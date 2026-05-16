@@ -1,0 +1,295 @@
+
+const express = require("express");
+const cors = require("cors");
+const WebSocket = require("ws");
+const path = require("path");
+const fs = require("fs");
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const SYMBOL = "BTCUSDT";
+const REST = "https://api.binance.com";
+const WSURL = "wss://stream.binance.com:9443/ws";
+
+// ── Persistence config ─────────────────────────────────────────────────────
+const DATA_DIR = path.join(__dirname, "data");
+const TRADES_FILE = path.join(DATA_DIR, "trades.json");
+const DEPTH_HIST_FILE = path.join(DATA_DIR, "depth_history.json");
+
+const TRADE_RETENTION_MS = 1000 * 60 * 60 * 72;   // keep 72h of trades
+const DEPTH_RETENTION_MS = 1000 * 60 * 60 * 72;   // keep 72h of depth history
+const DEPTH_SAMPLE_MS    = 30 * 1000;             // 1 snapshot every 30s
+const SAVE_INTERVAL_MS   = 15 * 1000;             // persist every 15s
+const MAX_TRADES_IN_MEM  = 250000;                // cap memory use
+
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+app.use(cors());
+// v106-fix: força no-cache pra HTML (pra novas versões aparecerem imediatamente
+// sem precisar limpar cache do navegador). Outros assets ficam com cache curto.
+app.use((req, res, next) => {
+  if (req.path === "/" || req.path.endsWith(".html")) {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+    res.set("Surrogate-Control", "no-store");
+  } else {
+    res.set("Cache-Control", "public, max-age=60");
+  }
+  next();
+});
+app.use(express.static(path.join(__dirname, "public"), { etag: false, lastModified: false }));
+
+const state = {
+  price: 0,
+  trades: [],
+  depth: { bids: [], asks: [], ts: Date.now() },
+  depthHist: [],
+  clients: new Set(),
+  lastDepthSnap: 0,
+  dirty: false
+};
+
+function num(v){ const x = Number(v); return Number.isFinite(x) ? x : 0; }
+
+function broadcast(obj){
+  const msg = JSON.stringify(obj);
+  for(const c of state.clients){
+    if(c.readyState === WebSocket.OPEN) c.send(msg);
+  }
+}
+
+async function getJson(url){
+  const r = await fetch(url);
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  return await r.json();
+}
+
+// ── Persistence ────────────────────────────────────────────────────────────
+function loadPersisted(){
+  try {
+    if (fs.existsSync(TRADES_FILE)) {
+      const arr = JSON.parse(fs.readFileSync(TRADES_FILE, "utf8"));
+      const cutoff = Date.now() - TRADE_RETENTION_MS;
+      state.trades = Array.isArray(arr) ? arr.filter(t => t && t.time >= cutoff) : [];
+      console.log(`Loaded ${state.trades.length} persisted trades`);
+    }
+  } catch(e){ console.log("trades load error:", e.message); }
+  try {
+    if (fs.existsSync(DEPTH_HIST_FILE)) {
+      const arr = JSON.parse(fs.readFileSync(DEPTH_HIST_FILE, "utf8"));
+      const cutoff = Date.now() - DEPTH_RETENTION_MS;
+      state.depthHist = Array.isArray(arr) ? arr.filter(s => s && s.time >= cutoff) : [];
+      console.log(`Loaded ${state.depthHist.length} persisted depth snapshots`);
+    }
+  } catch(e){ console.log("depth hist load error:", e.message); }
+}
+
+function persistNow(){
+  if (!state.dirty) return;
+  state.dirty = false;
+  try {
+    const cutT = Date.now() - TRADE_RETENTION_MS;
+    const trades = state.trades.filter(t => t.time >= cutT);
+    fs.writeFileSync(TRADES_FILE + ".tmp", JSON.stringify(trades));
+    fs.renameSync(TRADES_FILE + ".tmp", TRADES_FILE);
+  } catch(e){ console.log("trades save error:", e.message); }
+  try {
+    const cutD = Date.now() - DEPTH_RETENTION_MS;
+    const hist = state.depthHist.filter(s => s.time >= cutD);
+    fs.writeFileSync(DEPTH_HIST_FILE + ".tmp", JSON.stringify(hist));
+    fs.renameSync(DEPTH_HIST_FILE + ".tmp", DEPTH_HIST_FILE);
+  } catch(e){ console.log("depth hist save error:", e.message); }
+}
+setInterval(persistNow, SAVE_INTERVAL_MS);
+process.on("SIGINT", () => { persistNow(); process.exit(0); });
+process.on("SIGTERM", () => { persistNow(); process.exit(0); });
+
+// ── Trades ─────────────────────────────────────────────────────────────────
+function addTrade(t){
+  const item = {
+    id: t.a,
+    time: t.T || Date.now(),
+    price: num(t.p),
+    qty: num(t.q),
+    side: t.m ? "sell" : "buy",
+    notional: num(t.p) * num(t.q)
+  };
+  state.price = item.price;
+  state.trades.push(item);
+
+  const cutoff = Date.now() - TRADE_RETENTION_MS;
+  while(state.trades.length && state.trades[0].time < cutoff) state.trades.shift();
+  if (state.trades.length > MAX_TRADES_IN_MEM) {
+    state.trades.splice(0, state.trades.length - MAX_TRADES_IN_MEM);
+  }
+  state.dirty = true;
+  broadcast({ type:"trade", data:item });
+}
+
+// ── Depth snapshots ────────────────────────────────────────────────────────
+function setDepth(d){
+  state.depth = {
+    bids: (d.bids || d.b || []).slice(0, 1000).map(x => [num(x[0]), num(x[1])]),
+    asks: (d.asks || d.a || []).slice(0, 1000).map(x => [num(x[0]), num(x[1])]),
+    ts: Date.now()
+  };
+  const now = Date.now();
+  if (now - state.lastDepthSnap >= DEPTH_SAMPLE_MS && (state.depth.bids.length || state.depth.asks.length)) {
+    state.lastDepthSnap = now;
+    state.depthHist.push({
+      time: now,
+      bids: state.depth.bids.slice(0, 60),
+      asks: state.depth.asks.slice(0, 60)
+    });
+    const cutoff = now - DEPTH_RETENTION_MS;
+    while (state.depthHist.length && state.depthHist[0].time < cutoff) state.depthHist.shift();
+    if (state.depthHist.length > 12000) {
+      state.depthHist.splice(0, state.depthHist.length - 12000);
+    }
+    state.dirty = true;
+  }
+  broadcast({ type:"depth", data: state.depth });
+}
+
+async function depthSnapshot(){
+  try{
+    const d = await getJson(`${REST}/api/v3/depth?symbol=${SYMBOL}&limit=1000`);
+    setDepth(d);
+  }catch(e){
+    console.log("depth snapshot error:", e.message);
+  }
+}
+
+// ── Backfill on startup ────────────────────────────────────────────────────
+async function backfillTrades(){
+  try {
+    const have = state.trades.length;
+    const newestTime = have ? state.trades[state.trades.length - 1].time : 0;
+    const startTime = Math.max(newestTime + 1, Date.now() - TRADE_RETENTION_MS);
+    const endTime = Date.now();
+    if (startTime >= endTime - 60000) {
+      console.log(`Backfill skipped — ${have} trades already up-to-date`);
+      return;
+    }
+    console.log(`Backfilling trades from ${new Date(startTime).toISOString()}`);
+    let start = startTime;
+    let loops = 0;
+    let added = 0;
+    const seen = new Set(state.trades.map(t => t.id));
+    while (start < endTime && loops < 240) {
+      const url = `${REST}/api/v3/aggTrades?symbol=${SYMBOL}&startTime=${start}&endTime=${endTime}&limit=1000`;
+      let arr;
+      try { arr = await getJson(url); }
+      catch(e){ console.log("backfill page error:", e.message); break; }
+      if (!Array.isArray(arr) || !arr.length) break;
+      for (const t of arr) {
+        if (seen.has(t.a)) continue;
+        seen.add(t.a);
+        state.trades.push({
+          id: t.a,
+          time: t.T,
+          price: num(t.p),
+          qty: num(t.q),
+          side: t.m ? "sell" : "buy",
+          notional: num(t.p) * num(t.q)
+        });
+        added++;
+      }
+      const lastT = +arr[arr.length - 1].T;
+      if (!isFinite(lastT) || lastT <= start) break;
+      start = lastT + 1;
+      loops++;
+      await new Promise(r => setTimeout(r, 110));
+    }
+    state.trades.sort((a, b) => a.time - b.time);
+    if (state.trades.length > MAX_TRADES_IN_MEM) {
+      state.trades.splice(0, state.trades.length - MAX_TRADES_IN_MEM);
+    }
+    state.dirty = true;
+    console.log(`Backfill done: +${added} trades, total ${state.trades.length}`);
+    persistNow();
+  } catch (e) {
+    console.log("backfill error:", e.message);
+  }
+}
+
+function connectTrades(){
+  const ws = new WebSocket(`${WSURL}/${SYMBOL.toLowerCase()}@aggTrade`);
+  ws.on("open", () => console.log("Binance aggTrade connected"));
+  ws.on("message", m => { try{ addTrade(JSON.parse(m)); }catch(e){} });
+  ws.on("close", () => setTimeout(connectTrades, 1500));
+  ws.on("error", () => ws.close());
+}
+
+function connectDepth(){
+  const ws = new WebSocket(`${WSURL}/${SYMBOL.toLowerCase()}@depth20@100ms`);
+  ws.on("open", () => console.log("Binance depth connected"));
+  ws.on("message", m => { try{ setDepth(JSON.parse(m)); }catch(e){} });
+  ws.on("close", () => setTimeout(connectDepth, 1500));
+  ws.on("error", () => ws.close());
+}
+
+// ── HTTP API ───────────────────────────────────────────────────────────────
+app.get("/api/status", (req,res) => res.json({
+  ok: true,
+  symbol: SYMBOL,
+  price: state.price,
+  trades: state.trades.length,
+  depthHist: state.depthHist.length
+}));
+
+app.get("/api/depth", (req,res) => res.json(state.depth));
+
+app.get("/api/depth_history", (req,res) => {
+  try {
+    const since = Number(req.query.since || 0);
+    const limit = Math.min(Number(req.query.limit || 2000), 6000);
+    const arr = state.depthHist.filter(s => s.time >= since).slice(-limit);
+    res.json(arr);
+  } catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/klines", async (req,res) => {
+  try{
+    const interval = req.query.interval || "5m";
+    const limit = Math.min(Number(req.query.limit || 650), 1000);
+    const raw = await getJson(`${REST}/api/v3/klines?symbol=${SYMBOL}&interval=${interval}&limit=${limit}`);
+    res.json(raw.map(k => ({ t:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], closeTime:+k[6] })));
+  }catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/trades", async (req,res) => {
+  try{
+    const start = Number(req.query.start || 0);
+    const end = Number(req.query.end || Date.now());
+    let out = state.trades.filter(t => t.time >= start && t.time <= end);
+    out = out.map(t => ({
+      a: t.id,
+      p: String(t.price),
+      q: String(t.qty),
+      T: t.time,
+      m: t.side === "sell"
+    }));
+    res.json(out);
+  }catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+const server = app.listen(PORT, "0.0.0.0", () => {
+  console.log(`DepthVisionLab running on port ${PORT}`);
+});
+
+const wss = new WebSocket.Server({ server, path:"/ws" });
+wss.on("connection", ws => {
+  state.clients.add(ws);
+  ws.send(JSON.stringify({ type:"status", data:{ price:state.price, symbol:SYMBOL }}));
+  ws.send(JSON.stringify({ type:"depth", data:state.depth }));
+  ws.on("close", () => state.clients.delete(ws));
+});
+
+loadPersisted();
+depthSnapshot();
+setInterval(depthSnapshot, 15000);
+connectTrades();
+connectDepth();
+setTimeout(backfillTrades, 3000);
