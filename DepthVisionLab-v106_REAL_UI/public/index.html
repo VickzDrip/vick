@@ -1729,7 +1729,9 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
         <div class="tip" id="tip"></div>
         <div class="loader" id="loader"><div class="ring"></div><div class="sub">BUSCANDO KLINES + AGGTRADES + DEPTH</div></div>
         <div class="err" id="err"><div id="errMsg">Falha</div><button class="btn" style="width:auto;padding:8px 18px" id="retry">TENTAR NOVAMENTE</button></div>
+        <button id="scaleToggleBtn" title="Mostrar/ocultar escala de preço">◀</button>
       </div>
+      <div id="timeAxisWrap"><canvas id="timeAxisCanvas"></canvas></div>
       <div class="panes" id="volumePaneWrap"><canvas id="deltaPane"></canvas></div>
     </section>
   </div>
@@ -1749,7 +1751,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 const API='https://api.binance.com', WS='wss://stream.binance.com:9443/stream?streams=';
 const LOCAL_API=location.origin; // our own server with persisted trades + depth history
 let depthRefreshTimer=null;
-const S={sym:'BTCUSDT',tf:'5m',candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:{heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true},custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal'};
+const S={sym:'BTCUSDT',tf:'5m',candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:{heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true},custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal'};
 window.__bigTradesOverlayCache={key:'',items:[]};
 window.__bigTradesPersistentCache=new Map();
 window.__bigTradesLastGood=[];
@@ -2046,8 +2048,8 @@ function roundToTick(p){
 }
 function findCandleIndex(time){const ms=tfMs(S.tf);if(!S.candles.length)return-1;const first=S.candles[0].t;let i=Math.floor((time-first)/ms);if(i<0||i>=S.candles.length){for(let j=S.candles.length-1;j>=0;j--)if(time>=S.candles[j].t&&time<S.candles[j].t+ms)return j;return-1}return i}
 let raf=false;function drawSoon(){if(!raf){raf=true;requestAnimationFrame(()=>{raf=false;draw()})}}
-const PL=18,PR=82,PT=8,PB=10;
-function RP(){return PR+(S.inds.book?Math.max(128,Math.min(S.book.maxW,S.book.w)+18):0)}
+const PL=18,PT=8,PB=10; let PR=68;
+function RP(){const sp=S.yScale?.hidden?14:PR;return sp+(S.inds.book?Math.max(128,Math.min(S.book.maxW,S.book.w)+18):0)}
 function CW(W){return Math.max(80,W-PL-RP())}
 function futureMax(){return (S.candles.length||1)+(S.view.future||650)}
 function setupCanvas(c,w){c.width=w.clientWidth*devicePixelRatio;c.height=w.clientHeight*devicePixelRatio;const ctx=c.getContext('2d');ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);return ctx}
@@ -2083,8 +2085,8 @@ function profileLabel(){const m=el('profileAnchor')?.value||'visible';return m==
 function scale(vs,H){if(!vs||!vs.length)vs=S.candles.slice(-1);let hi=Math.max(...vs.map(c=>c.h)),lo=Math.min(...vs.map(c=>c.l));const pad=(hi-lo)*.08||hi*.01;hi+=pad;lo-=pad;const mid=(hi+lo)/2,range=Math.max(hi-lo,mid*.00001)/clamp(S.yScale.zoom||1,.15,40);hi=mid+range/2;lo=mid-range/2;return{lo,hi,y:p=>PT+(H-PT-PB)*(1-(p-lo)/(hi-lo))}}
 function draw(){
 
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();updateUI(V,sc)}
-function drawGrid(ctx,W,H,sc){const rp=RP(),right=W-rp,cw=CW(W);ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);ctx.strokeStyle='#0d1626';ctx.lineWidth=.6;ctx.font='9px monospace';ctx.textAlign='left';for(let i=0;i<=6;i++){const y=PT+(H-PT-PB)*i/6;const pv=sc.hi-(sc.hi-sc.lo)*i/6;ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(right,y);ctx.stroke();ctx.fillStyle='#6f86a8';ctx.fillText(priceFmt(pv),right+7,y+3)}ctx.strokeStyle=S.yScale.drag?'rgba(0,212,255,.55)':'rgba(200,216,240,.10)';ctx.beginPath();ctx.moveTo(right+.5,PT);ctx.lineTo(right+.5,H-PB);ctx.stroke();ctx.fillStyle='rgba(0,212,255,.35)';ctx.fillRect(right+1,PT,3,H-PT-PB);ctx.fillStyle='#6a7fa0';ctx.font='8px monospace';ctx.fillText('SCALE',right+9,PT+10);ctx.strokeStyle='#0d1626';for(let i=1;i<10;i++){const xx=PL+cw*i/10;ctx.beginPath();ctx.moveTo(xx,PT);ctx.lineTo(xx,H-PB);ctx.stroke()}}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc)}
+function drawGrid(ctx,W,H,sc){const rp=RP(),right=W-rp,cw=CW(W);ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);ctx.strokeStyle='#0d1626';ctx.lineWidth=.6;ctx.font='9px monospace';ctx.textAlign='left';for(let i=0;i<=6;i++){const y=PT+(H-PT-PB)*i/6;const pv=sc.hi-(sc.hi-sc.lo)*i/6;ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(right,y);ctx.stroke();if(!S.yScale.hidden){ctx.fillStyle='#6f86a8';ctx.fillText(priceFmt(pv),right+7,y+3)}}if(!S.yScale.hidden){ctx.strokeStyle=S.yScale.drag?'rgba(0,212,255,.55)':'rgba(200,216,240,.10)';ctx.beginPath();ctx.moveTo(right+.5,PT);ctx.lineTo(right+.5,H-PB);ctx.stroke();ctx.fillStyle='rgba(0,212,255,.35)';ctx.fillRect(right+1,PT,3,H-PT-PB);}ctx.strokeStyle='#0d1626';for(let i=1;i<10;i++){const xx=PL+cw*i/10;ctx.beginPath();ctx.moveTo(xx,PT);ctx.lineTo(xx,H-PB);ctx.stroke()}}
 function calcATR(cs,n=14){const tr=cs.map((c,i)=>i?Math.max(c.h-c.l,Math.abs(c.h-cs[i-1].c),Math.abs(c.l-cs[i-1].c)):c.h-c.l);return tr.map((_,i)=>i<n-1?null:tr.slice(i-n+1,i+1).reduce((a,b)=>a+b,0)/n)}
 function getDrawCandle(i,c){
   if(S.chartStyle!=='heikin')return c;
@@ -2320,10 +2322,6 @@ function drawHeat(ctx,W,H,sc){
     ctx.fillRect(hx,yy-Math.max(1,h*.16),hotW,Math.max(2,h*.30));
   }
 
-  ctx.fillStyle='rgba(190,210,240,.62)';
-  ctx.font='700 8px Inter,Arial';
-  ctx.textAlign='left';
-  ctx.fillText('HEATMAP · '+heatAnchorLabel(),chartLeft+6,chartTop+12);
   ctx.restore();
 
   heatDebugBox('HEATMAP DEBUG\ndraw: OK\nlevels: '+allLevels.length+'\nvisible: '+visibleLevels.length+'\nbucket: '+bucketPrice.toFixed(2));
@@ -2569,10 +2567,6 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
   ctx.textAlign='right';
   ctx.fillText('ASK',legX+legW,legY+legH+1);
 
-  ctx.fillStyle='rgba(200,218,255,0.82)';
-  ctx.font='700 9px Inter,Arial';
-  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-  ctx.fillText('LIQUIDITY HEATMAP · DEEPCHARTS · depth '+(data.depthCount||0)+' · zones '+(data.current?.length||0),left+7,top+13);
 
   // v100: Heatmap não desenha bubbles. Big Trades/Footprint cuidam dos eventos agressivos.
   ctx.restore();
@@ -3324,6 +3318,31 @@ function drawLastPrice(ctx,W,sc){
 function H_SAFE(h){return Math.max(PT+40,h-PB)}
 function drawCustom(ctx,V,sc,x){S.custom.forEach(ind=>{let vals=[];try{vals=evalCustom(ind.code)}catch(e){return}ctx.strokeStyle=ind.color;ctx.lineWidth=1.4;ctx.beginPath();let on=false;for(let i=V.a;i<V.b;i++){const v=vals[i];if(v==null||!isFinite(v))continue;const xx=x(i),yy=sc.y(v);if(!on){ctx.moveTo(xx,yy);on=true}else ctx.lineTo(xx,yy)}ctx.stroke()})}
 function evalCustom(code){const C=S.candles, close=C.map(c=>c.c), open=C.map(c=>c.o), high=C.map(c=>c.h), low=C.map(c=>c.l), volume=C.map(c=>c.v), delta=C.map(c=>c.delta);const sma=(arr,n)=>arr.map((_,i)=>i<n-1?null:arr.slice(i-n+1,i+1).reduce((a,b)=>a+b,0)/n);const ema=(arr,n)=>{const k=2/(n+1),out=[];let p=null;arr.forEach((v,i)=>{if(i<n-1)out.push(null);else if(p==null){p=arr.slice(0,n).reduce((a,b)=>a+b,0)/n;out.push(p)}else{p=v*k+p*(1-k);out.push(p)}});return out};const fn=new Function('open','high','low','close','volume','delta','sma','ema',code);return fn(open,high,low,close,volume,delta,sma,ema)}
+function drawTimeAxis(){
+  const wrap=el('timeAxisWrap'),c=el('timeAxisCanvas');
+  if(!wrap||!c||!S.candles.length)return;
+  const ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);
+  const V=visible(),rp=RP(),cw=CW(W);
+  if(cw<=0)return;
+  const tf=S.tf||'5m';
+  const isDay=(tf==='1d'||tf==='1w'||tf==='1M');
+  const steps=Math.max(3,Math.min(10,Math.floor(cw/65)));
+  ctx.font='9px monospace';
+  for(let i=1;i<steps;i++){
+    const frac=i/steps;
+    const rawIdx=S.view.start+V.span*frac;
+    const idx=Math.round(clamp(rawIdx,0,S.candles.length-1));
+    const xx=PL+frac*cw;
+    if(xx<PL+26||xx>W-rp-26)continue;
+    const d=new Date(S.candles[idx].t);
+    const lbl=isDay?d.toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}):d.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'});
+    ctx.fillStyle='#1e2a40';ctx.fillRect(xx-.5,0,1,5);
+    ctx.fillStyle='#4a6080';ctx.textAlign='center';ctx.fillText(lbl,xx,H-3);
+  }
+  ctx.fillStyle='#07101e';ctx.fillRect(W-rp,0,rp+2,H);
+  ctx.fillStyle='#050914';ctx.fillRect(0,0,PL,H);
+}
 function drawDeltaPane(){
   const wrap=document.querySelector('.panes'),c=el('deltaPane'); if(!wrap||!c)return; const ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,V=visible();
   ctx.clearRect(0,0,W,H);ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);
@@ -5416,6 +5435,35 @@ return {
   display:block!important;
 }
 
+/* Time axis bar */
+#timeAxisWrap{
+  height:22px;
+  background:#050914;
+  border-top:1px solid #1e2a40;
+  position:relative;
+  flex-shrink:0;
+  overflow:hidden;
+}
+#timeAxisWrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* Scale toggle button */
+#scaleToggleBtn{
+  position:absolute;
+  right:0;top:50%;transform:translateY(-50%);
+  width:14px;height:48px;
+  background:rgba(8,12,24,.82);
+  border:1px solid #1e2a40;
+  border-right:none;
+  border-radius:4px 0 0 4px;
+  color:#4a5e7a;
+  font-size:9px;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  padding:0;line-height:1;z-index:4;
+  transition:color .15s,border-color .15s;
+}
+#scaleToggleBtn:hover{color:#00d4ff;border-color:rgba(0,212,255,.5);}
+
 /* COMING SOON: recursos visíveis, mas bloqueados/claros */
 .dvl-soon-list{
   display:flex;
@@ -5540,5 +5588,20 @@ return {
   else applyV107();
   setTimeout(applyV107,300);
   setTimeout(applyV107,1000);
+
+  // Scale toggle button
+  function initScaleToggle(){
+    var btn=document.getElementById('scaleToggleBtn');
+    if(!btn||btn.__dvlBound)return;
+    btn.__dvlBound=true;
+    btn.onclick=function(){
+      S.yScale.hidden=!S.yScale.hidden;
+      btn.textContent=S.yScale.hidden?'▶':'◀';
+      if(typeof draw==='function')draw();
+    };
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initScaleToggle);
+  else initScaleToggle();
+  setTimeout(initScaleToggle,400);
 })();
 </script>
