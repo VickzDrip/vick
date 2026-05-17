@@ -1554,11 +1554,11 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 </label>
 <label class="row">
   <span>Cor compra</span>
-  <input id="bigBuyColor" type="color" value="#00e676" style="width:22px;height:22px;padding:1px;cursor:pointer;background:#06080f;border:1px solid #1e2a40;border-radius:3px">
+  <input id="bigBuyColor" type="color" value="#00e676" style="width:22px;height:22px;padding:0;cursor:pointer;border:1px solid #1e2a40;border-radius:3px">
 </label>
 <label class="row">
   <span>Cor venda</span>
-  <input id="bigSellColor" type="color" value="#ff3d57" style="width:22px;height:22px;padding:1px;cursor:pointer;background:#06080f;border:1px solid #1e2a40;border-radius:3px">
+  <input id="bigSellColor" type="color" value="#ff3d57" style="width:22px;height:22px;padding:0;cursor:pointer;border:1px solid #1e2a40;border-radius:3px">
 </label>
 </div>
             <div class="kv"><span class="k">Últimas velas</span><input class="num" id="bigBars" type="number" min="1" max="500" step="1" value="30">
@@ -1594,8 +1594,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
           <div class="ind-settings" id="settings-stdVolume">
             <div class="kv"><span class="k">Modo</span><select class="select" id="volMode"><option value="normal" selected>Volume normal</option><option value="delta">Delta buy/sell</option></select></div>
             <div class="kv"><span class="k">Média</span><input class="num" id="volMaLen" type="number" min="1" max="100" step="1" value="20"></div>
-            <div class="kv"><span class="k">Cor compra</span><input id="volBuyColor" type="color" value="#00e676" style="width:22px;height:22px;padding:1px;cursor:pointer;background:#06080f;border:1px solid #1e2a40;border-radius:3px"></div>
-            <div class="kv"><span class="k">Cor venda</span><input id="volSellColor" type="color" value="#ff3d57" style="width:22px;height:22px;padding:1px;cursor:pointer;background:#06080f;border:1px solid #1e2a40;border-radius:3px"></div>
+            <div class="kv"><span class="k">Cor compra</span><input id="volBuyColor" type="color" value="#26a69a" style="width:22px;height:22px;padding:0;cursor:pointer;border:1px solid #1e2a40;border-radius:3px"></div>
+            <div class="kv"><span class="k">Cor venda</span><input id="volSellColor" type="color" value="#ef5350" style="width:22px;height:22px;padding:0;cursor:pointer;border:1px solid #1e2a40;border-radius:3px"></div>
             <div class="hint">Volume inferior com média móvel. Modo delta divide barra em compras (verde) e vendas (vermelho).</div>
           </div>
         </div>
@@ -3428,8 +3428,8 @@ function drawDeltaPane(){
   const volZoom=Math.max(0.1,S.yVolScale?.zoom||1);
   const maxVol=rawMax/volZoom;
   const bw=Math.max(1,cw/V.n*.72),base=H-6,volTop=18,area=Math.max(12,base-volTop);
-  const buyColor=el('volBuyColor')?.value||'#00e676';
-  const sellColor=el('volSellColor')?.value||'#ff3d57';
+  const buyColor=el('volBuyColor')?.value||'#26a69a';
+  const sellColor=el('volSellColor')?.value||'#ef5350';
   const volMode=el('volMode')?.value||'normal';
   ctx.font='9px monospace';
 
@@ -4037,19 +4037,24 @@ window.addEventListener('resize',draw);boot();
     const osr=CanvasRenderingContext2D.prototype.strokeRect;
     const os=CanvasRenderingContext2D.prototype.stroke;
     const of=CanvasRenderingContext2D.prototype.fill;
+    const skipRemap=c=>c?.id==='deltaPane';
     CanvasRenderingContext2D.prototype.fillRect=function(){
+      if(skipRemap(this.canvas))return ofr.apply(this,arguments);
       const old=this.fillStyle; this.fillStyle=mapFill(old);
       const out=ofr.apply(this,arguments); this.fillStyle=old; return out;
     };
     CanvasRenderingContext2D.prototype.strokeRect=function(){
+      if(skipRemap(this.canvas))return osr.apply(this,arguments);
       const old=this.strokeStyle; this.strokeStyle=mapStroke(old);
       const out=osr.apply(this,arguments); this.strokeStyle=old; return out;
     };
     CanvasRenderingContext2D.prototype.stroke=function(){
+      if(skipRemap(this.canvas))return os.apply(this,arguments);
       const old=this.strokeStyle; this.strokeStyle=mapStroke(old);
       const out=os.apply(this,arguments); this.strokeStyle=old; return out;
     };
     CanvasRenderingContext2D.prototype.fill=function(){
+      if(skipRemap(this.canvas))return of.apply(this,arguments);
       const old=this.fillStyle; this.fillStyle=mapFill(old);
       const out=of.apply(this,arguments); this.fillStyle=old; return out;
     };
@@ -5800,6 +5805,10 @@ return {
   .asset-main{font-size:14px!important;}
   .topbar .pnow{font-size:18px!important;}
 }
+input[type=color]{-webkit-appearance:none;appearance:none;padding:0!important;border:none!important;cursor:pointer;display:block}
+input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
+input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 </style>
 <script id="DVL__V107_LOGO_AND_SOON_SCRIPT">
 (function(){
