@@ -1549,10 +1549,6 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
   <input id="bigTradeBubbleScale" type="number" min="0.4" max="3" step="0.05" value="1.15">
 </label>
 <label class="row">
-  <span>Max bubbles/candle</span>
-  <input id="bigTradeMaxBubbles" type="number" min="1" max="12" step="1" value="4">
-</label>
-<label class="row">
   <span>Exibir últimas velas</span>
   <input id="bigTradeVisibleBars" type="number" min="1" max="2000" step="1" value="200" title="Mostra bolhas apenas nas últimas X velas visíveis">
 </label>
@@ -3176,31 +3172,36 @@ function buildFootprintBigTradeClustersForSide(rows,side,minV,mergeLevels){
   }));
 }
 function bigTradeCacheConfigKey(){
-  // v2: net-delta scoring — bump version to bust old caches
-  return 'v2|'+String(S.sym)+'|'+String(S.tf)+'|'+String(bigTradeMinValue())+'|'+String(bigTradeDisplayMode())+'|'+String(bigTradeMergeLevels())+'|'+String(bigTradeMaxBubbles())+'|'+String(bigTradeUnitValue({q:1,notional:1}));
+  // v3: pre-filter then merge — bump version to bust old caches
+  return 'v3|'+String(S.sym)+'|'+String(S.tf)+'|'+String(bigTradeMinValue())+'|'+String(bigTradeDisplayMode())+'|'+String(bigTradeMergeLevels())+'|'+String(bigTradeUnitValue({q:1,notional:1}));
 }
 function buildBigTradeClustersForCandle(idx){
   const c=S.candles[idx];
   if(!c)return [];
   const minV=bigTradeMinValue();
   const mergeLevels=bigTradeMergeLevels();
-  const maxPerCandle=bigTradeMaxBubbles();
   const mode=bigTradeDisplayMode();
   const range=Math.max(1e-9,(+c.h||0)-(+c.l||0));
 
   const rows=normalizedFootprintRows(c,Math.max(10,Math.min(28,Math.round(range/Math.max(range/22,1e-9)))));
   if(!rows||!rows.length)return [];
 
-  // Build price-merged clusters scored by NET delta (buy - sell).
-  // A cluster is green only when buyers dominated at that level; red when
-  // sellers dominated (absorption). This prevents false green bubbles at tops
-  // where large buys were absorbed by passive sell limit orders.
+  // Step 1: pre-filter — only levels where the DOMINANT side individually >= minV.
+  // This ensures we never merge a weak level with a strong one.
+  const qualRows=rows.filter(([price,row])=>{
+    const buy=+row.buy||0,sell=+row.sell||0;
+    const buyV=bigTradeUnitValue({q:buy,notional:buy*Math.max(0,price)});
+    const sellV=bigTradeUnitValue({q:sell,notional:sell*Math.max(0,price)});
+    return Math.max(buyV,sellV)>=minV;
+  }).sort((a,b)=>a[0]-b[0]);
+  if(!qualRows.length)return [];
+
+  // Step 2: merge only adjacent qualifying levels (both sides already qualified)
   const baseGap=medianGapFromRows(rows);
   const tol=baseGap>0?baseGap*Math.max(1,mergeLevels):0;
-  const sorted=[...rows].sort((a,b)=>a[0]-b[0]);
   const merged=[];
   let cur=null;
-  for(const [price,row] of sorted){
+  for(const [price,row] of qualRows){
     const buy=+row.buy||0,sell=+row.sell||0;
     if(!cur){cur={priceSum:price*(buy+sell+1e-9),wSum:buy+sell+1e-9,buy,sell,count:1,lastPrice:price};continue;}
     if(mergeLevels>0&&tol>0&&Math.abs(price-cur.lastPrice)<=tol+1e-9){
@@ -3213,15 +3214,15 @@ function buildBigTradeClustersForCandle(idx){
   }
   if(cur)merged.push(cur);
 
-  // Score by |net delta|; direction set by sign
+  // Step 3: score each cluster — color by dominant side, value = dominant side
   const all=[];
   for(const cl of merged){
     const p=cl.priceSum/Math.max(cl.wSum,1e-9);
-    const net=cl.buy-cl.sell;
-    const absNet=Math.abs(net);
-    const v=bigTradeUnitValue({q:absNet,notional:absNet*Math.max(0,p)});
-    if(v<minV)continue;
-    all.push({p,btValue:v,qtyValue:absNet,levelCount:cl.count,isSell:net<0});
+    const buyV=bigTradeUnitValue({q:cl.buy,notional:cl.buy*Math.max(0,p)});
+    const sellV=bigTradeUnitValue({q:cl.sell,notional:cl.sell*Math.max(0,p)});
+    const isSell=sellV>buyV;
+    const v=Math.max(buyV,sellV);
+    all.push({p,btValue:v,qtyValue:Math.max(cl.buy,cl.sell),levelCount:cl.count,isSell});
   }
 
   if(!all.length)return [];
@@ -3236,7 +3237,7 @@ function buildBigTradeClustersForCandle(idx){
   }
 
   const out=[];
-  if(mode==='all'){g.all.slice(0,maxPerCandle).forEach(t=>out.push({idx,t}));}
+  if(mode==='all'){g.all.forEach(t=>out.push({idx,t}));}
   else if(mode==='largestOne'){if(g.one)out.push({idx,t:g.one});}
   else{if(g.buy)out.push({idx,t:g.buy});if(g.sell)out.push({idx,t:g.sell});}
   return out;
@@ -3769,8 +3770,8 @@ if(el('tfSelect')){
   };
 }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();boot()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();boot()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatMinQty','heatTopN','heatAnchor','heatPower','heatSmooth','heatOpacity','volMaLen','liqAnchor','liqStep','liqTop','liqOpacity','liqBubbles','volShowCVD','bigTradeVisibleBars','bigTradeMaxBubbles','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',draw)});
-['bigTradeVisibleBars','bigTradeMaxBubbles','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatMinQty','heatTopN','heatPower','heatSmooth','heatOpacity','liqStep','liqTop','liqOpacity','profileRows'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',draw)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;draw();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{draw();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});function syncBigTradeMinSizeUI(){
+['profileRows','profileAnchor','bigMult','heatMinQty','heatTopN','heatAnchor','heatPower','heatSmooth','heatOpacity','volMaLen','liqAnchor','liqStep','liqTop','liqOpacity','liqBubbles','volShowCVD','bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',draw)});
+['bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatMinQty','heatTopN','heatPower','heatSmooth','heatOpacity','liqStep','liqTop','liqOpacity','profileRows'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',draw)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;draw();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{draw();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});function syncBigTradeMinSizeUI(){
   const unit=el('bigTradeUnit')?.value||'qty';
   const lbl=el('bigTradeMinSizeLabel');
   const inp=el('bigTradeMinSize');
