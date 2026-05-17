@@ -2369,9 +2369,17 @@ function drawHeat(ctx,W,H,sc){
 
   if(!allLevels.length){heatDebugBox('HEATMAP DEBUG\ndraw: OK\nlevels: 0\nbucket: '+bucketPrice.toFixed(2));return;}
 
-  // Normalização agressiva: p98 como teto — só os níveis excepcionais ficam em full-bright.
+  // Preço atual definido aqui para uso em normalização e supressão do spread.
+  const curPrice=S.price||S.candles.at(-1)?.c||0;
+  // Distância mínima para ser considerada "parede real" (0.35% do preço)
+  const wallMinDist=curPrice>0?curPrice*0.0035:0;
+
+  // Normalização: excluir os níveis do spread imediato do denominador.
+  // O book sempre tem volume alto logo no spread — isso não é sinal, é estrutura normal.
   allLevels.sort((a,b)=>b.q-a.q);
-  const globalTop=allLevels.slice(0,Math.max(topN,120));
+  const farLevels=wallMinDist>0?allLevels.filter(l=>Math.abs(l.p-curPrice)>wallMinDist):allLevels;
+  const normSource=farLevels.length>=20?farLevels:allLevels;
+  const globalTop=normSource.slice(0,Math.max(topN,120));
   const qs=globalTop.map(l=>l.q).sort((a,b)=>a-b);
   const p70=qs[Math.floor(qs.length*.70)]||1;
   const p98=qs[Math.floor(qs.length*.98)]||p70*4;
@@ -2409,7 +2417,10 @@ function drawHeat(ctx,W,H,sc){
     const y2=sc.y(l.p+bucketPrice);
     const bucketH=isFinite(y2)?Math.abs(y2-yy):3;
     const h=clamp(Math.max(bucketH,1.5)+strength*8+smooth*.04,2,24);
-    const a=clamp((.008+strength*.38)*opacity,.004,.55);
+    // Zona imediata do spread (< wallMinDist): atenuar muito para não confundir com parede real
+    const isSpread=wallMinDist>0&&Math.abs(l.p-curPrice)<wallMinDist;
+    const spreadMult=isSpread?0.18:1.0;
+    const a=clamp((.008+strength*.38)*opacity*spreadMult,.004,.55);
     // Cores mais saturadas e distintas: verde puro para bid, vermelho puro para ask
     const base=askDom?'255,55,85':'0,200,120';
     const soft=askDom?'120,20,50':'0,80,100';
@@ -2428,11 +2439,11 @@ function drawHeat(ctx,W,H,sc){
     }
   }
 
-  // ── Marcadores das top walls: linha + label de preço e quantidade ────────
-  const curPrice=S.price||S.candles.at(-1)?.c||0;
+  // ── Marcadores das top walls: só paredes reais (distância >= 0.35% do preço) ─
   if(curPrice>0){
-    const bidWalls=allLevels.filter(l=>l.p<curPrice&&l.p>=lo&&l.bid>l.ask).sort((a,b)=>b.q-a.q).slice(0,3);
-    const askWalls=allLevels.filter(l=>l.p>curPrice&&l.p<=hi&&l.ask>l.bid).sort((a,b)=>b.q-a.q).slice(0,3);
+    // wallMinDist já definido acima; filtra spread imediato do book
+    const bidWalls=allLevels.filter(l=>l.p<curPrice-wallMinDist&&l.p>=lo&&l.bid>l.ask).sort((a,b)=>b.q-a.q).slice(0,3);
+    const askWalls=allLevels.filter(l=>l.p>curPrice+wallMinDist&&l.p<=hi&&l.ask>l.bid).sort((a,b)=>b.q-a.q).slice(0,3);
 
     function drawWallMarker(l,isBid,rank){
       const yy=sc.y(l.p);
