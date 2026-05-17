@@ -2691,9 +2691,11 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
   // ── Layer 0: Ambiente — só top 40 bids + top 40 asks, full-width, baixa opacidade ──
   // Limitar a 40 por lado elimina o fundo lodoso de centenas de faixas escuras sobrepostas.
   // Cores: bid começa em teal (0.22) não azul escuro; ask começa em laranja (0.60).
-  const ambBids=[...curBids].filter(b=>+(b.q||0)>0&&+(b.p||0)>=sc.lo&&+(b.p||0)<=sc.hi)
+  // Sem filtro por sc.lo/sc.hi — o top-40 é sempre os maiores do livro inteiro,
+  // independente de zoom/pan. Culling por pixel acontece no loop abaixo.
+  const ambBids=[...curBids].filter(b=>+(b.q||0)>0)
     .sort((a,b)=>+(b.q||0)-+(a.q||0)).slice(0,40);
-  const ambAsks=[...curAsks].filter(a=>+(a.q||0)>0&&+(a.p||0)>=sc.lo&&+(a.p||0)<=sc.hi)
+  const ambAsks=[...curAsks].filter(a=>+(a.q||0)>0)
     .sort((a,b)=>+(b.q||0)-+(a.q||0)).slice(0,40);
   for(const b of ambBids){
     const p=+(b.p||0),q=+(b.q||0);
@@ -2729,7 +2731,6 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
     if(cw<0.3)continue;
 
     for(const[bk,qty]of e.bid){
-      if(bk<sc.lo||bk>sc.hi)continue;
       const d=df(bk);if(d<0.04)continue;
       const t=clamp(qty/denom,0,1);if(t<0.010)continue;
       const th=getTH(bk);
@@ -2745,7 +2746,6 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
       }
     }
     for(const[bk,qty]of e.ask){
-      if(bk<sc.lo||bk>sc.hi)continue;
       const d=df(bk);if(d<0.04)continue;
       const t=clamp(qty/denom,0,1);if(t<0.010)continue;
       const th=getTH(bk);
@@ -2771,7 +2771,7 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
     const liveLvls=[
       ...curBids.map(b=>({p:+(b.p||0),q:+(b.q||0),isBid:true})),
       ...curAsks.map(a=>({p:+(a.p||0),q:+(a.q||0),isBid:false}))
-    ].filter(l=>l.p>=sc.lo&&l.p<=sc.hi&&l.q>0)
+    ].filter(l=>l.q>0)
      .sort((a,b)=>b.q-a.q).slice(0,350);
     for(const l of liveLvls){
       const d=df(l.p);if(d<0.04)continue;
