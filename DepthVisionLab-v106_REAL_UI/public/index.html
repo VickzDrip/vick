@@ -3121,7 +3121,8 @@ function buildFootprintBigTradeClustersForSide(rows,side,minV,mergeLevels){
   }));
 }
 function bigTradeCacheConfigKey(){
-  return String(S.sym)+'|'+String(S.tf)+'|'+String(bigTradeMinValue())+'|'+String(bigTradeDisplayMode())+'|'+String(bigTradeMergeLevels())+'|'+String(bigTradeMaxBubbles())+'|'+String(bigTradeUnitValue({q:1,notional:1}));
+  // v2: net-delta scoring — bump version to bust old caches
+  return 'v2|'+String(S.sym)+'|'+String(S.tf)+'|'+String(bigTradeMinValue())+'|'+String(bigTradeDisplayMode())+'|'+String(bigTradeMergeLevels())+'|'+String(bigTradeMaxBubbles())+'|'+String(bigTradeUnitValue({q:1,notional:1}));
 }
 function buildBigTradeClustersForCandle(idx){
   const c=S.candles[idx];
@@ -3132,17 +3133,42 @@ function buildBigTradeClustersForCandle(idx){
   const mode=bigTradeDisplayMode();
   const range=Math.max(1e-9,(+c.h||0)-(+c.l||0));
 
-  // Sempre usa footprint normalizado. Se os aggTrades ainda estão recarregando,
-  // normalizedFootprintRows cai para distribuição sintética baseada no volume real do candle.
-  // Assim o candle não fica sem Big Trade por causa de buffer momentaneamente vazio.
   const rows=normalizedFootprintRows(c,Math.max(10,Math.min(28,Math.round(range/Math.max(range/22,1e-9)))));
   if(!rows||!rows.length)return [];
 
-  const buyClusters=buildFootprintBigTradeClustersForSide(rows,'buy',minV,mergeLevels);
-  const sellClusters=buildFootprintBigTradeClustersForSide(rows,'sell',minV,mergeLevels);
-  let all=[];
-  buyClusters.forEach(t=>all.push(t));
-  sellClusters.forEach(t=>all.push(t));
+  // Build price-merged clusters scored by NET delta (buy - sell).
+  // A cluster is green only when buyers dominated at that level; red when
+  // sellers dominated (absorption). This prevents false green bubbles at tops
+  // where large buys were absorbed by passive sell limit orders.
+  const baseGap=medianGapFromRows(rows);
+  const tol=baseGap>0?baseGap*Math.max(1,mergeLevels):0;
+  const sorted=[...rows].sort((a,b)=>a[0]-b[0]);
+  const merged=[];
+  let cur=null;
+  for(const [price,row] of sorted){
+    const buy=+row.buy||0,sell=+row.sell||0;
+    if(!cur){cur={priceSum:price*(buy+sell+1e-9),wSum:buy+sell+1e-9,buy,sell,count:1,lastPrice:price};continue;}
+    if(mergeLevels>0&&tol>0&&Math.abs(price-cur.lastPrice)<=tol+1e-9){
+      cur.priceSum+=price*(buy+sell+1e-9);cur.wSum+=buy+sell+1e-9;
+      cur.buy+=buy;cur.sell+=sell;cur.count++;cur.lastPrice=price;
+    }else{
+      merged.push(cur);
+      cur={priceSum:price*(buy+sell+1e-9),wSum:buy+sell+1e-9,buy,sell,count:1,lastPrice:price};
+    }
+  }
+  if(cur)merged.push(cur);
+
+  // Score by |net delta|; direction set by sign
+  const all=[];
+  for(const cl of merged){
+    const p=cl.priceSum/Math.max(cl.wSum,1e-9);
+    const net=cl.buy-cl.sell;
+    const absNet=Math.abs(net);
+    const v=bigTradeUnitValue({q:absNet,notional:absNet*Math.max(0,p)});
+    if(v<minV)continue;
+    all.push({p,btValue:v,qtyValue:absNet,levelCount:cl.count,isSell:net<0});
+  }
+
   if(!all.length)return [];
   all.sort((a,b)=>b.btValue-a.btValue);
 
@@ -3150,22 +3176,14 @@ function buildBigTradeClustersForCandle(idx){
   for(const item of all){
     g.all.push(item);
     if(!g.one||item.btValue>g.one.btValue)g.one=item;
-    if(item.isSell){
-      if(!g.sell||item.btValue>g.sell.btValue)g.sell=item;
-    }else{
-      if(!g.buy||item.btValue>g.buy.btValue)g.buy=item;
-    }
+    if(item.isSell){if(!g.sell||item.btValue>g.sell.btValue)g.sell=item;}
+    else{if(!g.buy||item.btValue>g.buy.btValue)g.buy=item;}
   }
 
   const out=[];
-  if(mode==='all'){
-    g.all.slice(0,maxPerCandle).forEach(t=>out.push({idx,t}));
-  }else if(mode==='largestOne'){
-    if(g.one)out.push({idx,t:g.one});
-  }else{
-    if(g.buy)out.push({idx,t:g.buy});
-    if(g.sell)out.push({idx,t:g.sell});
-  }
+  if(mode==='all'){g.all.slice(0,maxPerCandle).forEach(t=>out.push({idx,t}));}
+  else if(mode==='largestOne'){if(g.one)out.push({idx,t:g.one});}
+  else{if(g.buy)out.push({idx,t:g.buy});if(g.sell)out.push({idx,t:g.sell});}
   return out;
 }
 function visibleBigTradesByCandle(V){
