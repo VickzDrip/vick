@@ -1554,11 +1554,11 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 </label>
 <label class="row">
   <span>Cor compra</span>
-  <input id="bigBuyColor" type="color" value="#00e676" style="width:22px;height:22px;padding:0;cursor:pointer;border:1px solid #1e2a40;border-radius:3px">
+  <div style="position:relative;width:28px;height:28px;border-radius:4px;overflow:hidden;border:1px solid #1e2a40;flex-shrink:0;cursor:pointer"><input id="bigBuyColor" type="color" value="#00e676" style="position:absolute;width:300%;height:300%;top:-100%;left:-100%;border:none;padding:0;cursor:pointer"></div>
 </label>
 <label class="row">
   <span>Cor venda</span>
-  <input id="bigSellColor" type="color" value="#ff3d57" style="width:22px;height:22px;padding:0;cursor:pointer;border:1px solid #1e2a40;border-radius:3px">
+  <div style="position:relative;width:28px;height:28px;border-radius:4px;overflow:hidden;border:1px solid #1e2a40;flex-shrink:0;cursor:pointer"><input id="bigSellColor" type="color" value="#ff3d57" style="position:absolute;width:300%;height:300%;top:-100%;left:-100%;border:none;padding:0;cursor:pointer"></div>
 </label>
 </div>
             <div class="kv"><span class="k">Últimas velas</span><input class="num" id="bigBars" type="number" min="1" max="500" step="1" value="30">
@@ -1594,8 +1594,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
           <div class="ind-settings" id="settings-stdVolume">
             <div class="kv"><span class="k">Modo</span><select class="select" id="volMode"><option value="normal" selected>Volume normal</option><option value="delta">Delta buy/sell</option></select></div>
             <div class="kv"><span class="k">Média</span><input class="num" id="volMaLen" type="number" min="1" max="100" step="1" value="20"></div>
-            <div class="kv"><span class="k">Cor compra</span><input id="volBuyColor" type="color" value="#26a69a" style="width:22px;height:22px;padding:0;cursor:pointer;border:1px solid #1e2a40;border-radius:3px"></div>
-            <div class="kv"><span class="k">Cor venda</span><input id="volSellColor" type="color" value="#ef5350" style="width:22px;height:22px;padding:0;cursor:pointer;border:1px solid #1e2a40;border-radius:3px"></div>
+            <div class="kv"><span class="k">Cor compra</span><div style="position:relative;width:28px;height:28px;border-radius:4px;overflow:hidden;border:1px solid #1e2a40;flex-shrink:0;cursor:pointer"><input id="volBuyColor" type="color" value="#26a69a" style="position:absolute;width:300%;height:300%;top:-100%;left:-100%;border:none;padding:0;cursor:pointer"></div></div>
+            <div class="kv"><span class="k">Cor venda</span><div style="position:relative;width:28px;height:28px;border-radius:4px;overflow:hidden;border:1px solid #1e2a40;flex-shrink:0;cursor:pointer"><input id="volSellColor" type="color" value="#ef5350" style="position:absolute;width:300%;height:300%;top:-100%;left:-100%;border:none;padding:0;cursor:pointer"></div></div>
             <div class="hint">Volume inferior com média móvel. Modo delta divide barra em compras (verde) e vendas (vermelho).</div>
           </div>
         </div>
@@ -2000,12 +2000,12 @@ function addAggTrade(t,live=false,seq=S.loadSeq){
   if(live)updateTradeN();
 }
 function resetAggStats(){S.trades=[];S.candles.forEach(c=>{c.delta=0;c.buy=0;c.sell=0;c.fp=new Map()})}
-async function reloadAggTradesForBigBars(redraw=true,seq=S.loadSeq,sym=S.sym,tf=S.tf){
+async function reloadAggTradesForBigBars(redraw=true,seq=S.loadSeq,sym=S.sym,tf=S.tf,barsOverride=0){
   if(!S.candles.length||S.aggLoading)return;
   S.aggLoading=true; S.aggSeq=seq;
   try{
     resetAggStats();
-    const inputBars=+el('bigBars').value||80;
+    const inputBars=barsOverride||+el('bigBars').value||80;
     const bars=clamp(inputBars,1,500);
     let start=S.candles[Math.max(0,S.candles.length-bars)].t;
     const end=Date.now(); let loops=0; const seen=new Set();
@@ -3453,7 +3453,8 @@ function drawDeltaPane(){
         if(sellH>0){ctx.fillStyle=sellColor;ctx.fillRect(xx-bw/2,base-h,bw,sellH);}
         if(buyH>0){ctx.fillStyle=buyColor;ctx.fillRect(xx-bw/2,base-buyH,bw,buyH);}
       } else {
-        ctx.fillStyle=bullish?buyColor:sellColor;
+        // no trade data for this bar — show dim gray so delta mode looks clearly different
+        ctx.fillStyle='rgba(120,140,170,0.25)';
         ctx.fillRect(xx-bw/2,base-h,bw,h);
       }
     } else {
@@ -3601,7 +3602,7 @@ if(el('tfSelect')){
   };
 }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();boot()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();boot()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatMinQty','heatTopN','heatAnchor','heatPower','heatSmooth','heatOpacity','volMaLen','volMode','liqAnchor','liqStep','liqTop','liqOpacity','liqBubbles','bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const n=el(id); if(n)n.addEventListener('change',draw)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',draw)});if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
+['profileRows','profileAnchor','bigMult','heatMinQty','heatTopN','heatAnchor','heatPower','heatSmooth','heatOpacity','volMaLen','liqAnchor','liqStep','liqTop','liqOpacity','liqBubbles','bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const n=el(id); if(n)n.addEventListener('change',draw)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',draw)});if(el('volMode'))el('volMode').addEventListener('change',()=>{draw();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
 let touchState={mode:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5};
 function touchDist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
 wrap.addEventListener('touchstart',e=>{if(!S.candles.length)return;const r=wrap.getBoundingClientRect();if(e.touches.length===1){const x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){e.preventDefault();addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){e.preventDefault();touchState.mode='bookResize';S.book.resize=true;draw();return}if(priceScaleHit(x,y,r.width,r.height)){e.preventDefault();touchState.mode='priceScale';S.yScale.drag=true;S.yScale.lastY=e.touches[0].clientY;draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){e.preventDefault();if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}touchState.mode='pos';S.dragPos={...hit,lastX:e.touches[0].clientX,lastY:e.touches[0].clientY};return}touchState.mode='pan';touchState.lastX=e.touches[0].clientX;touchState.lastY=e.touches[0].clientY;S.view.auto=false}else if(e.touches.length===2){e.preventDefault();touchState.mode='pinch';touchState.dist=touchDist(e.touches[0],e.touches[1]);touchState.midX=(e.touches[0].clientX+e.touches[1].clientX)/2;touchState.midY=(e.touches[0].clientY+e.touches[1].clientY)/2;touchState.anchorRel=clamp((touchState.midX-r.left-PL)/CW(r.width),0,1);S.view.auto=false}},{passive:false});
