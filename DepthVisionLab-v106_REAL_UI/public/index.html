@@ -2766,8 +2766,7 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
     }
   }
 
-  // ── Right-edge live wall: paredes distantes em destaque ──
-  const wallW=clamp(pxPerBar*2.0,3,48);
+  // ── Live zones: livro atual expandido como bandas full-width ──
   const liveLvls=[
     ...curBids.map(b=>({p:+(b.p||0),q:+(b.q||0),isBid:true})),
     ...curAsks.map(a=>({p:+(a.p||0),q:+(a.q||0),isBid:false}))
@@ -2782,12 +2781,11 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
     const yy=sc.y(l.p);
     if(!isFinite(yy)||yy<top||yy>bottom)continue;
     ctx.fillStyle=dcHeatColor(temp,alpha);
-    ctx.fillRect(right-wallW,yy-th*0.5,wallW,Math.max(1,th));
-    // Núcleo para paredes máximas na live wall
+    ctx.fillRect(left,yy-th*0.5,width,Math.max(1,th));
     if(t>0.75){
       const ht=Math.pow((t-0.75)/0.25,1.5);
       ctx.fillStyle=dcHeatColor(l.isBid?0.48:0.98,Math.min(1,ht*d));
-      ctx.fillRect(right-wallW,yy-Math.max(1,th*0.25),wallW,Math.max(1.5,th*0.50));
+      ctx.fillRect(left,yy-Math.max(1,th*0.25),width,Math.max(1.5,th*0.50));
     }
   }
 
