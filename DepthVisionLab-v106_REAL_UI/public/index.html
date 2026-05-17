@@ -5562,27 +5562,48 @@ return {
     return Math.max(.12,Math.min(.88,share));
   }
   function creationCandleFootprint(z){
-    const c=S.candles[z.origin];
+    // Use the MIDDLE candle (imbalance candle) — it's the one that traded through the gap
+    const midIdx=z.origin-1;
+    const c=S.candles[midIdx];
     if(!c)return{buy:0,sell:0,total:0,delta:0,real:false,big:0};
 
-    // Use c.buy/c.sell directly — same source as the main footprint delta fix
-    let buy=+c.buy||0, sell=+c.sell||0;
-    const real=(buy+sell)>0;
+    const lo=z.low, hi=z.high;
+    let buy=0,sell=0,real=false;
 
-    // No real trade data — estimate from OHLC pressure
-    if(!real){
-      const share=pressureBuyShare(c);
-      const vol=Math.max(0,+c.v||0);
-      buy=vol*share; sell=vol*(1-share);
+    // Sum only fp levels that fall inside the FVG price range
+    if(c.fp&&c.fp.size>0){
+      c.fp.forEach((r,price)=>{
+        const p=+price;
+        if(!isFinite(p)||p<lo||p>hi)return;
+        buy+=+r.buy||0;
+        sell+=+r.sell||0;
+      });
+      if(buy+sell>0)real=true;
     }
 
-    // Count big trades
+    // Fallback: no fp data in zone — use candle's total scaled by zone/candle ratio
+    if(!real){
+      const totalBuy=+c.buy||0,totalSell=+c.sell||0;
+      const candleRange=Math.max(1e-9,c.h-c.l);
+      const zoneRange=Math.max(0,Math.min(hi,c.h)-Math.max(lo,c.l));
+      const ratio=Math.min(1,zoneRange/candleRange);
+      if(totalBuy+totalSell>0){
+        buy=(totalBuy)*ratio; sell=(totalSell)*ratio; real=true;
+      }else{
+        const share=pressureBuyShare(c);
+        const vol=Math.max(0,+c.v||0)*ratio;
+        buy=vol*share; sell=vol*(1-share);
+      }
+    }
+
+    // Count big trades in this candle's time window AND within the zone prices
     const stats=robustTradeStats();
     const threshold=Math.max(stats.median*4,stats.p95||0);
     const start=c.t,end=c.t+tfMs(S.tf);
     let big=0;
     for(const t of S.trades){
       if(t.time<start||t.time>=end)continue;
+      if(t.p<lo||t.p>hi)continue;
       if(threshold&&t.notional>=threshold)big++;
     }
     return{buy,sell,total:buy+sell,delta:buy-sell,real,big};
