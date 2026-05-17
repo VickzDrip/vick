@@ -5555,66 +5555,37 @@ return {
     return count?sum/count:avgRange(candles.slice(Math.max(0,idx-30),idx+1));
   }
   function pressureBuyShare(c){
-    // Estimativa footprint coerente usando o candle inteiro.
-    // Candle forte: dominância clara. Candle indeciso: equilíbrio.
     const range=Math.max(c.h-c.l,1e-9);
-    const body=(c.c-c.o)/range;               // -1..+1 aprox
-    const closePos=(c.c-c.l)/range;           // 0..1
-    const wickBias=(closePos-.5)*.22;
-    let share=.5 + body*.34 + wickBias;
+    const body=(c.c-c.o)/range;
+    const closePos=(c.c-c.l)/range;
+    let share=.5+body*.34+(closePos-.5)*.22;
     return Math.max(.12,Math.min(.88,share));
-  }
-  function normalizeFootprintVolume(c,buyRaw,sellRaw,real=false,big=0){
-    const candleTotal=Math.max(0,c?.v||0);
-    if(candleTotal<=0)return{buy:0,sell:0,total:0,delta:0,real:false,big:0};
-
-    const rawTotal=Math.max(0,buyRaw||0)+Math.max(0,sellRaw||0);
-    let buyShare;
-
-    // Usa aggTrades só como proporção. O total final sempre é o volume real do candle.
-    // Se a cobertura de trades estiver pequena, volta para estimativa de pressão do candle.
-    const coverage=rawTotal/candleTotal;
-    if(rawTotal>0 && coverage>=.08){
-      buyShare=Math.max(.08,Math.min(.92,Math.max(0,buyRaw||0)/rawTotal));
-    }else{
-      buyShare=pressureBuyShare(c);
-      real=false;
-    }
-
-    let buy=candleTotal*buyShare;
-    let sell=candleTotal-buy;
-
-    // Evita label absurdo tipo B:0 em candle com volume grande.
-    // Se não for dominância extrema, mantém os dois lados visíveis.
-    const minSide=candleTotal>=1000?Math.max(1,candleTotal*.06):Math.min(1,Math.max(.01,candleTotal*.04));
-    if(buy<minSide){buy=minSide;sell=Math.max(0,candleTotal-buy)}
-    if(sell<minSide){sell=minSide;buy=Math.max(0,candleTotal-sell)}
-
-    return{buy,sell,total:candleTotal,delta:buy-sell,real,big};
-  }
-  function fallbackZoneVolume(z){
-    const c=S.candles[z.origin];
-    if(!c)return{buy:0,sell:0,total:0,delta:0,real:false,big:0};
-    return normalizeFootprintVolume(c,0,0,false,0);
   }
   function creationCandleFootprint(z){
     const c=S.candles[z.origin];
-    if(!c)return fallbackZoneVolume(z);
+    if(!c)return{buy:0,sell:0,total:0,delta:0,real:false,big:0};
 
-    let buy=0,sell=0,big=0;
-    const rows=normalizedFootprintRows(c,24);
-    rows.forEach(([_,r])=>{buy+=+r.buy||0;sell+=+r.sell||0});
+    // Use c.buy/c.sell directly — same source as the main footprint delta fix
+    let buy=+c.buy||0, sell=+c.sell||0;
+    const real=(buy+sell)>0;
 
+    // No real trade data — estimate from OHLC pressure
+    if(!real){
+      const share=pressureBuyShare(c);
+      const vol=Math.max(0,+c.v||0);
+      buy=vol*share; sell=vol*(1-share);
+    }
+
+    // Count big trades
     const stats=robustTradeStats();
     const threshold=Math.max(stats.median*4,stats.p95||0);
     const start=c.t,end=c.t+tfMs(S.tf);
+    let big=0;
     for(const t of S.trades){
       if(t.time<start||t.time>=end)continue;
       if(threshold&&t.notional>=threshold)big++;
     }
-
-    const real=candleTradeCoverage(c)>=.035;
-    return normalizeFootprintVolume(c,buy,sell,real,big);
+    return{buy,sell,total:buy+sell,delta:buy-sell,real,big};
   }
   function zoneMetrics(z){
     return creationCandleFootprint(z);
@@ -5700,9 +5671,12 @@ return {
       ctx.beginPath();ctx.moveTo(x1,mid);ctx.lineTo(x2,mid);ctx.stroke();ctx.setLineDash([]);
       if(show && h>14 && x2-x1>70){
         const m=z.metrics||{buy:0,sell:0,total:0,real:false};
+        const cOrigin=S.candles[z.origin];
+        const price=cOrigin?+cOrigin.c||1:1;
+        const buyU=m.buy*price, sellU=m.sell*price;
         const label=bull
-          ? ('B:'+nFmt(m.buy)+' | S:'+nFmt(m.sell))
-          : ('S:'+nFmt(m.sell)+' | B:'+nFmt(m.buy));
+          ? ('B:'+nFmt(buyU)+' | S:'+nFmt(sellU))
+          : ('S:'+nFmt(sellU)+' | B:'+nFmt(buyU));
         ctx.font='10px monospace';
         ctx.textAlign='left';
         ctx.textBaseline='middle';
