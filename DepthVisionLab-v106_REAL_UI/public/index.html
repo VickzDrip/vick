@@ -1485,13 +1485,11 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
             <button class="gear" data-settings="heatmap" title="Inputs Liquidity Heatmap">⚙</button>
           </div>
           <div class="ind-settings" id="settings-heatmap">
-            <div class="kv"><span class="k">Âncora</span><select class="select tiny-select" id="liqAnchor"><option value="24h" selected>24 horas</option><option value="7d">7 dias</option><option value="all">histórico carregado</option></select></div>
+            <div class="kv"><span class="k">Brilho</span><input class="num" id="heatOpacity" type="number" min="0.10" max="1" step="0.05" value="0.75"></div>
+            <div class="kv"><span class="k">Resolução preço ($)</span><input class="num" id="liqStep" type="number" min="5" max="500" step="5" value="25"></div>
+            <div class="kv"><span class="k">Zona morta (%)</span><input class="num" id="heatDistPct" type="number" min="0" max="5" step="0.1" value="0.8"></div>
             <div class="kv"><span class="k">Depth API</span><select class="select tiny-select" id="depthLimit"><option value="250">250 níveis</option><option value="500" selected>500 níveis</option><option value="1000">1000 níveis</option></select></div>
-            <div class="kv"><span class="k">Resolução preço</span><input class="num" id="liqStep" type="number" min="1" max="1000" step="1" value="25"></div>
-            <div class="kv"><span class="k">Zonas máximas</span><input class="num" id="liqTop" type="number" min="60" max="2000" step="20" value="1200"></div>
-            <div class="kv"><span class="k">Opacidade</span><input class="num" id="liqOpacity" type="number" min="0.10" max="1" step="0.05" value="0.85"></div>
-            <div class="kv"><span class="k">Bubbles</span><select class="select tiny-select" id="liqBubbles"><option value="1" selected>ON</option><option value="0">OFF</option></select></div>
-            <div class="hint">Heatmap real: REST depth profundo + diff depth live. Bubbles usam aggTrades. Nenhum cálculo usa velas visíveis.</div>
+            <div class="hint">Zona morta: % ao redor do preço suprimido. Paredes distantes ficam em destaque.</div>
           </div>
         </div>
 
@@ -2603,8 +2601,9 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
 
   // Preço atual — usado para suprimir zonas próximas e destacar zonas distantes
   const curPrice=S.price||S.candles.at(-1)?.c||0;
-  // 0.8% do preço como escala de distância: dentro = suprimido, fora = destaque pleno
-  const distScale=curPrice>0?curPrice*0.008:1e9;
+  // heatDistPct (%): zona morta ao redor do preço. 0 = sem supressão.
+  const distPct=clamp(numInput('heatDistPct',0.8),0,5)/100;
+  const distScale=curPrice>0&&distPct>0?curPrice*distPct:1e9;
   // df(price): 0 = no preço, 1 = totalmente longe — curva exponencial suave
   function df(p){
     if(!curPrice)return 1;
@@ -3867,8 +3866,8 @@ if(el('tfSelect')){
   };
 }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();boot()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();boot()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatMinQty','heatTopN','heatAnchor','heatPower','heatSmooth','heatOpacity','volMaLen','liqAnchor','liqStep','liqTop','liqOpacity','liqBubbles','volShowCVD','bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',draw)});
-['bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatMinQty','heatTopN','heatPower','heatSmooth','heatOpacity','liqStep','liqTop','liqOpacity','profileRows'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',draw)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;draw();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{draw();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});function syncBigTradeMinSizeUI(){
+['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','volMaLen','liqStep','depthLimit','volShowCVD','bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',draw)});
+['bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatOpacity','heatDistPct','liqStep','profileRows'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',draw)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;draw();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{draw();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});function syncBigTradeMinSizeUI(){
   const unit=el('bigTradeUnit')?.value||'qty';
   const lbl=el('bigTradeMinSizeLabel');
   const inp=el('bigTradeMinSize');
