@@ -2766,26 +2766,32 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
     }
   }
 
-  // ── Live zones: livro atual expandido como bandas full-width ──
-  const liveLvls=[
-    ...curBids.map(b=>({p:+(b.p||0),q:+(b.q||0),isBid:true})),
-    ...curAsks.map(a=>({p:+(a.p||0),q:+(a.q||0),isBid:false}))
-  ].filter(l=>l.p>=sc.lo&&l.p<=sc.hi&&l.q>0)
-   .sort((a,b)=>b.q-a.q).slice(0,350);
-  for(const l of liveLvls){
-    const d=df(l.p);if(d<0.04)continue;
-    const t=clamp(l.q/denom,0,1);if(t<0.04)continue;
-    const temp=l.isBid?0.22+t*0.30:0.60+t*0.40;
-    const alpha=clamp((0.18+t*0.82)*d,0.08,Math.min(1.0,opacity*1.4));
-    const th=getTH(l.p);
-    const yy=sc.y(l.p);
-    if(!isFinite(yy)||yy<top||yy>bottom)continue;
-    ctx.fillStyle=dcHeatColor(temp,alpha);
-    ctx.fillRect(left,yy-th*0.5,width,Math.max(1,th));
-    if(t>0.75){
-      const ht=Math.pow((t-0.75)/0.25,1.5);
-      ctx.fillStyle=dcHeatColor(l.isBid?0.48:0.98,Math.min(1,ht*d));
-      ctx.fillRect(left,yy-Math.max(1,th*0.25),width,Math.max(1.5,th*0.50));
+  // ── Live zones: aparecem apenas a partir do candle atual para a direita ──
+  // O histórico (esquerda) fica com os snapshots do heatHist.
+  // O livro ao vivo só pinta na área após o último candle.
+  const liveX0=Math.max(left, x(lastCi)+pxPerBar*0.5);
+  const liveW=right-liveX0;
+  if(liveW>1){
+    const liveLvls=[
+      ...curBids.map(b=>({p:+(b.p||0),q:+(b.q||0),isBid:true})),
+      ...curAsks.map(a=>({p:+(a.p||0),q:+(a.q||0),isBid:false}))
+    ].filter(l=>l.p>=sc.lo&&l.p<=sc.hi&&l.q>0)
+     .sort((a,b)=>b.q-a.q).slice(0,350);
+    for(const l of liveLvls){
+      const d=df(l.p);if(d<0.04)continue;
+      const t=clamp(l.q/denom,0,1);if(t<0.04)continue;
+      const temp=l.isBid?0.22+t*0.30:0.60+t*0.40;
+      const alpha=clamp((0.18+t*0.82)*d,0.08,Math.min(1.0,opacity*1.4));
+      const th=getTH(l.p);
+      const yy=sc.y(l.p);
+      if(!isFinite(yy)||yy<top||yy>bottom)continue;
+      ctx.fillStyle=dcHeatColor(temp,alpha);
+      ctx.fillRect(liveX0,yy-th*0.5,liveW,Math.max(1,th));
+      if(t>0.75){
+        const ht=Math.pow((t-0.75)/0.25,1.5);
+        ctx.fillStyle=dcHeatColor(l.isBid?0.48:0.98,Math.min(1,ht*d));
+        ctx.fillRect(liveX0,yy-Math.max(1,th*0.25),liveW,Math.max(1.5,th*0.50));
+      }
     }
   }
 
