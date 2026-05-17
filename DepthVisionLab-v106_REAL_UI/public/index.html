@@ -1553,6 +1553,10 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
   <input id="bigTradeMaxBubbles" type="number" min="1" max="12" step="1" value="4">
 </label>
 <label class="row">
+  <span>Exibir últimas velas</span>
+  <input id="bigTradeVisibleBars" type="number" min="1" max="2000" step="1" value="200" title="Mostra bolhas apenas nas últimas X velas visíveis">
+</label>
+<label class="row">
   <span>Cor compra</span>
   <label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden">
     <div id="bigBuyColorSwatch" style="width:100%;height:100%;background:#00e676;pointer-events:none"></div>
@@ -3242,9 +3246,11 @@ function visibleBigTradesByCandle(V){
   if(!window.__bigTradesPersistentCache)window.__bigTradesPersistentCache=new Map();
   const out=[];
 
-  // Calcula fora do visible, mas usa cache por candle para não piscar quando o buffer de aggTrades
-  // é limpo/recarregado em segundo plano.
-  const a=0,b=S.candles.length;
+  // Only iterate candles within visible window + bigTradeVisibleBars limit to avoid
+  // rebuilding all 520 cached candles on every cache miss when an input changes.
+  const visibleBarsLimit=clamp(+(el('bigTradeVisibleBars')?.value||200),1,2000);
+  const a=Math.max(0,Math.min(Math.floor(V.a)-2,S.candles.length-visibleBarsLimit));
+  const b=Math.min(S.candles.length,Math.ceil(V.b)+2);
   for(let idx=a;idx<b;idx++){
     const c=S.candles[idx];
     if(!c)continue;
@@ -3306,8 +3312,10 @@ function drawBigTrades(ctx,V,sc,x,W,H){
   }
 
   let items=visibleBigTradesByCandle(V);
-  // Only show bubbles for visible candles (not limited to bigBars window)
-  items=items.filter(o=>o.idx>=Math.floor(V.a)&&o.idx<=Math.ceil(V.b));
+  // Filter to visible window, then apply user's "last X candles" limit
+  const visibleBarsLimit=clamp(+(el('bigTradeVisibleBars')?.value||200),1,2000);
+  const visibleFrom=Math.max(Math.floor(V.a), S.candles.length-visibleBarsLimit);
+  items=items.filter(o=>o.idx>=visibleFrom&&o.idx<=Math.ceil(V.b));
   // v101: short cache to avoid flicker during agg-trade reloads
   try{
     const cacheKey=bigTradeCacheConfigKey()+'|'+String(S.candles.length);
@@ -3760,7 +3768,8 @@ if(el('tfSelect')){
   };
 }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();boot()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();boot()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatMinQty','heatTopN','heatAnchor','heatPower','heatSmooth','heatOpacity','volMaLen','liqAnchor','liqStep','liqTop','liqOpacity','liqBubbles','volShowCVD'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',draw)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;draw();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{draw();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
+['profileRows','profileAnchor','bigMult','heatMinQty','heatTopN','heatAnchor','heatPower','heatSmooth','heatOpacity','volMaLen','liqAnchor','liqStep','liqTop','liqOpacity','liqBubbles','volShowCVD','bigTradeVisibleBars','bigTradeMaxBubbles','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',draw)});
+['bigTradeVisibleBars','bigTradeMaxBubbles','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatMinQty','heatTopN','heatPower','heatSmooth','heatOpacity','liqStep','liqTop','liqOpacity','profileRows'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',draw)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;draw();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{draw();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
 let touchState={mode:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5};
 function touchDist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
 wrap.addEventListener('touchstart',e=>{if(!S.candles.length)return;const r=wrap.getBoundingClientRect();if(e.touches.length===1){const x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){e.preventDefault();addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){e.preventDefault();touchState.mode='bookResize';S.book.resize=true;draw();return}if(priceScaleHit(x,y,r.width,r.height)){e.preventDefault();touchState.mode='priceScale';S.yScale.drag=true;S.yScale.lastY=e.touches[0].clientY;draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){e.preventDefault();if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}touchState.mode='pos';S.dragPos={...hit,lastX:e.touches[0].clientX,lastY:e.touches[0].clientY};return}touchState.mode='pan';touchState.lastX=e.touches[0].clientX;touchState.lastY=e.touches[0].clientY;S.view.auto=false}else if(e.touches.length===2){e.preventDefault();touchState.mode='pinch';touchState.dist=touchDist(e.touches[0],e.touches[1]);touchState.midX=(e.touches[0].clientX+e.touches[1].clientX)/2;touchState.midY=(e.touches[0].clientY+e.touches[1].clientY)/2;touchState.anchorRel=clamp((touchState.midX-r.left-PL)/CW(r.width),0,1);S.view.auto=false}},{passive:false});
