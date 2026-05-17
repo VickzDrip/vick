@@ -1588,7 +1588,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
             <div class="kv"><span class="k">Mitigação</span><select class="select tiny-select" id="fvgMitMode"><option value="wick">wick/touch</option><option value="close">close</option></select></div>
             <div class="kv"><span class="k">Ocultar mitigado</span><select class="select tiny-select" id="fvgHideMit"><option value="1">sim</option><option value="0">não</option></select></div>
             <div class="kv"><span class="k">Métricas</span><select class="select tiny-select" id="fvgMetrics"><option value="1">mostrar</option><option value="0">limpo</option></select></div>
-            <div class="hint">FVG usa volume total do candle gerador e divide Buy x Sell por footprint/pressão do candle.</div>
+            <div class="kv"><span class="k">Min vol zona (USDT)</span><input class="num" id="fvgMinVol" type="number" min="0" step="50000" value="0"></div>
+            <div class="hint">FVG filtra os níveis do candle de imbalance dentro do gap. Min vol em USDT (0 = sem filtro).</div>
           </div>
         </div>
 
@@ -5613,7 +5614,7 @@ return {
   }
   function fvgZones(){
     if(!S.candles||S.candles.length<5)return[];
-    const settingsKey=[S.candles.length,S.candles.at(-1)?.t,E('fvgBars')?.value,E('fvgMinAtr')?.value,E('fvgMinPct')?.value,E('fvgMitMode')?.value,E('fvgHideMit')?.value].join('|');
+    const settingsKey=[S.candles.length,S.candles.at(-1)?.t,E('fvgBars')?.value,E('fvgMinAtr')?.value,E('fvgMinPct')?.value,E('fvgMitMode')?.value,E('fvgHideMit')?.value,E('fvgMinVol')?.value].join('|');
     if(S.__fvgCacheKey===settingsKey && Array.isArray(S.__fvgCache))return S.__fvgCache;
     const bars=Math.max(20,Math.min(520,safeNum(E('fvgBars')?.value,180)));
     const minAtr=safeNum(E('fvgMinAtr')?.value,.08);
@@ -5640,6 +5641,10 @@ return {
       }
       if(hide&&z.status==='MITIGATED')continue;
       const m=zoneMetrics(z); z.metrics=m;
+      const minVol=safeNum(E('fvgMinVol')?.value,0);
+      const midC=S.candles[z.origin-1];
+      const zoneUsdt=(m.buy+m.sell)*(midC?+midC.c||1:1);
+      if(minVol>0&&zoneUsdt<minVol)continue;
       const dirDelta=z.type==='bull'?m.delta:-m.delta;
       const deltaScore=Math.max(0,Math.min(35, (dirDelta/Math.max(m.total,1))*35 + 17));
       const gapScore=Math.max(0,Math.min(25,(gap/Math.max(atr,1e-9))*18));
@@ -5767,9 +5772,10 @@ return {
     draw=function(){
       oldDraw();
     };
-    ['fvgBars','fvgMinAtr','fvgMinPct','fvgExtend','fvgMitMode','fvgHideMit','fvgMetrics'].forEach(id=>{
+    ['fvgBars','fvgMinAtr','fvgMinPct','fvgExtend','fvgMitMode','fvgHideMit','fvgMetrics','fvgMinVol'].forEach(id=>{
       const node=E(id); if(!node)return;
-      node.addEventListener('change',()=>{ if(id==='fvgBars')reloadAggTradesForBigBars(true); else draw(); });
+      node.addEventListener('change',()=>{ if(id==='fvgBars')reloadAggTradesForBigBars(true); else{S.__fvgCacheKey='';draw();} });
+      if(id==='fvgMinVol')node.addEventListener('input',()=>{S.__fvgCacheKey='';draw();});
     });
     draw();
   });
