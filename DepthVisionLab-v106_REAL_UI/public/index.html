@@ -2601,6 +2601,17 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
   const span=Math.max(0.35,S.view.end-S.view.start);
   const pxPerBar=(right-left)/span;
 
+  // Preço atual — usado para suprimir zonas próximas e destacar zonas distantes
+  const curPrice=S.price||S.candles.at(-1)?.c||0;
+  // 0.8% do preço como escala de distância: dentro = suprimido, fora = destaque pleno
+  const distScale=curPrice>0?curPrice*0.008:1e9;
+  // df(price): 0 = no preço, 1 = totalmente longe — curva exponencial suave
+  function df(p){
+    if(!curPrice)return 1;
+    const d=Math.abs(p-curPrice)/distScale;
+    return clamp(1-Math.exp(-d),0,1);
+  }
+
   ctx.save();
   ctx.beginPath();ctx.rect(left,top,width,height);ctx.clip();
   ctx.globalCompositeOperation='source-over';
@@ -2671,28 +2682,31 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
   // Cria o fundo teal persistente em TODAS as velas (mesmo sem snapshots históricos).
   // Bandas horizontais brilhantes emergem naturalmente quando uma grande ordem fica
   // estática em vários snapshots consecutivos — exatamente como no DeepCharts.
-  const bgMult=0.28;
+  // ── Layer 0: Ambiente — book atual em toda a largura, suprimido perto do preço ──
+  // df(p) = 0 no preço → 1 longe. Zonas distantes = brilhantes. Próximas = escuras.
+  const bgMult=0.32;
   for(const b of curBids){
     const p=+(b.p||0),q=+(b.q||0);
     if(!isFinite(p)||p<sc.lo||p>sc.hi||q<=0)continue;
-    const t=clamp(q/denom,0,1);if(t<0.006)continue;
+    const d=df(p);if(d<0.04)continue;
+    const t=clamp(q/denom,0,1);if(t*d<0.005)continue;
     const yy=sc.y(Math.round(p/step)*step);
     if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
-    ctx.fillStyle=dcHeatColor(t*0.52,clamp(0.010+t*opacity*bgMult,0.008,opacity*bgMult));
+    ctx.fillStyle=dcHeatColor(t*0.52,clamp(0.010+t*d*opacity*bgMult,0.006,opacity*bgMult*d));
     ctx.fillRect(left,yy-tileH*0.5,width,Math.max(1,tileH));
   }
   for(const a of curAsks){
     const p=+(a.p||0),q=+(a.q||0);
     if(!isFinite(p)||p<sc.lo||p>sc.hi||q<=0)continue;
-    const t=clamp(q/denom,0,1);if(t<0.006)continue;
+    const d=df(p);if(d<0.04)continue;
+    const t=clamp(q/denom,0,1);if(t*d<0.005)continue;
     const yy=sc.y(Math.round(p/step)*step);
     if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
-    ctx.fillStyle=dcHeatColor(0.48+t*0.52,clamp(0.010+t*opacity*bgMult,0.008,opacity*bgMult));
+    ctx.fillStyle=dcHeatColor(0.48+t*0.52,clamp(0.010+t*d*opacity*bgMult,0.006,opacity*bgMult*d));
     ctx.fillRect(left,yy-tileH*0.5,width,Math.max(1,tileH));
   }
 
-  // ── Layer 1: Colunas temporais — um coluna por candle com snapshots históricos ──
-  // Bid=teal, Ask=quente. Paredes persistentes acumulam e viram bandas horizontais.
+  // ── Layer 1: Colunas temporais — suprimidas perto do preço, brilhantes longe ──
   for(let ci=startCi;ci<=endCi;ci++){
     const e=byCandle.get(ci);
     if(!e)continue;
@@ -2702,29 +2716,27 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
     const cw=x2-x1;
     if(cw<0.3)continue;
 
-    // Bid side — [0..0.52] = preto → teal → ciano
     for(const[bk,qty]of e.bid){
       if(bk<sc.lo||bk>sc.hi)continue;
-      const t=clamp(qty/denom,0,1);
-      if(t<0.010)continue;
+      const d=df(bk);if(d<0.04)continue;
+      const t=clamp(qty/denom,0,1);if(t<0.010)continue;
       const yy=sc.y(bk);
       if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
-      ctx.fillStyle=dcHeatColor(t*0.52,clamp(0.05+t*0.82,0.04,opacity));
+      ctx.fillStyle=dcHeatColor(t*0.52,clamp((0.05+t*0.82)*d,0.03,opacity));
       ctx.fillRect(x1,yy-tileH*0.5,cw,Math.max(1,tileH));
     }
-    // Ask side — [0.48..1.0] = amarelo → laranja → vermelho → branco
     for(const[bk,qty]of e.ask){
       if(bk<sc.lo||bk>sc.hi)continue;
-      const t=clamp(qty/denom,0,1);
-      if(t<0.010)continue;
+      const d=df(bk);if(d<0.04)continue;
+      const t=clamp(qty/denom,0,1);if(t<0.010)continue;
       const yy=sc.y(bk);
       if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
-      ctx.fillStyle=dcHeatColor(0.48+t*0.52,clamp(0.05+t*0.82,0.04,opacity));
+      ctx.fillStyle=dcHeatColor(0.48+t*0.52,clamp((0.05+t*0.82)*d,0.03,opacity));
       ctx.fillRect(x1,yy-tileH*0.5,cw,Math.max(1,tileH));
     }
   }
 
-  // ── Right-edge live wall: mostra o book atual em destaque ──
+  // ── Right-edge live wall: paredes distantes em destaque ──
   const wallW=clamp(pxPerBar*2.0,3,48);
   const liveLvls=[
     ...curBids.map(b=>({p:+(b.p||0),q:+(b.q||0),isBid:true})),
@@ -2732,10 +2744,10 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
   ].filter(l=>l.p>=sc.lo&&l.p<=sc.hi&&l.q>0)
    .sort((a,b)=>b.q-a.q).slice(0,350);
   for(const l of liveLvls){
-    const t=clamp(l.q/denom,0,1);
-    if(t<0.04)continue;
+    const d=df(l.p);if(d<0.04)continue;
+    const t=clamp(l.q/denom,0,1);if(t<0.04)continue;
     const temp=l.isBid?t*0.52:0.48+t*0.52;
-    const alpha=clamp(0.12+t*0.88,0.08,Math.min(1.0,opacity*1.25));
+    const alpha=clamp((0.12+t*0.88)*d,0.06,Math.min(1.0,opacity*1.25));
     const yy=sc.y(l.p);
     if(!isFinite(yy)||yy<top||yy>bottom)continue;
     ctx.fillStyle=dcHeatColor(temp,alpha);
