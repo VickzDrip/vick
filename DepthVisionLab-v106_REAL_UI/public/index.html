@@ -2667,7 +2667,32 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
   const p95=allQtys[Math.floor(allQtys.length*0.95)]||allQtys[allQtys.length-1]||1;
   const denom=Math.max(1,p95);
 
-  // ── Render: one column per candle, bid=cool (teal), ask=warm (orange/red) ──
+  // ── Layer 0: Ambient — book atual sobre toda a largura, opacidade muito baixa ──
+  // Cria o fundo teal persistente em TODAS as velas (mesmo sem snapshots históricos).
+  // Bandas horizontais brilhantes emergem naturalmente quando uma grande ordem fica
+  // estática em vários snapshots consecutivos — exatamente como no DeepCharts.
+  const bgMult=0.28;
+  for(const b of curBids){
+    const p=+(b.p||0),q=+(b.q||0);
+    if(!isFinite(p)||p<sc.lo||p>sc.hi||q<=0)continue;
+    const t=clamp(q/denom,0,1);if(t<0.006)continue;
+    const yy=sc.y(Math.round(p/step)*step);
+    if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
+    ctx.fillStyle=dcHeatColor(t*0.52,clamp(0.010+t*opacity*bgMult,0.008,opacity*bgMult));
+    ctx.fillRect(left,yy-tileH*0.5,width,Math.max(1,tileH));
+  }
+  for(const a of curAsks){
+    const p=+(a.p||0),q=+(a.q||0);
+    if(!isFinite(p)||p<sc.lo||p>sc.hi||q<=0)continue;
+    const t=clamp(q/denom,0,1);if(t<0.006)continue;
+    const yy=sc.y(Math.round(p/step)*step);
+    if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
+    ctx.fillStyle=dcHeatColor(0.48+t*0.52,clamp(0.010+t*opacity*bgMult,0.008,opacity*bgMult));
+    ctx.fillRect(left,yy-tileH*0.5,width,Math.max(1,tileH));
+  }
+
+  // ── Layer 1: Colunas temporais — um coluna por candle com snapshots históricos ──
+  // Bid=teal, Ask=quente. Paredes persistentes acumulam e viram bandas horizontais.
   for(let ci=startCi;ci<=endCi;ci++){
     const e=byCandle.get(ci);
     if(!e)continue;
@@ -2677,28 +2702,24 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
     const cw=x2-x1;
     if(cw<0.3)continue;
 
-    // Bid side — temperature range [0 .. 0.52] = black → teal → cyan
+    // Bid side — [0..0.52] = preto → teal → ciano
     for(const[bk,qty]of e.bid){
       if(bk<sc.lo||bk>sc.hi)continue;
       const t=clamp(qty/denom,0,1);
-      if(t<0.025)continue;
-      const temp=t*0.52;
-      const alpha=clamp(0.06+t*0.82,0.05,opacity);
+      if(t<0.010)continue;
       const yy=sc.y(bk);
       if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
-      ctx.fillStyle=dcHeatColor(temp,alpha);
+      ctx.fillStyle=dcHeatColor(t*0.52,clamp(0.05+t*0.82,0.04,opacity));
       ctx.fillRect(x1,yy-tileH*0.5,cw,Math.max(1,tileH));
     }
-    // Ask side — temperature range [0.48 .. 1.0] = yellow → orange → red → white
+    // Ask side — [0.48..1.0] = amarelo → laranja → vermelho → branco
     for(const[bk,qty]of e.ask){
       if(bk<sc.lo||bk>sc.hi)continue;
       const t=clamp(qty/denom,0,1);
-      if(t<0.025)continue;
-      const temp=0.48+t*0.52;
-      const alpha=clamp(0.06+t*0.82,0.05,opacity);
+      if(t<0.010)continue;
       const yy=sc.y(bk);
       if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
-      ctx.fillStyle=dcHeatColor(temp,alpha);
+      ctx.fillStyle=dcHeatColor(0.48+t*0.52,clamp(0.05+t*0.82,0.04,opacity));
       ctx.fillRect(x1,yy-tileH*0.5,cw,Math.max(1,tileH));
     }
   }
