@@ -3236,9 +3236,9 @@ function drawBigTrades(ctx,V,sc,x,W,H){
   }
 
   let items=visibleBigTradesByCandle(V);
-  // Respect bigBars setting: only show bubbles for the last N candles loaded
-  {const bigBarsLimit=clamp(+(el('bigBars')?.value||80),1,500);const bigBarsStart=Math.max(0,S.candles.length-bigBarsLimit);items=items.filter(o=>o.idx>=bigBarsStart);}
-  // v101: cache curto para evitar piscar/sumir entre redraws enquanto dados/footprint atualizam.
+  // Only show bubbles for visible candles (not limited to bigBars window)
+  items=items.filter(o=>o.idx>=Math.floor(V.a)&&o.idx<=Math.ceil(V.b));
+  // v101: short cache to avoid flicker during agg-trade reloads
   try{
     const cacheKey=bigTradeCacheConfigKey()+'|'+String(S.candles.length);
     if(items.length){window.__bigTradesOverlayCache={key:cacheKey,items:items,ts:Date.now()};}
@@ -3276,19 +3276,52 @@ function drawBigTrades(ctx,V,sc,x,W,H){
     drawItems.push({xx,yy,adjY:yy,r,v,hot,big,t});
   });
 
-  // Greedy de-overlap: push bubbles apart vertically if they overlap
-  for(let i=0;i<drawItems.length;i++){
-    for(let j=0;j<i;j++){
-      const a=drawItems[j],b=drawItems[i];
-      const dx=Math.abs(b.xx-a.xx);
-      const minDist=a.r+b.r+2;
-      if(dx>=minDist)continue; // far enough apart horizontally
-      const dy=Math.abs(b.adjY-a.adjY);
-      const dist=Math.sqrt(dx*dx+dy*dy);
-      if(dist<minDist){
-        const push=Math.sqrt(Math.max(0,minDist*minDist-dx*dx));
-        b.adjY=a.adjY+(b.adjY>=a.adjY?push:-push);
-        b.adjY=clamp(b.adjY,top+b.r,bottom-b.r);
+  // De-overlap step 1: within each candle column, sort by price then space apart
+  const cols=new Map();
+  drawItems.forEach(item=>{
+    const col=Math.round(item.xx);
+    if(!cols.has(col))cols.set(col,[]);
+    cols.get(col).push(item);
+  });
+  cols.forEach(group=>{
+    if(group.length<2)return;
+    group.sort((a,b)=>a.yy-b.yy); // top→bottom by original price
+    for(let pass=0;pass<5;pass++){
+      for(let k=1;k<group.length;k++){
+        const a=group[k-1],b=group[k];
+        const need=a.r+b.r+3;
+        if(b.adjY-a.adjY<need){
+          const mid=(a.adjY+b.adjY)/2;
+          a.adjY=clamp(mid-need/2,top+a.r,bottom-a.r);
+          b.adjY=clamp(mid+need/2,top+b.r,bottom-b.r);
+        }
+      }
+      for(let k=group.length-2;k>=0;k--){
+        const a=group[k],b=group[k+1];
+        const need=a.r+b.r+3;
+        if(b.adjY-a.adjY<need){
+          const mid=(a.adjY+b.adjY)/2;
+          a.adjY=clamp(mid-need/2,top+a.r,bottom-a.r);
+          b.adjY=clamp(mid+need/2,top+b.r,bottom-b.r);
+        }
+      }
+    }
+  });
+
+  // De-overlap step 2: cross-column (bubbles from adjacent candles)
+  for(let pass=0;pass<2;pass++){
+    for(let i=0;i<drawItems.length;i++){
+      for(let j=0;j<i;j++){
+        const a=drawItems[j],b=drawItems[i];
+        const dx=b.xx-a.xx,dy=b.adjY-a.adjY;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        const minDist=a.r+b.r+2;
+        if(dist>0&&dist<minDist){
+          const push=(minDist-dist)/2;
+          const py=dy/dist*push;
+          a.adjY=clamp(a.adjY-py,top+a.r,bottom-a.r);
+          b.adjY=clamp(b.adjY+py,top+b.r,bottom-b.r);
+        }
       }
     }
   }
