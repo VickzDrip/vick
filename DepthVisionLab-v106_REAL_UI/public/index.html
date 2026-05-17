@@ -1765,7 +1765,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 const API='https://api.binance.com', WS='wss://stream.binance.com:9443/stream?streams=';
 const LOCAL_API=location.origin; // our own server with persisted trades + depth history
 let depthRefreshTimer=null;
-const S={sym:'BTCUSDT',tf:'5m',candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:{heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true},custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal'};
+const S={sym:'BTCUSDT',tf:'5m',candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:{heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true},custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal'};
 window.__bigTradesOverlayCache={key:'',items:[]};
 window.__bigTradesPersistentCache=new Map();
 window.__bigTradesLastGood=[];
@@ -1985,8 +1985,10 @@ function pushHeatSnapshot(){
     .map(v=>({p:v.p,q:v.q,side:v.side,power:Math.min(1,v.q/maxQty)}));
   const idx=S.candles.length-1;
   S.heatHist.push({time:now,idx,levels});
-  // 6000 snaps × 2s = ~3.3h de histórico de orderbook
   if(S.heatHist.length>6000)S.heatHist.splice(0,S.heatHist.length-6000);
+  // Atualiza denom estável (p95) — só muda aqui, não a cada frame de render
+  const qs=levels.map(v=>v.q).sort((a,b)=>a-b);
+  S.heatDenom=Math.max(1,qs[Math.floor(qs.length*0.95)]||qs[qs.length-1]||1);
 }
 function addAggTrade(t,live=false,seq=S.loadSeq){
   if(seq!==S.loadSeq)return;
@@ -2677,16 +2679,10 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
 
   if(!byCandle.size){ctx.restore();return;}
 
-  // ── Normalise: p95 of all visible qty values ──
-  const allQtys=[];
-  for(const[,e]of byCandle){
-    for(const v of e.bid.values())if(v>0)allQtys.push(v);
-    for(const v of e.ask.values())if(v>0)allQtys.push(v);
-  }
-  if(!allQtys.length){ctx.restore();return;}
-  allQtys.sort((a,b)=>a-b);
-  const p95=allQtys[Math.floor(allQtys.length*0.95)]||allQtys[allQtys.length-1]||1;
-  const denom=Math.max(1,p95);
+  // ── Normalise: usa S.heatDenom (estável, atualizado a cada 2s no snapshot) ──
+  // Evita recalcular p95 a cada frame do WebSocket, que causava piscar de zonas.
+  if(!S.heatDenom||S.heatDenom<1){ctx.restore();return;}
+  const denom=S.heatDenom;
 
   // ── Layer 0: Ambient — book atual sobre toda a largura, opacidade muito baixa ──
   // Cria o fundo teal persistente em TODAS as velas (mesmo sem snapshots históricos).
