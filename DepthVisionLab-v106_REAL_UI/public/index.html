@@ -2692,29 +2692,33 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
   // Cria o fundo teal persistente em TODAS as velas (mesmo sem snapshots históricos).
   // Bandas horizontais brilhantes emergem naturalmente quando uma grande ordem fica
   // estática em vários snapshots consecutivos — exatamente como no DeepCharts.
-  // ── Layer 0: Ambiente — book atual em toda a largura, suprimido perto do preço ──
-  // df(p) = 0 no preço → 1 longe. Zonas distantes = brilhantes. Próximas = escuras.
-  const bgMult=0.52;
-  for(const b of curBids){
+  // ── Layer 0: Ambiente — só top 40 bids + top 40 asks, full-width, baixa opacidade ──
+  // Limitar a 40 por lado elimina o fundo lodoso de centenas de faixas escuras sobrepostas.
+  // Cores: bid começa em teal (0.22) não azul escuro; ask começa em laranja (0.60).
+  const ambBids=[...curBids].filter(b=>+(b.q||0)>0&&+(b.p||0)>=sc.lo&&+(b.p||0)<=sc.hi)
+    .sort((a,b)=>+(b.q||0)-+(a.q||0)).slice(0,40);
+  const ambAsks=[...curAsks].filter(a=>+(a.q||0)>0&&+(a.p||0)>=sc.lo&&+(a.p||0)<=sc.hi)
+    .sort((a,b)=>+(b.q||0)-+(a.q||0)).slice(0,40);
+  for(const b of ambBids){
     const p=+(b.p||0),q=+(b.q||0);
-    if(!isFinite(p)||p<sc.lo||p>sc.hi||q<=0)continue;
     const d=df(p);if(d<0.04)continue;
-    const t=clamp(q/denom,0,1);if(t*d<0.005)continue;
+    const t=clamp(q/denom,0,1);
     const th=getTH(p);
     const yy=sc.y(bkt(p));
     if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
-    ctx.fillStyle=dcHeatColor(t*0.52,clamp(0.010+t*d*opacity*bgMult,0.006,opacity*bgMult*d));
+    // Bids: teal → cyan (0.22..0.52) — nunca começa em azul escuro
+    ctx.fillStyle=dcHeatColor(0.22+t*0.30,clamp((0.08+t*0.72)*d,0.04,opacity));
     ctx.fillRect(left,yy-th*0.5,width,Math.max(1,th));
   }
-  for(const a of curAsks){
+  for(const a of ambAsks){
     const p=+(a.p||0),q=+(a.q||0);
-    if(!isFinite(p)||p<sc.lo||p>sc.hi||q<=0)continue;
     const d=df(p);if(d<0.04)continue;
-    const t=clamp(q/denom,0,1);if(t*d<0.005)continue;
+    const t=clamp(q/denom,0,1);
     const th=getTH(p);
     const yy=sc.y(bkt(p));
     if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
-    ctx.fillStyle=dcHeatColor(0.48+t*0.52,clamp(0.010+t*d*opacity*bgMult,0.006,opacity*bgMult*d));
+    // Asks: laranja → branco (0.60..1.0) — sempre quente
+    ctx.fillStyle=dcHeatColor(0.60+t*0.40,clamp((0.08+t*0.72)*d,0.04,opacity));
     ctx.fillRect(left,yy-th*0.5,width,Math.max(1,th));
   }
 
@@ -2735,12 +2739,12 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
       const th=getTH(bk);
       const yy=sc.y(bk);
       if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
-      ctx.fillStyle=dcHeatColor(t*0.52,clamp((0.10+t*0.90)*d,0.05,opacity));
+      // Bid: teal → cyan (0.22..0.52)
+      ctx.fillStyle=dcHeatColor(0.22+t*0.30,clamp((0.12+t*0.88)*d,0.06,opacity));
       ctx.fillRect(x1,yy-th*0.5,cw,Math.max(1,th));
-      // Núcleo brilhante para paredes próximas do máximo
-      if(t>0.75){
-        const ht=Math.pow((t-0.75)/0.25,1.5);
-        ctx.fillStyle=dcHeatColor(0.50,Math.min(1,ht*d*0.95));
+      if(t>0.72){
+        const ht=Math.pow((t-0.72)/0.28,1.4);
+        ctx.fillStyle=dcHeatColor(0.48,Math.min(1,ht*d));
         ctx.fillRect(x1,yy-Math.max(1,th*0.28),cw,Math.max(1.5,th*0.55));
       }
     }
@@ -2751,12 +2755,12 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
       const th=getTH(bk);
       const yy=sc.y(bk);
       if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
-      ctx.fillStyle=dcHeatColor(0.48+t*0.52,clamp((0.10+t*0.90)*d,0.05,opacity));
+      // Ask: laranja → branco (0.60..1.0)
+      ctx.fillStyle=dcHeatColor(0.60+t*0.40,clamp((0.12+t*0.88)*d,0.06,opacity));
       ctx.fillRect(x1,yy-th*0.5,cw,Math.max(1,th));
-      // Núcleo brilhante para paredes próximas do máximo
-      if(t>0.75){
-        const ht=Math.pow((t-0.75)/0.25,1.5);
-        ctx.fillStyle=dcHeatColor(0.96,Math.min(1,ht*d*0.95));
+      if(t>0.72){
+        const ht=Math.pow((t-0.72)/0.28,1.4);
+        ctx.fillStyle=dcHeatColor(0.98,Math.min(1,ht*d));
         ctx.fillRect(x1,yy-Math.max(1,th*0.28),cw,Math.max(1.5,th*0.55));
       }
     }
@@ -2772,7 +2776,7 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
   for(const l of liveLvls){
     const d=df(l.p);if(d<0.04)continue;
     const t=clamp(l.q/denom,0,1);if(t<0.04)continue;
-    const temp=l.isBid?t*0.52:0.48+t*0.52;
+    const temp=l.isBid?0.22+t*0.30:0.60+t*0.40;
     const alpha=clamp((0.18+t*0.82)*d,0.08,Math.min(1.0,opacity*1.4));
     const th=getTH(l.p);
     const yy=sc.y(l.p);
@@ -2782,7 +2786,7 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
     // Núcleo para paredes máximas na live wall
     if(t>0.75){
       const ht=Math.pow((t-0.75)/0.25,1.5);
-      ctx.fillStyle=dcHeatColor(l.isBid?0.50:0.96,Math.min(1,ht*d));
+      ctx.fillStyle=dcHeatColor(l.isBid?0.48:0.98,Math.min(1,ht*d));
       ctx.fillRect(right-wallW,yy-Math.max(1,th*0.25),wallW,Math.max(1.5,th*0.50));
     }
   }
