@@ -1970,7 +1970,8 @@ function heatAnchorLabel(){
 }
 function pushHeatSnapshot(){
   const now=Date.now();
-  if(S.heatHist.length && now-S.heatHist.at(-1).time<900)return;
+  // Snapshot a cada 2s — balance entre resolução temporal e memória
+  if(S.heatHist.length && now-S.heatHist.at(-1).time<2000)return;
   const raw=[...S.depth.bids.map(v=>({...v,side:'b'})),...S.depth.asks.map(v=>({...v,side:'a'}))]
     .filter(v=>v.q>0&&isFinite(v.p)&&isFinite(v.q));
   if(!raw.length)return;
@@ -1982,7 +1983,8 @@ function pushHeatSnapshot(){
     .map(v=>({p:v.p,q:v.q,side:v.side,power:Math.min(1,v.q/maxQty)}));
   const idx=S.candles.length-1;
   S.heatHist.push({time:now,idx,levels});
-  if(S.heatHist.length>1800)S.heatHist.splice(0,S.heatHist.length-1800);
+  // 6000 snaps × 2s = ~3.3h de histórico de orderbook
+  if(S.heatHist.length>6000)S.heatHist.splice(0,S.heatHist.length-6000);
 }
 function addAggTrade(t,live=false,seq=S.loadSeq){
   if(seq!==S.loadSeq)return;
@@ -2589,139 +2591,148 @@ function drawLiquidityZone(ctx,x1,x2,yy,h,rgb,a){
 }
 
 function drawLiquidityEngine(ctx,W,H,sc,x){
-  const data=buildLiquidityEngine();
-  const opacity=clamp(+el('liqOpacity')?.value||0.75,0.10,1.0);
-  const left=PL, right=W-RP(), top=PT, bottom=H-PB;
-  const width=right-left, height=bottom-top;
+  // ── DeepCharts-style: time columns per snapshot, temperature = order size ──
+  const left=PL,right=W-RP(),top=PT,bottom=H-PB;
+  const width=right-left,height=bottom-top;
   if(width<=0||height<=0)return;
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(left,top,width,height);
-  ctx.clip();
-
-  const span=Math.max(.35,S.view.end-S.view.start);
+  const opacity=clamp(numInput('heatOpacity',0.85),0.08,1.0);
+  const step=Math.max(1,+el('liqStep')?.value||25);
+  const span=Math.max(0.35,S.view.end-S.view.start);
   const pxPerBar=(right-left)/span;
 
-  // tileH: use fixed pixel band tied to step projected on screen, min 3px
-  const rawBucketPx=data.step>0?Math.abs(sc.y(sc.lo+data.step)-sc.y(sc.lo)):4;
-  const tileH=clamp(rawBucketPx*0.88, 3, 22);
-
-  // Normalise: use p95 of visible levels to maximise contrast in view
-  const visibleScores=data.current
-    .filter(l=>l.price>=sc.lo&&l.price<=sc.hi)
-    .map(l=>l.score).sort((a,b)=>a-b);
-  const localP95=visibleScores[Math.floor(visibleScores.length*0.95)]||data.maxScore;
-  const norm=Math.max(1, localP95);
-
-  function strength(score){return clamp(Math.pow(score/norm,0.42),0,1);}
-
-  function tileColor(l,baseAlpha){
-    const total=(l.bid||0)+(l.ask||0)||1;
-    const askRatio=(l.ask||0)/total;
-    const s=strength(l.score||0);
-    const t=clamp(askRatio*0.85+s*0.15,0,1);
-    const a=clamp((s*0.70+0.10)*baseAlpha*opacity,0.005,0.85);
-    return {t,a,s};
-  }
-
-  // ── Layer 1: Full-width ribbon tiles — ALL current book levels ──
+  ctx.save();
+  ctx.beginPath();ctx.rect(left,top,width,height);ctx.clip();
   ctx.globalCompositeOperation='source-over';
-  const allCur=data.current||[];
 
-  for(let i=0;i<allCur.length;i++){
-    const l=allCur[i];
-    const yy=sc.y(l.price);
-    if(!isFinite(yy)||yy<top-tileH*2||yy>bottom+tileH*2)continue;
-    const {t,a,s}=tileColor(l,0.62);
-    if(a<0.002)continue;
-    const h=clamp(tileH*(0.55+s*0.75),2,tileH*1.6);
-    const grad=ctx.createLinearGradient(left,0,right,0);
-    grad.addColorStop(0,   dcHeatColor(t,a*0.10));
-    grad.addColorStop(0.08,dcHeatColor(t,a*0.55));
-    grad.addColorStop(0.42,dcHeatColor(t,a));
-    grad.addColorStop(0.58,dcHeatColor(t,a));
-    grad.addColorStop(0.92,dcHeatColor(t,a*0.55));
-    grad.addColorStop(1,   dcHeatColor(t,a*0.10));
-    ctx.fillStyle=grad;
-    ctx.fillRect(left,yy-h*0.5,width,Math.max(2,h));
+  // Tile height = pixels per price bucket
+  const rawBktPx=step>0?Math.max(1.2,Math.abs(sc.y(sc.lo+step)-sc.y(sc.lo))):3;
+  const tileH=clamp(rawBktPx*0.94,1.5,36);
+
+  // ── Group S.heatHist snapshots by candle index, average qty per bucket ──
+  const allSnaps=S.heatHist||[];
+  const byCandle=new Map(); // candleIdx → {bid:Map<bkt,qty>, ask:Map<bkt,qty>, n}
+  const startCi=Math.max(0,Math.floor(S.view.start)-2);
+  const endCi=Math.min(S.candles.length-1,Math.ceil(S.view.end)+2);
+  for(let si=0;si<allSnaps.length;si++){
+    const snap=allSnaps[si];
+    const ci=snap.idx;
+    if(!Number.isFinite(ci)||ci<startCi||ci>endCi)continue;
+    let e=byCandle.get(ci);
+    if(!e){e={bid:new Map(),ask:new Map(),n:0};byCandle.set(ci,e);}
+    e.n++;
+    const lvs=snap.levels||[];
+    for(let j=0;j<lvs.length;j++){
+      const lv=lvs[j];
+      const p=+lv.p;if(!isFinite(p)||p<=0)continue;
+      const q=+lv.q;if(!isFinite(q)||q<=0)continue;
+      const bk=Math.round(p/step)*step;
+      const m=lv.side==='a'?e.ask:e.bid;
+      m.set(bk,(m.get(bk)||0)+q);
+    }
+  }
+  // Average accumulated qty by snapshot count
+  for(const[,e]of byCandle){
+    if(e.n<=1)continue;
+    for(const[k,v]of e.bid)e.bid.set(k,v/e.n);
+    for(const[k,v]of e.ask)e.ask.set(k,v/e.n);
   }
 
-  // ── Layer 2: Historical snapshot tiles ──
-  ctx.globalCompositeOperation='lighter';
-  const snaps=data.snaps||[];
-  if(snaps.length>1){
-    for(let si=0;si<snaps.length;si++){
-      const snap=snaps[si];
-      const next=snaps[si+1];
-      let x1=x(snap.idx)-pxPerBar*0.42;
-      let x2=next?x(next.idx)-pxPerBar*0.42:x1+pxPerBar*0.92;
-      if(!isFinite(x1)||!isFinite(x2))continue;
-      if(x2<left||x1>right)continue;
-      x1=clamp(x1,left,right); x2=clamp(x2,left,right);
-      const tw=Math.max(0.5,x2-x1);
-      const lv=(snap.levels||[]).slice(0,120);
-      for(let j=0;j<lv.length;j++){
-        const l=lv[j];
-        const yy=sc.y(l.price);
-        if(!isFinite(yy)||yy<top-tileH*2||yy>bottom+tileH*2)continue;
-        const {t,a,s}=tileColor(l,0.34);
-        if(s<0.04||a<0.002)continue;
-        const h2=clamp(tileH*(0.55+s*0.65),1.5,tileH*1.5);
-        const grad2=ctx.createLinearGradient(x1,0,x1+tw,0);
-        grad2.addColorStop(0,   dcHeatColor(t,a*0.15));
-        grad2.addColorStop(0.30,dcHeatColor(t,a*0.75));
-        grad2.addColorStop(0.70,dcHeatColor(t,a*0.75));
-        grad2.addColorStop(1,   dcHeatColor(t,a*0.15));
-        ctx.fillStyle=grad2;
-        ctx.fillRect(x1,yy-h2*0.5,tw,Math.max(1,h2));
-      }
+  // ── Current live book → always painted on the last 2 candles ──
+  const curBids=S.depth?.bids||[];
+  const curAsks=S.depth?.asks||[];
+  const lastCi=S.candles.length-1;
+  if(lastCi>=0){
+    function mkLive(){
+      const e={bid:new Map(),ask:new Map(),n:1};
+      for(const b of curBids){const p=+(b.p||0),q=+(b.q||0);if(p&&q){const bk=Math.round(p/step)*step;e.bid.set(bk,(e.bid.get(bk)||0)+q);}}
+      for(const a of curAsks){const p=+(a.p||0),q=+(a.q||0);if(p&&q){const bk=Math.round(p/step)*step;e.ask.set(bk,(e.ask.get(bk)||0)+q);}}
+      return e;
+    }
+    const live=mkLive();
+    byCandle.set(lastCi,live);
+    if(lastCi>0&&!byCandle.has(lastCi-1))byCandle.set(lastCi-1,live);
+  }
+
+  if(!byCandle.size){ctx.restore();return;}
+
+  // ── Normalise: p95 of all visible qty values ──
+  const allQtys=[];
+  for(const[,e]of byCandle){
+    for(const v of e.bid.values())if(v>0)allQtys.push(v);
+    for(const v of e.ask.values())if(v>0)allQtys.push(v);
+  }
+  if(!allQtys.length){ctx.restore();return;}
+  allQtys.sort((a,b)=>a-b);
+  const p95=allQtys[Math.floor(allQtys.length*0.95)]||allQtys[allQtys.length-1]||1;
+  const denom=Math.max(1,p95);
+
+  // ── Render: one column per candle, bid=cool (teal), ask=warm (orange/red) ──
+  for(let ci=startCi;ci<=endCi;ci++){
+    const e=byCandle.get(ci);
+    if(!e)continue;
+    const xc=x(ci);
+    const x1=Math.max(left,xc-pxPerBar*0.49);
+    const x2=Math.min(right,xc+pxPerBar*0.49);
+    const cw=x2-x1;
+    if(cw<0.3)continue;
+
+    // Bid side — temperature range [0 .. 0.52] = black → teal → cyan
+    for(const[bk,qty]of e.bid){
+      if(bk<sc.lo||bk>sc.hi)continue;
+      const t=clamp(qty/denom,0,1);
+      if(t<0.025)continue;
+      const temp=t*0.52;
+      const alpha=clamp(0.06+t*0.82,0.05,opacity);
+      const yy=sc.y(bk);
+      if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
+      ctx.fillStyle=dcHeatColor(temp,alpha);
+      ctx.fillRect(x1,yy-tileH*0.5,cw,Math.max(1,tileH));
+    }
+    // Ask side — temperature range [0.48 .. 1.0] = yellow → orange → red → white
+    for(const[bk,qty]of e.ask){
+      if(bk<sc.lo||bk>sc.hi)continue;
+      const t=clamp(qty/denom,0,1);
+      if(t<0.025)continue;
+      const temp=0.48+t*0.52;
+      const alpha=clamp(0.06+t*0.82,0.05,opacity);
+      const yy=sc.y(bk);
+      if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
+      ctx.fillStyle=dcHeatColor(temp,alpha);
+      ctx.fillRect(x1,yy-tileH*0.5,cw,Math.max(1,tileH));
     }
   }
 
-  // ── Layer 3: Live wall — right side, top levels only ──
-  ctx.globalCompositeOperation='source-over';
-  const topCur=(data.current||[]).slice(0,200);
-  for(let i=topCur.length-1;i>=0;i--){
-    const l=topCur[i];
-    const yy=sc.y(l.price);
-    if(!isFinite(yy)||yy<top-25||yy>bottom+25)continue;
-    const {t,a,s}=tileColor(l,0.80);
-    if(s<0.03)continue;
-    const wallLen=clamp(width*(0.05+s*0.30),width*0.04,width*0.38);
-    const x1=right-wallLen;
-    const h3=clamp(tileH*(0.60+s*0.90),1.8,tileH*2.0);
-    const grad3=ctx.createLinearGradient(x1,0,right,0);
-    grad3.addColorStop(0,   dcHeatColor(t,0));
-    grad3.addColorStop(0.20,dcHeatColor(t,a*0.40));
-    grad3.addColorStop(0.72,dcHeatColor(t,a*0.85));
-    grad3.addColorStop(1,   dcHeatColor(t,a*0.60));
-    ctx.fillStyle=grad3;
-    ctx.fillRect(x1,yy-h3*0.5,wallLen,Math.max(1.5,h3));
+  // ── Right-edge live wall: mostra o book atual em destaque ──
+  const wallW=clamp(pxPerBar*2.0,3,48);
+  const liveLvls=[
+    ...curBids.map(b=>({p:+(b.p||0),q:+(b.q||0),isBid:true})),
+    ...curAsks.map(a=>({p:+(a.p||0),q:+(a.q||0),isBid:false}))
+  ].filter(l=>l.p>=sc.lo&&l.p<=sc.hi&&l.q>0)
+   .sort((a,b)=>b.q-a.q).slice(0,350);
+  for(const l of liveLvls){
+    const t=clamp(l.q/denom,0,1);
+    if(t<0.04)continue;
+    const temp=l.isBid?t*0.52:0.48+t*0.52;
+    const alpha=clamp(0.12+t*0.88,0.08,Math.min(1.0,opacity*1.25));
+    const yy=sc.y(l.p);
+    if(!isFinite(yy)||yy<top||yy>bottom)continue;
+    ctx.fillStyle=dcHeatColor(temp,alpha);
+    ctx.fillRect(right-wallW,yy-tileH*0.5,wallW,Math.max(1,tileH));
   }
 
-  // ── Colour legend ──
-  ctx.globalCompositeOperation='source-over';
-  const legW=90,legH=8,legX=left+8,legY=bottom-18;
-  const legGrad=ctx.createLinearGradient(legX,0,legX+legW,0);
-  legGrad.addColorStop(0,   dcHeatColor(0,   0.90));
-  legGrad.addColorStop(0.33,dcHeatColor(0.33,0.90));
-  legGrad.addColorStop(0.55,dcHeatColor(0.55,0.90));
-  legGrad.addColorStop(0.75,dcHeatColor(0.75,0.90));
-  legGrad.addColorStop(1,   dcHeatColor(1,   0.90));
-  ctx.fillStyle='rgba(5,9,20,0.70)';
-  ctx.fillRect(legX-3,legY-3,legW+6,legH+14);
-  ctx.fillStyle=legGrad;
-  ctx.fillRect(legX,legY,legW,legH);
+  // ── Legend ──
+  const legW=110,legH=7,legX=left+8,legY=bottom-18;
+  const lg=ctx.createLinearGradient(legX,0,legX+legW,0);
+  for(let i=0;i<=10;i++)lg.addColorStop(i/10,dcHeatColor(i/10,0.90));
+  ctx.fillStyle='rgba(5,9,20,0.75)';ctx.fillRect(legX-3,legY-3,legW+6,legH+14);
+  ctx.fillStyle=lg;ctx.fillRect(legX,legY,legW,legH);
   ctx.fillStyle='rgba(200,215,240,0.72)';
   ctx.font='700 8px Inter,Arial';
-  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.textAlign='left';ctx.textBaseline='top';
   ctx.fillText('BID',legX,legY+legH+1);
   ctx.textAlign='right';
   ctx.fillText('ASK',legX+legW,legY+legH+1);
-
-
-  // v100: Heatmap não desenha bubbles. Big Trades/Footprint cuidam dos eventos agressivos.
   ctx.restore();
 }
 function drawLiquidityBubbles(ctx,sc,x,left,right,top,bottom){
