@@ -1594,6 +1594,24 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
           </div>
         </div>
 
+        <div class="ind-card" data-card="histZones">
+          <div class="ind-head">
+            <div class="row on" data-ind="histZones"><span class="name">Historical Zones</span><span class="switch"></span></div>
+            <button class="gear" data-settings="histZones" title="Inputs Historical Zones">⚙</button>
+          </div>
+          <div class="ind-settings" id="settings-histZones">
+            <div class="kv"><span class="k">Últimas velas</span><input class="num" id="hzBars" type="number" min="20" max="500" step="10" value="200"></div>
+            <div class="kv"><span class="k">Bucket $ (passo)</span><input class="num" id="hzStep" type="number" min="0.5" max="1000" step="0.5" value="50"></div>
+            <div class="kv"><span class="k">Mescla (ticks)</span><input class="num" id="hzMergeTol" type="number" min="0" max="20" step="1" value="3"></div>
+            <div class="kv"><span class="k">Top zonas</span><input class="num" id="hzTopN" type="number" min="1" max="50" step="1" value="15"></div>
+            <div class="kv"><span class="k">Opacidade</span><input class="num" id="hzOpacity" type="number" min="0.05" max="1" step="0.05" value="0.45"></div>
+            <div class="kv"><span class="k">Estender</span><select class="select tiny-select" id="hzExtend"><option value="1">borda direita</option><option value="0">só visível</option></select></div>
+            <div class="kv"><span class="k">Rótulo</span><select class="select tiny-select" id="hzShowVol"><option value="1">mostrar vol</option><option value="0">limpo</option></select></div>
+            <div class="kv"><span class="k">Min vol (qty)</span><input class="num" id="hzMinVol" type="number" min="0" step="0.1" value="0"></div>
+            <div class="hint">Agrega volume real do footprint (buy+sell) por faixa de preço. Zonas quentes = mais trades realizados. Requer aggTrades.</div>
+          </div>
+        </div>
+
         <div class="ind-card" data-card="stdVolume">
           <div class="ind-head">
             <div class="row on" data-ind="stdVolume"><span class="name">Volume Padrão MA</span><span class="switch"></span></div>
@@ -2155,7 +2173,7 @@ function profileLabel(){const m=el('profileAnchor')?.value||'visible';return m==
 function scale(vs,H){if(!vs||!vs.length)vs=S.candles.slice(-1);let hi=Math.max(...vs.map(c=>c.h)),lo=Math.min(...vs.map(c=>c.l));const pad=(hi-lo)*.08||hi*.01;hi+=pad;lo-=pad;const mid=(hi+lo)/2,range=Math.max(hi-lo,mid*.00001)/clamp(S.yScale.zoom||1,.15,40);hi=mid+range/2;lo=mid-range/2;return{lo,hi,y:p=>PT+(H-PT-PB)*(1-(p-lo)/(hi-lo))}}
 function draw(){
 
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc)}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawHistZones)safeLayer('Historical Zones',()=>window.__drawHistZones(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc)}
 function drawGrid(ctx,W,H,sc){
   const rp=RP(),right=W-rp,cw=CW(W);
   ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);
@@ -6159,5 +6177,170 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   setTimeout(applyV107,1000);
 
 
+})();
+</script>
+
+<script>
+/* HistoricalZones — horizontal volume zones from footprint aggTrades data.
+   Buckets buy+sell qty per price level, merges adjacent buckets, draws top-N
+   zones colored by relative volume intensity (cool→warm gradient). */
+(function DepthVisionLab_HistZones(){
+  'use strict';
+  function E(id){return document.getElementById(id)}
+  function sn(v,d){v=+v;return Number.isFinite(v)?v:d}
+
+  let _cache=null,_cacheKey='';
+
+  function buildZones(){
+    if(!S.candles||!S.candles.length)return[];
+    const bars  =Math.max(20,Math.min(500,sn(E('hzBars')?.value,200)));
+    const step  =Math.max(0.5,sn(E('hzStep')?.value,50));
+    const merge =Math.max(0,sn(E('hzMergeTol')?.value,3));
+    const topN  =Math.max(1,Math.min(50,sn(E('hzTopN')?.value,15)));
+    const minVol=Math.max(0,sn(E('hzMinVol')?.value,0));
+
+    const scanTo=S.candles.length;
+    const scanFrom=Math.max(0,scanTo-bars);
+    const ck=[scanTo,S.candles.at(-1)?.t,bars,step,merge,topN,minVol].join('|');
+    if(_cacheKey===ck&&_cache)return _cache;
+
+    // Accumulate footprint volume per price bucket
+    const bmap=new Map();
+    let hasFp=false;
+    for(let i=scanFrom;i<scanTo;i++){
+      const c=S.candles[i];
+      if(!c||!c.fp||!c.fp.size)continue;
+      hasFp=true;
+      c.fp.forEach((r,rawP)=>{
+        const p=+rawP; if(!isFinite(p))return;
+        const bkt=Math.round(p/step)*step;
+        bmap.set(bkt,(bmap.get(bkt)||0)+(+r.buy||0)+(+r.sell||0));
+      });
+    }
+
+    if(!hasFp||!bmap.size){_cache=[];_cacheKey=ck;return[];}
+
+    // Sort by price, merge adjacent within (merge * step) gap
+    const sorted=[...bmap.entries()].filter(([,v])=>v>0).sort((a,b)=>a[0]-b[0]);
+    const zones=[];
+    let cur=null;
+    for(const [price,vol] of sorted){
+      if(!cur){
+        cur={lo:price-step*0.5,hi:price+step*0.5,vol};
+      }else{
+        const gap=(price-step*0.5)-cur.hi;
+        if(gap<=merge*step){
+          cur.hi=price+step*0.5;
+          cur.vol+=vol;
+        }else{
+          zones.push(cur);
+          cur={lo:price-step*0.5,hi:price+step*0.5,vol};
+        }
+      }
+    }
+    if(cur)zones.push(cur);
+
+    const result=zones
+      .filter(z=>z.vol>minVol)
+      .sort((a,b)=>b.vol-a.vol)
+      .slice(0,topN);
+
+    _cacheKey=ck; _cache=result;
+    return result;
+  }
+
+  function fmtV(v){
+    if(v>=1e6)return(v/1e6).toFixed(1)+'M';
+    if(v>=1e3)return(v/1e3).toFixed(0)+'K';
+    return v.toFixed(1);
+  }
+
+  function drawHistZones(ctx,W,H,V,sc){
+    if(!S.inds.histZones)return;
+    const zones=buildZones();
+    if(!zones.length)return;
+
+    const opacity =Math.max(0.05,Math.min(1,sn(E('hzOpacity')?.value,0.45)));
+    const showVol =(E('hzShowVol')?.value||'1')==='1';
+    const extend  =(E('hzExtend')?.value||'1')==='1';
+    const right=W-RP(), left=PL;
+    const maxVol=zones[0].vol; // sorted desc
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(left,PT,right-left,H-PT-PB);
+    ctx.clip();
+
+    // Draw weakest→strongest so strongest renders on top
+    for(let i=zones.length-1;i>=0;i--){
+      const z=zones[i];
+      const t=Math.min(1,z.vol/maxVol); // 0=weakest 1=strongest
+
+      const yt=sc.y(z.hi), yb=sc.y(z.lo);
+      if(!isFinite(yt)||!isFinite(yb))continue;
+      const yTop=Math.min(yt,yb), yBot=Math.max(yt,yb);
+      const zH=Math.max(2,yBot-yTop);
+      if(yBot<PT-4||yTop>H-PB+4)continue;
+
+      const x2=extend?right:Math.min(right,right); // always full width for now
+
+      // Color ramp: steel-blue (t=0) → gold (t=1)
+      const cr=Math.round(80+t*175);
+      const cg=Math.round(140+t*50);
+      const cb=Math.round(220-t*200);
+      const a =+(opacity*(0.28+t*0.72)).toFixed(3);
+      const aE=+(a*0.12).toFixed(3);
+
+      const grad=ctx.createLinearGradient(left,0,x2,0);
+      grad.addColorStop(0,   `rgba(${cr},${cg},${cb},${aE})`);
+      grad.addColorStop(0.08,`rgba(${cr},${cg},${cb},${a})`);
+      grad.addColorStop(0.92,`rgba(${cr},${cg},${cb},${a})`);
+      grad.addColorStop(1,   `rgba(${cr},${cg},${cb},${aE})`);
+      ctx.fillStyle=grad;
+      ctx.fillRect(left,yTop,x2-left,zH);
+
+      // Top + bottom edge lines only (cleaner than full rect stroke)
+      const ba=Math.min(1,a*2.2).toFixed(3);
+      ctx.strokeStyle=`rgba(${cr},${cg},${cb},${ba})`;
+      ctx.lineWidth=t>0.55?1.3:0.7;
+      ctx.beginPath();
+      ctx.moveTo(left,yTop+0.5); ctx.lineTo(x2,yTop+0.5);
+      ctx.moveTo(left,yBot-0.5); ctx.lineTo(x2,yBot-0.5);
+      ctx.stroke();
+
+      // Volume label — right-aligned near price axis
+      if(showVol&&zH>11){
+        const label=fmtV(z.vol);
+        ctx.font=(t>0.5?'bold ':'')+'9px monospace';
+        ctx.textAlign='right';
+        ctx.textBaseline='middle';
+        const ty=Math.max(yTop+6,Math.min(yBot-6,(yTop+yBot)/2));
+        const la=Math.min(1,a*3.5).toFixed(3);
+        ctx.fillStyle=`rgba(${Math.min(255,cr+40)},${Math.min(255,cg+40)},${Math.max(0,cb-40)},${la})`;
+        ctx.fillText(label,x2-6,ty);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  window.__drawHistZones=drawHistZones;
+
+  function ready(fn){if(document.readyState!=='loading')fn();else document.addEventListener('DOMContentLoaded',fn)}
+  ready(()=>{
+    if(typeof S==='undefined')return;
+    if(!('histZones' in S.inds))S.inds.histZones=true;
+    try{if(typeof syncIndControls==='function')syncIndControls();}catch(_){}
+    ['hzBars','hzStep','hzMergeTol','hzTopN','hzMinVol'].forEach(id=>{
+      const n=E(id); if(!n)return;
+      n.addEventListener('input', ()=>{_cache=null;if(typeof draw==='function')draw();});
+      n.addEventListener('change',()=>{_cache=null;if(typeof draw==='function')draw();});
+    });
+    ['hzOpacity','hzExtend','hzShowVol'].forEach(id=>{
+      const n=E(id); if(!n)return;
+      n.addEventListener('input', ()=>{if(typeof draw==='function')draw();});
+      n.addEventListener('change',()=>{if(typeof draw==='function')draw();});
+    });
+  });
 })();
 </script>
