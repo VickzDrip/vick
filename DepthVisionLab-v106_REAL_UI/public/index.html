@@ -1189,6 +1189,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 
 
 <style id="dvl-v106-real-final-overrides">
+/* profile row buttons: equal width, override .btn width:auto!important */
+.profile-row .btn{width:auto!important;flex:1 1 0%!important;min-width:0!important;}
 /* v106 REAL: logo only inside sidebar, topbar clean, asset/menu on left and price on right */
 .topbar-brand-dvl{display:none!important;}
 .topbar{display:flex!important;align-items:center!important;flex-wrap:nowrap!important;}
@@ -1384,14 +1386,11 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
   background:none !important;
 }
 .dvl-logo-img{
-  /* sidebar tem 222px; padding 14px dos dois lados → ~194px úteis.
-     A logo tem proporção ~4.1:1 (427x104). Altura 36px → largura ~148px. Cabe bem. */
   width:auto !important;
-  height:36px !important;
-  max-width:190px !important;
+  height:26px !important;
+  max-width:170px !important;
   object-fit:contain !important;
   display:block !important;
-  /* inverte pra branco no tema escuro (logo é preta, fundo transparente) */
   filter:invert(1) brightness(1.1) !important;
 }
 .dvl-logo-top{
@@ -1399,7 +1398,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
   max-width:140px !important;
 }
 .side-brand{
-  padding:14px 14px 12px !important;
+  padding:6px 10px 5px !important;
   border-bottom:1px solid #10192b !important;
 }
 @media(max-width:760px){
@@ -1460,9 +1459,9 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
       </div>
       <div class="section chart-custom">
         <div class="title">GRÁFICO</div>
-        <div class="profile-row" style="display:flex;gap:6px;margin-bottom:6px">
-          <button class="btn compact-save" id="themeToggle" type="button" style="flex:1">⚙ CUSTOMIZAÇÃO</button>
-          <button class="btn compact-save" id="profileSaveBtn" type="button" style="flex:1" title="Salva todos os parâmetros (inputs, TF, tipo de candle, etc) no navegador">💾 PERFIL</button>
+        <div class="profile-row" style="display:flex;gap:5px;margin-bottom:2px;justify-content:center">
+          <button class="btn compact-save" id="themeToggle" type="button" style="flex:1;min-width:0;text-align:center">⚙ CUSTOMIZAÇÃO</button>
+          <button class="btn compact-save" id="profileSaveBtn" type="button" style="flex:1;min-width:0;text-align:center" title="Salva todos os parâmetros (inputs, TF, tipo de candle, etc) no navegador">💾 PERFIL</button>
         </div>
         <div class="profile-status" id="profileStatus" style="font-size:9px;color:#6a7fa0;margin-bottom:6px;letter-spacing:1px;min-height:11px"></div>
         <div class="theme-panel" id="themePanel">
@@ -1736,7 +1735,6 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
             </div>
             <button class="mini-btn dot-long pos-btn" id="btnLong" title="Long"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19L19 5"/><polyline points="12 5 19 5 19 12"/></svg><span>L</span></button>
             <button class="mini-btn dot-short pos-btn" id="btnShort" title="Short"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5L19 19"/><polyline points="12 19 19 19 19 12"/></svg><span>S</span></button>
-            <button class="mini-btn danger" id="btnClearPos" title="Limpar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 4H8l-5 8 5 8h13"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg></button>
           </div>
         </div>
         <div class="hud" id="hud" style="display:none!important">zoom: <b>—</b><br>modo: <b>pan livre</b></div>
@@ -1745,7 +1743,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
         <div class="err" id="err"><div id="errMsg">Falha</div><button class="btn" style="width:auto;padding:8px 18px" id="retry">TENTAR NOVAMENTE</button></div>
       </div>
       <div id="timeAxisWrap"><canvas id="timeAxisCanvas"></canvas></div>
-      <div class="pane-divider" id="volumeDivider"><span class="pane-divider-label">VOLUME</span></div>
+      <div class="pane-divider" id="volumeDivider"></div>
       <div class="panes" id="volumePaneWrap"><canvas id="deltaPane"></canvas></div>
     </section>
   </div>
@@ -3604,11 +3602,11 @@ function drawLastPrice(ctx,W,sc){
     closeTxt=fmtCountdownV56(closeAt-Date.now());
   }catch(_){ }
   ctx.strokeStyle='rgba(0,212,255,.55)';ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(right,y);ctx.stroke();ctx.setLineDash([]);
-  const boxW=Math.min(86,RP()-8),boxH=31,boxX=right+4,boxY=clamp(y-boxH/2,PT,H_SAFE(ctx.canvas.height)-boxH);
+  const boxW=Math.max(74,Math.min(92,RP()-4)),boxH=38,boxX=right+3,boxY=clamp(y-boxH/2,PT,H_SAFE(ctx.canvas.height)-boxH);
   ctx.fillStyle='#00d4ff';ctx.fillRect(boxX,boxY,boxW,boxH);
   ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=.6;ctx.strokeRect(boxX+.5,boxY+.5,boxW-1,boxH-1);
-  ctx.fillStyle='#050914';ctx.textAlign='center';ctx.font='bold 11px monospace';ctx.fillText(priceFmt(last.c),boxX+boxW/2,boxY+13);
-  ctx.font='10px monospace';ctx.fillText(closeTxt,boxX+boxW/2,boxY+26);
+  ctx.fillStyle='#050914';ctx.textAlign='center';ctx.font='bold 11px monospace';ctx.fillText(priceFmt(last.c),boxX+boxW/2,boxY+15);
+  ctx.font='10px monospace';ctx.fillText(closeTxt,boxX+boxW/2,boxY+30);
 }
 function H_SAFE(h){return Math.max(PT+40,h-PB)}
 function drawCustom(ctx,V,sc,x){S.custom.forEach(ind=>{let vals=[];try{vals=evalCustom(ind.code)}catch(e){return}ctx.strokeStyle=ind.color;ctx.lineWidth=1.4;ctx.beginPath();let on=false;for(let i=V.a;i<V.b;i++){const v=vals[i];if(v==null||!isFinite(v))continue;const xx=x(i),yy=sc.y(v);if(!on){ctx.moveTo(xx,yy);on=true}else ctx.lineTo(xx,yy)}ctx.stroke()})}
@@ -3863,7 +3861,7 @@ document.querySelectorAll('.gear[data-settings]').forEach(g=>g.onclick=(ev)=>{ev
 if(inputModalClose)inputModalClose.onclick=closeInputModal;
 if(inputModalScrim)inputModalScrim.onclick=closeInputModal;
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeInputModal();});
-syncIndControls();el('btnLive').onclick=fitAll;el('btnFit').onclick=fitClose;el('btnLong').onclick=()=>{S.tool=S.tool==='long'?null:'long';syncToolBtns()};el('btnShort').onclick=()=>{S.tool=S.tool==='short'?null:'short';syncToolBtns()};el('btnClearPos').onclick=()=>{S.positions=[];draw()};el('applyBtn').onclick=()=>{refreshDepth();draw();if(isMobile())closeMobilePanel()};el('retry').onclick=boot;const __brandReload=document.querySelector('.brand')||document.querySelector('.side-logo')||document.querySelector('#topSym');if(__brandReload)__brandReload.onclick=()=>location.reload();el('chartStyle').onchange=e=>{S.chartStyle=e.target.value;draw()};
+syncIndControls();el('btnLive').onclick=fitAll;el('btnFit').onclick=fitClose;el('btnLong').onclick=()=>{S.tool=S.tool==='long'?null:'long';syncToolBtns()};el('btnShort').onclick=()=>{S.tool=S.tool==='short'?null:'short';syncToolBtns()};el('applyBtn').onclick=()=>{refreshDepth();draw();if(isMobile())closeMobilePanel()};el('retry').onclick=boot;const __brandReload=document.querySelector('.brand')||document.querySelector('.side-logo')||document.querySelector('#topSym');if(__brandReload)__brandReload.onclick=()=>location.reload();el('chartStyle').onchange=e=>{S.chartStyle=e.target.value;draw()};
 if(el('tfSelect')){
   el('tfSelect').onchange=e=>{
     const next=e.target.value;
@@ -5535,11 +5533,28 @@ return {
       if(n.type==='checkbox'||n.type==='radio') out[n.id]={c:!!n.checked};
       else out[n.id]={v:n.value};
     });
+    try{ if(window.S){ out._tf=S.tf; out._inds=JSON.stringify(S.inds); } }catch(_){}
     return out;
   }
 
   function applyAll(data){
     if(!data || typeof data!=='object') return 0;
+    // Restore S.tf and S.inds FIRST so that when topSym.onchange fires boot(), S.tf is correct
+    try{
+      if(data._tf && window.S && typeof S.tf!=='undefined' && S.tf!==data._tf){
+        S.tf=data._tf;
+        document.querySelectorAll('.tf').forEach(x=>x.classList.toggle('active',x.dataset.tf===S.tf));
+        const tfSel=document.getElementById('tfSelect');
+        if(tfSel) tfSel.value=data._tf;
+      }
+    }catch(_){}
+    try{
+      if(data._inds && window.S && S.inds){
+        const inds=JSON.parse(data._inds);
+        Object.keys(inds).forEach(k=>{ if(k in S.inds) S.inds[k]=inds[k]; });
+        if(typeof syncIndControls==='function') syncIndControls();
+      }
+    }catch(_){}
     let applied=0;
     listInputs().forEach(n=>{
       const rec=data[n.id]; if(!rec) return;
