@@ -2737,6 +2737,12 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
       if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
       ctx.fillStyle=dcHeatColor(t*0.52,clamp((0.10+t*0.90)*d,0.05,opacity));
       ctx.fillRect(x1,yy-th*0.5,cw,Math.max(1,th));
+      // Núcleo brilhante para paredes próximas do máximo
+      if(t>0.75){
+        const ht=Math.pow((t-0.75)/0.25,1.5);
+        ctx.fillStyle=dcHeatColor(0.50,Math.min(1,ht*d*0.95));
+        ctx.fillRect(x1,yy-Math.max(1,th*0.28),cw,Math.max(1.5,th*0.55));
+      }
     }
     for(const[bk,qty]of e.ask){
       if(bk<sc.lo||bk>sc.hi)continue;
@@ -2747,6 +2753,12 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
       if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
       ctx.fillStyle=dcHeatColor(0.48+t*0.52,clamp((0.10+t*0.90)*d,0.05,opacity));
       ctx.fillRect(x1,yy-th*0.5,cw,Math.max(1,th));
+      // Núcleo brilhante para paredes próximas do máximo
+      if(t>0.75){
+        const ht=Math.pow((t-0.75)/0.25,1.5);
+        ctx.fillStyle=dcHeatColor(0.96,Math.min(1,ht*d*0.95));
+        ctx.fillRect(x1,yy-Math.max(1,th*0.28),cw,Math.max(1.5,th*0.55));
+      }
     }
   }
 
@@ -2767,6 +2779,12 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
     if(!isFinite(yy)||yy<top||yy>bottom)continue;
     ctx.fillStyle=dcHeatColor(temp,alpha);
     ctx.fillRect(right-wallW,yy-th*0.5,wallW,Math.max(1,th));
+    // Núcleo para paredes máximas na live wall
+    if(t>0.75){
+      const ht=Math.pow((t-0.75)/0.25,1.5);
+      ctx.fillStyle=dcHeatColor(l.isBid?0.50:0.96,Math.min(1,ht*d));
+      ctx.fillRect(right-wallW,yy-Math.max(1,th*0.25),wallW,Math.max(1.5,th*0.50));
+    }
   }
 
   // ── Legend ──
