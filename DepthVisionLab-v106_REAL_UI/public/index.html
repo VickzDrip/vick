@@ -2247,7 +2247,7 @@ function drawHeat(ctx,W,H,sc){
 
   const minQty=numInput('heatMinQty',0.05);
   const topN=clamp(Math.round(numInput('heatTopN',700)),80,1600);
-  const power=Math.max(.25,numInput('heatPower',1.25));
+  const power=Math.max(.25,numInput('heatPower',2.0));
   const smooth=numInput('heatSmooth',10);
   const opacity=clamp(numInput('heatOpacity',.36),.04,.78);
   const anchor=el('heatAnchor')?.value||'current';
@@ -2336,7 +2336,7 @@ function drawHeat(ctx,W,H,sc){
     }
   }
 
-  // 3) Base global por candles, sempre presente e fraca, para o heatmap existir no preço todo.
+  // 3) Base global por candles — peso muito baixo, só pra contexto de preço histórico.
   const cs=anchorCandles();
   if(cs.length){
     const maxCandles=anchor==='current'?260:1800;
@@ -2353,7 +2353,7 @@ function drawHeat(ctx,W,H,sc){
       const q=vol/rows;
       for(let r=0;r<rows;r++){
         const pp=low+(high-low)*(r+.5)/rows;
-        addBucket(map,pp,q,side,0.055);
+        addBucket(map,pp,q,side,0.012); // reduzido de 0.055 → menos ruído de fundo
       }
     }
   }
@@ -2369,26 +2369,24 @@ function drawHeat(ctx,W,H,sc){
 
   if(!allLevels.length){heatDebugBox('HEATMAP DEBUG\ndraw: OK\nlevels: 0\nbucket: '+bucketPrice.toFixed(2));return;}
 
-  // Normalização GLOBAL pela âncora. Não use apenas visível, senão o zoom muda a cor.
+  // Normalização agressiva: p98 como teto — só os níveis excepcionais ficam em full-bright.
   allLevels.sort((a,b)=>b.q-a.q);
   const globalTop=allLevels.slice(0,Math.max(topN,120));
   const qs=globalTop.map(l=>l.q).sort((a,b)=>a-b);
-  const p50=qs[Math.floor(qs.length*.50)]||1;
-  const p92=qs[Math.floor(qs.length*.92)]||p50;
-  const denom=Math.max(1,p50,p92*.30);
+  const p70=qs[Math.floor(qs.length*.70)]||1;
+  const p98=qs[Math.floor(qs.length*.98)]||p70*4;
+  const denom=Math.max(1e-9,p98);
 
   // Só aqui o zoom entra: escolher o que desenhar na tela atual.
   const visibleLevels=allLevels.filter(l=>l.p>=lo&&l.p<=hi).sort((a,b)=>b.q-a.q).slice(0,topN).sort((a,b)=>a.p-b.p);
 
   ctx.save();
-  // v101: sempre por cima; nenhuma camada posterior deve apagar os bubbles.
   ctx.globalCompositeOperation='source-over';
   ctx.globalAlpha=1;
   ctx.shadowBlur=0;
   ctx.beginPath();
   ctx.rect(chartLeft,chartTop,width,height);
   ctx.clip();
-  ctx.globalCompositeOperation='source-over';
 
   if(!visibleLevels.length){
     ctx.restore();
@@ -2396,32 +2394,74 @@ function drawHeat(ctx,W,H,sc){
     return;
   }
 
+  // Threshold: só desenha se tiver pelo menos 20% do p70 (remove ruído extremo)
+  const drawThreshold=p70*.20;
+
   for(let i=0;i<visibleLevels.length;i++){
     const l=visibleLevels[i];
+    if(l.q<drawThreshold)continue;
     const yy=sc.y(l.p);
     if(!isFinite(yy)||yy<chartTop-50||yy>chartBottom+50)continue;
-    const relative=l.q/denom;
-    const strength=Math.pow(clamp(relative,0,2.8)/2.8,1/power);
+    const relative=clamp(l.q/denom,0,1);
+    // Power elevado = curva mais íngreme, paredes fortes se destacam muito mais
+    const strength=Math.pow(relative,1/Math.max(power,0.25));
     const askDom=l.ask>l.bid;
-    // Altura visual baseada no bucket real projetado na escala atual, não recalculada por zoom.
     const y2=sc.y(l.p+bucketPrice);
     const bucketH=isFinite(y2)?Math.abs(y2-yy):3;
-    const h=clamp(Math.max(bucketH,1.5)+strength*10+smooth*.06,2,28);
-    const a=clamp((.018+strength*.22)*opacity,.008,.34);
-    const base=askDom?'210,62,78':'0,178,148';
-    const soft=askDom?'105,36,74':'0,70,120';
+    const h=clamp(Math.max(bucketH,1.5)+strength*8+smooth*.04,2,24);
+    const a=clamp((.008+strength*.38)*opacity,.004,.55);
+    // Cores mais saturadas e distintas: verde puro para bid, vermelho puro para ask
+    const base=askDom?'255,55,85':'0,200,120';
+    const soft=askDom?'120,20,50':'0,80,100';
 
     const grad=ctx.createLinearGradient(chartLeft,yy,chartRight,yy);
-    grad.addColorStop(0,'rgba('+soft+','+(a*.16)+')');
-    grad.addColorStop(.34,'rgba('+base+','+(a*.68)+')');
-    grad.addColorStop(1,'rgba('+soft+','+(a*.08)+')');
+    grad.addColorStop(0,`rgba(${soft},${a*.10})`);
+    grad.addColorStop(.40,`rgba(${base},${a*.75})`);
+    grad.addColorStop(1,`rgba(${soft},${a*.06})`);
     ctx.fillStyle=grad;
     ctx.fillRect(chartLeft,yy-h/2,width,h);
 
-    const hotW=width*clamp(.10+strength*.78,.10,.88);
-    const hx=askDom?chartRight-hotW:chartLeft;
-    ctx.fillStyle='rgba('+base+','+clamp((.025+strength*.22)*opacity,.01,.36)+')';
-    ctx.fillRect(hx,yy-Math.max(1,h*.16),hotW,Math.max(2,h*.30));
+    // Linha de núcleo mais fina e intensa nos níveis mais fortes
+    if(strength>.45){
+      ctx.fillStyle=`rgba(${base},${clamp((.04+strength*.40)*opacity,.02,.60)})`;
+      ctx.fillRect(chartLeft,yy-Math.max(1,bucketH*.25),width,Math.max(1.5,bucketH*.50));
+    }
+  }
+
+  // ── Marcadores das top walls: linha + label de preço e quantidade ────────
+  const curPrice=S.price||S.candles.at(-1)?.c||0;
+  if(curPrice>0){
+    const bidWalls=allLevels.filter(l=>l.p<curPrice&&l.p>=lo&&l.bid>l.ask).sort((a,b)=>b.q-a.q).slice(0,3);
+    const askWalls=allLevels.filter(l=>l.p>curPrice&&l.p<=hi&&l.ask>l.bid).sort((a,b)=>b.q-a.q).slice(0,3);
+
+    function drawWallMarker(l,isBid,rank){
+      const yy=sc.y(l.p);
+      if(!isFinite(yy)||yy<chartTop||yy>chartBottom)return;
+      const strength=clamp(l.q/denom,0,1);
+      const col=isBid?'0,220,130':'255,60,90';
+      const alpha=clamp(.55+strength*.45,.55,1)*opacity*2.2;
+      // Linha horizontal sólida
+      ctx.strokeStyle=`rgba(${col},${clamp(alpha,.25,.85)})`;
+      ctx.lineWidth=rank===0?1.8:1.1;
+      ctx.setLineDash(rank===0?[]:[4,3]);
+      ctx.beginPath();ctx.moveTo(chartLeft,yy);ctx.lineTo(chartRight,yy);ctx.stroke();
+      ctx.setLineDash([]);
+      // Label: preço + qty
+      const qty=l.q.toFixed(1);
+      const label=`${priceFmt(l.p)} · ${qty} BTC`;
+      ctx.font=`bold ${rank===0?10:9}px monospace`;
+      ctx.textBaseline='middle';
+      const tw=ctx.measureText(label).width+8;
+      const lx=isBid?chartLeft+4:chartRight-tw-4;
+      ctx.fillStyle=`rgba(6,10,20,.78)`;
+      ctx.fillRect(lx-2,yy-8,tw+4,16);
+      ctx.fillStyle=`rgba(${col},${clamp(alpha,.55,1)})`;
+      ctx.textAlign='left';
+      ctx.fillText(label,lx+2,yy+1);
+    }
+
+    bidWalls.forEach((l,i)=>drawWallMarker(l,true,i));
+    askWalls.forEach((l,i)=>drawWallMarker(l,false,i));
   }
 
   ctx.restore();
