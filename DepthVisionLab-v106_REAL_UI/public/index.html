@@ -2684,9 +2684,9 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
   if(!S.heatDenom||S.heatDenom<1){ctx.restore();return;}
   const denom=S.heatDenom;
 
-  // ── Layer 1: Colunas temporais — zonas só fora do range do candle ──
-  // Bids só abaixo do low do candle, asks só acima do high.
-  // Onde o preço já passou, a zona some automaticamente — sem ambient layer.
+  // ── Layer 1: Colunas temporais ──
+  // Zona intacta (preço não tocou): brilho cheio.
+  // Zona tocada (preço passou): permanece visível em baixa intensidade — visão histórica.
   for(let ci=startCi;ci<=endCi;ci++){
     const e=byCandle.get(ci);
     if(!e)continue;
@@ -2700,30 +2700,32 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
     if(cw<0.3)continue;
 
     for(const[bk,qty]of e.bid){
-      if(candleLo>0&&bk>=candleLo)continue; // consumido: preço passou por aqui
       const d=df(bk);if(d<0.04)continue;
       const t=clamp(qty/denom,0,1);if(t<0.010)continue;
       const th=getTH(bk);
       const yy=sc.y(bk);
       if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
-      ctx.fillStyle=dcHeatColor(0.22+t*0.30,clamp((0.12+t*0.88)*d,0.06,opacity));
+      const touched=candleLo>0&&bk>=candleLo;
+      const maxA=touched?opacity*0.22:opacity;
+      ctx.fillStyle=dcHeatColor(0.22+t*0.30,clamp((0.12+t*0.88)*d,0.04,maxA));
       ctx.fillRect(x1,yy-th*0.5,cw,Math.max(1,th));
-      if(t>0.72){
+      if(!touched&&t>0.72){
         const ht=Math.pow((t-0.72)/0.28,1.4);
         ctx.fillStyle=dcHeatColor(0.48,Math.min(1,ht*d));
         ctx.fillRect(x1,yy-Math.max(1,th*0.28),cw,Math.max(1.5,th*0.55));
       }
     }
     for(const[bk,qty]of e.ask){
-      if(bk<=candleHi)continue; // consumido: preço passou por aqui
       const d=df(bk);if(d<0.04)continue;
       const t=clamp(qty/denom,0,1);if(t<0.010)continue;
       const th=getTH(bk);
       const yy=sc.y(bk);
       if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
-      ctx.fillStyle=dcHeatColor(0.60+t*0.40,clamp((0.12+t*0.88)*d,0.06,opacity));
+      const touched=bk<=candleHi;
+      const maxA=touched?opacity*0.22:opacity;
+      ctx.fillStyle=dcHeatColor(0.60+t*0.40,clamp((0.12+t*0.88)*d,0.04,maxA));
       ctx.fillRect(x1,yy-th*0.5,cw,Math.max(1,th));
-      if(t>0.72){
+      if(!touched&&t>0.72){
         const ht=Math.pow((t-0.72)/0.28,1.4);
         ctx.fillStyle=dcHeatColor(0.98,Math.min(1,ht*d));
         ctx.fillRect(x1,yy-Math.max(1,th*0.28),cw,Math.max(1.5,th*0.55));
