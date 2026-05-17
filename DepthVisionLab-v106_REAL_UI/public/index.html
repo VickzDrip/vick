@@ -1485,11 +1485,15 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
             <button class="gear" data-settings="heatmap" title="Inputs Liquidity Heatmap">⚙</button>
           </div>
           <div class="ind-settings" id="settings-heatmap">
-            <div class="kv"><span class="k">Brilho</span><input class="num" id="heatOpacity" type="number" min="0.05" max="1" step="0.05" value="0.85"></div>
-            <div class="kv"><span class="k">Range ± ($)</span><input class="num" id="heatRange" type="number" min="100" max="20000" step="100" value="1500"></div>
-            <div class="kv"><span class="k">Zona morta (%)</span><input class="num" id="heatDistPct" type="number" min="0" max="5" step="0.1" value="0.6"></div>
+            <div class="kv"><span class="k">Brilho</span><input class="num" id="heatOpacity" type="number" min="0.10" max="1" step="0.05" value="0.92"></div>
+            <div class="kv"><span class="k">Zona morta (%)</span><input class="num" id="heatDistPct" type="number" min="0" max="5" step="0.1" value="0.8"></div>
+            <div class="kv"><span class="k">── Resolução próxima ($)</span><input class="num" id="heatStepNear" type="number" min="1" max="100" step="1" value="10"></div>
+            <div class="kv"><span class="k">até (% do preço)</span><input class="num" id="heatZone1" type="number" min="0.1" max="10" step="0.1" value="0.5"></div>
+            <div class="kv"><span class="k">── Resolução média ($)</span><input class="num" id="heatStepMid" type="number" min="5" max="200" step="5" value="25"></div>
+            <div class="kv"><span class="k">até (% do preço)</span><input class="num" id="heatZone2" type="number" min="0.2" max="20" step="0.1" value="2.0"></div>
+            <div class="kv"><span class="k">── Resolução distante ($)</span><input class="num" id="heatStepFar" type="number" min="10" max="1000" step="10" value="100"></div>
             <div class="kv"><span class="k">Depth API</span><select class="select tiny-select" id="depthLimit"><option value="250">250 níveis</option><option value="500" selected>500 níveis</option><option value="1000">1000 níveis</option></select></div>
-            <div class="hint">Grade ancorada ao preço. Níveis consumidos somem automaticamente.</div>
+            <div class="hint">Próxima: &lt;0.5% | Média: 0.5–2% | Distante: &gt;2%</div>
           </div>
         </div>
 
@@ -1761,7 +1765,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 const API='https://api.binance.com', WS='wss://stream.binance.com:9443/stream?streams=';
 const LOCAL_API=location.origin; // our own server with persisted trades + depth history
 let depthRefreshTimer=null;
-const S={sym:'BTCUSDT',tf:'5m',candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatPeak:new Map(),trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:{heatmap:false,profile:true,bigTrades:true,book:false,stdVolume:true},custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal'};
+const S={sym:'BTCUSDT',tf:'5m',candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:{heatmap:false,profile:true,bigTrades:true,book:false,stdVolume:true},custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal'};
 window.__bigTradesOverlayCache={key:'',items:[]};
 window.__bigTradesPersistentCache=new Map();
 window.__bigTradesLastGood=[];
@@ -2589,172 +2593,201 @@ function drawLiquidityZone(ctx,x1,x2,yy,h,rgb,a){
 }
 
 function drawLiquidityEngine(ctx,W,H,sc,x){
+  // ── DeepCharts-style: time columns per snapshot, temperature = order size ──
   const left=PL,right=W-RP(),top=PT,bottom=H-PB;
   const width=right-left,height=bottom-top;
   if(width<=0||height<=0)return;
 
-  const opacity=clamp(numInput('heatOpacity',0.85),0.05,1.0);
-  const range=Math.max(100,numInput('heatRange',1500));
-  const curPrice=S.price||S.candles.at(-1)?.c||0;
-  if(!curPrice||!S.candles.length)return;
-
-  // Auto step → ~50 grid levels in the visible range
-  const step=Math.max(1,Math.round(range*2/50));
-  function bkt(p){return Math.round(p/step)*step;}
-  const gridLo=bkt(curPrice-range);
-  const gridHi=bkt(curPrice+range);
-
-  // Zona morta = corte duro: níveis dentro de distPct% do preço são completamente omitidos.
-  // Fora da zona morta, todos os níveis renderizam em brilho cheio — sem multiplicar por d.
-  const deadPct=clamp(numInput('heatDistPct',0.6),0,5)/100;
-  const deadDist=curPrice*deadPct;
-  function inDead(p){return deadDist>0&&Math.abs(p-curPrice)<deadDist;}
-
-  const tileH=clamp(Math.abs(sc.y(sc.lo)-sc.y(sc.lo+step))*0.92,1.5,40);
+  const opacity=clamp(numInput('heatOpacity',0.85),0.08,1.0);
   const span=Math.max(0.35,S.view.end-S.view.start);
   const pxPerBar=(right-left)/span;
 
-  // ── Build current book grid map ──
-  const curBids=S.depth?.bids||[];
-  const curAsks=S.depth?.asks||[];
-  const curGrid=new Map(); // bktPrice → {qty, isBid}
-  for(const b of curBids){
-    const p=+(b.p||0),q=+(b.q||0);if(!p||!q)continue;
-    const bk=bkt(p);if(bk<gridLo||bk>gridHi)continue;
-    const e=curGrid.get(bk)||{qty:0,isBid:true};e.qty+=q;curGrid.set(bk,e);
+  // Preço atual — supressão próxima + multi-resolução
+  const curPrice=S.price||S.candles.at(-1)?.c||0;
+  const distPct=clamp(numInput('heatDistPct',0.8),0,5)/100;
+  const distScale=curPrice>0&&distPct>0?curPrice*distPct:1e9;
+  function df(p){
+    if(!curPrice)return 1;
+    return clamp(1-Math.exp(-Math.abs(p-curPrice)/distScale),0,1);
   }
-  for(const a of curAsks){
-    const p=+(a.p||0),q=+(a.q||0);if(!p||!q)continue;
-    const bk=bkt(p);if(bk<gridLo||bk>gridHi)continue;
-    const e=curGrid.get(bk)||{qty:0,isBid:false};e.qty+=q;curGrid.set(bk,e);
-  }
-  if(!curGrid.size)return;
 
-  // ── Normalize: p80 (mais generoso que p95 — mostra mais níveis como "quentes") ──
-  const gridQtys=[];
-  for(const[,e]of curGrid)if(e.qty>0&&!inDead(e.qty))gridQtys.push(e.qty);
-  // use all qty values for normalization regardless of dead zone
-  const allGridQtys=[];
-  for(const[,e]of curGrid)if(e.qty>0)allGridQtys.push(e.qty);
-  allGridQtys.sort((a,b)=>a-b);
-  const p80=allGridQtys[Math.floor(allGridQtys.length*0.80)]||allGridQtys[allGridQtys.length-1]||1;
-  const denom=Math.max(1,p80);
-  const sigThresh=denom*0.08;
-
-  // ── Update S.heatPeak + detect consumed levels ──
-  const consumed=new Set();
-  for(const[lv,e]of curGrid){
-    const cur=e.qty;
-    const oldPeak=S.heatPeak.get(lv)||0;
-    if(cur>oldPeak)S.heatPeak.set(lv,cur);
-    const pk=S.heatPeak.get(lv)||0;
-    if(pk>=sigThresh&&cur<pk*0.15)consumed.add(lv);
-    else if(cur>=pk*0.40&&cur>0)S.heatPeak.set(lv,cur);
+  // ── Multi-resolução: 3 zonas com bucket adaptativo por distância ──
+  const stepNear=Math.max(1,numInput('heatStepNear',10));
+  const stepMid =Math.max(1,numInput('heatStepMid',25));
+  const stepFar =Math.max(1,numInput('heatStepFar',100));
+  const zone1=clamp(numInput('heatZone1',0.5),0,50)/100; // 0.5% → fração do preço
+  const zone2=clamp(numInput('heatZone2',2.0),0,50)/100;
+  function getStep(p){
+    if(!curPrice)return stepMid;
+    const dist=Math.abs(p-curPrice)/curPrice;
+    if(dist<=zone1)return stepNear;
+    if(dist<=zone2)return stepMid;
+    return stepFar;
   }
+  function bkt(p){const s=getStep(p);return Math.round(p/s)*s;}
+  // tileH pré-calculado por zona (evita sc.y() duplo em loop)
+  function zoneTileH(s){return clamp(Math.max(1.2,Math.abs(sc.y(sc.lo+s)-sc.y(sc.lo)))*0.94,1.5,36);}
+  const thNear=zoneTileH(stepNear),thMid=zoneTileH(stepMid),thFar=zoneTileH(stepFar);
+  function getTH(p){const s=getStep(p);return s===stepNear?thNear:s===stepFar?thFar:thMid;}
 
   // ── Group S.heatHist snapshots by candle index, average qty per bucket ──
   const allSnaps=S.heatHist||[];
-  const byCandleH=new Map();
+  const byCandle=new Map(); // candleIdx → {bid:Map<bkt,qty>, ask:Map<bkt,qty>, n}
   const startCi=Math.max(0,Math.floor(S.view.start)-2);
   const endCi=Math.min(S.candles.length-1,Math.ceil(S.view.end)+2);
   for(let si=0;si<allSnaps.length;si++){
     const snap=allSnaps[si];
     const ci=snap.idx;
     if(!Number.isFinite(ci)||ci<startCi||ci>endCi)continue;
-    let e=byCandleH.get(ci);
-    if(!e){e={bid:new Map(),ask:new Map(),n:0};byCandleH.set(ci,e);}
+    let e=byCandle.get(ci);
+    if(!e){e={bid:new Map(),ask:new Map(),n:0};byCandle.set(ci,e);}
     e.n++;
-    for(const lv of snap.levels||[]){
-      const p=+lv.p,q=+lv.q;if(!p||!q)continue;
-      const bk=bkt(p);if(bk<gridLo||bk>gridHi)continue;
+    const lvs=snap.levels||[];
+    for(let j=0;j<lvs.length;j++){
+      const lv=lvs[j];
+      const p=+lv.p;if(!isFinite(p)||p<=0)continue;
+      const q=+lv.q;if(!isFinite(q)||q<=0)continue;
+      const bk=bkt(p);
       const m=lv.side==='a'?e.ask:e.bid;
       m.set(bk,(m.get(bk)||0)+q);
     }
   }
-  for(const[,e]of byCandleH){
+  // Average accumulated qty by snapshot count
+  for(const[,e]of byCandle){
     if(e.n<=1)continue;
     for(const[k,v]of e.bid)e.bid.set(k,v/e.n);
     for(const[k,v]of e.ask)e.ask.set(k,v/e.n);
   }
-  // Pin live book to last 2 candles
+
+  // ── Current live book → always painted on the last 2 candles ──
+  const curBids=S.depth?.bids||[];
+  const curAsks=S.depth?.asks||[];
   const lastCi=S.candles.length-1;
   if(lastCi>=0){
-    const live={bid:new Map(),ask:new Map(),n:1};
-    for(const[bk,e]of curGrid)(e.isBid?live.bid:live.ask).set(bk,e.qty);
-    byCandleH.set(lastCi,live);
-    if(lastCi>0&&!byCandleH.has(lastCi-1))byCandleH.set(lastCi-1,live);
+    function mkLive(){
+      const e={bid:new Map(),ask:new Map(),n:1};
+      for(const b of curBids){const p=+(b.p||0),q=+(b.q||0);if(p&&q){const bk=bkt(p);e.bid.set(bk,(e.bid.get(bk)||0)+q);}}
+      for(const a of curAsks){const p=+(a.p||0),q=+(a.q||0);if(p&&q){const bk=bkt(p);e.ask.set(bk,(e.ask.get(bk)||0)+q);}}
+      return e;
+    }
+    const live=mkLive();
+    byCandle.set(lastCi,live);
+    if(lastCi>0&&!byCandle.has(lastCi-1))byCandle.set(lastCi-1,live);
   }
 
-  // ── Layer 0: Ambient full-width (fundo de referência dos 20 maiores níveis) ──
-  const ambEntries=[...curGrid.entries()]
-    .filter(([bk,e])=>!inDead(bk)&&!consumed.has(bk)&&e.qty>0)
-    .sort((a,b)=>b[1].qty-a[1].qty).slice(0,20);
-  for(const[bk,e]of ambEntries){
-    const t=clamp(e.qty/denom,0,1);
-    const yy=sc.y(bk);
-    if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
-    const temp=e.isBid?0.22+t*0.30:0.60+t*0.40;
-    ctx.fillStyle=dcHeatColor(temp,clamp(0.18+t*0.22,0.08,opacity*0.45));
-    ctx.fillRect(left,yy-tileH*0.5,width,Math.max(1,tileH));
+  if(!byCandle.size){ctx.restore();return;}
+
+  // ── Normalise: p95 of all visible qty values ──
+  const allQtys=[];
+  for(const[,e]of byCandle){
+    for(const v of e.bid.values())if(v>0)allQtys.push(v);
+    for(const v of e.ask.values())if(v>0)allQtys.push(v);
+  }
+  if(!allQtys.length){ctx.restore();return;}
+  allQtys.sort((a,b)=>a-b);
+  const p95=allQtys[Math.floor(allQtys.length*0.95)]||allQtys[allQtys.length-1]||1;
+  const denom=Math.max(1,p95);
+
+  // ── Layer 0: Ambient — book atual sobre toda a largura, opacidade muito baixa ──
+  // Cria o fundo teal persistente em TODAS as velas (mesmo sem snapshots históricos).
+  // Bandas horizontais brilhantes emergem naturalmente quando uma grande ordem fica
+  // estática em vários snapshots consecutivos — exatamente como no DeepCharts.
+  // ── Layer 0: Ambiente — só top 40 bids + top 40 asks, full-width, baixa opacidade ──
+  // Limitar a 40 por lado elimina o fundo lodoso de centenas de faixas escuras sobrepostas.
+  // Cores: bid começa em teal (0.22) não azul escuro; ask começa em laranja (0.60).
+  const ambBids=[...curBids].filter(b=>+(b.q||0)>0&&+(b.p||0)>=sc.lo&&+(b.p||0)<=sc.hi)
+    .sort((a,b)=>+(b.q||0)-+(a.q||0)).slice(0,40);
+  const ambAsks=[...curAsks].filter(a=>+(a.q||0)>0&&+(a.p||0)>=sc.lo&&+(a.p||0)<=sc.hi)
+    .sort((a,b)=>+(b.q||0)-+(a.q||0)).slice(0,40);
+  for(const b of ambBids){
+    const p=+(b.p||0),q=+(b.q||0);
+    const d=df(p);if(d<0.04)continue;
+    const t=clamp(q/denom,0,1);
+    const th=getTH(p);
+    const yy=sc.y(bkt(p));
+    if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
+    // Bids: teal → cyan (0.22..0.52) — nunca começa em azul escuro
+    ctx.fillStyle=dcHeatColor(0.22+t*0.30,clamp((0.08+t*0.72)*d,0.04,opacity));
+    ctx.fillRect(left,yy-th*0.5,width,Math.max(1,th));
+  }
+  for(const a of ambAsks){
+    const p=+(a.p||0),q=+(a.q||0);
+    const d=df(p);if(d<0.04)continue;
+    const t=clamp(q/denom,0,1);
+    const th=getTH(p);
+    const yy=sc.y(bkt(p));
+    if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
+    // Asks: laranja → branco (0.60..1.0) — sempre quente
+    ctx.fillStyle=dcHeatColor(0.60+t*0.40,clamp((0.08+t*0.72)*d,0.04,opacity));
+    ctx.fillRect(left,yy-th*0.5,width,Math.max(1,th));
   }
 
-  // ── Layer 1: Time columns — brilho cheio, sem multiplicar por distância ──
+  // ── Layer 1: Colunas temporais — suprimidas perto do preço, brilhantes longe ──
   for(let ci=startCi;ci<=endCi;ci++){
-    const e=byCandleH.get(ci);if(!e)continue;
+    const e=byCandle.get(ci);
+    if(!e)continue;
     const xc=x(ci);
     const x1=Math.max(left,xc-pxPerBar*0.49);
     const x2=Math.min(right,xc+pxPerBar*0.49);
-    if(x2-x1<0.3)continue;
     const cw=x2-x1;
-    const isLive=ci>=lastCi-1;
+    if(cw<0.3)continue;
+
     for(const[bk,qty]of e.bid){
-      if(inDead(bk))continue;
-      if(isLive&&consumed.has(bk))continue;
-      const t=clamp(qty/denom,0,1);if(t<0.006)continue;
+      if(bk<sc.lo||bk>sc.hi)continue;
+      const d=df(bk);if(d<0.04)continue;
+      const t=clamp(qty/denom,0,1);if(t<0.010)continue;
+      const th=getTH(bk);
       const yy=sc.y(bk);
-      if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
-      const a=clamp(0.28+t*0.72,0,1)*opacity;
-      ctx.fillStyle=dcHeatColor(0.22+t*0.30,a);
-      ctx.fillRect(x1,yy-tileH*0.5,cw,Math.max(1,tileH));
-      if(t>0.68){
-        const ht=Math.pow((t-0.68)/0.32,1.2);
-        ctx.fillStyle=dcHeatColor(0.50,Math.min(1,ht*opacity));
-        ctx.fillRect(x1,yy-Math.max(1,tileH*0.28),cw,Math.max(1.5,tileH*0.55));
+      if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
+      // Bid: teal → cyan (0.22..0.52)
+      ctx.fillStyle=dcHeatColor(0.22+t*0.30,clamp((0.12+t*0.88)*d,0.06,opacity));
+      ctx.fillRect(x1,yy-th*0.5,cw,Math.max(1,th));
+      if(t>0.72){
+        const ht=Math.pow((t-0.72)/0.28,1.4);
+        ctx.fillStyle=dcHeatColor(0.48,Math.min(1,ht*d));
+        ctx.fillRect(x1,yy-Math.max(1,th*0.28),cw,Math.max(1.5,th*0.55));
       }
     }
     for(const[bk,qty]of e.ask){
-      if(inDead(bk))continue;
-      if(isLive&&consumed.has(bk))continue;
-      const t=clamp(qty/denom,0,1);if(t<0.006)continue;
+      if(bk<sc.lo||bk>sc.hi)continue;
+      const d=df(bk);if(d<0.04)continue;
+      const t=clamp(qty/denom,0,1);if(t<0.010)continue;
+      const th=getTH(bk);
       const yy=sc.y(bk);
-      if(!isFinite(yy)||yy<top-tileH||yy>bottom+tileH)continue;
-      const a=clamp(0.28+t*0.72,0,1)*opacity;
-      ctx.fillStyle=dcHeatColor(0.60+t*0.40,a);
-      ctx.fillRect(x1,yy-tileH*0.5,cw,Math.max(1,tileH));
-      if(t>0.68){
-        const ht=Math.pow((t-0.68)/0.32,1.2);
-        ctx.fillStyle=dcHeatColor(0.98,Math.min(1,ht*opacity));
-        ctx.fillRect(x1,yy-Math.max(1,tileH*0.28),cw,Math.max(1.5,tileH*0.55));
+      if(!isFinite(yy)||yy<top-th||yy>bottom+th)continue;
+      // Ask: laranja → branco (0.60..1.0)
+      ctx.fillStyle=dcHeatColor(0.60+t*0.40,clamp((0.12+t*0.88)*d,0.06,opacity));
+      ctx.fillRect(x1,yy-th*0.5,cw,Math.max(1,th));
+      if(t>0.72){
+        const ht=Math.pow((t-0.72)/0.28,1.4);
+        ctx.fillStyle=dcHeatColor(0.98,Math.min(1,ht*d));
+        ctx.fillRect(x1,yy-Math.max(1,th*0.28),cw,Math.max(1.5,th*0.55));
       }
     }
   }
 
-  // ── Layer 2: Live right-edge wall ──
+  // ── Right-edge live wall: paredes distantes em destaque ──
   const wallW=clamp(pxPerBar*2.0,3,48);
-  for(const[bk,e]of curGrid){
-    if(inDead(bk))continue;
-    if(consumed.has(bk))continue;
-    const t=clamp(e.qty/denom,0,1);if(t<0.03)continue;
-    const yy=sc.y(bk);
+  const liveLvls=[
+    ...curBids.map(b=>({p:+(b.p||0),q:+(b.q||0),isBid:true})),
+    ...curAsks.map(a=>({p:+(a.p||0),q:+(a.q||0),isBid:false}))
+  ].filter(l=>l.p>=sc.lo&&l.p<=sc.hi&&l.q>0)
+   .sort((a,b)=>b.q-a.q).slice(0,350);
+  for(const l of liveLvls){
+    const d=df(l.p);if(d<0.04)continue;
+    const t=clamp(l.q/denom,0,1);if(t<0.04)continue;
+    const temp=l.isBid?0.22+t*0.30:0.60+t*0.40;
+    const alpha=clamp((0.18+t*0.82)*d,0.08,Math.min(1.0,opacity*1.4));
+    const th=getTH(l.p);
+    const yy=sc.y(l.p);
     if(!isFinite(yy)||yy<top||yy>bottom)continue;
-    const temp=e.isBid?0.22+t*0.30:0.60+t*0.40;
-    const a=clamp(0.30+t*0.70,0,1)*Math.min(1,opacity*1.2);
-    ctx.fillStyle=dcHeatColor(temp,a);
-    ctx.fillRect(right-wallW,yy-tileH*0.5,wallW,Math.max(1,tileH));
-    if(t>0.70){
-      const ht=Math.pow((t-0.70)/0.30,1.3);
-      ctx.fillStyle=dcHeatColor(e.isBid?0.50:0.98,Math.min(1,ht*opacity*1.3));
-      ctx.fillRect(right-wallW,yy-Math.max(1,tileH*0.25),wallW,Math.max(1.5,tileH*0.50));
+    ctx.fillStyle=dcHeatColor(temp,alpha);
+    ctx.fillRect(right-wallW,yy-th*0.5,wallW,Math.max(1,th));
+    // Núcleo para paredes máximas na live wall
+    if(t>0.75){
+      const ht=Math.pow((t-0.75)/0.25,1.5);
+      ctx.fillStyle=dcHeatColor(l.isBid?0.48:0.98,Math.min(1,ht*d));
+      ctx.fillRect(right-wallW,yy-Math.max(1,th*0.25),wallW,Math.max(1.5,th*0.50));
     }
   }
 
@@ -2770,6 +2803,7 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
   ctx.fillText('BID',legX,legY+legH+1);
   ctx.textAlign='right';
   ctx.fillText('ASK',legX+legW,legY+legH+1);
+  ctx.restore();
 }
 function drawLiquidityBubbles(ctx,sc,x,left,right,top,bottom){
   const trades=S.trades||[];
@@ -3870,8 +3904,8 @@ if(el('tfSelect')){
   };
 }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();boot()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();boot()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatOpacity','heatRange','heatDistPct','volMaLen','depthLimit','volShowCVD','bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',draw)});
-['bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatOpacity','heatRange','heatDistPct','profileRows'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',draw)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;draw();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{draw();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});function syncBigTradeMinSizeUI(){
+['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',draw)});
+['bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',draw)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;draw();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{draw();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});function syncBigTradeMinSizeUI(){
   const unit=el('bigTradeUnit')?.value||'qty';
   const lbl=el('bigTradeMinSizeLabel');
   const inp=el('bigTradeMinSize');
