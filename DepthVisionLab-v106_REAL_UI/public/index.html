@@ -2889,16 +2889,17 @@ function drawFootprint(ctx,V,sc,x,bw){
     const i=V.a+j,xx=x(i);
     const top=sc.y(c.h),bot=sc.y(c.l),hh=Math.max(2,bot-top);
     const rows=normalizedFootprintRows(c,Math.max(8,Math.min(22,Math.floor(hh/9))));
-    const buyTot=rows.reduce((a,[_,r])=>a+r.buy,0), sellTot=rows.reduce((a,[_,r])=>a+r.sell,0), total=Math.max(1,buyTot+sellTot);
-    const delta=buyTot-sellTot;
     const maxRow=Math.max(1,...rows.map(([_,r])=>r.buy+r.sell));
+    // Use c.buy/c.sell directly — raw from trades, not affected by k-normalization
+    const realDelta=(+c.buy||0)-(+c.sell||0);
 
     // Se estiver afastado, mostra um mini footprint agregado, sem poluir.
     if(V.n>rightLimit || bw<18 || hh<45){
       const w=Math.max(6,bw*.82), left=xx-w/2;
+      const buyTotM=rows.reduce((a,[_,r])=>a+r.buy,0),sellTotM=rows.reduce((a,[_,r])=>a+r.sell,0),totalM=Math.max(1,buyTotM+sellTotM);
       ctx.fillStyle='rgba(5,9,20,.65)';ctx.fillRect(left,top,w,hh);
-      ctx.strokeStyle=delta>=0?'rgba(0,230,118,.75)':'rgba(255,61,87,.75)';ctx.lineWidth=1.1;ctx.strokeRect(left,top,w,hh);
-      const mid=top+hh*(sellTot/total);
+      ctx.strokeStyle=realDelta>=0?'rgba(0,230,118,.75)':'rgba(255,61,87,.75)';ctx.lineWidth=1.1;ctx.strokeRect(left,top,w,hh);
+      const mid=top+hh*(sellTotM/totalM);
       ctx.fillStyle='rgba(255,61,87,.20)';ctx.fillRect(left+1,top,w-2,Math.max(1,mid-top));
       ctx.fillStyle='rgba(0,230,118,.20)';ctx.fillRect(left+1,mid,w-2,Math.max(1,bot-mid));
       return;
@@ -2906,7 +2907,7 @@ function drawFootprint(ctx,V,sc,x,bw){
 
     const boxW=clamp(bw*2.75,54,116), left=xx-boxW/2, rowH=clamp(hh/Math.max(1,rows.length),9,18);
     ctx.fillStyle='rgba(5,9,20,.78)';ctx.fillRect(left,top,boxW,hh);
-    ctx.strokeStyle=delta>=0?'rgba(0,180,90,.55)':'rgba(200,50,70,.55)';ctx.lineWidth=.95;ctx.strokeRect(left,top,boxW,hh);
+    ctx.strokeStyle=realDelta>=0?'rgba(0,180,90,.55)':'rgba(200,50,70,.55)';ctx.lineWidth=.95;ctx.strokeRect(left,top,boxW,hh);
     ctx.strokeStyle='rgba(255,255,255,.12)';ctx.beginPath();ctx.moveTo(xx,top);ctx.lineTo(xx,bot);ctx.stroke();
 
     rows.forEach(([price,r])=>{
@@ -2953,8 +2954,8 @@ function drawFootprint(ctx,V,sc,x,bw){
       ctx.fillStyle='rgba(5,9,20,.92)';ctx.fillRect(left,bot+2,boxW,15);
       ctx.strokeStyle=delta>=0?'rgba(0,180,90,.65)':'rgba(200,50,70,.65)';ctx.lineWidth=.7;ctx.strokeRect(left,bot+2,boxW,15);
       ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=2;
-      ctx.fillStyle=delta>=0?'#00ff88':'#ff4466';
-      ctx.fillText((delta>=0?'▲ ':'▼ ')+fmtVolClean(Math.abs(delta)*c.c),xx,bot+11);
+      ctx.fillStyle=realDelta>=0?'#00ff88':'#ff4466';
+      ctx.fillText((realDelta>=0?'▲ ':'▼ ')+fmtVolClean(Math.abs(realDelta)*c.c),xx,bot+11);
       ctx.shadowBlur=0;
     }
   });
