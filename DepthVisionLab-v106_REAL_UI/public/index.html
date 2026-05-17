@@ -1843,6 +1843,8 @@ async function boot(){
     clearInterval(depthRefreshTimer);
     depthRefreshTimer=setInterval(function(){ if(!S.wsIntentional) refreshDepth(); }, 30000);
     draw();
+    // Non-blocking: load full historical footprint from server for 100% real data
+    loadFootprintFromServer(seq,sym,tf).catch(()=>{});
   }catch(e){
     if(seq!==S.loadSeq)return;
     showLoad(false);
@@ -2051,6 +2053,55 @@ async function reloadAggTradesForBigBars(redraw=true,seq=S.loadSeq,sym=S.sym,tf=
   finally{if(seq===S.loadSeq)S.aggLoading=false}
 }
 function state_lastT(arr){const x=+arr[arr.length-1]?.T; return isFinite(x)?x:0;}
+
+// ── Load full footprint from server (100% real data for all stored history) ──
+// Non-blocking: fires after boot draw. Populates c.fp / c.buy / c.sell for
+// every candle the server has trades for, using a compact aggregated endpoint
+// instead of streaming raw trades. Skips the most recent N bars already
+// handled by reloadAggTradesForBigBars with higher-resolution individual trades.
+async function loadFootprintFromServer(seq=S.loadSeq,sym=S.sym,tf=S.tf){
+  if(!S.candles.length)return;
+  try{
+    // Compute the same tick step the chart uses for footprint rows
+    const rows=+el('profileRows')?.value||80;
+    const recent=S.candles.slice(-80);
+    const avg=recent.length?recent.reduce((a,c)=>a+(c.h-c.l),0)/recent.length:100;
+    const last=S.candles.at(-1);
+    const range=last?Math.max(last.h-last.l,avg*3):100;
+    const tick=adaptivePriceStep(range,rows*.72);
+
+    const start=S.candles[0].t;
+    const url=`${LOCAL_API}/api/footprint?interval=${tf}&start=${start}&end=${Date.now()}&tick=${tick}`;
+    const data=await fetch(url).then(r=>r.json());
+    if(seq!==S.loadSeq||sym!==S.sym||tf!==S.tf)return;
+    if(!Array.isArray(data)||!data.length)return;
+
+    // Apply to candles that don't yet have real data (historical bars)
+    // Recent bars already have high-res data from reloadAggTradesForBigBars
+    const bigBarsLimit=clamp(+(el('bigBars')?.value||80),1,500);
+    const recentFrom=Math.max(0,S.candles.length-bigBarsLimit);
+
+    for(const fp of data){
+      const idx=findCandleIndex(fp.t);
+      if(idx<0||idx>=recentFrom)continue; // skip recent bars — already loaded
+      const c=S.candles[idx];
+      if(!c)continue;
+      c.buy=fp.b||0; c.sell=fp.s||0; c.delta=c.buy-c.sell;
+      c.fp=new Map();
+      for(const [price,sides] of Object.entries(fp.fp)){
+        const p=Math.round(+price/tick)*tick;
+        c.fp.set(p,{buy:sides[0]||0,sell:sides[1]||0,n:0,notional:(sides[0]+sides[1])*p});
+      }
+    }
+
+    // Bust BigTrades cache so historical bars now use real footprint
+    window.__bigTradesPersistentCache=new Map();
+    window.__bigTradesLastGood=[];
+    draw();
+    console.log(`Footprint loaded: ${data.length} candles with real data`);
+  }catch(e){console.log('footprint server load error:',e.message);}
+}
+
 function roundToTick(p){
   const rows=+el('profileRows').value||80;
   const recent=S.candles.slice(-80);

@@ -259,6 +259,40 @@ app.get("/api/klines", async (req,res) => {
   }catch(e){ res.status(500).json({ error: e.message }); }
 });
 
+// ── Footprint aggregation endpoint ────────────────────────────────────────
+// Returns buy/sell volume per price level per candle — ~100x smaller than
+// raw trades, gives 100% real data coverage for all stored history.
+function tfToMs(tf) {
+  const m = String(tf).match(/^(\d+)([mhd])$/);
+  if (!m) return 300000;
+  const unit = { m: 60000, h: 3600000, d: 86400000 }[m[2]] || 60000;
+  return parseInt(m[1]) * unit;
+}
+app.get("/api/footprint", (req, res) => {
+  try {
+    const start  = Number(req.query.start || 0);
+    const end    = Number(req.query.end || Date.now());
+    const tf     = String(req.query.interval || "5m");
+    const tick   = Math.max(0.001, Number(req.query.tick || 10));
+    const ms     = tfToMs(tf);
+
+    const trades = state.trades.filter(t => t.time >= start && t.time <= end);
+    const map    = new Map(); // ct → candle bucket
+
+    for (const t of trades) {
+      const ct  = Math.floor(t.time / ms) * ms;
+      if (!map.has(ct)) map.set(ct, { t: ct, b: 0, s: 0, fp: {} });
+      const bkt = map.get(ct);
+      const lvl = String(Math.round(t.price / tick) * tick);
+      if (!bkt.fp[lvl]) bkt.fp[lvl] = [0, 0]; // [buy, sell]
+      if (t.side === "buy") { bkt.fp[lvl][0] += t.qty; bkt.b += t.qty; }
+      else                  { bkt.fp[lvl][1] += t.qty; bkt.s += t.qty; }
+    }
+
+    res.json([...map.values()].sort((a, b) => a.t - b.t));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("/api/trades", async (req,res) => {
   try{
     const start = Number(req.query.start || 0);
