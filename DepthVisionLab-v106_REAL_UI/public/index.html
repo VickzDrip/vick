@@ -2098,9 +2098,9 @@ async function loadFootprintFromServer(seq=S.loadSeq,sym=S.sym,tf=S.tf){
       }
     }
 
-    // Bust BigTrades cache so historical bars now use real footprint
+    // Bust only the per-candle cluster cache so historical bars rebuild with real footprint.
+    // Keep __bigTradesLastGood as fallback so bubbles stay visible during the rebuild.
     window.__bigTradesPersistentCache=new Map();
-    window.__bigTradesLastGood=[];
     draw();
     console.log(`Footprint loaded: ${data.length} candles with real data`);
   }catch(e){console.log('footprint server load error:',e.message);}
@@ -3254,7 +3254,8 @@ function visibleBigTradesByCandle(V){
   for(let idx=a;idx<b;idx++){
     const c=S.candles[idx];
     if(!c)continue;
-    const candleKey=cfg+'|'+String(c.t)+'|'+String(c.o)+'|'+String(c.h)+'|'+String(c.l)+'|'+String(c.c)+'|'+String(c.v);
+    // Key uses trade-derived buy/sell (not kline c.v which changes every tick)
+    const candleKey=cfg+'|'+String(c.t)+'|'+String(c.h)+'|'+String(c.l)+'|'+String(Math.round((c.buy||0)*1e4))+'|'+String(Math.round((c.sell||0)*1e4));
     let cached=window.__bigTradesPersistentCache.get(candleKey);
 
     // Recalcula candle atual e candles recentes, mas se der vazio conserva o último bom.
@@ -5715,21 +5716,34 @@ return {
       reloadAggTradesForBigBars = async function(redraw=true){
         if(!S.candles.length||S.aggLoading)return;S.aggLoading=true;
         try{
-          resetAggStats();
+          // Targeted reset: only zero bars we're about to reload — preserves historical footprint
           const bars=Math.max(
             Math.max(1,Math.min(200,safeNum(E('bigBars')?.value,30))),
             Math.max(20,Math.min(520,safeNum(E('fvgBars')?.value,180)))
           );
-          let start=S.candles[Math.max(0,S.candles.length-bars)].t;
-          const end=Date.now();let loops=0;
+          S.trades=[];
+          const resetFrom=Math.max(0,S.candles.length-bars);
+          for(let i=resetFrom;i<S.candles.length;i++){const c=S.candles[i];c.delta=0;c.buy=0;c.sell=0;c.fp=new Map();}
+          let start=S.candles[resetFrom].t;
+          const end=Date.now();let loops=0;const seen=new Set();
+          // Use local server cache first (covers deep history without rate limits)
+          try{
+            const arr=await fetch(`${LOCAL_API}/api/trades?start=${start}&end=${end}`).then(r=>r.json());
+            if(Array.isArray(arr)&&arr.length){
+              for(const t of arr){const id=t.a??`${t.T}-${t.p}-${t.q}`;if(seen.has(id))continue;seen.add(id);addAggTrade(t,false);}
+              const lT=+arr[arr.length-1]?.T;if(isFinite(lT))start=lT+1;
+            }
+          }catch(_){}
           while(start<end&&loops<14&&S.trades.length<14000){
             const url=`${API}/api/v3/aggTrades?symbol=${S.sym}&startTime=${start}&endTime=${end}&limit=1000`;
             const arr=await fetch(url).then(r=>r.json());
             if(!Array.isArray(arr)||!arr.length)break;
-            arr.forEach(t=>addAggTrade(t,false));
+            for(const t of arr){const id=t.a??`${t.T}-${t.p}-${t.q}`;if(seen.has(id))continue;seen.add(id);addAggTrade(t,false);}
             const lastT=+arr[arr.length-1].T;if(lastT<=start)break;start=lastT+1;loops++;
           }
           if(redraw){setStatus(true,'AGGTRADES/FVG ATUALIZADOS · LIVE');draw()}
+          // Restore historical footprint that was targeted-reset above
+          if(typeof loadFootprintFromServer==='function')loadFootprintFromServer(S.loadSeq,S.sym,S.tf).catch(()=>{});
         }catch(e){setStatus(false,'FALHA AGGTRADES/FVG')}
         finally{S.aggLoading=false}
       };
