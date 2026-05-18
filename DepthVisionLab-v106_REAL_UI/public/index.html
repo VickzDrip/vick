@@ -1608,7 +1608,16 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
             <div class="kv"><span class="k">Linha POC</span><select class="select tiny-select" id="svpShowPOC"><option value="1">mostrar</option><option value="0">ocultar</option></select></div>
             <div class="kv"><span class="k">VAH / VAL</span><select class="select tiny-select" id="svpShowVA"><option value="1">mostrar</option><option value="0">ocultar</option></select></div>
             <div class="kv"><span class="k">Rótulo sessão</span><select class="select tiny-select" id="svpShowLabel"><option value="1">mostrar</option><option value="0">ocultar</option></select></div>
-            <div class="hint">Volume Profile ancorado por sessão. Cores: ouro=POC · roxo=VAH/VAL · azul=value area · cinza=fora VA. Requer aggTrades.</div>
+            <div class="kv"><span class="k">Cor POC</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColPOCSwatch" style="width:100%;height:100%;background:#f0b229;pointer-events:none"></div><input id="svpColPOC" type="color" value="#f0b229" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
+            <div class="kv"><span class="k">Cor Value Area</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColVASwatch" style="width:100%;height:100%;background:#2e7dd4;pointer-events:none"></div><input id="svpColVA" type="color" value="#2e7dd4" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
+            <div class="kv"><span class="k">Cor fora VA</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColOutSwatch" style="width:100%;height:100%;background:#3d5580;pointer-events:none"></div><input id="svpColOut" type="color" value="#3d5580" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
+            <div class="kv"><span class="k">Cor linha POC</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColPocLineSwatch" style="width:100%;height:100%;background:#f0b229;pointer-events:none"></div><input id="svpColPocLine" type="color" value="#f0b229" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
+            <div class="kv"><span class="k">Cor VAH/VAL</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColVaLineSwatch" style="width:100%;height:100%;background:#9b59ff;pointer-events:none"></div><input id="svpColVaLine" type="color" value="#9b59ff" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
+            <div class="kv"><span class="k">Delta split</span><select class="select tiny-select" id="svpDelta"><option value="0" selected>ocultar</option><option value="1">mostrar</option></select></div>
+            <div class="kv"><span class="k">Largura delta (%)</span><input class="num" id="svpDeltaW" type="number" min="10" max="100" step="5" value="40"></div>
+            <div class="kv"><span class="k">Cor compra</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColBuySwatch" style="width:100%;height:100%;background:#00e676;pointer-events:none"></div><input id="svpColBuy" type="color" value="#00e676" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
+            <div class="kv"><span class="k">Cor venda</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColSellSwatch" style="width:100%;height:100%;background:#ff3d57;pointer-events:none"></div><input id="svpColSell" type="color" value="#ff3d57" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
+            <div class="hint">Profile ancorado por sessão. Delta split = barras buy/sell à esquerda. Cores totalmente configuráveis. Requer aggTrades.</div>
           </div>
         </div>
 
@@ -6182,9 +6191,8 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
 <script>
 /* SessionProfile — Volume Profile ancorado por sessão.
-   Agrupa velas por período de ancoragem (15m→1D), acumula volume do footprint
-   por faixa de preço, desenha barras horizontais dentro do espaço de cada sessão.
-   Cores: ouro=POC | azul vivo=Value Area | cinza=fora VA | roxo dashed=VAH/VAL */
+   Perfil de volume por período de ancoragem com cores configuráveis
+   e delta split (barras buy/sell) opcionais à esquerda do profile. */
 (function DepthVisionLab_SessionProfile(){
   'use strict';
   function E(id){return document.getElementById(id)}
@@ -6195,17 +6203,26 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
   let _cache=null,_cacheKey='';
 
+  // Convert hex color + alpha to rgba string
+  function hx(hex,a){
+    try{
+      const h=hex.replace('#','');
+      const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+      return `rgba(${r},${g},${b},${a.toFixed(3)})`;
+    }catch(_){return `rgba(128,128,128,${a.toFixed(3)})`;}
+  }
+  function col(id,dflt){return E(id)?.value||dflt;}
+
   function buildSessions(){
     if(!S.candles||S.candles.length<2)return[];
-    const anchor =E('svpAnchor')?.value||'1d';
-    const count  =Math.max(1,Math.min(8,sn(E('svpCount')?.value,4)));
-    const rows   =Math.max(20,Math.min(300,sn(E('svpRows')?.value,80)));
+    const anchor  =E('svpAnchor')?.value||'1d';
+    const count   =Math.max(1,Math.min(8,sn(E('svpCount')?.value,4)));
+    const rows    =Math.max(20,Math.min(300,sn(E('svpRows')?.value,80)));
     const anchorMs=ANCHOR_MS[anchor]||86400000;
 
     const ck=[S.candles.length,S.candles.at(-1)?.t,anchor,count,rows].join('|');
     if(_cacheKey===ck&&_cache)return _cache;
 
-    // Group candle indices by session id
     const sessMap=new Map();
     for(let i=0;i<S.candles.length;i++){
       const c=S.candles[i];
@@ -6214,7 +6231,6 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       sessMap.get(sid).indices.push(i);
     }
 
-    // Take last `count` sessions (most recent)
     const sorted=[...sessMap.values()].sort((a,b)=>a.sid-b.sid);
     const recent=sorted.slice(-count);
 
@@ -6231,7 +6247,6 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       const step=(sessionHi-sessionLo)/rows;
       if(step<=0)continue;
 
-      // Accumulate volume per row using existing candleProfileRows helper
       const prof=Array.from({length:rows},()=>({buy:0,sell:0,vol:0}));
       for(const c of candles){
         let crows;
@@ -6246,7 +6261,6 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       const maxVol=Math.max(1,...prof.map(r=>r.vol));
       const poc=prof.findIndex(r=>r.vol===maxVol);
 
-      // Value area (70%)
       const total=prof.reduce((a,r)=>a+r.vol,0);
       const target=total*0.70;
       let vah=poc,val=poc,acc=prof[poc]?.vol||0;
@@ -6257,12 +6271,17 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         else{val--;acc+=Math.max(0,dn);}
       }
 
+      // Max buy and sell for delta scaling
+      const maxBuy =Math.max(1,...prof.map(r=>r.buy));
+      const maxSell=Math.max(1,...prof.map(r=>r.sell));
+      const maxSide=Math.max(maxBuy,maxSell);
+
       sessions.push({
         sid, anchorMs,
         startIdx:Math.min(...indices),
         endIdx:Math.max(...indices),
         startTime:candles[0].t,
-        prof, maxVol, poc, vah, val,
+        prof, maxVol, maxSide, poc, vah, val,
         sessionLo, sessionHi, step, rows
       });
     }
@@ -6286,11 +6305,22 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const sessions=buildSessions();
     if(!sessions.length)return;
 
-    const opacity  =Math.max(0.1,Math.min(1,sn(E('svpOpacity')?.value,0.75)));
-    const widthPct =Math.max(0.1,Math.min(1,sn(E('svpWidth')?.value,85)/100));
-    const showPOC  =(E('svpShowPOC')?.value||'1')==='1';
-    const showVA   =(E('svpShowVA')?.value||'1')==='1';
-    const showLabel=(E('svpShowLabel')?.value||'1')==='1';
+    const opacity   =Math.max(0.1,Math.min(1,sn(E('svpOpacity')?.value,0.75)));
+    const widthPct  =Math.max(0.1,Math.min(1,sn(E('svpWidth')?.value,85)/100));
+    const showPOC   =(E('svpShowPOC')?.value||'1')==='1';
+    const showVA    =(E('svpShowVA')?.value||'1')==='1';
+    const showLabel =(E('svpShowLabel')?.value||'1')==='1';
+    const showDelta =(E('svpDelta')?.value||'0')==='1';
+    const deltaWPct =Math.max(0.1,Math.min(1,sn(E('svpDeltaW')?.value,40)/100));
+
+    // Colors
+    const cPOC    =col('svpColPOC','#f0b229');
+    const cVA     =col('svpColVA','#2e7dd4');
+    const cOut    =col('svpColOut','#3d5580');
+    const cPocLn  =col('svpColPocLine','#f0b229');
+    const cVaLn   =col('svpColVaLine','#9b59ff');
+    const cBuy    =col('svpColBuy','#00e676');
+    const cSell   =col('svpColSell','#ff3d57');
 
     const cw=CW(W), pxPerBar=cw/Math.max(1,V.span);
     const chartRight=W-RP(), chartLeft=PL;
@@ -6303,11 +6333,12 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       const xRight=x(sess.endIdx  )+pxPerBar*0.5;
       if(xRight<chartLeft-20||xLeft>chartRight+20)continue;
 
-      const sessW=Math.max(10,xRight-xLeft);
-      const maxBarW=sessW*widthPct;
-      const {prof,maxVol,poc,vah,val,sessionLo,step,rows}=sess;
+      const sessW   =Math.max(10,xRight-xLeft);
+      const maxBarW =sessW*widthPct;
+      const maxDeltaW=sessW*deltaWPct;
+      const {prof,maxVol,maxSide,poc,vah,val,sessionLo,step,rows}=sess;
 
-      // Draw bars (back to front — draw all before lines)
+      // ── Main profile bars (right side, extending rightward from xLeft) ──
       for(let i=0;i<rows;i++){
         const r=prof[i]; if(!r.vol)continue;
         const barW=Math.max(1,(r.vol/maxVol)*maxBarW);
@@ -6318,50 +6349,78 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
         const inVA=(i>=val&&i<=vah), isPOC=(i===poc);
         if(isPOC){
-          ctx.fillStyle=`rgba(240,178,40,${(opacity*0.92).toFixed(3)})`;
+          ctx.fillStyle=hx(cPOC,opacity*0.92);
         }else if(inVA){
-          // Buy/sell tint within value area
-          const dt=r.vol>0?(r.buy-r.sell)/r.vol:0; // -1=full sell, 1=full buy
-          const gr=Math.round(100+clamp(dt,0,1)*80);
-          const rr=Math.round(100+clamp(-dt,0,1)*60);
-          ctx.fillStyle=`rgba(${rr},${gr},210,${(opacity*0.58).toFixed(3)})`;
+          ctx.fillStyle=hx(cVA,opacity*0.60);
         }else{
-          ctx.fillStyle=`rgba(80,110,190,${(opacity*0.28).toFixed(3)})`;
+          ctx.fillStyle=hx(cOut,opacity*0.35);
         }
         ctx.fillRect(xLeft,cy-bh*0.5,barW,bh);
       }
 
-      // POC dashed line
+      // ── Delta split bars (left side, extending leftward from xLeft) ──
+      if(showDelta){
+        for(let i=0;i<rows;i++){
+          const r=prof[i]; if(!r.buy&&!r.sell)continue;
+          const price=sessionLo+step*(i+0.5);
+          const cy=sc.y(price);
+          const bh=Math.max(1.5,Math.abs(sc.y(sessionLo+step*i)-sc.y(sessionLo+step*(i+1)))-0.5);
+          if(cy+bh<PT-4||cy-bh>H-PB+4)continue;
+
+          // Buy bar: top half of row, green, extends LEFT
+          const buyW =Math.max(1,(r.buy /maxSide)*maxDeltaW);
+          ctx.fillStyle=hx(cBuy,opacity*0.75);
+          ctx.fillRect(xLeft-buyW, cy-bh*0.5, buyW, bh*0.5);
+
+          // Sell bar: bottom half of row, red, extends LEFT
+          const sellW=Math.max(1,(r.sell/maxSide)*maxDeltaW);
+          ctx.fillStyle=hx(cSell,opacity*0.75);
+          ctx.fillRect(xLeft-sellW, cy, sellW, bh*0.5);
+        }
+
+        // Thin separator line at xLeft between profile and delta
+        ctx.strokeStyle=hx('#8899bb',opacity*0.35);
+        ctx.lineWidth=0.6; ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(xLeft,Math.max(PT,sc.y(sess.sessionHi)));
+        ctx.lineTo(xLeft,Math.min(H-PB,sc.y(sess.sessionLo)));
+        ctx.stroke();
+      }
+
+      // ── POC dashed line ──
       if(showPOC&&poc>=0){
         const pocY=sc.y(sessionLo+step*(poc+0.5));
         if(pocY>PT&&pocY<H-PB){
-          ctx.strokeStyle=`rgba(240,178,40,${(opacity).toFixed(3)})`;
+          ctx.strokeStyle=hx(cPocLn,opacity);
           ctx.lineWidth=1.4; ctx.setLineDash([6,4]);
           ctx.beginPath();
-          ctx.moveTo(xLeft,pocY);ctx.lineTo(Math.min(xRight+30,chartRight),pocY);
+          // Extend both directions: left (across delta) and right (full session)
+          const lineLeft=showDelta?xLeft-maxDeltaW*0.9:xLeft;
+          ctx.moveTo(lineLeft,pocY);ctx.lineTo(Math.min(xRight+30,chartRight),pocY);
           ctx.stroke(); ctx.setLineDash([]);
         }
       }
 
-      // VAH / VAL dashed lines
+      // ── VAH / VAL dashed lines ──
       if(showVA){
         const vahY=sc.y(sessionLo+step*(vah+0.5));
         const valY=sc.y(sessionLo+step*(val+0.5));
-        ctx.strokeStyle=`rgba(150,90,255,${(opacity*0.80).toFixed(3)})`;
+        const lineLeft=showDelta?xLeft-maxDeltaW*0.9:xLeft;
+        ctx.strokeStyle=hx(cVaLn,opacity*0.80);
         ctx.lineWidth=0.9; ctx.setLineDash([4,4]);
         ctx.beginPath();
-        if(vahY>PT&&vahY<H-PB){ctx.moveTo(xLeft,vahY);ctx.lineTo(Math.min(xRight+30,chartRight),vahY);}
-        if(valY>PT&&valY<H-PB){ctx.moveTo(xLeft,valY);ctx.lineTo(Math.min(xRight+30,chartRight),valY);}
+        if(vahY>PT&&vahY<H-PB){ctx.moveTo(lineLeft,vahY);ctx.lineTo(Math.min(xRight+30,chartRight),vahY);}
+        if(valY>PT&&valY<H-PB){ctx.moveTo(lineLeft,valY);ctx.lineTo(Math.min(xRight+30,chartRight),valY);}
         ctx.stroke(); ctx.setLineDash([]);
       }
 
-      // Session label (top-left of profile)
+      // ── Session label ──
       if(showLabel){
         const label=fmtLabel(sess.sid,sess.anchorMs);
         const topY=Math.max(PT+11,Math.min(sc.y(sess.sessionHi)-4,H-PB-14));
         ctx.font='bold 9px monospace';
         ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-        ctx.fillStyle=`rgba(190,210,240,${(opacity*0.90).toFixed(3)})`;
+        ctx.fillStyle=hx('#bdd2f0',opacity*0.90);
         ctx.fillText(label,Math.max(chartLeft+4,xLeft+4),topY);
       }
     }
@@ -6376,10 +6435,29 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     if(typeof S==='undefined')return;
     if(!('sessionProfile' in S.inds))S.inds.sessionProfile=true;
     try{if(typeof syncIndControls==='function')syncIndControls();}catch(_){}
+
     const inv=()=>{_cache=null;if(typeof draw==='function')draw();};
-    ['svpAnchor','svpCount','svpRows','svpWidth','svpOpacity','svpShowPOC','svpShowVA','svpShowLabel'].forEach(id=>{
+    const redraw=()=>{if(typeof draw==='function')draw();};
+
+    // Settings that need cache invalidation
+    ['svpAnchor','svpCount','svpRows'].forEach(id=>{
       const n=E(id); if(!n)return;
       n.addEventListener('input',inv); n.addEventListener('change',inv);
+    });
+    // Settings that only need redraw (no cache bust)
+    ['svpWidth','svpOpacity','svpShowPOC','svpShowVA','svpShowLabel',
+     'svpDelta','svpDeltaW'].forEach(id=>{
+      const n=E(id); if(!n)return;
+      n.addEventListener('input',redraw); n.addEventListener('change',redraw);
+    });
+    // Color pickers: update swatch + redraw
+    [['svpColPOC','svpColPOCSwatch'],['svpColVA','svpColVASwatch'],
+     ['svpColOut','svpColOutSwatch'],['svpColPocLine','svpColPocLineSwatch'],
+     ['svpColVaLine','svpColVaLineSwatch'],
+     ['svpColBuy','svpColBuySwatch'],['svpColSell','svpColSellSwatch']].forEach(([cid,sid])=>{
+      const inp=E(cid), sw=E(sid); if(!inp)return;
+      const upd=()=>{if(sw)sw.style.background=inp.value; redraw();};
+      inp.addEventListener('input',upd); inp.addEventListener('change',upd);
     });
   });
 })();
