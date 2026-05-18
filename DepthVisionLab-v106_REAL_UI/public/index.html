@@ -6523,41 +6523,53 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       return{price:priceFromY(y,H,sc),x,y};
     }
 
-    // Pointerdown: start drag — set anchor
-    wrap.addEventListener('pointerdown',function(ev){
+    // Click 1: set anchor. Click 2: fix measurement.
+    wrap.addEventListener('click',function(ev){
       if(!S._ruler.active)return;
       if(S.tool)return;
       const pt=ptFromEvent(ev.clientX,ev.clientY);
       if(!pt)return;
-      ev.stopPropagation();ev.preventDefault();
-      S._ruler.anchor=pt;
-      S._ruler.live=pt;
-      S._ruler.fixed=null;
-      wrap.setPointerCapture(ev.pointerId);
-      drawSoon();
+      ev.stopPropagation();
+      if(!S._ruler.anchor){
+        S._ruler.anchor=pt;
+        S._ruler.live=pt;
+      }else{
+        S._ruler.fixed=pt;
+        S._ruler.active=false;
+        S._ruler.live=null;
+        syncBtn();
+      }
+      draw();
     },{capture:true});
 
-    // Pointermove: drag updates live end
-    wrap.addEventListener('pointermove',function(ev){
+    // Mouse move: live preview after anchor set (no button held)
+    wrap.addEventListener('mousemove',function(ev){
       if(!S._ruler.active||!S._ruler.anchor)return;
       const r=wrap.getBoundingClientRect(),H=r.height;
       const y=ev.clientY-r.top;
       const sc=scale(visible().cs,H);
       S._ruler.live={price:priceFromY(y,H,sc),x:ev.clientX-r.left,y};
       drawSoon();
-    },{capture:true});
+    },false);
 
-    // Pointerup: fix measurement, deactivate tool
-    wrap.addEventListener('pointerup',function(ev){
-      if(!S._ruler.active||!S._ruler.anchor)return;
-      const r=wrap.getBoundingClientRect(),H=r.height;
-      const y=ev.clientY-r.top;
-      const sc=scale(visible().cs,H);
-      S._ruler.fixed={price:priceFromY(y,H,sc),x:ev.clientX-r.left,y};
-      S._ruler.active=false;
-      S._ruler.live=null;
-      syncBtn();draw();
-    },{capture:true});
+    // Touch: tap 1 = anchor, tap 2 = fix
+    wrap.addEventListener('touchend',function(ev){
+      if(!S._ruler.active)return;
+      if(S.tool)return;
+      const t=ev.changedTouches[0];
+      const pt=ptFromEvent(t.clientX,t.clientY);
+      if(!pt)return;
+      if(!S._ruler.anchor){
+        S._ruler.anchor=pt;
+        S._ruler.live=pt;
+      }else{
+        S._ruler.fixed=pt;
+        S._ruler.active=false;
+        S._ruler.live=null;
+        syncBtn();
+      }
+      draw();
+    },{passive:true});
 
     // ── Draw hook ──
     const _base=window.draw;
