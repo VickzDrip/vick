@@ -6768,42 +6768,48 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const cs=S.candles;
     const lastIdx=cs.length-1;
 
-    // Compute dollar volume for each candle (base_vol * close_price)
+    // Collect all candles above threshold, sorted by dollar volume descending
     const candidates=[];
     for(let i=0;i<cs.length;i++){
       const c=cs[i];
       const dollarVol=c.v*c.c;
       if(dollarVol>=minVal)candidates.push({i,c,dollarVol});
     }
-    // Sort by dollar volume descending, take top N
     candidates.sort((a,b)=>b.dollarVol-a.dollarVol);
-    const zones=candidates.slice(0,maxZones);
+
+    // Greedy non-overlapping selection: add zone only if price range doesn't
+    // overlap any already-selected zone (prevents stacking boxes)
+    const zones=[];
+    for(const cand of candidates){
+      if(zones.length>=maxZones)break;
+      const lo=cand.c.l, hi=cand.c.h;
+      const overlaps=zones.some(z=>lo<z.hi&&hi>z.lo);
+      if(!overlaps)zones.push({...cand,lo,hi});
+    }
 
     const rgb=hexToRgb(color);
-    const span=S.view.end-S.view.start;
+    const vspan=S.view.end-S.view.start;
     const cw=CW(W);
+    const bw=cw/vspan;
 
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
 
     for(const{i,c,dollarVol}of zones){
-      const x1=x(i)-cw/span*0.5;
-      const x2=x(lastIdx+extend)+cw/span*0.5;
+      const x1=x(i)-bw*0.5;
+      const x2=x(lastIdx+extend)+bw*0.5;
       const y1=sc.y(c.h);
       const y2=sc.y(c.l);
       const boxH=Math.max(1,y2-y1);
 
-      // Skip if fully off screen
       if(x2<PL||x1>W-RP()||y2<PT||y1>H-PB)continue;
 
       const x1c=Math.max(PL,x1);
       const x2c=Math.min(W-RP(),x2);
 
-      // Fill
       ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.10)`;
       ctx.fillRect(x1c,y1,x2c-x1c,boxH);
 
-      // Border top and bottom
       ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.55)`;
       ctx.lineWidth=1;
       ctx.setLineDash([]);
@@ -6812,14 +6818,12 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       ctx.moveTo(x1c,y2);ctx.lineTo(x2c,y2);
       ctx.stroke();
 
-      // Left anchor line
-      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.45)`;
-      ctx.lineWidth=1.5;
-      ctx.beginPath();
-      if(x1>=PL){ctx.moveTo(x1,y1);ctx.lineTo(x1,y2);}
-      ctx.stroke();
+      if(x1>=PL){
+        ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.45)`;
+        ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x1,y2);ctx.stroke();
+      }
 
-      // Label: dollar volume, right-aligned inside box near left anchor
       const labelX=Math.max(PL+4,x1c+4);
       const labelY=y1+boxH/2;
       if(labelX<x2c-20&&boxH>9){
@@ -6836,9 +6840,9 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
   window.__drawVolZones=drawVolZones;
 
-  // Wire up via event delegation — works whether inputs are in sidebar or modal
+  // Event delegation + call draw() directly (not drawSoon) to avoid 33ms throttle drop
   const VZ_IDS=new Set(['vzMinVal','vzMaxZones','vzExtend','vzColor']);
-  function vzRedraw(){if(typeof drawSoon==='function')drawSoon();}
+  function vzRedraw(){if(typeof draw==='function')draw();}
   document.addEventListener('input',function(ev){
     if(!VZ_IDS.has(ev.target?.id))return;
     if(ev.target.id==='vzColor'){const sw=E('vzColorSwatch');if(sw)sw.style.background=ev.target.value;}
