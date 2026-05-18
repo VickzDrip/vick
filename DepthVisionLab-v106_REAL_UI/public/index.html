@@ -4358,7 +4358,7 @@ window.addEventListener('resize',draw);boot();
     const osr=CanvasRenderingContext2D.prototype.strokeRect;
     const os=CanvasRenderingContext2D.prototype.stroke;
     const of=CanvasRenderingContext2D.prototype.fill;
-    const skipRemap=c=>c?.id==='deltaPane';
+    const skipRemap=c=>c?.id==='deltaPane'||window.__ETX_SKIP_COLORMAP;
     CanvasRenderingContext2D.prototype.fillRect=function(){
       if(skipRemap(this.canvas))return ofr.apply(this,arguments);
       const old=this.fillStyle; this.fillStyle=mapFill(old);
@@ -6308,6 +6308,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     if(!S.inds.sessionProfile)return;
     const sessions=buildSessions();
     if(!sessions.length)return;
+    window.__ETX_SKIP_COLORMAP=true;
 
     const opacity   =Math.max(0.1,Math.min(1,sn(E('svpOpacity')?.value,0.75)));
     const widthPct  =Math.max(0.1,Math.min(1,sn(E('svpWidth')?.value,85)/100));
@@ -6429,6 +6430,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
 
     ctx.restore();
+    window.__ETX_SKIP_COLORMAP=false;
   }
 
   window.__drawSessionProfile=drawSessionProfiles;
