@@ -6569,109 +6569,68 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     function drawRuler(){
       const rl=S._ruler;
       if(!rl||!rl.anchor)return;
-      const p2=rl.live||rl.anchor;
       const p1=rl.anchor;
-      if(p1===p2&&!rl.fixed)return;
 
       const wrap2=document.getElementById('chartWrap');
       const cvs=document.getElementById('chart');
       if(!wrap2||!cvs)return;
       const W=wrap2.clientWidth,H=wrap2.clientHeight;
       const sc=scale(visible().cs,H);
-
-      const y1=sc.y(p1.price),y2=sc.y(p2.price);
-      const left=PL,right=W-RP();
-      const pct=(p2.price-p1.price)/p1.price*100;
-      const isUp=p2.price>=p1.price;
-      const clrMain=isUp?'rgba(0,230,118,':'rgba(255,61,87,';
-      const hex=isUp?'#00e676':'#ff3d57';
-
       const ctx=cvs.getContext('2d');
+      const left=PL,right=W-RP();
+      const y1=sc.y(p1.price);
+
       ctx.save();
       window.__ETX_SKIP_COLORMAP=true;
 
-      const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
-
-      // Semi-transparent fill between lines
-      ctx.fillStyle=clrMain+'0.08)';
-      ctx.fillRect(left,yTop,right-left,Math.max(1,yBot-yTop));
-
-      // Anchor line (neutral)
+      // ── Anchor line + dot: always drawn immediately after first click ──
       ctx.setLineDash([6,4]);
       ctx.strokeStyle='rgba(190,210,240,0.55)';
       ctx.lineWidth=1;
       ctx.beginPath();ctx.moveTo(left,y1);ctx.lineTo(right,y1);ctx.stroke();
-
-      // Anchor dot — marks the start point clearly
       ctx.setLineDash([]);
-      ctx.fillStyle='rgba(190,210,240,0.95)';
-      ctx.strokeStyle='rgba(5,9,20,0.85)';
-      ctx.lineWidth=1.5;
+      ctx.fillStyle='rgba(190,210,240,0.95)';ctx.strokeStyle='rgba(5,9,20,0.85)';ctx.lineWidth=1.5;
       ctx.beginPath();ctx.arc(p1.x,y1,5,0,Math.PI*2);ctx.fill();ctx.stroke();
-      // Cross hair lines through the dot
-      ctx.strokeStyle='rgba(190,210,240,0.55)';
-      ctx.lineWidth=1;
+      ctx.strokeStyle='rgba(190,210,240,0.50)';ctx.lineWidth=1;
       ctx.beginPath();ctx.moveTo(p1.x-9,y1);ctx.lineTo(p1.x+9,y1);ctx.moveTo(p1.x,y1-9);ctx.lineTo(p1.x,y1+9);ctx.stroke();
 
-      // End line (colored)
-      ctx.strokeStyle=clrMain+'0.85)';
-      ctx.lineWidth=1.2;
-      ctx.beginPath();ctx.moveTo(left,y2);ctx.lineTo(right,y2);ctx.stroke();
-      ctx.setLineDash([]);
+      // ── Full ruler: only when end point is different from anchor ──
+      const p2=rl.live;
+      if(p2&&p2!==p1&&Math.abs(p2.price-p1.price)>0){
+        const y2=sc.y(p2.price);
+        const pct=(p2.price-p1.price)/p1.price*100;
+        const isUp=p2.price>=p1.price;
+        const clrMain=isUp?'rgba(0,230,118,':'rgba(255,61,87,';
+        const hex=isUp?'#00e676':'#ff3d57';
 
-      // Vertical measurement line + arrowhead on right edge
-      const ax=right-52;
-      ctx.strokeStyle=clrMain+'0.65)';
-      ctx.lineWidth=1.5;
-      ctx.beginPath();ctx.moveTo(ax,y1);ctx.lineTo(ax,y2);ctx.stroke();
-      // Arrowhead at p2 end
-      const dir=y2<y1?1:-1; // screen coords: y2<y1 means price went up
-      ctx.beginPath();
-      ctx.moveTo(ax-5,y2+dir*9);
-      ctx.lineTo(ax,y2);
-      ctx.lineTo(ax+5,y2+dir*9);
-      ctx.stroke();
+        const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
+        ctx.fillStyle=clrMain+'0.08)';
+        ctx.fillRect(left,yTop,right-left,Math.max(1,yBot-yTop));
 
-      // Label box
-      const pctTxt=(isUp?'+':'')+pct.toFixed(2)+'%';
-      const absTxt=priceFmt(Math.abs(p2.price-p1.price));
-      ctx.font='bold 13px Inter,Arial,monospace';
-      const tw=ctx.measureText(pctTxt).width;
-      const bw=Math.max(tw+20,86),bh=38;
-      const bx=ax-bw-10,by=(y1+y2)/2-bh/2;
+        ctx.strokeStyle=clrMain+'0.85)';ctx.lineWidth=1.2;ctx.setLineDash([]);
+        ctx.beginPath();ctx.moveTo(left,y2);ctx.lineTo(right,y2);ctx.stroke();
 
-      // Box background
-      ctx.fillStyle='rgba(5,9,20,0.82)';
-      ctx.strokeStyle=clrMain+'0.55)';
-      ctx.lineWidth=1;
-      // Rounded rect fallback
-      const r2=4;
-      ctx.beginPath();
-      ctx.moveTo(bx+r2,by);ctx.lineTo(bx+bw-r2,by);ctx.arcTo(bx+bw,by,bx+bw,by+r2,r2);
-      ctx.lineTo(bx+bw,by+bh-r2);ctx.arcTo(bx+bw,by+bh,bx+bw-r2,by+bh,r2);
-      ctx.lineTo(bx+r2,by+bh);ctx.arcTo(bx,by+bh,bx,by+bh-r2,r2);
-      ctx.lineTo(bx,by+r2);ctx.arcTo(bx,by,bx+r2,by,r2);
-      ctx.closePath();
-      ctx.fill();ctx.stroke();
+        const ax=right-52;
+        ctx.strokeStyle=clrMain+'0.65)';ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(ax,y1);ctx.lineTo(ax,y2);ctx.stroke();
+        const dir=y2<y1?1:-1;
+        ctx.beginPath();ctx.moveTo(ax-5,y2+dir*9);ctx.lineTo(ax,y2);ctx.lineTo(ax+5,y2+dir*9);ctx.stroke();
 
-      // Percentage text
-      ctx.fillStyle=hex;
-      ctx.font='bold 13px Inter,Arial,monospace';
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(pctTxt,bx+bw/2,by+bh/2-8);
-
-      // Absolute diff text
-      ctx.fillStyle='rgba(190,210,240,0.75)';
-      ctx.font='10px Inter,Arial,monospace';
-      ctx.fillText(absTxt,bx+bw/2,by+bh/2+8);
-
-      // Price labels on right edge
-      ctx.textAlign='right';ctx.textBaseline='bottom';
-      ctx.font='10px monospace';
-      ctx.fillStyle='rgba(190,210,240,0.70)';
-      ctx.fillText(priceFmt(p1.price),right-2,y1-2);
-      ctx.fillStyle=clrMain+'0.90)';
-      ctx.fillText(priceFmt(p2.price),right-2,y2-2);
+        const pctTxt=(isUp?'+':'')+pct.toFixed(2)+'%';
+        const absTxt=priceFmt(Math.abs(p2.price-p1.price));
+        ctx.font='bold 13px Inter,Arial,monospace';
+        const tw=ctx.measureText(pctTxt).width;
+        const bw=Math.max(tw+20,86),bh=38,bx=ax-bw-10,by=(y1+y2)/2-bh/2,r2=4;
+        ctx.fillStyle='rgba(5,9,20,0.82)';ctx.strokeStyle=clrMain+'0.55)';ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(bx+r2,by);ctx.lineTo(bx+bw-r2,by);ctx.arcTo(bx+bw,by,bx+bw,by+r2,r2);ctx.lineTo(bx+bw,by+bh-r2);ctx.arcTo(bx+bw,by+bh,bx+bw-r2,by+bh,r2);ctx.lineTo(bx+r2,by+bh);ctx.arcTo(bx,by+bh,bx,by+bh-r2,r2);ctx.lineTo(bx,by+r2);ctx.arcTo(bx,by,bx+r2,by,r2);ctx.closePath();ctx.fill();ctx.stroke();
+        ctx.fillStyle=hex;ctx.font='bold 13px Inter,Arial,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(pctTxt,bx+bw/2,by+bh/2-8);
+        ctx.fillStyle='rgba(190,210,240,0.75)';ctx.font='10px Inter,Arial,monospace';
+        ctx.fillText(absTxt,bx+bw/2,by+bh/2+8);
+        ctx.textAlign='right';ctx.textBaseline='bottom';ctx.font='10px monospace';
+        ctx.fillStyle='rgba(190,210,240,0.70)';ctx.fillText(priceFmt(p1.price),right-2,y1-2);
+        ctx.fillStyle=clrMain+'0.90)';ctx.fillText(priceFmt(p2.price),right-2,y2-2);
+      }
 
       window.__ETX_SKIP_COLORMAP=false;
       ctx.restore();
