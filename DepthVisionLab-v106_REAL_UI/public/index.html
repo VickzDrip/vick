@@ -6475,194 +6475,207 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 })();
 </script>
 
-<!-- ── Ruler Tool: mede % entre dois preços ── -->
+<!-- ── Ruler Tool: arrasta como positions ── -->
 <script>
 (function(){
   function initRuler(){
     if(!window.S)return setTimeout(initRuler,100);
-    // State: anchor+live = in-progress; saved = fixed measurement on chart
-    S._ruler={active:false,anchor:null,live:null,saved:null};
+    S._rulers=[];     // array de {x1,x2,price1,price2,_del}
+    S._rulerDrag=null;
 
     // ── Button ──
     const btn=document.createElement('button');
     btn.id='btnRuler';btn.className='mini-btn';
-    btn.title='Régua % — clique no ponto inicial, mova, clique no ponto final';
+    btn.title='Régua % — clica no gráfico e arrasta as linhas';
     btn.textContent='📏';btn.style.cssText='font-size:15px;padding:0 6px;';
     const ref=document.getElementById('btnShort');
     if(ref&&ref.parentNode)ref.parentNode.insertBefore(btn,ref.nextSibling);
 
-    function syncBtn(){btn.classList.toggle('tool-active',S._ruler.active||!!S._ruler.saved);}
+    function syncBtn(){btn.classList.toggle('tool-active',S.tool==='ruler'||S._rulers.length>0);}
 
     btn.addEventListener('click',function(){
-      // If there's a saved ruler → clear it; if active → cancel; else → arm
-      if(S._ruler.saved){S._ruler={active:false,anchor:null,live:null,saved:null};}
-      else if(S._ruler.active){S._ruler={active:false,anchor:null,live:null,saved:null};}
-      else{S._ruler={active:true,anchor:null,live:null,saved:null};}
+      if(S._rulers.length>0){S._rulers=[];S.tool=null;}
+      else if(S.tool==='ruler'){S.tool=null;}
+      else{S.tool='ruler';}
+      if(typeof syncToolBtns==='function')syncToolBtns();
       syncBtn();draw();
     });
 
     const wrap=document.getElementById('chartWrap');
     if(!wrap)return;
 
-    function ptFromEvent(clientX,clientY){
-      const r=wrap.getBoundingClientRect(),H=r.height,W=r.width;
-      const x=clientX-r.left,y=clientY-r.top;
-      if(x<PL||y<PT||x>W-RP()||y>H-PB)return null;
-      const sc=scale(visible().cs,H);
-      return{price:priceFromY(y,H,sc),idx:idxFromX(x,W),x,y};
+    function addRuler(x,y,W,H,sc){
+      const price=priceFromY(y,H,sc),idx=idxFromX(x,W),spread=price*0.005;
+      S._rulers.push({x1:idx,x2:idx+36,price1:price+spread,price2:price-spread,_del:null});
+      S.tool=null;if(typeof syncToolBtns==='function')syncToolBtns();syncBtn();draw();
     }
 
-    // ── Mouse: click 1 = anchor, move = live preview, click 2 = fix ──
-    wrap.addEventListener('click',function(ev){
-      if(!S._ruler.active)return;
-      if(S.tool)return;
-      const pt=ptFromEvent(ev.clientX,ev.clientY);
-      if(!pt)return;
-      ev.stopPropagation();
-      if(!S._ruler.anchor){
-        S._ruler.anchor=pt;
-      }else{
-        S._ruler.saved={p1:S._ruler.anchor,p2:pt};
-        S._ruler.anchor=null;S._ruler.live=null;S._ruler.active=false;
-        syncBtn();
+    function hitRuler(xp,yp,W,H,sc){
+      const right=W-RP();
+      for(let i=S._rulers.length-1;i>=0;i--){
+        const r=S._rulers[i];
+        if(r._del&&xp>=r._del.x-4&&xp<=r._del.x+r._del.w+4&&yp>=r._del.y-4&&yp<=r._del.y+r._del.h+4)
+          return{index:i,part:'delete'};
+        const x1px=PL+(r.x1-S.view.start+0.5)*CW(W)/(S.view.end-S.view.start);
+        const x2px=PL+(r.x2-S.view.start+0.5)*CW(W)/(S.view.end-S.view.start);
+        const xa=clamp(Math.min(x1px,x2px),PL,right),xb=clamp(Math.max(x1px,x2px),PL,right);
+        const y1=sc.y(r.price1),y2=sc.y(r.price2);
+        const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
+        if(xp>=xa-10&&xp<=xb+18){
+          if(Math.abs(yp-y1)<12)return{index:i,part:'line1'};
+          if(Math.abs(yp-y2)<12)return{index:i,part:'line2'};
+          if(xp>=xb-18&&xp<=xb+18&&yp>=yTop-28&&yp<=yBot+16)return{index:i,part:'right'};
+          if(yp>=yTop-28&&yp<=yBot+16)return{index:i,part:'body'};
+        }
       }
-      draw();
-    },{capture:true});
+      return null;
+    }
 
-    wrap.addEventListener('mousemove',function(ev){
-      if(!S._ruler.active||!S._ruler.anchor)return;
-      const r=wrap.getBoundingClientRect(),H=r.height,W=r.width;
-      const x=ev.clientX-r.left,y=ev.clientY-r.top;
-      const sc=scale(visible().cs,H);
-      S._ruler.live={price:priceFromY(y,H,sc),idx:idxFromX(x,W),x,y};
-      drawSoon();
-    },false);
+    function dragRuler(e,rect){
+      const dp=S._rulerDrag;if(!dp)return false;
+      const r=S._rulers[dp.index];if(!r)return false;
+      const H=rect.height,W=rect.width,sc=scale(visible().cs,H);
+      const price=priceFromY(e.clientY-rect.top,H,sc);
+      if(dp.part==='line1'){r.price1=price;}
+      else if(dp.part==='line2'){r.price2=price;}
+      else if(dp.part==='right'){r.x2=idxFromX(e.clientX-rect.left,W);}
+      else{
+        const dxIdx=(e.clientX-dp.lastX)*(S.view.end-S.view.start)/CW(W);
+        const dPrice=priceFromY(e.clientY-rect.top,H,sc)-priceFromY(dp.lastY-rect.top,H,sc);
+        r.x1+=dxIdx;r.x2+=dxIdx;r.price1+=dPrice;r.price2+=dPrice;
+        dp.lastX=e.clientX;dp.lastY=e.clientY;
+      }
+      draw();return true;
+    }
 
-    // ── Touch: tap 1 = anchor, slide = live, tap 2 = fix ──
-    let _touchMoved=false;
-    wrap.addEventListener('touchstart',function(){_touchMoved=false;},{passive:true});
+    // Capture phase — fires before existing bubble handlers
+    wrap.addEventListener('mousedown',function(ev){
+      const rect=wrap.getBoundingClientRect(),x=ev.clientX-rect.left,y=ev.clientY-rect.top;
+      const W=rect.width,H=rect.height,sc=scale(visible().cs,H);
+      if(S.tool==='ruler'&&x>=PL&&x<=W-RP()&&y>=PT&&y<=H-PB){
+        addRuler(x,y,W,H,sc);ev.stopPropagation();return;
+      }
+      const hit=hitRuler(x,y,W,H,sc);
+      if(hit){
+        if(hit.part==='delete'){S._rulers.splice(hit.index,1);syncBtn();draw();}
+        else{S._rulerDrag={...hit,lastX:ev.clientX,lastY:ev.clientY};wrap.style.cursor='move';}
+        ev.stopPropagation();
+      }
+    },true);
+
+    window.addEventListener('mousemove',function(ev){
+      if(!S._rulerDrag)return;
+      dragRuler(ev,wrap.getBoundingClientRect());
+    });
+    window.addEventListener('mouseup',function(){
+      if(S._rulerDrag){S._rulerDrag=null;wrap.style.cursor='default';}
+    });
+
+    // Touch — capture phase
+    wrap.addEventListener('touchstart',function(ev){
+      if(ev.touches.length!==1)return;
+      const t=ev.touches[0],rect=wrap.getBoundingClientRect();
+      const x=t.clientX-rect.left,y=t.clientY-rect.top;
+      const W=rect.width,H=rect.height,sc=scale(visible().cs,H);
+      if(S.tool==='ruler'&&x>=PL&&x<=W-RP()&&y>=PT&&y<=H-PB){
+        addRuler(x,y,W,H,sc);ev.preventDefault();ev.stopPropagation();return;
+      }
+      const hit=hitRuler(x,y,W,H,sc);
+      if(hit){
+        if(hit.part==='delete'){S._rulers.splice(hit.index,1);syncBtn();draw();}
+        else{S._rulerDrag={...hit,lastX:t.clientX,lastY:t.clientY};}
+        ev.preventDefault();ev.stopPropagation();
+      }
+    },{capture:true,passive:false});
+
     wrap.addEventListener('touchmove',function(ev){
-      _touchMoved=true;
-      if(!S._ruler.active||!S._ruler.anchor)return;
-      const t=ev.touches[0];
-      const r=wrap.getBoundingClientRect(),H=r.height,W=r.width;
-      const x=t.clientX-r.left,y=t.clientY-r.top;
-      const sc=scale(visible().cs,H);
-      S._ruler.live={price:priceFromY(y,H,sc),idx:idxFromX(x,W),x,y};
-      drawSoon();
-    },{passive:true});
-    wrap.addEventListener('touchend',function(ev){
-      if(!S._ruler.active)return;
-      if(S.tool||_touchMoved)return; // ignore if it was a pan gesture
-      const t=ev.changedTouches[0];
-      const pt=ptFromEvent(t.clientX,t.clientY);
-      if(!pt)return;
-      if(!S._ruler.anchor){
-        S._ruler.anchor=pt;
-      }else{
-        S._ruler.saved={p1:S._ruler.anchor,p2:pt};
-        S._ruler.anchor=null;S._ruler.live=null;S._ruler.active=false;
-        syncBtn();
-      }
-      draw();
-    },{passive:true});
+      if(!S._rulerDrag)return;
+      ev.preventDefault();const t=ev.touches[0];
+      dragRuler({clientX:t.clientX,clientY:t.clientY},wrap.getBoundingClientRect());
+    },{capture:true,passive:false});
+
+    wrap.addEventListener('touchend',function(){S._rulerDrag=null;},{passive:true});
 
     // ── Draw hook ──
     const _base=window.draw;
-    window.draw=function(){_base();drawRuler();};
+    window.draw=function(){_base();drawRulers();};
 
-    function drawRuler(){
-      const rl=S._ruler;
-      const wrap2=document.getElementById('chartWrap');
-      const cvs=document.getElementById('chart');
-      if(!wrap2||!cvs)return;
-      const W=wrap2.clientWidth,H=wrap2.clientHeight;
-      const V=visible();
-      const sc=scale(V.cs,H);
+    function drawRulers(){
+      if(!S._rulers.length)return;
+      const cvs=document.getElementById('chart');if(!cvs)return;
+      const W=wrap.clientWidth,H=wrap.clientHeight;
+      const sc=scale(visible().cs,H);
       const ctx=cvs.getContext('2d');
-      const left=PL,right=W-RP();
+      const right=W-RP();
+      ctx.save();window.__ETX_SKIP_COLORMAP=true;
 
-      ctx.save();
-      window.__ETX_SKIP_COLORMAP=true;
+      S._rulers.forEach(function(r){
+        const x1px=PL+(r.x1-S.view.start+0.5)*CW(W)/(S.view.end-S.view.start);
+        const x2px=PL+(r.x2-S.view.start+0.5)*CW(W)/(S.view.end-S.view.start);
+        const xa=clamp(Math.min(x1px,x2px),PL,right),xb=clamp(Math.max(x1px,x2px),PL,right);
+        const boxW=Math.max(24,xb-xa);
+        const y1=sc.y(r.price1),y2=sc.y(r.price2);
+        const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
+        const isUp=r.price2>=r.price1;
+        const pct=(r.price2-r.price1)/r.price1*100;
+        const rgb=isUp?'0,230,118':'255,61,87',hex=isUp?'#00e676':'#ff3d57';
 
-      // Draw in-progress anchor dot while user has set first point
-      if(rl.anchor){
-        const y1=sc.y(rl.anchor.price);
-        ctx.setLineDash([5,4]);ctx.strokeStyle='rgba(190,210,240,0.50)';ctx.lineWidth=1;
-        ctx.beginPath();ctx.moveTo(left,y1);ctx.lineTo(right,y1);ctx.stroke();
+        // Band fill
+        ctx.fillStyle=`rgba(${rgb},0.13)`;
+        ctx.fillRect(xa,yTop,boxW,Math.max(1,yBot-yTop));
+
+        // Line 1 — dashed neutral (reference)
+        ctx.setLineDash([5,4]);ctx.strokeStyle='rgba(190,210,240,0.72)';ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(xa,y1);ctx.lineTo(xa+boxW,y1);ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle='rgba(190,210,240,0.95)';ctx.strokeStyle='rgba(5,9,20,0.80)';ctx.lineWidth=1.5;
-        ctx.beginPath();ctx.arc(rl.anchor.x,y1,5,0,Math.PI*2);ctx.fill();ctx.stroke();
-        ctx.strokeStyle='rgba(190,210,240,0.45)';ctx.lineWidth=1;
-        ctx.beginPath();ctx.moveTo(rl.anchor.x-9,y1);ctx.lineTo(rl.anchor.x+9,y1);ctx.moveTo(rl.anchor.x,y1-9);ctx.lineTo(rl.anchor.x,y1+9);ctx.stroke();
-        // Live end while moving
-        if(rl.live&&rl.live!==rl.anchor){
-          drawMeasurement(ctx,rl.anchor,rl.live,sc,W,H,left,right,0.72);
-        }
-      }
 
-      // Draw fixed saved ruler (price-anchored, survives zoom/pan)
-      if(rl.saved){
-        drawMeasurement(ctx,rl.saved.p1,rl.saved.p2,sc,W,H,left,right,1.0);
-      }
+        // Line 2 — solid colored (end)
+        ctx.strokeStyle=`rgba(${rgb},0.88)`;ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(xa,y2);ctx.lineTo(xa+boxW,y2);ctx.stroke();
+
+        // Vertical connector + arrow on right edge
+        const ax=xa+boxW-3;
+        ctx.strokeStyle=`rgba(${rgb},0.55)`;ctx.lineWidth=1.2;
+        ctx.beginPath();ctx.moveTo(ax,y1);ctx.lineTo(ax,y2);ctx.stroke();
+        const dir=y2<y1?1:-1;
+        ctx.beginPath();ctx.moveTo(ax-4,y2+dir*6);ctx.lineTo(ax,y2);ctx.lineTo(ax+4,y2+dir*6);ctx.stroke();
+
+        // Center label box
+        const pctTxt=(isUp?'+':'')+pct.toFixed(2)+'%',absTxt=priceFmt(Math.abs(r.price2-r.price1));
+        ctx.font='bold 12px Inter,Arial,monospace';
+        const tw=ctx.measureText(pctTxt).width,bw2=Math.max(tw+16,76),bh2=34;
+        const midX=xa+boxW/2,midY=(y1+y2)/2,lx=midX-bw2/2,ly=midY-bh2/2,rd=4;
+        ctx.fillStyle='rgba(5,9,20,0.88)';ctx.strokeStyle=`rgba(${rgb},0.50)`;ctx.lineWidth=1;
+        ctx.beginPath();
+        ctx.moveTo(lx+rd,ly);ctx.lineTo(lx+bw2-rd,ly);ctx.arcTo(lx+bw2,ly,lx+bw2,ly+rd,rd);
+        ctx.lineTo(lx+bw2,ly+bh2-rd);ctx.arcTo(lx+bw2,ly+bh2,lx+bw2-rd,ly+bh2,rd);
+        ctx.lineTo(lx+rd,ly+bh2);ctx.arcTo(lx,ly+bh2,lx,ly+bh2-rd,rd);
+        ctx.lineTo(lx,ly+rd);ctx.arcTo(lx,ly,lx+rd,ly,rd);
+        ctx.closePath();ctx.fill();ctx.stroke();
+        ctx.fillStyle=hex;ctx.font='bold 12px Inter,Arial,monospace';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(pctTxt,midX,midY-7);
+        ctx.fillStyle='rgba(190,210,240,0.72)';ctx.font='10px Inter,Arial,monospace';
+        ctx.fillText(absTxt,midX,midY+8);
+
+        // Right resize handle (igual positions)
+        ctx.fillStyle='rgba(200,216,240,0.80)';
+        ctx.fillRect(clamp(xa+boxW-5,PL,right-5),yTop-5,10,10);
+
+        // Header + delete button
+        const headerY=clamp(yTop-22,PT+2,H-PB-24),headerX=clamp(xa,PL,right-100);
+        ctx.fillStyle=`rgba(${rgb},0.85)`;ctx.fillRect(headerX,headerY,74,18);
+        ctx.fillStyle='#050914';ctx.font='10px monospace';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('RÉGUA',headerX+37,headerY+9);
+        ctx.fillStyle='rgba(255,61,87,0.92)';ctx.fillRect(headerX+77,headerY,18,18);
+        ctx.fillStyle='#050914';ctx.font='13px monospace';
+        ctx.fillText('×',headerX+86,headerY+9);
+        r._del={x:headerX+77,y:headerY,w:18,h:18};
+      });
 
       window.__ETX_SKIP_COLORMAP=false;
       ctx.restore();
-    }
-
-    function drawMeasurement(ctx,p1,p2,sc,W,H,left,right,alpha){
-      const x1=Math.max(left,p1.x);
-      const x2=Math.min(right,p2.x);
-      const y1=sc.y(p1.price);
-      const y2=sc.y(p2.price);
-      const pct=(p2.price-p1.price)/p1.price*100;
-      const isUp=p2.price>=p1.price;
-      const clrG=`rgba(0,230,118,${alpha})`;
-      const clrR=`rgba(255,61,87,${alpha})`;
-      const clrMain=isUp?clrG:clrR;
-      const hex=isUp?'#00e676':'#ff3d57';
-
-      // Band between the two price levels — width = between the two x positions
-      const bLeft=Math.min(x1,x2),bRight=Math.max(x1,x2);
-      const bW=Math.max(40,bRight-bLeft);
-      const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
-
-      ctx.fillStyle=isUp?`rgba(0,230,118,${(alpha*0.09).toFixed(3)})`:`rgba(255,61,87,${(alpha*0.09).toFixed(3)})`;
-      ctx.fillRect(bLeft,yTop,bW,Math.max(1,yBot-yTop));
-
-      // Top line (anchor)
-      ctx.setLineDash([5,4]);ctx.strokeStyle=`rgba(190,210,240,${(alpha*0.55).toFixed(3)})`;ctx.lineWidth=1;
-      ctx.beginPath();ctx.moveTo(bLeft,y1);ctx.lineTo(bLeft+bW,y1);ctx.stroke();
-      // Bottom line (end)
-      ctx.strokeStyle=isUp?`rgba(0,230,118,${(alpha*0.80).toFixed(3)})`:`rgba(255,61,87,${(alpha*0.80).toFixed(3)})`;ctx.lineWidth=1.2;
-      ctx.beginPath();ctx.moveTo(bLeft,y2);ctx.lineTo(bLeft+bW,y2);ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Vertical arrow on right edge of band
-      const ax=bLeft+bW-4;
-      ctx.strokeStyle=isUp?`rgba(0,230,118,${(alpha*0.65).toFixed(3)})`:`rgba(255,61,87,${(alpha*0.65).toFixed(3)})`;ctx.lineWidth=1.5;
-      ctx.beginPath();ctx.moveTo(ax,y1);ctx.lineTo(ax,y2);ctx.stroke();
-      const dir=y2<y1?1:-1;
-      ctx.beginPath();ctx.moveTo(ax-4,y2+dir*7);ctx.lineTo(ax,y2);ctx.lineTo(ax+4,y2+dir*7);ctx.stroke();
-
-      // Endpoint dot
-      ctx.fillStyle=isUp?`rgba(0,230,118,${alpha})`:`rgba(255,61,87,${alpha})`;
-      ctx.beginPath();ctx.arc(x2,y2,4,0,Math.PI*2);ctx.fill();
-
-      // Label box in center of band
-      const pctTxt=(isUp?'+':'')+pct.toFixed(2)+'%';
-      const absTxt=priceFmt(Math.abs(p2.price-p1.price));
-      ctx.font='bold 12px Inter,Arial,monospace';
-      const tw=ctx.measureText(pctTxt).width;
-      const bw=Math.max(tw+16,76),bh=34;
-      const midX=bLeft+bW/2,midY=(y1+y2)/2;
-      const lx=midX-bw/2,ly=midY-bh/2,r2=4;
-      ctx.fillStyle=`rgba(5,9,20,${(alpha*0.85).toFixed(3)})`;ctx.strokeStyle=isUp?`rgba(0,230,118,${(alpha*0.55).toFixed(3)})`:`rgba(255,61,87,${(alpha*0.55).toFixed(3)})`;ctx.lineWidth=1;
-      ctx.beginPath();ctx.moveTo(lx+r2,ly);ctx.lineTo(lx+bw-r2,ly);ctx.arcTo(lx+bw,ly,lx+bw,ly+r2,r2);ctx.lineTo(lx+bw,ly+bh-r2);ctx.arcTo(lx+bw,ly+bh,lx+bw-r2,ly+bh,r2);ctx.lineTo(lx+r2,ly+bh);ctx.arcTo(lx,ly+bh,lx,ly+bh-r2,r2);ctx.lineTo(lx,ly+r2);ctx.arcTo(lx,ly,lx+r2,ly,r2);ctx.closePath();ctx.fill();ctx.stroke();
-      ctx.fillStyle=hex;ctx.font=`bold 12px Inter,Arial,monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(pctTxt,midX,midY-7);
-      ctx.fillStyle=`rgba(190,210,240,${(alpha*0.72).toFixed(3)})`;ctx.font='10px Inter,Arial,monospace';
-      ctx.fillText(absTxt,midX,midY+8);
     }
 
     syncBtn();
