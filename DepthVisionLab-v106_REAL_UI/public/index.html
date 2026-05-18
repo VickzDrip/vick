@@ -6475,27 +6475,30 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 })();
 </script>
 
-<!-- ── Ruler Tool: arrasta como positions ── -->
+<!-- ── Ruler Tool: TradingView-style drag-to-measure ── -->
 <script>
 (function(){
   function initRuler(){
     if(!window.S)return setTimeout(initRuler,100);
-    S._rulers=[];     // array de {x1,x2,price1,price2,_del}
-    S._rulerDrag=null;
+    S._rulers=[];        // [{x1,x2,price1,price2,_del}]
+    S._rulerDrag=null;   // drag existing ruler
+    S._rulerNew=null;    // {price1,idx1,livePrice,liveIdx,liveX,liveY} during creation
 
     // ── Button ──
     const btn=document.createElement('button');
     btn.id='btnRuler';btn.className='mini-btn';
-    btn.title='Régua % — clica no gráfico e arrasta as linhas';
+    btn.title='Régua % — segura e arrasta pra medir';
     btn.textContent='📏';btn.style.cssText='font-size:15px;padding:0 6px;';
     const ref=document.getElementById('btnShort');
     if(ref&&ref.parentNode)ref.parentNode.insertBefore(btn,ref.nextSibling);
 
-    function syncBtn(){btn.classList.toggle('tool-active',S.tool==='ruler'||S._rulers.length>0);}
+    function syncBtn(){
+      btn.classList.toggle('tool-active',S.tool==='ruler'||S._rulers.length>0||!!S._rulerNew);
+    }
 
     btn.addEventListener('click',function(){
-      if(S._rulers.length>0){S._rulers=[];S.tool=null;}
-      else if(S.tool==='ruler'){S.tool=null;}
+      if(S._rulers.length>0){S._rulers=[];S._rulerNew=null;S.tool=null;}
+      else if(S.tool==='ruler'){S.tool=null;S._rulerNew=null;}
       else{S.tool='ruler';}
       if(typeof syncToolBtns==='function')syncToolBtns();
       syncBtn();draw();
@@ -6504,58 +6507,73 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const wrap=document.getElementById('chartWrap');
     if(!wrap)return;
 
-    function addRuler(x,y,W,H,sc){
-      const price=priceFromY(y,H,sc),idx=idxFromX(x,W),spread=price*0.005;
-      S._rulers.push({x1:idx,x2:idx+36,price1:price+spread,price2:price-spread,_del:null});
-      S.tool=null;if(typeof syncToolBtns==='function')syncToolBtns();syncBtn();draw();
+    function ptFrom(clientX,clientY,rect){
+      const x=clientX-rect.left,y=clientY-rect.top,W=rect.width,H=rect.height;
+      if(x<PL||y<PT||x>W-RP()||y>H-PB)return null;
+      const sc=scale(visible().cs,H);
+      return{x,y,price:priceFromY(y,H,sc),idx:idxFromX(x,W),W,H,sc};
     }
 
     function hitRuler(xp,yp,W,H,sc){
       const right=W-RP();
       for(let i=S._rulers.length-1;i>=0;i--){
         const r=S._rulers[i];
-        if(r._del&&xp>=r._del.x-4&&xp<=r._del.x+r._del.w+4&&yp>=r._del.y-4&&yp<=r._del.y+r._del.h+4)
+        if(r._del&&xp>=r._del.x-5&&xp<=r._del.x+r._del.w+5&&yp>=r._del.y-5&&yp<=r._del.y+r._del.h+5)
           return{index:i,part:'delete'};
-        const x1px=PL+(r.x1-S.view.start+0.5)*CW(W)/(S.view.end-S.view.start);
-        const x2px=PL+(r.x2-S.view.start+0.5)*CW(W)/(S.view.end-S.view.start);
-        const xa=clamp(Math.min(x1px,x2px),PL,right),xb=clamp(Math.max(x1px,x2px),PL,right);
+        const ax=PL+(r.x1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        const bx=PL+(r.x2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        const xa=clamp(Math.min(ax,bx),PL,right),xb=clamp(Math.max(ax,bx),PL,right);
         const y1=sc.y(r.price1),y2=sc.y(r.price2);
         const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
-        if(xp>=xa-10&&xp<=xb+18){
-          if(Math.abs(yp-y1)<12)return{index:i,part:'line1'};
-          if(Math.abs(yp-y2)<12)return{index:i,part:'line2'};
-          if(xp>=xb-18&&xp<=xb+18&&yp>=yTop-28&&yp<=yBot+16)return{index:i,part:'right'};
-          if(yp>=yTop-28&&yp<=yBot+16)return{index:i,part:'body'};
+        if(xp>=xa-8&&xp<=xb+8){
+          if(Math.abs(yp-y1)<10)return{index:i,part:'line1'};
+          if(Math.abs(yp-y2)<10)return{index:i,part:'line2'};
+          if(yp>=yTop-5&&yp<=yBot+5)return{index:i,part:'body'};
         }
       }
       return null;
     }
 
-    function dragRuler(e,rect){
+    function applyDrag(e,rect){
       const dp=S._rulerDrag;if(!dp)return false;
       const r=S._rulers[dp.index];if(!r)return false;
       const H=rect.height,W=rect.width,sc=scale(visible().cs,H);
       const price=priceFromY(e.clientY-rect.top,H,sc);
       if(dp.part==='line1'){r.price1=price;}
       else if(dp.part==='line2'){r.price2=price;}
-      else if(dp.part==='right'){r.x2=idxFromX(e.clientX-rect.left,W);}
       else{
-        const dxIdx=(e.clientX-dp.lastX)*(S.view.end-S.view.start)/CW(W);
-        const dPrice=priceFromY(e.clientY-rect.top,H,sc)-priceFromY(dp.lastY-rect.top,H,sc);
-        r.x1+=dxIdx;r.x2+=dxIdx;r.price1+=dPrice;r.price2+=dPrice;
+        const dIdx=(e.clientX-dp.lastX)*(S.view.end-S.view.start)/CW(W);
+        const dP=priceFromY(e.clientY-rect.top,H,sc)-priceFromY(dp.lastY-rect.top,H,sc);
+        r.x1+=dIdx;r.x2+=dIdx;r.price1+=dP;r.price2+=dP;
         dp.lastX=e.clientX;dp.lastY=e.clientY;
       }
       draw();return true;
     }
 
-    // Capture phase — fires before existing bubble handlers
-    wrap.addEventListener('mousedown',function(ev){
-      const rect=wrap.getBoundingClientRect(),x=ev.clientX-rect.left,y=ev.clientY-rect.top;
-      const W=rect.width,H=rect.height,sc=scale(visible().cs,H);
-      if(S.tool==='ruler'&&x>=PL&&x<=W-RP()&&y>=PT&&y<=H-PB){
-        addRuler(x,y,W,H,sc);ev.stopPropagation();return;
+    function saveNew(){
+      const n=S._rulerNew;if(!n)return;
+      // only save if dragged far enough
+      if(Math.abs(n.livePrice-n.price1)/n.price1>0.00005){
+        S._rulers.push({x1:n.idx1,x2:n.liveIdx,price1:n.price1,price2:n.livePrice,_del:null});
       }
-      const hit=hitRuler(x,y,W,H,sc);
+      S._rulerNew=null;
+      S.tool=null;if(typeof syncToolBtns==='function')syncToolBtns();
+      syncBtn();draw();
+    }
+
+    // ── Mouse — capture phase ──
+    wrap.addEventListener('mousedown',function(ev){
+      if(ev.button!==0)return;
+      const rect=wrap.getBoundingClientRect();
+      const pt=ptFrom(ev.clientX,ev.clientY,rect);
+
+      if(S.tool==='ruler'){
+        if(!pt)return;
+        S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x,liveY:pt.y};
+        ev.stopPropagation();return;
+      }
+      if(!pt)return;
+      const hit=hitRuler(pt.x,pt.y,pt.W,pt.H,pt.sc);
       if(hit){
         if(hit.part==='delete'){S._rulers.splice(hit.index,1);syncBtn();draw();}
         else{S._rulerDrag={...hit,lastX:ev.clientX,lastY:ev.clientY};wrap.style.cursor='move';}
@@ -6564,23 +6582,32 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     },true);
 
     window.addEventListener('mousemove',function(ev){
-      if(!S._rulerDrag)return;
-      dragRuler(ev,wrap.getBoundingClientRect());
+      if(S._rulerNew&&S.tool==='ruler'){
+        const rect=wrap.getBoundingClientRect();
+        const pt=ptFrom(ev.clientX,ev.clientY,rect);
+        if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;S._rulerNew.liveY=pt.y;}
+        drawSoon();return;
+      }
+      if(S._rulerDrag)applyDrag(ev,wrap.getBoundingClientRect());
     });
+
     window.addEventListener('mouseup',function(){
+      if(S._rulerNew){saveNew();return;}
       if(S._rulerDrag){S._rulerDrag=null;wrap.style.cursor='default';}
     });
 
-    // Touch — capture phase
+    // ── Touch — capture phase ──
     wrap.addEventListener('touchstart',function(ev){
       if(ev.touches.length!==1)return;
       const t=ev.touches[0],rect=wrap.getBoundingClientRect();
-      const x=t.clientX-rect.left,y=t.clientY-rect.top;
-      const W=rect.width,H=rect.height,sc=scale(visible().cs,H);
-      if(S.tool==='ruler'&&x>=PL&&x<=W-RP()&&y>=PT&&y<=H-PB){
-        addRuler(x,y,W,H,sc);ev.preventDefault();ev.stopPropagation();return;
+      const pt=ptFrom(t.clientX,t.clientY,rect);
+      if(S.tool==='ruler'){
+        if(!pt)return;
+        S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x,liveY:pt.y};
+        ev.preventDefault();ev.stopPropagation();return;
       }
-      const hit=hitRuler(x,y,W,H,sc);
+      if(!pt)return;
+      const hit=hitRuler(pt.x,pt.y,pt.W,pt.H,pt.sc);
       if(hit){
         if(hit.part==='delete'){S._rulers.splice(hit.index,1);syncBtn();draw();}
         else{S._rulerDrag={...hit,lastX:t.clientX,lastY:t.clientY};}
@@ -6589,89 +6616,150 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     },{capture:true,passive:false});
 
     wrap.addEventListener('touchmove',function(ev){
-      if(!S._rulerDrag)return;
-      ev.preventDefault();const t=ev.touches[0];
-      dragRuler({clientX:t.clientX,clientY:t.clientY},wrap.getBoundingClientRect());
+      const t=ev.touches[0];
+      if(S._rulerNew&&S.tool==='ruler'){
+        const rect=wrap.getBoundingClientRect();
+        const pt=ptFrom(t.clientX,t.clientY,rect);
+        if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;S._rulerNew.liveY=pt.y;}
+        ev.preventDefault();drawSoon();return;
+      }
+      if(S._rulerDrag){ev.preventDefault();applyDrag({clientX:t.clientX,clientY:t.clientY},wrap.getBoundingClientRect());}
     },{capture:true,passive:false});
 
-    wrap.addEventListener('touchend',function(){S._rulerDrag=null;},{passive:true});
+    wrap.addEventListener('touchend',function(){
+      if(S._rulerNew){saveNew();return;}
+      S._rulerDrag=null;
+    },{passive:true});
 
     // ── Draw hook ──
     const _base=window.draw;
     window.draw=function(){_base();drawRulers();};
 
+    // Shared renderer — draws TradingView-style ruler shape
+    function renderShape(ctx,x1px,x2px,y1,y2,W,H,alpha){
+      const right=W-RP();
+      // Clamp to visible chart area
+      const xa=clamp(Math.min(x1px,x2px),PL,right);
+      const xb=clamp(Math.max(x1px,x2px),PL,right);
+      const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
+      const isUp=y2<=y1; // y smaller = higher price = up
+      const rgb=isUp?'0,230,118':'255,61,87';
+      const hex=isUp?'#00e676':'#ff3d57';
+      const a=alpha;
+
+      // Colored band fill between the two price levels
+      ctx.fillStyle=`rgba(${rgb},${(0.15*a).toFixed(3)})`;
+      ctx.fillRect(xa,yTop,Math.max(1,xb-xa),Math.max(1,yBot-yTop));
+
+      // Dashed vertical lines at x1 and x2 (full chart height)
+      ctx.setLineDash([4,5]);
+      ctx.lineWidth=1;
+      ctx.strokeStyle=`rgba(100,140,220,${(0.50*a).toFixed(3)})`;
+      if(x1px>=PL&&x1px<=right){
+        ctx.beginPath();ctx.moveTo(x1px,PT);ctx.lineTo(x1px,H-PB);ctx.stroke();
+      }
+      if(x2px>=PL&&x2px<=right){
+        ctx.beginPath();ctx.moveTo(x2px,PT);ctx.lineTo(x2px,H-PB);ctx.stroke();
+      }
+
+      // Dashed horizontal at price1 (reference line — neutral)
+      ctx.strokeStyle=`rgba(160,185,230,${(0.48*a).toFixed(3)})`;
+      ctx.beginPath();ctx.moveTo(PL,y1);ctx.lineTo(right,y1);ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Solid horizontal at price2 (end line — colored)
+      ctx.strokeStyle=`rgba(${rgb},${(0.85*a).toFixed(3)})`;
+      ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(PL,y2);ctx.lineTo(right,y2);ctx.stroke();
+
+      // Vertical arrow on right side of band
+      const ax=xb+5;
+      ctx.strokeStyle=`rgba(${rgb},${(0.65*a).toFixed(3)})`;
+      ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(ax,y1);ctx.lineTo(ax,y2);ctx.stroke();
+      const dir=y2<y1?1:-1;
+      ctx.beginPath();
+      ctx.moveTo(ax-5,y2+dir*7);ctx.lineTo(ax,y2);ctx.lineTo(ax+5,y2+dir*7);
+      ctx.stroke();
+
+      // Dot at end point
+      ctx.fillStyle=`rgba(${rgb},${a.toFixed(3)})`;
+      ctx.strokeStyle=`rgba(5,9,20,${(0.75*a).toFixed(3)})`;ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(x2px,y2,4.5,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+      return{xa,xb,yTop,yBot,isUp,rgb,hex};
+    }
+
+    function renderLabel(ctx,pct,p1,p2,nBars,xa,xb,yTop,yBot,rgb,hex,W,H,a){
+      const right=W-RP();
+      const absDiff=priceFmt(Math.abs(p2-p1));
+      const line1=(pct>=0?'+':'')+pct.toFixed(2)+'% · '+(pct>=0?'+':'-')+absDiff;
+      const line2=nBars+' barra'+(nBars!==1?'s':'')+', '+(S.tf||'');
+      ctx.font='bold 13px Inter,Arial,monospace';
+      const w1=ctx.measureText(line1).width;
+      ctx.font='11px Inter,Arial,monospace';
+      const w2=ctx.measureText(line2).width;
+      const bw=Math.max(w1,w2)+24,bh=46,rd=6;
+      const midX=clamp((xa+xb)/2,PL+bw/2,right-bw/2);
+      const midY=clamp((yTop+yBot)/2,PT+bh/2,H-PB-bh/2);
+      const lx=midX-bw/2,ly=midY-bh/2;
+      // Colored background (like TradingView)
+      ctx.fillStyle=`rgba(${rgb},${(0.88*a).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.moveTo(lx+rd,ly);ctx.lineTo(lx+bw-rd,ly);ctx.arcTo(lx+bw,ly,lx+bw,ly+rd,rd);
+      ctx.lineTo(lx+bw,ly+bh-rd);ctx.arcTo(lx+bw,ly+bh,lx+bw-rd,ly+bh,rd);
+      ctx.lineTo(lx+rd,ly+bh);ctx.arcTo(lx,ly+bh,lx,ly+bh-rd,rd);
+      ctx.lineTo(lx,ly+rd);ctx.arcTo(lx,ly,lx+rd,ly,rd);
+      ctx.closePath();ctx.fill();
+      // White text
+      ctx.fillStyle=`rgba(255,255,255,${(0.96*a).toFixed(3)})`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.font='bold 13px Inter,Arial,monospace';
+      ctx.fillText(line1,midX,midY-13);
+      ctx.font='11px Inter,Arial,monospace';
+      ctx.fillText(line2,midX,midY+8);
+    }
+
     function drawRulers(){
-      if(!S._rulers.length)return;
       const cvs=document.getElementById('chart');if(!cvs)return;
       const W=wrap.clientWidth,H=wrap.clientHeight;
+      if(!W||!H)return;
       const sc=scale(visible().cs,H);
       const ctx=cvs.getContext('2d');
+      if(!S._rulers.length&&!S._rulerNew)return;
       const right=W-RP();
+
       ctx.save();window.__ETX_SKIP_COLORMAP=true;
+      ctx.textAlign='center';ctx.textBaseline='middle';
 
+      // In-progress creation
+      if(S._rulerNew){
+        const n=S._rulerNew;
+        const x1px=PL+(n.idx1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        const x2px=clamp(n.liveX,PL,right);
+        const y1=sc.y(n.price1),y2=sc.y(n.livePrice);
+        const {xa,xb,yTop,yBot,isUp,rgb,hex}=renderShape(ctx,x1px,x2px,y1,y2,W,H,0.82);
+        const pct=(n.livePrice-n.price1)/n.price1*100;
+        const nBars=Math.max(1,Math.abs(Math.round(n.liveIdx-n.idx1)));
+        renderLabel(ctx,pct,n.price1,n.livePrice,nBars,xa,xb,yTop,yBot,rgb,hex,W,H,0.82);
+      }
+
+      // Saved rulers
       S._rulers.forEach(function(r){
-        const x1px=PL+(r.x1-S.view.start+0.5)*CW(W)/(S.view.end-S.view.start);
-        const x2px=PL+(r.x2-S.view.start+0.5)*CW(W)/(S.view.end-S.view.start);
-        const xa=clamp(Math.min(x1px,x2px),PL,right),xb=clamp(Math.max(x1px,x2px),PL,right);
-        const boxW=Math.max(24,xb-xa);
+        const x1px=PL+(r.x1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        const x2px=PL+(r.x2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const y1=sc.y(r.price1),y2=sc.y(r.price2);
-        const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
-        const isUp=r.price2>=r.price1;
+        const {xa,xb,yTop,yBot,isUp,rgb,hex}=renderShape(ctx,x1px,x2px,y1,y2,W,H,1.0);
         const pct=(r.price2-r.price1)/r.price1*100;
-        const rgb=isUp?'0,230,118':'255,61,87',hex=isUp?'#00e676':'#ff3d57';
-
-        // Band fill
-        ctx.fillStyle=`rgba(${rgb},0.13)`;
-        ctx.fillRect(xa,yTop,boxW,Math.max(1,yBot-yTop));
-
-        // Line 1 — dashed neutral (reference)
-        ctx.setLineDash([5,4]);ctx.strokeStyle='rgba(190,210,240,0.72)';ctx.lineWidth=1.5;
-        ctx.beginPath();ctx.moveTo(xa,y1);ctx.lineTo(xa+boxW,y1);ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Line 2 — solid colored (end)
-        ctx.strokeStyle=`rgba(${rgb},0.88)`;ctx.lineWidth=1.5;
-        ctx.beginPath();ctx.moveTo(xa,y2);ctx.lineTo(xa+boxW,y2);ctx.stroke();
-
-        // Vertical connector + arrow on right edge
-        const ax=xa+boxW-3;
-        ctx.strokeStyle=`rgba(${rgb},0.55)`;ctx.lineWidth=1.2;
-        ctx.beginPath();ctx.moveTo(ax,y1);ctx.lineTo(ax,y2);ctx.stroke();
-        const dir=y2<y1?1:-1;
-        ctx.beginPath();ctx.moveTo(ax-4,y2+dir*6);ctx.lineTo(ax,y2);ctx.lineTo(ax+4,y2+dir*6);ctx.stroke();
-
-        // Center label box
-        const pctTxt=(isUp?'+':'')+pct.toFixed(2)+'%',absTxt=priceFmt(Math.abs(r.price2-r.price1));
-        ctx.font='bold 12px Inter,Arial,monospace';
-        const tw=ctx.measureText(pctTxt).width,bw2=Math.max(tw+16,76),bh2=34;
-        const midX=xa+boxW/2,midY=(y1+y2)/2,lx=midX-bw2/2,ly=midY-bh2/2,rd=4;
-        ctx.fillStyle='rgba(5,9,20,0.88)';ctx.strokeStyle=`rgba(${rgb},0.50)`;ctx.lineWidth=1;
-        ctx.beginPath();
-        ctx.moveTo(lx+rd,ly);ctx.lineTo(lx+bw2-rd,ly);ctx.arcTo(lx+bw2,ly,lx+bw2,ly+rd,rd);
-        ctx.lineTo(lx+bw2,ly+bh2-rd);ctx.arcTo(lx+bw2,ly+bh2,lx+bw2-rd,ly+bh2,rd);
-        ctx.lineTo(lx+rd,ly+bh2);ctx.arcTo(lx,ly+bh2,lx,ly+bh2-rd,rd);
-        ctx.lineTo(lx,ly+rd);ctx.arcTo(lx,ly,lx+rd,ly,rd);
-        ctx.closePath();ctx.fill();ctx.stroke();
-        ctx.fillStyle=hex;ctx.font='bold 12px Inter,Arial,monospace';
-        ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.fillText(pctTxt,midX,midY-7);
-        ctx.fillStyle='rgba(190,210,240,0.72)';ctx.font='10px Inter,Arial,monospace';
-        ctx.fillText(absTxt,midX,midY+8);
-
-        // Right resize handle (igual positions)
-        ctx.fillStyle='rgba(200,216,240,0.80)';
-        ctx.fillRect(clamp(xa+boxW-5,PL,right-5),yTop-5,10,10);
-
-        // Header + delete button
-        const headerY=clamp(yTop-22,PT+2,H-PB-24),headerX=clamp(xa,PL,right-100);
-        ctx.fillStyle=`rgba(${rgb},0.85)`;ctx.fillRect(headerX,headerY,74,18);
-        ctx.fillStyle='#050914';ctx.font='10px monospace';
-        ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.fillText('RÉGUA',headerX+37,headerY+9);
-        ctx.fillStyle='rgba(255,61,87,0.92)';ctx.fillRect(headerX+77,headerY,18,18);
-        ctx.fillStyle='#050914';ctx.font='13px monospace';
-        ctx.fillText('×',headerX+86,headerY+9);
-        r._del={x:headerX+77,y:headerY,w:18,h:18};
+        const nBars=Math.max(1,Math.abs(Math.round(r.x2-r.x1)));
+        renderLabel(ctx,pct,r.price1,r.price2,nBars,xa,xb,yTop,yBot,rgb,hex,W,H,1.0);
+        // Delete button
+        const delX=clamp(xb+12,PL,right-20),delY=clamp(yTop-14,PT+2,H-PB-18);
+        ctx.fillStyle='rgba(255,61,87,0.90)';
+        ctx.beginPath();ctx.arc(delX+8,delY+8,9,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#fff';ctx.font='bold 13px monospace';
+        ctx.fillText('×',delX+8,delY+9);
+        r._del={x:delX,y:delY,w:18,h:18};
       });
 
       window.__ETX_SKIP_COLORMAP=false;
