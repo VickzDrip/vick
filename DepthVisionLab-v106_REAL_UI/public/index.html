@@ -6497,18 +6497,13 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     if(ref&&ref.parentNode)ref.parentNode.insertBefore(btn,ref.nextSibling);
 
     btn.addEventListener('click',function(){
-      const r=S._ruler;
-      // If fixed measurement exists → clear it and arm for new one
-      if(r.fixed){S._ruler={active:true,anchor:null,live:null,fixed:null};}
-      // If arming/drawing → cancel
-      else if(r.active){S._ruler={active:false,anchor:null,live:null,fixed:null};}
-      // Idle → arm
-      else{S._ruler={active:true,anchor:null,live:null,fixed:null};}
+      // Active → cancel/clear. Idle → arm.
+      S._ruler=S._ruler.active?{active:false,anchor:null,live:null}:{active:true,anchor:null,live:null};
       syncBtn();draw();
     });
 
     function syncBtn(){
-      btn.classList.toggle('tool-active',S._ruler.active||!!S._ruler.fixed);
+      btn.classList.toggle('tool-active',S._ruler.active);
     }
 
     // ── Chart interaction ──
@@ -6523,52 +6518,45 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       return{price:priceFromY(y,H,sc),x,y};
     }
 
-    // Click 1: set anchor. Click 2: fix measurement.
+    // Click 1: set anchor. After that, end always follows mouse freely.
+    // Click again: reset anchor to current mouse position.
+    // 📏 button is the only way to clear.
     wrap.addEventListener('click',function(ev){
       if(!S._ruler.active)return;
       if(S.tool)return;
       const pt=ptFromEvent(ev.clientX,ev.clientY);
       if(!pt)return;
       ev.stopPropagation();
-      if(!S._ruler.anchor){
-        S._ruler.anchor=pt;
-        S._ruler.live=pt;
-      }else{
-        S._ruler.fixed=pt;
-        S._ruler.active=false;
-        S._ruler.live=null;
-        syncBtn();
-      }
+      S._ruler.anchor=pt;
+      S._ruler.live=pt;
       draw();
     },{capture:true});
 
-    // Mouse move: live preview after anchor set (no button held)
+    // Mouse move: end always tracks mouse once active
     wrap.addEventListener('mousemove',function(ev){
       if(!S._ruler.active||!S._ruler.anchor)return;
       const r=wrap.getBoundingClientRect(),H=r.height;
-      const y=ev.clientY-r.top;
-      const sc=scale(visible().cs,H);
-      S._ruler.live={price:priceFromY(y,H,sc),x:ev.clientX-r.left,y};
+      S._ruler.live={price:priceFromY(ev.clientY-r.top,H,scale(visible().cs,H)),x:ev.clientX-r.left,y:ev.clientY-r.top};
       drawSoon();
     },false);
 
-    // Touch: tap 1 = anchor, tap 2 = fix
+    // Touch: tap sets/resets anchor; move updates end live
     wrap.addEventListener('touchend',function(ev){
       if(!S._ruler.active)return;
       if(S.tool)return;
       const t=ev.changedTouches[0];
       const pt=ptFromEvent(t.clientX,t.clientY);
       if(!pt)return;
-      if(!S._ruler.anchor){
-        S._ruler.anchor=pt;
-        S._ruler.live=pt;
-      }else{
-        S._ruler.fixed=pt;
-        S._ruler.active=false;
-        S._ruler.live=null;
-        syncBtn();
-      }
+      S._ruler.anchor=pt;
+      S._ruler.live=pt;
       draw();
+    },{passive:true});
+    wrap.addEventListener('touchmove',function(ev){
+      if(!S._ruler.active||!S._ruler.anchor)return;
+      const t=ev.touches[0];
+      const r=wrap.getBoundingClientRect(),H=r.height;
+      S._ruler.live={price:priceFromY(t.clientY-r.top,H,scale(visible().cs,H)),x:t.clientX-r.left,y:t.clientY-r.top};
+      drawSoon();
     },{passive:true});
 
     // ── Draw hook ──
@@ -6581,7 +6569,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     function drawRuler(){
       const rl=S._ruler;
       if(!rl||!rl.anchor)return;
-      const p2=rl.fixed||rl.live||rl.anchor;
+      const p2=rl.live||rl.anchor;
       const p1=rl.anchor;
       if(p1===p2&&!rl.fixed)return;
 
