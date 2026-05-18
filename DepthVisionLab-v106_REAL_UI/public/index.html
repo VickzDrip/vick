@@ -6691,20 +6691,18 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       return{xa,xb,yTop,yBot,isUp,rgb,hex};
     }
 
-    function renderLabel(ctx,pct,p1,p2,nBars,xa,xb,yTop,yBot,rgb,hex,W,H,a){
+    function renderLabel(ctx,pct,nBars,x2px,y2,rgb,hex,W,H,a){
       const right=W-RP();
-      const absDiff=priceFmt(Math.abs(p2-p1));
-      const line1=(pct>=0?'+':'')+pct.toFixed(2)+'% · '+(pct>=0?'+':'-')+absDiff;
-      const line2=nBars+' barra'+(nBars!==1?'s':'')+', '+(S.tf||'');
-      ctx.font='bold 13px Inter,Arial,monospace';
-      const w1=ctx.measureText(line1).width;
-      ctx.font='11px Inter,Arial,monospace';
-      const w2=ctx.measureText(line2).width;
-      const bw=Math.max(w1,w2)+24,bh=46,rd=6;
-      const midX=clamp((xa+xb)/2,PL+bw/2,right-bw/2);
-      const midY=clamp((yTop+yBot)/2,PT+bh/2,H-PB-bh/2);
-      const lx=midX-bw/2,ly=midY-bh/2;
-      // Colored background (like TradingView)
+      const pctTxt=(pct>=0?'+':'')+pct.toFixed(2)+'%';
+      const barTxt=nBars+' barra'+(nBars!==1?'s':'');
+      ctx.font='bold 12px Inter,Arial,monospace';
+      const w1=ctx.measureText(pctTxt).width;
+      ctx.font='10px Inter,Arial,monospace';
+      const w2=ctx.measureText(barTxt).width;
+      const bw=Math.max(w1,w2)+16,bh=34,rd=5;
+      // Position label to the right of the endpoint, or left if near edge
+      const lx=clamp(x2px+8,PL,right-bw-2);
+      const ly=clamp(y2-bh/2,PT+2,H-PB-bh-2);
       ctx.fillStyle=`rgba(${rgb},${(0.88*a).toFixed(3)})`;
       ctx.beginPath();
       ctx.moveTo(lx+rd,ly);ctx.lineTo(lx+bw-rd,ly);ctx.arcTo(lx+bw,ly,lx+bw,ly+rd,rd);
@@ -6712,13 +6710,12 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       ctx.lineTo(lx+rd,ly+bh);ctx.arcTo(lx,ly+bh,lx,ly+bh-rd,rd);
       ctx.lineTo(lx,ly+rd);ctx.arcTo(lx,ly,lx+rd,ly,rd);
       ctx.closePath();ctx.fill();
-      // White text
       ctx.fillStyle=`rgba(255,255,255,${(0.96*a).toFixed(3)})`;
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.font='bold 13px Inter,Arial,monospace';
-      ctx.fillText(line1,midX,midY-13);
-      ctx.font='11px Inter,Arial,monospace';
-      ctx.fillText(line2,midX,midY+8);
+      ctx.textAlign='left';ctx.textBaseline='middle';
+      ctx.font='bold 12px Inter,Arial,monospace';
+      ctx.fillText(pctTxt,lx+8,ly+10);
+      ctx.font='10px Inter,Arial,monospace';
+      ctx.fillText(barTxt,lx+8,ly+24);
     }
 
     function drawRulers(){
@@ -6742,7 +6739,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const {xa,xb,yTop,yBot,isUp,rgb,hex}=renderShape(ctx,x1px,x2px,y1,y2,W,H,0.82);
         const pct=(n.livePrice-n.price1)/n.price1*100;
         const nBars=Math.max(1,Math.abs(Math.round(n.liveIdx-n.idx1)));
-        renderLabel(ctx,pct,n.price1,n.livePrice,nBars,xa,xb,yTop,yBot,rgb,hex,W,H,0.82);
+        renderLabel(ctx,pct,nBars,x2px,y2,rgb,hex,W,H,0.82);
       }
 
       // Saved rulers
@@ -6753,7 +6750,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const {xa,xb,yTop,yBot,isUp,rgb,hex}=renderShape(ctx,x1px,x2px,y1,y2,W,H,1.0);
         const pct=(r.price2-r.price1)/r.price1*100;
         const nBars=Math.max(1,Math.abs(Math.round(r.x2-r.x1)));
-        renderLabel(ctx,pct,r.price1,r.price2,nBars,xa,xb,yTop,yBot,rgb,hex,W,H,1.0);
+        renderLabel(ctx,pct,nBars,x2px,y2,rgb,hex,W,H,1.0);
         // Delete button
         const delX=clamp(xb+12,PL,right-20),delY=clamp(yTop-14,PT+2,H-PB-18);
         ctx.fillStyle='rgba(255,61,87,0.90)';
