@@ -3831,7 +3831,7 @@ function fitLive(){const span=S.view.end-S.view.start||180;S.view.end=S.candles.
 const chart=el('chart'),wrap=el('chartWrap');
 wrap.addEventListener('wheel',e=>{e.preventDefault();const r=wrap.getBoundingClientRect(),rel=clamp((e.clientX-r.left-PL)/CW(r.width),0,1);const factor=Math.exp(e.deltaY*0.00072);zoom(factor,rel)},{passive:false});
 el('volumePaneWrap')?.addEventListener('wheel',e=>{e.preventDefault();const factor=Math.exp(e.deltaY*0.0012);S.yVolScale={zoom:clamp((S.yVolScale?.zoom||1)*factor,0.05,20)};draw();},{passive:false});
-wrap.addEventListener('mousedown',e=>{const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){S.book.resize=true;wrap.style.cursor='ew-resize';draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}S.dragPos={...hit,lastX:e.clientX,lastY:e.clientY};wrap.style.cursor='move';return}if(priceScaleHit(x,y,r.width,r.height)){S.yScale.drag=true;S.yScale.lastY=e.clientY;wrap.style.cursor='ns-resize';draw();return}S.mouse.down=true;S.mouse.lastX=e.clientX;S.mouse.lastY=e.clientY});
+wrap.addEventListener('mousedown',e=>{const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&S.tool!=='ruler'&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){S.book.resize=true;wrap.style.cursor='ew-resize';draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}S.dragPos={...hit,lastX:e.clientX,lastY:e.clientY};wrap.style.cursor='move';return}if(priceScaleHit(x,y,r.width,r.height)){S.yScale.drag=true;S.yScale.lastY=e.clientY;wrap.style.cursor='ns-resize';draw();return}S.mouse.down=true;S.mouse.lastX=e.clientX;S.mouse.lastY=e.clientY});
 window.addEventListener('mouseup',()=>{S.mouse.down=false;S.dragPos=null;if(S.yScale.drag){S.yScale.drag=false;wrap.style.cursor='default';draw();return}if(S.book.resize){S.book.resize=false;wrap.style.cursor='default';draw()}else{wrap.style.cursor='default'}});
 window.addEventListener('mousemove',e=>{const r=wrap.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;if(S.yScale.drag){const dy=e.clientY-S.yScale.lastY;S.yScale.zoom=clamp(S.yScale.zoom*Math.exp(-dy*0.012),.18,45);S.yScale.lastY=e.clientY;draw();return}if(S.book.resize){resizeBookFromX(x,r.width);return}const overScale=priceScaleHit(x,y,r.width,r.height);wrap.style.cursor=bookResizeHit(x,y)?'ew-resize':overScale?'ns-resize':'default';if(S.dragPos){dragPosition(e,r);return}if(S.mouse.down){const span=S.view.end-S.view.start,dx=e.clientX-S.mouse.lastX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;S.mouse.lastX=e.clientX;S.view.auto=false;draw();return}el('tip').style.display='none';});
 wrap.addEventListener('mouseleave',()=>{S.mouse.down=false;S.book.resize=false;S.yScale.drag=false;wrap.style.cursor='default';el('tip').style.display='none';draw()});
@@ -3930,7 +3930,7 @@ syncBigTradeMinSizeUI();
 if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
 let touchState={mode:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5};
 function touchDist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
-wrap.addEventListener('touchstart',e=>{if(!S.candles.length)return;const r=wrap.getBoundingClientRect();if(e.touches.length===1){const x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){e.preventDefault();addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){e.preventDefault();touchState.mode='bookResize';S.book.resize=true;draw();return}if(priceScaleHit(x,y,r.width,r.height)){e.preventDefault();touchState.mode='priceScale';S.yScale.drag=true;S.yScale.lastY=e.touches[0].clientY;draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){e.preventDefault();if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}touchState.mode='pos';S.dragPos={...hit,lastX:e.touches[0].clientX,lastY:e.touches[0].clientY};return}touchState.mode='pan';touchState.lastX=e.touches[0].clientX;touchState.lastY=e.touches[0].clientY;S.view.auto=false}else if(e.touches.length===2){e.preventDefault();touchState.mode='pinch';touchState.dist=touchDist(e.touches[0],e.touches[1]);touchState.midX=(e.touches[0].clientX+e.touches[1].clientX)/2;touchState.midY=(e.touches[0].clientY+e.touches[1].clientY)/2;touchState.anchorRel=clamp((touchState.midX-r.left-PL)/CW(r.width),0,1);S.view.auto=false}},{passive:false});
+wrap.addEventListener('touchstart',e=>{if(!S.candles.length)return;const r=wrap.getBoundingClientRect();if(e.touches.length===1){const x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&S.tool!=='ruler'&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){e.preventDefault();addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){e.preventDefault();touchState.mode='bookResize';S.book.resize=true;draw();return}if(priceScaleHit(x,y,r.width,r.height)){e.preventDefault();touchState.mode='priceScale';S.yScale.drag=true;S.yScale.lastY=e.touches[0].clientY;draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){e.preventDefault();if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}touchState.mode='pos';S.dragPos={...hit,lastX:e.touches[0].clientX,lastY:e.touches[0].clientY};return}touchState.mode='pan';touchState.lastX=e.touches[0].clientX;touchState.lastY=e.touches[0].clientY;S.view.auto=false}else if(e.touches.length===2){e.preventDefault();touchState.mode='pinch';touchState.dist=touchDist(e.touches[0],e.touches[1]);touchState.midX=(e.touches[0].clientX+e.touches[1].clientX)/2;touchState.midY=(e.touches[0].clientY+e.touches[1].clientY)/2;touchState.anchorRel=clamp((touchState.midX-r.left-PL)/CW(r.width),0,1);S.view.auto=false}},{passive:false});
 wrap.addEventListener('touchmove',e=>{if(!S.candles.length)return;e.preventDefault();const r=wrap.getBoundingClientRect();if(touchState.mode==='bookResize'&&e.touches.length===1){const x=e.touches[0].clientX-r.left;resizeBookFromX(x,r.width);return}if(touchState.mode==='priceScale'&&e.touches.length===1){const dy=e.touches[0].clientY-S.yScale.lastY;S.yScale.zoom=clamp(S.yScale.zoom*Math.exp(-dy*0.012),.18,45);S.yScale.lastY=e.touches[0].clientY;draw();return}if(touchState.mode==='pos'&&e.touches.length===1){dragPosition({clientX:e.touches[0].clientX,clientY:e.touches[0].clientY},r);return}if(touchState.mode==='pan'&&e.touches.length===1){const span=S.view.end-S.view.start,dx=e.touches[0].clientX-touchState.lastX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;touchState.lastX=e.touches[0].clientX;touchState.lastY=e.touches[0].clientY;draw()}else if(touchState.mode==='pinch'&&e.touches.length===2){const nd=touchDist(e.touches[0],e.touches[1]);const midX=(e.touches[0].clientX+e.touches[1].clientX)/2;const midY=(e.touches[0].clientY+e.touches[1].clientY)/2;const raw=touchState.dist/Math.max(1,nd);const factor=clamp(1+(raw-1)*0.72,.88,1.12);zoom(factor,touchState.anchorRel);const span=S.view.end-S.view.start,dx=midX-touchState.midX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;touchState.dist=nd;touchState.midX=midX;touchState.midY=midY;draw()}},{passive:false});
 wrap.addEventListener('touchend',()=>{touchState.mode=null;S.dragPos=null;if(S.yScale.drag){S.yScale.drag=false;draw()}if(S.book.resize){S.book.resize=false;draw()}},{passive:true});
 
@@ -6475,19 +6475,17 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 })();
 </script>
 
-<!-- ── Ruler Tool: TradingView-style drag-to-measure ── -->
+<!-- ── Ruler Tool: TradingView-style ── -->
 <script>
 (function(){
   function initRuler(){
     if(!window.S)return setTimeout(initRuler,100);
-    S._rulers=[];        // [{x1,x2,price1,price2,_del}]
-    S._rulerDrag=null;   // drag existing ruler
-    S._rulerNew=null;    // {price1,idx1,livePrice,liveIdx,liveX,liveY} during creation
+    S._rulers=[];    // [{x1,x2,price1,price2}] — max 1 active
+    S._rulerNew=null;// {price1,idx1,livePrice,liveIdx,liveX} during creation
 
-    // ── Button ──
     const btn=document.createElement('button');
     btn.id='btnRuler';btn.className='mini-btn';
-    btn.title='Régua % — segura e arrasta pra medir';
+    btn.title='Régua % — clica, arrasta, solta';
     btn.textContent='📏';btn.style.cssText='font-size:15px;padding:0 6px;';
     const ref=document.getElementById('btnShort');
     if(ref&&ref.parentNode)ref.parentNode.insertBefore(btn,ref.nextSibling);
@@ -6497,8 +6495,8 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
 
     btn.addEventListener('click',function(){
-      if(S._rulers.length>0){S._rulers=[];S._rulerNew=null;S.tool=null;}
-      else if(S.tool==='ruler'){S.tool=null;S._rulerNew=null;}
+      if(S.tool==='ruler'){S.tool=null;S._rulerNew=null;}
+      else if(S._rulers.length>0){S._rulers=[];S._rulerNew=null;S.tool=null;}
       else{S.tool='ruler';}
       if(typeof syncToolBtns==='function')syncToolBtns();
       syncBtn();draw();
@@ -6507,215 +6505,145 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const wrap=document.getElementById('chartWrap');
     if(!wrap)return;
 
-    function ptFrom(clientX,clientY,rect){
+    function ptFrom(clientX,clientY){
+      const rect=wrap.getBoundingClientRect();
       const x=clientX-rect.left,y=clientY-rect.top,W=rect.width,H=rect.height;
       if(x<PL||y<PT||x>W-RP()||y>H-PB)return null;
       const sc=scale(visible().cs,H);
-      return{x,y,price:priceFromY(y,H,sc),idx:idxFromX(x,W),W,H,sc};
+      return{x,y,price:priceFromY(y,H,sc),idx:idxFromX(x,W)};
     }
 
-    function hitRuler(xp,yp,W,H,sc){
-      const right=W-RP();
-      for(let i=S._rulers.length-1;i>=0;i--){
-        const r=S._rulers[i];
-        if(r._del&&xp>=r._del.x-5&&xp<=r._del.x+r._del.w+5&&yp>=r._del.y-5&&yp<=r._del.y+r._del.h+5)
-          return{index:i,part:'delete'};
-        const ax=PL+(r.x1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
-        const bx=PL+(r.x2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
-        const xa=clamp(Math.min(ax,bx),PL,right),xb=clamp(Math.max(ax,bx),PL,right);
-        const y1=sc.y(r.price1),y2=sc.y(r.price2);
-        const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
-        if(xp>=xa-8&&xp<=xb+8){
-          if(Math.abs(yp-y1)<10)return{index:i,part:'line1'};
-          if(Math.abs(yp-y2)<10)return{index:i,part:'line2'};
-          if(yp>=yTop-5&&yp<=yBot+5)return{index:i,part:'body'};
-        }
-      }
-      return null;
+    function tfMins(){
+      const m=(S.tf||'').match(/^(\d+)(m|h|d|w)$/i);
+      if(!m)return 1;
+      const n=parseInt(m[1]);
+      return m[2].toLowerCase()==='m'?n:m[2].toLowerCase()==='h'?n*60:m[2].toLowerCase()==='d'?n*1440:n*10080;
     }
 
-    function applyDrag(e,rect){
-      const dp=S._rulerDrag;if(!dp)return false;
-      const r=S._rulers[dp.index];if(!r)return false;
-      const H=rect.height,W=rect.width,sc=scale(visible().cs,H);
-      const price=priceFromY(e.clientY-rect.top,H,sc);
-      if(dp.part==='line1'){r.price1=price;}
-      else if(dp.part==='line2'){r.price2=price;}
-      else{
-        const dIdx=(e.clientX-dp.lastX)*(S.view.end-S.view.start)/CW(W);
-        const dP=priceFromY(e.clientY-rect.top,H,sc)-priceFromY(dp.lastY-rect.top,H,sc);
-        r.x1+=dIdx;r.x2+=dIdx;r.price1+=dP;r.price2+=dP;
-        dp.lastX=e.clientX;dp.lastY=e.clientY;
-      }
-      draw();return true;
+    function fmtDur(bars){
+      const mins=Math.max(1,bars)*tfMins();
+      if(mins<60)return mins+'m';
+      const h=Math.floor(mins/60),m=mins%60;
+      return m>0?h+'h '+m+'m':h+'h';
     }
 
-    function saveNew(){
-      const n=S._rulerNew;if(!n)return;
-      // only save if dragged far enough
-      if(Math.abs(n.livePrice-n.price1)/n.price1>0.00005){
-        S._rulers.push({x1:n.idx1,x2:n.liveIdx,price1:n.price1,price2:n.livePrice,_del:null});
-      }
-      S._rulerNew=null;
-      S.tool=null;if(typeof syncToolBtns==='function')syncToolBtns();
-      syncBtn();draw();
-    }
+    // Track tap position for clear-on-click
+    let _tapX=0,_tapY=0;
 
-    // ── Mouse — capture phase ──
-    // Use pointerdown to match V40's capture order (fires before mousedown)
+    // pointerdown — capture (fires before V40 + mousedown/touchstart)
     wrap.addEventListener('pointerdown',function(ev){
       if(ev.button!==0)return;
-      const rect=wrap.getBoundingClientRect();
-      const pt=ptFrom(ev.clientX,ev.clientY,rect);
-
-      if(S.tool==='ruler'){
-        if(!pt)return;
-        S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x,liveY:pt.y};
-        ev.stopImmediatePropagation();ev.preventDefault();return;
-      }
+      _tapX=ev.clientX;_tapY=ev.clientY;
+      if(S.tool!=='ruler')return;
+      const pt=ptFrom(ev.clientX,ev.clientY);
       if(!pt)return;
-      const hit=hitRuler(pt.x,pt.y,pt.W,pt.H,pt.sc);
-      if(hit){
-        if(hit.part==='delete'){S._rulers.splice(hit.index,1);syncBtn();draw();}
-        else{S._rulerDrag={...hit,lastX:ev.clientX,lastY:ev.clientY};wrap.style.cursor='move';}
-        ev.stopImmediatePropagation();ev.preventDefault();
-      }
-    },true);
+      S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x};
+      draw();
+      ev.stopImmediatePropagation();ev.preventDefault();
+    },{capture:true,passive:false});
 
     window.addEventListener('pointermove',function(ev){
-      if(S._rulerNew&&S.tool==='ruler'){
-        const rect=wrap.getBoundingClientRect();
-        const pt=ptFrom(ev.clientX,ev.clientY,rect);
-        if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;S._rulerNew.liveY=pt.y;}
-        drawSoon();return;
-      }
-      if(S._rulerDrag)applyDrag(ev,wrap.getBoundingClientRect());
-    });
-
-    window.addEventListener('pointerup',function(){
-      if(S._rulerNew){saveNew();return;}
-      if(S._rulerDrag){S._rulerDrag=null;wrap.style.cursor='default';}
-    });
-
-    // ── Touch — capture phase ──
-    wrap.addEventListener('touchstart',function(ev){
-      if(ev.touches.length!==1)return;
-      const t=ev.touches[0],rect=wrap.getBoundingClientRect();
-      const pt=ptFrom(t.clientX,t.clientY,rect);
-      if(S.tool==='ruler'){
-        if(!pt)return;
-        S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x,liveY:pt.y};
-        ev.preventDefault();ev.stopPropagation();return;
-      }
+      if(!S._rulerNew||S.tool!=='ruler')return;
+      const pt=ptFrom(ev.clientX,ev.clientY);
       if(!pt)return;
-      const hit=hitRuler(pt.x,pt.y,pt.W,pt.H,pt.sc);
-      if(hit){
-        if(hit.part==='delete'){S._rulers.splice(hit.index,1);syncBtn();draw();}
-        else{S._rulerDrag={...hit,lastX:t.clientX,lastY:t.clientY};}
-        ev.preventDefault();ev.stopPropagation();
+      S._rulerNew.livePrice=pt.price;
+      S._rulerNew.liveIdx=pt.idx;
+      S._rulerNew.liveX=pt.x;
+      drawSoon();
+    });
+
+    window.addEventListener('pointerup',function(ev){
+      const dx=ev.clientX-_tapX,dy=ev.clientY-_tapY;
+      const isTap=Math.sqrt(dx*dx+dy*dy)<10;
+
+      if(S._rulerNew){
+        const moved=Math.abs(S._rulerNew.livePrice-S._rulerNew.price1)/S._rulerNew.price1>0.00005;
+        if(moved){
+          const n=S._rulerNew;
+          S._rulers=[{x1:n.idx1,x2:n.liveIdx,price1:n.price1,price2:n.livePrice}];
+          S._rulerNew=null;S.tool=null;
+          if(typeof syncToolBtns==='function')syncToolBtns();
+        }else{
+          S._rulerNew=null; // tap only — discard zeroed, re-arm
+        }
+        syncBtn();draw();
+        return;
       }
-    },{capture:true,passive:false});
 
-    wrap.addEventListener('touchmove',function(ev){
-      const t=ev.touches[0];
-      if(S._rulerNew&&S.tool==='ruler'){
-        const rect=wrap.getBoundingClientRect();
-        const pt=ptFrom(t.clientX,t.clientY,rect);
-        if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;S._rulerNew.liveY=pt.y;}
-        ev.preventDefault();drawSoon();return;
+      // Clear saved ruler on any tap when not armed
+      if(isTap&&S._rulers.length>0&&S.tool!=='ruler'){
+        S._rulers=[];syncBtn();draw();
       }
-      if(S._rulerDrag){ev.preventDefault();applyDrag({clientX:t.clientX,clientY:t.clientY},wrap.getBoundingClientRect());}
-    },{capture:true,passive:false});
+    });
 
-    wrap.addEventListener('touchend',function(){
-      if(S._rulerNew){saveNew();return;}
-      S._rulerDrag=null;
-    },{passive:true});
-
-    // ── Draw hook ──
+    // Draw hook
     const _base=window.draw;
     window.draw=function(){_base();drawRulers();};
 
-    // Shared renderer — draws TradingView-style ruler shape
-    function renderShape(ctx,x1px,x2px,y1,y2,W,H,alpha){
+    function drawShape(ctx,x1px,x2px,y1,y2,W,H,alpha){
       const right=W-RP();
-      // Clamp to visible chart area
       const xa=clamp(Math.min(x1px,x2px),PL,right);
       const xb=clamp(Math.max(x1px,x2px),PL,right);
       const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
-      const isUp=y2<=y1; // y smaller = higher price = up
-      const rgb=isUp?'0,230,118':'255,61,87';
-      const hex=isUp?'#00e676':'#ff3d57';
+      const isUp=y2<y1;
+      const bandRgb=isUp?'0,160,255':'255,61,87';
       const a=alpha;
 
-      // Colored band fill between the two price levels
-      ctx.fillStyle=`rgba(${rgb},${(0.15*a).toFixed(3)})`;
+      // Band fill
+      ctx.fillStyle=`rgba(${bandRgb},${(0.13*a).toFixed(3)})`;
       ctx.fillRect(xa,yTop,Math.max(1,xb-xa),Math.max(1,yBot-yTop));
 
-      // Dashed vertical lines at x1 and x2 (full chart height)
-      ctx.setLineDash([4,5]);
-      ctx.lineWidth=1;
-      ctx.strokeStyle=`rgba(100,140,220,${(0.50*a).toFixed(3)})`;
-      if(x1px>=PL&&x1px<=right){
-        ctx.beginPath();ctx.moveTo(x1px,PT);ctx.lineTo(x1px,H-PB);ctx.stroke();
-      }
-      if(x2px>=PL&&x2px<=right){
-        ctx.beginPath();ctx.moveTo(x2px,PT);ctx.lineTo(x2px,H-PB);ctx.stroke();
-      }
+      // Dashed vertical lines at x1 + x2
+      ctx.setLineDash([4,5]);ctx.lineWidth=1;
+      ctx.strokeStyle=`rgba(100,140,220,${(0.52*a).toFixed(3)})`;
+      if(x1px>=PL-1&&x1px<=right+1){ctx.beginPath();ctx.moveTo(x1px,PT);ctx.lineTo(x1px,H-PB);ctx.stroke();}
+      if(x2px>=PL-1&&x2px<=right+1){ctx.beginPath();ctx.moveTo(x2px,PT);ctx.lineTo(x2px,H-PB);ctx.stroke();}
 
-      // Dashed horizontal at price1 (reference line — neutral)
-      ctx.strokeStyle=`rgba(160,185,230,${(0.48*a).toFixed(3)})`;
+      // Dashed horizontal at price1 (reference)
+      ctx.strokeStyle=`rgba(160,185,230,${(0.45*a).toFixed(3)})`;
       ctx.beginPath();ctx.moveTo(PL,y1);ctx.lineTo(right,y1);ctx.stroke();
       ctx.setLineDash([]);
 
-      // Solid horizontal at price2 (end line — colored)
-      ctx.strokeStyle=`rgba(${rgb},${(0.85*a).toFixed(3)})`;
-      ctx.lineWidth=1.5;
+      // Solid horizontal at price2 (colored)
+      ctx.strokeStyle=`rgba(${bandRgb},${(0.88*a).toFixed(3)})`;ctx.lineWidth=1.5;
       ctx.beginPath();ctx.moveTo(PL,y2);ctx.lineTo(right,y2);ctx.stroke();
 
-      // Vertical arrow on right side of band
+      // Vertical arrow at right edge of band
       const ax=xb+5;
-      ctx.strokeStyle=`rgba(${rgb},${(0.65*a).toFixed(3)})`;
-      ctx.lineWidth=1.5;
+      ctx.strokeStyle=`rgba(${bandRgb},${(0.65*a).toFixed(3)})`;ctx.lineWidth=1.5;
       ctx.beginPath();ctx.moveTo(ax,y1);ctx.lineTo(ax,y2);ctx.stroke();
       const dir=y2<y1?1:-1;
-      ctx.beginPath();
-      ctx.moveTo(ax-5,y2+dir*7);ctx.lineTo(ax,y2);ctx.lineTo(ax+5,y2+dir*7);
-      ctx.stroke();
+      ctx.beginPath();ctx.moveTo(ax-5,y2+dir*7);ctx.lineTo(ax,y2);ctx.lineTo(ax+5,y2+dir*7);ctx.stroke();
 
-      // Dot at end point
-      ctx.fillStyle=`rgba(${rgb},${a.toFixed(3)})`;
+      // Dot at endpoint
+      ctx.fillStyle=`rgba(30,130,230,${a.toFixed(3)})`;
       ctx.strokeStyle=`rgba(5,9,20,${(0.75*a).toFixed(3)})`;ctx.lineWidth=1.5;
       ctx.beginPath();ctx.arc(x2px,y2,4.5,0,Math.PI*2);ctx.fill();ctx.stroke();
-
-      return{xa,xb,yTop,yBot,isUp,rgb,hex};
     }
 
-    function renderLabel(ctx,pct,nBars,x2px,y2,rgb,hex,W,H,a){
+    // Blue label — always blue, positioned at endpoint
+    function drawLabel(ctx,pctTxt,timeTxt,x2px,y2,W,H,alpha){
       const right=W-RP();
-      const pctTxt=(pct>=0?'+':'')+pct.toFixed(2)+'%';
-      const barTxt=nBars+' barra'+(nBars!==1?'s':'');
       ctx.font='bold 12px Inter,Arial,monospace';
       const w1=ctx.measureText(pctTxt).width;
       ctx.font='10px Inter,Arial,monospace';
-      const w2=ctx.measureText(barTxt).width;
-      const bw=Math.max(w1,w2)+16,bh=34,rd=5;
-      // Position label to the right of the endpoint, or left if near edge
+      const w2=ctx.measureText(timeTxt).width;
+      const bw=Math.max(w1,w2)+16,bh=32,rd=5;
       const lx=clamp(x2px+8,PL,right-bw-2);
       const ly=clamp(y2-bh/2,PT+2,H-PB-bh-2);
-      ctx.fillStyle=`rgba(${rgb},${(0.88*a).toFixed(3)})`;
+      ctx.fillStyle=`rgba(30,100,220,${(0.90*alpha).toFixed(3)})`;
       ctx.beginPath();
       ctx.moveTo(lx+rd,ly);ctx.lineTo(lx+bw-rd,ly);ctx.arcTo(lx+bw,ly,lx+bw,ly+rd,rd);
       ctx.lineTo(lx+bw,ly+bh-rd);ctx.arcTo(lx+bw,ly+bh,lx+bw-rd,ly+bh,rd);
       ctx.lineTo(lx+rd,ly+bh);ctx.arcTo(lx,ly+bh,lx,ly+bh-rd,rd);
       ctx.lineTo(lx,ly+rd);ctx.arcTo(lx,ly,lx+rd,ly,rd);
       ctx.closePath();ctx.fill();
-      ctx.fillStyle=`rgba(255,255,255,${(0.96*a).toFixed(3)})`;
+      ctx.fillStyle=`rgba(255,255,255,${(0.96*alpha).toFixed(3)})`;
       ctx.textAlign='left';ctx.textBaseline='middle';
       ctx.font='bold 12px Inter,Arial,monospace';
       ctx.fillText(pctTxt,lx+8,ly+10);
       ctx.font='10px Inter,Arial,monospace';
-      ctx.fillText(barTxt,lx+8,ly+24);
+      ctx.fillText(timeTxt,lx+8,ly+23);
     }
 
     function drawRulers(){
@@ -6726,38 +6654,48 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       const ctx=cvs.getContext('2d');
       if(!S._rulers.length&&!S._rulerNew)return;
       const right=W-RP();
-
       ctx.save();window.__ETX_SKIP_COLORMAP=true;
-      ctx.textAlign='center';ctx.textBaseline='middle';
 
       // In-progress creation
       if(S._rulerNew){
         const n=S._rulerNew;
         const x1px=PL+(n.idx1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
-        const x2px=clamp(n.liveX,PL,right);
-        const y1=sc.y(n.price1),y2=sc.y(n.livePrice);
-        const {xa,xb,yTop,yBot,isUp,rgb,hex}=renderShape(ctx,x1px,x2px,y1,y2,W,H,0.82);
-        const pct=(n.livePrice-n.price1)/n.price1*100;
-        const nBars=Math.max(1,Math.abs(Math.round(n.liveIdx-n.idx1)));
-        renderLabel(ctx,pct,nBars,x2px,y2,rgb,hex,W,H,0.82);
+        const y1=sc.y(n.price1);
+        const isZeroed=Math.abs(n.livePrice-n.price1)<n.price1*0.00005;
+
+        if(isZeroed){
+          // Phase 1: anchor set, zeroed blue label
+          ctx.setLineDash([4,5]);ctx.lineWidth=1;
+          ctx.strokeStyle='rgba(100,140,220,0.55)';
+          ctx.beginPath();ctx.moveTo(x1px,PT);ctx.lineTo(x1px,H-PB);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(PL,y1);ctx.lineTo(right,y1);ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle='rgba(30,130,230,1)';
+          ctx.strokeStyle='rgba(5,9,20,0.75)';ctx.lineWidth=1.5;
+          ctx.beginPath();ctx.arc(x1px,y1,5,0,Math.PI*2);ctx.fill();ctx.stroke();
+          drawLabel(ctx,'0,00%','0 barras, 0m',x1px+8,y1,W,H,0.90);
+        }else{
+          // Phase 2: dragging — live band + label
+          const x2px=clamp(n.liveX,PL,right);
+          const y2=sc.y(n.livePrice);
+          drawShape(ctx,x1px,x2px,y1,y2,W,H,0.82);
+          const pct=(n.livePrice-n.price1)/n.price1*100;
+          const nBars=Math.max(1,Math.abs(Math.round(n.liveIdx-n.idx1)));
+          const pctTxt=(pct>=0?'+':'')+pct.toFixed(2)+'%';
+          drawLabel(ctx,pctTxt,nBars+' barra'+(nBars!==1?'s':'')+'  '+fmtDur(nBars),x2px,y2,W,H,0.82);
+        }
       }
 
-      // Saved rulers
+      // Saved ruler
       S._rulers.forEach(function(r){
         const x1px=PL+(r.x1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const x2px=PL+(r.x2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const y1=sc.y(r.price1),y2=sc.y(r.price2);
-        const {xa,xb,yTop,yBot,isUp,rgb,hex}=renderShape(ctx,x1px,x2px,y1,y2,W,H,1.0);
+        drawShape(ctx,x1px,x2px,y1,y2,W,H,1.0);
         const pct=(r.price2-r.price1)/r.price1*100;
         const nBars=Math.max(1,Math.abs(Math.round(r.x2-r.x1)));
-        renderLabel(ctx,pct,nBars,x2px,y2,rgb,hex,W,H,1.0);
-        // Delete button
-        const delX=clamp(xb+12,PL,right-20),delY=clamp(yTop-14,PT+2,H-PB-18);
-        ctx.fillStyle='rgba(255,61,87,0.90)';
-        ctx.beginPath();ctx.arc(delX+8,delY+8,9,0,Math.PI*2);ctx.fill();
-        ctx.fillStyle='#fff';ctx.font='bold 13px monospace';
-        ctx.fillText('×',delX+8,delY+9);
-        r._del={x:delX,y:delY,w:18,h:18};
+        const pctTxt=(pct>=0?'+':'')+pct.toFixed(2)+'%';
+        drawLabel(ctx,pctTxt,nBars+' barra'+(nBars!==1?'s':'')+'  '+fmtDur(nBars),x2px,y2,W,H,1.0);
       });
 
       window.__ETX_SKIP_COLORMAP=false;
