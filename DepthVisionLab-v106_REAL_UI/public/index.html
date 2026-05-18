@@ -2055,10 +2055,12 @@ async function reloadAggTradesForBigBars(redraw=true,seq=S.loadSeq,sym=S.sym,tf=
       const arr=await fetch(`${LOCAL_API}/api/trades?start=${start}&end=${end}`).then(r=>r.json());
       if(seq!==S.loadSeq||sym!==S.sym||tf!==S.tf)return;
       if(Array.isArray(arr)&&arr.length){
+        let chunk=0;
         for(const t of arr){
           const id=t.a??`${t.T}-${t.p}-${t.q}`;
           if(seen.has(id))continue; seen.add(id);
           addAggTrade(t,false,seq);
+          if(++chunk%2000===0){await new Promise(r=>setTimeout(r,0));if(seq!==S.loadSeq||sym!==S.sym||tf!==S.tf)return;}
         }
         // Advance start past what we got from cache, then fill any remaining gap from Binance
         if(state_lastT(arr)){
@@ -2074,9 +2076,11 @@ async function reloadAggTradesForBigBars(redraw=true,seq=S.loadSeq,sym=S.sym,tf=
       if(seq!==S.loadSeq||sym!==S.sym||tf!==S.tf)return;
       if(!Array.isArray(arr)||!arr.length)break;
       for(const t of arr){const id=t.a??`${t.T}-${t.p}-${t.q}`; if(seen.has(id))continue; seen.add(id); addAggTrade(t,false,seq);}
+      await new Promise(r=>setTimeout(r,0)); // yield between batches so browser can render
+      if(seq!==S.loadSeq||sym!==S.sym||tf!==S.tf)return;
       const lastT=+arr[arr.length-1].T; if(!isFinite(lastT)||lastT<=start)break; start=lastT+1; loops++;
     }
-    if(redraw&&seq===S.loadSeq){setStatus(true,'BIG ORDERS · '+S.trades.length+' TRADES');draw();}
+    if(redraw&&seq===S.loadSeq){setStatus(true,'BIG ORDERS · '+S.trades.length+' TRADES');drawSoon();}
   }catch(e){if(seq===S.loadSeq)setStatus(false,'FALHA AGGTRADES REST')}
   finally{if(seq===S.loadSeq)S.aggLoading=false}
 }
@@ -2125,7 +2129,7 @@ async function loadFootprintFromServer(seq=S.loadSeq,sym=S.sym,tf=S.tf){
     // Bust only the per-candle cluster cache so historical bars rebuild with real footprint.
     // Keep __bigTradesLastGood as fallback so bubbles stay visible during the rebuild.
     window.__bigTradesPersistentCache=new Map();
-    draw();
+    drawSoon();
     console.log(`Footprint loaded: ${data.length} candles with real data`);
   }catch(e){console.log('footprint server load error:',e.message);}
 }
@@ -2141,6 +2145,7 @@ function roundToTick(p){
 }
 function findCandleIndex(time){const ms=tfMs(S.tf);if(!S.candles.length)return-1;const first=S.candles[0].t;let i=Math.floor((time-first)/ms);if(i<0||i>=S.candles.length){for(let j=S.candles.length-1;j>=0;j--)if(time>=S.candles[j].t&&time<S.candles[j].t+ms)return j;return-1}return i}
 let raf=false,lastDraw=0;function drawSoon(){if(raf)return;raf=true;requestAnimationFrame(ts=>{raf=false;if(ts-lastDraw<33)return;lastDraw=ts;draw();})}
+let _bootTimer=null;function bootDebounced(){clearTimeout(_bootTimer);_bootTimer=setTimeout(boot,120);}
 const PL=18,PT=8,PB=10; let PR=68;
 function RP(){const sp=S.yScale?.hidden?14:PR;return sp+(S.inds.book?Math.max(128,Math.min(S.book.maxW,S.book.w)+18):0)}
 function CW(W){return Math.max(80,W-PL-RP())}
@@ -3900,10 +3905,10 @@ if(el('tfSelect')){
     S.tf=next;
     document.querySelectorAll('.tf').forEach(x=>x.classList.toggle('active',x.dataset.tf===S.tf));
     closeMobilePanel();
-    boot();
+    bootDebounced();
   };
 }
-document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();boot()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();boot()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();bootDebounced()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();bootDebounced()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
 ['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',draw)});
 ['bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',draw)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;draw();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{draw();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});function syncBigTradeMinSizeUI(){
   const unit=el('bigTradeUnit')?.value||'qty';
@@ -5898,7 +5903,8 @@ return {
           try{
             const arr=await fetch(`${LOCAL_API}/api/trades?start=${start}&end=${end}`).then(r=>r.json());
             if(Array.isArray(arr)&&arr.length){
-              for(const t of arr){const id=t.a??`${t.T}-${t.p}-${t.q}`;if(seen.has(id))continue;seen.add(id);addAggTrade(t,false);}
+              let chunk=0;
+              for(const t of arr){const id=t.a??`${t.T}-${t.p}-${t.q}`;if(seen.has(id))continue;seen.add(id);addAggTrade(t,false);if(++chunk%2000===0)await new Promise(r=>setTimeout(r,0));}
               const lT=+arr[arr.length-1]?.T;if(isFinite(lT))start=lT+1;
             }
           }catch(_){}
@@ -5907,9 +5913,10 @@ return {
             const arr=await fetch(url).then(r=>r.json());
             if(!Array.isArray(arr)||!arr.length)break;
             for(const t of arr){const id=t.a??`${t.T}-${t.p}-${t.q}`;if(seen.has(id))continue;seen.add(id);addAggTrade(t,false);}
+            await new Promise(r=>setTimeout(r,0)); // yield between batches so browser can render
             const lastT=+arr[arr.length-1].T;if(lastT<=start)break;start=lastT+1;loops++;
           }
-          if(redraw){setStatus(true,'AGGTRADES/FVG ATUALIZADOS · LIVE');draw()}
+          if(redraw){setStatus(true,'AGGTRADES/FVG ATUALIZADOS · LIVE');drawSoon();}
           // Restore historical footprint that was targeted-reset above
           if(typeof loadFootprintFromServer==='function')loadFootprintFromServer(S.loadSeq,S.sym,S.tf).catch(()=>{});
         }catch(e){setStatus(false,'FALHA AGGTRADES/FVG')}
