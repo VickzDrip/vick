@@ -4128,7 +4128,7 @@ window.addEventListener('resize',draw);boot();
 
     var lastPlot=0;
     function plotFromPoint(clientX,clientY,ev){
-      if(!hasS() || !S.tool || !S.candles.length) return false;
+      if(!hasS() || !S.tool || S.tool==='ruler' || !S.candles.length) return false;
       var now=Date.now(); if(now-lastPlot<220) return true;
       var r=wrap.getBoundingClientRect();
       var x=clientX-r.left, y=clientY-r.top;
@@ -6562,7 +6562,8 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
 
     // ── Mouse — capture phase ──
-    wrap.addEventListener('mousedown',function(ev){
+    // Use pointerdown to match V40's capture order (fires before mousedown)
+    wrap.addEventListener('pointerdown',function(ev){
       if(ev.button!==0)return;
       const rect=wrap.getBoundingClientRect();
       const pt=ptFrom(ev.clientX,ev.clientY,rect);
@@ -6570,18 +6571,18 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       if(S.tool==='ruler'){
         if(!pt)return;
         S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x,liveY:pt.y};
-        ev.stopPropagation();return;
+        ev.stopImmediatePropagation();ev.preventDefault();return;
       }
       if(!pt)return;
       const hit=hitRuler(pt.x,pt.y,pt.W,pt.H,pt.sc);
       if(hit){
         if(hit.part==='delete'){S._rulers.splice(hit.index,1);syncBtn();draw();}
         else{S._rulerDrag={...hit,lastX:ev.clientX,lastY:ev.clientY};wrap.style.cursor='move';}
-        ev.stopPropagation();
+        ev.stopImmediatePropagation();ev.preventDefault();
       }
     },true);
 
-    window.addEventListener('mousemove',function(ev){
+    window.addEventListener('pointermove',function(ev){
       if(S._rulerNew&&S.tool==='ruler'){
         const rect=wrap.getBoundingClientRect();
         const pt=ptFrom(ev.clientX,ev.clientY,rect);
@@ -6591,7 +6592,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       if(S._rulerDrag)applyDrag(ev,wrap.getBoundingClientRect());
     });
 
-    window.addEventListener('mouseup',function(){
+    window.addEventListener('pointerup',function(){
       if(S._rulerNew){saveNew();return;}
       if(S._rulerDrag){S._rulerDrag=null;wrap.style.cursor='default';}
     });
