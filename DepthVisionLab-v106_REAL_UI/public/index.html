@@ -6475,27 +6475,28 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 })();
 </script>
 
-<!-- ── Ruler Tool: TradingView-style ── -->
+<!-- ── Ruler Tool ── -->
 <script>
 (function(){
   function initRuler(){
     if(!window.S)return setTimeout(initRuler,100);
-    S._rulers=[];    // [{x1,x2,price1,price2}] — max 1 active
-    S._rulerNew=null;// {price1,idx1,livePrice,liveIdx,liveX} during creation
+    S._rulers=[];          // [{x1,x2,price1,price2}]
+    S._rulerNew=null;      // {price1,idx1,livePrice,liveIdx,liveX,phase:'anchor'|'drag'}
+    S._rulerCross=null;    // {price,idx} crosshair following cursor when armed
+    S._rulerDragSv=null;   // {index,lastX,lastY} dragging saved ruler
 
     const btn=document.createElement('button');
     btn.id='btnRuler';btn.className='mini-btn';
-    btn.title='Régua % — clica, arrasta, solta';
-    btn.textContent='📏';btn.style.cssText='font-size:15px;padding:0 6px;';
+    btn.title='Régua %';btn.textContent='📏';
+    btn.style.cssText='font-size:15px;padding:0 6px;';
     const ref=document.getElementById('btnShort');
     if(ref&&ref.parentNode)ref.parentNode.insertBefore(btn,ref.nextSibling);
 
     function syncBtn(){
       btn.classList.toggle('tool-active',S.tool==='ruler'||S._rulers.length>0||!!S._rulerNew);
     }
-
     btn.addEventListener('click',function(){
-      if(S.tool==='ruler'){S.tool=null;S._rulerNew=null;}
+      if(S.tool==='ruler'){S.tool=null;S._rulerNew=null;S._rulerCross=null;}
       else if(S._rulers.length>0){S._rulers=[];S._rulerNew=null;S.tool=null;}
       else{S.tool='ruler';}
       if(typeof syncToolBtns==='function')syncToolBtns();
@@ -6505,206 +6506,217 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const wrap=document.getElementById('chartWrap');
     if(!wrap)return;
 
-    function ptFrom(clientX,clientY){
-      const rect=wrap.getBoundingClientRect();
-      const x=clientX-rect.left,y=clientY-rect.top,W=rect.width,H=rect.height;
+    function ptFrom(cx,cy){
+      const r=wrap.getBoundingClientRect(),x=cx-r.left,y=cy-r.top,W=r.width,H=r.height;
       if(x<PL||y<PT||x>W-RP()||y>H-PB)return null;
       const sc=scale(visible().cs,H);
-      return{x,y,price:priceFromY(y,H,sc),idx:idxFromX(x,W)};
+      return{x,y,W,H,sc,price:priceFromY(y,H,sc),idx:idxFromX(x,W)};
     }
-
     function tfMins(){
-      const m=(S.tf||'').match(/^(\d+)(m|h|d|w)$/i);
-      if(!m)return 1;
+      const m=(S.tf||'').match(/^(\d+)(m|h|d|w)$/i);if(!m)return 1;
       const n=parseInt(m[1]);
-      return m[2].toLowerCase()==='m'?n:m[2].toLowerCase()==='h'?n*60:m[2].toLowerCase()==='d'?n*1440:n*10080;
+      return m[2]==='m'?n:m[2]==='h'?n*60:m[2]==='d'?n*1440:n*10080;
     }
-
     function fmtDur(bars){
-      const mins=Math.max(1,bars)*tfMins();
-      if(mins<60)return mins+'m';
-      const h=Math.floor(mins/60),m=mins%60;
-      return m>0?h+'h '+m+'m':h+'h';
+      const t=Math.max(1,bars)*tfMins();if(t<60)return t+'m';
+      const h=Math.floor(t/60),m=t%60;return m?h+'h '+m+'m':h+'h';
+    }
+    function hitSaved(xp,yp,W,H,sc){
+      const right=W-RP();
+      for(let i=S._rulers.length-1;i>=0;i--){
+        const r=S._rulers[i];
+        const x1p=PL+(r.x1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        const x2p=PL+(r.x2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        const xa=clamp(Math.min(x1p,x2p),PL,right),xb=clamp(Math.max(x1p,x2p),PL,right);
+        const y1=sc.y(r.price1),y2=sc.y(r.price2);
+        if(xp>=xa-12&&xp<=xb+12&&yp>=Math.min(y1,y2)-12&&yp<=Math.max(y1,y2)+12)return{index:i};
+      }
+      return null;
     }
 
-    // Track tap position for clear-on-click
     let _tapX=0,_tapY=0;
 
-    // pointerdown — capture (fires before V40 + mousedown/touchstart)
+    // capture — fires before V40 + main handlers
     wrap.addEventListener('pointerdown',function(ev){
       if(ev.button!==0)return;
       _tapX=ev.clientX;_tapY=ev.clientY;
-      if(S.tool!=='ruler')return;
-      const pt=ptFrom(ev.clientX,ev.clientY);
-      if(!pt)return;
-      S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x};
-      draw();
-      ev.stopImmediatePropagation();ev.preventDefault();
+
+      if(S.tool==='ruler'){
+        const pt=ptFrom(ev.clientX,ev.clientY);if(!pt)return;
+        if(!S._rulerNew){
+          S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x,phase:'anchor'};
+          S._rulerCross=null;
+        }else if(S._rulerNew.phase==='anchor'){
+          S._rulerNew.phase='drag';
+          S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;
+        }
+        draw();ev.stopImmediatePropagation();ev.preventDefault();return;
+      }
+
+      // Drag saved ruler
+      if(S._rulers.length>0){
+        const pt=ptFrom(ev.clientX,ev.clientY);if(!pt)return;
+        const hit=hitSaved(pt.x,pt.y,pt.W,pt.H,pt.sc);
+        if(hit){
+          S._rulerDragSv={...hit,lastX:ev.clientX,lastY:ev.clientY};
+          ev.stopImmediatePropagation();ev.preventDefault();
+        }
+      }
     },{capture:true,passive:false});
 
-    window.addEventListener('pointermove',function(ev){
-      if(!S._rulerNew||S.tool!=='ruler')return;
+    // Crosshair follows mouse hover when armed (desktop)
+    wrap.addEventListener('mousemove',function(ev){
+      if(S.tool!=='ruler'||S._rulerNew)return;
       const pt=ptFrom(ev.clientX,ev.clientY);
-      if(!pt)return;
-      S._rulerNew.livePrice=pt.price;
-      S._rulerNew.liveIdx=pt.idx;
-      S._rulerNew.liveX=pt.x;
+      S._rulerCross=pt?{price:pt.price,idx:pt.idx}:null;
       drawSoon();
     });
 
-    window.addEventListener('pointerup',function(ev){
-      const dx=ev.clientX-_tapX,dy=ev.clientY-_tapY;
-      const isTap=Math.sqrt(dx*dx+dy*dy)<10;
+    window.addEventListener('pointermove',function(ev){
+      if(S._rulerNew&&S._rulerNew.phase==='drag'){
+        const pt=ptFrom(ev.clientX,ev.clientY);
+        if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;}
+        drawSoon();return;
+      }
+      if(S._rulerDragSv){
+        const r=S._rulers[S._rulerDragSv.index];if(!r)return;
+        const rect=wrap.getBoundingClientRect(),W=rect.width,H=rect.height;
+        const sc=scale(visible().cs,H);
+        const dIdx=(ev.clientX-S._rulerDragSv.lastX)*(S.view.end-S.view.start)/CW(W);
+        const dP=priceFromY(ev.clientY-rect.top,H,sc)-priceFromY(S._rulerDragSv.lastY-rect.top,H,sc);
+        r.x1+=dIdx;r.x2+=dIdx;r.price1+=dP;r.price2+=dP;
+        S._rulerDragSv.lastX=ev.clientX;S._rulerDragSv.lastY=ev.clientY;
+        drawSoon();
+      }
+    });
 
+    window.addEventListener('pointerup',function(ev){
+      const dx=ev.clientX-_tapX,dy=ev.clientY-_tapY,isTap=Math.sqrt(dx*dx+dy*dy)<10;
+      if(S._rulerDragSv){S._rulerDragSv=null;draw();return;}
       if(S._rulerNew){
-        const moved=Math.abs(S._rulerNew.livePrice-S._rulerNew.price1)/S._rulerNew.price1>0.00005;
-        if(moved){
-          const n=S._rulerNew;
-          S._rulers=[{x1:n.idx1,x2:n.liveIdx,price1:n.price1,price2:n.livePrice}];
-          S._rulerNew=null;S.tool=null;
-          if(typeof syncToolBtns==='function')syncToolBtns();
-        }else{
-          S._rulerNew=null; // tap only — discard zeroed, re-arm
+        if(S._rulerNew.phase==='drag'){
+          const moved=Math.abs(S._rulerNew.livePrice-S._rulerNew.price1)/S._rulerNew.price1>0.00005;
+          if(moved){
+            const n=S._rulerNew;
+            S._rulers=[{x1:n.idx1,x2:n.liveIdx,price1:n.price1,price2:n.livePrice}];
+            S._rulerNew=null;S.tool=null;
+            if(typeof syncToolBtns==='function')syncToolBtns();
+          }else{S._rulerNew.phase='anchor';}
+          syncBtn();draw();
         }
-        syncBtn();draw();
         return;
       }
-
-      // Clear saved ruler on any tap when not armed
-      if(isTap&&S._rulers.length>0&&S.tool!=='ruler'){
-        S._rulers=[];syncBtn();draw();
-      }
+      if(isTap&&S._rulers.length>0&&S.tool!=='ruler'){S._rulers=[];syncBtn();draw();}
     });
 
     // Draw hook
     const _base=window.draw;
     window.draw=function(){_base();drawRulers();};
 
-    function drawShape(ctx,x1px,x2px,y1,y2,W,H,alpha){
+    function drawCross(ctx,xpx,y1,W,H,a){
       const right=W-RP();
-      const xa=clamp(Math.min(x1px,x2px),PL,right);
-      const xb=clamp(Math.max(x1px,x2px),PL,right);
-      const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
-      const isUp=y2<y1;
-      const bandRgb=isUp?'0,160,255':'255,61,87';
-      const a=alpha;
-
-      // Band fill
-      ctx.fillStyle=`rgba(${bandRgb},${(0.13*a).toFixed(3)})`;
-      ctx.fillRect(xa,yTop,Math.max(1,xb-xa),Math.max(1,yBot-yTop));
-
-      // Dashed vertical lines at x1 + x2
       ctx.setLineDash([4,5]);ctx.lineWidth=1;
-      ctx.strokeStyle=`rgba(100,140,220,${(0.52*a).toFixed(3)})`;
-      if(x1px>=PL-1&&x1px<=right+1){ctx.beginPath();ctx.moveTo(x1px,PT);ctx.lineTo(x1px,H-PB);ctx.stroke();}
-      if(x2px>=PL-1&&x2px<=right+1){ctx.beginPath();ctx.moveTo(x2px,PT);ctx.lineTo(x2px,H-PB);ctx.stroke();}
-
-      // Dashed horizontal at price1 (reference)
-      ctx.strokeStyle=`rgba(160,185,230,${(0.45*a).toFixed(3)})`;
+      ctx.strokeStyle=`rgba(100,140,220,${(0.55*a).toFixed(2)})`;
+      ctx.beginPath();ctx.moveTo(xpx,PT);ctx.lineTo(xpx,H-PB);ctx.stroke();
       ctx.beginPath();ctx.moveTo(PL,y1);ctx.lineTo(right,y1);ctx.stroke();
       ctx.setLineDash([]);
+      ctx.fillStyle=`rgba(30,130,230,${a.toFixed(2)})`;
+      ctx.strokeStyle=`rgba(5,9,20,${(0.75*a).toFixed(2)})`;ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(xpx,y1,5,0,Math.PI*2);ctx.fill();ctx.stroke();
+    }
 
-      // Solid horizontal at price2 (colored)
-      ctx.strokeStyle=`rgba(${bandRgb},${(0.88*a).toFixed(3)})`;ctx.lineWidth=1.5;
+    function drawBand(ctx,x1px,x2px,y1,y2,W,H,a){
+      const right=W-RP();
+      const xa=clamp(Math.min(x1px,x2px),PL,right),xb=clamp(Math.max(x1px,x2px),PL,right);
+      const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
+      const rgb=y2<y1?'0,160,255':'255,61,87';
+      ctx.fillStyle=`rgba(${rgb},${(0.14*a).toFixed(2)})`;
+      ctx.fillRect(xa,yTop,Math.max(1,xb-xa),Math.max(1,yBot-yTop));
+      ctx.setLineDash([4,5]);ctx.lineWidth=1;
+      ctx.strokeStyle=`rgba(100,140,220,${(0.52*a).toFixed(2)})`;
+      if(x1px>PL-2&&x1px<right+2){ctx.beginPath();ctx.moveTo(x1px,PT);ctx.lineTo(x1px,H-PB);ctx.stroke();}
+      if(x2px>PL-2&&x2px<right+2){ctx.beginPath();ctx.moveTo(x2px,PT);ctx.lineTo(x2px,H-PB);ctx.stroke();}
+      ctx.strokeStyle=`rgba(160,185,230,${(0.45*a).toFixed(2)})`;
+      ctx.beginPath();ctx.moveTo(PL,y1);ctx.lineTo(right,y1);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle=`rgba(${rgb},${(0.88*a).toFixed(2)})`;ctx.lineWidth=1.5;
       ctx.beginPath();ctx.moveTo(PL,y2);ctx.lineTo(right,y2);ctx.stroke();
-
-      // Vertical arrow at right edge of band
       const ax=xb+5;
-      ctx.strokeStyle=`rgba(${bandRgb},${(0.65*a).toFixed(3)})`;ctx.lineWidth=1.5;
+      ctx.strokeStyle=`rgba(${rgb},${(0.65*a).toFixed(2)})`;ctx.lineWidth=1.5;
       ctx.beginPath();ctx.moveTo(ax,y1);ctx.lineTo(ax,y2);ctx.stroke();
       const dir=y2<y1?1:-1;
       ctx.beginPath();ctx.moveTo(ax-5,y2+dir*7);ctx.lineTo(ax,y2);ctx.lineTo(ax+5,y2+dir*7);ctx.stroke();
-
-      // Dot at endpoint
-      ctx.fillStyle=`rgba(30,130,230,${a.toFixed(3)})`;
-      ctx.strokeStyle=`rgba(5,9,20,${(0.75*a).toFixed(3)})`;ctx.lineWidth=1.5;
+      ctx.fillStyle=`rgba(30,130,230,${a.toFixed(2)})`;
+      ctx.strokeStyle=`rgba(5,9,20,${(0.75*a).toFixed(2)})`;ctx.lineWidth=1.5;
       ctx.beginPath();ctx.arc(x2px,y2,4.5,0,Math.PI*2);ctx.fill();ctx.stroke();
     }
 
-    // Blue label — always blue, positioned at endpoint
-    function drawLabel(ctx,pctTxt,timeTxt,x2px,y2,W,H,alpha){
+    function drawLabel(ctx,line1,line2,x2px,y2,W,H,a){
       const right=W-RP();
-      ctx.font='bold 12px Inter,Arial,monospace';
-      const w1=ctx.measureText(pctTxt).width;
-      ctx.font='10px Inter,Arial,monospace';
-      const w2=ctx.measureText(timeTxt).width;
+      ctx.font='bold 12px Inter,Arial,monospace';const w1=ctx.measureText(line1).width;
+      ctx.font='10px Inter,Arial,monospace';const w2=ctx.measureText(line2).width;
       const bw=Math.max(w1,w2)+16,bh=32,rd=5;
-      const lx=clamp(x2px+8,PL,right-bw-2);
-      const ly=clamp(y2-bh/2,PT+2,H-PB-bh-2);
-      ctx.fillStyle=`rgba(30,100,220,${(0.90*alpha).toFixed(3)})`;
+      const lx=clamp(x2px+8,PL,right-bw-2),ly=clamp(y2-bh/2,PT+2,H-PB-bh-2);
+      ctx.fillStyle=`rgba(30,100,220,${(0.90*a).toFixed(2)})`;
       ctx.beginPath();
       ctx.moveTo(lx+rd,ly);ctx.lineTo(lx+bw-rd,ly);ctx.arcTo(lx+bw,ly,lx+bw,ly+rd,rd);
       ctx.lineTo(lx+bw,ly+bh-rd);ctx.arcTo(lx+bw,ly+bh,lx+bw-rd,ly+bh,rd);
       ctx.lineTo(lx+rd,ly+bh);ctx.arcTo(lx,ly+bh,lx,ly+bh-rd,rd);
       ctx.lineTo(lx,ly+rd);ctx.arcTo(lx,ly,lx+rd,ly,rd);
       ctx.closePath();ctx.fill();
-      ctx.fillStyle=`rgba(255,255,255,${(0.96*alpha).toFixed(3)})`;
+      ctx.fillStyle=`rgba(255,255,255,${(0.96*a).toFixed(2)})`;
       ctx.textAlign='left';ctx.textBaseline='middle';
-      ctx.font='bold 12px Inter,Arial,monospace';
-      ctx.fillText(pctTxt,lx+8,ly+10);
-      ctx.font='10px Inter,Arial,monospace';
-      ctx.fillText(timeTxt,lx+8,ly+23);
+      ctx.font='bold 12px Inter,Arial,monospace';ctx.fillText(line1,lx+8,ly+10);
+      ctx.font='10px Inter,Arial,monospace';ctx.fillText(line2,lx+8,ly+23);
     }
 
     function drawRulers(){
       const cvs=document.getElementById('chart');if(!cvs)return;
-      const W=wrap.clientWidth,H=wrap.clientHeight;
-      if(!W||!H)return;
-      const sc=scale(visible().cs,H);
+      const W=wrap.clientWidth,H=wrap.clientHeight;if(!W||!H)return;
+      const sc=scale(visible().cs,H),right=W-RP();
       const ctx=cvs.getContext('2d');
-      if(!S._rulers.length&&!S._rulerNew)return;
-      const right=W-RP();
+      if(!S._rulers.length&&!S._rulerNew&&!S._rulerCross)return;
       ctx.save();window.__ETX_SKIP_COLORMAP=true;
 
-      // In-progress creation
+      // Crosshair follows cursor when armed
+      if(S._rulerCross&&S.tool==='ruler'&&!S._rulerNew){
+        const c=S._rulerCross;
+        const xpx=PL+(c.idx-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        drawCross(ctx,xpx,sc.y(c.price),W,H,0.70);
+      }
+
+      // In-progress
       if(S._rulerNew){
         const n=S._rulerNew;
         const x1px=PL+(n.idx1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const y1=sc.y(n.price1);
-        const isZeroed=Math.abs(n.livePrice-n.price1)<n.price1*0.00005;
-
-        if(isZeroed){
-          // Phase 1: anchor set, zeroed blue label
-          ctx.setLineDash([4,5]);ctx.lineWidth=1;
-          ctx.strokeStyle='rgba(100,140,220,0.55)';
-          ctx.beginPath();ctx.moveTo(x1px,PT);ctx.lineTo(x1px,H-PB);ctx.stroke();
-          ctx.beginPath();ctx.moveTo(PL,y1);ctx.lineTo(right,y1);ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.fillStyle='rgba(30,130,230,1)';
-          ctx.strokeStyle='rgba(5,9,20,0.75)';ctx.lineWidth=1.5;
-          ctx.beginPath();ctx.arc(x1px,y1,5,0,Math.PI*2);ctx.fill();ctx.stroke();
+        if(n.phase==='anchor'){
+          drawCross(ctx,x1px,y1,W,H,1.0);
           drawLabel(ctx,'0,00%','0 barras, 0m',x1px+8,y1,W,H,0.90);
         }else{
-          // Phase 2: dragging — live band + label
-          const x2px=clamp(n.liveX,PL,right);
-          const y2=sc.y(n.livePrice);
-          drawShape(ctx,x1px,x2px,y1,y2,W,H,0.82);
+          const x2px=clamp(n.liveX,PL,right),y2=sc.y(n.livePrice);
+          drawBand(ctx,x1px,x2px,y1,y2,W,H,0.82);
           const pct=(n.livePrice-n.price1)/n.price1*100;
-          const nBars=Math.max(1,Math.abs(Math.round(n.liveIdx-n.idx1)));
-          const pctTxt=(pct>=0?'+':'')+pct.toFixed(2)+'%';
-          drawLabel(ctx,pctTxt,nBars+' barra'+(nBars!==1?'s':'')+'  '+fmtDur(nBars),x2px,y2,W,H,0.82);
+          const nb=Math.max(1,Math.abs(Math.round(n.liveIdx-n.idx1)));
+          drawLabel(ctx,(pct>=0?'+':'')+pct.toFixed(2)+'%',nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb),x2px,y2,W,H,0.82);
         }
       }
 
-      // Saved ruler
+      // Saved
       S._rulers.forEach(function(r){
         const x1px=PL+(r.x1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const x2px=PL+(r.x2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const y1=sc.y(r.price1),y2=sc.y(r.price2);
-        drawShape(ctx,x1px,x2px,y1,y2,W,H,1.0);
+        drawBand(ctx,x1px,x2px,y1,y2,W,H,1.0);
         const pct=(r.price2-r.price1)/r.price1*100;
-        const nBars=Math.max(1,Math.abs(Math.round(r.x2-r.x1)));
-        const pctTxt=(pct>=0?'+':'')+pct.toFixed(2)+'%';
-        drawLabel(ctx,pctTxt,nBars+' barra'+(nBars!==1?'s':'')+'  '+fmtDur(nBars),x2px,y2,W,H,1.0);
+        const nb=Math.max(1,Math.abs(Math.round(r.x2-r.x1)));
+        drawLabel(ctx,(pct>=0?'+':'')+pct.toFixed(2)+'%',nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb),x2px,y2,W,H,1.0);
       });
 
-      window.__ETX_SKIP_COLORMAP=false;
-      ctx.restore();
+      window.__ETX_SKIP_COLORMAP=false;ctx.restore();
     }
-
     syncBtn();
   }
-
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initRuler);
   else initRuler();
 })();
