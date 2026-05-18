@@ -1609,15 +1609,13 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
             <div class="kv"><span class="k">VAH / VAL</span><select class="select tiny-select" id="svpShowVA"><option value="1">mostrar</option><option value="0">ocultar</option></select></div>
             <div class="kv"><span class="k">Rótulo sessão</span><select class="select tiny-select" id="svpShowLabel"><option value="1">mostrar</option><option value="0">ocultar</option></select></div>
             <div class="kv"><span class="k">Cor POC</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColPOCSwatch" style="width:100%;height:100%;background:#f0b229;pointer-events:none"></div><input id="svpColPOC" type="color" value="#f0b229" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
-            <div class="kv"><span class="k">Cor Value Area</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColVASwatch" style="width:100%;height:100%;background:#2e7dd4;pointer-events:none"></div><input id="svpColVA" type="color" value="#2e7dd4" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
-            <div class="kv"><span class="k">Cor fora VA</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColOutSwatch" style="width:100%;height:100%;background:#3d5580;pointer-events:none"></div><input id="svpColOut" type="color" value="#3d5580" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
             <div class="kv"><span class="k">Cor linha POC</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColPocLineSwatch" style="width:100%;height:100%;background:#f0b229;pointer-events:none"></div><input id="svpColPocLine" type="color" value="#f0b229" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
             <div class="kv"><span class="k">Cor VAH/VAL</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColVaLineSwatch" style="width:100%;height:100%;background:#9b59ff;pointer-events:none"></div><input id="svpColVaLine" type="color" value="#9b59ff" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
             <div class="kv"><span class="k">Delta split</span><select class="select tiny-select" id="svpDelta"><option value="0" selected>ocultar</option><option value="1">mostrar</option></select></div>
             <div class="kv"><span class="k">Largura delta (%)</span><input class="num" id="svpDeltaW" type="number" min="10" max="100" step="5" value="40"></div>
             <div class="kv"><span class="k">Cor compra</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColBuySwatch" style="width:100%;height:100%;background:#00e676;pointer-events:none"></div><input id="svpColBuy" type="color" value="#00e676" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
             <div class="kv"><span class="k">Cor venda</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="svpColSellSwatch" style="width:100%;height:100%;background:#ff3d57;pointer-events:none"></div><input id="svpColSell" type="color" value="#ff3d57" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
-            <div class="hint">Profile ancorado por sessão. Delta split = barras buy/sell à esquerda. Cores totalmente configuráveis. Requer aggTrades.</div>
+            <div class="hint">Barras do profile coloridas por delta: verde=compra dominant · vermelho=venda dominant · ouro=POC. Delta split exibe buy/sell à esquerda. Requer aggTrades.</div>
           </div>
         </div>
 
@@ -6313,14 +6311,12 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const showDelta =(E('svpDelta')?.value||'0')==='1';
     const deltaWPct =Math.max(0.1,Math.min(1,sn(E('svpDeltaW')?.value,40)/100));
 
-    // Colors
-    const cPOC    =col('svpColPOC','#f0b229');
-    const cVA     =col('svpColVA','#2e7dd4');
-    const cOut    =col('svpColOut','#3d5580');
-    const cPocLn  =col('svpColPocLine','#f0b229');
-    const cVaLn   =col('svpColVaLine','#9b59ff');
-    const cBuy    =col('svpColBuy','#00e676');
-    const cSell   =col('svpColSell','#ff3d57');
+    // Colors — buy/sell apply to BOTH main bars and delta split
+    const cPOC   =col('svpColPOC','#f0b229');
+    const cPocLn =col('svpColPocLine','#f0b229');
+    const cVaLn  =col('svpColVaLine','#9b59ff');
+    const cBuy   =col('svpColBuy','#00e676');
+    const cSell  =col('svpColSell','#ff3d57');
 
     const cw=CW(W), pxPerBar=cw/Math.max(1,V.span);
     const chartRight=W-RP(), chartLeft=PL;
@@ -6350,10 +6346,13 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const inVA=(i>=val&&i<=vah), isPOC=(i===poc);
         if(isPOC){
           ctx.fillStyle=hx(cPOC,opacity*0.92);
-        }else if(inVA){
-          ctx.fillStyle=hx(cVA,opacity*0.60);
         }else{
-          ctx.fillStyle=hx(cOut,opacity*0.35);
+          // Color by delta direction — same palette as delta split
+          const dt=r.vol>0?(r.buy-r.sell)/r.vol:0; // -1=all sell, +1=all buy
+          const baseCol=dt>=0?cBuy:cSell;
+          const intensity=0.30+Math.abs(dt)*0.70;   // richer color = stronger imbalance
+          const alpha=inVA?opacity*0.68*intensity:opacity*0.28*intensity;
+          ctx.fillStyle=hx(baseCol,alpha);
         }
         ctx.fillRect(xLeft,cy-bh*0.5,barW,bh);
       }
@@ -6451,8 +6450,8 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       n.addEventListener('input',redraw); n.addEventListener('change',redraw);
     });
     // Color pickers: update swatch + redraw
-    [['svpColPOC','svpColPOCSwatch'],['svpColVA','svpColVASwatch'],
-     ['svpColOut','svpColOutSwatch'],['svpColPocLine','svpColPocLineSwatch'],
+    [['svpColPOC','svpColPOCSwatch'],
+     ['svpColPocLine','svpColPocLineSwatch'],
      ['svpColVaLine','svpColVaLineSwatch'],
      ['svpColBuy','svpColBuySwatch'],['svpColSell','svpColSellSwatch']].forEach(([cid,sid])=>{
       const inp=E(cid), sw=E(sid); if(!inp)return;
