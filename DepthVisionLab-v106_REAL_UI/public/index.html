@@ -6768,24 +6768,37 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const cs=S.candles;
     const lastIdx=cs.length-1;
 
-    // Collect all candles above threshold, sorted by dollar volume descending
+    // 1. Collect candles above threshold, sorted by dollar volume desc
     const candidates=[];
     for(let i=0;i<cs.length;i++){
       const c=cs[i];
       const dollarVol=c.v*c.c;
-      if(dollarVol>=minVal)candidates.push({i,c,dollarVol});
+      if(dollarVol>=minVal)candidates.push({i,c,dollarVol,lo:c.l,hi:c.h});
     }
     candidates.sort((a,b)=>b.dollarVol-a.dollarVol);
 
-    // Greedy non-overlapping selection: add zone only if price range doesn't
-    // overlap any already-selected zone (prevents stacking boxes)
+    // 2. Greedy non-overlapping selection
     const zones=[];
     for(const cand of candidates){
       if(zones.length>=maxZones)break;
-      const lo=cand.c.l, hi=cand.c.h;
-      const overlaps=zones.some(z=>lo<z.hi&&hi>z.lo);
-      if(!overlaps)zones.push({...cand,lo,hi});
+      const overlaps=zones.some(z=>cand.lo<z.hi&&cand.hi>z.lo);
+      if(!overlaps)zones.push(cand);
     }
+
+    // 3. Sort selected zones by candle index, then merge groups whose
+    //    origin candles are within MERGE_BARS of each other
+    zones.sort((a,b)=>a.i-b.i);
+    const MERGE_BARS=5;
+    const merged=[];
+    let g=[zones[0]];
+    for(let k=1;k<zones.length;k++){
+      if(zones[k].i-g[g.length-1].i<=MERGE_BARS){
+        g.push(zones[k]);
+      }else{
+        merged.push(g);g=[zones[k]];
+      }
+    }
+    if(g.length)merged.push(g);
 
     const rgb=hexToRgb(color);
     const vspan=S.view.end-S.view.start;
@@ -6795,11 +6808,20 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
 
-    for(const{i,c,dollarVol}of zones){
-      const x1=x(i)-bw*0.5;
+    for(const group of merged){
+      // Merged box bounds
+      const hi=Math.max(...group.map(z=>z.hi));
+      const lo=Math.min(...group.map(z=>z.lo));
+      const mid=(hi+lo)/2;
+      const totalVol=group.reduce((s,z)=>s+z.dollarVol,0);
+      // Anchor x = earliest candle in group
+      const anchorIdx=group[0].i;
+
+      const x1=x(anchorIdx)-bw*0.5;
       const x2=x(lastIdx+extend)+bw*0.5;
-      const y1=sc.y(c.h);
-      const y2=sc.y(c.l);
+      const y1=sc.y(hi);
+      const y2=sc.y(lo);
+      const ym=sc.y(mid);
       const boxH=Math.max(1,y2-y1);
 
       if(x2<PL||x1>W-RP()||y2<PT||y1>H-PB)continue;
@@ -6807,9 +6829,11 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       const x1c=Math.max(PL,x1);
       const x2c=Math.min(W-RP(),x2);
 
+      // Fill
       ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.10)`;
       ctx.fillRect(x1c,y1,x2c-x1c,boxH);
 
+      // Top and bottom borders
       ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.55)`;
       ctx.lineWidth=1;
       ctx.setLineDash([]);
@@ -6818,19 +6842,28 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       ctx.moveTo(x1c,y2);ctx.lineTo(x2c,y2);
       ctx.stroke();
 
+      // 50% midline — dashed, slightly brighter
+      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.75)`;
+      ctx.lineWidth=1;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath();ctx.moveTo(x1c,ym);ctx.lineTo(x2c,ym);ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Left anchor line
       if(x1>=PL){
         ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.45)`;
         ctx.lineWidth=1.5;
         ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x1,y2);ctx.stroke();
       }
 
+      // Label
       const labelX=Math.max(PL+4,x1c+4);
       const labelY=y1+boxH/2;
       if(labelX<x2c-20&&boxH>9){
         ctx.font='bold 9px monospace';
         ctx.textBaseline='middle';
         ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.85)`;
-        ctx.fillText('$'+nFmt(dollarVol),labelX,labelY);
+        ctx.fillText('$'+nFmt(totalVol),labelX,labelY);
       }
     }
 
