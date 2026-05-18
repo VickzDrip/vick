@@ -1643,8 +1643,9 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
             <div class="kv"><span class="k">Mín. USD</span><input class="num" id="vzMinVal" type="number" min="0" step="1" value="500000" style="width:100px"></div>
             <div class="kv"><span class="k">Máx. zonas</span><input class="num" id="vzMaxZones" type="number" min="1" max="50" step="1" value="20"></div>
             <div class="kv"><span class="k">Cor</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="vzColorSwatch" style="width:100%;height:100%;background:#6366f1;pointer-events:none"></div><input id="vzColor" type="color" value="#6366f1" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
-            <div class="kv"><span class="k">Extensão (barras)</span><input class="num" id="vzExtend" type="number" min="0" max="200" step="1" value="20"></div>
-            <div class="hint">Caixas horizontais (pavio a pavio) nas velas com volume em dólar acima do mínimo. Exibe as N maiores zonas.</div>
+            <div class="kv"><span class="k">Extensão (barras)</span><input class="num" id="vzExtend" type="number" min="0" max="500" step="1" value="20"></div>
+            <div class="kv"><span class="k">Gap mesclagem %</span><input class="num" id="vzGapRatio" type="number" min="0" max="300" step="1" value="50"></div>
+            <div class="hint">Caixas horizontais (pavio a pavio) nas velas com volume em dólar acima do mínimo. Gap = % da menor zona para mesclar níveis próximos.</div>
           </div>
         </div>
 
@@ -6753,8 +6754,9 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const minVal=Math.max(0,numVal('vzMinVal',500000));
     const maxZones=Math.max(1,Math.min(50,numVal('vzMaxZones',20)));
     const color=E('vzColor')?.value||'#6366f1';
-    const extend=Math.max(0,numVal('vzExtend',20));
-    return{minVal,maxZones,color,extend};
+    const extend=Math.max(0,Math.round(numVal('vzExtend',20)));
+    const gapRatio=Math.max(0,numVal('vzGapRatio',50))/100;
+    return{minVal,maxZones,color,extend,gapRatio};
   }
 
   function hexToRgb(hex){
@@ -6764,7 +6766,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
   function drawVolZones(ctx,W,H,V,sc,x){
     if(!window.S||!S.inds.volZones||!S.candles.length)return;
-    const{minVal,maxZones,color,extend}=getSettings();
+    const{minVal,maxZones,color,extend,gapRatio}=getSettings();
     const cs=S.candles;
     const lastIdx=cs.length-1;
 
@@ -6809,9 +6811,9 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }));
 
     // 5. Price-gap merge: sort by price, merge adjacent boxes where the gap
-    //    between them is less than 50% of the height of the smaller box
+    //    between them is less than gapRatio of the height of the smaller box
     boxes.sort((a,b)=>a.lo-b.lo);
-    const PRICE_GAP_RATIO=0.5;
+    const PRICE_GAP_RATIO=gapRatio;
     const priceGroups=[];
     let pg=[boxes[0]];
     for(let k=1;k<boxes.length;k++){
@@ -6840,11 +6842,14 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
 
+    // Right edge: position of last candle + extend bars (in pixels), unclamped
+    const xRight=x(lastIdx)+extend*bw;
+
     for(const{hi,lo,totalVol,anchorIdx}of finalZones){
       const mid=(hi+lo)/2;
 
       const x1=x(anchorIdx)-bw*0.5;
-      const x2=x(lastIdx+extend)+bw*0.5;
+      const x2=xRight+bw*0.5;
       const y1=sc.y(hi);
       const y2=sc.y(lo);
       const ym=sc.y(mid);
@@ -6900,7 +6905,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   window.__drawVolZones=drawVolZones;
 
   // Event delegation + call draw() directly (not drawSoon) to avoid 33ms throttle drop
-  const VZ_IDS=new Set(['vzMinVal','vzMaxZones','vzExtend','vzColor']);
+  const VZ_IDS=new Set(['vzMinVal','vzMaxZones','vzExtend','vzColor','vzGapRatio']);
   function vzRedraw(){if(typeof draw==='function')draw();}
   document.addEventListener('input',function(ev){
     if(!VZ_IDS.has(ev.target?.id))return;
