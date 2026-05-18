@@ -6800,6 +6800,38 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
     if(g.length)merged.push(g);
 
+    // 4. Compute a flat box for each time-group
+    const boxes=merged.map(grp=>({
+      hi:Math.max(...grp.map(z=>z.hi)),
+      lo:Math.min(...grp.map(z=>z.lo)),
+      totalVol:grp.reduce((s,z)=>s+z.dollarVol,0),
+      anchorIdx:grp[0].i
+    }));
+
+    // 5. Price-gap merge: sort by price, merge adjacent boxes where the gap
+    //    between them is less than 50% of the height of the smaller box
+    boxes.sort((a,b)=>a.lo-b.lo);
+    const PRICE_GAP_RATIO=0.5;
+    const priceGroups=[];
+    let pg=[boxes[0]];
+    for(let k=1;k<boxes.length;k++){
+      const prev=pg[pg.length-1];
+      const curr=boxes[k];
+      const gap=curr.lo-prev.hi;                          // >0 = space, <=0 = touching
+      const smallerH=Math.min(prev.hi-prev.lo,curr.hi-curr.lo);
+      if(gap<=PRICE_GAP_RATIO*smallerH){pg.push(curr);}
+      else{priceGroups.push(pg);pg=[curr];}
+    }
+    if(pg.length)priceGroups.push(pg);
+
+    // Final zones: one box per price-group
+    const finalZones=priceGroups.map(grp=>({
+      hi:Math.max(...grp.map(z=>z.hi)),
+      lo:Math.min(...grp.map(z=>z.lo)),
+      totalVol:grp.reduce((s,z)=>s+z.totalVol,0),
+      anchorIdx:Math.min(...grp.map(z=>z.anchorIdx))
+    }));
+
     const rgb=hexToRgb(color);
     const vspan=S.view.end-S.view.start;
     const cw=CW(W);
@@ -6808,14 +6840,8 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
 
-    for(const group of merged){
-      // Merged box bounds
-      const hi=Math.max(...group.map(z=>z.hi));
-      const lo=Math.min(...group.map(z=>z.lo));
+    for(const{hi,lo,totalVol,anchorIdx}of finalZones){
       const mid=(hi+lo)/2;
-      const totalVol=group.reduce((s,z)=>s+z.dollarVol,0);
-      // Anchor x = earliest candle in group
-      const anchorIdx=group[0].i;
 
       const x1=x(anchorIdx)-bw*0.5;
       const x2=x(lastIdx+extend)+bw*0.5;
@@ -6842,7 +6868,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       ctx.moveTo(x1c,y2);ctx.lineTo(x2c,y2);
       ctx.stroke();
 
-      // 50% midline — dashed, slightly brighter
+      // 50% midline — dashed
       ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.75)`;
       ctx.lineWidth=1;
       ctx.setLineDash([4,4]);
