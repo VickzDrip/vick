@@ -1843,32 +1843,30 @@ async function boot(){
     S.view.auto=true;
     S.yScale.zoom=1;
 
-    await reloadAggTradesForBigBars(false,seq,sym,tf);
-
-    // ── Load persisted depth history from our server (for heatmap continuity) ──
-    try {
-      const hist=await fetch(`${LOCAL_API}/api/depth_history?limit=4000`).then(r=>r.json());
-      if(seq===S.loadSeq && Array.isArray(hist) && hist.length){
-        S.heatHist=hist.map(snap=>{
-          const levels=[];
-          (snap.bids||[]).forEach(b=>levels.push({p:+b[0],q:+b[1],side:'b'}));
-          (snap.asks||[]).forEach(a=>levels.push({p:+a[0],q:+a[1],side:'a'}));
-          const idx=findCandleIndex(snap.time);
-          return {time:snap.time, idx: idx>=0?idx:S.candles.length-1, levels};
-        });
-        console.log('Loaded',S.heatHist.length,'historical depth snapshots');
-      }
-    } catch(_) { /* server not running with persistence — degrade gracefully */ }
-
-    if(seq!==S.loadSeq||sym!==S.sym||tf!==S.tf)return;
-
+    // ── Show chart immediately with candle data ──
     update24(hr);
     showLoad(false);
-    setStatus(true);
+    setStatus(true,'AO VIVO · BINANCE');
     startWS(seq,sym,tf);
     clearInterval(depthRefreshTimer);
     depthRefreshTimer=setInterval(function(){ if(!S.wsIntentional) refreshDepth(); }, 30000);
     draw();
+
+    // ── Background: load aggTrades + depth history + footprint without blocking chart ──
+    reloadAggTradesForBigBars(false,seq,sym,tf).catch(()=>{});
+    // Load persisted depth history (heatmap continuity)
+    fetch(`${LOCAL_API}/api/depth_history?limit=4000`).then(r=>r.json()).then(hist=>{
+      if(seq!==S.loadSeq||!Array.isArray(hist)||!hist.length)return;
+      S.heatHist=hist.map(snap=>{
+        const levels=[];
+        (snap.bids||[]).forEach(b=>levels.push({p:+b[0],q:+b[1],side:'b'}));
+        (snap.asks||[]).forEach(a=>levels.push({p:+a[0],q:+a[1],side:'a'}));
+        const idx=findCandleIndex(snap.time);
+        return {time:snap.time, idx: idx>=0?idx:S.candles.length-1, levels};
+      });
+      console.log('Loaded',S.heatHist.length,'historical depth snapshots');
+      if(seq===S.loadSeq)drawSoon();
+    }).catch(()=>{ /* server not running — degrade gracefully */ });
     // Non-blocking: load full historical footprint from server for 100% real data
     loadFootprintFromServer(seq,sym,tf).catch(()=>{});
   }catch(e){
@@ -2142,7 +2140,7 @@ function roundToTick(p){
   return Math.round(p/step)*step;
 }
 function findCandleIndex(time){const ms=tfMs(S.tf);if(!S.candles.length)return-1;const first=S.candles[0].t;let i=Math.floor((time-first)/ms);if(i<0||i>=S.candles.length){for(let j=S.candles.length-1;j>=0;j--)if(time>=S.candles[j].t&&time<S.candles[j].t+ms)return j;return-1}return i}
-let raf=false;function drawSoon(){if(!raf){raf=true;requestAnimationFrame(()=>{raf=false;draw()})}}
+let raf=false,lastDraw=0;function drawSoon(){if(raf)return;raf=true;requestAnimationFrame(ts=>{raf=false;if(ts-lastDraw<33)return;lastDraw=ts;draw();})}
 const PL=18,PT=8,PB=10; let PR=68;
 function RP(){const sp=S.yScale?.hidden?14:PR;return sp+(S.inds.book?Math.max(128,Math.min(S.book.maxW,S.book.w)+18):0)}
 function CW(W){return Math.max(80,W-PL-RP())}
@@ -2657,31 +2655,39 @@ function drawLiquidityEngine(ctx,W,H,sc,x){
 
   // ── Group S.heatHist snapshots by candle index, average qty per bucket ──
   const allSnaps=S.heatHist||[];
-  const byCandle=new Map(); // candleIdx → {bid:Map<bkt,qty>, ask:Map<bkt,qty>, n}
   const startCi=Math.max(0,Math.floor(S.view.start)-2);
   const endCi=Math.min(S.candles.length-1,Math.ceil(S.view.end)+2);
-  for(let si=0;si<allSnaps.length;si++){
-    const snap=allSnaps[si];
-    const ci=snap.idx;
-    if(!Number.isFinite(ci)||ci<startCi||ci>endCi)continue;
-    let e=byCandle.get(ci);
-    if(!e){e={bid:new Map(),ask:new Map(),n:0};byCandle.set(ci,e);}
-    e.n++;
-    const lvs=snap.levels||[];
-    for(let j=0;j<lvs.length;j++){
-      const lv=lvs[j];
-      const p=+lv.p;if(!isFinite(p)||p<=0)continue;
-      const q=+lv.q;if(!isFinite(q)||q<=0)continue;
-      const bk=bkt(p);
-      const m=lv.side==='a'?e.ask:e.bid;
-      m.set(bk,(m.get(bk)||0)+q);
+
+  // Cache bypass: rebuild byCandle only when snapshots or visible range changed
+  const cacheKey=`${allSnaps.length}|${startCi}|${endCi}`;
+  let byCandle;
+  if(window.__heatByCandleCache && window.__heatByCandleCache.key===cacheKey){
+    byCandle=window.__heatByCandleCache.map;
+  }else{
+    byCandle=new Map();
+    for(let si=0;si<allSnaps.length;si++){
+      const snap=allSnaps[si];
+      const ci=snap.idx;
+      if(!Number.isFinite(ci)||ci<startCi||ci>endCi)continue;
+      let e=byCandle.get(ci);
+      if(!e){e={bid:new Map(),ask:new Map(),n:0};byCandle.set(ci,e);}
+      e.n++;
+      const lvs=snap.levels||[];
+      for(let j=0;j<lvs.length;j++){
+        const lv=lvs[j];
+        const p=+lv.p;if(!isFinite(p)||p<=0)continue;
+        const q=+lv.q;if(!isFinite(q)||q<=0)continue;
+        const bk=bkt(p);
+        const m=lv.side==='a'?e.ask:e.bid;
+        m.set(bk,(m.get(bk)||0)+q);
+      }
     }
-  }
-  // Average accumulated qty by snapshot count
-  for(const[,e]of byCandle){
-    if(e.n<=1)continue;
-    for(const[k,v]of e.bid)e.bid.set(k,v/e.n);
-    for(const[k,v]of e.ask)e.ask.set(k,v/e.n);
+    for(const[,e]of byCandle){
+      if(e.n<=1)continue;
+      for(const[k,v]of e.bid)e.bid.set(k,v/e.n);
+      for(const[k,v]of e.ask)e.ask.set(k,v/e.n);
+    }
+    window.__heatByCandleCache={key:cacheKey,map:byCandle};
   }
 
   // ── Current live book → always painted on the last 2 candles ──
@@ -3815,7 +3821,7 @@ function drawDeltaPane(){
 function bestBid(){return S.depth.bids[0]?.p||S.candles.at(-1)?.c||0}function bestAsk(){return S.depth.asks[0]?.p||S.candles.at(-1)?.c||0}function updateBookStats(){const b=bestBid(),a=bestAsk();el('bestBid').textContent=priceFmt(b);el('bestAsk').textContent=priceFmt(a);el('spread').textContent=priceFmt(a-b);el('bookN').textContent=(S.depth.bids.length+S.depth.asks.length)}function updateTradeN(){el('tradeN').textContent=S.trades.length}
 function updateUI(V,sc){const last=S.candles.at(-1);el('pNow').textContent=priceFmt(last.c);el('oO').textContent=priceFmt(last.o);el('oH').textContent=priceFmt(last.h);el('oL').textContent=priceFmt(last.l);el('oC').textContent=priceFmt(last.c);el('oV').textContent=fmtN(last.v);el('oD').textContent=(last.delta>=0?'+':'')+fmtN(last.delta);el('oD').className='v '+(last.delta>=0?'up':'dn');el('bSym').textContent=S.sym;el('bTf').textContent=S.tf;el('bBars').textContent=S.candles.length;el('bTime').textContent=new Date().toLocaleTimeString('pt-PT');updateBookStats();updateTradeN();el('hud').innerHTML='zoom: <b>'+V.n+' velas</b><br>preço: <b>'+priceFmt(sc.lo)+' - '+priceFmt(sc.hi)+'</b><br>modo: <b>'+(S.view.auto?'preço atual':'pan livre')+'</b><br>futuro: <b>'+Math.max(0,Math.round(S.view.end-S.candles.length))+' barras</b><br>escala Y: <b>'+((S.yScale.zoom||1).toFixed(2))+'x</b>'}
 function priceScaleHit(x,y,W,H){const right=W-RP();return x>=right&&x<=Math.min(W,right+PR)&&y>=PT&&y<=H-PB}
-function zoom(f,center){const max=futureMax();if(!S.candles.length)return;const span=Math.max(.0001,S.view.end-S.view.start),minSpan=.42;const ns=clamp(span*f,minSpan,max);const rel=clamp(center??.72,0,1);const anchor=S.view.start+span*rel;let start=anchor-ns*rel;start=clamp(start,0,Math.max(0,max-ns));S.view.start=start;S.view.end=start+ns;S.view.auto=false;drawSoon()}
+function zoom(f,center){const max=futureMax();if(!S.candles.length)return;const span=Math.max(.0001,S.view.end-S.view.start),minSpan=.42;const ns=clamp(span*f,minSpan,max);const rel=clamp(center??.72,0,1);const anchor=S.view.start+span*rel;let start=anchor-ns*rel;start=clamp(start,0,Math.max(0,max-ns));S.view.start=start;S.view.end=start+ns;S.view.auto=false;draw()}
 function fitLive(){const span=S.view.end-S.view.start||180;S.view.end=S.candles.length+Math.min(90,Math.max(28,span*.25));S.view.start=Math.max(0,S.view.end-span);S.view.auto=true;draw()}function fitAll(){S.view.start=0;S.view.end=S.candles.length;S.view.auto=false;draw()}function fitClose(){const n=24;S.view.end=S.candles.length+3;S.view.start=Math.max(0,S.view.end-n);S.view.auto=false;draw()}
 const chart=el('chart'),wrap=el('chartWrap');
 wrap.addEventListener('wheel',e=>{e.preventDefault();const r=wrap.getBoundingClientRect(),rel=clamp((e.clientX-r.left-PL)/CW(r.width),0,1);const factor=Math.exp(e.deltaY*0.00072);zoom(factor,rel)},{passive:false});
@@ -6366,14 +6372,16 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
           const bh=Math.max(1.5,Math.abs(sc.y(sessionLo+step*i)-sc.y(sessionLo+step*(i+1)))-0.5);
           if(cy+bh<PT-4||cy-bh>H-PB+4)continue;
 
-          // Fixed green for buy, fixed red for sell — never follows other colors
-          const buyW =Math.max(1,(r.buy /maxSide)*maxDeltaW);
-          ctx.fillStyle=`rgba(0,230,118,${(opacity*0.82).toFixed(3)})`;
-          ctx.fillRect(xLeft-buyW, cy-bh*0.5, buyW, bh*0.5);
-
-          const sellW=Math.max(1,(r.sell/maxSide)*maxDeltaW);
-          ctx.fillStyle=`rgba(255,61,87,${(opacity*0.82).toFixed(3)})`;
-          ctx.fillRect(xLeft-sellW, cy, sellW, bh*0.5);
+          // Full-height proportional split: green (buy) right, red (sell) further left
+          const total=r.buy+r.sell;
+          if(!total)continue;
+          const scaledW=Math.max(2,(total/maxSide)*maxDeltaW);
+          const buyPx=Math.max(0.5,(r.buy/total)*scaledW);
+          const sellPx=Math.max(0.5,scaledW-buyPx);
+          ctx.fillStyle=`rgba(0,230,118,${(opacity*0.85).toFixed(3)})`;
+          ctx.fillRect(xLeft-buyPx, cy-bh*0.5, buyPx, bh);
+          ctx.fillStyle=`rgba(255,61,87,${(opacity*0.85).toFixed(3)})`;
+          ctx.fillRect(xLeft-buyPx-sellPx, cy-bh*0.5, sellPx, bh);
         }
 
         // Thin separator line at xLeft between profile and delta
