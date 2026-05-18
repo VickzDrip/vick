@@ -6474,3 +6474,221 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   });
 })();
 </script>
+
+<!-- ── Ruler Tool: mede % entre dois preços ── -->
+<script>
+(function(){
+  // ── State (kept separate from S.tool to avoid conflicts with Long/Short) ──
+  function initRuler(){
+    if(!window.S)return setTimeout(initRuler,100);
+    S._ruler={active:false,anchor:null,live:null,fixed:null};
+    setup();
+  }
+
+  function setup(){
+    // ── Button ──
+    const btn=document.createElement('button');
+    btn.id='btnRuler';
+    btn.className='mini-btn';
+    btn.title='Régua % — clique e arraste para medir porcentagem entre preços';
+    btn.textContent='📏';
+    btn.style.cssText='font-size:15px;padding:0 6px;';
+    const ref=document.getElementById('btnShort');
+    if(ref&&ref.parentNode)ref.parentNode.insertBefore(btn,ref.nextSibling);
+
+    btn.addEventListener('click',function(){
+      const r=S._ruler;
+      // If fixed measurement exists → clear it and arm for new one
+      if(r.fixed){S._ruler={active:true,anchor:null,live:null,fixed:null};}
+      // If arming/drawing → cancel
+      else if(r.active){S._ruler={active:false,anchor:null,live:null,fixed:null};}
+      // Idle → arm
+      else{S._ruler={active:true,anchor:null,live:null,fixed:null};}
+      syncBtn();draw();
+    });
+
+    function syncBtn(){
+      btn.classList.toggle('tool-active',S._ruler.active||!!S._ruler.fixed);
+    }
+
+    // ── Chart interaction ──
+    const wrap=document.getElementById('chartWrap');
+    if(!wrap)return;
+
+    function ptFromEvent(clientX,clientY){
+      const r=wrap.getBoundingClientRect(),H=r.height,W=r.width;
+      const x=clientX-r.left,y=clientY-r.top;
+      if(x<PL||y<PT||x>W-RP()||y>H-PB)return null;
+      const sc=scale(visible().cs,H);
+      return{price:priceFromY(y,H,sc),x,y};
+    }
+
+    // Click: set anchor then fixed point
+    wrap.addEventListener('click',function(ev){
+      if(!S._ruler.active)return;
+      if(S.tool)return; // let Long/Short tool have priority
+      const pt=ptFromEvent(ev.clientX,ev.clientY);
+      if(!pt)return;
+      ev.stopPropagation();
+      if(!S._ruler.anchor){
+        S._ruler.anchor=pt;
+      }else{
+        S._ruler.fixed=pt;
+        S._ruler.active=false;
+        S._ruler.live=null;
+      }
+      syncBtn();draw();
+    },false);
+
+    // Mouse move: live preview while anchor is set
+    wrap.addEventListener('mousemove',function(ev){
+      if(!S._ruler.active||!S._ruler.anchor)return;
+      const r=wrap.getBoundingClientRect(),H=r.height,W=r.width;
+      const x=ev.clientX-r.left,y=ev.clientY-r.top;
+      const sc=scale(visible().cs,H);
+      S._ruler.live={price:priceFromY(y,H,sc),x,y};
+      drawSoon();
+    },false);
+
+    // Touch move: live preview
+    wrap.addEventListener('touchmove',function(ev){
+      if(!S._ruler.active||!S._ruler.anchor)return;
+      const t=ev.touches[0];
+      const r=wrap.getBoundingClientRect(),H=r.height,W=r.width;
+      const x=t.clientX-r.left,y=t.clientY-r.top;
+      const sc=scale(visible().cs,H);
+      S._ruler.live={price:priceFromY(y,H,sc),x,y};
+      drawSoon();
+    },{passive:true});
+
+    // Touch end: set point
+    wrap.addEventListener('touchend',function(ev){
+      if(!S._ruler.active)return;
+      if(S.tool)return;
+      const t=ev.changedTouches[0];
+      const pt=ptFromEvent(t.clientX,t.clientY);
+      if(!pt)return;
+      if(!S._ruler.anchor){
+        S._ruler.anchor=pt;
+      }else{
+        S._ruler.fixed=pt;
+        S._ruler.active=false;
+        S._ruler.live=null;
+      }
+      syncBtn();draw();
+    },{passive:true});
+
+    // ── Draw hook ──
+    const _base=window.draw;
+    window.draw=function(){
+      _base();
+      drawRuler();
+    };
+
+    function drawRuler(){
+      const rl=S._ruler;
+      if(!rl||!rl.anchor)return;
+      const p2=rl.fixed||rl.live||rl.anchor;
+      const p1=rl.anchor;
+      if(p1===p2&&!rl.fixed)return;
+
+      const wrap2=document.getElementById('chartWrap');
+      const cvs=document.getElementById('chart');
+      if(!wrap2||!cvs)return;
+      const W=wrap2.clientWidth,H=wrap2.clientHeight;
+      const sc=scale(visible().cs,H);
+
+      const y1=sc.y(p1.price),y2=sc.y(p2.price);
+      const left=PL,right=W-RP();
+      const pct=(p2.price-p1.price)/p1.price*100;
+      const isUp=p2.price>=p1.price;
+      const clrMain=isUp?'rgba(0,230,118,':'rgba(255,61,87,';
+      const hex=isUp?'#00e676':'#ff3d57';
+
+      const ctx=cvs.getContext('2d');
+      ctx.save();
+      window.__ETX_SKIP_COLORMAP=true;
+
+      const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
+
+      // Semi-transparent fill between lines
+      ctx.fillStyle=clrMain+'0.08)';
+      ctx.fillRect(left,yTop,right-left,Math.max(1,yBot-yTop));
+
+      // Anchor line (neutral)
+      ctx.setLineDash([6,4]);
+      ctx.strokeStyle='rgba(190,210,240,0.55)';
+      ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(left,y1);ctx.lineTo(right,y1);ctx.stroke();
+
+      // End line (colored)
+      ctx.strokeStyle=clrMain+'0.85)';
+      ctx.lineWidth=1.2;
+      ctx.beginPath();ctx.moveTo(left,y2);ctx.lineTo(right,y2);ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Vertical measurement line + arrowhead on right edge
+      const ax=right-52;
+      ctx.strokeStyle=clrMain+'0.65)';
+      ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(ax,y1);ctx.lineTo(ax,y2);ctx.stroke();
+      // Arrowhead at p2 end
+      const dir=y2<y1?1:-1; // screen coords: y2<y1 means price went up
+      ctx.beginPath();
+      ctx.moveTo(ax-5,y2+dir*9);
+      ctx.lineTo(ax,y2);
+      ctx.lineTo(ax+5,y2+dir*9);
+      ctx.stroke();
+
+      // Label box
+      const pctTxt=(isUp?'+':'')+pct.toFixed(2)+'%';
+      const absTxt=priceFmt(Math.abs(p2.price-p1.price));
+      ctx.font='bold 13px Inter,Arial,monospace';
+      const tw=ctx.measureText(pctTxt).width;
+      const bw=Math.max(tw+20,86),bh=38;
+      const bx=ax-bw-10,by=(y1+y2)/2-bh/2;
+
+      // Box background
+      ctx.fillStyle='rgba(5,9,20,0.82)';
+      ctx.strokeStyle=clrMain+'0.55)';
+      ctx.lineWidth=1;
+      // Rounded rect fallback
+      const r2=4;
+      ctx.beginPath();
+      ctx.moveTo(bx+r2,by);ctx.lineTo(bx+bw-r2,by);ctx.arcTo(bx+bw,by,bx+bw,by+r2,r2);
+      ctx.lineTo(bx+bw,by+bh-r2);ctx.arcTo(bx+bw,by+bh,bx+bw-r2,by+bh,r2);
+      ctx.lineTo(bx+r2,by+bh);ctx.arcTo(bx,by+bh,bx,by+bh-r2,r2);
+      ctx.lineTo(bx,by+r2);ctx.arcTo(bx,by,bx+r2,by,r2);
+      ctx.closePath();
+      ctx.fill();ctx.stroke();
+
+      // Percentage text
+      ctx.fillStyle=hex;
+      ctx.font='bold 13px Inter,Arial,monospace';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(pctTxt,bx+bw/2,by+bh/2-8);
+
+      // Absolute diff text
+      ctx.fillStyle='rgba(190,210,240,0.75)';
+      ctx.font='10px Inter,Arial,monospace';
+      ctx.fillText(absTxt,bx+bw/2,by+bh/2+8);
+
+      // Price labels on right edge
+      ctx.textAlign='right';ctx.textBaseline='bottom';
+      ctx.font='10px monospace';
+      ctx.fillStyle='rgba(190,210,240,0.70)';
+      ctx.fillText(priceFmt(p1.price),right-2,y1-2);
+      ctx.fillStyle=clrMain+'0.90)';
+      ctx.fillText(priceFmt(p2.price),right-2,y2-2);
+
+      window.__ETX_SKIP_COLORMAP=false;
+      ctx.restore();
+    }
+
+    syncBtn();
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initRuler);
+  else initRuler();
+})();
+</script>
