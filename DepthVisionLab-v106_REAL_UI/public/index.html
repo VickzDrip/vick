@@ -1648,10 +1648,11 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
           <div class="ind-settings" id="settings-volZones">
             <div class="kv"><span class="k">Mín. USD</span><input class="num" id="vzMinVal" type="number" min="0" step="1" value="500000" style="width:100px"></div>
-            <div class="kv"><span class="k">Máx. zonas</span><input class="num" id="vzMaxZones" type="number" min="1" max="50" step="1" value="20"></div>
+            <div class="kv"><span class="k">Máx. zonas</span><input class="num" id="vzMaxZones" type="number" min="1" max="50" step="1" value="10"></div>
             <div class="kv"><span class="k">Cor</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="vzColorSwatch" style="width:100%;height:100%;background:#6366f1;pointer-events:none"></div><input id="vzColor" type="color" value="#6366f1" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
             <div class="kv"><span class="k">Extensão (barras)</span><input class="num" id="vzExtend" type="number" min="0" max="500" step="1" value="20"></div>
-            <div class="kv"><span class="k">Gap mesclagem %</span><input class="num" id="vzGapRatio" type="number" min="0" max="300" step="1" value="50"></div>
+            <div class="kv"><span class="k">Cluster ×altura</span><input class="num" id="vzGapRatio" type="number" min="0" max="500" step="1" value="100"></div>
+            <div class="kv"><span class="k">Alt. mín. %preço</span><input class="num" id="vzMinHeight" type="number" min="0" max="5" step="0.05" value="0"></div>
             <div class="hint">Caixas horizontais (pavio a pavio) nas velas com volume em dólar acima do mínimo. Gap = % da menor zona para mesclar níveis próximos.</div>
           </div>
         </div>
@@ -6794,11 +6795,12 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   function numVal(id,def){const n=E(id);if(!n)return def;const v=parseFloat(n.value);return Number.isFinite(v)?v:def;}
   function getSettings(){
     const minVal=Math.max(0,numVal('vzMinVal',500000));
-    const maxZones=Math.max(1,Math.min(50,numVal('vzMaxZones',20)));
+    const maxZones=Math.max(1,Math.min(50,numVal('vzMaxZones',10)));
     const color=E('vzColor')?.value||'#6366f1';
     const extend=Math.max(0,Math.round(numVal('vzExtend',20)));
-    const gapRatio=Math.max(0,numVal('vzGapRatio',50))/100;
-    return{minVal,maxZones,color,extend,gapRatio};
+    const gapRatio=Math.max(0,numVal('vzGapRatio',100))/100;
+    const minHeightPct=Math.max(0,numVal('vzMinHeight',0));
+    return{minVal,maxZones,color,extend,gapRatio,minHeightPct};
   }
 
   function hexToRgb(hex){
@@ -6810,75 +6812,93 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   let _vzCache=null;
   let _vzCacheKey='';
 
-  function computeZones(cs,minVal,maxZones,gapRatio){
-    // 1. Collect candles above threshold, sorted by dollar volume desc
+  function computeZones(cs,minVal,maxZones,gapRatio,minHeightPct){
+    // 1. Collect candidates above threshold
     const candidates=[];
     for(let i=0;i<cs.length;i++){
       const c=cs[i];
-      const dollarVol=c.v*c.c;
-      if(dollarVol>=minVal)candidates.push({i,dollarVol,lo:c.l,hi:c.h});
+      const dv=c.v*c.c;
+      if(dv>=minVal)candidates.push({i,dollarVol:dv,lo:c.l,hi:c.h});
     }
+    if(!candidates.length)return[];
     candidates.sort((a,b)=>b.dollarVol-a.dollarVol);
 
-    // 2. Greedy non-overlapping selection
-    const zones=[];
+    // 2. Greedy non-overlapping — collect up to 3× maxZones to feed clustering
+    const pool=[];
+    const cap=maxZones*3;
     for(const cand of candidates){
-      if(zones.length>=maxZones)break;
-      if(!zones.some(z=>cand.lo<z.hi&&cand.hi>z.lo))zones.push(cand);
+      if(pool.length>=cap)break;
+      if(!pool.some(z=>cand.lo<z.hi&&cand.hi>z.lo))pool.push(cand);
     }
-    if(!zones.length)return[];
+    if(!pool.length)return[];
 
-    // 3. Sort by index, merge time-adjacent groups (within 5 bars)
-    zones.sort((a,b)=>a.i-b.i);
+    // 3. Minimum height filter (% of last price)
+    const lastPrice=cs[cs.length-1].c;
+    const minH=minHeightPct>0?lastPrice*minHeightPct/100:0;
+    const filtered=minH>0?pool.filter(z=>(z.hi-z.lo)>=minH):pool;
+    if(!filtered.length)return[];
+
+    // 4. Time-adjacent merge (within 5 bars) → boxes
+    filtered.sort((a,b)=>a.i-b.i);
     const MERGE_BARS=5;
-    const timeGroups=[];
-    let tg=[zones[0]];
-    for(let k=1;k<zones.length;k++){
-      if(zones[k].i-tg[tg.length-1].i<=MERGE_BARS)tg.push(zones[k]);
-      else{timeGroups.push(tg);tg=[zones[k]];}
+    const tGroups=[];
+    let tg=[filtered[0]];
+    for(let k=1;k<filtered.length;k++){
+      if(filtered[k].i-tg[tg.length-1].i<=MERGE_BARS)tg.push(filtered[k]);
+      else{tGroups.push(tg);tg=[filtered[k]];}
     }
-    timeGroups.push(tg);
-
-    // 4. Flatten each time-group to a single box
-    const boxes=timeGroups.map(grp=>({
-      hi:Math.max(...grp.map(z=>z.hi)),
-      lo:Math.min(...grp.map(z=>z.lo)),
-      totalVol:grp.reduce((s,z)=>s+z.dollarVol,0),
-      anchorIdx:grp[0].i
-    }));
-
-    // 5. Price-gap merge: merge adjacent boxes where gap < gapRatio × smaller height
-    boxes.sort((a,b)=>a.lo-b.lo);
-    const pg=[];
-    let grp=[boxes[0]];
-    for(let k=1;k<boxes.length;k++){
-      const prev=grp[grp.length-1];
-      const curr=boxes[k];
-      const gap=curr.lo-prev.hi;
-      const smallerH=Math.min(prev.hi-prev.lo,curr.hi-curr.lo);
-      if(gap<=gapRatio*smallerH)grp.push(curr);
-      else{pg.push(grp);grp=[curr];}
-    }
-    pg.push(grp);
-
-    return pg.map(g=>({
+    tGroups.push(tg);
+    let boxes=tGroups.map(g=>({
       hi:Math.max(...g.map(z=>z.hi)),
       lo:Math.min(...g.map(z=>z.lo)),
-      totalVol:g.reduce((s,z)=>s+z.totalVol,0),
-      anchorIdx:Math.min(...g.map(z=>z.anchorIdx))
+      totalVol:g.reduce((s,z)=>s+z.dollarVol,0),
+      anchorIdx:g[0].i
     }));
+
+    // 5. Midpoint clustering — sort by midpoint, merge consecutive zones whose
+    //    midpoints are within gapRatio × taller zone height. Iterate until stable.
+    let changed=true;
+    while(changed){
+      changed=false;
+      boxes.forEach(b=>{b.mid=(b.hi+b.lo)/2;});
+      boxes.sort((a,b)=>a.mid-b.mid);
+      const merged=[];
+      let cur=boxes[0];
+      for(let k=1;k<boxes.length;k++){
+        const next=boxes[k];
+        const tallest=Math.max(cur.hi-cur.lo,next.hi-next.lo);
+        if(Math.abs(next.mid-cur.mid)<=gapRatio*tallest){
+          // Merge next into cur
+          cur={
+            hi:Math.max(cur.hi,next.hi),
+            lo:Math.min(cur.lo,next.lo),
+            totalVol:cur.totalVol+next.totalVol,
+            anchorIdx:Math.min(cur.anchorIdx,next.anchorIdx)
+          };
+          changed=true;
+        }else{
+          merged.push(cur);
+          cur=next;
+        }
+      }
+      merged.push(cur);
+      boxes=merged;
+    }
+
+    // 6. Keep top maxZones by volume
+    boxes.sort((a,b)=>b.totalVol-a.totalVol);
+    return boxes.slice(0,maxZones);
   }
 
   function drawVolZones(ctx,W,H,V,sc,x){
     if(!window.S||!S.inds.volZones||!S.candles.length)return;
-    const{minVal,maxZones,color,extend,gapRatio}=getSettings();
+    const{minVal,maxZones,color,extend,gapRatio,minHeightPct}=getSettings();
     const cs=S.candles;
     const lastIdx=cs.length-1;
 
-    // Recompute only when candles or settings change
-    const key=`${cs.length}|${S.sym}|${minVal}|${maxZones}|${gapRatio}`;
+    const key=`${cs.length}|${S.sym}|${minVal}|${maxZones}|${gapRatio}|${minHeightPct}`;
     if(key!==_vzCacheKey){
-      _vzCache=computeZones(cs,minVal,maxZones,gapRatio);
+      _vzCache=computeZones(cs,minVal,maxZones,gapRatio,minHeightPct);
       _vzCacheKey=key;
     }
     const finalZones=_vzCache;
@@ -6951,7 +6971,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
   window.__drawVolZones=drawVolZones;
 
-  const VZ_IDS=new Set(['vzMinVal','vzMaxZones','vzExtend','vzColor','vzGapRatio']);
+  const VZ_IDS=new Set(['vzMinVal','vzMaxZones','vzExtend','vzColor','vzGapRatio','vzMinHeight']);
   function vzRedraw(){if(typeof drawSoon==='function')drawSoon();}
   document.addEventListener('input',function(ev){
     if(!VZ_IDS.has(ev.target?.id))return;
