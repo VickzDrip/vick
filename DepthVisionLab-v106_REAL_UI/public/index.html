@@ -6818,44 +6818,47 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const bucketSize=lastPrice*bucketPct/100;
     if(bucketSize<=0)return[];
 
-    // Price range across all candles
     let priceMin=Infinity,priceMax=-Infinity;
     for(const c of cs){if(c.l<priceMin)priceMin=c.l;if(c.h>priceMax)priceMax=c.h;}
 
     const nBuckets=Math.min(8000,Math.ceil((priceMax-priceMin)/bucketSize)+1);
     const vols=new Float64Array(nBuckets);
+    const buyV=new Float64Array(nBuckets);
+    const sellV=new Float64Array(nBuckets);
     const tchs=new Uint32Array(nBuckets);
 
-    // Distribute each candle's dollar volume proportionally across the price buckets it spans
     for(const c of cs){
       const dv=c.v*c.c;
       const range=c.h-c.l;
+      // buy fraction = how much of the range is below the close (close position in bar)
+      const bf=range>0?(c.c-c.l)/range:0.5;
+      const sf=1-bf;
       const loIdx=Math.max(0,Math.floor((c.l-priceMin)/bucketSize));
       const hiIdx=Math.min(nBuckets-1,Math.floor((c.h-priceMin)/bucketSize));
       if(loIdx===hiIdx){
-        vols[loIdx]+=dv;
+        vols[loIdx]+=dv; buyV[loIdx]+=dv*bf; sellV[loIdx]+=dv*sf;
         tchs[loIdx]++;
       }else{
+        const inv=range>0?1/range:1/(hiIdx-loIdx+1);
         for(let b=loIdx;b<=hiIdx;b++){
           const bLo=priceMin+b*bucketSize;
           const bHi=bLo+bucketSize;
-          const overlap=Math.min(c.h,bHi)-Math.max(c.l,bLo);
-          vols[b]+=dv*(range>0?overlap/range:1/(hiIdx-loIdx+1));
+          const frac=(Math.min(c.h,bHi)-Math.max(c.l,bLo))*(range>0?inv:1);
+          const bdv=dv*frac;
+          vols[b]+=bdv; buyV[b]+=bdv*bf; sellV[b]+=bdv*sf;
           tchs[b]++;
         }
       }
     }
 
-    // Filter by minTouch, build bucket list
     const buckets=[];
     for(let i=0;i<nBuckets;i++){
-      if(tchs[i]>=minTouch&&vols[i]>0)buckets.push({i,vol:vols[i],touches:tchs[i]});
+      if(tchs[i]>=minTouch&&vols[i]>0)
+        buckets.push({i,vol:vols[i],bv:buyV[i],sv:sellV[i],touches:tchs[i]});
     }
     if(!buckets.length)return[];
 
-    // Greedy bucket selection with auto-scaled minimum separation.
-    // Applied BEFORE merging so each zone seed is spatially diverse.
-    // minSep auto-scales: distributes topN seeds across the full price range.
+    // Greedy selection with auto-scaled minimum separation — applied BEFORE merge
     const byVol=[...buckets].sort((a,b)=>b.vol-a.vol);
     const minSep=Math.max(1,Math.floor(nBuckets/(topN*1.5)));
     const selIdx=[];
@@ -6866,32 +6869,33 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     if(!selIdx.length)return[];
     const topSet=new Set(selIdx);
 
-    // Sort selected buckets by price, merge only directly adjacent ones (gap ≤ mergeGap)
     const top=buckets.filter(b=>topSet.has(b.i)).sort((a,b)=>a.i-b.i);
     if(!top.length)return[];
 
     const zones=[];
     let lastI=top[0].i;
     let zn={lo:priceMin+top[0].i*bucketSize,hi:priceMin+(top[0].i+1)*bucketSize,
-            totalVol:top[0].vol,totalTouches:top[0].touches};
+            totalVol:top[0].vol,totalBuyVol:top[0].bv,totalSellVol:top[0].sv,
+            totalTouches:top[0].touches};
 
     for(let k=1;k<top.length;k++){
       const b=top[k];
       if(b.i-lastI<=mergeGap+1){
         zn.hi=priceMin+(b.i+1)*bucketSize;
-        zn.totalVol+=b.vol;
+        zn.totalVol+=b.vol; zn.totalBuyVol+=b.bv; zn.totalSellVol+=b.sv;
         zn.totalTouches+=b.touches;
       }else{
         zones.push(zn);
         zn={lo:priceMin+b.i*bucketSize,hi:priceMin+(b.i+1)*bucketSize,
-            totalVol:b.vol,totalTouches:b.touches};
+            totalVol:b.vol,totalBuyVol:b.bv,totalSellVol:b.sv,totalTouches:b.touches};
       }
       lastI=b.i;
     }
     zones.push(zn);
 
-    zones.sort((a,b)=>b.totalVol-a.totalVol);
-    return zones.slice(0,topN);
+    // Sort ascending (weakest first) — painter's order ready for draw, no re-sort needed
+    zones.sort((a,b)=>a.totalVol-b.totalVol);
+    return zones.slice(-topN); // keep strongest topN (tail = strongest)
   }
 
   function drawVolZones(ctx,W,H,V,sc,x){
@@ -6914,62 +6918,84 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const bw=cw/vspan;
     const xRight=Math.min(W-RP(),x(lastIdx)+extend*bw);
     const xLeft=PL;
-    const maxVol=zones[0].totalVol; // sorted desc
-    const rp=RP();
+    // zones sorted ascending: last element = strongest
+    const maxVol=zones[zones.length-1].totalVol;
 
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
 
-    // Painter's order: weakest first, strongest on top
-    const sorted=[...zones].sort((a,b)=>a.totalVol-b.totalVol);
-
-    for(const{hi,lo,totalVol,totalTouches}of sorted){
+    // Iterate ascending (weakest → strongest) — painter's order, no per-frame sort
+    for(const{hi,lo,totalVol,totalBuyVol,totalSellVol,totalTouches}of zones){
       const rel=maxVol>0?totalVol/maxVol:1;
       const mid=(hi+lo)/2;
       const yMid=sc.y(mid);
 
       if(yMid<PT-20||yMid>H-PB+20||xRight<=xLeft)continue;
 
-      // Thin pixel band centered at POC — height proportional to strength
-      // NOT the candle price range — a fixed pixel band for visual clarity
-      const bandH=Math.max(2,2+rel*16);  // 2px (weak) → 18px (strong)
+      const bandH=Math.max(2,2+rel*16);
       const bandTop=Math.max(PT,yMid-bandH/2);
       const bandBot=Math.min(H-PB,yMid+bandH/2);
       const bH=bandBot-bandTop;
 
-      // Background halo — very subtle, just hints at the zone
       if(bH>0){
         ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.03+0.09*rel).toFixed(3)})`;
         ctx.fillRect(xLeft,bandTop,xRight-xLeft,bH);
       }
 
-      // POC line — primary visual element: solid for strong, dashed for weak
-      const pocA=0.28+0.62*rel;
-      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${pocA.toFixed(3)})`;
+      // POC line
+      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.28+0.62*rel).toFixed(3)})`;
       ctx.lineWidth=rel>0.75?2:rel>0.4?1.5:1;
-      ctx.setLineDash(rel>0.4?[]:[3,5]);
+      if(rel>0.4)ctx.setLineDash([]);
+      else ctx.setLineDash([3,5]);
       ctx.beginPath();
       ctx.moveTo(xLeft,yMid);
       ctx.lineTo(xRight,yMid);
       ctx.stroke();
-      ctx.setLineDash([]);
+      if(rel<=0.4)ctx.setLineDash([]);
 
-      // Profile bar on right edge — volume profile aesthetic
-      const barMaxW=28;
-      const barW=Math.round(2+rel*barMaxW);
+      // Profile bar — buy (green) + sell (red) stacked
       if(bH>=2){
-        ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.20+0.55*rel).toFixed(3)})`;
-        ctx.fillRect(xRight-barW,bandTop,barW,bH);
+        const barMaxW=28;
+        const totalBW=Math.round(2+rel*barMaxW);
+        const buyBW=Math.round(totalBW*(totalVol>0?totalBuyVol/totalVol:0.5));
+        const sellBW=totalBW-buyBW;
+        const barY=bandTop;
+        if(buyBW>0){
+          ctx.fillStyle=`rgba(0,230,118,${(0.20+0.50*rel).toFixed(3)})`;
+          ctx.fillRect(xRight-totalBW,barY,buyBW,bH);
+        }
+        if(sellBW>0){
+          ctx.fillStyle=`rgba(255,61,87,${(0.20+0.50*rel).toFixed(3)})`;
+          ctx.fillRect(xRight-totalBW+buyBW,barY,sellBW,bH);
+        }
       }
 
-      // Label — above the POC line, only for meaningful zones
+      // Label with colored buy/sell split
       if(rel>0.07){
         const ly=yMid-(bH/2+5);
         if(ly>PT+4&&ly<H-PB-2){
-          ctx.font=`${rel>0.6?'bold ':''}9px monospace`;
+          const isBold=rel>0.6;
+          ctx.font=`${isBold?'bold ':''}9px monospace`;
           ctx.textBaseline='alphabetic';
-          ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.45+0.50*rel).toFixed(3)})`;
-          ctx.fillText(`HVN ${priceFmt(mid)} | $${nFmt(totalVol)} | ${totalTouches}t`,xLeft+6,ly);
+          const baseA=(0.45+0.50*rel).toFixed(3);
+          const bsA=(0.55+0.40*rel).toFixed(3);
+          const base=`rgba(${rgb.r},${rgb.g},${rgb.b},${baseA})`;
+          const p1=`HVN ${priceFmt(mid)} | `;
+          const p2=`↑${nFmt(totalBuyVol)}`;
+          const p3=' ';
+          const p4=`↓${nFmt(totalSellVol)}`;
+          const p5=` | ${totalTouches}t`;
+          let tx=xLeft+6;
+          ctx.fillStyle=base;
+          ctx.fillText(p1,tx,ly);tx+=ctx.measureText(p1).width;
+          ctx.fillStyle=`rgba(0,230,118,${bsA})`;
+          ctx.fillText(p2,tx,ly);tx+=ctx.measureText(p2).width;
+          ctx.fillStyle=base;
+          ctx.fillText(p3,tx,ly);tx+=ctx.measureText(p3).width;
+          ctx.fillStyle=`rgba(255,61,87,${bsA})`;
+          ctx.fillText(p4,tx,ly);tx+=ctx.measureText(p4).width;
+          ctx.fillStyle=base;
+          ctx.fillText(p5,tx,ly);
         }
       }
     }
