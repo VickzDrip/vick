@@ -1657,6 +1657,28 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
+        <div class="ind-card" data-card="buyZones">
+          <div class="ind-head">
+            <div class="row on" data-ind="buyZones"><span class="name">Buy Zones (Top 5)</span><span class="switch"></span></div>
+            <button class="gear" data-settings="buyZones" title="Inputs Buy Zones">⚙</button>
+          </div>
+          <div class="ind-settings" id="settings-buyZones">
+            <div class="kv"><span class="k">Cor</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="bzColorSwatch" style="width:100%;height:100%;background:#00e676;pointer-events:none"></div><input id="bzColor" type="color" value="#00e676" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
+            <div class="hint">5 zonas com maior volume de compra acumulado. Usa os mesmos parâmetros de faixa do HVN.</div>
+          </div>
+        </div>
+
+        <div class="ind-card" data-card="sellZones">
+          <div class="ind-head">
+            <div class="row on" data-ind="sellZones"><span class="name">Sell Zones (Top 5)</span><span class="switch"></span></div>
+            <button class="gear" data-settings="sellZones" title="Inputs Sell Zones">⚙</button>
+          </div>
+          <div class="ind-settings" id="settings-sellZones">
+            <div class="kv"><span class="k">Cor</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="szColorSwatch" style="width:100%;height:100%;background:#ff3d57;pointer-events:none"></div><input id="szColor" type="color" value="#ff3d57" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
+            <div class="hint">5 zonas com maior volume de venda acumulado. Usa os mesmos parâmetros de faixa do HVN.</div>
+          </div>
+        </div>
+
         <div class="ind-card" data-card="book" style="display:none!important">
           <div class="ind-head">
             <div class="row" data-ind="book"><span class="name">Orderbook Ladder</span><span class="switch"></span></div>
@@ -1841,7 +1863,7 @@ html.pre-ui .switch::after{transition:none!important}
 const API='https://api.binance.com', WS='wss://stream.binance.com:9443/stream?streams=';
 const LOCAL_API=location.origin; // our own server with persisted trades + depth history
 let depthRefreshTimer=null;
-const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal'};
+const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true,buyZones:true,sellZones:true},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal'};
 window.__bigTradesOverlayCache={key:'',items:[]};
 window.__bigTradesPersistentCache=new Map();
 window.__bigTradesLastGood=[];
@@ -2238,7 +2260,7 @@ function scale(vs,H){if(!vs||!vs.length)vs=S.candles.slice(-1);let hi=Math.max(.
 function draw(){
 
 const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_panDx=0;
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc)}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawBuyZones)safeLayer('Buy Zones',()=>window.__drawBuyZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSellZones)safeLayer('Sell Zones',()=>window.__drawSellZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc)}
 function drawGrid(ctx,W,H,sc){
   const rp=RP(),right=W-rp,cw=CW(W);
   ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);
@@ -7016,48 +7038,68 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       }
     }
 
-    // ── Buy / Sell accent zones ──
-    function drawAccent(zList,r255,g255,b255,pfx,volKey){
-      if(!zList||!zList.length)return;
-      const maxV=zList.reduce((m,z)=>Math.max(m,z[volKey]),0);
-      for(const z of zList){
-        const rel=maxV>0?z[volKey]/maxV:1;
-        const mid=(z.hi+z.lo)/2;
-        const yMid=sc.y(mid);
-        if(yMid<PT-20||yMid>H-PB+20||xRight<=xLeft)continue;
-        // Thicker solid accent line
-        ctx.strokeStyle=`rgba(${r255},${g255},${b255},${(0.45+0.50*rel).toFixed(3)})`;
-        ctx.lineWidth=rel>0.6?2.5:1.8;
-        ctx.setLineDash([]);
-        ctx.beginPath();ctx.moveTo(xLeft,yMid);ctx.lineTo(xRight,yMid);ctx.stroke();
-        // Accent bar on right (no split — pure buy or pure sell color)
-        const barW=Math.round(3+rel*22);
-        ctx.fillStyle=`rgba(${r255},${g255},${b255},${(0.30+0.55*rel).toFixed(3)})`;
-        ctx.fillRect(xRight-barW,yMid-2,barW,4);
-        // Label below the line to avoid colliding with HVN label above
-        const ly=yMid+11;
-        if(ly<H-PB-2){
-          ctx.font=`${rel>0.5?'bold ':''}9px monospace`;
-          ctx.textBaseline='alphabetic';
-          ctx.fillStyle=`rgba(${r255},${g255},${b255},${(0.65+0.30*rel).toFixed(3)})`;
-          ctx.fillText(`${pfx} ${priceFmt(mid)} | ${nFmt(z[volKey])} | ${z.totalTouches}t`,xLeft+6,ly);
-        }
-      }
-    }
-    drawAccent(sellZones,255,61,87,'SELL','totalSellVol');
-    drawAccent(buyZones,0,230,118,'BUY','totalBuyVol');
-
     window.__ETX_SKIP_COLORMAP=false;
     ctx.restore();
   }
 
-  window.__drawVolZones=drawVolZones;
+  // ── Shared accent draw for buy/sell zone indicators ──
+  function drawAccentSet(ctx,W,H,sc,xLeft,xRight,zList,rgb,pfx,volKey){
+    if(!zList||!zList.length)return;
+    const maxV=zList.reduce((m,z)=>Math.max(m,z[volKey]),0);
+    ctx.save();
+    window.__ETX_SKIP_COLORMAP=true;
+    ctx.setLineDash([]);
+    for(const z of zList){
+      const rel=maxV>0?z[volKey]/maxV:1;
+      const mid=(z.hi+z.lo)/2;
+      const yMid=sc.y(mid);
+      if(yMid<PT-20||yMid>H-PB+20||xRight<=xLeft)continue;
+      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.45+0.50*rel).toFixed(3)})`;
+      ctx.lineWidth=rel>0.6?2.5:1.8;
+      ctx.beginPath();ctx.moveTo(xLeft,yMid);ctx.lineTo(xRight,yMid);ctx.stroke();
+      const barW=Math.round(3+rel*22);
+      ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.30+0.55*rel).toFixed(3)})`;
+      ctx.fillRect(xRight-barW,yMid-2,barW,4);
+      const ly=yMid+11;
+      if(ly<H-PB-2){
+        ctx.font=`${rel>0.5?'bold ':''}9px monospace`;
+        ctx.textBaseline='alphabetic';
+        ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.65+0.30*rel).toFixed(3)})`;
+        ctx.fillText(`${pfx} ${priceFmt(mid)} | ${nFmt(z[volKey])} | ${z.totalTouches}t`,xLeft+6,ly);
+      }
+    }
+    window.__ETX_SKIP_COLORMAP=false;
+    ctx.restore();
+  }
 
-  const VZ_IDS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor']);
+  function makeAccentDraw(indKey,colorId,swatchId,pfx,volKey,cacheKey){
+    return function(ctx,W,H,V,sc,x){
+      if(!window.S||!S.inds[indKey]||!S.candles.length)return;
+      if(!_vzCache?.[cacheKey])return;
+      const colorHex=E(colorId)?.value||(indKey==='buyZones'?'#00e676':'#ff3d57');
+      const rgb=hexToRgb(colorHex);
+      const vspan=S.view.end-S.view.start;
+      const cw=CW(W);
+      const bw=cw/vspan;
+      const lastIdx=S.candles.length-1;
+      const extend=Math.max(0,Math.round(numVal('vzExtend',20)));
+      const xRight=Math.min(W-RP(),x(lastIdx)+extend*bw);
+      const xLeft=PL;
+      drawAccentSet(ctx,W,H,sc,xLeft,xRight,_vzCache[cacheKey],rgb,pfx,volKey);
+    };
+  }
+
+  window.__drawVolZones=drawVolZones;
+  window.__drawBuyZones=makeAccentDraw('buyZones','bzColor','bzColorSwatch','BUY','totalBuyVol','buy');
+  window.__drawSellZones=makeAccentDraw('sellZones','szColor','szColorSwatch','SELL','totalSellVol','sell');
+
+  const VZ_IDS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','bzColor','szColor']);
   function vzRedraw(){if(typeof drawSoon==='function')drawSoon();}
   document.addEventListener('input',function(ev){
     if(!VZ_IDS.has(ev.target?.id))return;
     if(ev.target.id==='vzColor'){const sw=E('vzColorSwatch');if(sw)sw.style.background=ev.target.value;}
+    if(ev.target.id==='bzColor'){const sw=E('bzColorSwatch');if(sw)sw.style.background=ev.target.value;}
+    if(ev.target.id==='szColor'){const sw=E('szColorSwatch');if(sw)sw.style.background=ev.target.value;}
     vzRedraw();
   });
   document.addEventListener('change',function(ev){
