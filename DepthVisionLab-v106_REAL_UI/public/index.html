@@ -1647,13 +1647,13 @@ html.pre-ui .switch::after{transition:none!important}
             <button class="gear" data-settings="volZones" title="Inputs Volume Zones">⚙</button>
           </div>
           <div class="ind-settings" id="settings-volZones">
-            <div class="kv"><span class="k">Mín. USD</span><input class="num" id="vzMinVal" type="number" min="0" step="1" value="500000" style="width:100px"></div>
-            <div class="kv"><span class="k">Máx. zonas</span><input class="num" id="vzMaxZones" type="number" min="1" max="50" step="1" value="10"></div>
-            <div class="kv"><span class="k">Cor</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="vzColorSwatch" style="width:100%;height:100%;background:#6366f1;pointer-events:none"></div><input id="vzColor" type="color" value="#6366f1" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
+            <div class="kv"><span class="k">Faixa % preço</span><input class="num" id="vzBucket" type="number" min="0.01" max="5" step="0.01" value="0.25" style="width:70px"></div>
+            <div class="kv"><span class="k">Top zonas</span><input class="num" id="vzTopN" type="number" min="1" max="30" step="1" value="8"></div>
+            <div class="kv"><span class="k">Mín. toques</span><input class="num" id="vzMinTouch" type="number" min="1" max="200" step="1" value="3"></div>
+            <div class="kv"><span class="k">Mesclar faixas</span><input class="num" id="vzMerge" type="number" min="0" max="20" step="1" value="1"></div>
             <div class="kv"><span class="k">Extensão (barras)</span><input class="num" id="vzExtend" type="number" min="0" max="500" step="1" value="20"></div>
-            <div class="kv"><span class="k">Cluster ×altura</span><input class="num" id="vzGapRatio" type="number" min="0" max="500" step="1" value="100"></div>
-            <div class="kv"><span class="k">Alt. mín. %preço</span><input class="num" id="vzMinHeight" type="number" min="0" max="5" step="0.05" value="0"></div>
-            <div class="hint">Caixas horizontais (pavio a pavio) nas velas com volume em dólar acima do mínimo. Gap = % da menor zona para mesclar níveis próximos.</div>
+            <div class="kv"><span class="k">Cor</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="vzColorSwatch" style="width:100%;height:100%;background:#f59e0b;pointer-events:none"></div><input id="vzColor" type="color" value="#f59e0b" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
+            <div class="hint">Zonas HVN — acumula volume de todos os candles por faixa de preço. Mostra onde o mercado mais negociou historicamente. Opacidade proporcional ao volume acumulado.</div>
           </div>
         </div>
 
@@ -6780,27 +6780,28 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 })();
 </script>
 
-<!-- ── High Volume Zones ── -->
+<!-- ── High Volume Zones (HVN) ── -->
 <script>
 (function(){
   function E(id){return document.getElementById(id)}
   function nFmt(v){
     v=Number(v)||0;const a=Math.abs(v);const s=v<0?'-':'';
-    if(a>=1e9)return s+(a/1e9).toFixed(1)+'B';
+    if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';
     if(a>=1e6)return s+(a/1e6).toFixed(1)+'M';
     if(a>=1e3)return s+(a/1e3).toFixed(0)+'K';
     return s+Math.round(a);
   }
+  function priceFmt(v){return v>=1000?v.toLocaleString('en-US',{maximumFractionDigits:0}):v.toFixed(2);}
 
   function numVal(id,def){const n=E(id);if(!n)return def;const v=parseFloat(n.value);return Number.isFinite(v)?v:def;}
   function getSettings(){
-    const minVal=Math.max(0,numVal('vzMinVal',500000));
-    const maxZones=Math.max(1,Math.min(50,numVal('vzMaxZones',10)));
-    const color=E('vzColor')?.value||'#6366f1';
+    const bucketPct=Math.max(0.01,numVal('vzBucket',0.25));
+    const topN=Math.max(1,Math.min(30,numVal('vzTopN',8)));
+    const minTouch=Math.max(1,Math.round(numVal('vzMinTouch',3)));
+    const mergeGap=Math.max(0,Math.round(numVal('vzMerge',1)));
     const extend=Math.max(0,Math.round(numVal('vzExtend',20)));
-    const gapRatio=Math.max(0,numVal('vzGapRatio',100))/100;
-    const minHeightPct=Math.max(0,numVal('vzMinHeight',0));
-    return{minVal,maxZones,color,extend,gapRatio,minHeightPct};
+    const color=E('vzColor')?.value||'#f59e0b';
+    return{bucketPct,topN,minTouch,mergeGap,extend,color};
   }
 
   function hexToRgb(hex){
@@ -6808,160 +6809,155 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     return{r,g,b};
   }
 
-  // ── Cache: heavy selection runs only when data or settings change ──
   let _vzCache=null;
   let _vzCacheKey='';
 
-  function computeZones(cs,minVal,maxZones,gapRatio,minHeightPct){
-    // 1. Collect candidates above threshold
-    const candidates=[];
-    for(let i=0;i<cs.length;i++){
-      const c=cs[i];
-      const dv=c.v*c.c;
-      if(dv>=minVal)candidates.push({i,dollarVol:dv,lo:c.l,hi:c.h});
-    }
-    if(!candidates.length)return[];
-    candidates.sort((a,b)=>b.dollarVol-a.dollarVol);
-
-    // 2. Greedy non-overlapping — collect up to 3× maxZones to feed clustering
-    const pool=[];
-    const cap=maxZones*3;
-    for(const cand of candidates){
-      if(pool.length>=cap)break;
-      if(!pool.some(z=>cand.lo<z.hi&&cand.hi>z.lo))pool.push(cand);
-    }
-    if(!pool.length)return[];
-
-    // 3. Minimum height filter (% of last price)
+  function computeHVN(cs,bucketPct,topN,minTouch,mergeGap){
+    if(cs.length<2)return[];
     const lastPrice=cs[cs.length-1].c;
-    const minH=minHeightPct>0?lastPrice*minHeightPct/100:0;
-    const filtered=minH>0?pool.filter(z=>(z.hi-z.lo)>=minH):pool;
-    if(!filtered.length)return[];
+    const bucketSize=lastPrice*bucketPct/100;
+    if(bucketSize<=0)return[];
 
-    // 4. Time-adjacent merge (within 5 bars) → boxes
-    filtered.sort((a,b)=>a.i-b.i);
-    const MERGE_BARS=5;
-    const tGroups=[];
-    let tg=[filtered[0]];
-    for(let k=1;k<filtered.length;k++){
-      if(filtered[k].i-tg[tg.length-1].i<=MERGE_BARS)tg.push(filtered[k]);
-      else{tGroups.push(tg);tg=[filtered[k]];}
-    }
-    tGroups.push(tg);
-    let boxes=tGroups.map(g=>({
-      hi:Math.max(...g.map(z=>z.hi)),
-      lo:Math.min(...g.map(z=>z.lo)),
-      totalVol:g.reduce((s,z)=>s+z.dollarVol,0),
-      anchorIdx:g[0].i
-    }));
+    // Price range across all candles
+    let priceMin=Infinity,priceMax=-Infinity;
+    for(const c of cs){if(c.l<priceMin)priceMin=c.l;if(c.h>priceMax)priceMax=c.h;}
 
-    // 5. Midpoint clustering — sort by midpoint, merge consecutive zones whose
-    //    midpoints are within gapRatio × taller zone height. Iterate until stable.
-    let changed=true;
-    while(changed){
-      changed=false;
-      boxes.forEach(b=>{b.mid=(b.hi+b.lo)/2;});
-      boxes.sort((a,b)=>a.mid-b.mid);
-      const merged=[];
-      let cur=boxes[0];
-      for(let k=1;k<boxes.length;k++){
-        const next=boxes[k];
-        const tallest=Math.max(cur.hi-cur.lo,next.hi-next.lo);
-        if(Math.abs(next.mid-cur.mid)<=gapRatio*tallest){
-          // Merge next into cur
-          cur={
-            hi:Math.max(cur.hi,next.hi),
-            lo:Math.min(cur.lo,next.lo),
-            totalVol:cur.totalVol+next.totalVol,
-            anchorIdx:Math.min(cur.anchorIdx,next.anchorIdx)
-          };
-          changed=true;
-        }else{
-          merged.push(cur);
-          cur=next;
+    const nBuckets=Math.min(8000,Math.ceil((priceMax-priceMin)/bucketSize)+1);
+    const vols=new Float64Array(nBuckets);
+    const tchs=new Uint32Array(nBuckets);
+
+    // Distribute each candle's dollar volume proportionally across the price buckets it spans
+    for(const c of cs){
+      const dv=c.v*c.c;
+      const range=c.h-c.l;
+      const loIdx=Math.max(0,Math.floor((c.l-priceMin)/bucketSize));
+      const hiIdx=Math.min(nBuckets-1,Math.floor((c.h-priceMin)/bucketSize));
+      if(loIdx===hiIdx){
+        vols[loIdx]+=dv;
+        tchs[loIdx]++;
+      }else{
+        for(let b=loIdx;b<=hiIdx;b++){
+          const bLo=priceMin+b*bucketSize;
+          const bHi=bLo+bucketSize;
+          const overlap=Math.min(c.h,bHi)-Math.max(c.l,bLo);
+          vols[b]+=dv*(range>0?overlap/range:1/(hiIdx-loIdx+1));
+          tchs[b]++;
         }
       }
-      merged.push(cur);
-      boxes=merged;
     }
 
-    // 6. Keep top maxZones by volume
-    boxes.sort((a,b)=>b.totalVol-a.totalVol);
-    return boxes.slice(0,maxZones);
+    // Filter by minTouch, build bucket list
+    const buckets=[];
+    for(let i=0;i<nBuckets;i++){
+      if(tchs[i]>=minTouch&&vols[i]>0)buckets.push({i,vol:vols[i],touches:tchs[i]});
+    }
+    if(!buckets.length)return[];
+
+    // Mark top N*4 by volume (headroom for merging)
+    const topSet=new Set(
+      [...buckets].sort((a,b)=>b.vol-a.vol).slice(0,topN*4).map(b=>b.i)
+    );
+
+    // Sort top buckets by price, merge adjacent buckets (gap ≤ mergeGap)
+    const top=buckets.filter(b=>topSet.has(b.i)).sort((a,b)=>a.i-b.i);
+    if(!top.length)return[];
+
+    const zones=[];
+    let lastI=top[0].i;
+    let zn={lo:priceMin+top[0].i*bucketSize,hi:priceMin+(top[0].i+1)*bucketSize,
+            totalVol:top[0].vol,totalTouches:top[0].touches};
+
+    for(let k=1;k<top.length;k++){
+      const b=top[k];
+      if(b.i-lastI<=mergeGap+1){
+        zn.hi=priceMin+(b.i+1)*bucketSize;
+        zn.totalVol+=b.vol;
+        zn.totalTouches+=b.touches;
+      }else{
+        zones.push(zn);
+        zn={lo:priceMin+b.i*bucketSize,hi:priceMin+(b.i+1)*bucketSize,
+            totalVol:b.vol,totalTouches:b.touches};
+      }
+      lastI=b.i;
+    }
+    zones.push(zn);
+
+    // Sort by volume, keep top N
+    zones.sort((a,b)=>b.totalVol-a.totalVol);
+    return zones.slice(0,topN);
   }
 
   function drawVolZones(ctx,W,H,V,sc,x){
     if(!window.S||!S.inds.volZones||!S.candles.length)return;
-    const{minVal,maxZones,color,extend,gapRatio,minHeightPct}=getSettings();
+    const{bucketPct,topN,minTouch,mergeGap,extend,color}=getSettings();
     const cs=S.candles;
     const lastIdx=cs.length-1;
 
-    const key=`${cs.length}|${S.sym}|${minVal}|${maxZones}|${gapRatio}|${minHeightPct}`;
+    const key=`${cs.length}|${S.sym}|${bucketPct}|${topN}|${minTouch}|${mergeGap}`;
     if(key!==_vzCacheKey){
-      _vzCache=computeZones(cs,minVal,maxZones,gapRatio,minHeightPct);
+      _vzCache=computeHVN(cs,bucketPct,topN,minTouch,mergeGap);
       _vzCacheKey=key;
     }
-    const finalZones=_vzCache;
-    if(!finalZones||!finalZones.length)return;
+    const zones=_vzCache;
+    if(!zones||!zones.length)return;
 
     const rgb=hexToRgb(color);
     const vspan=S.view.end-S.view.start;
     const cw=CW(W);
     const bw=cw/vspan;
     const xRight=x(lastIdx)+extend*bw;
+    const xLeft=PL;
+
+    // Max volume for relative opacity scaling
+    const maxVol=zones[0].totalVol; // already sorted desc
 
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
 
-    for(const{hi,lo,totalVol,anchorIdx}of finalZones){
+    for(const{hi,lo,totalVol,totalTouches}of zones){
+      const rel=maxVol>0?totalVol/maxVol:1;
       const mid=(hi+lo)/2;
-      const x1=x(anchorIdx)-bw*0.5;
-      const x2=xRight+bw*0.5;
       const y1=sc.y(hi);
       const y2=sc.y(lo);
       const ym=sc.y(mid);
       const boxH=Math.max(1,y2-y1);
+      const x2=Math.min(W-RP(),xRight+bw*0.5);
+      const x1c=xLeft;
+      const x2c=x2;
 
-      if(x2<PL||x1>W-RP()||y2<PT||y1>H-PB)continue;
+      if(x2c<PL||y2<PT||y1>H-PB)continue;
 
-      const x1c=Math.max(PL,x1);
-      const x2c=Math.min(W-RP(),x2);
-
-      // Fill
-      ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.10)`;
+      // Fill — opacity scales with relative volume (strongest zone most visible)
+      ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.04+0.14*rel).toFixed(3)})`;
       ctx.fillRect(x1c,y1,x2c-x1c,boxH);
 
-      // Top and bottom borders
-      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.55)`;
-      ctx.lineWidth=1;
+      // Top and bottom borders — also scale with volume
+      const borderA=(0.30+0.50*rel).toFixed(3);
+      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${borderA})`;
+      ctx.lineWidth=rel>0.7?1.5:1;
       ctx.setLineDash([]);
       ctx.beginPath();
       ctx.moveTo(x1c,y1);ctx.lineTo(x2c,y1);
       ctx.moveTo(x1c,y2);ctx.lineTo(x2c,y2);
       ctx.stroke();
 
-      // 50% midline — dashed
-      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.75)`;
-      ctx.lineWidth=1;
-      ctx.setLineDash([4,4]);
-      ctx.beginPath();ctx.moveTo(x1c,ym);ctx.lineTo(x2c,ym);ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Left anchor line
-      if(x1>=PL){
-        ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.45)`;
-        ctx.lineWidth=1.5;
-        ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x1,y2);ctx.stroke();
+      // Midline — dashed, only for taller zones
+      if(boxH>12){
+        ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.20+0.35*rel).toFixed(3)})`;
+        ctx.lineWidth=1;
+        ctx.setLineDash([3,5]);
+        ctx.beginPath();ctx.moveTo(x1c,ym);ctx.lineTo(x2c,ym);ctx.stroke();
+        ctx.setLineDash([]);
       }
 
-      // Label
-      const labelX=Math.max(PL+4,x1c+4);
-      const labelY=y1+boxH/2;
-      if(labelX<x2c-20&&boxH>9){
-        ctx.font='bold 9px monospace';
+      // Label: HVN {price} | {vol} | {touches}t
+      if(boxH>8){
+        const labelX=x1c+6;
+        const labelY=y1+boxH/2;
+        ctx.font=`${rel>0.5?'bold ':''} 9px monospace`;
         ctx.textBaseline='middle';
-        ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.85)`;
-        ctx.fillText('$'+nFmt(totalVol),labelX,labelY);
+        ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.70+0.30*rel).toFixed(3)})`;
+        ctx.fillText(`HVN ${priceFmt(mid)} | $${nFmt(totalVol)} | ${totalTouches}t`,labelX,labelY);
       }
     }
 
@@ -6971,7 +6967,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
   window.__drawVolZones=drawVolZones;
 
-  const VZ_IDS=new Set(['vzMinVal','vzMaxZones','vzExtend','vzColor','vzGapRatio','vzMinHeight']);
+  const VZ_IDS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor']);
   function vzRedraw(){if(typeof drawSoon==='function')drawSoon();}
   document.addEventListener('input',function(ev){
     if(!VZ_IDS.has(ev.target?.id))return;
