@@ -1663,8 +1663,9 @@ html.pre-ui .switch::after{transition:none!important}
             <button class="gear" data-settings="buyZones" title="Inputs Buy Zones">⚙</button>
           </div>
           <div class="ind-settings" id="settings-buyZones">
+            <div class="kv"><span class="k">Range ± %</span><input class="num" id="bzRange" type="number" min="0.1" max="50" step="0.1" value="5" style="width:70px"></div>
             <div class="kv"><span class="k">Cor</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="bzColorSwatch" style="width:100%;height:100%;background:#00e676;pointer-events:none"></div><input id="bzColor" type="color" value="#00e676" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
-            <div class="hint">5 zonas com maior volume de compra acumulado. Usa os mesmos parâmetros de faixa do HVN.</div>
+            <div class="hint">Top 5 níveis históricos perto do preço atual com maior volume acumulado de compra. Range ± define a janela de busca em % do preço.</div>
           </div>
         </div>
 
@@ -1674,8 +1675,9 @@ html.pre-ui .switch::after{transition:none!important}
             <button class="gear" data-settings="sellZones" title="Inputs Sell Zones">⚙</button>
           </div>
           <div class="ind-settings" id="settings-sellZones">
+            <div class="kv"><span class="k">Range ± %</span><input class="num" id="szRange" type="number" min="0.1" max="50" step="0.1" value="5" style="width:70px"></div>
             <div class="kv"><span class="k">Cor</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="szColorSwatch" style="width:100%;height:100%;background:#ff3d57;pointer-events:none"></div><input id="szColor" type="color" value="#ff3d57" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
-            <div class="hint">5 zonas com maior volume de venda acumulado. Usa os mesmos parâmetros de faixa do HVN.</div>
+            <div class="hint">Top 5 níveis históricos perto do preço atual com maior volume acumulado de venda. Range ± define a janela de busca em % do preço.</div>
           </div>
         </div>
 
@@ -6915,24 +6917,10 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
     zones.push(zn);
 
-    // Greedy spatial picker — reused for buy/sell accent selection
-    function spreadPick(arr,n,gap){
-      const out=[];
-      for(const z of arr){
-        const zm=(z.hi+z.lo)/2;
-        if(out.every(s=>Math.abs(zm-(s.hi+s.lo)/2)>=gap))out.push(z);
-        if(out.length>=n)break;
-      }
-      return out;
-    }
-    const minGap=bucketSize*4;
-    // Top 5 buy/sell zones picked from ALL computed zones (wider pool than topN)
-    const buyZones=spreadPick([...zones].sort((a,b)=>b.totalBuyVol-a.totalBuyVol),5,minGap);
-    const sellZones=spreadPick([...zones].sort((a,b)=>b.totalSellVol-a.totalSellVol),5,minGap);
-
     // HVN zones: ascending (weakest first = painter's order)
     zones.sort((a,b)=>a.totalVol-b.totalVol);
-    return{hvn:zones.slice(-topN),buy:buyZones,sell:sellZones};
+    // Expose raw bucket arrays for buy/sell zone indicators (filtered at draw time by range)
+    return{hvn:zones.slice(-topN),rawBuckets:{priceMin,bucketSize,nBuckets,bvArr,svArr,tchs}};
   }
 
   function drawVolZones(ctx,W,H,V,sc,x){
@@ -6948,7 +6936,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
     const cache=_vzCache;
     if(!cache?.hvn?.length)return;
-    const{hvn:zones,buy:buyZones,sell:sellZones}=cache;
+    const{hvn:zones}=cache;
 
     const rgb=hexToRgb(color);
     const vspan=S.view.end-S.view.start;
@@ -7080,28 +7068,46 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     ctx.restore();
   }
 
-  function makeAccentDraw(indKey,colorId,swatchId,pfx,volKey,cacheKey){
+  function makeAccentDraw(indKey,colorId,rangeId,pfx,isBuy){
     return function(ctx,W,H,V,sc,x){
       if(!window.S||!S.inds[indKey]||!S.candles.length)return;
-      if(!_vzCache?.[cacheKey])return;
-      const colorHex=E(colorId)?.value||(indKey==='buyZones'?'#00e676':'#ff3d57');
+      if(!_vzCache?.rawBuckets)return;
+      const{priceMin,bucketSize,nBuckets,bvArr,svArr,tchs}=_vzCache.rawBuckets;
+      const cs=S.candles;
+      const lastPrice=cs[cs.length-1].c;
+      const rangePct=Math.max(0.1,numVal(rangeId,5));
+      const priceLo=lastPrice*(1-rangePct/100);
+      const priceHi=lastPrice*(1+rangePct/100);
+      // Filter buckets to the range window, collect buy or sell data
+      const iLo=Math.max(0,Math.floor((priceLo-priceMin)/bucketSize));
+      const iHi=Math.min(nBuckets-1,Math.ceil((priceHi-priceMin)/bucketSize));
+      const cands=[];
+      for(let i=iLo;i<=iHi;i++){
+        const v=isBuy?bvArr[i]:svArr[i];
+        if(v>0)cands.push({lo:priceMin+i*bucketSize,hi:priceMin+(i+1)*bucketSize,
+                           vol:v,touches:tchs[i]});
+      }
+      if(!cands.length)return;
+      cands.sort((a,b)=>b.vol-a.vol);
+      const top5=cands.slice(0,5);
+      const colorHex=E(colorId)?.value||(isBuy?'#00e676':'#ff3d57');
       const rgb=hexToRgb(colorHex);
       const vspan=S.view.end-S.view.start;
       const cw=CW(W);
       const bw=cw/vspan;
-      const lastIdx=S.candles.length-1;
+      const lastIdx=cs.length-1;
       const extend=Math.max(0,Math.round(numVal('vzExtend',20)));
       const xRight=Math.min(W-RP(),x(lastIdx)+extend*bw);
       const xLeft=PL;
-      drawAccentSet(ctx,W,H,sc,xLeft,xRight,_vzCache[cacheKey],rgb,pfx,volKey);
+      drawAccentSet(ctx,W,H,sc,xLeft,xRight,top5,rgb,pfx,'vol');
     };
   }
 
   window.__drawVolZones=drawVolZones;
-  window.__drawBuyZones=makeAccentDraw('buyZones','bzColor','bzColorSwatch','BUY','totalBuyVol','buy');
-  window.__drawSellZones=makeAccentDraw('sellZones','szColor','szColorSwatch','SELL','totalSellVol','sell');
+  window.__drawBuyZones=makeAccentDraw('buyZones','bzColor','bzRange','BUY',true);
+  window.__drawSellZones=makeAccentDraw('sellZones','szColor','szRange','SELL',false);
 
-  const VZ_IDS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','bzColor','szColor']);
+  const VZ_IDS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','bzColor','bzRange','szColor','szRange']);
   function vzRedraw(){if(typeof drawSoon==='function')drawSoon();}
   document.addEventListener('input',function(ev){
     if(!VZ_IDS.has(ev.target?.id))return;
