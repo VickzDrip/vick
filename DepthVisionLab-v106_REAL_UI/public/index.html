@@ -1425,6 +1425,13 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 </script>
 </head>
 <body>
+<script>
+(function(){try{var d=(JSON.parse(localStorage.getItem('dvlUserProfile_v1')||'null')||{}).data||{};if(d._tf)window.__savedTf=d._tf;if(d._inds){try{window.__savedInds=JSON.parse(d._inds);}catch(e){}}if(d.topSym&&d.topSym.v)window.__savedSym=d.topSym.v;}catch(e){}document.documentElement.classList.add('pre-ui');})();
+</script>
+<style>
+html.pre-ui .tfs .tf,html.pre-ui .sidebar .ind-card{visibility:hidden}
+html.pre-ui .switch::after{transition:none!important}
+</style>
 <div class="mobile-scrim" id="mobileScrim"></div>
 <div class="platform">
   <div class="topbar">
@@ -1728,36 +1735,32 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
     </aside>
 <script>
 (function(){
-  document.body.classList.add('inds-syncing');
   try{
-    var saved=JSON.parse(localStorage.getItem('dvlUserProfile_v1')||'null');
-    var d=saved&&saved.data;
-    if(d){
-      // Pre-apply indicator states — prevents switch flash on first paint
-      if(d._inds){
-        var inds=JSON.parse(d._inds);
-        document.querySelectorAll('[data-ind]').forEach(function(n){
-          var k=n.dataset.ind;
-          if(k in inds)n.classList.toggle('on',!!inds[k]);
-        });
-      }
-      // Pre-apply TF so S init and first boot() use the correct timeframe
-      if(d._tf){
-        window.__savedTf=d._tf;
-        document.querySelectorAll('.tf').forEach(function(b){
-          b.classList.toggle('active',b.dataset.tf===d._tf);
-        });
-        var tfSel=document.getElementById('tfSelect');
-        if(tfSel)tfSel.value=d._tf;
-      }
-      // Pre-apply symbol so first boot() loads the right pair
-      if(d.topSym&&d.topSym.v){
-        window.__savedSym=d.topSym.v;
-        var topSym=document.getElementById('topSym');
-        if(topSym)topSym.value=d.topSym.v;
-      }
+    // Apply saved indicator states to DOM
+    if(window.__savedInds){
+      document.querySelectorAll('[data-ind]').forEach(function(n){
+        var k=n.dataset.ind;
+        if(k in window.__savedInds)n.classList.toggle('on',!!window.__savedInds[k]);
+      });
+    }
+    // Apply saved TF to tab buttons + select
+    if(window.__savedTf){
+      document.querySelectorAll('.tf').forEach(function(b){
+        b.classList.toggle('active',b.dataset.tf===window.__savedTf);
+      });
+      var tfSel=document.getElementById('tfSelect');
+      if(tfSel)tfSel.value=window.__savedTf;
+    }
+    // Apply saved symbol
+    if(window.__savedSym){
+      var ts=document.getElementById('topSym');
+      if(ts)ts.value=window.__savedSym;
     }
   }catch(e){}
+  // Reveal: elements now have correct state before becoming visible
+  document.documentElement.classList.remove('pre-ui');
+  // Keep transition suppression active until 1200ms restore completes
+  document.body.classList.add('inds-syncing');
 })();
 </script>
     <section class="chartPanel">
@@ -1837,7 +1840,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 const API='https://api.binance.com', WS='wss://stream.binance.com:9443/stream?streams=';
 const LOCAL_API=location.origin; // our own server with persisted trades + depth history
 let depthRefreshTimer=null;
-const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:{heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true},custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal'};
+const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal'};
 window.__bigTradesOverlayCache={key:'',items:[]};
 window.__bigTradesPersistentCache=new Map();
 window.__bigTradesLastGood=[];
