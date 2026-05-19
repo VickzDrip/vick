@@ -6893,9 +6893,24 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
     zones.push(zn);
 
-    // Sort ascending (weakest first) — painter's order ready for draw, no re-sort needed
+    // Greedy spatial picker — reused for buy/sell accent selection
+    function spreadPick(arr,n,gap){
+      const out=[];
+      for(const z of arr){
+        const zm=(z.hi+z.lo)/2;
+        if(out.every(s=>Math.abs(zm-(s.hi+s.lo)/2)>=gap))out.push(z);
+        if(out.length>=n)break;
+      }
+      return out;
+    }
+    const minGap=bucketSize*4;
+    // Top 5 buy/sell zones picked from ALL computed zones (wider pool than topN)
+    const buyZones=spreadPick([...zones].sort((a,b)=>b.totalBuyVol-a.totalBuyVol),5,minGap);
+    const sellZones=spreadPick([...zones].sort((a,b)=>b.totalSellVol-a.totalSellVol),5,minGap);
+
+    // HVN zones: ascending (weakest first = painter's order)
     zones.sort((a,b)=>a.totalVol-b.totalVol);
-    return zones.slice(-topN); // keep strongest topN (tail = strongest)
+    return{hvn:zones.slice(-topN),buy:buyZones,sell:sellZones};
   }
 
   function drawVolZones(ctx,W,H,V,sc,x){
@@ -6909,8 +6924,9 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       _vzCache=computeHVN(cs,bucketPct,topN,minTouch,mergeGap);
       _vzCacheKey=key;
     }
-    const zones=_vzCache;
-    if(!zones||!zones.length)return;
+    const cache=_vzCache;
+    if(!cache?.hvn?.length)return;
+    const{hvn:zones,buy:buyZones,sell:sellZones}=cache;
 
     const rgb=hexToRgb(color);
     const vspan=S.view.end-S.view.start;
@@ -6999,6 +7015,37 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         }
       }
     }
+
+    // ── Buy / Sell accent zones ──
+    function drawAccent(zList,r255,g255,b255,pfx,volKey){
+      if(!zList||!zList.length)return;
+      const maxV=zList.reduce((m,z)=>Math.max(m,z[volKey]),0);
+      for(const z of zList){
+        const rel=maxV>0?z[volKey]/maxV:1;
+        const mid=(z.hi+z.lo)/2;
+        const yMid=sc.y(mid);
+        if(yMid<PT-20||yMid>H-PB+20||xRight<=xLeft)continue;
+        // Thicker solid accent line
+        ctx.strokeStyle=`rgba(${r255},${g255},${b255},${(0.45+0.50*rel).toFixed(3)})`;
+        ctx.lineWidth=rel>0.6?2.5:1.8;
+        ctx.setLineDash([]);
+        ctx.beginPath();ctx.moveTo(xLeft,yMid);ctx.lineTo(xRight,yMid);ctx.stroke();
+        // Accent bar on right (no split — pure buy or pure sell color)
+        const barW=Math.round(3+rel*22);
+        ctx.fillStyle=`rgba(${r255},${g255},${b255},${(0.30+0.55*rel).toFixed(3)})`;
+        ctx.fillRect(xRight-barW,yMid-2,barW,4);
+        // Label below the line to avoid colliding with HVN label above
+        const ly=yMid+11;
+        if(ly<H-PB-2){
+          ctx.font=`${rel>0.5?'bold ':''}9px monospace`;
+          ctx.textBaseline='alphabetic';
+          ctx.fillStyle=`rgba(${r255},${g255},${b255},${(0.65+0.30*rel).toFixed(3)})`;
+          ctx.fillText(`${pfx} ${priceFmt(mid)} | ${nFmt(z[volKey])} | ${z.totalTouches}t`,xLeft+6,ly);
+        }
+      }
+    }
+    drawAccent(sellZones,255,61,87,'SELL','totalSellVol');
+    drawAccent(buyZones,0,230,118,'BUY','totalBuyVol');
 
     window.__ETX_SKIP_COLORMAP=false;
     ctx.restore();
