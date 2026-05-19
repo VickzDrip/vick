@@ -7046,6 +7046,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   function drawAccentSet(ctx,W,H,sc,xLeft,xRight,zList,rgb,pfx,volKey){
     if(!zList||!zList.length)return;
     const maxV=zList.reduce((m,z)=>Math.max(m,z[volKey]),0);
+    const isBuy=pfx==='BUY';
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
     ctx.setLineDash([]);
@@ -7054,18 +7055,25 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       const mid=(z.hi+z.lo)/2;
       const yMid=sc.y(mid);
       if(yMid<PT-20||yMid>H-PB+20||xRight<=xLeft)continue;
+      // Line
       ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.45+0.50*rel).toFixed(3)})`;
       ctx.lineWidth=rel>0.6?2.5:1.8;
       ctx.beginPath();ctx.moveTo(xLeft,yMid);ctx.lineTo(xRight,yMid);ctx.stroke();
+      // Bar on right
       const barW=Math.round(3+rel*22);
       ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.30+0.55*rel).toFixed(3)})`;
       ctx.fillRect(xRight-barW,yMid-2,barW,4);
-      const ly=yMid+11;
-      if(ly<H-PB-2){
+      // Label: RIGHT-aligned, BUY above line / SELL below line
+      // This avoids collision with left-aligned HVN labels
+      const ly=isBuy?yMid-7:yMid+13;
+      const inBounds=isBuy?(ly>PT+4):(ly<H-PB-2);
+      if(inBounds){
         ctx.font=`${rel>0.5?'bold ':''}9px monospace`;
         ctx.textBaseline='alphabetic';
+        ctx.textAlign='right';
         ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.65+0.30*rel).toFixed(3)})`;
-        ctx.fillText(`${pfx} ${priceFmt(mid)} | ${nFmt(z[volKey])} | ${z.totalTouches}t`,xLeft+6,ly);
+        ctx.fillText(`${pfx} ${priceFmt(mid)} | ${nFmt(z[volKey])}`,xRight-barW-6,ly);
+        ctx.textAlign='left';
       }
     }
     window.__ETX_SKIP_COLORMAP=false;
