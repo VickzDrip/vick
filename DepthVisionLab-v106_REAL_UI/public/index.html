@@ -6764,18 +6764,17 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     return{r,g,b};
   }
 
-  function drawVolZones(ctx,W,H,V,sc,x){
-    if(!window.S||!S.inds.volZones||!S.candles.length)return;
-    const{minVal,maxZones,color,extend,gapRatio}=getSettings();
-    const cs=S.candles;
-    const lastIdx=cs.length-1;
+  // ── Cache: heavy selection runs only when data or settings change ──
+  let _vzCache=null;
+  let _vzCacheKey='';
 
+  function computeZones(cs,minVal,maxZones,gapRatio){
     // 1. Collect candles above threshold, sorted by dollar volume desc
     const candidates=[];
     for(let i=0;i<cs.length;i++){
       const c=cs[i];
       const dollarVol=c.v*c.c;
-      if(dollarVol>=minVal)candidates.push({i,c,dollarVol,lo:c.l,hi:c.h});
+      if(dollarVol>=minVal)candidates.push({i,dollarVol,lo:c.l,hi:c.h});
     }
     candidates.sort((a,b)=>b.dollarVol-a.dollarVol);
 
@@ -6783,71 +6782,77 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const zones=[];
     for(const cand of candidates){
       if(zones.length>=maxZones)break;
-      const overlaps=zones.some(z=>cand.lo<z.hi&&cand.hi>z.lo);
-      if(!overlaps)zones.push(cand);
+      if(!zones.some(z=>cand.lo<z.hi&&cand.hi>z.lo))zones.push(cand);
     }
+    if(!zones.length)return[];
 
-    // 3. Sort selected zones by candle index, then merge groups whose
-    //    origin candles are within MERGE_BARS of each other
+    // 3. Sort by index, merge time-adjacent groups (within 5 bars)
     zones.sort((a,b)=>a.i-b.i);
     const MERGE_BARS=5;
-    const merged=[];
-    let g=[zones[0]];
+    const timeGroups=[];
+    let tg=[zones[0]];
     for(let k=1;k<zones.length;k++){
-      if(zones[k].i-g[g.length-1].i<=MERGE_BARS){
-        g.push(zones[k]);
-      }else{
-        merged.push(g);g=[zones[k]];
-      }
+      if(zones[k].i-tg[tg.length-1].i<=MERGE_BARS)tg.push(zones[k]);
+      else{timeGroups.push(tg);tg=[zones[k]];}
     }
-    if(g.length)merged.push(g);
+    timeGroups.push(tg);
 
-    // 4. Compute a flat box for each time-group
-    const boxes=merged.map(grp=>({
+    // 4. Flatten each time-group to a single box
+    const boxes=timeGroups.map(grp=>({
       hi:Math.max(...grp.map(z=>z.hi)),
       lo:Math.min(...grp.map(z=>z.lo)),
       totalVol:grp.reduce((s,z)=>s+z.dollarVol,0),
       anchorIdx:grp[0].i
     }));
 
-    // 5. Price-gap merge: sort by price, merge adjacent boxes where the gap
-    //    between them is less than gapRatio of the height of the smaller box
+    // 5. Price-gap merge: merge adjacent boxes where gap < gapRatio × smaller height
     boxes.sort((a,b)=>a.lo-b.lo);
-    const PRICE_GAP_RATIO=gapRatio;
-    const priceGroups=[];
-    let pg=[boxes[0]];
+    const pg=[];
+    let grp=[boxes[0]];
     for(let k=1;k<boxes.length;k++){
-      const prev=pg[pg.length-1];
+      const prev=grp[grp.length-1];
       const curr=boxes[k];
-      const gap=curr.lo-prev.hi;                          // >0 = space, <=0 = touching
+      const gap=curr.lo-prev.hi;
       const smallerH=Math.min(prev.hi-prev.lo,curr.hi-curr.lo);
-      if(gap<=PRICE_GAP_RATIO*smallerH){pg.push(curr);}
-      else{priceGroups.push(pg);pg=[curr];}
+      if(gap<=gapRatio*smallerH)grp.push(curr);
+      else{pg.push(grp);grp=[curr];}
     }
-    if(pg.length)priceGroups.push(pg);
+    pg.push(grp);
 
-    // Final zones: one box per price-group
-    const finalZones=priceGroups.map(grp=>({
-      hi:Math.max(...grp.map(z=>z.hi)),
-      lo:Math.min(...grp.map(z=>z.lo)),
-      totalVol:grp.reduce((s,z)=>s+z.totalVol,0),
-      anchorIdx:Math.min(...grp.map(z=>z.anchorIdx))
+    return pg.map(g=>({
+      hi:Math.max(...g.map(z=>z.hi)),
+      lo:Math.min(...g.map(z=>z.lo)),
+      totalVol:g.reduce((s,z)=>s+z.totalVol,0),
+      anchorIdx:Math.min(...g.map(z=>z.anchorIdx))
     }));
+  }
+
+  function drawVolZones(ctx,W,H,V,sc,x){
+    if(!window.S||!S.inds.volZones||!S.candles.length)return;
+    const{minVal,maxZones,color,extend,gapRatio}=getSettings();
+    const cs=S.candles;
+    const lastIdx=cs.length-1;
+
+    // Recompute only when candles or settings change
+    const key=`${cs.length}|${S.sym}|${minVal}|${maxZones}|${gapRatio}`;
+    if(key!==_vzCacheKey){
+      _vzCache=computeZones(cs,minVal,maxZones,gapRatio);
+      _vzCacheKey=key;
+    }
+    const finalZones=_vzCache;
+    if(!finalZones||!finalZones.length)return;
 
     const rgb=hexToRgb(color);
     const vspan=S.view.end-S.view.start;
     const cw=CW(W);
     const bw=cw/vspan;
+    const xRight=x(lastIdx)+extend*bw;
 
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
 
-    // Right edge: position of last candle + extend bars (in pixels), unclamped
-    const xRight=x(lastIdx)+extend*bw;
-
     for(const{hi,lo,totalVol,anchorIdx}of finalZones){
       const mid=(hi+lo)/2;
-
       const x1=x(anchorIdx)-bw*0.5;
       const x2=xRight+bw*0.5;
       const y1=sc.y(hi);
