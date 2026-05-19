@@ -6853,12 +6853,12 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
     if(!buckets.length)return[];
 
-    // Mark top N*4 by volume (headroom for merging)
+    // Candidate pool: top N×8 by volume — large headroom so spatial filter has enough to pick from
     const topSet=new Set(
-      [...buckets].sort((a,b)=>b.vol-a.vol).slice(0,topN*4).map(b=>b.i)
+      [...buckets].sort((a,b)=>b.vol-a.vol).slice(0,topN*8).map(b=>b.i)
     );
 
-    // Sort top buckets by price, merge adjacent buckets (gap ≤ mergeGap)
+    // Sort top buckets by price, merge directly adjacent buckets (gap ≤ mergeGap)
     const top=buckets.filter(b=>topSet.has(b.i)).sort((a,b)=>a.i-b.i);
     if(!top.length)return[];
 
@@ -6882,9 +6882,20 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
     zones.push(zn);
 
-    // Sort by volume, keep top N
+    // Sort by volume desc so greedy picks strongest first
     zones.sort((a,b)=>b.totalVol-a.totalVol);
-    return zones.slice(0,topN);
+
+    // Spatial diversity: greedy selection — keep a zone only if its midpoint is
+    // at least 4 bucket-widths away from every already-selected zone.
+    // This spreads zones across the full price range instead of clustering.
+    const minGap=bucketSize*4;
+    const spread=[];
+    for(const z of zones){
+      const zm=(z.hi+z.lo)/2;
+      if(spread.every(s=>Math.abs(zm-(s.hi+s.lo)/2)>=minGap))spread.push(z);
+      if(spread.length>=topN)break;
+    }
+    return spread;
   }
 
   function drawVolZones(ctx,W,H,V,sc,x){
