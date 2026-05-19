@@ -6954,57 +6954,40 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     for(const{hi,lo,totalVol,totalBuyVol,totalSellVol,totalTouches}of zones){
       const rel=maxVol>0?totalVol/maxVol:1;
       const mid=(hi+lo)/2;
-      const yMid=sc.y(mid);
+      const y1=sc.y(hi);
+      const y2=sc.y(lo);
+      const ym=sc.y(mid);
+      const boxH=Math.max(1,y2-y1);
 
-      if(yMid<PT-20||yMid>H-PB+20||xRight<=xLeft)continue;
+      if(xRight<=xLeft||y2<PT||y1>H-PB)continue;
 
-      const bandH=Math.max(2,2+rel*16);
-      const bandTop=Math.max(PT,yMid-bandH/2);
-      const bandBot=Math.min(H-PB,yMid+bandH/2);
-      const bH=bandBot-bandTop;
+      // Fill — opacity scales with relative volume
+      ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.04+0.13*rel).toFixed(3)})`;
+      ctx.fillRect(xLeft,y1,xRight-xLeft,boxH);
 
-      if(bH>0){
-        ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.03+0.09*rel).toFixed(3)})`;
-        ctx.fillRect(xLeft,bandTop,xRight-xLeft,bH);
-      }
-
-      // POC line
-      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.28+0.62*rel).toFixed(3)})`;
-      ctx.lineWidth=rel>0.75?2:rel>0.4?1.5:1;
-      if(rel>0.4)ctx.setLineDash([]);
-      else ctx.setLineDash([3,5]);
+      // Top and bottom borders
+      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.30+0.50*rel).toFixed(3)})`;
+      ctx.lineWidth=rel>0.7?1.5:1;
+      ctx.setLineDash([]);
       ctx.beginPath();
-      ctx.moveTo(xLeft,yMid);
-      ctx.lineTo(xRight,yMid);
+      ctx.moveTo(xLeft,y1);ctx.lineTo(xRight,y1);
+      ctx.moveTo(xLeft,y2);ctx.lineTo(xRight,y2);
       ctx.stroke();
-      if(rel<=0.4)ctx.setLineDash([]);
 
-      // Profile bar — buy (green) + sell (red) stacked
-      if(bH>=2){
-        const barMaxW=28;
-        const totalBW=Math.round(2+rel*barMaxW);
-        const buyBW=Math.round(totalBW*(totalVol>0?totalBuyVol/totalVol:0.5));
-        const sellBW=totalBW-buyBW;
-        const barY=bandTop;
-        if(buyBW>0){
-          ctx.fillStyle=`rgba(0,230,118,${(0.20+0.50*rel).toFixed(3)})`;
-          ctx.fillRect(xRight-totalBW,barY,buyBW,bH);
-        }
-        if(sellBW>0){
-          ctx.fillStyle=`rgba(255,61,87,${(0.20+0.50*rel).toFixed(3)})`;
-          ctx.fillRect(xRight-totalBW+buyBW,barY,sellBW,bH);
-        }
+      // Midline — dashed, only for taller zones
+      if(boxH>12){
+        ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.20+0.35*rel).toFixed(3)})`;
+        ctx.lineWidth=1;ctx.setLineDash([3,5]);
+        ctx.beginPath();ctx.moveTo(xLeft,ym);ctx.lineTo(xRight,ym);ctx.stroke();
+        ctx.setLineDash([]);
       }
 
-      // Label with colored buy/sell split
-      if(rel>0.07){
-        const ly=yMid-(bH/2+5);
-        if(ly>PT+4&&ly<H-PB-2){
-          ctx.font=`${rel>0.6?'bold ':''}9px monospace`;
-          ctx.textBaseline='alphabetic';
-          ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.45+0.50*rel).toFixed(3)})`;
-          ctx.fillText(`HVN ${priceFmt(mid)} | $${nFmt(totalVol)} | ${totalTouches}t`,xLeft+6,ly);
-        }
+      // Label inside the box, centered vertically
+      if(boxH>8){
+        ctx.font=`${rel>0.5?'bold ':''}9px monospace`;
+        ctx.textBaseline='middle';
+        ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.65+0.30*rel).toFixed(3)})`;
+        ctx.fillText(`HVN ${priceFmt(mid)} | $${nFmt(totalVol)} | ${totalTouches}t`,xLeft+6,ym);
       }
     }
 
