@@ -25,14 +25,15 @@ const MAX_TRADES_IN_MEM  = 250000;                // cap memory use
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 app.use(cors());
-// v106-fix: força no-cache pra HTML (pra novas versões aparecerem imediatamente
-// sem precisar limpar cache do navegador). Outros assets ficam com cache curto.
 app.use((req, res, next) => {
   if (req.path === "/" || req.path.endsWith(".html")) {
     res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     res.set("Pragma", "no-cache");
     res.set("Expires", "0");
     res.set("Surrogate-Control", "no-store");
+  } else if (req.path === "/manifest.json") {
+    res.set("Content-Type", "application/manifest+json");
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
   } else {
     res.set("Cache-Control", "public, max-age=60");
   }
