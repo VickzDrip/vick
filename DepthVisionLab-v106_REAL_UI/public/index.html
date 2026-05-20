@@ -988,13 +988,13 @@ button, .btn, .mini-btn, .gear, .scale-btn{
 #tfSelect{width:66px!important;}
 .candleBar .tool-select,
 #chartStyle{min-width:118px!important;max-width:138px!important;}
-#volumePaneWrap,.panes{height:96px!important;flex-basis:96px!important;}
+#volumePaneWrap,.panes{display:none!important;height:0!important;min-height:0!important;flex-basis:0!important;overflow:hidden!important;}
 .scaleDockV19{bottom:22px!important;}
 @media(max-width:760px){
   .toolDeck{height:38px!important;min-height:38px!important;top:5px!important;}
   .toolDeck .toolbar{height:34px!important;min-height:34px!important;}
   .toolDeck .mini-btn,.toolDeck .tool-select{height:30px!important;min-height:30px!important;font-size:10.5px!important;}
-  #volumePaneWrap,.panes{height:94px!important;flex-basis:94px!important;}
+  #volumePaneWrap,.panes{display:none!important;height:0!important;min-height:0!important;flex-basis:0!important;}
 }
 </style>
 
@@ -3703,8 +3703,8 @@ function drawLastPrice(ctx,W,sc){
 function H_SAFE(h){return Math.max(PT+40,h-PB)}
 function drawVolumeOverlay(ctx,W,H,V,xFn,bw){
   if(!V.cs.length)return;
-  const right=W-RP(),cw=CW(W);
-  const areaH=(H-PT-PB)*0.15,base=H-PB;
+  const right=W-RP();
+  const areaH=(H-PT-PB)*0.20,base=H-PB;
   const volZoom=Math.max(0.1,S.yVolScale?.zoom||1);
   const maxVol=Math.max(1,...V.cs.map(b=>b.v))/volZoom;
   const buyCol=el('volBuyColor')?.value||'#26a69a';
@@ -3719,13 +3719,14 @@ function drawVolumeOverlay(ctx,W,H,V,xFn,bw){
     if(hasSplit){
       const buyH=bar.v>0?barH*bar.buy/bar.v:barH*0.5;
       const sellH=barH-buyH;
-      ctx.globalAlpha=0.55;
-      ctx.fillStyle=sellCol;ctx.fillRect(xx-bw/2,base-barH,bw,Math.max(1,sellH));
-      ctx.fillStyle=buyCol;ctx.fillRect(xx-bw/2,base-buyH,bw,Math.max(1,buyH));
+      ctx.globalAlpha=0.6;
+      if(sellH>=1){ctx.fillStyle=sellCol;ctx.fillRect(xx-bw/2,base-barH,bw,sellH);}
+      if(buyH>=1){ctx.fillStyle=buyCol;ctx.fillRect(xx-bw/2,base-buyH,bw,buyH);}
+      if(sellH<1&&buyH<1){ctx.fillStyle=bar.c>=bar.o?buyCol:sellCol;ctx.fillRect(xx-bw/2,base-barH,bw,barH);}
     }else{
-      ctx.globalAlpha=0.45;
+      ctx.globalAlpha=0.5;
       ctx.fillStyle=bar.c>=bar.o?buyCol:sellCol;
-      ctx.fillRect(xx-bw/2,base-barH,bw,Math.max(1,barH));
+      ctx.fillRect(xx-bw/2,base-barH,bw,barH);
     }
   });
   ctx.globalAlpha=1;
@@ -3825,6 +3826,7 @@ function drawTimeAxis(){
   }
 }
 function drawDeltaPane(){
+  return; // volume moved to main chart overlay (drawVolumeOverlay)
   const wrap=document.querySelector('.panes'),c=el('deltaPane'); if(!wrap||!c)return;
   const ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,V=visible();
   ctx.clearRect(0,0,W,H);ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);
