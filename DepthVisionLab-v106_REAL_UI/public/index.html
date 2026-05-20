@@ -1842,7 +1842,7 @@ html.pre-ui .switch::after{transition:none!important}
 const API='https://api.binance.com', WS='wss://stream.binance.com:9443/stream?streams=';
 const LOCAL_API=location.origin; // our own server with persisted trades + depth history
 let depthRefreshTimer=null;
-const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal'};
+const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal',_cross:null};
 window.__bigTradesOverlayCache={key:'',items:[]};
 window.__bigTradesPersistentCache=new Map();
 window.__bigTradesLastGood=[];
@@ -2239,13 +2239,13 @@ function scale(vs,H){if(!vs||!vs.length)vs=S.candles.slice(-1);let hi=Math.max(.
 function draw(){
 
 const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_panDx=0;
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc)}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
 function drawGrid(ctx,W,H,sc){
   const rp=RP(),right=W-rp,cw=CW(W);
   ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);
   // Compute nice price step for grid labels
   const priceRange=sc.hi-sc.lo;
-  const rawStep=priceRange/9;
+  const rawStep=priceRange/14;
   const mag=Math.pow(10,Math.floor(Math.log10(Math.max(1,rawStep))));
   let step=mag;
   for(const n of[1,2,5,10]){if(n*mag>=rawStep){step=n*mag;break;}}
@@ -3701,6 +3701,38 @@ function drawLastPrice(ctx,W,sc){
   ctx.font='10px monospace';ctx.fillText(closeTxt,boxX+boxW/2,boxY+30);
 }
 function H_SAFE(h){return Math.max(PT+40,h-PB)}
+function drawCrosshair(ctx,W,H,sc,xFn,V){
+  if(!S._cross)return;
+  const{cx,cy}=S._cross;
+  const right=W-RP();
+  if(cx<PL||cx>right||cy<PT||cy>H-PB)return;
+  const price=sc.lo+(1-(cy-PT)/(H-PT-PB))*(sc.hi-sc.lo);
+  const idx=clamp(Math.floor(S.view.start+(cx-PL)/CW(W)*V.span),0,S.candles.length-1);
+  const snapX=xFn(idx);
+  ctx.save();
+  ctx.setLineDash([3,4]);
+  ctx.strokeStyle='rgba(200,216,240,0.22)';
+  ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(PL,cy);ctx.lineTo(right,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(snapX,PT);ctx.lineTo(snapX,H-PB);ctx.stroke();
+  ctx.setLineDash([]);
+  if(!S.yScale.hidden){
+    const lbl=priceFmt(price);
+    const lblW=Math.max(74,Math.min(92,RP()-4)),lblH=18;
+    const lblX=right+2,lblY=clamp(cy-lblH/2,PT,H-PB-lblH);
+    ctx.fillStyle='rgba(12,28,70,0.97)';
+    ctx.fillRect(lblX,lblY,lblW,lblH);
+    ctx.strokeStyle='rgba(140,170,240,0.55)';
+    ctx.lineWidth=0.8;
+    ctx.strokeRect(lblX+.5,lblY+.5,lblW-1,lblH-1);
+    ctx.fillStyle='#dce8ff';
+    ctx.font='10px monospace';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(lbl,lblX+lblW/2,lblY+lblH/2);
+  }
+  ctx.restore();
+}
 function drawCustom(ctx,V,sc,x){S.custom.forEach(ind=>{let vals=[];try{vals=evalCustom(ind.code)}catch(e){return}ctx.strokeStyle=ind.color;ctx.lineWidth=1.4;ctx.beginPath();let on=false;for(let i=V.a;i<V.b;i++){const v=vals[i];if(v==null||!isFinite(v))continue;const xx=x(i),yy=sc.y(v);if(!on){ctx.moveTo(xx,yy);on=true}else ctx.lineTo(xx,yy)}ctx.stroke()})}
 function evalCustom(code){const C=S.candles, close=C.map(c=>c.c), open=C.map(c=>c.o), high=C.map(c=>c.h), low=C.map(c=>c.l), volume=C.map(c=>c.v), delta=C.map(c=>c.delta);const sma=(arr,n)=>arr.map((_,i)=>i<n-1?null:arr.slice(i-n+1,i+1).reduce((a,b)=>a+b,0)/n);const ema=(arr,n)=>{const k=2/(n+1),out=[];let p=null;arr.forEach((v,i)=>{if(i<n-1)out.push(null);else if(p==null){p=arr.slice(0,n).reduce((a,b)=>a+b,0)/n;out.push(p)}else{p=v*k+p*(1-k);out.push(p)}});return out};const fn=new Function('open','high','low','close','volume','delta','sma','ema',code);return fn(open,high,low,close,volume,delta,sma,ema)}
 function drawTimeAxis(){
@@ -3734,6 +3766,27 @@ function drawTimeAxis(){
   }
   ctx.fillStyle='#07101e';ctx.fillRect(W-rp,0,rp+2,H);
   ctx.fillStyle='#050914';ctx.fillRect(0,0,PL,H);
+  // Crosshair time label
+  if(S._cross&&S.candles.length){
+    const cidx=clamp(Math.floor(S.view.start+(S._cross.cx-PL)/cw*V.span),0,S.candles.length-1);
+    const xx=PL+(cidx-S.view.start+.5)*cw/V.span;
+    if(xx>=PL+2&&xx<=W-rp-2){
+      const d=new Date(S.candles[cidx].t);
+      const lbl=d.toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+      ctx.font='10px monospace';
+      const tw=ctx.measureText(lbl).width+14;
+      const lx=clamp(xx-tw/2,PL+2,W-rp-tw-2);
+      ctx.fillStyle='rgba(12,28,70,0.97)';
+      ctx.fillRect(lx,0,tw,H);
+      ctx.strokeStyle='rgba(140,170,240,0.45)';
+      ctx.lineWidth=0.7;
+      ctx.strokeRect(lx+.5,.5,tw-1,H-1);
+      ctx.fillStyle='#dce8ff';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText(lbl,lx+tw/2,H/2);
+    }
+  }
 }
 function drawDeltaPane(){
   const wrap=document.querySelector('.panes'),c=el('deltaPane'); if(!wrap||!c)return;
@@ -3889,7 +3942,7 @@ wrap.addEventListener('wheel',e=>{e.preventDefault();const r=wrap.getBoundingCli
 el('volumePaneWrap')?.addEventListener('wheel',e=>{e.preventDefault();const factor=Math.exp(e.deltaY*0.0012);S.yVolScale={zoom:clamp((S.yVolScale?.zoom||1)*factor,0.05,20)};drawSoon();},{passive:false});
 wrap.addEventListener('mousedown',e=>{const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&S.tool!=='ruler'&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){S.book.resize=true;wrap.style.cursor='ew-resize';draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}S.dragPos={...hit,lastX:e.clientX,lastY:e.clientY};wrap.style.cursor='move';return}if(priceScaleHit(x,y,r.width,r.height)){S.yScale.drag=true;S.yScale.lastY=e.clientY;wrap.style.cursor='ns-resize';draw();return}S.mouse.down=true;S.mouse.lastX=e.clientX;S.mouse.lastY=e.clientY});
 window.addEventListener('mouseup',()=>{S.mouse.down=false;S.dragPos=null;if(S.yScale.drag){S.yScale.drag=false;wrap.style.cursor='default';draw();return}if(S.book.resize){S.book.resize=false;wrap.style.cursor='default';draw()}else{wrap.style.cursor='default'}});
-window.addEventListener('mousemove',e=>{const r=wrap.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;if(S.yScale.drag){const dy=e.clientY-S.yScale.lastY;S.yScale.zoom=clamp(S.yScale.zoom*Math.exp(-dy*0.012),.18,45);S.yScale.lastY=e.clientY;drawSoon();return}if(S.book.resize){resizeBookFromX(x,r.width);return}const overScale=priceScaleHit(x,y,r.width,r.height);wrap.style.cursor=bookResizeHit(x,y)?'ew-resize':overScale?'ns-resize':'default';if(S.dragPos){dragPosition(e,r);return}if(S.mouse.down){const span=S.view.end-S.view.start,dx=e.clientX-S.mouse.lastX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;S.mouse.lastX=e.clientX;S.view.auto=false;_panDx+=dx;const cc=el('chart');if(cc)cc.style.transform=`translateX(${_panDx}px)`;drawSoon();return}el('tip').style.display='none';});
+window.addEventListener('mousemove',e=>{const r=wrap.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;if(S.yScale.drag){const dy=e.clientY-S.yScale.lastY;S.yScale.zoom=clamp(S.yScale.zoom*Math.exp(-dy*0.012),.18,45);S.yScale.lastY=e.clientY;drawSoon();return}if(S.book.resize){resizeBookFromX(x,r.width);return}const overScale=priceScaleHit(x,y,r.width,r.height);wrap.style.cursor=bookResizeHit(x,y)?'ew-resize':overScale?'ns-resize':'default';if(S.dragPos){dragPosition(e,r);return}if(S.mouse.down){const span=S.view.end-S.view.start,dx=e.clientX-S.mouse.lastX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;S.mouse.lastX=e.clientX;S.view.auto=false;_panDx+=dx;const cc=el('chart');if(cc)cc.style.transform=`translateX(${_panDx}px)`;drawSoon();return}el('tip').style.display='none';if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){S._cross={cx:x,cy:y};drawSoon();}});
 wrap.addEventListener('mouseleave',()=>{S.mouse.down=false;S.book.resize=false;S.yScale.drag=false;wrap.style.cursor='default';el('tip').style.display='none';draw()});
 
 function showTip(x,y,r){const V=visible();if(x<PL||x>r.width-RP())return el('tip').style.display='none';const idx=clamp(Math.floor(S.view.start+(x-PL)/CW(r.width)*V.span),0,S.candles.length-1),c=S.candles[idx],d=new Date(c.t);el('tip').innerHTML='<div class="tt">'+d.toLocaleString('pt-PT')+'</div><div>O '+priceFmt(c.o)+' H <span class="up">'+priceFmt(c.h)+'</span></div><div>L <span class="dn">'+priceFmt(c.l)+'</span> C '+priceFmt(c.c)+'</div><div>Vol '+fmtN(c.v)+' · Delta <span class="'+(c.delta>=0?'up':'dn')+'">'+(c.delta>=0?'+':'')+fmtN(c.delta)+'</span></div><div>Buy '+fmtN(c.buy)+' · Sell '+fmtN(c.sell)+'</div>';el('tip').style.display='block';el('tip').style.left=Math.min(x+14,r.width-200)+'px';el('tip').style.top=Math.max(10,y-20)+'px'}
@@ -5076,6 +5129,8 @@ return {
 
 
 
+<style>#etxRealChartTooltip,#etxRealCrossX,#etxRealCrossY{display:none!important;pointer-events:none!important;}</style>
+<script>window.__V50_REAL_CHART_TOUCH__=true;</script>
 <script id="v50-real-chart-touch-area-js">
 (function(){
   let timer=null;
