@@ -3711,23 +3711,13 @@ function drawVolumeOverlay(ctx,W,H,V,xFn,bw){
   const sellCol=el('volSellColor')?.value||'#ef5350';
   ctx.save();
   window.__ETX_SKIP_COLORMAP=true;
+  ctx.globalAlpha=0.55;
   V.cs.forEach((bar,j)=>{
     const i=V.a+j,xx=xFn(i);
     if(xx<PL-bw||xx>right+bw)return;
     const barH=Math.max(1,areaH*bar.v/maxVol);
-    const hasSplit=bar.buy>0||bar.sell>0;
-    if(hasSplit){
-      const buyH=bar.v>0?barH*bar.buy/bar.v:barH*0.5;
-      const sellH=barH-buyH;
-      ctx.globalAlpha=0.6;
-      if(sellH>=1){ctx.fillStyle=sellCol;ctx.fillRect(xx-bw/2,base-barH,bw,sellH);}
-      if(buyH>=1){ctx.fillStyle=buyCol;ctx.fillRect(xx-bw/2,base-buyH,bw,buyH);}
-      if(sellH<1&&buyH<1){ctx.fillStyle=bar.c>=bar.o?buyCol:sellCol;ctx.fillRect(xx-bw/2,base-barH,bw,barH);}
-    }else{
-      ctx.globalAlpha=0.5;
-      ctx.fillStyle=bar.c>=bar.o?buyCol:sellCol;
-      ctx.fillRect(xx-bw/2,base-barH,bw,barH);
-    }
+    ctx.fillStyle=bar.c>=bar.o?buyCol:sellCol;
+    ctx.fillRect(xx-bw/2,base-barH,bw,barH);
   });
   ctx.globalAlpha=1;
   window.__ETX_SKIP_COLORMAP=false;
