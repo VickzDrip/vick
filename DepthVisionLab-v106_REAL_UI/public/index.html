@@ -1647,6 +1647,7 @@ html.pre-ui .switch::after{transition:none!important}
             <button class="gear" data-settings="volZones" title="Inputs Volume Zones">⚙</button>
           </div>
           <div class="ind-settings" id="settings-volZones">
+            <div class="kv"><span class="k">TF análise</span><select class="select" id="vzTf" style="width:72px"><option value="">Atual</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="2h">2h</option><option value="4h">4h</option><option value="6h">6h</option><option value="12h">12h</option><option value="1d">1d</option><option value="3d">3d</option><option value="1w">1w</option></select></div>
             <div class="kv"><span class="k">Faixa % preço</span><input class="num" id="vzBucket" type="number" min="0.01" max="5" step="0.01" value="0.1" style="width:70px"></div>
             <div class="kv"><span class="k">Top zonas</span><input class="num" id="vzTopN" type="number" min="1" max="30" step="1" value="12"></div>
             <div class="kv"><span class="k">Mín. toques</span><input class="num" id="vzMinTouch" type="number" min="1" max="200" step="1" value="2"></div>
@@ -6812,6 +6813,36 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   let _vzCache=null;
   let _vzCacheKey='';
 
+  // ── Multi-TF candle fetch for HVN analysis TF ──
+  let _vzExtCandles=null;
+  let _vzExtKey='';
+  let _vzExtFetching=false;
+
+  function getVZCandles(){
+    const sel=E('vzTf');
+    const vzTf=sel?sel.value:'';
+    if(!vzTf||vzTf===S.tf)return S.candles;
+    const wantKey=`${S.sym}|${vzTf}`;
+    if(_vzExtKey===wantKey&&_vzExtCandles)return _vzExtCandles;
+    // Async fetch — return current candles while loading
+    if(!_vzExtFetching||_vzExtKey!==wantKey){
+      _vzExtFetching=true;
+      _vzExtKey=wantKey;
+      _vzExtCandles=null;
+      fetch(`${API}/api/v3/klines?symbol=${S.sym}&interval=${vzTf}&limit=1000`)
+        .then(r=>r.ok?r.json():Promise.reject(r.status))
+        .then(d=>{
+          if(_vzExtKey!==wantKey)return; // symbol/tf changed while fetching
+          _vzExtCandles=d.map(klineToCandle);
+          _vzExtFetching=false;
+          _vzCacheKey=''; // force recompute with new candles
+          if(typeof drawSoon==='function')drawSoon();
+        })
+        .catch(e=>{_vzExtFetching=false;console.warn('HVN TF fetch:',e);});
+    }
+    return S.candles; // use current candles while fetch is in progress
+  }
+
   function computeHVN(cs,bucketPct,topN,minTouch,mergeGap){
     if(cs.length<2)return[];
     const lastPrice=cs[cs.length-1].c;
@@ -6902,10 +6933,11 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   function drawVolZones(ctx,W,H,V,sc,x){
     if(!window.S||!S.inds.volZones||!S.candles.length)return;
     const{bucketPct,topN,minTouch,mergeGap,extend,color}=getSettings();
-    const cs=S.candles;
+    const vzTfSel=E('vzTf');const vzTf=vzTfSel?vzTfSel.value:'';
+    const cs=getVZCandles();
     const lastIdx=cs.length-1;
 
-    const key=`${cs.length}|${cs[0]?.t||0}|${S.sym}|${S.tf}|${bucketPct}|${topN}|${minTouch}|${mergeGap}`;
+    const key=`${cs.length}|${cs[0]?.t||0}|${S.sym}|${vzTf||S.tf}|${bucketPct}|${topN}|${minTouch}|${mergeGap}`;
     if(key!==_vzCacheKey){
       _vzCache=computeHVN(cs,bucketPct,topN,minTouch,mergeGap);
       _vzCacheKey=key;
@@ -6973,7 +7005,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
   window.__drawVolZones=drawVolZones;
 
-  const VZ_IDS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor']);
+  const VZ_IDS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','vzTf']);
   function vzRedraw(){if(typeof drawSoon==='function')drawSoon();}
   document.addEventListener('input',function(ev){
     if(!VZ_IDS.has(ev.target?.id))return;
@@ -6982,6 +7014,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   });
   document.addEventListener('change',function(ev){
     if(!VZ_IDS.has(ev.target?.id))return;
+    if(ev.target.id==='vzTf'){_vzExtCandles=null;_vzExtKey='';_vzExtFetching=false;_vzCacheKey='';}
     vzRedraw();
   });
 })();
