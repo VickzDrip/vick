@@ -2239,7 +2239,7 @@ function scale(vs,H){if(!vs||!vs.length)vs=S.candles.slice(-1);let hi=Math.max(.
 function draw(){
 
 const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_panDx=0;
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
 function drawGrid(ctx,W,H,sc){
   const rp=RP(),right=W-rp,cw=CW(W);
   ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);
@@ -3701,6 +3701,37 @@ function drawLastPrice(ctx,W,sc){
   ctx.font='10px monospace';ctx.fillText(closeTxt,boxX+boxW/2,boxY+30);
 }
 function H_SAFE(h){return Math.max(PT+40,h-PB)}
+function drawVolumeOverlay(ctx,W,H,V,xFn,bw){
+  if(!V.cs.length)return;
+  const right=W-RP(),cw=CW(W);
+  const areaH=(H-PT-PB)*0.15,base=H-PB;
+  const volZoom=Math.max(0.1,S.yVolScale?.zoom||1);
+  const maxVol=Math.max(1,...V.cs.map(b=>b.v))/volZoom;
+  const buyCol=el('volBuyColor')?.value||'#26a69a';
+  const sellCol=el('volSellColor')?.value||'#ef5350';
+  ctx.save();
+  window.__ETX_SKIP_COLORMAP=true;
+  V.cs.forEach((bar,j)=>{
+    const i=V.a+j,xx=xFn(i);
+    if(xx<PL-bw||xx>right+bw)return;
+    const barH=Math.max(1,areaH*bar.v/maxVol);
+    const hasSplit=bar.buy>0||bar.sell>0;
+    if(hasSplit){
+      const buyH=bar.v>0?barH*bar.buy/bar.v:barH*0.5;
+      const sellH=barH-buyH;
+      ctx.globalAlpha=0.55;
+      ctx.fillStyle=sellCol;ctx.fillRect(xx-bw/2,base-barH,bw,Math.max(1,sellH));
+      ctx.fillStyle=buyCol;ctx.fillRect(xx-bw/2,base-buyH,bw,Math.max(1,buyH));
+    }else{
+      ctx.globalAlpha=0.45;
+      ctx.fillStyle=bar.c>=bar.o?buyCol:sellCol;
+      ctx.fillRect(xx-bw/2,base-barH,bw,Math.max(1,barH));
+    }
+  });
+  ctx.globalAlpha=1;
+  window.__ETX_SKIP_COLORMAP=false;
+  ctx.restore();
+}
 function drawCrosshair(ctx,W,H,sc,xFn,V){
   if(!S._cross){S._crossIdx=null;return;}
   const{cx,cy}=S._cross;
