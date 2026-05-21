@@ -231,7 +231,21 @@ function connectDepth(){
   ws.on("error", () => ws.close());
 }
 
+// ── Version detection (auto-reload when index.html changes) ───────────────
+const INDEX_FILE = path.join(__dirname, "public", "index.html");
+let indexVersion = "0";
+function refreshVersion(){
+  try { indexVersion = String(fs.statSync(INDEX_FILE).mtimeMs); } catch(e){}
+}
+refreshVersion();
+setInterval(refreshVersion, 15000);
+
 // ── HTTP API ───────────────────────────────────────────────────────────────
+app.get("/api/version", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ v: indexVersion });
+});
+
 app.get("/api/status", (req,res) => res.json({
   ok: true,
   symbol: SYMBOL,
