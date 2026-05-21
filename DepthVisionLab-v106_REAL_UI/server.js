@@ -35,7 +35,7 @@ app.use((req, res, next) => {
     res.set("Content-Type", "application/manifest+json");
     res.set("Cache-Control", "no-store, no-cache, must-revalidate");
   } else {
-    res.set("Cache-Control", "public, max-age=60");
+    res.set("Cache-Control", "no-cache, must-revalidate");
   }
   next();
 });
