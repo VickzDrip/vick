@@ -1483,12 +1483,12 @@ html.pre-ui .switch::after{transition:none!important}
         </button>
 
         <div class="rp-lbl" style="margin-top:10px;">DESENHO</div>
-        <button class="rp-btn rp-dis">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><line x1="5" y1="19" x2="19" y2="5"/></svg>
+        <button class="rp-btn" id="rpDrawLine" title="Trend Line">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><line x1="4" y1="20" x2="20" y2="4"/></svg>
           <span>Linha</span>
         </button>
-        <button class="rp-btn rp-dis">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><rect x="4" y="6" width="16" height="12" rx="1"/></svg>
+        <button class="rp-btn" id="rpDrawRect" title="Rectangle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><rect x="3" y="5" width="18" height="14" rx="1"/></svg>
           <span>Retângulo</span>
         </button>
         <button class="rp-btn" id="rpFvg">
@@ -1499,8 +1499,8 @@ html.pre-ui .switch::after{transition:none!important}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><rect x="3" y="6" width="18" height="12" rx="1"/><line x1="8" y1="6" x2="8" y2="18"/></svg>
           <span>Orderblock</span>
         </button>
-        <button class="rp-btn rp-dis">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        <button class="rp-btn" id="rpDrawText" title="Text">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M4 6h16M12 6v12M9 18h6"/></svg>
           <span>Texto</span>
         </button>
 
@@ -1516,8 +1516,8 @@ html.pre-ui .switch::after{transition:none!important}
       <div class="rp-col">
 
         <div class="rp-lbl">UTILIDADES</div>
-        <button class="rp-btn rp-dis">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <button class="rp-btn" id="rpReplay" title="Replay Mode">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><polygon points="5,3 19,12 5,21"/></svg>
           <span>Replay</span>
         </button>
         <button class="rp-btn" id="rpSnapshot">
@@ -6025,6 +6025,23 @@ return {
 })();
 </script>
 
+<!-- DVL Drawing Tools overlays -->
+<div id="dvlReplayBar" style="display:none;position:fixed;bottom:52px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(6,12,22,0.94);border:1px solid rgba(0,212,255,0.35);border-radius:8px;padding:6px 10px;align-items:center;gap:6px;backdrop-filter:blur(6px);">
+  <span style="font-size:9px;color:#00d4ff;letter-spacing:2px;margin-right:4px;">REPLAY</span>
+  <button id="dvlRpBack" style="background:none;border:none;color:#c8d8f0;cursor:pointer;font-size:14px;padding:2px 5px;" title="Step back">⏮</button>
+  <button id="dvlRpPlay" style="background:none;border:none;color:#00d4ff;cursor:pointer;font-size:16px;padding:2px 6px;" title="Play/Pause">▶</button>
+  <button id="dvlRpFwd" style="background:none;border:none;color:#c8d8f0;cursor:pointer;font-size:14px;padding:2px 5px;" title="Step forward">⏭</button>
+  <button id="dvlRpSpeed" style="background:none;border:1px solid #1e2a40;border-radius:4px;color:#9db8d4;cursor:pointer;font-size:10px;padding:2px 6px;" title="Speed">1×</button>
+  <button id="dvlRpExit" style="background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);border-radius:4px;color:#ff3d57;cursor:pointer;font-size:10px;padding:2px 8px;" title="Exit Replay">Exit</button>
+</div>
+<div id="dvlTextPopup" style="display:none;position:fixed;z-index:9999;background:rgba(6,12,22,0.96);border:1px solid rgba(0,212,255,0.4);border-radius:8px;padding:10px 12px;backdrop-filter:blur(8px);">
+  <input id="dvlTextInput" type="text" placeholder="Texto..." maxlength="60" style="background:rgba(255,255,255,0.06);border:1px solid #1e2a40;border-radius:4px;color:#e8f0ff;font-size:12px;padding:4px 8px;width:160px;outline:none;">
+  <div style="display:flex;gap:6px;margin-top:6px;">
+    <button id="dvlTextOk" style="flex:1;background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.4);border-radius:4px;color:#00d4ff;font-size:11px;padding:4px;cursor:pointer;">OK</button>
+    <button id="dvlTextCancel" style="flex:1;background:none;border:1px solid #1e2a40;border-radius:4px;color:#6f86a8;font-size:11px;padding:4px;cursor:pointer;">Cancel</button>
+  </div>
+</div>
+<button id="dvlDrawDelete" style="display:none;position:fixed;z-index:9999;background:rgba(255,61,87,0.15);border:1px solid rgba(255,61,87,0.45);border-radius:6px;color:#ff3d57;font-size:11px;padding:5px 10px;cursor:pointer;top:60px;right:80px;">🗑 Delete</button>
 </body>
 </html>
 
@@ -7082,6 +7099,11 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 .rp-footer-btn:hover{background:#111827;color:#c8d8f0;}
 .rp-sair{color:#ff3d57!important;}
 .rp-sair:hover{background:rgba(255,61,87,.06)!important;}
+</style>
+<style>
+/* DVL Drawing Tools */
+.rp-btn.dvl-active{background:rgba(0,212,255,.18)!important;border-color:rgba(0,212,255,.55)!important;color:#00d4ff!important;}
+#dvlReplayBar button:hover{opacity:.75;}
 </style>
 <script id="DVL__V107_LOGO_AND_SOON_SCRIPT">
 (function(){
@@ -8228,5 +8250,579 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   });
 
   setTimeout(vzSyncReactUI,0);
+})();
+</script>
+<script>
+/* DVL Drawing Tools + Replay Mode */
+(function DVL_DrawReplay() {
+  'use strict';
+  function el(id){return document.getElementById(id)}
+  function ready(fn){if(document.readyState!=='loading')fn();else document.addEventListener('DOMContentLoaded',fn)}
+
+  // ── Extend S with drawing/replay state ──
+  ready(function(){
+    if(typeof S==='undefined')return;
+    if(!S.drawings)S.drawings=[];
+    if(!S.activeTool)S.activeTool=null;
+    if(!S.selectedDrawing)S.selectedDrawing=null;
+    if(!S.replay)S.replay={enabled:false,index:null,playing:false,speed:1,timer:null};
+
+    initDrawingTools();
+    initReplayMode();
+    loadDrawings();
+  });
+
+  // ── Coordinate helpers ──
+  function getCS(){
+    const wrap=el('chartWrap');if(!wrap)return null;
+    const W=wrap.clientWidth,H=wrap.clientHeight;
+    const span=Math.max(0.35,S.view.end-S.view.start);
+    const cw=CW(W);
+    // Use effective candles (respects replay)
+    const allCs=S._allCandles||S.candles;
+    const effEnd=(S.replay&&S.replay.enabled&&S.replay.index!=null)?Math.min(Math.floor(S.replay.index)+1,allCs.length):allCs.length;
+    const effCs=allCs.slice(0,effEnd);
+    const a=Math.floor(S.view.start),b=Math.ceil(S.view.end);
+    const vs=effCs.slice(Math.max(0,a),Math.min(effCs.length,b));
+    const sc=scale(vs.length?vs:effCs.slice(-1),H);
+    const x=i=>PL+(i-S.view.start+0.5)*cw/span;
+    const toPrice=y=>sc.lo+(1-(y-PT)/(H-PT-PB))*(sc.hi-sc.lo);
+    const toIdx=sx=>S.view.start+(sx-PL)*span/cw-0.5;
+    return{W,H,cw,span,sc,x,toPrice,toIdx};
+  }
+  function getPointerPos(e){
+    const wrap=el('chartWrap');if(!wrap)return{x:0,y:0};
+    const r=wrap.getBoundingClientRect();
+    if(e.touches&&e.touches.length){
+      return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};
+    }
+    return{x:e.clientX-r.left,y:e.clientY-r.top};
+  }
+
+  // ── Drawing state ──
+  let _drawPhase=0; // 0=idle,1=first-point-set,2=drawing
+  let _drawAnchor=null; // {idx,price} first point
+  let _drawPreview=null; // current mouse position for preview
+  let _dragState=null; // {drawing,type,ox,oy,origDrawing}
+  let _textPendingPos=null; // {idx,price} for text placement
+
+  // ── Init Drawing Tools ──
+  function initDrawingTools(){
+    // Panel buttons
+    const btnLine=el('rpDrawLine'),btnRect=el('rpDrawRect'),btnText=el('rpDrawText');
+    if(btnLine)btnLine.addEventListener('click',()=>setActiveTool(_dvlActiveTool==='line'?null:'line'));
+    if(btnRect)btnRect.addEventListener('click',()=>setActiveTool(_dvlActiveTool==='rect'?null:'rect'));
+    if(btnText)btnText.addEventListener('click',()=>setActiveTool(_dvlActiveTool==='text'?null:'text'));
+
+    // Delete button
+    const delBtn=el('dvlDrawDelete');
+    if(delBtn)delBtn.addEventListener('click',deleteSelectedDrawing);
+
+    // Text popup
+    const txOk=el('dvlTextOk'),txCancel=el('dvlTextCancel'),txInput=el('dvlTextInput');
+    if(txOk)txOk.addEventListener('click',confirmTextInput);
+    if(txCancel)txCancel.addEventListener('click',cancelTextInput);
+    if(txInput)txInput.addEventListener('keydown',e=>{if(e.key==='Enter')confirmTextInput();if(e.key==='Escape')cancelTextInput();});
+
+    // Capture-phase pointer events on chartWrap
+    const wrap=el('chartWrap');if(!wrap)return;
+    wrap.addEventListener('mousedown',onDrawMouseDown,true);
+    wrap.addEventListener('touchstart',onDrawTouchStart,{capture:true,passive:false});
+    window.addEventListener('mousemove',onDrawMouseMove,true);
+    window.addEventListener('mouseup',onDrawMouseUp,true);
+    wrap.addEventListener('touchmove',onDrawTouchMove,{capture:true,passive:false});
+    wrap.addEventListener('touchend',onDrawTouchEnd,{capture:true,passive:false});
+
+    // Keyboard: Delete key removes selected drawing
+    window.addEventListener('keydown',e=>{
+      if((e.key==='Delete'||e.key==='Backspace')&&S.selectedDrawing&&document.activeElement===document.body){
+        deleteSelectedDrawing();
+      }
+      if(e.key==='Escape'){
+        setActiveTool(null);
+        selectDrawing(null);
+      }
+    });
+
+    // Wrap draw() to render user drawings on top
+    const _origDraw=draw;
+    draw=function(){
+      // Replay: temporarily slice S.candles
+      if(S.replay&&S.replay.enabled&&S.replay.index!=null){
+        const full=S._allCandles||S.candles;
+        S._allCandles=full;
+        const end=Math.min(Math.floor(S.replay.index)+1,full.length);
+        S.candles=full.slice(0,end);
+        try{_origDraw();}finally{S.candles=full;}
+      }else{
+        S._allCandles=null;
+        _origDraw();
+      }
+      // Render drawings overlay
+      const wrap2=el('chartWrap');if(!wrap2)return;
+      const c=el('chart');if(!c)return;
+      const ctx=c.getContext('2d');
+      const cs=getCS();if(!cs)return;
+      ctx.save();
+      try{
+        drawUserDrawings(ctx,cs);
+        if(S.replay&&S.replay.enabled&&S.replay.index!=null)drawReplayCursor(ctx,cs);
+      }catch(_){}
+      ctx.restore();
+    };
+  }
+
+  let _dvlActiveTool=null;
+  function setActiveTool(tool){
+    _dvlActiveTool=tool;
+    S.activeTool=tool;
+    _drawPhase=0;_drawAnchor=null;_drawPreview=null;
+    selectDrawing(null);
+    // Update button states
+    ['rpDrawLine','rpDrawRect','rpDrawText'].forEach(id=>{
+      const b=el(id);if(!b)return;
+      b.classList.toggle('dvl-active',
+        (id==='rpDrawLine'&&tool==='line')||(id==='rpDrawRect'&&tool==='rect')||(id==='rpDrawText'&&tool==='text'));
+    });
+    // Update cursor
+    const wrap=el('chartWrap');
+    if(wrap)wrap.style.cursor=tool?'crosshair':'';
+    if(typeof drawSoon==='function')drawSoon();
+  }
+
+  // ── Event handlers ──
+  function onDrawMouseDown(e){
+    if(e.button!==0)return;
+    if(!_dvlActiveTool&&!S.selectedDrawing)return;
+    e.stopPropagation();
+    const cs=getCS();if(!cs)return;
+    const p=getPointerPos(e);
+    handlePointerDown(p,cs,false);
+  }
+  function onDrawTouchStart(e){
+    if(!_dvlActiveTool&&!S.selectedDrawing)return;
+    if(e.touches.length>1)return;
+    e.stopPropagation();e.preventDefault();
+    const cs=getCS();if(!cs)return;
+    const p=getPointerPos(e);
+    handlePointerDown(p,cs,true);
+  }
+  function onDrawMouseMove(e){
+    if(!_dvlActiveTool&&!_dragState)return;
+    const cs=getCS();if(!cs)return;
+    const wrap=el('chartWrap');if(!wrap)return;
+    const r=wrap.getBoundingClientRect();
+    const p={x:e.clientX-r.left,y:e.clientY-r.top};
+    handlePointerMove(p,cs);
+  }
+  function onDrawTouchMove(e){
+    if(!_dvlActiveTool&&!_dragState)return;
+    if(e.touches.length>1)return;
+    e.stopPropagation();e.preventDefault();
+    const cs=getCS();if(!cs)return;
+    const p=getPointerPos(e);
+    handlePointerMove(p,cs);
+  }
+  function onDrawMouseUp(e){
+    if(!_dvlActiveTool&&!_dragState)return;
+    const cs=getCS();if(!cs)return;
+    const wrap=el('chartWrap');if(!wrap)return;
+    const r=wrap.getBoundingClientRect();
+    const p={x:e.clientX-r.left,y:e.clientY-r.top};
+    handlePointerUp(p,cs);
+  }
+  function onDrawTouchEnd(e){
+    if(!_dvlActiveTool&&!_dragState)return;
+    e.stopPropagation();
+    const cs=getCS();if(!cs)return;
+    const p=_drawPreview||{x:0,y:0};
+    handlePointerUp(p,cs);
+  }
+
+  function handlePointerDown(p,cs,isTouch){
+    const idx=cs.toIdx(p.x),price=cs.toPrice(p.y);
+
+    if(_dvlActiveTool){
+      if(_dvlActiveTool==='text'){
+        _textPendingPos={idx,price};
+        showTextPopup(p);
+        return;
+      }
+      if(_drawPhase===0){
+        _drawAnchor={idx,price};
+        _drawPhase=1;
+        _drawPreview={x:p.x,y:p.y};
+      }else if(_drawPhase===1){
+        // Second point: finalize
+        finalizeDrawing(idx,price);
+      }
+      if(typeof drawSoon==='function')drawSoon();
+      return;
+    }
+
+    // No active tool — check hit test for selection / drag
+    const hit=hitTestDrawing(p.x,p.y,cs);
+    if(hit){
+      selectDrawing(hit.drawing);
+      _dragState={drawing:hit.drawing,type:hit.type,ox:p.x,oy:p.y,orig:JSON.parse(JSON.stringify(hit.drawing))};
+      if(typeof drawSoon==='function')drawSoon();
+    }else{
+      selectDrawing(null);
+      if(typeof drawSoon==='function')drawSoon();
+    }
+  }
+
+  function handlePointerMove(p,cs){
+    _drawPreview={x:p.x,y:p.y};
+    if(_dvlActiveTool&&_drawPhase===1){
+      if(typeof drawSoon==='function')drawSoon();
+      return;
+    }
+    if(_dragState){
+      const orig=_dragState.orig;
+      const d=_dragState.drawing;
+      const dIdx=cs.toIdx(p.x)-cs.toIdx(_dragState.ox);
+      const dPrice=cs.toPrice(p.y)-cs.toPrice(_dragState.oy);
+      if(_dragState.type==='body'){
+        if(d.type==='line'||d.type==='rect'){
+          d.x1=orig.x1+dIdx;d.x2=orig.x2+dIdx;
+          d.y1Price=orig.y1Price+dPrice;d.y2Price=orig.y2Price+dPrice;
+        }else if(d.type==='text'){
+          d.x=orig.x+dIdx;d.yPrice=orig.yPrice+dPrice;
+        }
+      }else if(_dragState.type==='h1'){
+        d.x1=orig.x1+dIdx;d.y1Price=orig.y1Price+dPrice;
+      }else if(_dragState.type==='h2'){
+        d.x2=orig.x2+dIdx;d.y2Price=orig.y2Price+dPrice;
+      }
+      if(typeof drawSoon==='function')drawSoon();
+    }
+  }
+
+  function handlePointerUp(p,cs){
+    if(_dragState){
+      _dragState=null;
+      saveDrawings();
+    }
+  }
+
+  function finalizeDrawing(idx2,price2){
+    if(!_drawAnchor)return;
+    const d={
+      id:Date.now(),
+      type:_dvlActiveTool,
+      x1:_drawAnchor.idx,y1Price:_drawAnchor.price,
+      x2:idx2,y2Price:price2,
+      color:'rgba(0,212,255,0.9)',
+      width:1.5,
+      fillOpacity:0.07,
+      createdAt:Date.now()
+    };
+    S.drawings.push(d);
+    _drawPhase=0;_drawAnchor=null;
+    saveDrawings();
+    if(typeof drawSoon==='function')drawSoon();
+  }
+
+  // ── Text popup ──
+  function showTextPopup(screenPos){
+    const popup=el('dvlTextPopup');if(!popup)return;
+    const wrap=el('chartWrap');if(!wrap)return;
+    const r=wrap.getBoundingClientRect();
+    let tx=r.left+screenPos.x+10,ty=r.top+screenPos.y-60;
+    tx=Math.min(tx,window.innerWidth-200);ty=Math.max(ty,10);
+    popup.style.left=tx+'px';popup.style.top=ty+'px';
+    popup.style.display='flex';popup.style.flexDirection='column';
+    const inp=el('dvlTextInput');if(inp){inp.value='';setTimeout(()=>inp.focus(),50);}
+  }
+  function confirmTextInput(){
+    const popup=el('dvlTextPopup');if(popup)popup.style.display='none';
+    const inp=el('dvlTextInput');
+    const txt=inp?inp.value.trim():'';
+    if(!txt||!_textPendingPos)return;
+    const d={id:Date.now(),type:'text',x:_textPendingPos.idx,yPrice:_textPendingPos.price,
+      text:txt,color:'rgba(0,212,255,0.92)',fontSize:12,createdAt:Date.now()};
+    S.drawings.push(d);
+    _textPendingPos=null;_drawPhase=0;
+    saveDrawings();
+    if(typeof drawSoon==='function')drawSoon();
+  }
+  function cancelTextInput(){
+    const popup=el('dvlTextPopup');if(popup)popup.style.display='none';
+    _textPendingPos=null;
+  }
+
+  // ── Selection ──
+  function selectDrawing(d){
+    S.selectedDrawing=d;
+    const delBtn=el('dvlDrawDelete');
+    if(delBtn)delBtn.style.display=d?'block':'none';
+    if(typeof drawSoon==='function')drawSoon();
+  }
+  function deleteSelectedDrawing(){
+    if(!S.selectedDrawing)return;
+    S.drawings=S.drawings.filter(d=>d.id!==S.selectedDrawing.id);
+    selectDrawing(null);
+    saveDrawings();
+    if(typeof drawSoon==='function')drawSoon();
+  }
+
+  // ── Hit testing ──
+  function hitTestDrawing(mx,my,cs){
+    const THRESH=8;
+    for(let i=S.drawings.length-1;i>=0;i--){
+      const d=S.drawings[i];
+      if(d.type==='line'){
+        const sx1=cs.x(d.x1),sy1=cs.sc.y(d.y1Price);
+        const sx2=cs.x(d.x2),sy2=cs.sc.y(d.y2Price);
+        // Check handles
+        if(Math.hypot(mx-sx1,my-sy1)<THRESH+2)return{drawing:d,type:'h1'};
+        if(Math.hypot(mx-sx2,my-sy2)<THRESH+2)return{drawing:d,type:'h2'};
+        // Check line body
+        const dist=pointToSegDist(mx,my,sx1,sy1,sx2,sy2);
+        if(dist<THRESH)return{drawing:d,type:'body'};
+      }else if(d.type==='rect'){
+        const sx1=cs.x(d.x1),sy1=cs.sc.y(d.y1Price);
+        const sx2=cs.x(d.x2),sy2=cs.sc.y(d.y2Price);
+        const rxMin=Math.min(sx1,sx2),rxMax=Math.max(sx1,sx2);
+        const ryMin=Math.min(sy1,sy2),ryMax=Math.max(sy1,sy2);
+        // Handles
+        if(Math.hypot(mx-sx1,my-sy1)<THRESH+2)return{drawing:d,type:'h1'};
+        if(Math.hypot(mx-sx2,my-sy2)<THRESH+2)return{drawing:d,type:'h2'};
+        // Inside rect
+        if(mx>=rxMin-2&&mx<=rxMax+2&&my>=ryMin-2&&my<=ryMax+2)return{drawing:d,type:'body'};
+      }else if(d.type==='text'){
+        const sx=cs.x(d.x),sy=cs.sc.y(d.yPrice);
+        const tw=(d.text.length*d.fontSize*0.6)+16;
+        if(mx>=sx-4&&mx<=sx+tw&&my>=sy-d.fontSize-2&&my<=sy+4)return{drawing:d,type:'body'};
+      }
+    }
+    return null;
+  }
+  function pointToSegDist(px,py,ax,ay,bx,by){
+    const dx=bx-ax,dy=by-ay;
+    if(dx===0&&dy===0)return Math.hypot(px-ax,py-ay);
+    const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)));
+    return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
+  }
+
+  // ── Drawing rendering ──
+  function drawUserDrawings(ctx,cs){
+    if(!S.drawings||!S.drawings.length)return;
+    ctx.save();
+    S.drawings.forEach(d=>{
+      const isSel=S.selectedDrawing&&S.selectedDrawing.id===d.id;
+      ctx.globalAlpha=1;ctx.setLineDash([]);
+      if(d.type==='line'){
+        const sx1=cs.x(d.x1),sy1=cs.sc.y(d.y1Price);
+        const sx2=cs.x(d.x2),sy2=cs.sc.y(d.y2Price);
+        ctx.beginPath();ctx.moveTo(sx1,sy1);ctx.lineTo(sx2,sy2);
+        ctx.strokeStyle=d.color||'rgba(0,212,255,0.9)';
+        ctx.lineWidth=isSel?(d.width||1.5)+0.8:d.width||1.5;
+        if(isSel){ctx.shadowColor='rgba(0,212,255,0.4)';ctx.shadowBlur=4;}
+        ctx.stroke();ctx.shadowBlur=0;
+        // Handles when selected
+        if(isSel){
+          drawHandle(ctx,sx1,sy1);drawHandle(ctx,sx2,sy2);
+        }
+      }else if(d.type==='rect'){
+        const sx1=cs.x(d.x1),sy1=cs.sc.y(d.y1Price);
+        const sx2=cs.x(d.x2),sy2=cs.sc.y(d.y2Price);
+        const rx=Math.min(sx1,sx2),ry=Math.min(sy1,sy2);
+        const rw=Math.abs(sx2-sx1),rh=Math.abs(sy2-sy1);
+        ctx.fillStyle='rgba(0,100,180,'+( d.fillOpacity||0.07)+')';
+        ctx.fillRect(rx,ry,rw,rh);
+        ctx.strokeStyle=d.color||'rgba(0,150,220,0.7)';
+        ctx.lineWidth=isSel?(d.borderWidth||1)+0.8:d.borderWidth||1;
+        if(isSel){ctx.shadowColor='rgba(0,212,255,0.35)';ctx.shadowBlur=4;ctx.setLineDash([4,3]);}
+        ctx.strokeRect(rx,ry,rw,rh);
+        ctx.shadowBlur=0;ctx.setLineDash([]);
+        if(isSel){drawHandle(ctx,sx1,sy1);drawHandle(ctx,sx2,sy2);}
+      }else if(d.type==='text'){
+        const sx=cs.x(d.x),sy=cs.sc.y(d.yPrice);
+        ctx.font=(d.fontSize||12)+'px monospace';
+        ctx.fillStyle=d.color||'rgba(0,212,255,0.92)';
+        if(isSel){
+          ctx.shadowColor='rgba(0,212,255,0.4)';ctx.shadowBlur=4;
+          const tw=ctx.measureText(d.text).width;
+          ctx.strokeStyle='rgba(0,212,255,0.3)';ctx.lineWidth=0.8;
+          ctx.setLineDash([3,3]);
+          ctx.strokeRect(sx-3,sy-(d.fontSize||12)-2,tw+6,(d.fontSize||12)+6);
+          ctx.setLineDash([]);
+        }
+        ctx.textAlign='left';ctx.textBaseline='alphabetic';
+        ctx.fillText(d.text,sx,sy);
+        ctx.shadowBlur=0;
+      }
+    });
+    // Draw in-progress preview
+    if(_dvlActiveTool&&_drawPhase===1&&_drawAnchor&&_drawPreview){
+      const sx1=cs.x(_drawAnchor.idx),sy1=cs.sc.y(_drawAnchor.price);
+      const sx2=_drawPreview.x,sy2=_drawPreview.y;
+      ctx.save();ctx.globalAlpha=0.55;ctx.setLineDash([5,4]);
+      if(_dvlActiveTool==='line'){
+        ctx.beginPath();ctx.moveTo(sx1,sy1);ctx.lineTo(sx2,sy2);
+        ctx.strokeStyle='rgba(0,212,255,0.8)';ctx.lineWidth=1.5;ctx.stroke();
+      }else if(_dvlActiveTool==='rect'){
+        const rx=Math.min(sx1,sx2),ry=Math.min(sy1,sy2);
+        const rw=Math.abs(sx2-sx1),rh=Math.abs(sy2-sy1);
+        ctx.fillStyle='rgba(0,100,180,0.08)';ctx.fillRect(rx,ry,rw,rh);
+        ctx.strokeStyle='rgba(0,180,255,0.8)';ctx.lineWidth=1;ctx.strokeRect(rx,ry,rw,rh);
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  function drawHandle(ctx,x,y){
+    ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
+    ctx.fillStyle='rgba(6,12,22,0.9)';ctx.fill();
+    ctx.strokeStyle='rgba(0,212,255,0.85)';ctx.lineWidth=1.5;ctx.stroke();
+  }
+
+  // ── Replay cursor ──
+  function drawReplayCursor(ctx,cs){
+    if(!S.replay||!S.replay.enabled||S.replay.index==null)return;
+    const idx=Math.floor(S.replay.index);
+    const sx=cs.x(idx);
+    if(sx<PL||sx>cs.W-RP())return;
+    ctx.save();
+    ctx.strokeStyle='rgba(255,200,50,0.65)';
+    ctx.lineWidth=1.5;ctx.setLineDash([6,4]);
+    ctx.beginPath();ctx.moveTo(sx,PT);ctx.lineTo(sx,cs.H-PB);ctx.stroke();
+    ctx.setLineDash([]);
+    // Label "REPLAY" at top
+    ctx.font='bold 9px monospace';ctx.fillStyle='rgba(255,200,50,0.85)';
+    ctx.textAlign='center';ctx.textBaseline='alphabetic';
+    ctx.fillText('REPLAY',sx,PT+14);
+    ctx.restore();
+  }
+
+  // ── Persistence ──
+  function storageKey(){
+    return'dvl_drawings_'+(S.sym||'')+'_'+(S.tf||'');
+  }
+  function saveDrawings(){
+    try{localStorage.setItem(storageKey(),JSON.stringify(S.drawings));}catch(_){}
+  }
+  function loadDrawings(){
+    try{
+      const raw=localStorage.getItem(storageKey());
+      if(raw)S.drawings=JSON.parse(raw)||[];
+    }catch(_){S.drawings=[];}
+    if(typeof drawSoon==='function')drawSoon();
+  }
+  // Reload drawings on symbol/tf change
+  ready(function(){
+    // Watch for symbol/tf changes
+    let _lastKey=storageKey();
+    setInterval(()=>{
+      const k=storageKey();
+      if(k!==_lastKey){_lastKey=k;loadDrawings();}
+    },800);
+  });
+
+  // ── Replay mode ──
+  function initReplayMode(){
+    const btn=el('rpReplay');
+    if(btn)btn.addEventListener('click',()=>{
+      if(S.replay&&S.replay.enabled)disableReplay();else enableReplay();
+    });
+
+    // Control bar buttons
+    const rpPlay=el('dvlRpPlay'),rpBack=el('dvlRpBack'),rpFwd=el('dvlRpFwd');
+    const rpSpeed=el('dvlRpSpeed'),rpExit=el('dvlRpExit');
+    if(rpPlay)rpPlay.addEventListener('click',()=>S.replay&&S.replay.playing?pauseReplay():playReplay());
+    if(rpBack)rpBack.addEventListener('click',stepReplayBackward);
+    if(rpFwd)rpFwd.addEventListener('click',stepReplayForward);
+    if(rpSpeed)rpSpeed.addEventListener('click',()=>{
+      const speeds=[1,2,5];const cur=S.replay.speed||1;
+      const next=speeds[(speeds.indexOf(cur)+1)%speeds.length];
+      S.replay.speed=next;rpSpeed.textContent=next+'x';
+      if(S.replay.playing){pauseReplay();playReplay();}
+    });
+    if(rpExit)rpExit.addEventListener('click',disableReplay);
+
+    // Click on chart while replay is enabled but no tool active -> set replay index
+    const wrap=el('chartWrap');
+    if(wrap){
+      wrap.addEventListener('click',e=>{
+        if(!S.replay||!S.replay.enabled||_dvlActiveTool)return;
+        if(S.selectedDrawing)return;
+        const cs=getCS();if(!cs)return;
+        const p=getPointerPos(e);
+        const idx=Math.round(cs.toIdx(p.x));
+        if(idx>=0&&idx<(S._allCandles||S.candles).length){
+          setReplayIndex(idx);
+        }
+      });
+    }
+  }
+
+  function enableReplay(){
+    S.replay.enabled=true;
+    S.replay.playing=false;
+    // Default to current last candle - 1
+    const all=S._allCandles||S.candles;
+    if(S.replay.index==null&&all.length>1)S.replay.index=all.length-1;
+    showReplayBar(true);
+    const btn=el('rpReplay');if(btn)btn.classList.add('dvl-active');
+    if(typeof drawSoon==='function')drawSoon();
+  }
+  function disableReplay(){
+    S.replay.enabled=false;
+    S.replay.playing=false;
+    S.replay.index=null;
+    if(S.replay.timer){clearInterval(S.replay.timer);S.replay.timer=null;}
+    if(S._allCandles){S.candles=S._allCandles;S._allCandles=null;}
+    showReplayBar(false);
+    const btn=el('rpReplay');if(btn)btn.classList.remove('dvl-active');
+    if(typeof drawSoon==='function')drawSoon();
+  }
+  function showReplayBar(show){
+    const bar=el('dvlReplayBar');
+    if(!bar)return;
+    bar.style.display=show?'flex':'none';
+  }
+  function setReplayIndex(idx){
+    const all=S._allCandles||S.candles;
+    S.replay.index=Math.max(0,Math.min(idx,all.length-1));
+    const play=el('dvlRpPlay');
+    if(play)play.textContent='▶';
+    if(typeof drawSoon==='function')drawSoon();
+  }
+  function playReplay(){
+    if(!S.replay.enabled)return;
+    S.replay.playing=true;
+    const play=el('dvlRpPlay');if(play)play.textContent='⏸';
+    if(S.replay.timer)clearInterval(S.replay.timer);
+    const msPerStep=Math.round(800/(S.replay.speed||1));
+    S.replay.timer=setInterval(()=>{
+      if(!S.replay.enabled||!S.replay.playing){
+        clearInterval(S.replay.timer);S.replay.timer=null;return;
+      }
+      const all=S._allCandles||S.candles;
+      if(S.replay.index>=all.length-1){
+        pauseReplay();return;
+      }
+      S.replay.index++;
+      if(typeof drawSoon==='function')drawSoon();
+    },msPerStep);
+  }
+  function pauseReplay(){
+    S.replay.playing=false;
+    if(S.replay.timer){clearInterval(S.replay.timer);S.replay.timer=null;}
+    const play=el('dvlRpPlay');if(play)play.textContent='▶';
+  }
+  function stepReplayForward(){
+    pauseReplay();
+    const all=S._allCandles||S.candles;
+    if(S.replay.index<all.length-1)setReplayIndex(S.replay.index+1);
+  }
+  function stepReplayBackward(){
+    pauseReplay();
+    if(S.replay.index>0)setReplayIndex(S.replay.index-1);
+  }
+  // Expose for console debugging
+  window._dvlDraw=window.S;
 })();
 </script>
