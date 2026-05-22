@@ -6267,79 +6267,86 @@ return {
     return{score,tier,imbalRatio,dirAligned,mixed};
   }
 
-  // ── per-zone reaction detection with footprint flow confirmation ──
-  // Returns {active, score, touchIdx, fpFlow, reactStatus}
-  // reactStatus: 'new' | 'tested' | 'respected' | 'held' | 'failed'
+  // ── Confluence combo reaction score ──
+  // Scoring: Base FVG +20 | FP dir agrees +20 | Absorption +20 | Wick +15 | Close +15 | Next candle +10
+  // Classification: 0-49=WEAK(WAIT) | 50-69=TESTED | 70-84=RESPECTED | 85+=HELD candidate
+  // Returns {active, comboScore, score, touchIdx, fpFlow, reactStatus}
   function computeFVGReaction(z,cs,volMAs,expireBars,fpCfg){
     const{low:lo,high:hi}=z;const mid=(lo+hi)/2;
     const lastI=cs.length-1;const bull=z.type==='bull';
     const scanStart=Math.max(z.origin+1,lastI-expireBars);
-    let bestScore=0,latestI=-1;
+    let bestCombo=0,latestI=-1,bestFpFlow=null;
+
     for(let i=scanStart;i<=lastI;i++){
-      const c=cs[i];if(c.h<lo||c.l>hi)continue;
+      const c=cs[i];if(!c||c.h<lo||c.l>hi)continue; // must touch/enter zone
       const range=c.h-c.l;if(range<1e-9)continue;
       const bodyTop=Math.max(c.o,c.c),bodyBot=Math.min(c.o,c.c);
       const lwR=(bodyBot-c.l)/range,uwR=(c.h-bodyTop)/range;
-      const avgV=volMAs[i];const next=i<lastI?cs[i+1]:null;
-      if(bull){
-        if(lwR>=0.28&&c.c>=mid&&c.v>=avgV*0.85){
-          let sc=30;
-          if(c.c>hi)sc+=20;else if(c.c>mid)sc+=8;
-          if(c.v>avgV*1.2)sc+=15;else if(c.v>avgV)sc+=8;
-          if(lwR>=0.5)sc+=10;
-          if(c.l<lo&&c.c>lo)sc+=10;
-          if(next&&next.c>next.o&&next.c>c.c)sc+=15;else if(next&&next.c>next.o)sc+=8;
-          if(sc>bestScore){bestScore=sc;latestI=i;}
-        }
-      }else{
-        if(uwR>=0.28&&c.c<=mid&&c.v>=avgV*0.85){
-          let sc=30;
-          if(c.c<lo)sc+=20;else if(c.c<mid)sc+=8;
-          if(c.v>avgV*1.2)sc+=15;else if(c.v>avgV)sc+=8;
-          if(uwR>=0.5)sc+=10;
-          if(c.h>hi&&c.c<hi)sc+=10;
-          if(next&&next.c<next.o&&next.c<c.c)sc+=15;else if(next&&next.c<next.o)sc+=8;
-          if(sc>bestScore){bestScore=sc;latestI=i;}
-        }
+      const avgV=volMAs[i]||1;const next=i<lastI?cs[i+1]:null;
+
+      // Footprint flow inside zone for this specific candle
+      let fp=null;
+      if(fpCfg?.fpEnabled){try{fp=zoneReactionFlow(z,i,i,cs);}catch(_){}}
+
+      let combo=20; // Base FVG: price touched zone (+20)
+
+      // Footprint direction agrees: +20
+      if(fp&&fp.total>0){
+        const dirOk=bull?fp.delta>0:fp.delta<0;
+        const dirShare=bull?fp.buyShare:fp.sellShare;
+        if(dirOk&&dirShare>=(fpCfg?.minShare||0.60))combo+=20;
       }
-    }
-    if(latestI>=0&&latestI<=lastI-expireBars){bestScore=0;latestI=-1;}
 
-    // ── Footprint flow confirmation inside zone ──
-    let fpFlow=null;
-    if(fpCfg?.fpEnabled&&latestI>=0){
-      const fsStart=Math.max(z.origin+1,latestI-((fpCfg.lookback||8)-1));
-      try{fpFlow=zoneReactionFlow(z,fsStart,latestI,cs);}catch(_){}
-    }
-
-    // Gate RESPECTED: require footprint confirmation if enabled
-    let active=bestScore>=58;
-    if(active&&fpCfg?.fpEnabled&&fpCfg?.requireConfirm&&fpFlow){
-      const hasMinFlow=!fpCfg.minFlow||fpFlow.totalUsdt>=fpCfg.minFlow;
-      if(hasMinFlow&&fpFlow.total>0){
-        const dirShare=bull?fpFlow.buyShare:fpFlow.sellShare;
-        const dirOk=bull?fpFlow.delta>0:fpFlow.delta<0;
-        const shareOk=dirShare>=fpCfg.minShare;
-        const synthOk=fpFlow.syntheticRatio<=fpCfg.maxSynth;
-        active=dirOk&&shareOk&&synthOk;
+      // Absorption: opposing side appeared but got absorbed: +20
+      // Bull: sellers tried (>35% vol) but buyers won AND closed >= mid
+      // Bear: buyers tried (>35% vol) but sellers won AND closed <= mid
+      if(fp&&fp.total>0){
+        const oppShare=bull?fp.sellShare:fp.buyShare;
+        const dirShare=bull?fp.buyShare:fp.sellShare;
+        const closedOk=bull?c.c>=mid:c.c<=mid;
+        if(oppShare>0.35&&dirShare>oppShare&&closedOk)combo+=20;
       }
-      // If total flow=0 (no footprint data at all), trust visual reaction only
+
+      // Rejection wick inside or beyond zone: +15
+      if(bull&&(lwR>=0.28||(c.l<lo&&c.c>=lo)))combo+=15;
+      else if(!bull&&(uwR>=0.28||(c.h>hi&&c.c<=hi)))combo+=15;
+
+      // Correct close confirmation: +15
+      if(bull&&c.c>=mid)combo+=15;
+      else if(!bull&&c.c<=mid)combo+=15;
+
+      // Next candle confirms without breaking reaction level: +10
+      if(next){
+        if(bull&&next.c>next.o&&next.l>=c.l)combo+=10;
+        else if(!bull&&next.c<next.o&&next.h<=c.h)combo+=10;
+      }
+
+      combo=Math.min(100,combo);
+      if(combo>bestCombo){bestCombo=combo;latestI=i;bestFpFlow=fp;}
     }
 
-    // ── React status ──
-    let reactStatus='new';
+    // Expiration: best touch older than expireBars → discard
+    if(latestI>=0&&latestI<=lastI-expireBars){bestCombo=0;latestI=-1;bestFpFlow=null;}
+
+    // ── React status from combo score ──
+    let reactStatus='waiting';
     if(z.status==='MITIGATED'){
       reactStatus='failed';
-    }else if(active){
-      const currentP=cs[lastI]?.c||0;
-      const localAtr=atrAt(cs,lastI,14);
-      const movedAway=bull?(currentP>=hi+localAtr):(currentP<=lo-localAtr);
-      reactStatus=movedAway?'held':'respected';
-    }else if(latestI>=0||z.tested){
-      reactStatus='tested';
+    }else if(latestI>=0){
+      if(bestCombo>=70){
+        const currentP=cs[lastI]?.c||0;
+        const localAtr=atrAt(cs,lastI,14);
+        const movedAway=bull?(currentP>=hi+localAtr):(currentP<=lo-localAtr);
+        reactStatus=movedAway?'held':'respected';
+      }else if(bestCombo>=50){
+        reactStatus='tested';
+      }else{
+        reactStatus='weak'; // touched but no real confluence — display as WAIT
+      }
     }
 
-    return{active,score:Math.min(95,bestScore),touchIdx:latestI,fpFlow,reactStatus};
+    const active=bestCombo>=70;
+    return{active,comboScore:Math.min(100,bestCombo),score:Math.min(100,bestCombo),touchIdx:latestI,fpFlow:bestFpFlow,reactStatus};
   }
 
   // ── NEW: caches for reaction pass ──
@@ -6469,9 +6476,9 @@ return {
         const buyU=m.buy*price,sellU=m.sell*price;
         const zW=x2-x1;
 
-        // Status: lifecycle state from footprint reaction system
-        const rs=react?.reactStatus||'new';
-        const statusFull=rs==='failed'?'FAILED':rs==='held'?'HELD':rs==='respected'?'RESPECTED':rs==='tested'?'TESTED':'WAITING';
+        // Status: lifecycle state — waiting/weak show as WAIT, touched zones show T/R/H/F
+        const rs=react?.reactStatus||'waiting';
+        const statusFull=rs==='failed'?'FAILED':rs==='held'?'HELD':rs==='respected'?'RESPECTED':rs==='tested'?'TESTED':'WAIT';
         const statusComp=rs==='failed'?'F':rs==='held'?'H':rs==='respected'?'R':rs==='tested'?'T':'W';
 
         // Any strong non-mixed zone in reactLabelSet gets the compact label
@@ -6504,12 +6511,13 @@ return {
             }
           }
         }else if(showReactLbl){
-          // Compact label: "BUY 82% W" / "SELL 87% T" / "BUY 75% R" / "SELL 78% H" / "BUY 80% F"
-          // Score = zone strength (cl.score), not reaction bounce score
-          const zoneScore=Math.min(95,cl.score);
+          // Compact label: "BUY 75% WAIT" / "SELL 87% T" / "BUY 72% R" / "SELL 88% H" / "BUY 72% F"
+          // WAIT/WEAK → show zone quality score (cl.score); T/R/H/F → show combo score
+          const isWait=rs==='waiting'||rs==='weak';
+          const displayScore=isWait?Math.min(95,cl.score):Math.min(100,react?.comboScore||20);
           const dirStr=bull?'BUY':'SELL';
           const statusSuffix=zW>120?` ${statusFull}`:` ${statusComp}`;
-          const rl=`${dirStr} ${zoneScore}%${statusSuffix}`;
+          const rl=`${dirStr} ${displayScore}%${statusSuffix}`;
           ctx.font='bold 8px monospace';
           const tw=Math.max(76,ctx.measureText(rl).width+14);
           const tx=x1+8,ty=Math.max(y1+10,Math.min(y2-10,midY));
@@ -6518,8 +6526,8 @@ return {
           ctx.lineWidth=.8;
           if(ctx.roundRect){ctx.beginPath();ctx.roundRect(tx-4,ty-9,tw,18,4);ctx.fill();ctx.stroke();}
           else{ctx.fillRect(tx-4,ty-9,tw,18);ctx.strokeRect(tx-4,ty-9,tw,18);}
-          // W/T = dimmer (waiting/tested, not yet confirmed); R/H = full; F = orange
-          const lAlpha=rs==='new'||rs==='tested'?0.72:0.95;
+          // WAIT/WEAK = dim; TESTED = medium; RESPECTED/HELD = full; FAILED = orange
+          const lAlpha=isWait?0.60:rs==='tested'?0.78:0.95;
           ctx.fillStyle=rs==='failed'?'rgba(255,140,60,0.92)':(bull?`rgba(0,220,115,${lAlpha})`:`rgba(255,82,72,${lAlpha})`);
           ctx.fillText(rl,tx,ty+1);
         }else if(show&&zW>70){
