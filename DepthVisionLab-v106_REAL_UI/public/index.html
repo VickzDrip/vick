@@ -1781,6 +1781,29 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Métricas</span><select class="select tiny-select" id="fvgMetrics"><option value="1">mostrar</option><option value="0">limpo</option></select></div>
             <div class="kv"><span class="k">Min vol zona (USDT)</span><input class="num" id="fvgMinVol" type="number" min="0" step="50000" value="0"></div>
             <div class="hint">FVG filtra os níveis do candle de imbalance dentro do gap. Min vol em USDT (0 = sem filtro).</div>
+            <div style="border-top:1px solid #101b2d;margin:8px 0 4px;"></div>
+            <label class="kv" style="cursor:pointer;">
+              <span class="k" style="color:#c8d8f0;font-weight:600;">FVG Strength</span>
+              <input type="checkbox" id="fvgEnableStrength" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;">
+            </label>
+            <div id="fvgStrCfg" style="display:none">
+              <div class="kv"><span class="k">Score forte</span><input class="num" id="fvgStrongScore" type="number" min="30" max="100" step="5" value="70" style="width:52px"></div>
+              <div class="kv"><span class="k">Score institucional</span><input class="num" id="fvgInstScore" type="number" min="50" max="100" step="5" value="85" style="width:52px"></div>
+              <div class="kv"><span class="k">Razão imbalance</span><input class="num" id="fvgImbalRatio" type="number" min="1" max="10" step="0.1" value="1.8" style="width:52px"></div>
+              <label class="kv" style="cursor:pointer;"><span class="k">Mostrar score</span><input type="checkbox" id="fvgShowScore" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+              <label class="kv" style="cursor:pointer;"><span class="k">Só perto do preço</span><input type="checkbox" id="fvgNearOnly" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+              <div class="kv"><span class="k">Dist. ATR máx.</span><input class="num" id="fvgAtrDist" type="number" min="1" max="20" step="0.5" value="6" style="width:52px"></div>
+              <div class="kv"><span class="k">Máx. FVGs visíveis</span><input class="num" id="fvgMaxVisible" type="number" min="1" max="20" step="1" value="8" style="width:52px"></div>
+            </div>
+            <div style="border-top:1px solid #101b2d;margin:8px 0 4px;"></div>
+            <label class="kv" style="cursor:pointer;">
+              <span class="k" style="color:#c8d8f0;font-weight:600;">FVG Reaction</span>
+              <input type="checkbox" id="fvgEnableReact" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;">
+            </label>
+            <div id="fvgReactCfg" style="display:none">
+              <div class="kv"><span class="k">Expirar (barras)</span><input class="num" id="fvgReactExpire" type="number" min="10" max="500" step="10" value="120" style="width:52px"></div>
+              <div class="hint" style="margin-top:4px;">Normal · Relevante · STRONG=borda brilhante · INST=glow · BUY/SELL FVG=reação ativa</div>
+            </div>
           </div>
         </div>
 
@@ -5999,82 +6022,59 @@ return {
 .ind-card[data-card="fvgVolume"] .name{color:#dfe9ff}.fvg-badge{font-weight:800}
 </style>
 <script>
-/* V50 — FVG Buy/Sell coerente: usa volume total do candle gerador e só usa aggTrades como ratio; evita zeros em candle grande. */
+/* V51 — FVG Strength + Reaction Intelligence Layer */
 (function DepthVisionLab_V44_FVG(){
   function E(id){return document.getElementById(id)}
   function ready(fn){if(document.readyState!=='loading')fn();else document.addEventListener('DOMContentLoaded',fn)}
   function safeNum(v,d){v=+v;return Number.isFinite(v)?v:d}
-  function pFmt(v){try{return priceFmt(v)}catch(_){return Number(v).toFixed(2)}}
   function nFmt(v){
-    v = Number(v) || 0;
-    const a = Math.abs(v);
-    const sign = v < 0 ? '-' : '';
-    if(a >= 1e9) return sign + Math.round(a / 1e9) + 'B';
-    if(a >= 1e6) return sign + Math.round(a / 1e6) + 'M';
-    if(a >= 1e3) return sign + Math.round(a / 1e3) + 'K';
-    return sign + Math.round(a).toString();
+    v=Number(v)||0;const a=Math.abs(v);const sign=v<0?'-':'';
+    if(a>=1e9)return sign+Math.round(a/1e9)+'B';
+    if(a>=1e6)return sign+Math.round(a/1e6)+'M';
+    if(a>=1e3)return sign+Math.round(a/1e3)+'K';
+    return sign+Math.round(a).toString();
   }
 
+  // ── Unchanged: zone geometry helpers ──
   function avgRange(cs){
-    const n=Math.min(30,cs.length); if(!n)return 0;
-    let s=0; for(let i=cs.length-n;i<cs.length;i++)s+=Math.max(0,cs[i].h-cs[i].l);
+    const n=Math.min(30,cs.length);if(!n)return 0;
+    let s=0;for(let i=cs.length-n;i<cs.length;i++)s+=Math.max(0,cs[i].h-cs[i].l);
     return s/n;
   }
   function atrAt(candles,idx,n){
     let start=Math.max(1,idx-n+1),sum=0,count=0;
     for(let i=start;i<=idx;i++){
-      const c=candles[i],p=candles[i-1]; if(!c||!p)continue;
-      sum+=Math.max(c.h-c.l,Math.abs(c.h-p.c),Math.abs(c.l-p.c)); count++;
+      const c=candles[i],p=candles[i-1];if(!c||!p)continue;
+      sum+=Math.max(c.h-c.l,Math.abs(c.h-p.c),Math.abs(c.l-p.c));count++;
     }
     return count?sum/count:avgRange(candles.slice(Math.max(0,idx-30),idx+1));
   }
   function pressureBuyShare(c){
     const range=Math.max(c.h-c.l,1e-9);
-    const body=(c.c-c.o)/range;
-    const closePos=(c.c-c.l)/range;
-    let share=.5+body*.34+(closePos-.5)*.22;
-    return Math.max(.12,Math.min(.88,share));
+    const body=(c.c-c.o)/range;const closePos=(c.c-c.l)/range;
+    return Math.max(.12,Math.min(.88,.5+body*.34+(closePos-.5)*.22));
   }
+
+  // ── Unchanged: footprint metrics ──
   function creationCandleFootprint(z){
-    // Use the MIDDLE candle (imbalance candle) — it's the one that traded through the gap
-    const midIdx=z.origin-1;
-    const c=S.candles[midIdx];
+    const midIdx=z.origin-1;const c=S.candles[midIdx];
     if(!c)return{buy:0,sell:0,total:0,delta:0,real:false,big:0};
-
-    const lo=z.low, hi=z.high;
-    let buy=0,sell=0,real=false;
-
-    // Sum only fp levels that fall inside the FVG price range
+    const lo=z.low,hi=z.high;let buy=0,sell=0,real=false;
     if(c.fp&&c.fp.size>0){
-      c.fp.forEach((r,price)=>{
-        const p=+price;
-        if(!isFinite(p)||p<lo||p>hi)return;
-        buy+=+r.buy||0;
-        sell+=+r.sell||0;
-      });
+      c.fp.forEach((r,price)=>{const p=+price;if(!isFinite(p)||p<lo||p>hi)return;buy+=+r.buy||0;sell+=+r.sell||0;});
       if(buy+sell>0)real=true;
     }
-
-    // Fallback: no fp data in zone — use candle's total scaled by zone/candle ratio
     if(!real){
       const totalBuy=+c.buy||0,totalSell=+c.sell||0;
       const candleRange=Math.max(1e-9,c.h-c.l);
       const zoneRange=Math.max(0,Math.min(hi,c.h)-Math.max(lo,c.l));
       const ratio=Math.min(1,zoneRange/candleRange);
-      if(totalBuy+totalSell>0){
-        buy=(totalBuy)*ratio; sell=(totalSell)*ratio; real=true;
-      }else{
-        const share=pressureBuyShare(c);
-        const vol=Math.max(0,+c.v||0)*ratio;
-        buy=vol*share; sell=vol*(1-share);
-      }
+      if(totalBuy+totalSell>0){buy=totalBuy*ratio;sell=totalSell*ratio;real=true;}
+      else{const share=pressureBuyShare(c);const vol=Math.max(0,+c.v||0)*ratio;buy=vol*share;sell=vol*(1-share);}
     }
-
-    // Count big trades in this candle's time window AND within the zone prices
     const stats=robustTradeStats();
     const threshold=Math.max(stats.median*4,stats.p95||0);
-    const start=c.t,end=c.t+tfMs(S.tf);
-    let big=0;
+    const start=c.t,end=c.t+tfMs(S.tf);let big=0;
     for(const t of S.trades){
       if(t.time<start||t.time>=end)continue;
       if(t.p<lo||t.p>hi)continue;
@@ -6082,13 +6082,13 @@ return {
     }
     return{buy,sell,total:buy+sell,delta:buy-sell,real,big};
   }
-  function zoneMetrics(z){
-    return creationCandleFootprint(z);
-  }
+  function zoneMetrics(z){return creationCandleFootprint(z);}
+
+  // ── Unchanged: zone detection + base score ──
   function fvgZones(){
     if(!S.candles||S.candles.length<5)return[];
     const settingsKey=[S.candles.length,S.candles.at(-1)?.t,E('fvgBars')?.value,E('fvgMinAtr')?.value,E('fvgMinPct')?.value,E('fvgMitMode')?.value,E('fvgHideMit')?.value,E('fvgMinVol')?.value].join('|');
-    if(S.__fvgCacheKey===settingsKey && Array.isArray(S.__fvgCache))return S.__fvgCache;
+    if(S.__fvgCacheKey===settingsKey&&Array.isArray(S.__fvgCache))return S.__fvgCache;
     const bars=Math.max(20,Math.min(520,safeNum(E('fvgBars')?.value,180)));
     const minAtr=safeNum(E('fvgMinAtr')?.value,.08);
     const minPct=safeNum(E('fvgMinPct')?.value,.01)/100;
@@ -6097,29 +6097,29 @@ return {
     const start=Math.max(2,S.candles.length-bars);
     const zones=[];
     for(let i=start;i<S.candles.length;i++){
-      const a=S.candles[i-2],b=S.candles[i]; if(!a||!b)continue;
+      const a=S.candles[i-2],b=S.candles[i];if(!a||!b)continue;
       let bull=false,bear=false,lo=0,hi=0;
       if(b.l>a.h){bull=true;lo=a.h;hi=b.l}
       if(b.h<a.l){bear=true;lo=b.h;hi=a.l}
       if(!bull&&!bear)continue;
       const gap=hi-lo,atr=atrAt(S.candles,i,14),pct=gap/Math.max(1,b.c);
-      if(gap < atr*minAtr || pct < minPct)continue;
+      if(gap<atr*minAtr||pct<minPct)continue;
       const z={type:bull?'bull':'bear',origin:i,from:i-2,low:lo,high:hi,endIdx:S.candles.length-1,status:'ACTIVE',tested:false,mitIdx:null,gap,atr};
       for(let j=i+1;j<S.candles.length;j++){
         const c=S.candles[j];
-        const touch=bull ? (c.l<hi) : (c.h>lo);
+        const touch=bull?(c.l<hi):(c.h>lo);
         if(touch){z.tested=true;z.status='TESTED'}
-        const full = bull ? (mit==='close'?c.c<=lo:c.l<=lo) : (mit==='close'?c.c>=hi:c.h>=hi);
+        const full=bull?(mit==='close'?c.c<=lo:c.l<=lo):(mit==='close'?c.c>=hi:c.h>=hi);
         if(full){z.status='MITIGATED';z.mitIdx=j;z.endIdx=j;break}
       }
       if(hide&&z.status==='MITIGATED')continue;
-      const m=zoneMetrics(z); z.metrics=m;
+      const m=zoneMetrics(z);z.metrics=m;
       const minVol=safeNum(E('fvgMinVol')?.value,0);
       const midC=S.candles[z.origin-1];
       const zoneUsdt=(m.buy+m.sell)*(midC?+midC.c||1:1);
       if(minVol>0&&zoneUsdt<minVol)continue;
       const dirDelta=z.type==='bull'?m.delta:-m.delta;
-      const deltaScore=Math.max(0,Math.min(35, (dirDelta/Math.max(m.total,1))*35 + 17));
+      const deltaScore=Math.max(0,Math.min(35,(dirDelta/Math.max(m.total,1))*35+17));
       const gapScore=Math.max(0,Math.min(25,(gap/Math.max(atr,1e-9))*18));
       const volScore=Math.max(0,Math.min(25,Math.log10(1+m.total)*8));
       const statusScore=z.status==='ACTIVE'?15:z.status==='TESTED'?8:0;
@@ -6130,85 +6130,280 @@ return {
     S.__fvgCache=zones.slice(-80);
     return S.__fvgCache;
   }
+
+  // ── NEW: Strength + Reaction config readers ──
+  function getFVGStrCfg(){
+    return{
+      enabled:E('fvgEnableStrength')?.checked!==false,
+      strongScore:Math.max(30,safeNum(E('fvgStrongScore')?.value,70)),
+      instScore:Math.max(50,safeNum(E('fvgInstScore')?.value,85)),
+      imbalRatio:Math.max(1,safeNum(E('fvgImbalRatio')?.value,1.8)),
+      showScore:E('fvgShowScore')?.checked!==false,
+      nearOnly:E('fvgNearOnly')?.checked!==false,
+      atrDist:Math.max(0,safeNum(E('fvgAtrDist')?.value,6)),
+      maxVisible:Math.max(1,Math.round(safeNum(E('fvgMaxVisible')?.value,8))),
+    };
+  }
+  function getFVGReactCfg(){
+    return{
+      enabled:E('fvgEnableReact')?.checked!==false,
+      expireBars:Math.max(10,Math.round(safeNum(E('fvgReactExpire')?.value,120))),
+    };
+  }
+
+  // ── NEW: ATR from last N candles ──
+  function currentATR(n){
+    const cs=S.candles;if(cs.length<2)return 0;
+    let sum=0,count=0;const start=Math.max(1,cs.length-n);
+    for(let i=start;i<cs.length;i++){
+      const prev=cs[i-1],c=cs[i];
+      sum+=Math.max(c.h-c.l,Math.abs(c.h-prev.c),Math.abs(c.l-prev.c));count++;
+    }
+    return count?sum/count:0;
+  }
+
+  // ── NEW: trailing volume MA ──
+  function buildFVGVolMA(cs,len){
+    const ma=new Float64Array(cs.length);let sum=0;
+    for(let i=0;i<cs.length;i++){
+      sum+=cs[i].v;if(i>=len)sum-=cs[i-len].v;
+      ma[i]=sum/Math.min(i+1,len);
+    }
+    return ma;
+  }
+
+  // ── NEW: classify zone tier using base score + dynamic factors ──
+  // Returns {score, tier:'normal'|'relevant'|'strong'|'institutional', imbalRatio, dirAligned}
+  function classifyFVG(z,currentPrice,atr,cfg){
+    const m=z.metrics||{};const bull=z.type==='bull';
+    const buyV=m.buy||0,sellV=m.sell||0;
+    const dirV=bull?buyV:sellV,oppV=bull?sellV:buyV;
+    const imbalRatio=dirV/Math.max(oppV,1e-9);
+    const dirAligned=dirV>oppV;
+    let score=z.score||0;
+    // Distance penalty: each ATR away from price reduces score
+    const distAtr=atr>0?Math.abs((z.low+z.high)/2-currentPrice)/atr:0;
+    score=Math.max(0,score-Math.min(20,distAtr*2.5));
+    // Age penalty: older zones decay
+    const age=S.candles.length-1-z.from;
+    score=Math.max(0,score-Math.min(15,age/12));
+    // Imbalance bonus: directional lopsidedness is a strength signal
+    if(dirAligned&&imbalRatio>=cfg.imbalRatio)score=Math.min(100,score+8);
+    score=Math.min(95,Math.round(score));
+    let tier='normal';
+    if(score>=cfg.instScore)tier='institutional';
+    else if(score>=cfg.strongScore)tier='strong';
+    else if(score>=55)tier='relevant';
+    // Strong/institutional also require directional imbalance alignment
+    if((tier==='strong'||tier==='institutional')&&(!dirAligned||imbalRatio<cfg.imbalRatio)){
+      tier='relevant';score=Math.min(score,69);
+    }
+    return{score,tier,imbalRatio,dirAligned};
+  }
+
+  // ── NEW: per-zone reaction detection ──
+  // Returns {active, score, touchIdx}
+  function computeFVGReaction(z,cs,volMAs,expireBars){
+    const{low:lo,high:hi}=z;const mid=(lo+hi)/2;
+    const lastI=cs.length-1;const bull=z.type==='bull';
+    const scanStart=Math.max(z.origin+1,lastI-expireBars);
+    let bestScore=0,latestI=-1;
+    for(let i=scanStart;i<=lastI;i++){
+      const c=cs[i];if(c.h<lo||c.l>hi)continue;
+      const range=c.h-c.l;if(range<1e-9)continue;
+      const bodyTop=Math.max(c.o,c.c),bodyBot=Math.min(c.o,c.c);
+      const lwR=(bodyBot-c.l)/range,uwR=(c.h-bodyTop)/range;
+      const avgV=volMAs[i];const next=i<lastI?cs[i+1]:null;
+      if(bull){
+        // BUY REACTION: lower wick + close >= mid + vol present
+        if(lwR>=0.28&&c.c>=mid&&c.v>=avgV*0.85){
+          let sc=30;
+          if(c.c>hi)sc+=20;else if(c.c>mid)sc+=8;
+          if(c.v>avgV*1.2)sc+=15;else if(c.v>avgV)sc+=8;
+          if(lwR>=0.5)sc+=10;
+          if(c.l<lo&&c.c>lo)sc+=10; // wick sweep into zone + recovery
+          if(next&&next.c>next.o&&next.c>c.c)sc+=15;else if(next&&next.c>next.o)sc+=8;
+          if(sc>bestScore){bestScore=sc;latestI=i;}
+        }
+      }else{
+        // SELL REACTION: upper wick + close <= mid + vol present
+        if(uwR>=0.28&&c.c<=mid&&c.v>=avgV*0.85){
+          let sc=30;
+          if(c.c<lo)sc+=20;else if(c.c<mid)sc+=8;
+          if(c.v>avgV*1.2)sc+=15;else if(c.v>avgV)sc+=8;
+          if(uwR>=0.5)sc+=10;
+          if(c.h>hi&&c.c<hi)sc+=10;
+          if(next&&next.c<next.o&&next.c<c.c)sc+=15;else if(next&&next.c<next.o)sc+=8;
+          if(sc>bestScore){bestScore=sc;latestI=i;}
+        }
+      }
+    }
+    // Expiration: best touch older than expireBars → discard
+    if(latestI>=0&&latestI<=lastI-expireBars){bestScore=0;latestI=-1;}
+    return{active:bestScore>=58,score:Math.min(95,bestScore),touchIdx:latestI};
+  }
+
+  // ── NEW: caches for reaction pass ──
+  let _fvgVolMA=null,_fvgVolMAKey='';
+  let _fvgReactCache=null,_fvgReactKey='';
+
+  // ── Draw ──
   function drawFVGVolumeZones(ctx,W,H,V,sc,x){
     if(!S.inds.fvgVolume)return;
     const ext=Math.max(0,Math.min(300,safeNum(E('fvgExtend')?.value,80)));
     const show=(E('fvgMetrics')?.value||'1')==='1';
-    const zones=fvgZones();
+    const allZones=fvgZones();
     const rp=RP(),right=W-rp;
+
+    const strCfg=getFVGStrCfg();
+    const reactCfg=getFVGReactCfg();
+    const cs=S.candles;
+    const currentPrice=cs.length?cs[cs.length-1].c:0;
+    const atr=currentATR(14);
+
+    // VolMA cache (invalidate on new candle)
+    if(reactCfg.enabled){
+      const vmk=`${cs.length}|${cs[cs.length-1]?.t||0}`;
+      if(vmk!==_fvgVolMAKey){_fvgVolMA=buildFVGVolMA(cs,20);_fvgVolMAKey=vmk;}
+    }
+
+    // Reaction cache (invalidate when zones or expiry setting changes)
+    const rk=`${S.__fvgCacheKey||cs.length}|${reactCfg.expireBars}`;
+    if(rk!==_fvgReactKey){_fvgReactCache=null;_fvgReactKey=rk;}
+    if(reactCfg.enabled&&_fvgVolMA&&!_fvgReactCache){
+      _fvgReactCache=allZones.map(z=>computeFVGReaction(z,cs,_fvgVolMA,reactCfg.expireBars));
+    }
+
+    // Classify every zone, then apply ATR distance + max-visible filters
+    const maxDist=(strCfg.enabled&&strCfg.nearOnly&&strCfg.atrDist>0)?atr*strCfg.atrDist:Infinity;
+    const effMax=strCfg.enabled?strCfg.maxVisible:Infinity;
+    const classified=allZones.map((z,zi)=>{
+      const mid=(z.low+z.high)/2;
+      const dist=Math.abs(mid-currentPrice);
+      const cl=strCfg.enabled?classifyFVG(z,currentPrice,atr,strCfg):{score:z.score||0,tier:'normal',imbalRatio:1,dirAligned:true};
+      const react=_fvgReactCache?_fvgReactCache[zi]:null;
+      return{z,zi,mid,dist,cl,react};
+    });
+    let visible=classified.filter(item=>item.dist<=maxDist);
+    if(visible.length>effMax){
+      visible.sort((a,b)=>{
+        const aN=a.dist<=atr?1:0,bN=b.dist<=atr?1:0;
+        if(aN!==bN)return bN-aN;
+        return b.cl.score-a.cl.score;
+      });
+      visible=visible.slice(0,effMax);
+    }
+
+    // Reaction label eligibility: only nearest bull + nearest bear get a label
+    const reactLabelSet=new Set();
+    if(reactCfg.enabled){
+      const ar=visible.filter(i=>i.react?.active).sort((a,b)=>a.dist-b.dist);
+      const nb=ar.find(a=>a.z.type==='bull'),nd=ar.find(a=>a.z.type==='bear');
+      if(nb)reactLabelSet.add(nb.zi);
+      if(nd)reactLabelSet.add(nd.zi);
+    }
+
     ctx.save();
-    zones.forEach(z=>{
+
+    visible.forEach(({z,zi,cl,react})=>{
       const x1=x(z.from)-Math.max(2,(CW(W)/Math.max(V.span,1))*0.45);
-      const naturalEnd=(z.mitIdx!=null?z.mitIdx:S.candles.length-1+ext);
-      const x2=Math.min(right, x(naturalEnd)+Math.max(4,(CW(W)/Math.max(V.span,1))*0.45));
+      const naturalEnd=z.mitIdx!=null?z.mitIdx:S.candles.length-1+ext;
+      const x2=Math.min(right,x(naturalEnd)+Math.max(4,(CW(W)/Math.max(V.span,1))*0.45));
       if(x2<PL||x1>right)return;
       const yyHigh=sc.y(z.high),yyLow=sc.y(z.low);
       if(!Number.isFinite(yyHigh)||!Number.isFinite(yyLow))return;
-      const y1=Math.min(yyHigh,yyLow), y2=Math.max(yyHigh,yyLow), h=Math.max(3,y2-y1);
+      const y1=Math.min(yyHigh,yyLow),y2=Math.max(yyHigh,yyLow),h=Math.max(3,y2-y1);
       if(y2<PT-4||y1>H-PB+4)return;
+
       const bull=z.type==='bull';
       const base=bull?'0,212,255':'255,124,58';
       const border=bull?'#00d4ff':'#ff7c3a';
       const active=z.status!=='MITIGATED';
-      const opacity=active?0.095:0.035;
+      const tier=strCfg.enabled?cl.tier:'normal';
+
+      // Fill — slightly richer for strong/institutional
+      const opMap={normal:.090,relevant:.095,strong:.115,institutional:.135};
+      const opacity=active?(opMap[tier]||.090):.035;
       const grad=ctx.createLinearGradient(x1,0,x2,0);
       grad.addColorStop(0,`rgba(${base},${opacity*.35})`);
       grad.addColorStop(.72,`rgba(${base},${opacity})`);
       grad.addColorStop(1,`rgba(${base},${opacity*.28})`);
-      ctx.fillStyle=grad;
-      ctx.fillRect(x1,y1,x2-x1,h);
+      ctx.fillStyle=grad;ctx.fillRect(x1,y1,x2-x1,h);
+
+      // Border — institutional gets subtle glow
+      const bAlpha=active?(tier==='institutional'?1.0:tier==='strong'?0.95:0.88):0.42;
+      const bW=tier==='institutional'?1.5:tier==='strong'?1.25:1.1;
+      if(tier==='institutional'&&active){
+        ctx.shadowColor=bull?'rgba(0,212,255,0.28)':'rgba(255,124,58,0.28)';
+        ctx.shadowBlur=5;
+      }
       ctx.strokeStyle=active?border:'rgba(120,135,160,.32)';
-      ctx.globalAlpha=active?0.88:0.42;
-      ctx.lineWidth=1.1;
+      ctx.globalAlpha=bAlpha;ctx.lineWidth=bW;
       ctx.strokeRect(x1+.5,y1+.5,x2-x1-1,h);
-      ctx.globalAlpha=1;
-      // midline / equilibrium
+      ctx.shadowBlur=0;ctx.shadowColor='transparent';ctx.globalAlpha=1;
+
+      // Midline / equilibrium
       ctx.strokeStyle=bull?'rgba(0,212,255,.28)':'rgba(255,124,58,.28)';
-      ctx.setLineDash([5,4]);
-      ctx.lineWidth=.75;
-      const mid=(y1+y2)/2;
-      ctx.beginPath();ctx.moveTo(x1,mid);ctx.lineTo(x2,mid);ctx.stroke();ctx.setLineDash([]);
-      if(show && h>14 && x2-x1>70){
+      ctx.setLineDash([5,4]);ctx.lineWidth=.75;
+      const midY=(y1+y2)/2;
+      ctx.beginPath();ctx.moveTo(x1,midY);ctx.lineTo(x2,midY);ctx.stroke();ctx.setLineDash([]);
+
+      // ── Labels ──
+      if(h>14&&x2-x1>60){
+        ctx.textAlign='left';ctx.textBaseline='middle';
         const m=z.metrics||{buy:0,sell:0,total:0,real:false};
-        const cOrigin=S.candles[z.origin];
-        const price=cOrigin?+cOrigin.c||1:1;
-        const buyU=m.buy*price, sellU=m.sell*price;
-        const label=bull
-          ? ('B:'+nFmt(buyU)+' | S:'+nFmt(sellU))
-          : ('S:'+nFmt(sellU)+' | B:'+nFmt(buyU));
-        ctx.font='10px monospace';
-        ctx.textAlign='left';
-        ctx.textBaseline='middle';
-        const tw=Math.max(92, ctx.measureText(label).width+14);
-        const tx=Math.max(x1+8, Math.min(x2-tw-8, x1+(x2-x1-tw)/2));
-        const ty=Math.max(y1+11, Math.min(y2-11, (y1+y2)/2));
-        ctx.fillStyle='rgba(6,10,20,.72)';
-        ctx.strokeStyle=active?(bull?'rgba(0,212,255,.50)':'rgba(255,124,58,.50)'):'rgba(120,135,160,.28)';
-        ctx.lineWidth=.8;
-        if(ctx.roundRect){ctx.beginPath();ctx.roundRect(tx-6,ty-10,tw,20,5);ctx.fill();ctx.stroke();}
-        else{ctx.fillRect(tx-6,ty-10,tw,20);ctx.strokeRect(tx-6,ty-10,tw,20);}
-        ctx.fillStyle=active?'rgba(225,238,255,.95)':'rgba(145,158,180,.68)';
-        ctx.fillText(label,tx,ty+1);
+        const cOrigin=S.candles[z.origin];const price=cOrigin?+cOrigin.c||1:1;
+        const buyU=m.buy*price,sellU=m.sell*price;
+        const showReactLbl=reactCfg.enabled&&react?.active&&reactLabelSet.has(zi);
+
+        if(showReactLbl){
+          // Reaction label: "BUY FVG 82%" / "SELL FVG 78%" — compact, colored, left-anchored
+          const rs=Math.min(95,react.score);
+          const rl=bull?`BUY FVG ${rs}%`:`SELL FVG ${rs}%`;
+          ctx.font='bold 8px monospace';
+          const tw=Math.max(76,ctx.measureText(rl).width+14);
+          const tx=x1+8,ty=Math.max(y1+10,Math.min(y2-10,midY));
+          ctx.fillStyle='rgba(6,10,20,.78)';
+          ctx.strokeStyle=active?(bull?'rgba(0,212,255,.55)':'rgba(255,124,58,.55)'):'rgba(120,135,160,.28)';
+          ctx.lineWidth=.8;
+          if(ctx.roundRect){ctx.beginPath();ctx.roundRect(tx-4,ty-9,tw,18,4);ctx.fill();ctx.stroke();}
+          else{ctx.fillRect(tx-4,ty-9,tw,18);ctx.strokeRect(tx-4,ty-9,tw,18);}
+          ctx.fillStyle=bull?'rgba(0,220,115,.95)':'rgba(255,82,72,.95)';
+          ctx.fillText(rl,tx,ty+1);
+        }else if(show&&x2-x1>70){
+          // Normal label: "B:7M | S:913K | 82%" — score appended if zone is wide enough
+          const scoreStr=(strCfg.enabled&&strCfg.showScore&&x2-x1>130)?` | ${cl.score}%`:'';
+          const lbl=bull?('B:'+nFmt(buyU)+' | S:'+nFmt(sellU)+scoreStr):('S:'+nFmt(sellU)+' | B:'+nFmt(buyU)+scoreStr);
+          ctx.font='10px monospace';
+          const tw=Math.max(92,ctx.measureText(lbl).width+14);
+          const tx=Math.max(x1+8,Math.min(x2-tw-8,x1+(x2-x1-tw)/2));
+          const ty=Math.max(y1+11,Math.min(y2-11,midY));
+          ctx.fillStyle='rgba(6,10,20,.72)';
+          ctx.strokeStyle=active?(bull?'rgba(0,212,255,.50)':'rgba(255,124,58,.50)'):'rgba(120,135,160,.28)';
+          ctx.lineWidth=.8;
+          if(ctx.roundRect){ctx.beginPath();ctx.roundRect(tx-6,ty-10,tw,20,5);ctx.fill();ctx.stroke();}
+          else{ctx.fillRect(tx-6,ty-10,tw,20);ctx.strokeRect(tx-6,ty-10,tw,20);}
+          ctx.fillStyle=active?'rgba(225,238,255,.95)':'rgba(145,158,180,.68)';
+          ctx.fillText(lbl,tx,ty+1);
+        }
       }
     });
+
     ctx.restore();
   }
 
-  window.__drawFVGVolumeZones = drawFVGVolumeZones;
+  window.__drawFVGVolumeZones=drawFVGVolumeZones;
 
   ready(function(){
     if(typeof S==='undefined')return;
-    S.inds.heatmap=false;
-    delete S.inds.liqEngine;
-    S.inds.fvgVolume=true;
-    try{syncIndControls&&syncIndControls()}catch(_){ }
-    // override aggTrades reload to cover FVG lookback too.
+    S.inds.heatmap=false;delete S.inds.liqEngine;S.inds.fvgVolume=true;
+    try{syncIndControls&&syncIndControls()}catch(_){}
+
     if(typeof reloadAggTradesForBigBars==='function'){
-      window.__oldReloadAggTradesForBigBars = reloadAggTradesForBigBars;
-      reloadAggTradesForBigBars = async function(redraw=true){
+      window.__oldReloadAggTradesForBigBars=reloadAggTradesForBigBars;
+      reloadAggTradesForBigBars=async function(redraw=true){
         if(!S.candles.length||S.aggLoading)return;S.aggLoading=true;
         try{
-          // Targeted reset: only zero bars we're about to reload — preserves historical footprint
           const bars=Math.max(
             Math.max(1,Math.min(200,safeNum(E('bigBars')?.value,30))),
             Math.max(20,Math.min(520,safeNum(E('fvgBars')?.value,180)))
@@ -6218,7 +6413,6 @@ return {
           for(let i=resetFrom;i<S.candles.length;i++){const c=S.candles[i];c.delta=0;c.buy=0;c.sell=0;c.fp=new Map();}
           let start=S.candles[resetFrom].t;
           const end=Date.now();let loops=0;const seen=new Set();
-          // Use local server cache first (covers deep history without rate limits)
           try{
             const arr=await fetch(`${LOCAL_API}/api/trades?start=${start}&end=${end}`).then(r=>r.json());
             if(Array.isArray(arr)&&arr.length){
@@ -6232,26 +6426,48 @@ return {
             const arr=await fetch(url).then(r=>r.json());
             if(!Array.isArray(arr)||!arr.length)break;
             for(const t of arr){const id=t.a??`${t.T}-${t.p}-${t.q}`;if(seen.has(id))continue;seen.add(id);addAggTrade(t,false);}
-            await new Promise(r=>setTimeout(r,0)); // yield between batches so browser can render
+            await new Promise(r=>setTimeout(r,0));
             const lastT=+arr[arr.length-1].T;if(lastT<=start)break;start=lastT+1;loops++;
           }
           if(redraw){setStatus(true,'AGGTRADES/FVG ATUALIZADOS · LIVE');drawSoon();}
-          // Restore historical footprint that was targeted-reset above
           if(typeof loadFootprintFromServer==='function')loadFootprintFromServer(S.loadSeq,S.sym,S.tf).catch(()=>{});
         }catch(e){setStatus(false,'FALHA AGGTRADES/FVG')}
         finally{S.aggLoading=false}
       };
       reloadAggTradesForBigBars(true);
     }
-    const oldDraw=draw;
-    draw=function(){
-      oldDraw();
-    };
+
+    const oldDraw=draw;draw=function(){oldDraw();};
+
+    // Existing zone inputs
     ['fvgBars','fvgMinAtr','fvgMinPct','fvgExtend','fvgMitMode','fvgHideMit','fvgMetrics','fvgMinVol'].forEach(id=>{
-      const node=E(id); if(!node)return;
-      node.addEventListener('change',()=>{ if(id==='fvgBars')reloadAggTradesForBigBars(true); else{S.__fvgCacheKey='';drawSoon();} });
+      const node=E(id);if(!node)return;
+      node.addEventListener('change',()=>{
+        _fvgReactKey=''; // zone list changed → invalidate reaction cache
+        if(id==='fvgBars')reloadAggTradesForBigBars(true);else{S.__fvgCacheKey='';drawSoon();}
+      });
       if(id==='fvgMinVol')node.addEventListener('input',()=>{S.__fvgCacheKey='';drawSoon();});
     });
+
+    // New: strength + reaction panel sync
+    function syncFVGPanels(){
+      const strOn=E('fvgEnableStrength')?.checked;
+      const sc=E('fvgStrCfg');if(sc)sc.style.display=strOn?'':'none';
+      const reactOn=E('fvgEnableReact')?.checked;
+      const rc=E('fvgReactCfg');if(rc)rc.style.display=reactOn?'':'none';
+      _fvgReactKey='';if(typeof drawSoon==='function')drawSoon();
+    }
+    ['fvgEnableStrength','fvgEnableReact','fvgShowScore','fvgNearOnly'].forEach(id=>{
+      const node=E(id);if(!node)return;
+      node.addEventListener('change',syncFVGPanels);
+    });
+    ['fvgStrongScore','fvgInstScore','fvgImbalRatio','fvgAtrDist','fvgMaxVisible','fvgReactExpire'].forEach(id=>{
+      const node=E(id);if(!node)return;
+      node.addEventListener('change',syncFVGPanels);
+      node.addEventListener('input',()=>{_fvgReactKey='';if(typeof drawSoon==='function')drawSoon();});
+    });
+    setTimeout(syncFVGPanels,0);
+
     draw();
   });
 })();
