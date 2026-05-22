@@ -6172,33 +6172,33 @@ return {
     return ma;
   }
 
-  // ── NEW: classify zone tier using base score + dynamic factors ──
-  // Returns {score, tier:'normal'|'relevant'|'strong'|'institutional', imbalRatio, dirAligned}
+  // ── Classify zone tier + detect MIXED (direction vs internal volume disagree) ──
+  // Returns {score, tier:'normal'|'relevant'|'strong'|'institutional', imbalRatio, dirAligned, mixed}
   function classifyFVG(z,currentPrice,atr,cfg){
     const m=z.metrics||{};const bull=z.type==='bull';
     const buyV=m.buy||0,sellV=m.sell||0;
     const dirV=bull?buyV:sellV,oppV=bull?sellV:buyV;
     const imbalRatio=dirV/Math.max(oppV,1e-9);
-    const dirAligned=dirV>oppV;
+    const dirAligned=dirV>oppV; // volume agrees with FVG direction
+    const mixed=!dirAligned;   // bearish FVG with more buy vol, or bull FVG with more sell vol
     let score=z.score||0;
-    // Distance penalty: each ATR away from price reduces score
     const distAtr=atr>0?Math.abs((z.low+z.high)/2-currentPrice)/atr:0;
     score=Math.max(0,score-Math.min(20,distAtr*2.5));
-    // Age penalty: older zones decay
     const age=S.candles.length-1-z.from;
     score=Math.max(0,score-Math.min(15,age/12));
-    // Imbalance bonus: directional lopsidedness is a strength signal
     if(dirAligned&&imbalRatio>=cfg.imbalRatio)score=Math.min(100,score+8);
     score=Math.min(95,Math.round(score));
+    // Mixed zones never get strong/institutional tier
     let tier='normal';
-    if(score>=cfg.instScore)tier='institutional';
-    else if(score>=cfg.strongScore)tier='strong';
-    else if(score>=55)tier='relevant';
-    // Strong/institutional also require directional imbalance alignment
-    if((tier==='strong'||tier==='institutional')&&(!dirAligned||imbalRatio<cfg.imbalRatio)){
-      tier='relevant';score=Math.min(score,69);
+    if(!mixed){
+      if(score>=cfg.instScore)tier='institutional';
+      else if(score>=cfg.strongScore)tier='strong';
+      else if(score>=55)tier='relevant';
+      if((tier==='strong'||tier==='institutional')&&imbalRatio<cfg.imbalRatio){
+        tier='relevant';score=Math.min(score,69);
+      }
     }
-    return{score,tier,imbalRatio,dirAligned};
+    return{score,tier,imbalRatio,dirAligned,mixed};
   }
 
   // ── NEW: per-zone reaction detection ──
@@ -6294,10 +6294,16 @@ return {
       visible=visible.slice(0,effMax);
     }
 
-    // Reaction label eligibility: only nearest bull + nearest bear get a label
+    // Reaction label eligibility:
+    // Only aligned zones (dirAligned + imbalRatio >= threshold + score >= strongScore)
+    // get a BUY/SELL reaction label. Mixed zones never qualify.
     const reactLabelSet=new Set();
     if(reactCfg.enabled){
-      const ar=visible.filter(i=>i.react?.active).sort((a,b)=>a.dist-b.dist);
+      const ar=visible.filter(i=>
+        i.react?.active&&i.cl.dirAligned&&
+        i.cl.imbalRatio>=strCfg.imbalRatio&&
+        i.cl.score>=strCfg.strongScore
+      ).sort((a,b)=>a.dist-b.dist);
       const nb=ar.find(a=>a.z.type==='bull'),nd=ar.find(a=>a.z.type==='bear');
       if(nb)reactLabelSet.add(nb.zi);
       if(nd)reactLabelSet.add(nd.zi);
@@ -6320,30 +6326,33 @@ return {
       const border=bull?'#00d4ff':'#ff7c3a';
       const active=z.status!=='MITIGATED';
       const tier=strCfg.enabled?cl.tier:'normal';
+      const isMixed=strCfg.enabled&&cl.mixed;
 
-      // Fill — slightly richer for strong/institutional
-      const opMap={normal:.090,relevant:.095,strong:.115,institutional:.135};
-      const opacity=active?(opMap[tier]||.090):.035;
+      // Fill opacity by tier (score-driven), mixed gets further reduced
+      // normal(<55):0.065  relevant(55-70):0.090  strong(70-85):0.115  inst(>85):0.135
+      const opMap={normal:.065,relevant:.090,strong:.115,institutional:.135};
+      const baseOp=active?(opMap[tier]||.065):.030;
+      const opacity=isMixed?baseOp*0.60:baseOp; // mixed zones are visually quiet
       const grad=ctx.createLinearGradient(x1,0,x2,0);
       grad.addColorStop(0,`rgba(${base},${opacity*.35})`);
       grad.addColorStop(.72,`rgba(${base},${opacity})`);
       grad.addColorStop(1,`rgba(${base},${opacity*.28})`);
       ctx.fillStyle=grad;ctx.fillRect(x1,y1,x2-x1,h);
 
-      // Border — institutional gets subtle glow
-      const bAlpha=active?(tier==='institutional'?1.0:tier==='strong'?0.95:0.88):0.42;
-      const bW=tier==='institutional'?1.5:tier==='strong'?1.25:1.1;
-      if(tier==='institutional'&&active){
+      // Border — mixed: thin+dim, strong: bright, institutional: glow
+      const bAlpha=isMixed?(active?0.40:0.18):active?(tier==='institutional'?1.0:tier==='strong'?0.95:0.88):0.42;
+      const bW=isMixed?0.8:tier==='institutional'?1.5:tier==='strong'?1.25:1.1;
+      if(tier==='institutional'&&active&&!isMixed){
         ctx.shadowColor=bull?'rgba(0,212,255,0.28)':'rgba(255,124,58,0.28)';
         ctx.shadowBlur=5;
       }
-      ctx.strokeStyle=active?border:'rgba(120,135,160,.32)';
+      ctx.strokeStyle=active?(isMixed?`rgba(${base},0.5)`:border):'rgba(120,135,160,.32)';
       ctx.globalAlpha=bAlpha;ctx.lineWidth=bW;
       ctx.strokeRect(x1+.5,y1+.5,x2-x1-1,h);
       ctx.shadowBlur=0;ctx.shadowColor='transparent';ctx.globalAlpha=1;
 
-      // Midline / equilibrium
-      ctx.strokeStyle=bull?'rgba(0,212,255,.28)':'rgba(255,124,58,.28)';
+      // Midline
+      ctx.strokeStyle=`rgba(${base},${isMixed?.16:.28})`;
       ctx.setLineDash([5,4]);ctx.lineWidth=.75;
       const midY=(y1+y2)/2;
       ctx.beginPath();ctx.moveTo(x1,midY);ctx.lineTo(x2,midY);ctx.stroke();ctx.setLineDash([]);
@@ -6354,12 +6363,46 @@ return {
         const m=z.metrics||{buy:0,sell:0,total:0,real:false};
         const cOrigin=S.candles[z.origin];const price=cOrigin?+cOrigin.c||1:1;
         const buyU=m.buy*price,sellU=m.sell*price;
+        const zW=x2-x1;
+
+        // Status label: RESPECTED when tested + active reaction, else NEW/TESTED/MITIGATED
+        const statusFull=z.status==='MITIGATED'?'MITIGATED':z.status==='ACTIVE'?'NEW':react?.active?'RESPECTED':'TESTED';
+        const statusComp=z.status==='MITIGATED'?'M':z.status==='ACTIVE'?'N':react?.active?'R':'T';
+
         const showReactLbl=reactCfg.enabled&&react?.active&&reactLabelSet.has(zi);
 
-        if(showReactLbl){
-          // Reaction label: "BUY FVG 82%" / "SELL FVG 78%" — compact, colored, left-anchored
+        if(isMixed){
+          // Mixed zone: "MIXED 42%" + optional volume line showing the disagreement
+          const sc=Math.min(95,cl.score);
+          const line1=`MIXED ${sc}%`;
+          // Volume line shows opposing side first to highlight the disagreement
+          const volLine=bull?`S:${nFmt(sellU)} | B:${nFmt(buyU)}`:`B:${nFmt(buyU)} | S:${nFmt(sellU)}`;
+          ctx.font='bold 8px monospace';
+          const tw=Math.max(70,Math.max(ctx.measureText(line1).width,ctx.measureText(volLine).width)+14);
+          if(zW>tw+16&&active){
+            const tx=x1+8;
+            const showVol=show&&h>30;
+            const boxH=showVol?34:18;
+            const ty=Math.max(y1+boxH/2,Math.min(y2-boxH/2,midY));
+            ctx.fillStyle='rgba(6,10,20,.60)';
+            ctx.strokeStyle=`rgba(${base},0.28)`;
+            ctx.lineWidth=.7;
+            if(ctx.roundRect){ctx.beginPath();ctx.roundRect(tx-4,ty-boxH/2,tw,boxH,4);ctx.fill();ctx.stroke();}
+            else{ctx.fillRect(tx-4,ty-boxH/2,tw,boxH);}
+            ctx.fillStyle=`rgba(${base},0.52)`;
+            ctx.fillText(line1,tx,showVol?ty-7:ty+1);
+            if(showVol){
+              ctx.font='7px monospace';
+              ctx.fillStyle=`rgba(${base},0.38)`;
+              ctx.fillText(volLine,tx,ty+8);
+            }
+          }
+        }else if(showReactLbl){
+          // Reaction label: "BUY 82% R" / "SELL 78% T"
           const rs=Math.min(95,react.score);
-          const rl=bull?`BUY FVG ${rs}%`:`SELL FVG ${rs}%`;
+          const dirStr=bull?'BUY':'SELL';
+          const statusSuffix=zW>120?` ${statusFull}`:` ${statusComp}`;
+          const rl=`${dirStr} ${rs}%${statusSuffix}`;
           ctx.font='bold 8px monospace';
           const tw=Math.max(76,ctx.measureText(rl).width+14);
           const tx=x1+8,ty=Math.max(y1+10,Math.min(y2-10,midY));
@@ -6370,10 +6413,11 @@ return {
           else{ctx.fillRect(tx-4,ty-9,tw,18);ctx.strokeRect(tx-4,ty-9,tw,18);}
           ctx.fillStyle=bull?'rgba(0,220,115,.95)':'rgba(255,82,72,.95)';
           ctx.fillText(rl,tx,ty+1);
-        }else if(show&&x2-x1>70){
-          // Normal label: "B:7M | S:913K | 82%" — score appended if zone is wide enough
-          const scoreStr=(strCfg.enabled&&strCfg.showScore&&x2-x1>130)?` | ${cl.score}%`:'';
-          const lbl=bull?('B:'+nFmt(buyU)+' | S:'+nFmt(sellU)+scoreStr):('S:'+nFmt(sellU)+' | B:'+nFmt(buyU)+scoreStr);
+        }else if(show&&zW>70){
+          // Normal label: "B:7M | S:913K | 82% T"
+          const scoreStr=(strCfg.enabled&&strCfg.showScore&&zW>130)?` | ${cl.score}%`:'';
+          const statusSuffix=(strCfg.enabled&&zW>160)?` ${statusComp}`:'';
+          const lbl=bull?('B:'+nFmt(buyU)+' | S:'+nFmt(sellU)+scoreStr+statusSuffix):('S:'+nFmt(sellU)+' | B:'+nFmt(buyU)+scoreStr+statusSuffix);
           ctx.font='10px monospace';
           const tw=Math.max(92,ctx.measureText(lbl).width+14);
           const tx=Math.max(x1+8,Math.min(x2-tw-8,x1+(x2-x1-tw)/2));
