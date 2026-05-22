@@ -1802,7 +1802,19 @@ html.pre-ui .switch::after{transition:none!important}
             </label>
             <div id="fvgReactCfg" style="display:none">
               <div class="kv"><span class="k">Expirar (barras)</span><input class="num" id="fvgReactExpire" type="number" min="10" max="500" step="10" value="120" style="width:52px"></div>
-              <div class="hint" style="margin-top:4px;">Normal · Relevante · STRONG=borda brilhante · INST=glow · BUY/SELL FVG=reação ativa</div>
+              <div style="border-top:1px solid #101b2d;margin:6px 0 3px;"></div>
+              <label class="kv" style="cursor:pointer;">
+                <span class="k" style="color:#9db8d4;font-weight:600;">Filtro Footprint</span>
+                <input type="checkbox" id="fvgFpFilter" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;">
+              </label>
+              <div id="fvgFpCfg">
+                <div class="kv"><span class="k">Min share buy/sell %</span><input class="num" id="fvgMinShare" type="number" min="50" max="90" step="5" value="60" style="width:52px"></div>
+                <div class="kv"><span class="k">Min flow zona (USDT)</span><input class="num" id="fvgMinFlow" type="number" min="0" step="50000" value="0" style="width:52px"></div>
+                <div class="kv"><span class="k">Max sintético %</span><input class="num" id="fvgMaxSynth" type="number" min="30" max="100" step="5" value="70" style="width:52px"></div>
+                <div class="kv"><span class="k">Lookback (velas)</span><input class="num" id="fvgFpLookback" type="number" min="1" max="30" step="1" value="8" style="width:52px"></div>
+                <label class="kv" style="cursor:pointer;"><span class="k">Exigir FP p/ RESPECTED</span><input type="checkbox" id="fvgFpRequire" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+              </div>
+              <div class="hint" style="margin-top:4px;">R=Respected · H=Held · F=Failed · Footprint confirma direção dentro da zona</div>
             </div>
           </div>
         </div>
@@ -6148,6 +6160,12 @@ return {
     return{
       enabled:E('fvgEnableReact')?.checked!==false,
       expireBars:Math.max(10,Math.round(safeNum(E('fvgReactExpire')?.value,120))),
+      fpEnabled:E('fvgFpFilter')?.checked!==false,
+      minShare:Math.max(0.50,Math.min(0.90,safeNum(E('fvgMinShare')?.value,60)/100)),
+      minFlow:Math.max(0,safeNum(E('fvgMinFlow')?.value,0)),
+      maxSynth:Math.max(0.30,Math.min(1.0,safeNum(E('fvgMaxSynth')?.value,70)/100)),
+      lookback:Math.max(1,Math.round(safeNum(E('fvgFpLookback')?.value,8))),
+      requireConfirm:E('fvgFpRequire')?.checked!==false,
     };
   }
 
@@ -6172,9 +6190,41 @@ return {
     return ma;
   }
 
+  // ── Footprint-based buy/sell flow inside zone price range ──
+  // Calls global normalizedFootprintRows() for each candle that overlaps the zone,
+  // filters rows to [z.low, z.high], and sums actual buy/sell pressure.
+  function zoneReactionFlow(z,startIdx,endIdx,cs){
+    const{low:lo,high:hi}=z;
+    let buy=0,sell=0,synthVol=0,totalVol=0;
+    for(let i=startIdx;i<=endIdx;i++){
+      const c=cs[i];if(!c)continue;
+      if(c.h<lo||c.l>hi)continue;
+      let rows;
+      try{rows=normalizedFootprintRows(c,40);}catch(_){continue;}
+      if(!rows||!rows.length)continue;
+      rows.forEach(([price,r])=>{
+        if(price<lo||price>hi)return;
+        const b=+r.buy||0,s=+r.sell||0,tv=b+s;
+        if(tv<1e-9)return;
+        buy+=b;sell+=s;
+        if(r.synthetic)synthVol+=tv;
+        totalVol+=tv;
+      });
+    }
+    const total=buy+sell;
+    if(total<1e-9)return{buy:0,sell:0,total:0,totalUsdt:0,delta:0,buyShare:0.5,sellShare:0.5,syntheticRatio:1,direction:'neutral',confidence:0};
+    const delta=buy-sell;
+    const buyShare=buy/total,sellShare=sell/total;
+    const syntheticRatio=totalVol>0?synthVol/totalVol:1;
+    const midPrice=(lo+hi)/2;
+    const totalUsdt=total*midPrice;
+    const confidence=Math.abs(buyShare-0.5)*2;
+    return{buy,sell,total,totalUsdt,delta,buyShare,sellShare,syntheticRatio,direction:delta>0?'buy':'sell',confidence};
+  }
+
   // ── Classify zone tier + detect MIXED (direction vs internal volume disagree) ──
   // Returns {score, tier:'normal'|'relevant'|'strong'|'institutional', imbalRatio, dirAligned, mixed}
-  function classifyFVG(z,currentPrice,atr,cfg){
+  function classifyFVG(z,currentPrice,atr,cfg,fpFlow){
     const m=z.metrics||{};const bull=z.type==='bull';
     const buyV=m.buy||0,sellV=m.sell||0;
     const dirV=bull?buyV:sellV,oppV=bull?sellV:buyV;
@@ -6187,6 +6237,19 @@ return {
     const age=S.candles.length-1-z.from;
     score=Math.max(0,score-Math.min(15,age/12));
     if(dirAligned&&imbalRatio>=cfg.imbalRatio)score=Math.min(100,score+8);
+    // ── Footprint flow score adjustments ──
+    if(fpFlow&&fpFlow.total>0){
+      const dirShare=bull?fpFlow.buyShare:fpFlow.sellShare;
+      const dirOk=bull?fpFlow.delta>0:fpFlow.delta<0;
+      if(dirOk){
+        score=Math.min(100,score+25);
+        if(dirShare>=0.65)score=Math.min(100,score+15);
+        if(dirShare>=0.75)score=Math.min(100,score+10);
+      }else{
+        score=Math.max(0,score-20);
+      }
+      if(fpFlow.syntheticRatio>0.70)score=Math.max(0,score-15);
+    }
     score=Math.min(95,Math.round(score));
     // Mixed zones never get strong/institutional tier
     let tier='normal';
@@ -6201,9 +6264,10 @@ return {
     return{score,tier,imbalRatio,dirAligned,mixed};
   }
 
-  // ── NEW: per-zone reaction detection ──
-  // Returns {active, score, touchIdx}
-  function computeFVGReaction(z,cs,volMAs,expireBars){
+  // ── per-zone reaction detection with footprint flow confirmation ──
+  // Returns {active, score, touchIdx, fpFlow, reactStatus}
+  // reactStatus: 'new' | 'tested' | 'respected' | 'held' | 'failed'
+  function computeFVGReaction(z,cs,volMAs,expireBars,fpCfg){
     const{low:lo,high:hi}=z;const mid=(lo+hi)/2;
     const lastI=cs.length-1;const bull=z.type==='bull';
     const scanStart=Math.max(z.origin+1,lastI-expireBars);
@@ -6215,18 +6279,16 @@ return {
       const lwR=(bodyBot-c.l)/range,uwR=(c.h-bodyTop)/range;
       const avgV=volMAs[i];const next=i<lastI?cs[i+1]:null;
       if(bull){
-        // BUY REACTION: lower wick + close >= mid + vol present
         if(lwR>=0.28&&c.c>=mid&&c.v>=avgV*0.85){
           let sc=30;
           if(c.c>hi)sc+=20;else if(c.c>mid)sc+=8;
           if(c.v>avgV*1.2)sc+=15;else if(c.v>avgV)sc+=8;
           if(lwR>=0.5)sc+=10;
-          if(c.l<lo&&c.c>lo)sc+=10; // wick sweep into zone + recovery
+          if(c.l<lo&&c.c>lo)sc+=10;
           if(next&&next.c>next.o&&next.c>c.c)sc+=15;else if(next&&next.c>next.o)sc+=8;
           if(sc>bestScore){bestScore=sc;latestI=i;}
         }
       }else{
-        // SELL REACTION: upper wick + close <= mid + vol present
         if(uwR>=0.28&&c.c<=mid&&c.v>=avgV*0.85){
           let sc=30;
           if(c.c<lo)sc+=20;else if(c.c<mid)sc+=8;
@@ -6238,9 +6300,43 @@ return {
         }
       }
     }
-    // Expiration: best touch older than expireBars → discard
     if(latestI>=0&&latestI<=lastI-expireBars){bestScore=0;latestI=-1;}
-    return{active:bestScore>=58,score:Math.min(95,bestScore),touchIdx:latestI};
+
+    // ── Footprint flow confirmation inside zone ──
+    let fpFlow=null;
+    if(fpCfg?.fpEnabled&&latestI>=0){
+      const fsStart=Math.max(z.origin+1,latestI-((fpCfg.lookback||8)-1));
+      try{fpFlow=zoneReactionFlow(z,fsStart,latestI,cs);}catch(_){}
+    }
+
+    // Gate RESPECTED: require footprint confirmation if enabled
+    let active=bestScore>=58;
+    if(active&&fpCfg?.fpEnabled&&fpCfg?.requireConfirm&&fpFlow){
+      const hasMinFlow=!fpCfg.minFlow||fpFlow.totalUsdt>=fpCfg.minFlow;
+      if(hasMinFlow&&fpFlow.total>0){
+        const dirShare=bull?fpFlow.buyShare:fpFlow.sellShare;
+        const dirOk=bull?fpFlow.delta>0:fpFlow.delta<0;
+        const shareOk=dirShare>=fpCfg.minShare;
+        const synthOk=fpFlow.syntheticRatio<=fpCfg.maxSynth;
+        active=dirOk&&shareOk&&synthOk;
+      }
+      // If total flow=0 (no footprint data at all), trust visual reaction only
+    }
+
+    // ── React status ──
+    let reactStatus='new';
+    if(z.status==='MITIGATED'){
+      reactStatus='failed';
+    }else if(active){
+      const currentP=cs[lastI]?.c||0;
+      const localAtr=atrAt(cs,lastI,14);
+      const movedAway=bull?(currentP>=hi+localAtr):(currentP<=lo-localAtr);
+      reactStatus=movedAway?'held':'respected';
+    }else if(latestI>=0||z.tested){
+      reactStatus='tested';
+    }
+
+    return{active,score:Math.min(95,bestScore),touchIdx:latestI,fpFlow,reactStatus};
   }
 
   // ── NEW: caches for reaction pass ──
@@ -6267,11 +6363,11 @@ return {
       if(vmk!==_fvgVolMAKey){_fvgVolMA=buildFVGVolMA(cs,20);_fvgVolMAKey=vmk;}
     }
 
-    // Reaction cache (invalidate when zones or expiry setting changes)
-    const rk=`${S.__fvgCacheKey||cs.length}|${reactCfg.expireBars}`;
+    // Reaction cache (invalidate when zones, expiry, or footprint filter settings change)
+    const rk=`${S.__fvgCacheKey||cs.length}|${reactCfg.expireBars}|${reactCfg.fpEnabled}|${reactCfg.minShare}|${reactCfg.maxSynth}|${reactCfg.lookback}|${reactCfg.requireConfirm}`;
     if(rk!==_fvgReactKey){_fvgReactCache=null;_fvgReactKey=rk;}
     if(reactCfg.enabled&&_fvgVolMA&&!_fvgReactCache){
-      _fvgReactCache=allZones.map(z=>computeFVGReaction(z,cs,_fvgVolMA,reactCfg.expireBars));
+      _fvgReactCache=allZones.map(z=>computeFVGReaction(z,cs,_fvgVolMA,reactCfg.expireBars,reactCfg));
     }
 
     // Classify every zone, then apply ATR distance + max-visible filters
@@ -6280,8 +6376,8 @@ return {
     const classified=allZones.map((z,zi)=>{
       const mid=(z.low+z.high)/2;
       const dist=Math.abs(mid-currentPrice);
-      const cl=strCfg.enabled?classifyFVG(z,currentPrice,atr,strCfg):{score:z.score||0,tier:'normal',imbalRatio:1,dirAligned:true};
       const react=_fvgReactCache?_fvgReactCache[zi]:null;
+      const cl=strCfg.enabled?classifyFVG(z,currentPrice,atr,strCfg,react?.fpFlow):{score:z.score||0,tier:'normal',imbalRatio:1,dirAligned:true};
       return{z,zi,mid,dist,cl,react};
     });
     let visible=classified.filter(item=>item.dist<=maxDist);
@@ -6294,9 +6390,8 @@ return {
       visible=visible.slice(0,effMax);
     }
 
-    // Reaction label eligibility:
-    // Only aligned zones (dirAligned + imbalRatio >= threshold + score >= strongScore)
-    // get a BUY/SELL reaction label. Mixed zones never qualify.
+    // Reaction label eligibility: aligned + score threshold get BUY/SELL label.
+    // Mixed zones never qualify. Failed strong zones also get a label (dimmed).
     const reactLabelSet=new Set();
     if(reactCfg.enabled){
       const ar=visible.filter(i=>
@@ -6307,6 +6402,11 @@ return {
       const nb=ar.find(a=>a.z.type==='bull'),nd=ar.find(a=>a.z.type==='bear');
       if(nb)reactLabelSet.add(nb.zi);
       if(nd)reactLabelSet.add(nd.zi);
+      // Failed zones that were strong also get a compact label
+      visible.filter(i=>
+        i.react?.reactStatus==='failed'&&
+        i.cl.score>=strCfg.strongScore
+      ).forEach(i=>reactLabelSet.add(i.zi));
     }
 
     ctx.save();
@@ -6365,11 +6465,12 @@ return {
         const buyU=m.buy*price,sellU=m.sell*price;
         const zW=x2-x1;
 
-        // Status label: RESPECTED when tested + active reaction, else NEW/TESTED/MITIGATED
-        const statusFull=z.status==='MITIGATED'?'MITIGATED':z.status==='ACTIVE'?'NEW':react?.active?'RESPECTED':'TESTED';
-        const statusComp=z.status==='MITIGATED'?'M':z.status==='ACTIVE'?'N':react?.active?'R':'T';
+        // Status: driven by react.reactStatus (new/tested/respected/held/failed)
+        const rs=react?.reactStatus||'new';
+        const statusFull=rs==='failed'?'FAILED':rs==='held'?'HELD':rs==='respected'?'RESPECTED':rs==='tested'?'TESTED':'NEW';
+        const statusComp=rs==='failed'?'F':rs==='held'?'H':rs==='respected'?'R':rs==='tested'?'T':'N';
 
-        const showReactLbl=reactCfg.enabled&&react?.active&&reactLabelSet.has(zi);
+        const showReactLbl=reactCfg.enabled&&reactLabelSet.has(zi)&&(react?.active||rs==='failed');
 
         if(isMixed){
           // Mixed zone: "MIXED 42%" + optional volume line showing the disagreement
@@ -6398,11 +6499,11 @@ return {
             }
           }
         }else if(showReactLbl){
-          // Reaction label: "BUY 82% R" / "SELL 78% T"
-          const rs=Math.min(95,react.score);
+          // Reaction label: "BUY 82% R" / "BUY 75% H" / "SELL 78% F"
+          const reactScore=Math.min(95,react?.score||0);
           const dirStr=bull?'BUY':'SELL';
           const statusSuffix=zW>120?` ${statusFull}`:` ${statusComp}`;
-          const rl=`${dirStr} ${rs}%${statusSuffix}`;
+          const rl=`${dirStr} ${reactScore}%${statusSuffix}`;
           ctx.font='bold 8px monospace';
           const tw=Math.max(76,ctx.measureText(rl).width+14);
           const tx=x1+8,ty=Math.max(y1+10,Math.min(y2-10,midY));
@@ -6411,7 +6512,7 @@ return {
           ctx.lineWidth=.8;
           if(ctx.roundRect){ctx.beginPath();ctx.roundRect(tx-4,ty-9,tw,18,4);ctx.fill();ctx.stroke();}
           else{ctx.fillRect(tx-4,ty-9,tw,18);ctx.strokeRect(tx-4,ty-9,tw,18);}
-          ctx.fillStyle=bull?'rgba(0,220,115,.95)':'rgba(255,82,72,.95)';
+          ctx.fillStyle=rs==='failed'?'rgba(255,140,60,.90)':(bull?'rgba(0,220,115,.95)':'rgba(255,82,72,.95)');
           ctx.fillText(rl,tx,ty+1);
         }else if(show&&zW>70){
           // Normal label: "B:7M | S:913K | 82% T"
@@ -6499,13 +6600,15 @@ return {
       const sc=E('fvgStrCfg');if(sc)sc.style.display=strOn?'':'none';
       const reactOn=E('fvgEnableReact')?.checked;
       const rc=E('fvgReactCfg');if(rc)rc.style.display=reactOn?'':'none';
+      const fpOn=E('fvgFpFilter')?.checked;
+      const fpc=E('fvgFpCfg');if(fpc)fpc.style.display=(reactOn&&fpOn)?'':'none';
       _fvgReactKey='';if(typeof drawSoon==='function')drawSoon();
     }
-    ['fvgEnableStrength','fvgEnableReact','fvgShowScore','fvgNearOnly'].forEach(id=>{
+    ['fvgEnableStrength','fvgEnableReact','fvgShowScore','fvgNearOnly','fvgFpFilter','fvgFpRequire'].forEach(id=>{
       const node=E(id);if(!node)return;
       node.addEventListener('change',syncFVGPanels);
     });
-    ['fvgStrongScore','fvgInstScore','fvgImbalRatio','fvgAtrDist','fvgMaxVisible','fvgReactExpire'].forEach(id=>{
+    ['fvgStrongScore','fvgInstScore','fvgImbalRatio','fvgAtrDist','fvgMaxVisible','fvgReactExpire','fvgMinShare','fvgMinFlow','fvgMaxSynth','fvgFpLookback'].forEach(id=>{
       const node=E(id);if(!node)return;
       node.addEventListener('change',syncFVGPanels);
       node.addEventListener('input',()=>{_fvgReactKey='';if(typeof drawSoon==='function')drawSoon();});
