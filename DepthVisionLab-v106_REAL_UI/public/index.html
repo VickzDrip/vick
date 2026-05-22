@@ -3859,9 +3859,9 @@ function drawBigTrades(ctx,V,sc,x,W,H){
 }
 function priceFromY(y,H,sc){const h=H-PT-PB;return sc.hi-(clamp(y,PT,H-PB)-PT)/h*(sc.hi-sc.lo)}
 function idxFromX(x,W){return S.view.start+(x-PL)/CW(W)*(S.view.end-S.view.start)-.5}
-function addPosition(type,x,y,W,H,sc){const entry=priceFromY(y,H,sc),idx=idxFromX(x,W);const risk=Math.max(entry*.002,(sc.hi-sc.lo)*.035);const stop=type==='long'?entry-risk:entry+risk;const target=type==='long'?entry+risk:entry-risk;S.positions.push({type,x1:idx,x2:idx+36,entry,stop,target});S.tool=null;syncToolBtns();draw()}
+function addPosition(type,x,y,W,H,sc){const entry=(S.cursor&&S.cursor.price)?S.cursor.price:priceFromY(y,H,sc);const idx=(S.cursor&&S.cursor.index!=null)?S.cursor.index:idxFromX(x,W);const risk=Math.max(entry*.002,(sc.hi-sc.lo)*.035);const stop=type==='long'?entry-risk:entry+risk;const target=type==='long'?entry+risk:entry-risk;S.positions.push({type,x1:idx,x2:idx+36,entry,stop,target});S.tool=null;syncToolBtns();draw()}
 function syncToolBtns(){['btnLong','btnShort'].forEach(id=>el(id)?.classList.remove('tool-active'));if(S.tool==='long')el('btnLong')?.classList.add('tool-active');if(S.tool==='short')el('btnShort')?.classList.add('tool-active')}
-function drawPositions(ctx,W,H,V,sc,x){if(!S.positions.length)return;const right=W-RP();ctx.save();S.positions.forEach((p,pi)=>{const x1=x(p.x1),x2=x(p.x2),xa=Math.min(x1,x2),xb=Math.max(x1,x2),ye=sc.y(p.entry),ys=sc.y(p.stop),yt=sc.y(p.target);const visXa=clamp(xa,PL,right),visXb=clamp(xb,PL,right),boxW=Math.max(24,visXb-visXa);const profitColor=p.type==='long'?'0,230,118':'255,61,87',lossColor=p.type==='long'?'255,61,87':'0,230,118';ctx.fillStyle=`rgba(${profitColor},.18)`;ctx.fillRect(visXa,Math.min(ye,yt),boxW,Math.abs(yt-ye));ctx.fillStyle=`rgba(${lossColor},.16)`;ctx.fillRect(visXa,Math.min(ye,ys),boxW,Math.abs(ys-ye));ctx.strokeStyle=`rgba(${profitColor},.85)`;ctx.lineWidth=1.2;ctx.strokeRect(visXa,Math.min(ye,yt),boxW,Math.abs(yt-ye));ctx.strokeStyle=`rgba(${lossColor},.78)`;ctx.strokeRect(visXa,Math.min(ye,ys),boxW,Math.abs(ys-ye));function line(y,col,label,price){ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(visXa,y);ctx.lineTo(visXb,y);ctx.stroke();ctx.fillStyle=col;ctx.font='10px monospace';ctx.textAlign='left';ctx.fillText(label+' '+priceFmt(price),Math.min(visXb+6,right-92),y+3)}line(ye,'#c8d8f0','ENTRY',p.entry);line(yt,p.type==='long'?'#00e676':'#ff3d57','TP',p.target);line(ys,p.type==='long'?'#ff3d57':'#00e676','SL',p.stop);const headerY=clamp(Math.min(ye,yt,ys)-22,PT+2,H-PB-24),headerX=clamp(visXa,PL,right-124);ctx.fillStyle=p.type==='long'?'#00e676':'#ff3d57';ctx.fillRect(headerX,headerY,98,18);ctx.fillStyle='#050914';ctx.font='10px monospace';ctx.textAlign='center';ctx.fillText((p.type==='long'?'LONG':'SHORT')+' 1:1',headerX+49,headerY+12);ctx.fillStyle='rgba(255,61,87,.92)';ctx.fillRect(headerX+101,headerY,18,18);ctx.fillStyle='#050914';ctx.font='13px monospace';ctx.fillText('×',headerX+110,headerY+13);p._del={x:headerX+101,y:headerY,w:18,h:18};ctx.fillStyle='rgba(200,216,240,.8)';ctx.fillRect(clamp(visXb-5,PL,right-5),Math.min(ye,yt,ys)-5,10,10);});ctx.restore()}
+function drawPositions(ctx,W,H,V,sc,x){if(!S.positions.length)return;const right=W-RP();ctx.save();S.positions.forEach((p,pi)=>{const x1=x(p.x1),x2=x(p.x2);const xa=clamp(Math.min(x1,x2),PL,right),xb=clamp(Math.max(x1,x2),PL,right);const visW=Math.max(40,xb-xa);const ye=sc.y(p.entry),ys=sc.y(p.stop),yt=sc.y(p.target);const isLong=p.type==='long';const pRgb=isLong?'0,230,118':'255,61,87',sRgb=isLong?'255,61,87':'0,230,118';const rr=p.entry!==p.stop?Math.abs((p.target-p.entry)/(p.stop-p.entry)):1;/* Profit zone */ctx.fillStyle=`rgba(${pRgb},0.08)`;ctx.fillRect(xa,Math.min(ye,yt),visW,Math.abs(yt-ye));/* Loss zone */ctx.fillStyle=`rgba(${sRgb},0.07)`;ctx.fillRect(xa,Math.min(ye,ys),visW,Math.abs(ys-ye));/* Zone borders */ctx.setLineDash([5,5]);ctx.lineWidth=0.8;ctx.strokeStyle=`rgba(${pRgb},0.4)`;ctx.strokeRect(xa,Math.min(ye,yt)+0.5,visW,Math.abs(yt-ye));ctx.strokeStyle=`rgba(${sRgb},0.38)`;ctx.strokeRect(xa,Math.min(ye,ys)+0.5,visW,Math.abs(ys-ye));ctx.setLineDash([]);/* Entry line */ctx.strokeStyle='rgba(200,216,240,0.85)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(xa,ye);ctx.lineTo(right,ye);ctx.stroke();/* TP line */ctx.strokeStyle=`rgba(${pRgb},0.72)`;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(xa,yt);ctx.lineTo(right,yt);ctx.stroke();/* SL line */ctx.strokeStyle=`rgba(${sRgb},0.68)`;ctx.beginPath();ctx.moveTo(xa,ys);ctx.lineTo(right,ys);ctx.stroke();/* Labels */const lx=Math.min(xb+8,right-88);ctx.font='9px monospace';ctx.textAlign='left';ctx.fillStyle='rgba(200,216,240,0.82)';ctx.fillText('Entry '+priceFmt(p.entry),lx,ye+4);ctx.fillStyle=`rgba(${pRgb},0.82)`;ctx.fillText('TP +'+rr.toFixed(2)+'R  '+priceFmt(p.target),lx,yt+4);ctx.fillStyle=`rgba(${sRgb},0.82)`;ctx.fillText('SL −'+rr.toFixed(2)+'R  '+priceFmt(p.stop),lx,ys+4);/* Compact header + delete */const hdrY=clamp(Math.min(ye,yt,ys)-18,PT+2,H-PB-20);const hdrX=clamp(xa,PL,right-70);ctx.fillStyle=isLong?'rgba(0,230,118,0.12)':'rgba(255,61,87,0.12)';ctx.strokeStyle=isLong?'rgba(0,230,118,0.38)':'rgba(255,61,87,0.38)';ctx.lineWidth=0.8;ctx.fillRect(hdrX,hdrY,44,14);ctx.strokeRect(hdrX,hdrY,44,14);ctx.fillStyle=isLong?'#00e676':'#ff3d57';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText(isLong?'LONG':'SHORT',hdrX+22,hdrY+10);/* Delete button */ctx.fillStyle='rgba(255,61,87,0.18)';ctx.strokeStyle='rgba(255,61,87,0.45)';ctx.fillRect(hdrX+48,hdrY,14,14);ctx.strokeRect(hdrX+48,hdrY,14,14);ctx.fillStyle='rgba(255,80,100,0.9)';ctx.font='bold 11px monospace';ctx.textAlign='center';ctx.fillText('\xd7',hdrX+55,hdrY+10);p._del={x:hdrX+48,y:hdrY,w:14,h:14};});ctx.restore()}
 function hitPosition(xp,yp,W,H,sc){for(let i=S.positions.length-1;i>=0;i--){const p=S.positions[i];if(p._del&&xp>=p._del.x-4&&xp<=p._del.x+p._del.w+4&&yp>=p._del.y-4&&yp<=p._del.y+p._del.h+4)return{index:i,part:'delete'};const right=W-RP();const x1=PL+(p.x1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start),x2=PL+(p.x2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start),xa=clamp(Math.min(x1,x2),PL,right),xb=clamp(Math.max(x1,x2),PL,right);const ye=sc.y(p.entry),ys=sc.y(p.stop),yt=sc.y(p.target),top=Math.min(ye,ys,yt),bot=Math.max(ye,ys,yt);if(xp>=xa-14&&xp<=xb+18){if(Math.abs(yp-ye)<12)return{index:i,part:'entry'};if(Math.abs(yp-ys)<12)return{index:i,part:'stop'};if(Math.abs(yp-yt)<12)return{index:i,part:'target'};if(xp>=xb-18&&xp<=xb+18&&yp>=top-28&&yp<=bot+16)return{index:i,part:'right'};if(xp>=xa-10&&xp<=xb+10&&yp>=top-28&&yp<=bot+16)return{index:i,part:'body'}}}return null}
 function dragPosition(e,r){const dp=S.dragPos;if(!dp)return false;const p=S.positions[dp.index],H=r.height,W=r.width;const V=visible(),sc=scale(V.cs,H);const x=e.clientX-r.left,y=e.clientY-r.top;const price=priceFromY(y,H,sc);if(dp.part==='entry')p.entry=price;else if(dp.part==='stop')p.stop=price;else if(dp.part==='target')p.target=price;else if(dp.part==='right')p.x2=idxFromX(x,W);else{const dxIdx=(e.clientX-dp.lastX)*(S.view.end-S.view.start)/CW(W);const oldPrice=priceFromY(dp.lastY-r.top,H,sc);const newPrice=priceFromY(e.clientY-r.top,H,sc);const dPrice=newPrice-oldPrice;p.x1+=dxIdx;p.x2+=dxIdx;p.entry+=dPrice;p.stop+=dPrice;p.target+=dPrice;dp.lastX=e.clientX;dp.lastY=e.clientY}drawSoon();return true}
 
@@ -7707,11 +7707,12 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       ctx.beginPath();ctx.arc(x2px,y2,4.5,0,Math.PI*2);ctx.fill();ctx.stroke();
     }
 
-    function drawLabel(ctx,line1,line2,x2px,y2,W,H,a){
+    function drawLabel(ctx,line1,line2,line3,x2px,y2,W,H,a){
       const right=W-RP();
       ctx.font='bold 12px Inter,Arial,monospace';const w1=ctx.measureText(line1).width;
       ctx.font='10px Inter,Arial,monospace';const w2=ctx.measureText(line2).width;
-      const bw=Math.max(w1,w2)+16,bh=32,rd=5;
+      const w3=ctx.measureText(line3||'').width;
+      const bw=Math.max(w1,w2,w3)+16,bh=line3?46:32,rd=5;
       const lx=clamp(x2px+8,PL,right-bw-2),ly=clamp(y2-bh/2,PT+2,H-PB-bh-2);
       ctx.fillStyle=`rgba(30,100,220,${(0.90*a).toFixed(2)})`;
       ctx.beginPath();
@@ -7724,6 +7725,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       ctx.textAlign='left';ctx.textBaseline='middle';
       ctx.font='bold 12px Inter,Arial,monospace';ctx.fillText(line1,lx+8,ly+10);
       ctx.font='10px Inter,Arial,monospace';ctx.fillText(line2,lx+8,ly+23);
+      if(line3)ctx.fillText(line3,lx+8,ly+36);
     }
 
     function drawRulers(){
@@ -7748,13 +7750,16 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const y1=sc.y(n.price1);
         if(n.phase==='anchor'){
           drawCross(ctx,x1px,y1,W,H,1.0);
-          drawLabel(ctx,'0,00%','0 barras, 0m',x1px+8,y1,W,H,0.90);
+          drawLabel(ctx,'0,00 pts','+0,00%','0 barras, 0m',x1px+8,y1,W,H,0.90);
         }else{
           const x2px=clamp(n.liveX,PL,right),y2=sc.y(n.livePrice);
           drawBand(ctx,x1px,x2px,y1,y2,W,H,0.82);
-          const pct=(n.livePrice-n.price1)/n.price1*100;
+          const priceDiff=n.livePrice-n.price1;
+          const pct=priceDiff/n.price1*100;
           const nb=Math.max(1,Math.abs(Math.round(n.liveIdx-n.idx1)));
-          drawLabel(ctx,(pct>=0?'+':'')+pct.toFixed(2)+'%',nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb),x2px,y2,W,H,0.82);
+          const ptStr=(priceDiff>=0?'+':'')+priceDiff.toFixed(2)+' pts';
+          const pctStr=(pct>=0?'+':'')+pct.toFixed(2)+'%';
+          drawLabel(ctx,ptStr,pctStr,nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb),x2px,y2,W,H,0.82);
         }
       }
 
@@ -7764,9 +7769,12 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const x2px=PL+(r.x2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const y1=sc.y(r.price1),y2=sc.y(r.price2);
         drawBand(ctx,x1px,x2px,y1,y2,W,H,1.0);
-        const pct=(r.price2-r.price1)/r.price1*100;
+        const priceDiff=r.price2-r.price1;
+        const pct=priceDiff/r.price1*100;
         const nb=Math.max(1,Math.abs(Math.round(r.x2-r.x1)));
-        drawLabel(ctx,(pct>=0?'+':'')+pct.toFixed(2)+'%',nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb),x2px,y2,W,H,1.0);
+        const ptStr=(priceDiff>=0?'+':'')+priceDiff.toFixed(2)+' pts';
+        const pctStr=(pct>=0?'+':'')+pct.toFixed(2)+'%';
+        drawLabel(ctx,ptStr,pctStr,nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb),x2px,y2,W,H,1.0);
       });
 
       window.__ETX_SKIP_COLORMAP=false;ctx.restore();
@@ -8355,7 +8363,8 @@ ready(()=>{
   if(typeof S==='undefined')return;
   if(!S.drawings)S.drawings=[];
   if(!S.selectedDrawing)S.selectedDrawing=null;
-  if(!S.replay)S.replay={enabled:false,index:null,playing:false,speed:1,timer:null};
+  if(!S.replay)S.replay={enabled:false,index:null,playing:false,speed:1,timer:null,selectingStart:false};
+  else if(S.replay.selectingStart===undefined)S.replay.selectingStart=false;
   S.cursor=null;
   _initBtns();_initEvents();_patchDraw();_loadDrawings();_watchSymTf();
 });
@@ -8449,7 +8458,7 @@ function _initEvents(){
   });
   window.addEventListener('contextmenu',e=>{if(_sm===ST.DRAWING){e.preventDefault();_cancelDrawing();drawSoon();}});
   wrap.addEventListener('click',e=>{
-    if(!S.replay?.enabled||_tool||_selId)return;
+    if(!S.replay?.enabled||S.replay.selectingStart||_tool||_selId)return;
     const cs=getCS();if(!cs)return;
     const r=wrap.getBoundingClientRect();
     const idx=Math.round(cs.iX(e.clientX-r.left));
@@ -8458,11 +8467,22 @@ function _initEvents(){
   });
 }
 
-function _onCk(e){if(_tool||_sm===ST.DRAWING)e.stopPropagation();}
+function _onCk(e){if(_tool||_sm===ST.DRAWING||S.replay?.selectingStart)e.stopPropagation();}
 
 function _onMD(e){
   if(e.button!==0)return;
   _closeCtx();
+  /* P0: replay start selection */
+  if(S.replay?.selectingStart){
+    e.stopPropagation();e.preventDefault();
+    const cs=getCS();if(!cs)return;
+    const wrap=el('chartWrap');if(!wrap)return;
+    const r=wrap.getBoundingClientRect();
+    S._cross={cx:e.clientX-r.left,cy:e.clientY-r.top};
+    _syncCursor(cs);
+    if(S.cursor){S.replay.selectingStart=false;S.replay.index=S.cursor.index;_showRpBar(true);drawSoon();}
+    return;
+  }
   const cs=getCS();if(!cs)return;
   const wrap=el('chartWrap');if(!wrap)return;
   const r=wrap.getBoundingClientRect();
@@ -8486,7 +8506,7 @@ function _onMD(e){
 /* DRAWING state: no stopPropagation so native mousemove updates S._cross and crosshair shows.
    DRAG states: stop propagation to block chart pan. */
 function _onMM(e){
-  if(_sm===ST.DRAWING)return;
+  if(_sm===ST.DRAWING||S.replay?.selectingStart)return;
   const cs=getCS();if(!cs)return;
   const wrap=el('chartWrap');if(!wrap)return;
   const r=wrap.getBoundingClientRect();
@@ -8514,6 +8534,10 @@ function _onTS(e){
   const r=wrap.getBoundingClientRect();
   const t=e.touches[0];
   const x=t.clientX-r.left,y=t.clientY-r.top;
+  if(S.replay?.selectingStart){
+    e.stopPropagation();e.preventDefault();
+    S._cross={cx:x,cy:y};drawSoon();return;
+  }
   if(_tool||_sm===ST.DRAWING){
     e.stopPropagation();e.preventDefault();
     S._cross={cx:x,cy:y};drawSoon();return;
@@ -8568,6 +8592,13 @@ function _onTM(e){
 
 function _onTE(e){
   if(_lpt){clearTimeout(_lpt);_lpt=null;}
+  if(S.replay?.selectingStart){
+    e.stopPropagation();
+    const cs=getCS();if(!cs)return;
+    _syncCursor(cs);
+    if(S.cursor){S.replay.selectingStart=false;S.replay.index=S.cursor.index;_showRpBar(true);drawSoon();}
+    return;
+  }
   if(_tool||_sm===ST.DRAWING){
     e.stopPropagation();
     const cs=getCS();if(!cs)return;
@@ -8735,7 +8766,7 @@ function _closeCtx(){if(_ctxMenu){_ctxMenu.remove();_ctxMenu=null;}}
 function _patchDraw(){
   const _orig=draw;
   draw=function(){
-    if(S.replay?.enabled&&S.replay.index!=null){
+    if(S.replay?.enabled&&S.replay.index!=null&&!S.replay.selectingStart){
       const full=S._allCandles||S.candles;S._allCandles=full;
       S.candles=full.slice(0,Math.min(Math.floor(S.replay.index)+1,full.length));
       try{_orig();}finally{S.candles=full;}
@@ -8750,7 +8781,10 @@ function _patchDraw(){
     ctx.save();
     try{
       _renderAll(ctx,_lastCS);
-      if(S.replay?.enabled&&S.replay.index!=null)_renderReplayCursor(ctx,_lastCS);
+      if(S.replay?.enabled){
+        if(S.replay.selectingStart)_renderReplaySelect(ctx,_lastCS);
+        else if(S.replay.index!=null)_renderReplayCursor(ctx,_lastCS);
+      }
       _renderToolHint(ctx);
     }catch(_){}
     ctx.restore();
@@ -8847,6 +8881,29 @@ function _renderReplayCursor(ctx,cs){
   ctx.font='bold 9px monospace';ctx.fillStyle='rgba(255,200,50,0.85)';ctx.textAlign='center';ctx.textBaseline='alphabetic';
   ctx.fillText('REPLAY',sx,PT+14);ctx.restore();
 }
+function _renderReplaySelect(ctx,cs){
+  if(!S.replay?.selectingStart||!S.cursor)return;
+  const sx=cs.xI(S.cursor.index);if(sx<PL||sx>cs.W-RP())return;
+  ctx.save();
+  ctx.strokeStyle='rgba(255,200,50,0.80)';ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
+  ctx.beginPath();ctx.moveTo(sx,PT);ctx.lineTo(sx,cs.H-PB);ctx.stroke();ctx.setLineDash([]);
+  const txt='▶ Iniciar Replay Aqui';
+  ctx.font='bold 11px monospace';
+  const tw=ctx.measureText(txt).width;
+  const bw=tw+16,bh=22,bx=Math.min(sx+6,cs.W-RP()-bw-4),by=PT+20;
+  const rd=5;
+  ctx.fillStyle='rgba(40,30,5,0.90)';
+  ctx.beginPath();
+  ctx.moveTo(bx+rd,by);ctx.lineTo(bx+bw-rd,by);ctx.arcTo(bx+bw,by,bx+bw,by+rd,rd);
+  ctx.lineTo(bx+bw,by+bh-rd);ctx.arcTo(bx+bw,by+bh,bx+bw-rd,by+bh,rd);
+  ctx.lineTo(bx+rd,by+bh);ctx.arcTo(bx,by+bh,bx,by+bh-rd,rd);
+  ctx.lineTo(bx,by+rd);ctx.arcTo(bx,by,bx+rd,by,rd);
+  ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(255,200,50,0.70)';ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle='rgba(255,200,50,0.95)';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(txt,bx+8,by+bh/2);
+  ctx.restore();
+}
 
 /* ─── PERSISTENCE ─── */
 function _sKey(){return'dvl_drawings_'+(S.sym||'')+'_'+(S.tf||'');}
@@ -8863,12 +8920,11 @@ function _watchSymTf(){
 
 /* ─── REPLAY ─── */
 function _enableReplay(){
-  S.replay.enabled=true;S.replay.playing=false;
-  const all=S._allCandles||S.candles;if(S.replay.index==null&&all.length>1)S.replay.index=all.length-1;
-  _showRpBar(true);const b=el('rpReplay');if(b)b.classList.add('dvl-active');drawSoon();
+  S.replay.enabled=true;S.replay.playing=false;S.replay.selectingStart=true;
+  const b=el('rpReplay');if(b)b.classList.add('dvl-active');drawSoon();
 }
 function _disableReplay(){
-  S.replay.enabled=false;S.replay.playing=false;S.replay.index=null;
+  S.replay.enabled=false;S.replay.playing=false;S.replay.index=null;S.replay.selectingStart=false;
   if(S.replay.timer){clearInterval(S.replay.timer);S.replay.timer=null;}
   if(S._allCandles){S.candles=S._allCandles;S._allCandles=null;}
   _showRpBar(false);const b=el('rpReplay');if(b)b.classList.remove('dvl-active');drawSoon();
