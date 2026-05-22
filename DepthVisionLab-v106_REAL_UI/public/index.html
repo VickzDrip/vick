@@ -1504,6 +1504,12 @@ html.pre-ui .switch::after{transition:none!important}
           <span>Texto</span>
         </button>
 
+        <div class="rp-lbl" style="margin-top:10px;">ANÁLISE</div>
+        <button class="rp-btn" id="rpHvnReact" title="HVN Reaction Zones — identifica reação compradora/vendedora nas zonas de volume">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>
+          <span>HVN React</span>
+        </button>
+
       </div>
 
       <!-- coluna direita: UTILIDADES + FAVORITOS + CONFIGURAÇÕES + TEMA -->
@@ -1832,6 +1838,21 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Extensão (barras)</span><input class="num" id="vzExtend" type="number" min="0" max="500" step="1" value="20"></div>
             <div class="kv"><span class="k">Cor</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="vzColorSwatch" style="width:100%;height:100%;background:#f59e0b;pointer-events:none"></div><input id="vzColor" type="color" value="#f59e0b" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
             <div class="hint">Zonas HVN — acumula volume de todos os candles por faixa de preço. Mostra onde o mercado mais negociou historicamente. Opacidade proporcional ao volume acumulado.</div>
+            <div style="border-top:1px solid #101b2d;margin:8px 0 4px;"></div>
+            <label class="kv" style="cursor:pointer;">
+              <span class="k" style="color:#c8d8f0;font-weight:600;">HVN Reaction</span>
+              <input type="checkbox" id="vzEnableReact" style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;">
+            </label>
+            <div id="vzReactCfg" style="display:none">
+              <div class="kv"><span class="k">Score mín.</span><input class="num" id="vzReactScore" type="number" min="0" max="100" step="5" value="60" style="width:52px"></div>
+              <div class="kv"><span class="k">Score forte</span><input class="num" id="vzStrongScore" type="number" min="0" max="100" step="5" value="80" style="width:52px"></div>
+              <div class="kv"><span class="k">Vol MA (barras)</span><input class="num" id="vzVolMA" type="number" min="5" max="100" step="1" value="20" style="width:52px"></div>
+              <div class="kv"><span class="k">Wick sensit.</span><input class="num" id="vzWickSens" type="number" min="0.05" max="1" step="0.05" value="0.35" style="width:52px"></div>
+              <label class="kv" style="cursor:pointer;"><span class="k">Candle confirm.</span><input type="checkbox" id="vzConfirmCandle" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+              <label class="kv" style="cursor:pointer;"><span class="k">Labels reação</span><input type="checkbox" id="vzShowLabels" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+              <label class="kv" style="cursor:pointer;"><span class="k">Score no label</span><input type="checkbox" id="vzShowScore" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+              <div class="hint" style="margin-top:4px;">Azul=neutra · Verde=compra · Vermelho=venda · Roxo=forte</div>
+            </div>
           </div>
         </div>
 
@@ -7353,7 +7374,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 })();
 </script>
 
-<!-- ── High Volume Zones (HVN) ── -->
+<!-- ── High Volume Zones (HVN) + HVN Reaction ── -->
 <script>
 (function(){
   function E(id){return document.getElementById(id)}
@@ -7365,16 +7386,29 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     return s+Math.round(a);
   }
   function priceFmt(v){return v>=1000?v.toLocaleString('en-US',{maximumFractionDigits:0}):v.toFixed(2);}
-
   function numVal(id,def){const n=E(id);if(!n)return def;const v=parseFloat(n.value);return Number.isFinite(v)?v:def;}
+
   function getSettings(){
-    const bucketPct=Math.max(0.01,numVal('vzBucket',0.1));
-    const topN=Math.max(1,Math.min(30,numVal('vzTopN',12)));
-    const minTouch=Math.max(1,Math.round(numVal('vzMinTouch',2)));
-    const mergeGap=Math.max(0,Math.round(numVal('vzMerge',0)));
-    const extend=Math.max(0,Math.round(numVal('vzExtend',20)));
-    const color=E('vzColor')?.value||'#f59e0b';
-    return{bucketPct,topN,minTouch,mergeGap,extend,color};
+    return{
+      bucketPct:Math.max(0.01,numVal('vzBucket',0.1)),
+      topN:Math.max(1,Math.min(30,numVal('vzTopN',12))),
+      minTouch:Math.max(1,Math.round(numVal('vzMinTouch',2))),
+      mergeGap:Math.max(0,Math.round(numVal('vzMerge',0))),
+      extend:Math.max(0,Math.round(numVal('vzExtend',20))),
+      color:E('vzColor')?.value||'#f59e0b'
+    };
+  }
+
+  function getReactSettings(){
+    return{
+      minScore:Math.max(0,numVal('vzReactScore',60)),
+      strongScore:Math.max(0,numVal('vzStrongScore',80)),
+      volMA:Math.max(5,Math.round(numVal('vzVolMA',20))),
+      wickSens:Math.max(0.05,numVal('vzWickSens',0.35)),
+      confirm:E('vzConfirmCandle')?E('vzConfirmCandle').checked:true,
+      labels:E('vzShowLabels')?E('vzShowLabels').checked:true,
+      score:E('vzShowScore')?E('vzShowScore').checked:true
+    };
   }
 
   function hexToRgb(hex){
@@ -7382,111 +7416,192 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     return{r,g,b};
   }
 
-  let _vzCache=null;
-  let _vzCacheKey='';
+  // ── Pre-compute trailing volume MA array ──
+  function buildVolMA(cs,len){
+    const ma=new Float64Array(cs.length);
+    let sum=0;
+    for(let i=0;i<cs.length;i++){
+      sum+=cs[i].v;
+      if(i>=len) sum-=cs[i-len].v;
+      ma[i]=sum/Math.min(i+1,len);
+    }
+    return ma;
+  }
 
-  // ── Multi-TF candle fetch for HVN analysis TF ──
-  let _vzExtCandles=null;
-  let _vzExtKey='';
-  let _vzExtFetching=false;
+  // ── Reaction scoring for a single zone ──
+  // Returns {type:'neutral'|'buy'|'sell'|'strong', score:0-100, dir:'buy'|'sell'|null}
+  function computeZoneReaction(zone,cs,volMAs,rs){
+    const{lo,hi}=zone;
+    const mid=(lo+hi)/2;
+    let bestBuy=0,bestSell=0,latestBuyI=-1,latestSellI=-1;
+    const scanStart=Math.max(0,cs.length-300);
+
+    for(let i=scanStart;i<cs.length;i++){
+      const c=cs[i];
+      if(c.h<lo||c.l>hi) continue; // zone not touched
+
+      const range=c.h-c.l;
+      if(range<1e-10) continue;
+
+      const bodyTop=Math.max(c.o,c.c);
+      const bodyBot=Math.min(c.o,c.c);
+      const lwR=(bodyBot-c.l)/range;   // lower wick ratio
+      const uwR=(c.h-bodyTop)/range;   // upper wick ratio
+      const avgV=volMAs[i];
+      const next=i<cs.length-1?cs[i+1]:null;
+      const prev=i>0?cs[i-1]:c;
+
+      // Approach direction
+      const fromAbove=prev.c>hi||(prev.c>=mid&&c.o>=mid);
+      const fromBelow=prev.c<lo||(prev.c<=mid&&c.o<=mid);
+
+      // ── BUY score: price came down, zone acted as support ──
+      let buy=0;
+      buy+=20;                                            // +20 touched zone
+      if(lwR>=rs.wickSens)          buy+=15;             // +15 lower wick
+      if(c.c>hi)                    buy+=15;             // +15 closed above zone
+      else if(c.c>mid)              buy+=8;              // +8  closed above mid
+      if(c.v>avgV*1.05)             buy+=15;             // +15 above-avg volume
+      if(next){
+        if(rs.confirm){
+          if(next.c>next.o&&next.c>c.c) buy+=15;        // +15 strong confirm up
+          else if(next.c>next.o)         buy+=8;         // +8  weak confirm
+        } else                           buy+=8;
+      }
+      if(c.l<lo&&c.c>lo)           buy+=10;             // +10 wick sweep + recovery
+      if(!fromAbove) buy=Math.min(buy,42);               // penalise wrong direction
+
+      // ── SELL score: price came up, zone acted as resistance ──
+      let sell=0;
+      sell+=20;
+      if(uwR>=rs.wickSens)          sell+=15;
+      if(c.c<lo)                    sell+=15;
+      else if(c.c<mid)              sell+=8;
+      if(c.v>avgV*1.05)             sell+=15;
+      if(next){
+        if(rs.confirm){
+          if(next.c<next.o&&next.c<c.c) sell+=15;
+          else if(next.c<next.o)         sell+=8;
+        } else                           sell+=8;
+      }
+      if(c.h>hi&&c.c<hi)           sell+=10;
+      if(!fromBelow) sell=Math.min(sell,42);
+
+      if(buy>bestBuy){bestBuy=buy;latestBuyI=i;}
+      if(sell>bestSell){bestSell=sell;latestSellI=i;}
+    }
+
+    const{minScore,strongScore}=rs;
+    // Give a small edge to the more recent signal when scores are close
+    const recencyBuy=latestBuyI>latestSellI+3;
+    const recencySell=latestSellI>latestBuyI+3;
+
+    let type='neutral',score=0,dir=null;
+    if(bestBuy>=minScore||bestSell>=minScore){
+      const buyWins=bestBuy>bestSell||(bestBuy>=minScore&&recencyBuy&&bestBuy>=bestSell-10);
+      if(buyWins&&bestBuy>=minScore){
+        score=bestBuy;dir='buy';type=score>=strongScore?'strong':'buy';
+      } else if(bestSell>=minScore){
+        score=bestSell;dir='sell';type=score>=strongScore?'strong':'sell';
+      }
+    }
+    return{type,score,dir};
+  }
+
+  // ── UI sync: checkbox ↔ right-panel button ↔ settings panel ──
+  function vzSyncReactUI(){
+    const cb=E('vzEnableReact');
+    const on=cb?cb.checked:false;
+    const cfg=E('vzReactCfg');
+    if(cfg) cfg.style.display=on?'':'none';
+    const rpBtn=E('rpHvnReact');
+    if(rpBtn) rpBtn.classList.toggle('active',on);
+    _vzReactCacheKey=''; // force reaction recompute
+  }
+
+  let _vzCache=null;        let _vzCacheKey='';
+  let _vzReactCache=null;   let _vzReactCacheKey='';
+
+  // ── Multi-TF candle fetch ──
+  let _vzExtCandles=null, _vzExtKey='', _vzExtFetching=false;
 
   function getVZCandles(){
     const sel=E('vzTf');
     const vzTf=sel?sel.value:'';
-    if(!vzTf||vzTf===S.tf)return S.candles;
+    if(!vzTf||vzTf===S.tf) return S.candles;
     const wantKey=`${S.sym}|${vzTf}`;
-    if(_vzExtKey===wantKey&&_vzExtCandles)return _vzExtCandles;
-    // Async fetch — return current candles while loading
+    if(_vzExtKey===wantKey&&_vzExtCandles) return _vzExtCandles;
     if(!_vzExtFetching||_vzExtKey!==wantKey){
-      _vzExtFetching=true;
-      _vzExtKey=wantKey;
-      _vzExtCandles=null;
+      _vzExtFetching=true; _vzExtKey=wantKey; _vzExtCandles=null;
       fetch(`${API}/api/v3/klines?symbol=${S.sym}&interval=${vzTf}&limit=1000`)
         .then(r=>r.ok?r.json():Promise.reject(r.status))
         .then(d=>{
-          if(_vzExtKey!==wantKey)return; // symbol/tf changed while fetching
+          if(_vzExtKey!==wantKey) return;
           _vzExtCandles=d.map(klineToCandle);
-          _vzExtFetching=false;
-          _vzCacheKey=''; // force recompute with new candles
-          if(typeof drawSoon==='function')drawSoon();
+          _vzExtFetching=false; _vzCacheKey='';
+          if(typeof drawSoon==='function') drawSoon();
         })
         .catch(e=>{_vzExtFetching=false;console.warn('HVN TF fetch:',e);});
     }
-    return S.candles; // use current candles while fetch is in progress
+    return S.candles;
   }
 
+  // ── HVN bucket computation (unchanged) ──
   function computeHVN(cs,bucketPct,topN,minTouch,mergeGap){
-    if(cs.length<2)return[];
+    if(cs.length<2) return[];
     const lastPrice=cs[cs.length-1].c;
     const bucketSize=lastPrice*bucketPct/100;
-    if(bucketSize<=0)return[];
-
+    if(bucketSize<=0) return[];
     let priceMin=Infinity,priceMax=-Infinity;
     for(const c of cs){if(c.l<priceMin)priceMin=c.l;if(c.h>priceMax)priceMax=c.h;}
-
     const nBuckets=Math.min(8000,Math.ceil((priceMax-priceMin)/bucketSize)+1);
     const vols=new Float64Array(nBuckets);
     const buyV=new Float64Array(nBuckets);
     const sellV=new Float64Array(nBuckets);
     const tchs=new Uint32Array(nBuckets);
-
     for(const c of cs){
       const dv=c.v*c.c;
       const range=c.h-c.l;
-      // buy fraction = how much of the range is below the close (close position in bar)
       const bf=range>0?(c.c-c.l)/range:0.5;
       const sf=1-bf;
       const loIdx=Math.max(0,Math.floor((c.l-priceMin)/bucketSize));
       const hiIdx=Math.min(nBuckets-1,Math.floor((c.h-priceMin)/bucketSize));
       if(loIdx===hiIdx){
-        vols[loIdx]+=dv; buyV[loIdx]+=dv*bf; sellV[loIdx]+=dv*sf;
-        tchs[loIdx]++;
+        vols[loIdx]+=dv;buyV[loIdx]+=dv*bf;sellV[loIdx]+=dv*sf;tchs[loIdx]++;
       }else{
         const inv=range>0?1/range:1/(hiIdx-loIdx+1);
         for(let b=loIdx;b<=hiIdx;b++){
-          const bLo=priceMin+b*bucketSize;
-          const bHi=bLo+bucketSize;
+          const bLo=priceMin+b*bucketSize,bHi=bLo+bucketSize;
           const frac=(Math.min(c.h,bHi)-Math.max(c.l,bLo))*(range>0?inv:1);
           const bdv=dv*frac;
-          vols[b]+=bdv; buyV[b]+=bdv*bf; sellV[b]+=bdv*sf;
-          tchs[b]++;
+          vols[b]+=bdv;buyV[b]+=bdv*bf;sellV[b]+=bdv*sf;tchs[b]++;
         }
       }
     }
-
     const buckets=[];
-    for(let i=0;i<nBuckets;i++){
-      if(tchs[i]>=minTouch&&vols[i]>0)
-        buckets.push({i,vol:vols[i],bv:buyV[i],sv:sellV[i],touches:tchs[i]});
-    }
-    if(!buckets.length)return[];
-
-    // Greedy selection with auto-scaled minimum separation — applied BEFORE merge
+    for(let i=0;i<nBuckets;i++)
+      if(tchs[i]>=minTouch&&vols[i]>0) buckets.push({i,vol:vols[i],bv:buyV[i],sv:sellV[i],touches:tchs[i]});
+    if(!buckets.length) return[];
     const byVol=[...buckets].sort((a,b)=>b.vol-a.vol);
     const minSep=Math.max(1,Math.floor(nBuckets/(topN*1.5)));
     const selIdx=[];
     for(const b of byVol){
-      if(selIdx.every(i=>Math.abs(b.i-i)>=minSep))selIdx.push(b.i);
-      if(selIdx.length>=topN*2)break;
+      if(selIdx.every(i=>Math.abs(b.i-i)>=minSep)) selIdx.push(b.i);
+      if(selIdx.length>=topN*2) break;
     }
-    if(!selIdx.length)return[];
+    if(!selIdx.length) return[];
     const topSet=new Set(selIdx);
-
     const top=buckets.filter(b=>topSet.has(b.i)).sort((a,b)=>a.i-b.i);
-    if(!top.length)return[];
-
+    if(!top.length) return[];
     const zones=[];
     let lastI=top[0].i;
     let zn={lo:priceMin+top[0].i*bucketSize,hi:priceMin+(top[0].i+1)*bucketSize,
-            totalVol:top[0].vol,totalBuyVol:top[0].bv,totalSellVol:top[0].sv,
-            totalTouches:top[0].touches};
-
+            totalVol:top[0].vol,totalBuyVol:top[0].bv,totalSellVol:top[0].sv,totalTouches:top[0].touches};
     for(let k=1;k<top.length;k++){
       const b=top[k];
       if(b.i-lastI<=mergeGap+1){
         zn.hi=priceMin+(b.i+1)*bucketSize;
-        zn.totalVol+=b.vol; zn.totalBuyVol+=b.bv; zn.totalSellVol+=b.sv;
-        zn.totalTouches+=b.touches;
+        zn.totalVol+=b.vol;zn.totalBuyVol+=b.bv;zn.totalSellVol+=b.sv;zn.totalTouches+=b.touches;
       }else{
         zones.push(zn);
         zn={lo:priceMin+b.i*bucketSize,hi:priceMin+(b.i+1)*bucketSize,
@@ -7495,15 +7610,13 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       lastI=b.i;
     }
     zones.push(zn);
-
-    // HVN zones: ascending (weakest first = painter's order)
     zones.sort((a,b)=>a.totalVol-b.totalVol);
-    // Expose raw bucket arrays for buy/sell zone indicators (filtered at draw time by range)
     return{hvn:zones.slice(-topN),rawBuckets:{priceMin,bucketSize,nBuckets,bvArr:buyV,svArr:sellV,tchs}};
   }
 
+  // ── Draw ──
   function drawVolZones(ctx,W,H,V,sc,x){
-    if(!window.S||!S.inds.volZones||!S.candles.length)return;
+    if(!window.S||!S.inds.volZones||!S.candles.length) return;
     const{bucketPct,topN,minTouch,mergeGap,extend,color}=getSettings();
     const vzTfSel=E('vzTf');const vzTf=vzTfSel?vzTfSel.value:'';
     const cs=getVZCandles();
@@ -7513,39 +7626,69 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     if(key!==_vzCacheKey){
       _vzCache=computeHVN(cs,bucketPct,topN,minTouch,mergeGap);
       _vzCacheKey=key;
+      _vzReactCacheKey=''; // zone list changed → invalidate reaction cache
     }
     const cache=_vzCache;
-    if(!cache?.hvn?.length)return;
+    if(!cache?.hvn?.length) return;
     const{hvn:zones}=cache;
 
-    const rgb=hexToRgb(color);
+    const amberRgb=hexToRgb(color);
     const vspan=S.view.end-S.view.start;
     const cw=CW(W);
     const bw=cw/vspan;
     const xRight=Math.min(W-RP(),x(lastIdx)+extend*bw);
     const xLeft=PL;
-    // zones sorted ascending: last element = strongest
     const maxVol=zones[zones.length-1].totalVol;
+
+    // ── Reaction: compute/retrieve cache ──
+    const reactOn=!!(E('vzEnableReact')?.checked);
+    let rs=null;
+    if(reactOn){
+      rs=getReactSettings();
+      const reactKey=`${key}|${rs.minScore}|${rs.strongScore}|${rs.volMA}|${rs.wickSens}|${rs.confirm}`;
+      if(reactKey!==_vzReactCacheKey){
+        const volMAs=buildVolMA(cs,rs.volMA);
+        _vzReactCache=zones.map(zone=>computeZoneReaction(zone,cs,volMAs,rs));
+        _vzReactCacheKey=reactKey;
+      }
+    }
 
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
 
-    // Iterate ascending (weakest → strongest) — painter's order, no per-frame sort
-    for(const{hi,lo,totalVol,totalBuyVol,totalSellVol,totalTouches}of zones){
+    for(let zi=0;zi<zones.length;zi++){
+      const{hi,lo,totalVol,totalTouches}=zones[zi];
       const rel=maxVol>0?totalVol/maxVol:1;
       const mid=(hi+lo)/2;
-      const y1=sc.y(hi);
-      const y2=sc.y(lo);
-      const ym=sc.y(mid);
+      const y1=sc.y(hi),y2=sc.y(lo),ym=sc.y(mid);
       const boxH=Math.max(1,y2-y1);
 
-      if(xRight<=xLeft||y2<PT||y1>H-PB)continue;
+      if(xRight<=xLeft||y2<PT||y1>H-PB) continue;
 
-      // Fill — opacity scales with relative volume
+      // ── Pick zone color based on reaction state ──
+      let rgb=amberRgb;
+      let labelStr=null;
+
+      if(reactOn&&_vzReactCache){
+        const rxn=_vzReactCache[zi]||{type:'neutral',score:0,dir:null};
+        switch(rxn.type){
+          case 'buy':    rgb={r:0,  g:230,b:118}; break; // green
+          case 'sell':   rgb={r:255,g:61, b:87 }; break; // red
+          case 'strong': rgb={r:167,g:105,b:250}; break; // purple
+          default:       rgb={r:80, g:150,b:255}; break; // blue = neutral
+        }
+        if(rs.labels&&rxn.type!=='neutral'){
+          const dirTag=rxn.dir==='buy'?'BUY':'SELL';
+          const typeTag=rxn.type==='strong'?`${dirTag} STRONG`:`${dirTag} REACTION`;
+          labelStr=rs.score?`${typeTag} ${rxn.score}%`:typeTag;
+        }
+      }
+
+      // Fill (opacity ∝ relative volume)
       ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.04+0.13*rel).toFixed(3)})`;
       ctx.fillRect(xLeft,y1,xRight-xLeft,boxH);
 
-      // Top and bottom borders
+      // Top + bottom borders
       ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.30+0.50*rel).toFixed(3)})`;
       ctx.lineWidth=rel>0.7?1.5:1;
       ctx.setLineDash([]);
@@ -7554,7 +7697,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       ctx.moveTo(xLeft,y2);ctx.lineTo(xRight,y2);
       ctx.stroke();
 
-      // Midline — dashed, only for taller zones
+      // Midline dashed (for taller zones)
       if(boxH>12){
         ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.20+0.35*rel).toFixed(3)})`;
         ctx.lineWidth=1;ctx.setLineDash([3,5]);
@@ -7562,12 +7705,13 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         ctx.setLineDash([]);
       }
 
-      // Label inside the box, centered vertically
+      // Label
       if(boxH>8){
         ctx.font=`${rel>0.5?'bold ':''}9px monospace`;
         ctx.textBaseline='middle';
         ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.65+0.30*rel).toFixed(3)})`;
-        ctx.fillText(`HVN ${priceFmt(mid)} | $${nFmt(totalVol)} | ${totalTouches}t`,xLeft+6,ym);
+        const lbl=reactOn&&labelStr?labelStr:`HVN ${priceFmt(mid)} | $${nFmt(totalVol)} | ${totalTouches}t`;
+        ctx.fillText(lbl,xLeft+6,ym);
       }
     }
 
@@ -7577,17 +7721,34 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
   window.__drawVolZones=drawVolZones;
 
-  const VZ_IDS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','vzTf']);
-  function vzRedraw(){if(typeof drawSoon==='function')drawSoon();}
+  // ── Event wiring ──
+  const VZ_INPUTS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','vzTf',
+    'vzReactScore','vzStrongScore','vzVolMA','vzWickSens']);
+
+  function vzRedraw(){_vzReactCacheKey='';if(typeof drawSoon==='function')drawSoon();}
+
   document.addEventListener('input',function(ev){
-    if(!VZ_IDS.has(ev.target?.id))return;
+    if(!VZ_INPUTS.has(ev.target?.id)) return;
     if(ev.target.id==='vzColor'){const sw=E('vzColorSwatch');if(sw)sw.style.background=ev.target.value;}
     vzRedraw();
   });
   document.addEventListener('change',function(ev){
-    if(!VZ_IDS.has(ev.target?.id))return;
-    if(ev.target.id==='vzTf'){_vzExtCandles=null;_vzExtKey='';_vzExtFetching=false;_vzCacheKey='';}
+    const id=ev.target?.id;
+    if(id==='vzEnableReact'){vzSyncReactUI();vzRedraw();return;}
+    if(id==='vzConfirmCandle'||id==='vzShowLabels'||id==='vzShowScore'){vzRedraw();return;}
+    if(!VZ_INPUTS.has(id)) return;
+    if(id==='vzTf'){_vzExtCandles=null;_vzExtKey='';_vzExtFetching=false;_vzCacheKey='';}
     vzRedraw();
   });
+
+  // Right-panel "HVN React" button → toggles the checkbox
+  document.addEventListener('click',function(ev){
+    if(!ev.target.closest('#rpHvnReact')) return;
+    const cb=E('vzEnableReact');
+    if(cb){cb.checked=!cb.checked;cb.dispatchEvent(new Event('change'));}
+  });
+
+  // Initial UI sync (deferred to ensure DOM is ready)
+  setTimeout(vzSyncReactUI,0);
 })();
 </script>
