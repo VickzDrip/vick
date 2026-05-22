@@ -7655,7 +7655,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const{hvn:zones}=cache;
 
     const amberRgb=hexToRgb(color);
-    const neutralRgb={r:80,g:150,b:255}; // blue when reactOn but no signal
+    const neutralRgb={r:80,g:150,b:255};
     const vspan=S.view.end-S.view.start;
     const cw=CW(W);
     const bw=cw/vspan;
@@ -7663,9 +7663,9 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const xLeft=PL;
     const maxVol=zones[zones.length-1].totalVol;
 
-    // ── Reaction mode: compute raw reactions then apply all filters ──
+    // ── Reaction mode ──
     const reactOn=!!(E('vzEnableReact')?.checked);
-    let rs=null,rxnMap=null;
+    let rs=null,rxnMap=null,labelZiSet=null;
 
     if(reactOn){
       rs=getReactSettings();
@@ -7676,27 +7676,25 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         _vzReactCacheKey=reactKey;
       }
 
-      // Build candidates with ATR distance filter
       const currentPrice=cs[lastIdx].c;
       const atr=computeATR(cs,14);
       const maxDist=rs.atrDist>0?atr*rs.atrDist:Infinity;
 
+      // ATR distance filter: zones beyond maxDist → neutral
       const candidates=zones.map((z,zi)=>{
         const rxn=(_vzReactCache&&_vzReactCache[zi])||{type:'neutral',score:0,dir:null,touchIdx:-1};
-        if(rxn.type==='neutral') return{zi,rxn,mid:(z.lo+z.hi)/2};
         const mid=(z.lo+z.hi)/2;
-        // ATR distance filter: zone too far from current price → neutral
-        if(maxDist>0&&Math.abs(mid-currentPrice)>maxDist)
-          return{zi,rxn:{type:'neutral',score:0,dir:null},mid};
-        return{zi,rxn,mid};
+        const dist=Math.abs(mid-currentPrice);
+        if(rxn.type==='neutral'||(maxDist>0&&dist>maxDist))
+          return{zi,rxn:{type:'neutral',score:0,dir:null},mid,dist};
+        return{zi,rxn,mid,dist};
       });
 
-      // Proximity dedup: two reactive zones within 1 ATR of each other → keep higher score only
+      // Proximity dedup: within 1 ATR of each other → keep higher score
       const proxDist=Math.max(atr,zones.length>0?(zones[0].hi-zones[0].lo)*3:0);
       const byScoreDesc=[...candidates].sort((a,b)=>b.rxn.score-a.rxn.score);
       const claimedMids=[];
       const allowedZi=new Set();
-
       for(const item of byScoreDesc){
         if(item.rxn.type==='neutral') continue;
         const tooClose=claimedMids.some(m=>Math.abs(m-item.mid)<proxDist);
@@ -7705,21 +7703,40 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
       // Max count limits: 3 buy, 3 sell, 2 strong
       let buyC=0,sellC=0,strongC=0;
-      const maxBuy=3,maxSell=3,maxStrong=2;
       rxnMap={};
-
       for(const item of byScoreDesc){
         const{zi,rxn}=item;
         if(rxn.type==='neutral'||!allowedZi.has(zi)){rxnMap[zi]={type:'neutral',score:0,dir:null};continue;}
         let allow=false;
-        if(rxn.type==='strong'&&strongC<maxStrong){strongC++;allow=true;}
-        else if(rxn.type==='buy'&&buyC<maxBuy){buyC++;allow=true;}
-        else if(rxn.type==='sell'&&sellC<maxSell){sellC++;allow=true;}
+        if(rxn.type==='strong'&&strongC<2){strongC++;allow=true;}
+        else if(rxn.type==='buy'&&buyC<3){buyC++;allow=true;}
+        else if(rxn.type==='sell'&&sellC<3){sellC++;allow=true;}
         rxnMap[zi]=allow?rxn:{type:'neutral',score:0,dir:null};
       }
-      // fill any index not yet assigned
       for(let zi=0;zi<zones.length;zi++){
         if(!(zi in rxnMap)) rxnMap[zi]={type:'neutral',score:0,dir:null};
+      }
+
+      // ── Label eligibility: 1 nearest support + 1 nearest resistance + all STRONG ──
+      // Other active zones keep their color but show no label
+      labelZiSet=new Set();
+      if(rs.labels){
+        const active=candidates
+          .filter(a=>rxnMap[a.zi]&&rxnMap[a.zi].type!=='neutral')
+          .map(a=>({...a,rxn:rxnMap[a.zi]}));
+
+        // nearest BUY below current price (support)
+        const buyBelow=active.filter(a=>a.rxn.dir==='buy'&&a.mid<=currentPrice)
+          .sort((a,b)=>b.mid-a.mid);
+        if(buyBelow.length) labelZiSet.add(buyBelow[0].zi);
+
+        // nearest SELL above current price (resistance)
+        const sellAbove=active.filter(a=>a.rxn.dir==='sell'&&a.mid>=currentPrice)
+          .sort((a,b)=>a.mid-b.mid);
+        if(sellAbove.length) labelZiSet.add(sellAbove[0].zi);
+
+        // STRONG zones always get a label (already within ATR, already rare)
+        active.filter(a=>a.rxn.type==='strong').forEach(a=>labelZiSet.add(a.zi));
       }
     }
 
@@ -7737,30 +7754,36 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
       let rgb=amberRgb;
       let labelStr=null;
+      let isStrong=false;
 
       if(reactOn&&rxnMap){
         const rxn=rxnMap[zi]||{type:'neutral',score:0,dir:null};
+        isStrong=rxn.type==='strong';
         switch(rxn.type){
-          case 'buy':    rgb={r:0,  g:210,b:100}; break; // green
-          case 'sell':   rgb={r:255,g:55, b:80 }; break; // red
-          case 'strong': rgb={r:160,g:90, b:250}; break; // purple
-          default:       rgb=neutralRgb;           break; // blue = neutral
+          case 'buy':    rgb={r:0,  g:210,b:100}; break;
+          case 'sell':   rgb={r:255,g:55, b:80 }; break;
+          case 'strong': rgb={r:148,g:78, b:235}; break; // muted purple
+          default:       rgb=neutralRgb;           break;
         }
-        // Compact label: "BUY 75%" / "SELL 68%" / "STRONG BUY 90%"
-        if(rs.labels&&rxn.type!=='neutral'){
+        // Label only for eligible zones (nearest support, nearest resistance, all STRONG)
+        if(labelZiSet&&labelZiSet.has(zi)&&rxn.type!=='neutral'){
+          const sc95=Math.min(95,rxn.score); // cap at 95%
           const dirTag=rxn.dir==='buy'?'BUY':'SELL';
-          if(rxn.type==='strong') labelStr=rs.score?`STRONG ${dirTag} ${rxn.score}%`:`STRONG ${dirTag}`;
-          else                    labelStr=rs.score?`${dirTag} ${rxn.score}%`:dirTag;
+          if(rxn.type==='strong') labelStr=rs.score?`STRONG ${dirTag} ${sc95}%`:`STRONG ${dirTag}`;
+          else                    labelStr=rs.score?`${dirTag} ${sc95}%`:dirTag;
         }
       }
 
-      // Fill — lower opacity for chart readability
-      ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.03+0.10*rel).toFixed(3)})`;
+      // Fill — strong zones get lower opacity
+      const fillBase=isStrong?[0.02,0.06]:[0.03,0.10];
+      ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(fillBase[0]+fillBase[1]*rel).toFixed(3)})`;
       ctx.fillRect(xLeft,y1,xRight-xLeft,boxH);
 
-      // Borders
-      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.25+0.45*rel).toFixed(3)})`;
-      ctx.lineWidth=rel>0.7?1.5:1;
+      // Borders — strong zones: thinner + lower opacity
+      const strokeBase=isStrong?[0.15,0.25]:[0.25,0.45];
+      const lw=isStrong?0.75:(rel>0.7?1.5:1);
+      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(strokeBase[0]+strokeBase[1]*rel).toFixed(3)})`;
+      ctx.lineWidth=lw;
       ctx.setLineDash([]);
       ctx.beginPath();
       ctx.moveTo(xLeft,y1);ctx.lineTo(xRight,y1);
@@ -7769,31 +7792,26 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
       // Midline dashed
       if(boxH>12){
-        ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.15+0.28*rel).toFixed(3)})`;
+        const midA=isStrong?(0.10+0.18*rel):(0.15+0.28*rel);
+        ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${midA.toFixed(3)})`;
         ctx.lineWidth=1;ctx.setLineDash([3,5]);
         ctx.beginPath();ctx.moveTo(xLeft,ym);ctx.lineTo(xRight,ym);ctx.stroke();
         ctx.setLineDash([]);
       }
 
-      // Label — left-anchored, compact
+      // Label — left-anchored, 7px, compact
       if(boxH>8){
         ctx.textBaseline='middle';
         if(reactOn&&labelStr){
-          // Reaction label: bold, colored, small
-          ctx.font='bold 8px monospace';
-          ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.80+0.18*rel).toFixed(3)})`;
-          ctx.fillText(labelStr,xLeft+6,ym);
-        } else if(reactOn){
-          // Neutral in react mode: minimal price label only
-          ctx.font='8px monospace';
-          ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.25+0.18*rel).toFixed(3)})`;
-          ctx.fillText(priceFmt(mid),xLeft+6,ym);
-        } else {
-          // Normal mode: full HVN info label
+          ctx.font='bold 7px monospace';
+          ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.72+0.20*rel).toFixed(3)})`;
+          ctx.fillText(labelStr,xLeft+5,ym);
+        } else if(!reactOn){
           ctx.font=`${rel>0.5?'bold ':''}9px monospace`;
           ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.55+0.30*rel).toFixed(3)})`;
           ctx.fillText(`HVN ${priceFmt(mid)} | $${nFmt(totalVol)} | ${totalTouches}t`,xLeft+6,ym);
         }
+        // neutral zones in react mode: no label — zone color alone signals state
       }
     }
 
