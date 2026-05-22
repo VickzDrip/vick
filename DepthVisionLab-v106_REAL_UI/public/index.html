@@ -8253,25 +8253,20 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 })();
 </script>
 <script>
-/* DVL Drawing Tools v3 + Replay Mode — TradingView-like state machine */
+/* DVL Drawing Tools v4 + Replay — Crosshair-driven, TradingView-like */
 (function DVL_DrawReplay(){
 'use strict';
 
-/* ═══════════════════════════════════════════════════════
-   CONSTANTS & CONFIG
-═══════════════════════════════════════════════════════ */
+/* ─── CONSTANTS & CONFIG ─── */
 const HIT_D=9,HIT_M=16,HDL_R_D=6,HDL_R_M=9;
 const STYLES={
   line:{color:'#00d4ff',width:1.5,opacity:0.95},
   rect:{borderColor:'#00d4ff',fillColor:'#0064b4',fillAlpha:0.07,borderWidth:1,opacity:0.95},
   text:{color:'#e8f0ff',fontSize:12,fontFamily:'monospace',bgColor:'rgba(6,12,22,0.72)'}
 };
-// User-configurable (can be extended)
 const CFG={snapToCandle:true,keepTool:false};
 
-/* ═══════════════════════════════════════════════════════
-   HELPERS
-═══════════════════════════════════════════════════════ */
+/* ─── HELPERS ─── */
 const el=id=>document.getElementById(id);
 const mob=()=>window.matchMedia('(pointer:coarse)').matches;
 const HIT=()=>mob()?HIT_M:HIT_D;
@@ -8280,9 +8275,7 @@ const uid=()=>Date.now()+Math.floor(Math.random()*1e6);
 const ready=fn=>document.readyState!=='loading'?fn():document.addEventListener('DOMContentLoaded',fn);
 const clone=o=>JSON.parse(JSON.stringify(o));
 
-/* ═══════════════════════════════════════════════════════
-   TIMESTAMP → INDEX CACHE (invalidated when candles change)
-═══════════════════════════════════════════════════════ */
+/* ─── TIMESTAMP→INDEX CACHE ─── */
 let _tic={},_ticN=-1;
 function tToIdx(t){
   const n=S.candles.length;
@@ -8295,12 +8288,7 @@ function tToIdx(t){
   return(_tic[t]=lo);
 }
 
-/* ═══════════════════════════════════════════════════════
-   COORDINATE SYSTEM
-   buildCS() replicates draw()'s internal computation.
-   _lastCS is updated at the end of each draw() call so
-   event handlers always use the same scale as last render.
-═══════════════════════════════════════════════════════ */
+/* ─── COORDINATE SYSTEM ─── */
 let _lastCS=null;
 function buildCS(){
   const wrap=el('chartWrap');if(!wrap)return null;
@@ -8312,114 +8300,78 @@ function buildCS(){
   const sc=scale(vs.length?vs:S.candles.slice(-1),H);
   return{
     W,H,cw,span,sc,
-    // candle index → screen x
     xI:i=>PL+(i-S.view.start+0.5)*cw/span,
-    // candle timestamp → screen x
     xT:t=>PL+(tToIdx(t)-S.view.start+0.5)*cw/span,
-    // price → screen y
     yP:p=>sc.y(p),
-    // screen y → price
     pY:y=>sc.lo+(1-(y-PT)/(H-PT-PB))*(sc.hi-sc.lo),
-    // screen x → raw float index
     iX:sx=>S.view.start+(sx-PL)*span/cw-0.5
   };
 }
 function getCS(){return _lastCS||buildCS();}
 
-/* ═══════════════════════════════════════════════════════
-   screenToChartPoint / chartPointToScreen
-   These are the central coordinate conversion functions.
-   All drawings must use them exclusively.
-═══════════════════════════════════════════════════════ */
+/* ─── S.cursor: crosshair position in chart coordinates ─── */
+function _syncCursor(cs){
+  if(!S._cross||!cs||!S.candles.length){S.cursor=null;return;}
+  const{cx,cy}=S._cross;
+  const raw=cs.iX(cx);
+  const idx=Math.max(0,Math.min(Math.round(raw),S.candles.length-1));
+  const c=S.candles[idx];
+  S.cursor={active:true,screenX:cs.xI(idx),screenY:cy,index:idx,time:c?c.t:0,price:cs.pY(cy)};
+}
+function _cursorPoint(){
+  if(!S.cursor)return null;
+  return{index:S.cursor.index,time:S.cursor.time,price:S.cursor.price};
+}
+
+/* ─── COORDINATE CONVERTERS ─── */
 function screenToChartPoint(sx,sy,cs){
   cs=cs||getCS();if(!cs)return{index:0,time:0,price:0};
-  const rawIdx=cs.iX(sx);
-  const idx=CFG.snapToCandle
-    ?Math.round(Math.max(0,Math.min(rawIdx,S.candles.length-1)))
-    :Math.max(0,Math.min(rawIdx,S.candles.length-1));
-  const snapIdx=Math.round(Math.max(0,Math.min(rawIdx,S.candles.length-1)));
-  const c=S.candles[snapIdx];
-  return{index:rawIdx,time:c?c.t:0,price:cs.pY(sy)};
+  const raw=cs.iX(sx);
+  const idx=CFG.snapToCandle?Math.round(Math.max(0,Math.min(raw,S.candles.length-1))):Math.max(0,Math.min(raw,S.candles.length-1));
+  const si=Math.round(Math.max(0,Math.min(raw,S.candles.length-1)));
+  const c=S.candles[si];
+  return{index:raw,time:c?c.t:0,price:cs.pY(sy)};
 }
 function chartPointToScreen(p,cs){
   cs=cs||getCS();if(!cs)return{x:0,y:0};
   const idx=p.time?tToIdx(p.time):(p.index||0);
   return{x:cs.xI(idx),y:cs.yP(p.price)};
 }
-function getPP(e){
-  const wrap=el('chartWrap');if(!wrap)return{x:0,y:0};
-  const r=wrap.getBoundingClientRect();
-  const src=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e;
-  return{x:src.clientX-r.left,y:src.clientY-r.top};
-}
 
-/* ═══════════════════════════════════════════════════════
-   STATE MACHINE
-   States:
-   IDLE         — normal chart mode (pan/zoom works normally)
-   DRAWING      — tool active, first point placed, awaiting second
-   SELECTED     — drawing is selected, handles shown
-   DRAG_BODY    — dragging selected drawing's body
-   DRAG_HANDLE  — dragging a handle of selected drawing
-   EDIT_TEXT    — text input popup is open
-═══════════════════════════════════════════════════════ */
+/* ─── STATE MACHINE ─── */
 const ST={IDLE:'idle',DRAWING:'drawing',SEL:'sel',DRAG_BODY:'drag_body',DRAG_HDL:'drag_hdl',EDIT_TEXT:'edit_text'};
 let _sm=ST.IDLE;
-
-// Active drawing tool
-let _tool=null; // 'trendline' | 'rectangle' | 'text' | null
-
-// In-progress draft (not yet in S.drawings)
+let _tool=null;
 let _draft=null;
-
-// Selected drawing id
 let _selId=null;
-
-// Drag state
 let _drag=null;
-// {handle:'body'|'h1'|'h2'|'h3'|'h4', ox:Number, oy:Number, origDraw:{...}, started:Boolean}
-
-// Text editing
-let _editId=null; // id of drawing being text-edited
-
-// Mobile helpers
-let _lpt=null;   // long press timer
+let _editId=null;
+let _lpt=null;
 let _ctxMenu=null;
-let _dblTap=null; // {id, t}
+let _dblTap=null;
 
-/* ═══════════════════════════════════════════════════════
-   INIT
-═══════════════════════════════════════════════════════ */
+/* ─── INIT ─── */
 ready(()=>{
   if(typeof S==='undefined')return;
   if(!S.drawings)S.drawings=[];
   if(!S.selectedDrawing)S.selectedDrawing=null;
   if(!S.replay)S.replay={enabled:false,index:null,playing:false,speed:1,timer:null};
-  _initBtns();
-  _initEvents();
-  _patchDraw();
-  _loadDrawings();
-  _watchSymTf();
+  S.cursor=null;
+  _initBtns();_initEvents();_patchDraw();_loadDrawings();_watchSymTf();
 });
 
-/* ═══════════════════════════════════════════════════════
-   BUTTONS
-═══════════════════════════════════════════════════════ */
+/* ─── BUTTONS ─── */
 function _initBtns(){
-  // Tool buttons
   [{id:'rpDrawLine',tool:'trendline'},{id:'rpDrawRect',tool:'rectangle'},{id:'rpDrawText',tool:'text'}]
   .forEach(({id,tool})=>{
     const b=el(id);if(!b)return;
     b.addEventListener('click',()=>_tool===tool?_clearTool():_setTool(tool));
   });
-  // Delete button
   const dBtn=el('dvlDrawDelete');if(dBtn)dBtn.addEventListener('click',_deleteSelected);
-  // Text popup
   const txOk=el('dvlTextOk'),txC=el('dvlTextCancel'),txI=el('dvlTextInput');
   if(txOk)txOk.addEventListener('click',_confirmText);
   if(txC)txC.addEventListener('click',_cancelText);
   if(txI)txI.addEventListener('keydown',e=>{if(e.key==='Enter')_confirmText();if(e.key==='Escape')_cancelText();});
-  // Replay buttons
   const rBtn=el('rpReplay');if(rBtn)rBtn.addEventListener('click',()=>S.replay.enabled?_disableReplay():_enableReplay());
   const rPlay=el('dvlRpPlay'),rBack=el('dvlRpBack'),rFwd=el('dvlRpFwd'),rSpd=el('dvlRpSpeed'),rExit=el('dvlRpExit');
   if(rPlay)rPlay.addEventListener('click',()=>S.replay.playing?_pauseReplay():_playReplay());
@@ -8432,35 +8384,24 @@ function _initBtns(){
   if(rExit)rExit.addEventListener('click',_disableReplay);
 }
 
-/* ═══════════════════════════════════════════════════════
-   TOOL STATE
-═══════════════════════════════════════════════════════ */
+/* ─── TOOL STATE ─── */
 function _setTool(t){
-  _cancelDrawing();_deselect();
-  _tool=t;_sm=ST.IDLE;
-  _updateToolBtns();
+  _cancelDrawing();_deselect();_tool=t;_sm=ST.IDLE;_updateToolBtns();
   const wrap=el('chartWrap');if(wrap)wrap.style.cursor='crosshair';
   drawSoon();
 }
 function _clearTool(){
-  _tool=null;_draft=null;
-  if(_sm===ST.DRAWING)_sm=ST.IDLE;
-  _updateToolBtns();
+  _tool=null;_draft=null;if(_sm===ST.DRAWING)_sm=ST.IDLE;_updateToolBtns();
   const wrap=el('chartWrap');if(wrap)wrap.style.cursor='';
   drawSoon();
 }
-function _cancelDrawing(){
-  _draft=null;
-  if(_sm===ST.DRAWING)_sm=ST.IDLE;
-}
+function _cancelDrawing(){_draft=null;if(_sm===ST.DRAWING)_sm=ST.IDLE;}
 function _updateToolBtns(){
   [{id:'rpDrawLine',t:'trendline'},{id:'rpDrawRect',t:'rectangle'},{id:'rpDrawText',t:'text'}]
   .forEach(({id,t})=>{const b=el(id);if(b)b.classList.toggle('dvl-active',t===_tool);});
 }
 
-/* ═══════════════════════════════════════════════════════
-   SELECTION
-═══════════════════════════════════════════════════════ */
+/* ─── SELECTION ─── */
 function _select(id){
   _selId=id;S.selectedDrawing=id?S.drawings.find(d=>d.id===id):null;
   _sm=id?ST.SEL:ST.IDLE;
@@ -8488,19 +8429,13 @@ function _dupSelected(){
   S.drawings.push(d);_select(d.id);_saveDrawings();drawSoon();
 }
 
-/* ═══════════════════════════════════════════════════════
-   EVENTS — Priority order:
-   1. Drawing in progress (tool active) → capture
-   2. Handle hit → capture
-   3. Body hit on selected drawing → capture
-   4. Any drawing hit → capture to select
-   5. Miss → pass through (chart pans normally)
-═══════════════════════════════════════════════════════ */
+/* ─── EVENTS ─── */
 function _initEvents(){
   const wrap=el('chartWrap');if(!wrap)return;
   wrap.addEventListener('mousedown',_onMD,true);
   window.addEventListener('mousemove',_onMM,true);
   window.addEventListener('mouseup',_onMU,true);
+  wrap.addEventListener('click',_onCk,true);
   wrap.addEventListener('touchstart',_onTS,{capture:true,passive:false});
   wrap.addEventListener('touchmove',_onTM,{capture:true,passive:false});
   wrap.addEventListener('touchend',_onTE,{capture:true,passive:false});
@@ -8512,189 +8447,136 @@ function _initEvents(){
     }
     if((e.key==='Delete'||e.key==='Backspace')&&_selId&&document.activeElement===document.body)_deleteSelected();
   });
-  window.addEventListener('contextmenu',e=>{
-    // Right-click cancels drawing in progress
-    if(_sm===ST.DRAWING){e.preventDefault();_cancelDrawing();drawSoon();}
-  });
-  // Replay: click chart to jump cursor
+  window.addEventListener('contextmenu',e=>{if(_sm===ST.DRAWING){e.preventDefault();_cancelDrawing();drawSoon();}});
   wrap.addEventListener('click',e=>{
     if(!S.replay?.enabled||_tool||_selId)return;
     const cs=getCS();if(!cs)return;
-    const p=getPP(e),idx=Math.round(cs.iX(p.x));
+    const r=wrap.getBoundingClientRect();
+    const idx=Math.round(cs.iX(e.clientX-r.left));
     const all=S._allCandles||S.candles;
     if(idx>=0&&idx<all.length)_setReplayIdx(idx);
   });
 }
 
-/* ── mousedown ── */
+function _onCk(e){if(_tool||_sm===ST.DRAWING)e.stopPropagation();}
+
 function _onMD(e){
   if(e.button!==0)return;
   _closeCtx();
   const cs=getCS();if(!cs)return;
-  const p=getPP(e);
-
-  /* Priority 1: Tool is active OR already in drawing state */
+  const wrap=el('chartWrap');if(!wrap)return;
+  const r=wrap.getBoundingClientRect();
+  const p={x:e.clientX-r.left,y:e.clientY-r.top};
   if(_tool||_sm===ST.DRAWING){
     e.stopPropagation();e.preventDefault();
-    _handleDrawClick(p,cs);
-    return;
+    if(!S._cross||!S.cursor){S._cross={cx:p.x,cy:p.y};_syncCursor(cs);}
+    _handleDrawClick(cs);return;
   }
-
-  /* Priority 2 & 3: Selected drawing — check handles first, then body */
   const sel=_getSelected();
   if(sel){
     const hh=_hitHandles(p.x,p.y,sel,cs);
-    if(hh){
-      e.stopPropagation();
-      _sm=ST.DRAG_HDL;
-      _drag={handle:hh,ox:p.x,oy:p.y,origDraw:clone(sel),started:false};
-      return;
-    }
-    if(_hitDrawing(sel,p.x,p.y,cs)){
-      e.stopPropagation();
-      // Don't set DRAG_BODY yet — wait for actual movement in _onMM
-      _drag={handle:'body',ox:p.x,oy:p.y,origDraw:clone(sel),started:false};
-      return;
-    }
+    if(hh){e.stopPropagation();_sm=ST.DRAG_HDL;_drag={handle:hh,ox:p.x,oy:p.y,origDraw:clone(sel),started:false};return;}
+    if(_hitDrawing(sel,p.x,p.y,cs)){e.stopPropagation();_drag={handle:'body',ox:p.x,oy:p.y,origDraw:clone(sel),started:false};return;}
   }
-
-  /* Priority 4: Any drawing */
   const hit=_hitAll(p.x,p.y,cs);
-  if(hit){
-    e.stopPropagation();
-    _select(hit.id);
-    _drag={handle:'body',ox:p.x,oy:p.y,origDraw:clone(hit),started:false};
-    return;
-  }
-
-  /* Priority 5: Miss — deselect, let chart pan proceed normally */
+  if(hit){e.stopPropagation();_select(hit.id);_drag={handle:'body',ox:p.x,oy:p.y,origDraw:clone(hit),started:false};return;}
   if(_selId){_deselect();drawSoon();}
 }
 
-/* ── mousemove ── */
+/* DRAWING state: no stopPropagation so native mousemove updates S._cross and crosshair shows.
+   DRAG states: stop propagation to block chart pan. */
 function _onMM(e){
-  // Only intercept when actively drawing, dragging, or previewing
-  const busy=_sm===ST.DRAWING||_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL||(_drag&&!_drag.started);
-  if(!busy)return;
+  if(_sm===ST.DRAWING)return;
   const cs=getCS();if(!cs)return;
   const wrap=el('chartWrap');if(!wrap)return;
   const r=wrap.getBoundingClientRect();
   const p={x:e.clientX-r.left,y:e.clientY-r.top};
-
-  if(_sm===ST.DRAWING&&_draft){
-    const cp=screenToChartPoint(p.x,p.y,cs);
-    _updateDraftEnd(cp);
-    e.stopPropagation();drawSoon();return;
-  }
-
-  if(_sm===ST.DRAG_HDL&&_drag){
-    _applyHandleDrag(p,cs);
-    e.stopPropagation();drawSoon();return;
-  }
-
-  // Pending drag (body) — check if movement threshold exceeded
+  if(_sm===ST.DRAG_HDL&&_drag){_applyHandleDrag(p,cs);e.stopPropagation();drawSoon();return;}
   if(_drag&&!_drag.started&&_selId){
-    const moved=Math.hypot(p.x-_drag.ox,p.y-_drag.oy)>4;
-    if(moved){
-      _drag.started=true;_sm=ST.DRAG_BODY;
-      _applyBodyDrag(p,cs);
-      e.stopPropagation();drawSoon();return;
+    if(Math.hypot(p.x-_drag.ox,p.y-_drag.oy)>4){
+      _drag.started=true;_sm=ST.DRAG_BODY;_applyBodyDrag(p,cs);e.stopPropagation();drawSoon();return;
     }
   }
-
-  if(_sm===ST.DRAG_BODY&&_drag&&_drag.started){
-    _applyBodyDrag(p,cs);
-    e.stopPropagation();drawSoon();
-  }
+  if(_sm===ST.DRAG_BODY&&_drag?.started){_applyBodyDrag(p,cs);e.stopPropagation();drawSoon();}
 }
 
-/* ── mouseup ── */
 function _onMU(e){
-  if(_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL){
-    _sm=ST.SEL;
-    if(_drag?.started)_saveDrawings();
-    _drag=null;
-    e.stopPropagation();return;
-  }
+  if(_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL){_sm=ST.SEL;if(_drag?.started)_saveDrawings();_drag=null;e.stopPropagation();return;}
   if(_drag){_drag=null;e.stopPropagation();}
 }
 
-/* ── touchstart ── */
+/* Mobile drawing: touchstart → seed crosshair (no point yet).
+   Slide finger to adjust. touchend → confirm point. */
 function _onTS(e){
   if(e.touches.length>1)return;
   _closeCtx();
-  const cs=getCS();if(!cs)return;
-  const p=getPP(e);
-
+  const wrap=el('chartWrap');if(!wrap)return;
+  const r=wrap.getBoundingClientRect();
+  const t=e.touches[0];
+  const x=t.clientX-r.left,y=t.clientY-r.top;
   if(_tool||_sm===ST.DRAWING){
     e.stopPropagation();e.preventDefault();
-    _handleDrawClick(p,cs);return;
+    S._cross={cx:x,cy:y};drawSoon();return;
   }
-
+  const cs=getCS();if(!cs)return;
+  const p={x,y};
   const sel=_getSelected();
   if(sel){
     const hh=_hitHandles(p.x,p.y,sel,cs);
-    if(hh){
-      e.stopPropagation();e.preventDefault();
-      _sm=ST.DRAG_HDL;
-      _drag={handle:hh,ox:p.x,oy:p.y,origDraw:clone(sel),started:false};
-      return;
-    }
+    if(hh){e.stopPropagation();e.preventDefault();_sm=ST.DRAG_HDL;_drag={handle:hh,ox:p.x,oy:p.y,origDraw:clone(sel),started:false};return;}
     if(_hitDrawing(sel,p.x,p.y,cs)){
       e.stopPropagation();e.preventDefault();
       _drag={handle:'body',ox:p.x,oy:p.y,origDraw:clone(sel),started:false};
-      _lpt=setTimeout(()=>{_lpt=null;if(!_drag?.started){_drag=null;_showCtx(sel,p);}},520);
-      return;
+      _lpt=setTimeout(()=>{_lpt=null;if(!_drag?.started){_drag=null;_showCtx(sel,p);}},520);return;
     }
   }
-
   const hit=_hitAll(p.x,p.y,cs);
   if(hit){
     e.stopPropagation();e.preventDefault();
-    // Double-tap to edit text
     if(_dblTap&&_dblTap.id===hit.id&&Date.now()-_dblTap.t<400){
-      _dblTap=null;
-      if(hit.type==='text'){_select(hit.id);_openTextPopup(p,hit.text,hit.id);return;}
+      _dblTap=null;if(hit.type==='text'){_select(hit.id);_openTextPopup(p,hit.text,hit.id);return;}
     }
     _dblTap={id:hit.id,t:Date.now()};
     _select(hit.id);
     _drag={handle:'body',ox:p.x,oy:p.y,origDraw:clone(hit),started:false};
-    _lpt=setTimeout(()=>{_lpt=null;if(!_drag?.started){_drag=null;_showCtx(hit,p);}},520);
-    return;
+    _lpt=setTimeout(()=>{_lpt=null;if(!_drag?.started){_drag=null;_showCtx(hit,p);}},520);return;
   }
-
   if(_selId){_deselect();drawSoon();}
 }
 
-/* ── touchmove ── */
 function _onTM(e){
-  const busy=_sm===ST.DRAWING||_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL||(_drag&&!_drag.started);
-  if(!busy)return;
   if(e.touches.length>1)return;
+  const wrap=el('chartWrap');if(!wrap)return;
+  const r=wrap.getBoundingClientRect();
+  const t=e.touches[0];
+  const x=t.clientX-r.left,y=t.clientY-r.top;
+  if(_tool||_sm===ST.DRAWING){
+    e.stopPropagation();e.preventDefault();
+    S._cross={cx:x,cy:y};drawSoon();return;
+  }
+  if(!(_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL||(_drag&&!_drag.started)))return;
   if(_lpt){clearTimeout(_lpt);_lpt=null;}
   e.stopPropagation();e.preventDefault();
   const cs=getCS();if(!cs)return;
-  const p=getPP(e);
-
-  if(_sm===ST.DRAWING&&_draft){const cp=screenToChartPoint(p.x,p.y,cs);_updateDraftEnd(cp);drawSoon();return;}
+  const p={x,y};
   if(_sm===ST.DRAG_HDL&&_drag){_applyHandleDrag(p,cs);drawSoon();return;}
   if(_drag&&!_drag.started&&_selId){
-    const moved=Math.hypot(p.x-_drag.ox,p.y-_drag.oy)>4;
-    if(moved){_drag.started=true;_sm=ST.DRAG_BODY;_applyBodyDrag(p,cs);drawSoon();return;}
+    if(Math.hypot(p.x-_drag.ox,p.y-_drag.oy)>4){_drag.started=true;_sm=ST.DRAG_BODY;_applyBodyDrag(p,cs);drawSoon();return;}
   }
   if(_sm===ST.DRAG_BODY&&_drag?.started){_applyBodyDrag(p,cs);drawSoon();}
 }
 
-/* ── touchend ── */
 function _onTE(e){
   if(_lpt){clearTimeout(_lpt);_lpt=null;}
-  if(_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL){
-    _sm=ST.SEL;if(_drag?.started)_saveDrawings();_drag=null;return;
+  if(_tool||_sm===ST.DRAWING){
+    e.stopPropagation();
+    const cs=getCS();if(!cs)return;
+    _syncCursor(cs);if(S.cursor)_handleDrawClick(cs);return;
   }
-  if(_drag){_drag=null;}
+  if(_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL){_sm=ST.SEL;if(_drag?.started)_saveDrawings();_drag=null;return;}
+  if(_drag)_drag=null;
 }
 
-/* ── double click (desktop text edit) ── */
 function _onDbl(e){
   const cs=getCS();if(!cs)return;
   const wrap=el('chartWrap');if(!wrap)return;
@@ -8704,64 +8586,38 @@ function _onDbl(e){
   if(hit&&hit.type==='text'){e.stopPropagation();_select(hit.id);_openTextPopup(p,hit.text,hit.id);}
 }
 
-/* ═══════════════════════════════════════════════════════
-   DRAWING LOGIC
-═══════════════════════════════════════════════════════ */
-function _handleDrawClick(p,cs){
-  const cp=screenToChartPoint(p.x,p.y,cs);
-
+/* ─── DRAWING LOGIC ─── */
+function _handleDrawClick(cs){
+  const cp=_cursorPoint();if(!cp)return;
   if(_tool==='text'){
-    // Single click → open text popup
+    const sp=chartPointToScreen(cp,cs);
     _draft={id:uid(),type:'text',p:{...cp},text:'',style:{...STYLES.text},locked:false,visible:true,createdAt:Date.now()};
-    _openTextPopup(p,null,null);
-    return;
+    _openTextPopup({x:sp.x,y:sp.y},null,null);return;
   }
-
   if(_sm!==ST.DRAWING){
-    // First click: start draft
-    _draft=_makeDraft(_tool,cp);
-    _sm=ST.DRAWING;
-    drawSoon();
+    _draft=_makeDraft(_tool,cp);_sm=ST.DRAWING;drawSoon();
   } else {
-    // Second click: finalize
-    _updateDraftEnd(cp);
-    _finalize();
+    _updateDraftEnd(cp);_finalize();
   }
 }
-
 function _makeDraft(type,cp){
   const base={id:uid(),type,locked:false,visible:true,createdAt:Date.now()};
   if(type==='trendline')return{...base,p1:{...cp},p2:{...cp},style:{...STYLES.line},extendLeft:false,extendRight:false};
   if(type==='rectangle')return{...base,p1:{...cp},p2:{...cp},style:{...STYLES.rect}};
   return base;
 }
-
-function _updateDraftEnd(cp){
-  if(!_draft)return;
-  _draft.p2={...cp};
-}
-
+function _updateDraftEnd(cp){if(_draft)_draft.p2={...cp};}
 function _finalize(){
   if(!_draft)return;
-  S.drawings.push(_draft);
-  const id=_draft.id;
-  _draft=null;
-  _sm=ST.SEL;
-  if(!CFG.keepTool)_clearTool();
-  _select(id);
-  _saveDrawings();drawSoon();
+  S.drawings.push(_draft);const id=_draft.id;
+  _draft=null;_sm=ST.SEL;if(!CFG.keepTool)_clearTool();
+  _select(id);_saveDrawings();drawSoon();
 }
 
-/* ═══════════════════════════════════════════════════════
-   DRAG LOGIC
-   Body drag: move entire drawing, all points shift by same delta.
-   Handle drag: move individual endpoint/corner.
-   Delta is computed in candle-index + price space.
-═══════════════════════════════════════════════════════ */
+/* ─── DRAG ─── */
 function _applyBodyDrag(p,cs){
   const d=_getSelected();if(!d||!_drag)return;
   const orig=_drag.origDraw;
-  // Compute raw float index delta (no snapping during drag for smoothness)
   const di=Math.round(cs.iX(p.x)-cs.iX(_drag.ox));
   const dp=cs.pY(p.y)-cs.pY(_drag.oy);
   if(d.type==='text'){
@@ -8774,145 +8630,93 @@ function _applyBodyDrag(p,cs){
     d.p2={index:ni2,time:S.candles[ni2]?.t||orig.p2.time,price:orig.p2.price+dp};
   }
 }
-
 function _applyHandleDrag(p,cs){
   const d=_getSelected();if(!d||!_drag)return;
-  const cp=screenToChartPoint(p.x,p.y,cs);
-  const h=_drag.handle;
+  const cp=screenToChartPoint(p.x,p.y,cs);const h=_drag.handle;
   if(d.type==='trendline'||d.type==='rectangle'){
     if(h==='h1')d.p1={...cp};
     else if(h==='h2')d.p2={...cp};
-    else if(h==='h3'){// rect top-right: x from p2, y from p1
-      d.p2={...d.p2,index:cp.index,time:cp.time};
-      d.p1={...d.p1,price:cp.price};
-    } else if(h==='h4'){// rect bottom-left: x from p1, y from p2
-      d.p1={...d.p1,index:cp.index,time:cp.time};
-      d.p2={...d.p2,price:cp.price};
-    }
-  } else if(d.type==='text'){
-    d.p={...cp};
-  }
+    else if(h==='h3'){d.p2={...d.p2,index:cp.index,time:cp.time};d.p1={...d.p1,price:cp.price};}
+    else if(h==='h4'){d.p1={...d.p1,index:cp.index,time:cp.time};d.p2={...d.p2,price:cp.price};}
+  } else if(d.type==='text'){d.p={...cp};}
 }
 
-/* ═══════════════════════════════════════════════════════
-   HIT TESTING
-═══════════════════════════════════════════════════════ */
+/* ─── HIT TESTING ─── */
 function _hitAll(mx,my,cs){
-  // Reverse order: topmost (last in array) checked first
   for(let i=S.drawings.length-1;i>=0;i--){
-    const d=S.drawings[i];
-    if(d.visible!==false&&_hitDrawing(d,mx,my,cs))return d;
-  }
-  return null;
+    const d=S.drawings[i];if(d.visible!==false&&_hitDrawing(d,mx,my,cs))return d;
+  }return null;
 }
-
 function _hitDrawing(d,mx,my,cs){
-  if(!d||d.visible===false)return false;
-  const R=HIT();
+  if(!d||d.visible===false)return false;const R=HIT();
   if(d.type==='trendline'){
     const s1=chartPointToScreen(d.p1,cs),s2=chartPointToScreen(d.p2,cs);
     return _ptSegDist(mx,my,s1.x,s1.y,s2.x,s2.y)<R;
   }
   if(d.type==='rectangle'){
     const s1=chartPointToScreen(d.p1,cs),s2=chartPointToScreen(d.p2,cs);
-    const xMin=Math.min(s1.x,s2.x),xMax=Math.max(s1.x,s2.x);
-    const yMin=Math.min(s1.y,s2.y),yMax=Math.max(s1.y,s2.y);
-    const inside=mx>=xMin&&mx<=xMax&&my>=yMin&&my<=yMax;
-    const nearBorder=(mx>=xMin-R&&mx<=xMax+R&&my>=yMin-R&&my<=yMax+R)&&
-      (Math.abs(mx-xMin)<R||Math.abs(mx-xMax)<R||Math.abs(my-yMin)<R||Math.abs(my-yMax)<R);
-    return inside||nearBorder;
+    const xMin=Math.min(s1.x,s2.x),xMax=Math.max(s1.x,s2.x),yMin=Math.min(s1.y,s2.y),yMax=Math.max(s1.y,s2.y);
+    const nb=(mx>=xMin-R&&mx<=xMax+R&&my>=yMin-R&&my<=yMax+R)&&(Math.abs(mx-xMin)<R||Math.abs(mx-xMax)<R||Math.abs(my-yMin)<R||Math.abs(my-yMax)<R);
+    return(mx>=xMin&&mx<=xMax&&my>=yMin&&my<=yMax)||nb;
   }
   if(d.type==='text'){
-    const sp=chartPointToScreen(d.p,cs);
-    const fs=d.style?.fontSize||12;
-    const tw=d.text.length*fs*0.62+12;
-    return mx>=sp.x-4&&mx<=sp.x+tw&&my>=sp.y-fs-2&&my<=sp.y+4;
-  }
-  return false;
+    const sp=chartPointToScreen(d.p,cs);const fs=d.style?.fontSize||12;
+    return mx>=sp.x-4&&mx<=sp.x+d.text.length*fs*0.62+12&&my>=sp.y-fs-2&&my<=sp.y+4;
+  }return false;
 }
-
 function _hitHandles(mx,my,d,cs){
-  const R=HDL()+5; // larger than visual handle for easier grabbing
+  const R=HDL()+5;
   if(d.type==='trendline'){
     const s1=chartPointToScreen(d.p1,cs),s2=chartPointToScreen(d.p2,cs);
-    if(Math.hypot(mx-s1.x,my-s1.y)<R)return'h1';
-    if(Math.hypot(mx-s2.x,my-s2.y)<R)return'h2';
+    if(Math.hypot(mx-s1.x,my-s1.y)<R)return'h1';if(Math.hypot(mx-s2.x,my-s2.y)<R)return'h2';
   } else if(d.type==='rectangle'){
     const s1=chartPointToScreen(d.p1,cs),s2=chartPointToScreen(d.p2,cs);
-    if(Math.hypot(mx-s1.x,my-s1.y)<R)return'h1';
-    if(Math.hypot(mx-s2.x,my-s2.y)<R)return'h2';
-    if(Math.hypot(mx-s2.x,my-s1.y)<R)return'h3';
-    if(Math.hypot(mx-s1.x,my-s2.y)<R)return'h4';
-  }
-  return null;
+    if(Math.hypot(mx-s1.x,my-s1.y)<R)return'h1';if(Math.hypot(mx-s2.x,my-s2.y)<R)return'h2';
+    if(Math.hypot(mx-s2.x,my-s1.y)<R)return'h3';if(Math.hypot(mx-s1.x,my-s2.y)<R)return'h4';
+  }return null;
 }
-
 function _ptSegDist(px,py,ax,ay,bx,by){
-  const dx=bx-ax,dy=by-ay;
-  if(!dx&&!dy)return Math.hypot(px-ax,py-ay);
+  const dx=bx-ax,dy=by-ay;if(!dx&&!dy)return Math.hypot(px-ax,py-ay);
   const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)));
   return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
 }
 
-/* ═══════════════════════════════════════════════════════
-   TEXT POPUP
-═══════════════════════════════════════════════════════ */
+/* ─── TEXT POPUP ─── */
 function _openTextPopup(sp,existingText,editId){
   const pop=el('dvlTextPopup');if(!pop)return;
   const wrap=el('chartWrap');if(!wrap)return;
   const r=wrap.getBoundingClientRect();
   let lx=r.left+sp.x+12,ly=r.top+sp.y-72;
   lx=Math.min(lx,window.innerWidth-230);ly=Math.max(ly,8);
-  pop.style.left=lx+'px';pop.style.top=ly+'px';
-  pop.style.display='flex';pop.style.flexDirection='column';
+  pop.style.left=lx+'px';pop.style.top=ly+'px';pop.style.display='flex';pop.style.flexDirection='column';
   const inp=el('dvlTextInput');
   if(inp){inp.value=existingText||'';setTimeout(()=>{inp.focus();inp.select();},50);}
-  _editId=editId||null;
-  _sm=ST.EDIT_TEXT;
+  _editId=editId||null;_sm=ST.EDIT_TEXT;
 }
-
 function _confirmText(){
   const pop=el('dvlTextPopup');if(pop)pop.style.display='none';
-  const inp=el('dvlTextInput');
-  const txt=(inp?inp.value:'')||'';
-  if(_editId){
-    // Editing existing text drawing
-    const d=S.drawings.find(x=>x.id===_editId);
-    if(d)d.text=txt;
-    _editId=null;_sm=ST.SEL;_saveDrawings();drawSoon();return;
-  }
-  // New text drawing
+  const txt=el('dvlTextInput')?.value||'';
+  if(_editId){const d=S.drawings.find(x=>x.id===_editId);if(d)d.text=txt;_editId=null;_sm=ST.SEL;_saveDrawings();drawSoon();return;}
   if(_draft){
     if(txt){_draft.text=txt;S.drawings.push(_draft);const id=_draft.id;_draft=null;_sm=ST.SEL;if(!CFG.keepTool)_clearTool();_select(id);_saveDrawings();}
     else{_draft=null;_sm=ST.IDLE;if(!CFG.keepTool)_clearTool();}
-  }
-  drawSoon();
+  }drawSoon();
 }
-
 function _cancelText(){
   const pop=el('dvlTextPopup');if(pop)pop.style.display='none';
-  _draft=null;_editId=null;
-  if(_sm===ST.EDIT_TEXT)_sm=_selId?ST.SEL:ST.IDLE;
-  if(!CFG.keepTool)_clearTool();
-  drawSoon();
+  _draft=null;_editId=null;if(_sm===ST.EDIT_TEXT)_sm=_selId?ST.SEL:ST.IDLE;
+  if(!CFG.keepTool)_clearTool();drawSoon();
 }
 
-/* ═══════════════════════════════════════════════════════
-   CONTEXT MENU (mobile long-press)
-═══════════════════════════════════════════════════════ */
+/* ─── CONTEXT MENU ─── */
 function _showCtx(d,sp){
-  _closeCtx();
-  const wrap=el('chartWrap');if(!wrap)return;
+  _closeCtx();const wrap=el('chartWrap');if(!wrap)return;
   const r=wrap.getBoundingClientRect();
   let lx=r.left+sp.x,ly=r.top+sp.y;
-  if(lx+145>window.innerWidth)lx=window.innerWidth-155;
-  if(ly+180>window.innerHeight)ly=ly-180;
+  if(lx+145>window.innerWidth)lx=window.innerWidth-155;if(ly+180>window.innerHeight)ly=ly-180;
   const m=document.createElement('div');
   m.style.cssText='position:fixed;left:'+lx+'px;top:'+ly+'px;z-index:9999;background:rgba(6,12,22,0.97);border:1px solid rgba(0,212,255,0.28);border-radius:9px;overflow:hidden;font-family:monospace;font-size:11px;min-width:130px;box-shadow:0 8px 28px rgba(0,0,0,0.65);';
-  const items=[
-    {lbl:'Deletar',clr:'#ff5252',fn:()=>{_select(d.id);_deleteSelected();}},
-    {lbl:'Duplicar',clr:'#c8d8f0',fn:()=>{_select(d.id);_dupSelected();}},
-  ];
+  const items=[{lbl:'Deletar',clr:'#ff5252',fn:()=>{_select(d.id);_deleteSelected();}},{lbl:'Duplicar',clr:'#c8d8f0',fn:()=>{_select(d.id);_dupSelected();}}];
   if(d.type==='text')items.splice(1,0,{lbl:'Editar texto',clr:'#00d4ff',fn:()=>{_select(d.id);_openTextPopup(sp,d.text,d.id);}});
   items.push({lbl:'Cancelar',clr:'#6a7fa0',fn:()=>{}});
   items.forEach(({lbl,clr,fn},i)=>{
@@ -8920,36 +8724,27 @@ function _showCtx(d,sp){
     div.style.cssText='padding:10px 14px;cursor:pointer;color:'+clr+';'+(i<items.length-1?'border-bottom:1px solid rgba(30,42,64,0.35);':'');
     div.addEventListener('mouseover',()=>div.style.background='rgba(0,212,255,0.08)');
     div.addEventListener('mouseout',()=>div.style.background='');
-    div.addEventListener('click',()=>{_closeCtx();fn();});
-    m.appendChild(div);
+    div.addEventListener('click',()=>{_closeCtx();fn();});m.appendChild(div);
   });
   document.body.appendChild(m);_ctxMenu=m;
   setTimeout(()=>document.addEventListener('click',_closeCtx,{once:true}),50);
 }
 function _closeCtx(){if(_ctxMenu){_ctxMenu.remove();_ctxMenu=null;}}
 
-/* ═══════════════════════════════════════════════════════
-   DRAW() PATCH
-   Wraps the global draw():
-   1. Handles replay (temporarily slices S.candles)
-   2. Calls original draw()
-   3. Caches the coordinate system (_lastCS)
-   4. Renders user drawings + draft preview + replay cursor + tool hint
-═══════════════════════════════════════════════════════ */
+/* ─── DRAW() PATCH ─── */
 function _patchDraw(){
   const _orig=draw;
   draw=function(){
     if(S.replay?.enabled&&S.replay.index!=null){
-      const full=S._allCandles||S.candles;
-      S._allCandles=full;
-      const end=Math.min(Math.floor(S.replay.index)+1,full.length);
-      S.candles=full.slice(0,end);
+      const full=S._allCandles||S.candles;S._allCandles=full;
+      S.candles=full.slice(0,Math.min(Math.floor(S.replay.index)+1,full.length));
       try{_orig();}finally{S.candles=full;}
-    } else {
-      S._allCandles=null;_orig();
-    }
-    // Cache CS after draw so events use same scale as last render
+    } else {S._allCandles=null;_orig();}
     _lastCS=buildCS();
+    _syncCursor(_lastCS);
+    /* Keep draft endpoint anchored to crosshair for live preview */
+    if(_sm===ST.DRAWING&&_draft&&S.cursor)
+      _draft.p2={index:S.cursor.index,time:S.cursor.time,price:S.cursor.price};
     const c=el('chart');if(!c)return;
     const ctx=c.getContext('2d');
     ctx.save();
@@ -8962,20 +8757,15 @@ function _patchDraw(){
   };
 }
 
-/* ═══════════════════════════════════════════════════════
-   RENDERING
-═══════════════════════════════════════════════════════ */
+/* ─── RENDERING ─── */
 function _renderAll(ctx,cs){
   if(!S.drawings?.length&&!_draft)return;
   ctx.save();
-  // Selected drawing renders last (on top of all others)
-  const sorted=S.drawings.filter(d=>d.visible!==false).slice()
-    .sort((a,b)=>a.id===_selId?1:b.id===_selId?-1:0);
+  const sorted=S.drawings.filter(d=>d.visible!==false).slice().sort((a,b)=>a.id===_selId?1:b.id===_selId?-1:0);
   sorted.forEach(d=>_renderOne(ctx,cs,d,d.id===_selId));
   if(_draft)_renderDraft(ctx,cs);
   ctx.restore();
 }
-
 function _renderOne(ctx,cs,d,sel){
   ctx.save();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.globalAlpha=1;
   if(d.type==='trendline')_rLine(ctx,cs,d,sel);
@@ -8983,133 +8773,98 @@ function _renderOne(ctx,cs,d,sel){
   else if(d.type==='text')_rText(ctx,cs,d,sel);
   ctx.restore();
 }
-
 function _rLine(ctx,cs,d,sel){
   const s1=chartPointToScreen(d.p1,cs),s2=chartPointToScreen(d.p2,cs);
   ctx.beginPath();ctx.moveTo(s1.x,s1.y);ctx.lineTo(s2.x,s2.y);
-  ctx.strokeStyle=d.style?.color||'#00d4ff';
-  ctx.lineWidth=sel?(d.style?.width||1.5)+0.8:(d.style?.width||1.5);
+  ctx.strokeStyle=d.style?.color||'#00d4ff';ctx.lineWidth=sel?(d.style?.width||1.5)+0.8:(d.style?.width||1.5);
   ctx.globalAlpha=d.style?.opacity||0.95;
   if(sel){ctx.shadowColor='rgba(0,212,255,0.5)';ctx.shadowBlur=6;}
   ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;
   if(sel){_rHandle(ctx,s1.x,s1.y);_rHandle(ctx,s2.x,s2.y);}
 }
-
 function _rRect(ctx,cs,d,sel){
   const s1=chartPointToScreen(d.p1,cs),s2=chartPointToScreen(d.p2,cs);
-  const rx=Math.min(s1.x,s2.x),ry=Math.min(s1.y,s2.y);
-  const rw=Math.abs(s2.x-s1.x),rh=Math.abs(s2.y-s1.y);
-  ctx.globalAlpha=d.style?.opacity||0.95;
-  ctx.fillStyle=d.style?.fillColor||'#0064b4';
-  ctx.globalAlpha=(d.style?.fillAlpha??0.07);
-  ctx.fillRect(rx,ry,rw,rh);
-  ctx.globalAlpha=d.style?.opacity||0.95;
-  ctx.strokeStyle=d.style?.borderColor||'#00d4ff';
+  const rx=Math.min(s1.x,s2.x),ry=Math.min(s1.y,s2.y),rw=Math.abs(s2.x-s1.x),rh=Math.abs(s2.y-s1.y);
+  ctx.fillStyle=d.style?.fillColor||'#0064b4';ctx.globalAlpha=d.style?.fillAlpha??0.07;ctx.fillRect(rx,ry,rw,rh);
+  ctx.globalAlpha=d.style?.opacity||0.95;ctx.strokeStyle=d.style?.borderColor||'#00d4ff';
   ctx.lineWidth=sel?(d.style?.borderWidth||1)+0.8:(d.style?.borderWidth||1);
   if(sel){ctx.setLineDash([5,3]);ctx.shadowColor='rgba(0,212,255,0.4)';ctx.shadowBlur=4;}
-  ctx.strokeRect(rx,ry,rw,rh);
-  ctx.setLineDash([]);ctx.shadowBlur=0;ctx.globalAlpha=1;
+  ctx.strokeRect(rx,ry,rw,rh);ctx.setLineDash([]);ctx.shadowBlur=0;ctx.globalAlpha=1;
   if(sel){_rHandle(ctx,s1.x,s1.y);_rHandle(ctx,s2.x,s2.y);_rHandle(ctx,s2.x,s1.y);_rHandle(ctx,s1.x,s2.y);}
 }
-
 function _rText(ctx,cs,d,sel){
-  const sp=chartPointToScreen(d.p,cs);
-  const fs=d.style?.fontSize||12;
-  ctx.font='bold '+fs+'px '+(d.style?.fontFamily||'monospace');
-  ctx.globalAlpha=0.95;
+  const sp=chartPointToScreen(d.p,cs);const fs=d.style?.fontSize||12;
+  ctx.font='bold '+fs+'px '+(d.style?.fontFamily||'monospace');ctx.globalAlpha=0.95;
   if(d.text){
     const tw=ctx.measureText(d.text).width;
     if(d.style?.bgColor){ctx.fillStyle=d.style.bgColor;ctx.fillRect(sp.x-3,sp.y-fs-1,tw+6,fs+6);}
-    if(sel){
-      ctx.setLineDash([3,3]);ctx.strokeStyle='rgba(0,212,255,0.45)';ctx.lineWidth=1;
-      ctx.strokeRect(sp.x-3,sp.y-fs-1,tw+6,fs+6);ctx.setLineDash([]);
-      ctx.shadowColor='rgba(0,212,255,0.4)';ctx.shadowBlur=5;
-    }
-    ctx.fillStyle=d.style?.color||'#e8f0ff';
-    ctx.textAlign='left';ctx.textBaseline='alphabetic';
-    ctx.fillText(d.text,sp.x,sp.y);
+    if(sel){ctx.setLineDash([3,3]);ctx.strokeStyle='rgba(0,212,255,0.45)';ctx.lineWidth=1;ctx.strokeRect(sp.x-3,sp.y-fs-1,tw+6,fs+6);ctx.setLineDash([]);ctx.shadowColor='rgba(0,212,255,0.4)';ctx.shadowBlur=5;}
+    ctx.fillStyle=d.style?.color||'#e8f0ff';ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.fillText(d.text,sp.x,sp.y);
   }
   ctx.shadowBlur=0;ctx.globalAlpha=1;
 }
-
 function _rHandle(ctx,x,y){
-  const r=HDL();
-  ctx.save();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.globalAlpha=1;
-  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
-  ctx.fillStyle='rgba(6,12,22,0.92)';ctx.fill();
-  ctx.strokeStyle='#00d4ff';ctx.lineWidth=1.5;ctx.stroke();
-  ctx.restore();
+  const r=HDL();ctx.save();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.globalAlpha=1;
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle='rgba(6,12,22,0.92)';ctx.fill();
+  ctx.strokeStyle='#00d4ff';ctx.lineWidth=1.5;ctx.stroke();ctx.restore();
 }
 
+/* Preview: endpoint tracks crosshair; fallback to last p2 if cursor gone */
 function _renderDraft(ctx,cs){
   if(!_draft)return;
+  let endX,endY;
+  if(S.cursor){endX=S.cursor.screenX;endY=S.cursor.screenY;}
+  else if(_draft.p2){const sp=chartPointToScreen(_draft.p2,cs);endX=sp.x;endY=sp.y;}
+  else return;
+  const s1=chartPointToScreen(_draft.p1,cs);
   ctx.save();ctx.globalAlpha=0.65;ctx.setLineDash([5,4]);ctx.strokeStyle='#00d4ff';ctx.lineWidth=1.5;
-  if(_draft.type==='trendline'&&_draft.p2){
-    const s1=chartPointToScreen(_draft.p1,cs),s2=chartPointToScreen(_draft.p2,cs);
-    ctx.beginPath();ctx.moveTo(s1.x,s1.y);ctx.lineTo(s2.x,s2.y);ctx.stroke();
+  if(_draft.type==='trendline'){
+    ctx.beginPath();ctx.moveTo(s1.x,s1.y);ctx.lineTo(endX,endY);ctx.stroke();
     ctx.setLineDash([]);ctx.globalAlpha=0.9;
     ctx.beginPath();ctx.arc(s1.x,s1.y,HDL(),0,Math.PI*2);ctx.fillStyle='#00d4ff';ctx.fill();
-  } else if(_draft.type==='rectangle'&&_draft.p2){
-    const s1=chartPointToScreen(_draft.p1,cs),s2=chartPointToScreen(_draft.p2,cs);
-    const rx=Math.min(s1.x,s2.x),ry=Math.min(s1.y,s2.y),rw=Math.abs(s2.x-s1.x),rh=Math.abs(s2.y-s1.y);
+    ctx.beginPath();ctx.arc(endX,endY,4,0,Math.PI*2);ctx.fillStyle='rgba(0,212,255,0.55)';ctx.fill();
+  } else if(_draft.type==='rectangle'){
+    const rx=Math.min(s1.x,endX),ry=Math.min(s1.y,endY),rw=Math.abs(endX-s1.x),rh=Math.abs(endY-s1.y);
     ctx.fillStyle='rgba(0,100,180,0.06)';ctx.fillRect(rx,ry,rw,rh);ctx.strokeRect(rx,ry,rw,rh);
     ctx.setLineDash([]);ctx.globalAlpha=0.9;
     ctx.beginPath();ctx.arc(s1.x,s1.y,HDL(),0,Math.PI*2);ctx.fillStyle='#00d4ff';ctx.fill();
+    ctx.beginPath();ctx.arc(endX,endY,4,0,Math.PI*2);ctx.fillStyle='rgba(0,212,255,0.55)';ctx.fill();
   }
   ctx.restore();
 }
-
 function _renderToolHint(ctx){
   if(!_tool)return;
   const labels={trendline:'↗ Linha',rectangle:'▭ Retângulo',text:'T Texto'};
   const state=_sm===ST.DRAWING?' — clique para finalizar':' — clique para iniciar';
-  ctx.save();ctx.font='bold 10px monospace';
-  ctx.fillStyle='rgba(0,212,255,0.82)';ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.save();ctx.font='bold 10px monospace';ctx.fillStyle='rgba(0,212,255,0.82)';ctx.textAlign='left';ctx.textBaseline='top';
   ctx.fillText((labels[_tool]||'')+state,PL+6,PT+6);ctx.restore();
 }
-
 function _renderReplayCursor(ctx,cs){
   if(!S.replay?.enabled||S.replay.index==null)return;
-  const sx=cs.xI(Math.floor(S.replay.index));
-  if(sx<PL||sx>cs.W-RP())return;
-  ctx.save();
-  ctx.strokeStyle='rgba(255,200,50,0.65)';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);
-  ctx.beginPath();ctx.moveTo(sx,PT);ctx.lineTo(sx,cs.H-PB);ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.font='bold 9px monospace';ctx.fillStyle='rgba(255,200,50,0.85)';
-  ctx.textAlign='center';ctx.textBaseline='alphabetic';
+  const sx=cs.xI(Math.floor(S.replay.index));if(sx<PL||sx>cs.W-RP())return;
+  ctx.save();ctx.strokeStyle='rgba(255,200,50,0.65)';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);
+  ctx.beginPath();ctx.moveTo(sx,PT);ctx.lineTo(sx,cs.H-PB);ctx.stroke();ctx.setLineDash([]);
+  ctx.font='bold 9px monospace';ctx.fillStyle='rgba(255,200,50,0.85)';ctx.textAlign='center';ctx.textBaseline='alphabetic';
   ctx.fillText('REPLAY',sx,PT+14);ctx.restore();
 }
 
-/* ═══════════════════════════════════════════════════════
-   PERSISTENCE
-═══════════════════════════════════════════════════════ */
+/* ─── PERSISTENCE ─── */
 function _sKey(){return'dvl_drawings_'+(S.sym||'')+'_'+(S.tf||'');}
 function _saveDrawings(){try{localStorage.setItem(_sKey(),JSON.stringify(S.drawings));}catch(_){}}
 function _loadDrawings(){
   try{
-    const raw=localStorage.getItem(_sKey());
-    const arr=raw?JSON.parse(raw):[];
-    // Accept only new format: trendline/rectangle with p1.time, text with p.time
-    S.drawings=arr.filter(d=>{
-      if(d.type==='text')return d.p&&d.p.time!==undefined;
-      return d.p1&&d.p1.time!==undefined;
-    });
-  }catch(_){S.drawings=[];}
-  drawSoon();
+    const arr=JSON.parse(localStorage.getItem(_sKey())||'[]');
+    S.drawings=arr.filter(d=>d.type==='text'?(d.p&&d.p.time!==undefined):(d.p1&&d.p1.time!==undefined));
+  }catch(_){S.drawings=[];}drawSoon();
 }
 function _watchSymTf(){
-  let _lk=_sKey();
-  setInterval(()=>{const k=_sKey();if(k!==_lk){_lk=k;_loadDrawings();}},800);
+  let _lk=_sKey();setInterval(()=>{const k=_sKey();if(k!==_lk){_lk=k;_loadDrawings();}},800);
 }
 
-/* ═══════════════════════════════════════════════════════
-   REPLAY
-═══════════════════════════════════════════════════════ */
+/* ─── REPLAY ─── */
 function _enableReplay(){
   S.replay.enabled=true;S.replay.playing=false;
-  const all=S._allCandles||S.candles;
-  if(S.replay.index==null&&all.length>1)S.replay.index=all.length-1;
+  const all=S._allCandles||S.candles;if(S.replay.index==null&&all.length>1)S.replay.index=all.length-1;
   _showRpBar(true);const b=el('rpReplay');if(b)b.classList.add('dvl-active');drawSoon();
 }
 function _disableReplay(){
@@ -9120,8 +8875,7 @@ function _disableReplay(){
 }
 function _showRpBar(show){const bar=el('dvlReplayBar');if(bar)bar.style.display=show?'flex':'none';}
 function _setReplayIdx(idx){
-  const all=S._allCandles||S.candles;
-  S.replay.index=Math.max(0,Math.min(idx,all.length-1));
+  const all=S._allCandles||S.candles;S.replay.index=Math.max(0,Math.min(idx,all.length-1));
   const p=el('dvlRpPlay');if(p)p.textContent='▶';drawSoon();
 }
 function _playReplay(){
@@ -9131,8 +8885,7 @@ function _playReplay(){
   const ms=Math.round(800/(S.replay.speed||1));
   S.replay.timer=setInterval(()=>{
     if(!S.replay.enabled||!S.replay.playing){clearInterval(S.replay.timer);S.replay.timer=null;return;}
-    const all=S._allCandles||S.candles;
-    if(S.replay.index>=all.length-1){_pauseReplay();return;}
+    const all=S._allCandles||S.candles;if(S.replay.index>=all.length-1){_pauseReplay();return;}
     S.replay.index++;drawSoon();
   },ms);
 }
@@ -9143,531 +8896,5 @@ function _pauseReplay(){
 function _stepFwd(){_pauseReplay();const all=S._allCandles||S.candles;if(S.replay.index<all.length-1)_setReplayIdx(S.replay.index+1);}
 function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.index-1);}
 
-})();
-
-  /* ── constants ── */
-  const HIT_D=9,HIT_M=16,HDL_D=5,HDL_M=9;
-  function mob(){return window.matchMedia('(pointer:coarse)').matches;}
-  function HR(){return mob()?HIT_M:HIT_D;}
-  function DR(){return mob()?HDL_M:HDL_D;}
-
-  /* ── timestamp→index binary-search cache ── */
-  let _tic={},_ticN=-1;
-  function tToIdx(t){
-    const n=S.candles.length;
-    if(_ticN!==n){_tic={};_ticN=n;}
-    if(_tic[t]!==undefined)return _tic[t];
-    const cs=S.candles;
-    if(!cs.length)return 0;
-    let lo=0,hi=cs.length-1;
-    while(lo<hi){const mid=(lo+hi)>>1;if(cs[mid].t<t)lo=mid+1;else hi=mid;}
-    if(lo>0&&Math.abs(cs[lo-1].t-t)<Math.abs(cs[lo].t-t))lo--;
-    return(_tic[t]=lo);
-  }
-
-  /* ── coordinate system — matches draw() exactly ── */
-  function getCS(){
-    const wrap=el('chartWrap');if(!wrap)return null;
-    const W=wrap.clientWidth,H=wrap.clientHeight;
-    const span=Math.max(0.35,S.view.end-S.view.start);
-    const cw=CW(W);
-    const a=Math.floor(S.view.start),b=Math.ceil(S.view.end);
-    const vs=S.candles.slice(Math.max(0,a),Math.min(S.candles.length,b));
-    const sc=scale(vs.length?vs:S.candles.slice(-1),H);
-    const xI=i=>PL+(i-S.view.start+0.5)*cw/span;
-    const xT=t=>xI(tToIdx(t));
-    const yP=p=>sc.y(p);
-    const pY=y=>sc.lo+(1-(y-PT)/(H-PT-PB))*(sc.hi-sc.lo);
-    const iX=sx=>S.view.start+(sx-PL)*span/cw-0.5;
-    return{W,H,cw,span,sc,xI,xT,yP,pY,iX};
-  }
-
-  function getPP(e){
-    const wrap=el('chartWrap');if(!wrap)return{x:0,y:0};
-    const r=wrap.getBoundingClientRect();
-    const src=(e.touches&&e.touches[0])||e;
-    return{x:src.clientX-r.left,y:src.clientY-r.top};
-  }
-
-  /* snap screen-x to nearest candle, return {t,price} */
-  function s2c(sx,sy,cs){
-    const raw=cs.iX(sx);
-    const idx=Math.round(Math.max(0,Math.min(raw,S.candles.length-1)));
-    const c=S.candles[idx];
-    return{t:c?c.t:0,price:cs.pY(sy)};
-  }
-
-  /* ── drawing/replay state ── */
-  let _tool=null,_phase=0,_anchor=null,_prev=null;
-  let _drag=null,_pendText=null,_ctxMenu=null,_lpt=null;
-
-  /* ── init ── */
-  ready(function(){
-    if(typeof S==='undefined')return;
-    if(!S.drawings)S.drawings=[];
-    if(!S.selectedDrawing)S.selectedDrawing=null;
-    if(!S.replay)S.replay={enabled:false,index:null,playing:false,speed:1,timer:null};
-    _initBtns();
-    _initEvents();
-    _patchDraw();
-    _loadDrawings();
-    _watchKey();
-  });
-
-  /* ── buttons ── */
-  function _initBtns(){
-    const map={rpDrawLine:'line',rpDrawRect:'rect',rpDrawText:'text'};
-    Object.entries(map).forEach(([id,t])=>{
-      const b=el(id);if(!b)return;
-      b.addEventListener('click',()=>setTool(_tool===t?null:t));
-    });
-    const dBtn=el('dvlDrawDelete');
-    if(dBtn)dBtn.addEventListener('click',delSel);
-    const txOk=el('dvlTextOk'),txC=el('dvlTextCancel'),txI=el('dvlTextInput');
-    if(txOk)txOk.addEventListener('click',confirmTxt);
-    if(txC)txC.addEventListener('click',cancelTxt);
-    if(txI)txI.addEventListener('keydown',e=>{if(e.key==='Enter')confirmTxt();if(e.key==='Escape')cancelTxt();});
-    // replay buttons
-    const rBtn=el('rpReplay');
-    if(rBtn)rBtn.addEventListener('click',()=>S.replay.enabled?disableReplay():enableReplay());
-    const rPlay=el('dvlRpPlay'),rBack=el('dvlRpBack'),rFwd=el('dvlRpFwd');
-    const rSpd=el('dvlRpSpeed'),rExit=el('dvlRpExit');
-    if(rPlay)rPlay.addEventListener('click',()=>S.replay.playing?pauseReplay():playReplay());
-    if(rBack)rBack.addEventListener('click',stepBack);
-    if(rFwd)rFwd.addEventListener('click',stepFwd);
-    if(rSpd)rSpd.addEventListener('click',()=>{
-      const s=[1,2,5],i=s.indexOf(S.replay.speed||1);
-      S.replay.speed=s[(i+1)%s.length];rSpd.textContent=S.replay.speed+'x';
-      if(S.replay.playing){pauseReplay();playReplay();}
-    });
-    if(rExit)rExit.addEventListener('click',disableReplay);
-  }
-
-  /* ── tool state ── */
-  function setTool(t){
-    _tool=t;_phase=0;_anchor=null;_prev=null;
-    selDraw(null);
-    ['rpDrawLine','rpDrawRect','rpDrawText'].forEach(id=>{
-      const b=el(id);if(!b)return;
-      const bt=id==='rpDrawLine'?'line':id==='rpDrawRect'?'rect':'text';
-      b.classList.toggle('dvl-active',bt===t);
-    });
-    const wrap=el('chartWrap');if(wrap)wrap.style.cursor=t?'crosshair':'';
-    drawSoon();
-  }
-
-  function selDraw(d){
-    S.selectedDrawing=d;
-    const dBtn=el('dvlDrawDelete');if(dBtn)dBtn.style.display=d?'block':'none';
-    drawSoon();
-  }
-
-  function delSel(){
-    if(!S.selectedDrawing)return;
-    S.drawings=S.drawings.filter(d=>d.id!==S.selectedDrawing.id);
-    selDraw(null);_saveDrawings();drawSoon();
-  }
-
-  function dupSel(){
-    if(!S.selectedDrawing)return;
-    const d=JSON.parse(JSON.stringify(S.selectedDrawing));
-    d.id=Date.now();
-    const shift=(S.candles.at(-1)?.c||0)*0.001||1;
-    if(d.p1!==undefined)d.p1+=shift;
-    if(d.p2!==undefined)d.p2+=shift;
-    if(d.price!==undefined)d.price+=shift;
-    S.drawings.push(d);selDraw(d);_saveDrawings();drawSoon();
-  }
-
-  /* ── events ── */
-  function _initEvents(){
-    const wrap=el('chartWrap');if(!wrap)return;
-    wrap.addEventListener('mousedown',_onMD,true);
-    window.addEventListener('mousemove',_onMM,true);
-    window.addEventListener('mouseup',_onMU,true);
-    wrap.addEventListener('touchstart',_onTS,{capture:true,passive:false});
-    wrap.addEventListener('touchmove',_onTM,{capture:true,passive:false});
-    wrap.addEventListener('touchend',_onTE,{capture:true,passive:false});
-    window.addEventListener('keydown',e=>{
-      if((e.key==='Delete'||e.key==='Backspace')&&S.selectedDrawing&&document.activeElement===document.body)delSel();
-      if(e.key==='Escape'){setTool(null);selDraw(null);_closeCtx();}
-    });
-    // Replay: click chart to jump cursor (only when no drawing tool active)
-    wrap.addEventListener('click',e=>{
-      if(!S.replay?.enabled||_tool||S.selectedDrawing)return;
-      const cs=getCS();if(!cs)return;
-      const p=getPP(e),idx=Math.round(cs.iX(p.x));
-      const all=S._allCandles||S.candles;
-      if(idx>=0&&idx<all.length)setReplayIdx(idx);
-    });
-  }
-
-  function _onMD(e){
-    if(e.button!==0)return;
-    _closeCtx();
-    const cs=getCS();if(!cs)return;
-    const p=getPP(e);
-    if(_tool){e.stopPropagation();e.preventDefault();_pDown(p,cs);return;}
-    const hit=_hitTest(p.x,p.y,cs);
-    if(hit){e.stopPropagation();_pDown(p,cs);}
-    else if(S.selectedDrawing)selDraw(null);
-    // no stopPropagation on miss → chart pan/zoom proceeds normally
-  }
-  function _onMM(e){
-    if(!_tool&&!_drag)return;
-    const cs=getCS();if(!cs)return;
-    const wrap=el('chartWrap');if(!wrap)return;
-    const r=wrap.getBoundingClientRect();
-    _pMove({x:e.clientX-r.left,y:e.clientY-r.top},cs);
-    e.stopPropagation();
-  }
-  function _onMU(e){
-    if(!_tool&&!_drag)return;
-    const cs=getCS();if(!cs)return;
-    const wrap=el('chartWrap');if(!wrap)return;
-    const r=wrap.getBoundingClientRect();
-    _pUp({x:e.clientX-r.left,y:e.clientY-r.top},cs);
-    e.stopPropagation();
-  }
-  function _onTS(e){
-    if(e.touches.length>1)return;
-    _closeCtx();
-    const cs=getCS();if(!cs)return;
-    const p=getPP(e);
-    if(_tool){e.stopPropagation();e.preventDefault();_pDown(p,cs);return;}
-    const hit=_hitTest(p.x,p.y,cs);
-    if(hit){
-      e.stopPropagation();e.preventDefault();
-      _lpt=setTimeout(()=>{_lpt=null;_drag=null;_showCtx(hit.drawing,p);},520);
-      _pDown(p,cs);
-    }else if(S.selectedDrawing){selDraw(null);}
-  }
-  function _onTM(e){
-    if(!_tool&&!_drag)return;
-    if(e.touches.length>1)return;
-    if(_lpt){clearTimeout(_lpt);_lpt=null;}
-    e.stopPropagation();e.preventDefault();
-    const cs=getCS();if(!cs)return;
-    _pMove(getPP(e),cs);
-  }
-  function _onTE(e){
-    if(_lpt){clearTimeout(_lpt);_lpt=null;}
-    if(!_tool&&!_drag)return;
-    e.stopPropagation();
-    const cs=getCS();if(!cs)return;
-    _pUp(getPP(e),cs);
-  }
-
-  /* ── pointer logic ── */
-  function _pDown(p,cs){
-    const cp=s2c(p.x,p.y,cs);
-    if(_tool==='text'){_pendText=cp;_showTxtPop(p);return;}
-    if(_tool){
-      if(_phase===0){_anchor=cp;_phase=1;_prev={x:p.x,y:p.y};}
-      else{_finalize(cp);}
-      drawSoon();return;
-    }
-    const hit=_hitTest(p.x,p.y,cs);
-    if(hit){
-      selDraw(hit.drawing);
-      _drag={drawing:hit.drawing,type:hit.type,ox:p.x,oy:p.y,orig:JSON.parse(JSON.stringify(hit.drawing))};
-      drawSoon();
-    }
-  }
-
-  function _pMove(p,cs){
-    _prev={x:p.x,y:p.y};
-    if(_tool&&_phase===1){drawSoon();return;}
-    if(!_drag)return;
-    const d=_drag.drawing,orig=_drag.orig;
-    const cp=s2c(p.x,p.y,cs),cpO=s2c(_drag.ox,_drag.oy,cs);
-    const dp=cp.price-cpO.price;
-    const di=tToIdx(cp.t)-tToIdx(cpO.t);
-    if(_drag.type==='body'){
-      if(d.type==='text'){
-        const ni=Math.max(0,Math.min(tToIdx(orig.t)+di,S.candles.length-1));
-        d.t=S.candles[ni]?.t||orig.t;d.price=orig.price+dp;
-      }else{
-        const ni1=Math.max(0,Math.min(tToIdx(orig.t1)+di,S.candles.length-1));
-        const ni2=Math.max(0,Math.min(tToIdx(orig.t2)+di,S.candles.length-1));
-        d.t1=S.candles[ni1]?.t||orig.t1;d.t2=S.candles[ni2]?.t||orig.t2;
-        d.p1=orig.p1+dp;d.p2=orig.p2+dp;
-      }
-    }else if(_drag.type==='h1'){d.t1=cp.t;d.p1=cp.price;}
-    else if(_drag.type==='h2'){d.t2=cp.t;d.p2=cp.price;}
-    else if(_drag.type==='h3'){d.t2=cp.t;d.p1=cp.price;} // rect top-right
-    else if(_drag.type==='h4'){d.t1=cp.t;d.p2=cp.price;} // rect bottom-left
-    drawSoon();
-  }
-
-  function _pUp(p,cs){if(_drag){_drag=null;_saveDrawings();}}
-
-  function _finalize(cp){
-    if(!_anchor)return;
-    S.drawings.push({id:Date.now(),type:_tool,t1:_anchor.t,p1:_anchor.price,t2:cp.t,p2:cp.price,color:'#00d4ff',width:1.5,fillAlpha:0.07,createdAt:Date.now()});
-    _phase=0;_anchor=null;_saveDrawings();drawSoon();
-  }
-
-  /* ── text popup ── */
-  function _showTxtPop(sp){
-    const pop=el('dvlTextPopup');if(!pop)return;
-    const wrap=el('chartWrap');if(!wrap)return;
-    const r=wrap.getBoundingClientRect();
-    let lx=r.left+sp.x+12,ly=r.top+sp.y-72;
-    lx=Math.min(lx,window.innerWidth-220);ly=Math.max(ly,8);
-    pop.style.left=lx+'px';pop.style.top=ly+'px';
-    pop.style.display='flex';pop.style.flexDirection='column';
-    const inp=el('dvlTextInput');if(inp){inp.value='';setTimeout(()=>inp.focus(),50);}
-  }
-  function confirmTxt(){
-    const pop=el('dvlTextPopup');if(pop)pop.style.display='none';
-    const inp=el('dvlTextInput');
-    const txt=inp?inp.value.trim():'';
-    if(!txt||!_pendText)return;
-    S.drawings.push({id:Date.now(),type:'text',t:_pendText.t,price:_pendText.price,text:txt,color:'#00d4ff',fontSize:12,createdAt:Date.now()});
-    _pendText=null;_saveDrawings();drawSoon();
-  }
-  function cancelTxt(){const pop=el('dvlTextPopup');if(pop)pop.style.display='none';_pendText=null;}
-
-  /* ── hit testing ── */
-  function _hitTest(mx,my,cs){
-    const R=HR();
-    for(let i=S.drawings.length-1;i>=0;i--){
-      const h=_hitOne(S.drawings[i],mx,my,cs,R);if(h)return h;
-    }
-    return null;
-  }
-  function _hitOne(d,mx,my,cs,R){
-    if(d.type==='line'){
-      const x1=cs.xT(d.t1),y1=cs.yP(d.p1),x2=cs.xT(d.t2),y2=cs.yP(d.p2);
-      if(Math.hypot(mx-x1,my-y1)<R+3)return{drawing:d,type:'h1'};
-      if(Math.hypot(mx-x2,my-y2)<R+3)return{drawing:d,type:'h2'};
-      if(_psd(mx,my,x1,y1,x2,y2)<R)return{drawing:d,type:'body'};
-    }else if(d.type==='rect'){
-      const x1=cs.xT(d.t1),y1=cs.yP(d.p1),x2=cs.xT(d.t2),y2=cs.yP(d.p2);
-      const xMin=Math.min(x1,x2),xMax=Math.max(x1,x2),yMin=Math.min(y1,y2),yMax=Math.max(y1,y2);
-      if(S.selectedDrawing?.id===d.id){
-        if(Math.hypot(mx-x1,my-y1)<R+3)return{drawing:d,type:'h1'};
-        if(Math.hypot(mx-x2,my-y2)<R+3)return{drawing:d,type:'h2'};
-        if(Math.hypot(mx-x2,my-y1)<R+3)return{drawing:d,type:'h3'};
-        if(Math.hypot(mx-x1,my-y2)<R+3)return{drawing:d,type:'h4'};
-      }
-      const nb=Math.abs(mx-xMin)<R||Math.abs(mx-xMax)<R||Math.abs(my-yMin)<R||Math.abs(my-yMax)<R;
-      const inside=mx>=xMin&&mx<=xMax&&my>=yMin&&my<=yMax;
-      if((inside||(mx>=xMin-R&&mx<=xMax+R&&my>=yMin-R&&my<=yMax+R&&nb)))return{drawing:d,type:'body'};
-    }else if(d.type==='text'){
-      const sx=cs.xT(d.t),sy=cs.yP(d.price),fs=d.fontSize||12;
-      const tw=d.text.length*fs*0.62+10;
-      if(mx>=sx-4&&mx<=sx+tw&&my>=sy-fs-2&&my<=sy+4)return{drawing:d,type:'body'};
-    }
-    return null;
-  }
-  function _psd(px,py,ax,ay,bx,by){
-    const dx=bx-ax,dy=by-ay;
-    if(!dx&&!dy)return Math.hypot(px-ax,py-ay);
-    const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)));
-    return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
-  }
-
-  /* ── context menu (mobile long-press) ── */
-  function _showCtx(d,sp){
-    _closeCtx();
-    const wrap=el('chartWrap');if(!wrap)return;
-    const r=wrap.getBoundingClientRect();
-    const m=document.createElement('div');
-    m.id='dvlCtxMenu';
-    m.style.cssText='position:fixed;left:'+(r.left+sp.x)+'px;top:'+(r.top+sp.y)+'px;z-index:9999;background:rgba(6,12,22,0.97);border:1px solid rgba(0,212,255,0.3);border-radius:7px;overflow:hidden;font-family:monospace;font-size:11px;min-width:120px;box-shadow:0 4px 18px rgba(0,0,0,0.55);';
-    [['Deletar',()=>{selDraw(d);delSel();},'#ff5252'],['Duplicar',()=>{selDraw(d);dupSel();},'#c8d8f0'],['Cancelar',()=>{},'#6a7fa0']].forEach(([lbl,fn,clr],i,arr)=>{
-      const div=document.createElement('div');
-      div.textContent=lbl;
-      div.style.cssText='padding:9px 14px;cursor:pointer;color:'+clr+';'+(i<arr.length-1?'border-bottom:1px solid rgba(30,42,64,0.4)':'');
-      div.addEventListener('mouseover',()=>div.style.background='rgba(0,212,255,0.08)');
-      div.addEventListener('mouseout',()=>div.style.background='');
-      div.addEventListener('click',()=>{_closeCtx();fn();});
-      m.appendChild(div);
-    });
-    document.body.appendChild(m);_ctxMenu=m;
-    setTimeout(()=>document.addEventListener('click',_closeCtx,{once:true}),50);
-  }
-  function _closeCtx(){if(_ctxMenu){_ctxMenu.remove();_ctxMenu=null;}}
-
-  /* ── draw() patch ── */
-  function _patchDraw(){
-    const _orig=draw;
-    draw=function(){
-      if(S.replay?.enabled&&S.replay.index!=null){
-        const full=S._allCandles||S.candles;
-        S._allCandles=full;
-        const end=Math.min(Math.floor(S.replay.index)+1,full.length);
-        S.candles=full.slice(0,end);
-        try{_orig();}finally{S.candles=full;}
-      }else{
-        S._allCandles=null;_orig();
-      }
-      const c=el('chart');if(!c)return;
-      const ctx=c.getContext('2d');
-      const cs=getCS();if(!cs)return;
-      ctx.save();
-      try{
-        _renderAll(ctx,cs);
-        if(S.replay?.enabled&&S.replay.index!=null)_renderReplayCursor(ctx,cs);
-        _renderHint(ctx);
-      }catch(_){}
-      ctx.restore();
-    };
-  }
-
-  /* ── rendering ── */
-  function _renderAll(ctx,cs){
-    if(!S.drawings?.length&&!(_tool&&_phase===1))return;
-    ctx.save();
-    // selected drawing renders last (on top)
-    const sorted=S.drawings.slice().sort((a,b)=>S.selectedDrawing?.id===a.id?1:S.selectedDrawing?.id===b.id?-1:0);
-    sorted.forEach(d=>_renderOne(ctx,cs,d));
-    if(_tool&&_phase===1&&_anchor&&_prev)_renderPreview(ctx,cs);
-    ctx.restore();
-  }
-
-  function _renderOne(ctx,cs,d){
-    const sel=S.selectedDrawing?.id===d.id;
-    ctx.save();ctx.setLineDash([]);ctx.shadowBlur=0;
-    if(d.type==='line'){
-      const x1=cs.xT(d.t1),y1=cs.yP(d.p1),x2=cs.xT(d.t2),y2=cs.yP(d.p2);
-      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);
-      ctx.strokeStyle=d.color||'#00d4ff';
-      ctx.lineWidth=sel?(d.width||1.5)+0.8:(d.width||1.5);
-      if(sel){ctx.shadowColor='rgba(0,212,255,0.5)';ctx.shadowBlur=5;}
-      ctx.stroke();ctx.shadowBlur=0;
-      if(sel){_hdl(ctx,x1,y1);_hdl(ctx,x2,y2);}
-    }else if(d.type==='rect'){
-      const x1=cs.xT(d.t1),y1=cs.yP(d.p1),x2=cs.xT(d.t2),y2=cs.yP(d.p2);
-      const rx=Math.min(x1,x2),ry=Math.min(y1,y2),rw=Math.abs(x2-x1),rh=Math.abs(y2-y1);
-      ctx.fillStyle='rgba(0,100,180,'+(d.fillAlpha??0.07)+')';ctx.fillRect(rx,ry,rw,rh);
-      ctx.strokeStyle=d.color||'rgba(0,180,220,0.75)';
-      ctx.lineWidth=sel?1.8:1;
-      if(sel){ctx.setLineDash([5,3]);ctx.shadowColor='rgba(0,212,255,0.4)';ctx.shadowBlur=4;}
-      ctx.strokeRect(rx,ry,rw,rh);ctx.setLineDash([]);ctx.shadowBlur=0;
-      if(sel){_hdl(ctx,x1,y1);_hdl(ctx,x2,y2);_hdl(ctx,x2,y1);_hdl(ctx,x1,y2);}
-    }else if(d.type==='text'){
-      const sx=cs.xT(d.t),sy=cs.yP(d.price),fs=d.fontSize||12;
-      ctx.font='bold '+fs+'px monospace';
-      if(sel){
-        const tw=ctx.measureText(d.text).width;
-        ctx.strokeStyle='rgba(0,212,255,0.35)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
-        ctx.strokeRect(sx-3,sy-fs-1,tw+6,fs+5);ctx.setLineDash([]);
-        ctx.shadowColor='rgba(0,212,255,0.4)';ctx.shadowBlur=4;
-      }
-      ctx.fillStyle=d.color||'#00d4ff';
-      ctx.textAlign='left';ctx.textBaseline='alphabetic';
-      ctx.fillText(d.text,sx,sy);ctx.shadowBlur=0;
-    }
-    ctx.restore();
-  }
-
-  function _hdl(ctx,x,y){
-    const r=DR();
-    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.fillStyle='rgba(6,12,22,0.92)';ctx.fill();
-    ctx.strokeStyle='#00d4ff';ctx.lineWidth=1.5;ctx.stroke();
-  }
-
-  function _renderPreview(ctx,cs){
-    const ax=cs.xT(_anchor.t),ay=cs.yP(_anchor.price);
-    const bx=_prev.x,by=_prev.y;
-    ctx.save();ctx.globalAlpha=0.6;ctx.setLineDash([5,4]);
-    ctx.strokeStyle='#00d4ff';ctx.lineWidth=1.5;
-    if(_tool==='line'){ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke();}
-    else if(_tool==='rect'){
-      const rx=Math.min(ax,bx),ry=Math.min(ay,by),rw=Math.abs(bx-ax),rh=Math.abs(by-ay);
-      ctx.fillStyle='rgba(0,100,180,0.06)';ctx.fillRect(rx,ry,rw,rh);ctx.strokeRect(rx,ry,rw,rh);
-    }
-    ctx.setLineDash([]);ctx.globalAlpha=0.9;
-    ctx.beginPath();ctx.arc(ax,ay,DR(),0,Math.PI*2);
-    ctx.fillStyle='#00d4ff';ctx.fill();
-    ctx.restore();
-  }
-
-  function _renderHint(ctx){
-    if(!_tool)return;
-    const labels={line:'↗ Linha ativo',rect:'▭ Retângulo ativo',text:'T Texto ativo'};
-    ctx.save();ctx.font='bold 10px monospace';
-    ctx.fillStyle='rgba(0,212,255,0.82)';ctx.textAlign='left';ctx.textBaseline='top';
-    ctx.fillText(labels[_tool]||'',PL+6,PT+6);ctx.restore();
-  }
-
-  function _renderReplayCursor(ctx,cs){
-    if(!S.replay?.enabled||S.replay.index==null)return;
-    const sx=cs.xI(Math.floor(S.replay.index));
-    if(sx<PL||sx>cs.W-RP())return;
-    ctx.save();
-    ctx.strokeStyle='rgba(255,200,50,0.65)';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);
-    ctx.beginPath();ctx.moveTo(sx,PT);ctx.lineTo(sx,cs.H-PB);ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.font='bold 9px monospace';ctx.fillStyle='rgba(255,200,50,0.85)';
-    ctx.textAlign='center';ctx.textBaseline='alphabetic';
-    ctx.fillText('REPLAY',sx,PT+14);ctx.restore();
-  }
-
-  /* ── persistence ── */
-  function _sKey(){return'dvl_drawings_'+(S.sym||'')+'_'+(S.tf||'');}
-  function _saveDrawings(){try{localStorage.setItem(_sKey(),JSON.stringify(S.drawings));}catch(_){}}
-  function _loadDrawings(){
-    try{
-      const raw=localStorage.getItem(_sKey());
-      const arr=raw?JSON.parse(raw):[];
-      // Discard drawings in old format (x1/y1Price) — they used pixel indices, can't migrate
-      S.drawings=arr.filter(d=>d.type==='text'?(d.t!==undefined):(d.t1!==undefined));
-    }catch(_){S.drawings=[];}
-    drawSoon();
-  }
-  function _watchKey(){
-    let _lk=_sKey();
-    setInterval(()=>{const k=_sKey();if(k!==_lk){_lk=k;_loadDrawings();}},800);
-  }
-
-  /* ── replay ── */
-  function enableReplay(){
-    S.replay.enabled=true;S.replay.playing=false;
-    const all=S._allCandles||S.candles;
-    if(S.replay.index==null&&all.length>1)S.replay.index=all.length-1;
-    _showRpBar(true);
-    const b=el('rpReplay');if(b)b.classList.add('dvl-active');
-    drawSoon();
-  }
-  function disableReplay(){
-    S.replay.enabled=false;S.replay.playing=false;S.replay.index=null;
-    if(S.replay.timer){clearInterval(S.replay.timer);S.replay.timer=null;}
-    if(S._allCandles){S.candles=S._allCandles;S._allCandles=null;}
-    _showRpBar(false);
-    const b=el('rpReplay');if(b)b.classList.remove('dvl-active');
-    drawSoon();
-  }
-  function _showRpBar(show){const bar=el('dvlReplayBar');if(bar)bar.style.display=show?'flex':'none';}
-  function setReplayIdx(idx){
-    const all=S._allCandles||S.candles;
-    S.replay.index=Math.max(0,Math.min(idx,all.length-1));
-    const p=el('dvlRpPlay');if(p)p.textContent='▶';
-    drawSoon();
-  }
-  function playReplay(){
-    if(!S.replay.enabled)return;
-    S.replay.playing=true;
-    const p=el('dvlRpPlay');if(p)p.textContent='⏸';
-    if(S.replay.timer)clearInterval(S.replay.timer);
-    const ms=Math.round(800/(S.replay.speed||1));
-    S.replay.timer=setInterval(()=>{
-      if(!S.replay.enabled||!S.replay.playing){clearInterval(S.replay.timer);S.replay.timer=null;return;}
-      const all=S._allCandles||S.candles;
-      if(S.replay.index>=all.length-1){pauseReplay();return;}
-      S.replay.index++;drawSoon();
-    },ms);
-  }
-  function pauseReplay(){
-    S.replay.playing=false;
-    if(S.replay.timer){clearInterval(S.replay.timer);S.replay.timer=null;}
-    const p=el('dvlRpPlay');if(p)p.textContent='▶';
-  }
-  function stepFwd(){pauseReplay();const all=S._allCandles||S.candles;if(S.replay.index<all.length-1)setReplayIdx(S.replay.index+1);}
-  function stepBack(){pauseReplay();if(S.replay.index>0)setReplayIdx(S.replay.index-1);}
 })();
 </script>
