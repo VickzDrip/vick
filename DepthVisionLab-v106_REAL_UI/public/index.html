@@ -4278,7 +4278,7 @@ syncBigTradeMinSizeUI();
 if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
 let touchState={mode:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5};
 function touchDist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
-wrap.addEventListener('touchstart',e=>{if(!S.candles.length)return;if(S.tool==='ruler'||S._rulerNew||S._rulerDragSv)return;const r=wrap.getBoundingClientRect();if(e.touches.length===1){const x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&S.tool!=='ruler'&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){e.preventDefault();addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){e.preventDefault();touchState.mode='bookResize';S.book.resize=true;draw();return}if(priceScaleHit(x,y,r.width,r.height)){e.preventDefault();touchState.mode='priceScale';S.yScale.drag=true;S.yScale.lastY=e.touches[0].clientY;draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){e.preventDefault();if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}touchState.mode='pos';S.dragPos={...hit,lastX:e.touches[0].clientX,lastY:e.touches[0].clientY};return}touchState._startCX=e.touches[0].clientX;touchState._startCY=e.touches[0].clientY;touchState._startX=x;touchState._startY=y;touchState._moved=false;touchState._justActivated=false;touchState._startTime=Date.now();if(touchState._lpt){clearTimeout(touchState._lpt);touchState._lpt=null;}if(S._cross&&x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){touchState.mode='cross';touchState._crossStartX=S._cross.cx;touchState._crossStartY=S._cross.cy;}else{touchState.mode='pan';touchState.lastX=e.touches[0].clientX;touchState.lastY=e.touches[0].clientY;S.view.auto=false;if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){touchState._lpt=setTimeout(()=>{touchState._lpt=null;touchState.mode='cross';touchState._justActivated=true;S._cross={cx:touchState._startX,cy:touchState._startY};drawSoon();},450);}}}else if(e.touches.length===2){e.preventDefault();touchState.mode='pinch';touchState.dist=touchDist(e.touches[0],e.touches[1]);touchState.midX=(e.touches[0].clientX+e.touches[1].clientX)/2;touchState.midY=(e.touches[0].clientY+e.touches[1].clientY)/2;touchState.anchorRel=clamp((touchState.midX-r.left-PL)/CW(r.width),0,1);S.view.auto=false}},{passive:false});
+wrap.addEventListener('touchstart',e=>{if(!S.candles.length)return;if(S._rulerNew||S._rulerDragSv)return;if(S.tool==='ruler'&&!S._cross)return;const r=wrap.getBoundingClientRect();if(e.touches.length===1){const x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&S.tool!=='ruler'&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){e.preventDefault();addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){e.preventDefault();touchState.mode='bookResize';S.book.resize=true;draw();return}if(priceScaleHit(x,y,r.width,r.height)){e.preventDefault();touchState.mode='priceScale';S.yScale.drag=true;S.yScale.lastY=e.touches[0].clientY;draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){e.preventDefault();if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}touchState.mode='pos';S.dragPos={...hit,lastX:e.touches[0].clientX,lastY:e.touches[0].clientY};return}touchState._startCX=e.touches[0].clientX;touchState._startCY=e.touches[0].clientY;touchState._startX=x;touchState._startY=y;touchState._moved=false;touchState._justActivated=false;touchState._startTime=Date.now();if(touchState._lpt){clearTimeout(touchState._lpt);touchState._lpt=null;}if(S._cross&&x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){touchState.mode='cross';touchState._crossStartX=S._cross.cx;touchState._crossStartY=S._cross.cy;}else{touchState.mode='pan';touchState.lastX=e.touches[0].clientX;touchState.lastY=e.touches[0].clientY;S.view.auto=false;if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){touchState._lpt=setTimeout(()=>{touchState._lpt=null;touchState.mode='cross';touchState._justActivated=true;S._cross={cx:touchState._startX,cy:touchState._startY};drawSoon();},450);}}}else if(e.touches.length===2){e.preventDefault();touchState.mode='pinch';touchState.dist=touchDist(e.touches[0],e.touches[1]);touchState.midX=(e.touches[0].clientX+e.touches[1].clientX)/2;touchState.midY=(e.touches[0].clientY+e.touches[1].clientY)/2;touchState.anchorRel=clamp((touchState.midX-r.left-PL)/CW(r.width),0,1);S.view.auto=false}},{passive:false});
 wrap.addEventListener('touchmove',e=>{if(!S.candles.length)return;e.preventDefault();const r=wrap.getBoundingClientRect();if(touchState.mode==='bookResize'&&e.touches.length===1){const x=e.touches[0].clientX-r.left;resizeBookFromX(x,r.width);return}if(touchState.mode==='priceScale'&&e.touches.length===1){const dy=e.touches[0].clientY-S.yScale.lastY;S.yScale.zoom=clamp(S.yScale.zoom*Math.exp(-dy*0.012),.18,45);S.yScale.lastY=e.touches[0].clientY;drawSoon();return}if(touchState.mode==='pos'&&e.touches.length===1){dragPosition({clientX:e.touches[0].clientX,clientY:e.touches[0].clientY},r);return}if(touchState.mode==='cross'&&e.touches.length===1){const _tx=e.touches[0].clientX-r.left,_ty=e.touches[0].clientY-r.top;const ncx=clamp(touchState._crossStartX+(_tx-touchState._startX),PL,r.width-RP());const ncy=clamp(touchState._crossStartY+(_ty-touchState._startY),PT,r.height-PB);S._cross={cx:ncx,cy:ncy};touchState._moved=true;drawSoon();}else if(touchState.mode==='pan'&&e.touches.length===1){const _pmx=e.touches[0].clientX,_pmy=e.touches[0].clientY;if(touchState._lpt&&(Math.abs(_pmx-touchState._startCX)>10||Math.abs(_pmy-touchState._startCY)>10)){clearTimeout(touchState._lpt);touchState._lpt=null;}const span=S.view.end-S.view.start,dx=_pmx-touchState.lastX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;touchState.lastX=_pmx;touchState.lastY=_pmy;_panDx+=dx;const cc=el('chart');if(cc)cc.style.transform=`translateX(${_panDx}px)`;drawSoon();}else if(touchState.mode==='pinch'&&e.touches.length===2){const nd=touchDist(e.touches[0],e.touches[1]);const midX=(e.touches[0].clientX+e.touches[1].clientX)/2;const midY=(e.touches[0].clientY+e.touches[1].clientY)/2;const raw=touchState.dist/Math.max(1,nd);const factor=clamp(1+(raw-1)*0.72,.88,1.12);zoom(factor,touchState.anchorRel);const span=S.view.end-S.view.start,dx=midX-touchState.midX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;touchState.dist=nd;touchState.midX=midX;touchState.midY=midY;draw()}},{passive:false});
 wrap.addEventListener('touchend',e=>{if(touchState._lpt){clearTimeout(touchState._lpt);touchState._lpt=null;}touchState.mode=null;S.dragPos=null;if(S.yScale.drag){S.yScale.drag=false;draw();return;}if(S.book.resize){S.book.resize=false;draw();}},{passive:true});
 wrap.addEventListener('click',e=>{if(!S._cross)return;if(touchState._justActivated){touchState._justActivated=false;return;}if(S.tool==='ruler'||S._rulerNew)return;const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){S._cross=null;S._crossIdx=null;drawSoon();}},{passive:true});
@@ -7594,7 +7594,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       return null;
     }
 
-    let _tapX=0,_tapY=0;
+    let _tapX=0,_tapY=0,_crossJustActivated=false;
 
     // capture: dispara antes do click nativo e do mousedown de pan
     wrap.addEventListener('pointerdown',function(ev){
@@ -7602,25 +7602,31 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       _tapX=ev.clientX;_tapY=ev.clientY;
 
       if(S.tool==='ruler'){
+        // Touch em modo cross-drag: deixa o native cross mover, não ancora aqui
+        if(touchState.mode==='cross'){
+          ev.stopImmediatePropagation();ev.preventDefault();return;
+        }
+
         const rect=wrap.getBoundingClientRect();
         const x=ev.clientX-rect.left,y=ev.clientY-rect.top;
         const W=rect.width,H=rect.height;
 
-        // 1º clique: cross não ativo → ativa o cross (não ancora ainda)
+        // Cross não ativo → ativa o cross (não ancora ainda)
         if(!S._cross){
           if(x>=PL&&x<=W-RP()&&y>=PT&&y<=H-PB){
-            S._cross={cx:x,cy:y};draw();
+            S._cross={cx:x,cy:y};_crossJustActivated=true;draw();
           }
           ev.stopImmediatePropagation();ev.preventDefault();return;
         }
 
+        _crossJustActivated=false;
         const p=getCrossChartPoint();
         if(!p)return;
         if(!S._rulerNew){
-          // 2º clique: ancora o ponto inicial (régua no zero)
+          // Cross ativo: ancora o ponto inicial (régua no zero)
           S._rulerNew={state:'start_locked',idx1:p.idx,price1:p.price,idx2:p.idx,price2:p.price,isDraggingEnd:true};
         }else{
-          // 3º clique: fixa a régua
+          // Fixa a régua
           const n=S._rulerNew;
           n.idx2=p.idx;n.price2=p.price;
           S._rulers.push({idx1:n.idx1,price1:n.price1,idx2:n.idx2,price2:n.price2});
@@ -7680,6 +7686,16 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         S._rulerNew.state='waiting_confirm';
         draw();return;
       }
+      // Tap curto após arrastar o cross (touchState.mode='cross' → pointerdown foi ignorado)
+      // Ancora o ponto inicial agora, se o cross não foi apenas ativado neste tap
+      if(S.tool==='ruler'&&isTap&&S._cross&&!_crossJustActivated&&!touchState._moved){
+        const p=getCrossChartPoint();
+        if(p){
+          S._rulerNew={state:'start_locked',idx1:p.idx,price1:p.price,idx2:p.idx,price2:p.price,isDraggingEnd:false};
+          draw();return;
+        }
+      }
+      _crossJustActivated=false;
       if(isTap&&S._rulers.length>0&&S.tool!=='ruler'){S._rulers=[];syncBtn();draw();}
     });
 
