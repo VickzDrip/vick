@@ -4179,7 +4179,7 @@ const chart=el('chart'),wrap=el('chartWrap');
 wrap.addEventListener('wheel',e=>{e.preventDefault();const r=wrap.getBoundingClientRect(),rel=clamp((e.clientX-r.left-PL)/CW(r.width),0,1);const factor=Math.exp(e.deltaY*0.00072);zoom(factor,rel)},{passive:false});
 el('volumePaneWrap')?.addEventListener('wheel',e=>{e.preventDefault();const factor=Math.exp(e.deltaY*0.0012);S.yVolScale={zoom:clamp((S.yVolScale?.zoom||1)*factor,0.05,20)};drawSoon();},{passive:false});
 wrap.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button===0)try{wrap.setPointerCapture(e.pointerId)}catch(_){}});
-wrap.addEventListener('mousedown',e=>{const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&S.tool!=='ruler'&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){S.book.resize=true;wrap.style.cursor='ew-resize';draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}S.dragPos={...hit,lastX:e.clientX,lastY:e.clientY};wrap.style.cursor='move';return}if(priceScaleHit(x,y,r.width,r.height)){S.yScale.drag=true;S.yScale.lastY=e.clientY;wrap.style.cursor='ns-resize';draw();return}S.mouse.down=true;S.mouse.lastX=e.clientX;S.mouse.lastY=e.clientY});
+wrap.addEventListener('mousedown',e=>{const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&S.tool!=='ruler'&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){S.book.resize=true;wrap.style.cursor='ew-resize';draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}S.dragPos={...hit,lastX:e.clientX,lastY:e.clientY};wrap.style.cursor='move';return}if(priceScaleHit(x,y,r.width,r.height)){S.yScale.drag=true;S.yScale.lastY=e.clientY;wrap.style.cursor='ns-resize';draw();return}if(S.tool==='ruler'||S._rulerNew)return;S.mouse.down=true;S.mouse.lastX=e.clientX;S.mouse.lastY=e.clientY});
 window.addEventListener('mouseup',()=>{S.mouse.down=false;S.dragPos=null;if(S.yScale.drag){S.yScale.drag=false;wrap.style.cursor='default';draw();return}if(S.book.resize){S.book.resize=false;wrap.style.cursor='default';draw()}else{wrap.style.cursor='default'}});
 window.addEventListener('mousemove',e=>{const r=wrap.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;if(S.yScale.drag){const dy=e.clientY-S.yScale.lastY;S.yScale.zoom=clamp(S.yScale.zoom*Math.exp(-dy*0.012),.18,45);S.yScale.lastY=e.clientY;drawSoon();return}if(S.book.resize){resizeBookFromX(x,r.width);return}const overScale=priceScaleHit(x,y,r.width,r.height);wrap.style.cursor=bookResizeHit(x,y)?'ew-resize':overScale?'ns-resize':'default';if(S.dragPos){dragPosition(e,r);return}if(S.mouse.down){const span=S.view.end-S.view.start,dx=e.clientX-S.mouse.lastX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;S.mouse.lastX=e.clientX;S.view.auto=false;_panDx+=dx;const cc=el('chart');if(cc)cc.style.transform=`translateX(${_panDx}px)`;drawSoon();return}el('tip').style.display='none';if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){S._cross={cx:x,cy:y};drawSoon();}});
 wrap.addEventListener('mouseleave',()=>{S.mouse.down=false;S.book.resize=false;S.yScale.drag=false;wrap.style.cursor='default';el('tip').style.display='none';draw()});
@@ -4281,7 +4281,7 @@ function touchDist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.client
 wrap.addEventListener('touchstart',e=>{if(!S.candles.length)return;if(S.tool==='ruler'||S._rulerNew||S._rulerDragSv)return;const r=wrap.getBoundingClientRect();if(e.touches.length===1){const x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if(S.tool&&S.tool!=='ruler'&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){e.preventDefault();addPosition(S.tool,x,y,r.width,r.height,sc);return}if(bookResizeHit(x,y)){e.preventDefault();touchState.mode='bookResize';S.book.resize=true;draw();return}if(priceScaleHit(x,y,r.width,r.height)){e.preventDefault();touchState.mode='priceScale';S.yScale.drag=true;S.yScale.lastY=e.touches[0].clientY;draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){e.preventDefault();if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}touchState.mode='pos';S.dragPos={...hit,lastX:e.touches[0].clientX,lastY:e.touches[0].clientY};return}touchState._startCX=e.touches[0].clientX;touchState._startCY=e.touches[0].clientY;touchState._startX=x;touchState._startY=y;touchState._moved=false;touchState._justActivated=false;touchState._startTime=Date.now();if(touchState._lpt){clearTimeout(touchState._lpt);touchState._lpt=null;}if(S._cross&&x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){touchState.mode='cross';touchState._crossStartX=S._cross.cx;touchState._crossStartY=S._cross.cy;}else{touchState.mode='pan';touchState.lastX=e.touches[0].clientX;touchState.lastY=e.touches[0].clientY;S.view.auto=false;if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){touchState._lpt=setTimeout(()=>{touchState._lpt=null;touchState.mode='cross';touchState._justActivated=true;S._cross={cx:touchState._startX,cy:touchState._startY};drawSoon();},450);}}}else if(e.touches.length===2){e.preventDefault();touchState.mode='pinch';touchState.dist=touchDist(e.touches[0],e.touches[1]);touchState.midX=(e.touches[0].clientX+e.touches[1].clientX)/2;touchState.midY=(e.touches[0].clientY+e.touches[1].clientY)/2;touchState.anchorRel=clamp((touchState.midX-r.left-PL)/CW(r.width),0,1);S.view.auto=false}},{passive:false});
 wrap.addEventListener('touchmove',e=>{if(!S.candles.length)return;e.preventDefault();const r=wrap.getBoundingClientRect();if(touchState.mode==='bookResize'&&e.touches.length===1){const x=e.touches[0].clientX-r.left;resizeBookFromX(x,r.width);return}if(touchState.mode==='priceScale'&&e.touches.length===1){const dy=e.touches[0].clientY-S.yScale.lastY;S.yScale.zoom=clamp(S.yScale.zoom*Math.exp(-dy*0.012),.18,45);S.yScale.lastY=e.touches[0].clientY;drawSoon();return}if(touchState.mode==='pos'&&e.touches.length===1){dragPosition({clientX:e.touches[0].clientX,clientY:e.touches[0].clientY},r);return}if(touchState.mode==='cross'&&e.touches.length===1){const _tx=e.touches[0].clientX-r.left,_ty=e.touches[0].clientY-r.top;const ncx=clamp(touchState._crossStartX+(_tx-touchState._startX),PL,r.width-RP());const ncy=clamp(touchState._crossStartY+(_ty-touchState._startY),PT,r.height-PB);S._cross={cx:ncx,cy:ncy};touchState._moved=true;drawSoon();}else if(touchState.mode==='pan'&&e.touches.length===1){const _pmx=e.touches[0].clientX,_pmy=e.touches[0].clientY;if(touchState._lpt&&(Math.abs(_pmx-touchState._startCX)>10||Math.abs(_pmy-touchState._startCY)>10)){clearTimeout(touchState._lpt);touchState._lpt=null;}const span=S.view.end-S.view.start,dx=_pmx-touchState.lastX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;touchState.lastX=_pmx;touchState.lastY=_pmy;_panDx+=dx;const cc=el('chart');if(cc)cc.style.transform=`translateX(${_panDx}px)`;drawSoon();}else if(touchState.mode==='pinch'&&e.touches.length===2){const nd=touchDist(e.touches[0],e.touches[1]);const midX=(e.touches[0].clientX+e.touches[1].clientX)/2;const midY=(e.touches[0].clientY+e.touches[1].clientY)/2;const raw=touchState.dist/Math.max(1,nd);const factor=clamp(1+(raw-1)*0.72,.88,1.12);zoom(factor,touchState.anchorRel);const span=S.view.end-S.view.start,dx=midX-touchState.midX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;touchState.dist=nd;touchState.midX=midX;touchState.midY=midY;draw()}},{passive:false});
 wrap.addEventListener('touchend',e=>{if(touchState._lpt){clearTimeout(touchState._lpt);touchState._lpt=null;}touchState.mode=null;S.dragPos=null;if(S.yScale.drag){S.yScale.drag=false;draw();return;}if(S.book.resize){S.book.resize=false;draw();}},{passive:true});
-wrap.addEventListener('click',e=>{if(!S._cross)return;if(touchState._justActivated){touchState._justActivated=false;return;}const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){S._cross=null;S._crossIdx=null;drawSoon();}},{passive:true});
+wrap.addEventListener('click',e=>{if(!S._cross)return;if(touchState._justActivated){touchState._justActivated=false;return;}if(S.tool==='ruler'||S._rulerNew)return;const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){S._cross=null;S._crossIdx=null;drawSoon();}},{passive:true});
 
 let lastTapTime=0;
 wrap.addEventListener('dblclick',e=>{const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(bookHit(x,y))return;if(priceScaleHit(x,y,r.width,r.height)){S.yScale.zoom=1;draw();return}const rel=clamp((x-PL)/CW(r.width),0,1);zoom(.78,rel)});
@@ -7536,9 +7536,9 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 (function(){
   function initRuler(){
     if(!window.S)return setTimeout(initRuler,100);
-    S._rulers=[];          // [{x1,x2,price1,price2}]
-    S._rulerNew=null;      // {price1,idx1,livePrice,liveIdx,liveX,phase:'anchor'|'drag'}
-    S._rulerDragSv=null;   // {index,lastX,lastY} dragging saved ruler
+    S._rulers=[];       // [{idx1,price1,idx2,price2}]
+    S._rulerNew=null;   // {idx1,price1,idx2,price2} — in-progress
+    S._rulerDragSv=null;// {index,lastX,lastY}
 
     const btn=document.createElement('button');
     btn.id='btnRuler';btn.className='mini-btn';
@@ -7551,7 +7551,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       btn.classList.toggle('tool-active',S.tool==='ruler'||S._rulers.length>0||!!S._rulerNew);
     }
     btn.addEventListener('click',function(){
-      if(S.tool==='ruler'){S.tool=null;S._rulerNew=null;S._rulerCross=null;}
+      if(S.tool==='ruler'){S.tool=null;S._rulerNew=null;}
       else if(S._rulers.length>0){S._rulers=[];S._rulerNew=null;S.tool=null;}
       else{S.tool='ruler';}
       if(typeof syncToolBtns==='function')syncToolBtns();
@@ -7561,12 +7561,6 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     const wrap=document.getElementById('chartWrap');
     if(!wrap)return;
 
-    function ptFrom(cx,cy){
-      const r=wrap.getBoundingClientRect(),x=cx-r.left,y=cy-r.top,W=r.width,H=r.height;
-      if(x<PL||y<PT||x>W-RP()||y>H-PB)return null;
-      const sc=scale(visible().cs,H);
-      return{x,y,W,H,sc,price:priceFromY(y,H,sc),idx:idxFromX(x,W)};
-    }
     function tfMins(){
       const m=(S.tf||'').match(/^(\d+)(m|h|d|w)$/i);if(!m)return 1;
       const n=parseInt(m[1]);
@@ -7576,12 +7570,23 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       const t=Math.max(1,bars)*tfMins();if(t<60)return t+'m';
       const h=Math.floor(t/60),m=t%60;return m?h+'h '+m+'m':h+'h';
     }
+
+    // Única fonte de posição: S._cross convertido para chart coords
+    function getCrossChartPoint(){
+      if(!S._cross)return null;
+      const rect=wrap.getBoundingClientRect(),W=rect.width,H=rect.height;
+      const cx=clamp(S._cross.cx,PL,W-RP());
+      const cy=clamp(S._cross.cy,PT,H-PB);
+      const sc=scale(visible().cs,H);
+      return{cx,cy,idx:idxFromX(cx,W),price:priceFromY(cy,H,sc)};
+    }
+
     function hitSaved(xp,yp,W,H,sc){
       const right=W-RP();
       for(let i=S._rulers.length-1;i>=0;i--){
         const r=S._rulers[i];
-        const x1p=PL+(r.x1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
-        const x2p=PL+(r.x2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        const x1p=PL+(r.idx1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        const x2p=PL+(r.idx2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const xa=clamp(Math.min(x1p,x2p),PL,right),xb=clamp(Math.max(x1p,x2p),PL,right);
         const y1=sc.y(r.price1),y2=sc.y(r.price2);
         if(xp>=xa-12&&xp<=xb+12&&yp>=Math.min(y1,y2)-12&&yp<=Math.max(y1,y2)+12)return{index:i};
@@ -7591,42 +7596,35 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
     let _tapX=0,_tapY=0;
 
-    // capture — fires before main handlers
+    // capture — antes do click nativo e do mousedown
     wrap.addEventListener('pointerdown',function(ev){
       if(ev.button!==0)return;
       _tapX=ev.clientX;_tapY=ev.clientY;
 
       if(S.tool==='ruler'){
-        // Use crosshair position if active (S._cross is still set at pointerdown capture time)
-        let price,idx,lx;
-        if(S._cross){
-          const rect=wrap.getBoundingClientRect(),W=rect.width,H=rect.height;
-          const sc=scale(visible().cs,H);
-          price=priceFromY(S._cross.cy,H,sc);
-          idx=idxFromX(S._cross.cx,W);
-          lx=S._cross.cx;
-        }else{
-          const pt=ptFrom(ev.clientX,ev.clientY);if(!pt)return;
-          price=pt.price;idx=pt.idx;lx=pt.x;
-        }
+        // S._cross garantido neste ponto (capture antes do click que o limparia)
+        const p=getCrossChartPoint();
+        if(!p)return;
         if(!S._rulerNew){
-          // 1st click: anchor at crosshair position
-          S._rulerNew={price1:price,idx1:idx,livePrice:price,liveIdx:idx,liveX:lx,phase:'drag'};
+          // 1º clique: ancora exatamente no crosshair
+          S._rulerNew={idx1:p.idx,price1:p.price,idx2:p.idx,price2:p.price};
         }else{
-          // 2nd click: save
-          const n=S._rulerNew;
-          S._rulers=[{x1:n.idx1,x2:n.liveIdx,price1:n.price1,price2:n.livePrice}];
+          // 2º clique: finaliza exatamente no crosshair
+          S._rulers=[{idx1:S._rulerNew.idx1,price1:S._rulerNew.price1,idx2:p.idx,price2:p.price}];
           S._rulerNew=null;S.tool=null;
           if(typeof syncToolBtns==='function')syncToolBtns();
-          syncBtn();draw();ev.stopImmediatePropagation();ev.preventDefault();return;
+          syncBtn();
         }
         draw();ev.stopImmediatePropagation();ev.preventDefault();return;
       }
 
-      // Drag saved ruler
-      if(S._rulers.length>0){
-        const pt=ptFrom(ev.clientX,ev.clientY);if(!pt)return;
-        const hit=hitSaved(pt.x,pt.y,pt.W,pt.H,pt.sc);
+      // Arrastar régua salva
+      if(S._rulers.length>0&&!S.tool){
+        const rect=wrap.getBoundingClientRect();
+        const x=ev.clientX-rect.left,y=ev.clientY-rect.top;
+        const W=rect.width,H=rect.height;
+        const sc=scale(visible().cs,H);
+        const hit=hitSaved(x,y,W,H,sc);
         if(hit){
           S._rulerDragSv={...hit,lastX:ev.clientX,lastY:ev.clientY};
           ev.stopImmediatePropagation();ev.preventDefault();
@@ -7634,17 +7632,17 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       }
     },{capture:true,passive:false});
 
+    // pointermove — atualiza preview da régua; mantém S._cross em sincronia
     window.addEventListener('pointermove',function(ev){
-      if(S._rulerNew&&S._rulerNew.phase==='drag'){
-        if(S._cross){
-          const rect=wrap.getBoundingClientRect(),W=rect.width,H=rect.height;
+      if(S._rulerNew){
+        const rect=wrap.getBoundingClientRect();
+        const x=ev.clientX-rect.left,y=ev.clientY-rect.top;
+        const W=rect.width,H=rect.height;
+        if(x>=PL&&x<=W-RP()&&y>=PT&&y<=H-PB){
+          S._cross={cx:x,cy:y};
           const sc=scale(visible().cs,H);
-          S._rulerNew.livePrice=priceFromY(S._cross.cy,H,sc);
-          S._rulerNew.liveIdx=idxFromX(S._cross.cx,W);
-          S._rulerNew.liveX=S._cross.cx;
-        }else{
-          const pt=ptFrom(ev.clientX,ev.clientY);
-          if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;}
+          S._rulerNew.idx2=idxFromX(x,W);
+          S._rulerNew.price2=priceFromY(y,H,sc);
         }
         drawSoon();return;
       }
@@ -7654,7 +7652,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const sc=scale(visible().cs,H);
         const dIdx=(ev.clientX-S._rulerDragSv.lastX)*(S.view.end-S.view.start)/CW(W);
         const dP=priceFromY(ev.clientY-rect.top,H,sc)-priceFromY(S._rulerDragSv.lastY-rect.top,H,sc);
-        r.x1+=dIdx;r.x2+=dIdx;r.price1+=dP;r.price2+=dP;
+        r.idx1+=dIdx;r.idx2+=dIdx;r.price1+=dP;r.price2+=dP;
         S._rulerDragSv.lastX=ev.clientX;S._rulerDragSv.lastY=ev.clientY;
         drawSoon();
       }
@@ -7663,8 +7661,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     window.addEventListener('pointerup',function(ev){
       const dx=ev.clientX-_tapX,dy=ev.clientY-_tapY,isTap=Math.sqrt(dx*dx+dy*dy)<10;
       if(S._rulerDragSv){S._rulerDragSv=null;draw();return;}
-      // After drag: freeze endpoint in place, wait for a click to save
-      if(S._rulerNew&&S._rulerNew.phase==='drag'){draw();return;}
+      if(S._rulerNew){draw();return;}
       if(isTap&&S._rulers.length>0&&S.tool!=='ruler'){S._rulers=[];syncBtn();draw();}
     });
 
@@ -7734,40 +7731,33 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     function drawRulers(){
       const cvs=document.getElementById('chart');if(!cvs)return;
       const W=wrap.clientWidth,H=wrap.clientHeight;if(!W||!H)return;
-      const sc=scale(visible().cs,H),right=W-RP();
+      const sc=scale(visible().cs,H);
       const ctx=cvs.getContext('2d');
-      if(!S._rulers.length&&!S._rulerNew&&!S._rulerCross)return;
+      if(!S._rulers.length&&!S._rulerNew)return;
       ctx.save();window.__ETX_SKIP_COLORMAP=true;
 
-      // In-progress
       if(S._rulerNew){
         const n=S._rulerNew;
         const x1px=PL+(n.idx1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
-        const y1=sc.y(n.price1);
-        if(n.phase==='anchor'){
-          drawCross(ctx,x1px,y1,W,H,1.0);
-          drawLabel(ctx,'0,00 pts','+0,00%','0 barras, 0m',x1px+8,y1,W,H,0.90);
-        }else{
-          const x2px=clamp(n.liveX,PL,right),y2=sc.y(n.livePrice);
-          drawBand(ctx,x1px,x2px,y1,y2,W,H,0.82);
-          const priceDiff=n.livePrice-n.price1;
-          const pct=priceDiff/n.price1*100;
-          const nb=Math.max(1,Math.abs(Math.round(n.liveIdx-n.idx1)));
-          const ptStr=(priceDiff>=0?'+':'')+priceDiff.toFixed(2)+' pts';
-          const pctStr=(pct>=0?'+':'')+pct.toFixed(2)+'%';
-          drawLabel(ctx,ptStr,pctStr,nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb),x2px,y2,W,H,0.82);
-        }
+        const x2px=PL+(n.idx2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        const y1=sc.y(n.price1),y2=sc.y(n.price2);
+        drawBand(ctx,x1px,x2px,y1,y2,W,H,0.82);
+        const priceDiff=n.price2-n.price1;
+        const pct=priceDiff/n.price1*100;
+        const nb=Math.max(1,Math.abs(Math.round(n.idx2-n.idx1)));
+        const ptStr=(priceDiff>=0?'+':'')+priceDiff.toFixed(2)+' pts';
+        const pctStr=(pct>=0?'+':'')+pct.toFixed(2)+'%';
+        drawLabel(ctx,ptStr,pctStr,nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb),x2px,y2,W,H,0.82);
       }
 
-      // Saved
       S._rulers.forEach(function(r){
-        const x1px=PL+(r.x1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
-        const x2px=PL+(r.x2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        const x1px=PL+(r.idx1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
+        const x2px=PL+(r.idx2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const y1=sc.y(r.price1),y2=sc.y(r.price2);
         drawBand(ctx,x1px,x2px,y1,y2,W,H,1.0);
         const priceDiff=r.price2-r.price1;
         const pct=priceDiff/r.price1*100;
-        const nb=Math.max(1,Math.abs(Math.round(r.x2-r.x1)));
+        const nb=Math.max(1,Math.abs(Math.round(r.idx2-r.idx1)));
         const ptStr=(priceDiff>=0?'+':'')+priceDiff.toFixed(2)+' pts';
         const pctStr=(pct>=0?'+':'')+pct.toFixed(2)+'%';
         drawLabel(ctx,ptStr,pctStr,nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb),x2px,y2,W,H,1.0);
