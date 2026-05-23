@@ -7602,13 +7602,25 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       _tapX=ev.clientX;_tapY=ev.clientY;
 
       if(S.tool==='ruler'){
+        const rect=wrap.getBoundingClientRect();
+        const x=ev.clientX-rect.left,y=ev.clientY-rect.top;
+        const W=rect.width,H=rect.height;
+
+        // 1º clique: cross não ativo → ativa o cross (não ancora ainda)
+        if(!S._cross){
+          if(x>=PL&&x<=W-RP()&&y>=PT&&y<=H-PB){
+            S._cross={cx:x,cy:y};draw();
+          }
+          ev.stopImmediatePropagation();ev.preventDefault();return;
+        }
+
         const p=getCrossChartPoint();
         if(!p)return;
         if(!S._rulerNew){
-          // Estado 2: trava ponto inicial, começa drag imediato
+          // 2º clique: ancora o ponto inicial (régua no zero)
           S._rulerNew={state:'start_locked',idx1:p.idx,price1:p.price,idx2:p.idx,price2:p.price,isDraggingEnd:true};
         }else{
-          // Estado 5: 2º clique finaliza exatamente no crosshair
+          // 3º clique: fixa a régua
           const n=S._rulerNew;
           n.idx2=p.idx;n.price2=p.price;
           S._rulers.push({idx1:n.idx1,price1:n.price1,idx2:n.idx2,price2:n.price2});
