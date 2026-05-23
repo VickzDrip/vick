@@ -7536,9 +7536,9 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 (function(){
   function initRuler(){
     if(!window.S)return setTimeout(initRuler,100);
-    S._rulers=[];       // [{idx1,price1,idx2,price2}]
-    S._rulerNew=null;   // {idx1,price1,idx2,price2} — in-progress
-    S._rulerDragSv=null;// {index,lastX,lastY}
+    S._rulers=[];
+    S._rulerNew=null;    // {state:'start_locked'|'waiting_confirm', idx1,price1,idx2,price2, isDraggingEnd}
+    S._rulerDragSv=null; // {index,lastX,lastY}
 
     const btn=document.createElement('button');
     btn.id='btnRuler';btn.className='mini-btn';
@@ -7551,8 +7551,8 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       btn.classList.toggle('tool-active',S.tool==='ruler'||S._rulers.length>0||!!S._rulerNew);
     }
     btn.addEventListener('click',function(){
-      if(S.tool==='ruler'){S.tool=null;S._rulerNew=null;}
-      else if(S._rulers.length>0){S._rulers=[];S._rulerNew=null;S.tool=null;}
+      if(S.tool==='ruler'||S._rulerNew){S.tool=null;S._rulerNew=null;}
+      else if(S._rulers.length>0){S._rulers=[];S.tool=null;}
       else{S.tool='ruler';}
       if(typeof syncToolBtns==='function')syncToolBtns();
       syncBtn();draw();
@@ -7571,7 +7571,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       const h=Math.floor(t/60),m=t%60;return m?h+'h '+m+'m':h+'h';
     }
 
-    // Única fonte de posição: S._cross convertido para chart coords
+    // Única fonte de posição: S._cross → chart coords
     function getCrossChartPoint(){
       if(!S._cross)return null;
       const rect=wrap.getBoundingClientRect(),W=rect.width,H=rect.height;
@@ -7596,21 +7596,22 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
     let _tapX=0,_tapY=0;
 
-    // capture — antes do click nativo e do mousedown
+    // capture: dispara antes do click nativo e do mousedown de pan
     wrap.addEventListener('pointerdown',function(ev){
       if(ev.button!==0)return;
       _tapX=ev.clientX;_tapY=ev.clientY;
 
       if(S.tool==='ruler'){
-        // S._cross garantido neste ponto (capture antes do click que o limparia)
         const p=getCrossChartPoint();
         if(!p)return;
         if(!S._rulerNew){
-          // 1º clique: ancora exatamente no crosshair
-          S._rulerNew={idx1:p.idx,price1:p.price,idx2:p.idx,price2:p.price};
+          // Estado 2: trava ponto inicial, começa drag imediato
+          S._rulerNew={state:'start_locked',idx1:p.idx,price1:p.price,idx2:p.idx,price2:p.price,isDraggingEnd:true};
         }else{
-          // 2º clique: finaliza exatamente no crosshair
-          S._rulers=[{idx1:S._rulerNew.idx1,price1:S._rulerNew.price1,idx2:p.idx,price2:p.price}];
+          // Estado 5: 2º clique finaliza exatamente no crosshair
+          const n=S._rulerNew;
+          n.idx2=p.idx;n.price2=p.price;
+          S._rulers.push({idx1:n.idx1,price1:n.price1,idx2:n.idx2,price2:n.price2});
           S._rulerNew=null;S.tool=null;
           if(typeof syncToolBtns==='function')syncToolBtns();
           syncBtn();
@@ -7618,7 +7619,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         draw();ev.stopImmediatePropagation();ev.preventDefault();return;
       }
 
-      // Arrastar régua salva
+      // Arrastar régua salva (só quando nenhuma tool ativa)
       if(S._rulers.length>0&&!S.tool){
         const rect=wrap.getBoundingClientRect();
         const x=ev.clientX-rect.left,y=ev.clientY-rect.top;
@@ -7632,7 +7633,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       }
     },{capture:true,passive:false});
 
-    // pointermove — atualiza preview da régua; mantém S._cross em sincronia
+    // Estado 3+4: endpoint segue crosshair em tempo real
     window.addEventListener('pointermove',function(ev){
       if(S._rulerNew){
         const rect=wrap.getBoundingClientRect();
@@ -7658,37 +7659,30 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       }
     });
 
+    // Estado 4: soltar NÃO finaliza — fica em waiting_confirm
     window.addEventListener('pointerup',function(ev){
       const dx=ev.clientX-_tapX,dy=ev.clientY-_tapY,isTap=Math.sqrt(dx*dx+dy*dy)<10;
       if(S._rulerDragSv){S._rulerDragSv=null;draw();return;}
-      if(S._rulerNew){draw();return;}
+      if(S._rulerNew){
+        S._rulerNew.isDraggingEnd=false;
+        S._rulerNew.state='waiting_confirm';
+        draw();return;
+      }
       if(isTap&&S._rulers.length>0&&S.tool!=='ruler'){S._rulers=[];syncBtn();draw();}
     });
 
-    // Draw hook
     const _base=window.draw;
     window.draw=function(){_base();drawRulers();};
 
-    function drawCross(ctx,xpx,y1,W,H,a){
-      const right=W-RP();
-      ctx.setLineDash([4,5]);ctx.lineWidth=1;
-      ctx.strokeStyle=`rgba(100,140,220,${(0.55*a).toFixed(2)})`;
-      ctx.beginPath();ctx.moveTo(xpx,PT);ctx.lineTo(xpx,H-PB);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(PL,y1);ctx.lineTo(right,y1);ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle=`rgba(30,130,230,${a.toFixed(2)})`;
-      ctx.strokeStyle=`rgba(5,9,20,${(0.75*a).toFixed(2)})`;ctx.lineWidth=1.5;
-      ctx.beginPath();ctx.arc(xpx,y1,5,0,Math.PI*2);ctx.fill();ctx.stroke();
-    }
-
-    function drawBand(ctx,x1px,x2px,y1,y2,W,H,a){
+    function drawBand(ctx,x1px,x2px,y1,y2,W,H,a,dashed){
       const right=W-RP();
       const xa=clamp(Math.min(x1px,x2px),PL,right),xb=clamp(Math.max(x1px,x2px),PL,right);
       const yTop=Math.min(y1,y2),yBot=Math.max(y1,y2);
       const rgb=y2<y1?'0,160,255':'255,61,87';
-      ctx.fillStyle=`rgba(${rgb},${(0.14*a).toFixed(2)})`;
+      ctx.fillStyle=`rgba(${rgb},${(0.12*a).toFixed(2)})`;
       ctx.fillRect(xa,yTop,Math.max(1,xb-xa),Math.max(1,yBot-yTop));
-      ctx.setLineDash([4,5]);ctx.lineWidth=1;
+      if(dashed)ctx.setLineDash([5,4]);else ctx.setLineDash([]);
+      ctx.lineWidth=1;
       ctx.strokeStyle=`rgba(100,140,220,${(0.52*a).toFixed(2)})`;
       if(x1px>PL-2&&x1px<right+2){ctx.beginPath();ctx.moveTo(x1px,PT);ctx.lineTo(x1px,H-PB);ctx.stroke();}
       if(x2px>PL-2&&x2px<right+2){ctx.beginPath();ctx.moveTo(x2px,PT);ctx.lineTo(x2px,H-PB);ctx.stroke();}
@@ -7741,20 +7735,22 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const x1px=PL+(n.idx1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const x2px=PL+(n.idx2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const y1=sc.y(n.price1),y2=sc.y(n.price2);
-        drawBand(ctx,x1px,x2px,y1,y2,W,H,0.82);
+        const waiting=n.state==='waiting_confirm';
+        drawBand(ctx,x1px,x2px,y1,y2,W,H,0.75,waiting);
         const priceDiff=n.price2-n.price1;
         const pct=priceDiff/n.price1*100;
         const nb=Math.max(1,Math.abs(Math.round(n.idx2-n.idx1)));
         const ptStr=(priceDiff>=0?'+':'')+priceDiff.toFixed(2)+' pts';
         const pctStr=(pct>=0?'+':'')+pct.toFixed(2)+'%';
-        drawLabel(ctx,ptStr,pctStr,nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb),x2px,y2,W,H,0.82);
+        const hint=waiting?'click p/ confirmar':nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb);
+        drawLabel(ctx,ptStr,pctStr,hint,x2px,y2,W,H,0.75);
       }
 
       S._rulers.forEach(function(r){
         const x1px=PL+(r.idx1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const x2px=PL+(r.idx2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const y1=sc.y(r.price1),y2=sc.y(r.price2);
-        drawBand(ctx,x1px,x2px,y1,y2,W,H,1.0);
+        drawBand(ctx,x1px,x2px,y1,y2,W,H,1.0,false);
         const priceDiff=r.price2-r.price1;
         const pct=priceDiff/r.price1*100;
         const nb=Math.max(1,Math.abs(Math.round(r.idx2-r.idx1)));
