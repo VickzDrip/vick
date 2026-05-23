@@ -6042,6 +6042,11 @@ return {
   </div>
 </div>
 <button id="dvlDrawDelete" style="display:none;position:fixed;z-index:9999;background:rgba(255,61,87,0.15);border:1px solid rgba(255,61,87,0.45);border-radius:6px;color:#ff3d57;font-size:11px;padding:5px 10px;cursor:pointer;top:60px;right:80px;">🗑 Delete</button>
+<div id="dvlConfirmBar" style="display:none;position:fixed;z-index:9999;bottom:52px;left:50%;transform:translateX(-50%);background:rgba(6,12,22,0.96);border:1px solid rgba(0,212,255,0.4);border-radius:8px;padding:8px 14px;flex-direction:row;align-items:center;gap:10px;backdrop-filter:blur(8px);">
+  <span style="font-size:10px;color:#a0b8d4;letter-spacing:.5px;">Confirmar desenho?</span>
+  <button id="dvlDrawOk" style="background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.4);border-radius:4px;color:#00d4ff;font-size:11px;padding:5px 14px;cursor:pointer;">&#10003; OK</button>
+  <button id="dvlDrawCancel2" style="background:none;border:1px solid #1e2a40;border-radius:4px;color:#6f86a8;font-size:11px;padding:5px 12px;cursor:pointer;">&#10007; Cancelar</button>
+</div>
 </body>
 </html>
 
@@ -7538,7 +7543,6 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     if(!window.S)return setTimeout(initRuler,100);
     S._rulers=[];          // [{x1,x2,price1,price2}]
     S._rulerNew=null;      // {price1,idx1,livePrice,liveIdx,liveX,phase:'anchor'|'drag'}
-    S._rulerCross=null;    // {price,idx} crosshair following cursor when armed
     S._rulerDragSv=null;   // {index,lastX,lastY} dragging saved ruler
 
     const btn=document.createElement('button');
@@ -7591,26 +7595,11 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
 
     let _tapX=0,_tapY=0;
-    let _rulerDragOrigin=null; // {fx,fy} last pointer position for incremental drag
 
-    // capture — fires before V40 + main handlers
+    // capture — fires before V40 + main handlers (ruler placement handled by DVL IIFE)
     wrap.addEventListener('pointerdown',function(ev){
       if(ev.button!==0)return;
       _tapX=ev.clientX;_tapY=ev.clientY;
-
-      if(S.tool==='ruler'){
-        const pt=ptFrom(ev.clientX,ev.clientY);if(!pt)return;
-        if(!S._rulerNew){
-          S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x,phase:'anchor'};
-          S._rulerCross=null;
-        }else if(S._rulerNew.phase==='anchor'){
-          S._rulerNew.phase='drag';
-          S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;
-          _rulerDragOrigin={fx:ev.clientX,fy:ev.clientY};
-        }
-        draw();ev.stopImmediatePropagation();ev.preventDefault();return;
-      }
-
       // Drag saved ruler
       if(S._rulers.length>0){
         const pt=ptFrom(ev.clientX,ev.clientY);if(!pt)return;
@@ -7622,32 +7611,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       }
     },{capture:true,passive:false});
 
-    // Crosshair follows mouse hover when armed (desktop)
-    wrap.addEventListener('mousemove',function(ev){
-      if(S.tool!=='ruler'||S._rulerNew)return;
-      const pt=ptFrom(ev.clientX,ev.clientY);
-      S._rulerCross=pt?{price:pt.price,idx:pt.idx}:null;
-      drawSoon();
-    });
-
     window.addEventListener('pointermove',function(ev){
-      if(S._rulerNew&&S._rulerNew.phase==='drag'){
-        if(_rulerDragOrigin){
-          /* Relative drag: same incremental-delta pattern as _rulerDragSv */
-          const rect=wrap.getBoundingClientRect();
-          const W=rect.width,H=rect.height,sc=scale(visible().cs,H);
-          const dx=ev.clientX-_rulerDragOrigin.fx,dy=ev.clientY-_rulerDragOrigin.fy;
-          const nx=clamp(S._rulerNew.liveX+dx,PL,W-RP());
-          const ny=clamp(sc.y(S._rulerNew.livePrice)+dy,PT,H-PB);
-          S._rulerNew.liveX=nx;S._rulerNew.liveIdx=idxFromX(nx,W);
-          S._rulerNew.livePrice=priceFromY(ny,H,sc);
-          _rulerDragOrigin={fx:ev.clientX,fy:ev.clientY};
-        }else{
-          const pt=ptFrom(ev.clientX,ev.clientY);
-          if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;}
-        }
-        drawSoon();return;
-      }
       if(S._rulerDragSv){
         const r=S._rulers[S._rulerDragSv.index];if(!r)return;
         const rect=wrap.getBoundingClientRect(),W=rect.width,H=rect.height;
@@ -7663,20 +7627,6 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     window.addEventListener('pointerup',function(ev){
       const dx=ev.clientX-_tapX,dy=ev.clientY-_tapY,isTap=Math.sqrt(dx*dx+dy*dy)<10;
       if(S._rulerDragSv){S._rulerDragSv=null;draw();return;}
-      if(S._rulerNew){
-        if(S._rulerNew.phase==='drag'){
-          _rulerDragOrigin=null; // clear for next gesture
-          const moved=Math.abs(S._rulerNew.livePrice-S._rulerNew.price1)/S._rulerNew.price1>0.00005;
-          if(moved){
-            const n=S._rulerNew;
-            S._rulers=[{x1:n.idx1,x2:n.liveIdx,price1:n.price1,price2:n.livePrice}];
-            S._rulerNew=null;S.tool=null;
-            if(typeof syncToolBtns==='function')syncToolBtns();
-          }else{S._rulerNew.phase='anchor';}
-          syncBtn();draw();
-        }
-        return;
-      }
       if(isTap&&S._rulers.length>0&&S.tool!=='ruler'){S._rulers=[];syncBtn();draw();}
     });
 
@@ -7751,13 +7701,6 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       if(!S._rulers.length&&!S._rulerNew&&!S._rulerCross)return;
       ctx.save();window.__ETX_SKIP_COLORMAP=true;
 
-      // Crosshair follows cursor when armed
-      if(S._rulerCross&&S.tool==='ruler'&&!S._rulerNew){
-        const c=S._rulerCross;
-        const xpx=PL+(c.idx-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
-        drawCross(ctx,xpx,sc.y(c.price),W,H,0.70);
-      }
-
       // In-progress
       if(S._rulerNew){
         const n=S._rulerNew;
@@ -7794,6 +7737,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
       window.__ETX_SKIP_COLORMAP=false;ctx.restore();
     }
+    window._syncRulerBtn=syncBtn; // exposed for DVL IIFE
     syncBtn();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initRuler);
@@ -8362,7 +8306,7 @@ function chartPointToScreen(p,cs){
 }
 
 /* ─── STATE MACHINE ─── */
-const ST={IDLE:'idle',DRAWING:'drawing',SEL:'sel',DRAG_BODY:'drag_body',DRAG_HDL:'drag_hdl',EDIT_TEXT:'edit_text'};
+const ST={IDLE:'idle',DRAWING:'drawing',SEL:'sel',DRAG_BODY:'drag_body',DRAG_HDL:'drag_hdl',EDIT_TEXT:'edit_text',CONFIRM:'confirm'};
 let _sm=ST.IDLE;
 let _tool=null;
 let _draft=null;
@@ -8407,6 +8351,8 @@ function _initBtns(){
     if(S.replay.playing){_pauseReplay();_playReplay();}
   });
   if(rExit)rExit.addEventListener('click',_disableReplay);
+  const okBtn=el('dvlDrawOk');if(okBtn)okBtn.addEventListener('click',_confirmDrawing);
+  const cnBtn=el('dvlDrawCancel2');if(cnBtn)cnBtn.addEventListener('click',_cancelConfirm);
 }
 
 /* ─── TOOL STATE ─── */
@@ -8416,11 +8362,13 @@ function _setTool(t){
   drawSoon();
 }
 function _clearTool(){
-  _tool=null;_draft=null;if(_sm===ST.DRAWING)_sm=ST.IDLE;_updateToolBtns();
+  _tool=null;_draft=null;S._rulerNew=null;
+  if(_sm===ST.DRAWING||_sm===ST.CONFIRM){_hideConfirmBar();_sm=ST.IDLE;}
+  _updateToolBtns();
   const wrap=el('chartWrap');if(wrap)wrap.style.cursor='';
   drawSoon();
 }
-function _cancelDrawing(){_draft=null;if(_sm===ST.DRAWING)_sm=ST.IDLE;}
+function _cancelDrawing(){_draft=null;S._rulerNew=null;if(_sm===ST.DRAWING||_sm===ST.CONFIRM){_hideConfirmBar();_sm=ST.IDLE;}}
 function _updateToolBtns(){
   [{id:'rpDrawLine',t:'trendline'},{id:'rpDrawRect',t:'rectangle'},{id:'rpDrawText',t:'text'}]
   .forEach(({id,t})=>{const b=el(id);if(b)b.classList.toggle('dvl-active',t===_tool);});
@@ -8467,7 +8415,8 @@ function _initEvents(){
   window.addEventListener('dblclick',_onDbl,true);
   window.addEventListener('keydown',e=>{
     if(e.key==='Escape'){
-      if(_sm===ST.DRAWING){_cancelDrawing();drawSoon();}
+      if(_sm===ST.CONFIRM){_cancelConfirm();}
+      else if(_sm===ST.DRAWING){_cancelDrawing();drawSoon();}
       else{_clearTool();_deselect();_closeCtx();drawSoon();}
     }
     if((e.key==='Delete'||e.key==='Backspace')&&_selId&&document.activeElement===document.body)_deleteSelected();
@@ -8483,7 +8432,7 @@ function _initEvents(){
   });
 }
 
-function _onCk(e){if(_tool||_sm===ST.DRAWING||S.replay?.selectingStart)e.stopPropagation();}
+function _onCk(e){if(_tool||S.tool==='ruler'||_sm===ST.DRAWING||_sm===ST.CONFIRM||S.replay?.selectingStart)e.stopPropagation();}
 
 function _onMD(e){
   if(e.button!==0)return;
@@ -8499,11 +8448,13 @@ function _onMD(e){
     if(S.cursor){S.replay.selectingStart=false;S.replay.index=S.cursor.index;_showRpBar(true);drawSoon();}
     return;
   }
+  /* P0.5: confirm state — block chart interaction */
+  if(_sm===ST.CONFIRM){e.stopPropagation();e.preventDefault();return;}
   const cs=getCS();if(!cs)return;
   const wrap=el('chartWrap');if(!wrap)return;
   const r=wrap.getBoundingClientRect();
   const p={x:e.clientX-r.left,y:e.clientY-r.top};
-  if(_tool||_sm===ST.DRAWING){
+  if(_tool||S.tool==='ruler'||_sm===ST.DRAWING){
     e.stopPropagation();e.preventDefault();
     if(!S._cross||!S.cursor){S._cross={cx:p.x,cy:p.y};_syncCursor(cs);}
     _handleDrawClick(cs);return;
@@ -8522,7 +8473,7 @@ function _onMD(e){
 /* DRAWING state: no stopPropagation so native mousemove updates S._cross and crosshair shows.
    DRAG states: stop propagation to block chart pan. */
 function _onMM(e){
-  if(_sm===ST.DRAWING||S.replay?.selectingStart)return;
+  if(_sm===ST.DRAWING||_sm===ST.CONFIRM||S.tool==='ruler'||S.replay?.selectingStart)return;
   const cs=getCS();if(!cs)return;
   const wrap=el('chartWrap');if(!wrap)return;
   const r=wrap.getBoundingClientRect();
@@ -8550,7 +8501,9 @@ function _onTS(e){
   const r=wrap.getBoundingClientRect();
   const t=e.touches[0];
   const x=t.clientX-r.left,y=t.clientY-r.top;
-  if(S.replay?.selectingStart||_tool||_sm===ST.DRAWING){
+  /* CONFIRM state blocks touch */
+  if(_sm===ST.CONFIRM){e.stopPropagation();e.preventDefault();return;}
+  if(S.replay?.selectingStart||_tool||S.tool==='ruler'||_sm===ST.DRAWING){
     e.stopPropagation();e.preventDefault();
     /* Relative drag: crosshair stays where it is, finger delta moves it */
     const baseCX=S._cross?S._cross.cx:x;
@@ -8591,7 +8544,7 @@ function _onTM(e){
   const r=wrap.getBoundingClientRect();
   const t=e.touches[0];
   const x=t.clientX-r.left,y=t.clientY-r.top;
-  if(S.replay?.selectingStart||_tool||_sm===ST.DRAWING){
+  if(S.replay?.selectingStart||_tool||S.tool==='ruler'||_sm===ST.DRAWING){
     e.stopPropagation();e.preventDefault();
     if(_crossDragStart){
       const ncx=clamp(_crossDragStart.cx+(x-_crossDragStart.fx),PL,wrap.clientWidth-RP());
@@ -8615,6 +8568,8 @@ function _onTM(e){
 function _onTE(e){
   if(_lpt){clearTimeout(_lpt);_lpt=null;}
   _crossDragStart=null;
+  /* CONFIRM state blocks touch */
+  if(_sm===ST.CONFIRM){e.stopPropagation();e.preventDefault();return;}
   if(S.replay?.selectingStart){
     e.stopPropagation();
     const cs=getCS();if(!cs)return;
@@ -8622,7 +8577,7 @@ function _onTE(e){
     if(S.cursor){S.replay.selectingStart=false;S.replay.index=S.cursor.index;_showRpBar(true);drawSoon();}
     return;
   }
-  if(_tool||_sm===ST.DRAWING){
+  if(_tool||S.tool==='ruler'||_sm===ST.DRAWING){
     e.stopPropagation();
     const cs=getCS();if(!cs)return;
     _syncCursor(cs);if(S.cursor)_handleDrawClick(cs);return;
@@ -8643,6 +8598,18 @@ function _onDbl(e){
 /* ─── DRAWING LOGIC ─── */
 function _handleDrawClick(cs){
   const cp=_cursorPoint();if(!cp)return;
+  /* Ruler: two-click flow using crosshair */
+  if(S.tool==='ruler'){
+    if(!S._rulerNew){
+      S._rulerNew={price1:cp.price,idx1:cp.index,livePrice:cp.price,liveIdx:cp.index,liveX:S.cursor.screenX,phase:'anchor'};
+      _sm=ST.DRAWING;
+    }else if(_sm===ST.DRAWING){
+      S._rulerNew.livePrice=cp.price;S._rulerNew.liveIdx=cp.index;S._rulerNew.liveX=S.cursor.screenX;
+      S._rulerNew.phase='drag';
+      _enterConfirm();
+    }
+    drawSoon();return;
+  }
   if(_tool==='text'){
     const sp=chartPointToScreen(cp,cs);
     _draft={id:uid(),type:'text',p:{...cp},text:'',style:{...STYLES.text},locked:false,visible:true,createdAt:Date.now()};
@@ -8650,8 +8617,8 @@ function _handleDrawClick(cs){
   }
   if(_sm!==ST.DRAWING){
     _draft=_makeDraft(_tool,cp);_sm=ST.DRAWING;drawSoon();
-  } else {
-    _updateDraftEnd(cp);_finalize();
+  }else{
+    _updateDraftEnd(cp);_enterConfirm();
   }
 }
 function _makeDraft(type,cp){
@@ -8666,6 +8633,33 @@ function _finalize(){
   S.drawings.push(_draft);const id=_draft.id;
   _draft=null;_sm=ST.SEL;if(!CFG.keepTool)_clearTool();
   _select(id);_saveDrawings();drawSoon();
+}
+function _enterConfirm(){
+  _sm=ST.CONFIRM;
+  const bar=el('dvlConfirmBar');if(bar)bar.style.display='flex';
+  drawSoon();
+}
+function _hideConfirmBar(){
+  const bar=el('dvlConfirmBar');if(bar)bar.style.display='none';
+}
+function _confirmDrawing(){
+  _hideConfirmBar();
+  if(S._rulerNew){
+    const n=S._rulerNew;
+    S._rulers=[{x1:n.idx1,x2:n.liveIdx,price1:n.price1,price2:n.livePrice}];
+    S._rulerNew=null;S.tool=null;_sm=ST.IDLE;
+    if(typeof window._syncRulerBtn==='function')window._syncRulerBtn();
+    if(typeof syncToolBtns==='function')syncToolBtns();
+  }else{_finalize();}
+  drawSoon();
+}
+function _cancelConfirm(){
+  _hideConfirmBar();
+  const wasRuler=!!S._rulerNew;
+  _cancelDrawing();
+  if(wasRuler){S.tool=null;if(typeof window._syncRulerBtn==='function')window._syncRulerBtn();if(typeof syncToolBtns==='function')syncToolBtns();}
+  else if(!CFG.keepTool)_clearTool();
+  drawSoon();
 }
 
 /* ─── DRAG ─── */
@@ -8799,6 +8793,9 @@ function _patchDraw(){
     /* Keep draft endpoint anchored to crosshair for live preview */
     if(_sm===ST.DRAWING&&_draft&&S.cursor)
       _draft.p2={index:S.cursor.index,time:S.cursor.time,price:S.cursor.price};
+    /* Ruler live endpoint follows crosshair in DRAWING state */
+    if(_sm===ST.DRAWING&&S._rulerNew&&S.cursor&&_lastCS)
+      Object.assign(S._rulerNew,{livePrice:S.cursor.price,liveIdx:S.cursor.index,liveX:_lastCS.xI(S.cursor.index)});
     const c=el('chart');if(!c)return;
     const ctx=c.getContext('2d');
     ctx.save();
@@ -8890,11 +8887,16 @@ function _renderDraft(ctx,cs){
   ctx.restore();
 }
 function _renderToolHint(ctx){
-  if(!_tool)return;
-  const labels={trendline:'↗ Linha',rectangle:'▭ Retângulo',text:'T Texto'};
+  if(_sm===ST.CONFIRM){
+    ctx.save();ctx.font='bold 10px monospace';ctx.fillStyle='rgba(50,220,100,0.88)';ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.fillText('Clique ✓ OK para confirmar  ·  Esc para cancelar',PL+6,PT+6);ctx.restore();return;
+  }
+  if(!_tool&&S.tool!=='ruler')return;
+  const labels={trendline:'↗ Linha',rectangle:'▭ Retângulo',text:'T Texto',ruler:'📏 Régua'};
+  const t=_tool||'ruler';
   const state=_sm===ST.DRAWING?' — clique para finalizar':' — clique para iniciar';
   ctx.save();ctx.font='bold 10px monospace';ctx.fillStyle='rgba(0,212,255,0.82)';ctx.textAlign='left';ctx.textBaseline='top';
-  ctx.fillText((labels[_tool]||'')+state,PL+6,PT+6);ctx.restore();
+  ctx.fillText((labels[t]||'')+state,PL+6,PT+6);ctx.restore();
 }
 function _renderReplayCursor(ctx,cs){
   if(!S.replay?.enabled||S.replay.index==null)return;
