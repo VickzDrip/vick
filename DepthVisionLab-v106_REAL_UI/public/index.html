@@ -8357,6 +8357,7 @@ let _editId=null;
 let _lpt=null;
 let _ctxMenu=null;
 let _dblTap=null;
+let _crossDragStart=null; // {fx,fy,cx,cy} — relative crosshair drag origin for mobile tools
 
 /* ─── INIT ─── */
 ready(()=>{
@@ -8525,7 +8526,7 @@ function _onMU(e){
   if(_drag){_drag=null;e.stopPropagation();}
 }
 
-/* Mobile drawing: touchstart → seed crosshair (no point yet).
+/* Mobile drawing: touchstart → seeds/keeps crosshair, drag is relative (like native cross mode).
    Slide finger to adjust. touchend → confirm point. */
 function _onTS(e){
   if(e.touches.length>1)return;
@@ -8534,13 +8535,14 @@ function _onTS(e){
   const r=wrap.getBoundingClientRect();
   const t=e.touches[0];
   const x=t.clientX-r.left,y=t.clientY-r.top;
-  if(S.replay?.selectingStart){
+  if(S.replay?.selectingStart||_tool||_sm===ST.DRAWING){
     e.stopPropagation();e.preventDefault();
-    S._cross={cx:x,cy:y};drawSoon();return;
-  }
-  if(_tool||_sm===ST.DRAWING){
-    e.stopPropagation();e.preventDefault();
-    S._cross={cx:x,cy:y};drawSoon();return;
+    /* Relative drag: crosshair stays where it is, finger delta moves it */
+    const baseCX=S._cross?S._cross.cx:x;
+    const baseCY=S._cross?S._cross.cy:y;
+    S._cross={cx:baseCX,cy:baseCY};
+    _crossDragStart={fx:x,fy:y,cx:baseCX,cy:baseCY};
+    drawSoon();return;
   }
   const cs=getCS();if(!cs)return;
   const p={x,y};
@@ -8574,9 +8576,14 @@ function _onTM(e){
   const r=wrap.getBoundingClientRect();
   const t=e.touches[0];
   const x=t.clientX-r.left,y=t.clientY-r.top;
-  if(_tool||_sm===ST.DRAWING){
+  if(S.replay?.selectingStart||_tool||_sm===ST.DRAWING){
     e.stopPropagation();e.preventDefault();
-    S._cross={cx:x,cy:y};drawSoon();return;
+    if(_crossDragStart){
+      const ncx=clamp(_crossDragStart.cx+(x-_crossDragStart.fx),PL,wrap.clientWidth-RP());
+      const ncy=clamp(_crossDragStart.cy+(y-_crossDragStart.fy),PT,wrap.clientHeight-PB);
+      S._cross={cx:ncx,cy:ncy};
+    }else{S._cross={cx:x,cy:y};}
+    drawSoon();return;
   }
   if(!(_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL||(_drag&&!_drag.started)))return;
   if(_lpt){clearTimeout(_lpt);_lpt=null;}
@@ -8592,6 +8599,7 @@ function _onTM(e){
 
 function _onTE(e){
   if(_lpt){clearTimeout(_lpt);_lpt=null;}
+  _crossDragStart=null;
   if(S.replay?.selectingStart){
     e.stopPropagation();
     const cs=getCS();if(!cs)return;
