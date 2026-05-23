@@ -7591,6 +7591,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
 
     let _tapX=0,_tapY=0;
+    let _rulerDragOrigin=null; // {fx,fy,liveX,liveY} — relative drag origin for touch
 
     // capture — fires before V40 + main handlers
     wrap.addEventListener('pointerdown',function(ev){
@@ -7601,10 +7602,15 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const pt=ptFrom(ev.clientX,ev.clientY);if(!pt)return;
         if(!S._rulerNew){
           S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x,phase:'anchor'};
-          S._rulerCross=null;
+          S._rulerCross=null;_rulerDragOrigin=null;
         }else if(S._rulerNew.phase==='anchor'){
+          /* Enter drag: endpoint jumps to tap, save drag origin at tap (delta starts at 0) */
           S._rulerNew.phase='drag';
           S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;
+          _rulerDragOrigin={fx:pt.x,fy:pt.y,liveX:pt.x,liveY:pt.y};
+        }else if(S._rulerNew.phase==='drag'){
+          /* Re-tap while dragging: relative from current live endpoint, no jump */
+          _rulerDragOrigin={fx:pt.x,fy:pt.y,liveX:S._rulerNew.liveX,liveY:pt.sc.y(S._rulerNew.livePrice)};
         }
         draw();ev.stopImmediatePropagation();ev.preventDefault();return;
       }
@@ -7630,8 +7636,20 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
     window.addEventListener('pointermove',function(ev){
       if(S._rulerNew&&S._rulerNew.phase==='drag'){
-        const pt=ptFrom(ev.clientX,ev.clientY);
-        if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;}
+        if(_rulerDragOrigin){
+          /* Relative drag: apply delta from origin to saved live endpoint */
+          const rect=wrap.getBoundingClientRect();
+          const curX=ev.clientX-rect.left,curY=ev.clientY-rect.top;
+          const nx=clamp(_rulerDragOrigin.liveX+(curX-_rulerDragOrigin.fx),PL,rect.width-RP());
+          const ny=clamp(_rulerDragOrigin.liveY+(curY-_rulerDragOrigin.fy),PT,rect.height-PB);
+          const sc=scale(visible().cs,rect.height);
+          S._rulerNew.liveX=nx;
+          S._rulerNew.liveIdx=idxFromX(nx,rect.width);
+          S._rulerNew.livePrice=priceFromY(ny,rect.height,sc);
+        }else{
+          const pt=ptFrom(ev.clientX,ev.clientY);
+          if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;}
+        }
         drawSoon();return;
       }
       if(S._rulerDragSv){
@@ -7651,6 +7669,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       if(S._rulerDragSv){S._rulerDragSv=null;draw();return;}
       if(S._rulerNew){
         if(S._rulerNew.phase==='drag'){
+          _rulerDragOrigin=null;
           const moved=Math.abs(S._rulerNew.livePrice-S._rulerNew.price1)/S._rulerNew.price1>0.00005;
           if(moved){
             const n=S._rulerNew;
