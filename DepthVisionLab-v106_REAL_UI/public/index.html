@@ -7598,15 +7598,11 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
       if(S.tool==='ruler'){
         const pt=ptFrom(ev.clientX,ev.clientY);if(!pt)return;
-        // Prefer crosshair position (snaps to candle/OHLC) over raw pointer
-        const price=S.cursor?S.cursor.price:pt.price;
-        const idx=S.cursor?S.cursor.index:pt.idx;
-        const lx=S.cursor?S.cursor.screenX:pt.x;
         if(!S._rulerNew){
-          // 1st click: anchor + immediately start live tracking
-          S._rulerNew={price1:price,idx1:idx,livePrice:price,liveIdx:idx,liveX:lx,phase:'drag'};
+          // 1st click: anchor at exact click position
+          S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x,phase:'drag'};
         }else{
-          // 2nd click: save
+          // 2nd click: save endpoint at current live position
           const n=S._rulerNew;
           S._rulers=[{x1:n.idx1,x2:n.liveIdx,price1:n.price1,price2:n.livePrice}];
           S._rulerNew=null;S.tool=null;
@@ -7629,17 +7625,8 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
     window.addEventListener('pointermove',function(ev){
       if(S._rulerNew&&S._rulerNew.phase==='drag'){
-        // Follow crosshair when active, else raw pointer
-        if(S._cross){
-          const rect=wrap.getBoundingClientRect(),W=rect.width,H=rect.height;
-          const sc=scale(visible().cs,H);
-          S._rulerNew.livePrice=priceFromY(S._cross.cy,H,sc);
-          S._rulerNew.liveIdx=idxFromX(S._cross.cx,W);
-          S._rulerNew.liveX=S._cross.cx;
-        }else{
-          const pt=ptFrom(ev.clientX,ev.clientY);
-          if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;}
-        }
+        const pt=ptFrom(ev.clientX,ev.clientY);
+        if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;}
         drawSoon();return;
       }
       if(S._rulerDragSv){
