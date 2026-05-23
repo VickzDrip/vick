@@ -7591,7 +7591,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
 
     let _tapX=0,_tapY=0;
-    let _rulerDragOrigin=null; // {fx,fy,liveX,liveY} — relative drag origin for touch
+    let _rulerDragOrigin=null; // {fx,fy} last pointer position for incremental drag
 
     // capture — fires before V40 + main handlers
     wrap.addEventListener('pointerdown',function(ev){
@@ -7602,15 +7602,11 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const pt=ptFrom(ev.clientX,ev.clientY);if(!pt)return;
         if(!S._rulerNew){
           S._rulerNew={price1:pt.price,idx1:pt.idx,livePrice:pt.price,liveIdx:pt.idx,liveX:pt.x,phase:'anchor'};
-          S._rulerCross=null;_rulerDragOrigin=null;
+          S._rulerCross=null;
         }else if(S._rulerNew.phase==='anchor'){
-          /* Enter drag: endpoint jumps to tap, save drag origin at tap (delta starts at 0) */
           S._rulerNew.phase='drag';
           S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;
-          _rulerDragOrigin={fx:pt.x,fy:pt.y,liveX:pt.x,liveY:pt.y};
-        }else if(S._rulerNew.phase==='drag'){
-          /* Re-tap while dragging: relative from current live endpoint, no jump */
-          _rulerDragOrigin={fx:pt.x,fy:pt.y,liveX:S._rulerNew.liveX,liveY:pt.sc.y(S._rulerNew.livePrice)};
+          _rulerDragOrigin={fx:ev.clientX,fy:ev.clientY};
         }
         draw();ev.stopImmediatePropagation();ev.preventDefault();return;
       }
@@ -7637,15 +7633,15 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     window.addEventListener('pointermove',function(ev){
       if(S._rulerNew&&S._rulerNew.phase==='drag'){
         if(_rulerDragOrigin){
-          /* Relative drag: apply delta from origin to saved live endpoint */
+          /* Relative drag: same incremental-delta pattern as _rulerDragSv */
           const rect=wrap.getBoundingClientRect();
-          const curX=ev.clientX-rect.left,curY=ev.clientY-rect.top;
-          const nx=clamp(_rulerDragOrigin.liveX+(curX-_rulerDragOrigin.fx),PL,rect.width-RP());
-          const ny=clamp(_rulerDragOrigin.liveY+(curY-_rulerDragOrigin.fy),PT,rect.height-PB);
-          const sc=scale(visible().cs,rect.height);
-          S._rulerNew.liveX=nx;
-          S._rulerNew.liveIdx=idxFromX(nx,rect.width);
-          S._rulerNew.livePrice=priceFromY(ny,rect.height,sc);
+          const W=rect.width,H=rect.height,sc=scale(visible().cs,H);
+          const dx=ev.clientX-_rulerDragOrigin.fx,dy=ev.clientY-_rulerDragOrigin.fy;
+          const nx=clamp(S._rulerNew.liveX+dx,PL,W-RP());
+          const ny=clamp(sc.y(S._rulerNew.livePrice)+dy,PT,H-PB);
+          S._rulerNew.liveX=nx;S._rulerNew.liveIdx=idxFromX(nx,W);
+          S._rulerNew.livePrice=priceFromY(ny,H,sc);
+          _rulerDragOrigin={fx:ev.clientX,fy:ev.clientY};
         }else{
           const pt=ptFrom(ev.clientX,ev.clientY);
           if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;}
@@ -7669,7 +7665,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       if(S._rulerDragSv){S._rulerDragSv=null;draw();return;}
       if(S._rulerNew){
         if(S._rulerNew.phase==='drag'){
-          _rulerDragOrigin=null;
+          _rulerDragOrigin=null; // clear for next gesture
           const moved=Math.abs(S._rulerNew.livePrice-S._rulerNew.price1)/S._rulerNew.price1>0.00005;
           if(moved){
             const n=S._rulerNew;
