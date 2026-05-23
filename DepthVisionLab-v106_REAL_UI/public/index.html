@@ -7591,10 +7591,35 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
     let _tapX=0,_tapY=0;
 
-    // capture — fires before V40 + main handlers (ruler placement handled by DVL IIFE)
+    // capture — fires before main handlers
     wrap.addEventListener('pointerdown',function(ev){
       if(ev.button!==0)return;
       _tapX=ev.clientX;_tapY=ev.clientY;
+
+      if(S.tool==='ruler'){
+        const pt=ptFrom(ev.clientX,ev.clientY);if(!pt)return;
+        // Prefer crosshair position (snaps to candle/OHLC) over raw pointer
+        const price=S.cursor?S.cursor.price:pt.price;
+        const idx=S.cursor?S.cursor.index:pt.idx;
+        const lx=S.cursor?S.cursor.screenX:pt.x;
+        if(!S._rulerNew){
+          // 1st click: anchor
+          S._rulerNew={price1:price,idx1:idx,livePrice:price,liveIdx:idx,liveX:lx,phase:'anchor'};
+        }else if(S._rulerNew.phase==='anchor'){
+          // 2nd click: start drag, endpoint starts at crosshair
+          S._rulerNew.phase='drag';
+          S._rulerNew.livePrice=price;S._rulerNew.liveIdx=idx;S._rulerNew.liveX=lx;
+        }else if(S._rulerNew.phase==='drag'){
+          // Click after drag → save
+          const n=S._rulerNew;
+          S._rulers=[{x1:n.idx1,x2:n.liveIdx,price1:n.price1,price2:n.livePrice}];
+          S._rulerNew=null;S.tool=null;
+          if(typeof syncToolBtns==='function')syncToolBtns();
+          syncBtn();draw();ev.stopImmediatePropagation();ev.preventDefault();return;
+        }
+        draw();ev.stopImmediatePropagation();ev.preventDefault();return;
+      }
+
       // Drag saved ruler
       if(S._rulers.length>0){
         const pt=ptFrom(ev.clientX,ev.clientY);if(!pt)return;
@@ -7607,6 +7632,11 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     },{capture:true,passive:false});
 
     window.addEventListener('pointermove',function(ev){
+      if(S._rulerNew&&S._rulerNew.phase==='drag'){
+        const pt=ptFrom(ev.clientX,ev.clientY);
+        if(pt){S._rulerNew.livePrice=pt.price;S._rulerNew.liveIdx=pt.idx;S._rulerNew.liveX=pt.x;}
+        drawSoon();return;
+      }
       if(S._rulerDragSv){
         const r=S._rulers[S._rulerDragSv.index];if(!r)return;
         const rect=wrap.getBoundingClientRect(),W=rect.width,H=rect.height;
@@ -7622,6 +7652,8 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     window.addEventListener('pointerup',function(ev){
       const dx=ev.clientX-_tapX,dy=ev.clientY-_tapY,isTap=Math.sqrt(dx*dx+dy*dy)<10;
       if(S._rulerDragSv){S._rulerDragSv=null;draw();return;}
+      // After drag: freeze endpoint in place, wait for a click to save
+      if(S._rulerNew&&S._rulerNew.phase==='drag'){draw();return;}
       if(isTap&&S._rulers.length>0&&S.tool!=='ruler'){S._rulers=[];syncBtn();draw();}
     });
 
@@ -7732,7 +7764,6 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 
       window.__ETX_SKIP_COLORMAP=false;ctx.restore();
     }
-    window._syncRulerBtn=syncBtn; // exposed for DVL IIFE
     syncBtn();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initRuler);
@@ -8355,13 +8386,13 @@ function _setTool(t){
   drawSoon();
 }
 function _clearTool(){
-  _tool=null;_draft=null;S._rulerNew=null;
+  _tool=null;_draft=null;
   if(_sm===ST.DRAWING)_sm=ST.IDLE;
   _updateToolBtns();
   const wrap=el('chartWrap');if(wrap)wrap.style.cursor='';
   drawSoon();
 }
-function _cancelDrawing(){_draft=null;S._rulerNew=null;if(_sm===ST.DRAWING)_sm=ST.IDLE;}
+function _cancelDrawing(){_draft=null;if(_sm===ST.DRAWING)_sm=ST.IDLE;}
 function _updateToolBtns(){
   [{id:'rpDrawLine',t:'trendline'},{id:'rpDrawRect',t:'rectangle'},{id:'rpDrawText',t:'text'}]
   .forEach(({id,t})=>{const b=el(id);if(b)b.classList.toggle('dvl-active',t===_tool);});
@@ -8424,7 +8455,7 @@ function _initEvents(){
   });
 }
 
-function _onCk(e){if(_tool||S.tool==='ruler'||_sm===ST.DRAWING||S.replay?.selectingStart)e.stopPropagation();}
+function _onCk(e){if(_tool||_sm===ST.DRAWING||S.replay?.selectingStart)e.stopPropagation();}
 
 function _onMD(e){
   if(e.button!==0)return;
@@ -8444,7 +8475,7 @@ function _onMD(e){
   const wrap=el('chartWrap');if(!wrap)return;
   const r=wrap.getBoundingClientRect();
   const p={x:e.clientX-r.left,y:e.clientY-r.top};
-  if(_tool||S.tool==='ruler'||_sm===ST.DRAWING){
+  if(_tool||_sm===ST.DRAWING){
     e.stopPropagation();e.preventDefault();
     if(!S._cross||!S.cursor){S._cross={cx:p.x,cy:p.y};_syncCursor(cs);}
     _handleDrawClick(cs);return;
@@ -8463,7 +8494,7 @@ function _onMD(e){
 /* DRAWING state: no stopPropagation so native mousemove updates S._cross and crosshair shows.
    DRAG states: stop propagation to block chart pan. */
 function _onMM(e){
-  if(_sm===ST.DRAWING||S.tool==='ruler'||S.replay?.selectingStart)return;
+  if(_sm===ST.DRAWING||S.replay?.selectingStart)return;
   const cs=getCS();if(!cs)return;
   const wrap=el('chartWrap');if(!wrap)return;
   const r=wrap.getBoundingClientRect();
@@ -8491,7 +8522,7 @@ function _onTS(e){
   const r=wrap.getBoundingClientRect();
   const t=e.touches[0];
   const x=t.clientX-r.left,y=t.clientY-r.top;
-  if(S.replay?.selectingStart||_tool||S.tool==='ruler'||_sm===ST.DRAWING){
+  if(S.replay?.selectingStart||_tool||_sm===ST.DRAWING){
     e.stopPropagation();e.preventDefault();
     /* Relative drag: crosshair stays where it is, finger delta moves it */
     const baseCX=S._cross?S._cross.cx:x;
@@ -8532,7 +8563,7 @@ function _onTM(e){
   const r=wrap.getBoundingClientRect();
   const t=e.touches[0];
   const x=t.clientX-r.left,y=t.clientY-r.top;
-  if(S.replay?.selectingStart||_tool||S.tool==='ruler'||_sm===ST.DRAWING){
+  if(S.replay?.selectingStart||_tool||_sm===ST.DRAWING){
     e.stopPropagation();e.preventDefault();
     if(_crossDragStart){
       const ncx=clamp(_crossDragStart.cx+(x-_crossDragStart.fx),PL,wrap.clientWidth-RP());
@@ -8563,7 +8594,7 @@ function _onTE(e){
     if(S.cursor){S.replay.selectingStart=false;S.replay.index=S.cursor.index;_showRpBar(true);drawSoon();}
     return;
   }
-  if(_tool||S.tool==='ruler'||_sm===ST.DRAWING){
+  if(_tool||_sm===ST.DRAWING){
     e.stopPropagation();
     const cs=getCS();if(!cs)return;
     _syncCursor(cs);if(S.cursor)_handleDrawClick(cs);return;
@@ -8584,23 +8615,6 @@ function _onDbl(e){
 /* ─── DRAWING LOGIC ─── */
 function _handleDrawClick(cs){
   const cp=_cursorPoint();if(!cp)return;
-  /* Ruler: two-click flow using crosshair */
-  if(S.tool==='ruler'){
-    if(!S._rulerNew){
-      S._rulerNew={price1:cp.price,idx1:cp.index,livePrice:cp.price,liveIdx:cp.index,liveX:S.cursor.screenX,phase:'anchor'};
-      _sm=ST.DRAWING;
-    }else if(_sm===ST.DRAWING){
-      S._rulerNew.livePrice=cp.price;S._rulerNew.liveIdx=cp.index;S._rulerNew.liveX=S.cursor.screenX;
-      S._rulerNew.phase='drag';
-      /* Save ruler directly — same instant finalize as drawings */
-      const n=S._rulerNew;
-      S._rulers=[{x1:n.idx1,x2:n.liveIdx,price1:n.price1,price2:n.livePrice}];
-      S._rulerNew=null;S.tool=null;_sm=ST.IDLE;
-      if(typeof window._syncRulerBtn==='function')window._syncRulerBtn();
-      if(typeof syncToolBtns==='function')syncToolBtns();
-    }
-    drawSoon();return;
-  }
   if(_tool==='text'){
     const sp=chartPointToScreen(cp,cs);
     _draft={id:uid(),type:'text',p:{...cp},text:'',style:{...STYLES.text},locked:false,visible:true,createdAt:Date.now()};
@@ -8758,9 +8772,7 @@ function _patchDraw(){
     /* Keep draft endpoint anchored to crosshair for live preview */
     if(_sm===ST.DRAWING&&_draft&&S.cursor)
       _draft.p2={index:S.cursor.index,time:S.cursor.time,price:S.cursor.price};
-    /* Ruler live endpoint follows crosshair in DRAWING state */
-    if(_sm===ST.DRAWING&&S._rulerNew&&S.cursor&&_lastCS)
-      Object.assign(S._rulerNew,{livePrice:S.cursor.price,liveIdx:S.cursor.index,liveX:_lastCS.xI(S.cursor.index)});
+
     const c=el('chart');if(!c)return;
     const ctx=c.getContext('2d');
     ctx.save();
@@ -8852,9 +8864,9 @@ function _renderDraft(ctx,cs){
   ctx.restore();
 }
 function _renderToolHint(ctx){
-  if(!_tool&&S.tool!=='ruler')return;
-  const labels={trendline:'↗ Linha',rectangle:'▭ Retângulo',text:'T Texto',ruler:'📏 Régua'};
-  const t=_tool||'ruler';
+  if(!_tool)return;
+  const labels={trendline:'↗ Linha',rectangle:'▭ Retângulo',text:'T Texto'};
+  const t=_tool;
   const state=_sm===ST.DRAWING?' — clique para finalizar':' — clique para iniciar';
   ctx.save();ctx.font='bold 10px monospace';ctx.fillStyle='rgba(0,212,255,0.82)';ctx.textAlign='left';ctx.textBaseline='top';
   ctx.fillText((labels[t]||'')+state,PL+6,PT+6);ctx.restore();
