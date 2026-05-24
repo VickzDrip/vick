@@ -1906,7 +1906,7 @@ html.pre-ui .switch::after{transition:none!important}
             <label class="kv" style="cursor:pointer;"><span class="k" style="color:#f59e0b;font-weight:600;">Exhaustion</span><input type="checkbox" id="faShowExhaustion" checked style="width:14px;height:14px;accent-color:#f59e0b;cursor:pointer;flex-shrink:0;"></label>
             <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
             <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">SCORES</div>
-            <div class="kv"><span class="k">Trail Score mín.</span><input class="num" id="faTrailScore" type="number" min="20" max="80" step="5" value="45" style="width:52px"></div>
+            <div class="kv"><span class="k">Trail Score mín.</span><input class="num" id="faTrailScore" type="number" min="20" max="80" step="5" value="40" style="width:52px"></div>
             <div class="kv"><span class="k">Pulse Score mín.</span><input class="num" id="faPulseScore" type="number" min="50" max="95" step="5" value="75" style="width:52px"></div>
             <div class="kv"><span class="k">Institutional Score</span><input class="num" id="faInstScore" type="number" min="60" max="100" step="5" value="85" style="width:52px"></div>
             <div class="kv"><span class="k">Exhaustion Sens.</span><input class="num" id="faExhaustSens" type="number" min="0.1" max="0.9" step="0.05" value="0.35" style="width:52px"></div>
@@ -9147,7 +9147,7 @@ function getCfg(){
     showTrail:cb('faShowTrail'),showPulse:cb('faShowPulse'),showExhaustion:cb('faShowExhaustion'),
     useFP:cb('faUseFP'),allowSynth:cb('faAllowSynth'),
     volMA:Math.max(3,sn('faVolMA',20)),lookback:Math.max(2,sn('faLookback',5)),
-    trailScore:sn('faTrailScore',45),pulseScore:sn('faPulseScore',75),
+    trailScore:sn('faTrailScore',40),pulseScore:sn('faPulseScore',75),
     instScore:sn('faInstScore',85),exhaustSens:sn('faExhaustSens',0.35),
     trailOpacity:sn('faTrailOpacity',0.35),trailGlow:cb('faTrailGlow'),
     maxPulses:Math.max(1,sn('faMaxPulses',12))
@@ -9211,6 +9211,13 @@ function analyzeFlow(candles,cfg){
     score=Math.min(100,Math.max(0,score));
     const confFactor=f.synthetic?0.75:1.0;
     const adjScore=Math.round(score*confFactor);
+    // trailDir: regra relaxada — independente de dir completo
+    const buyShare=f.buy/total;
+    const prevClose=i>0?candles[i-1].c:c.o;
+    const priceUp=c.c>=prevClose;
+    let trailDir=null;
+    if((buyShare>0.52||f.delta>0)&&(priceUp||bull))trailDir='buy';
+    else if((buyShare<0.48||f.delta<0)&&(!priceUp||!bull))trailDir='sell';
     let exhaustion=null;
     if(i>=cfg.lookback&&i>0){
       const prevC=candles[i-1];
@@ -9221,7 +9228,7 @@ function analyzeFlow(candles,cfg){
       if(priceUp&&buyFalling&&deltaShr&&bull)exhaustion='bullExhaust';
       else if(priceDown&&sellFalling&&deltaShr&&!bull)exhaustion='bearExhaust';
     }
-    return{i,c,score:adjScore,direction:dir,buy:f.buy,sell:f.sell,buyGrowth,sellGrowth,synthetic:f.synthetic,exhaustion,volRatio:vr};
+    return{i,c,score:adjScore,direction:dir,trailDir,buyShare,buy:f.buy,sell:f.sell,buyGrowth,sellGrowth,synthetic:f.synthetic,exhaustion,volRatio:vr};
   });
 }
 
@@ -9241,31 +9248,48 @@ function flowColor(dir,score,a){
   return`rgba(90,110,140,${a})`;
 }
 
+function trailColor(dir,score,a){
+  if(dir==='buy'){
+    if(score>=75)return`rgba(0,220,180,${a})`;  // teal-green forte
+    if(score>=55)return`rgba(0,200,255,${a})`;  // ciano brilhante
+    return`rgba(0,170,230,${a})`;               // ciano médio
+  }
+  if(dir==='sell'){
+    if(score>=75)return`rgba(255,75,55,${a})`;  // vermelho
+    if(score>=55)return`rgba(255,130,50,${a})`; // laranja-vermelho
+    return`rgba(210,90,35,${a})`;               // laranja
+  }
+  return`rgba(90,110,140,${a})`;
+}
+
 function drawTrail(ctx,res,V,sc,x,bw,W,H,cfg){
   if(!cfg.showTrail)return;
-  const right=W-RP(),op=cfg.trailOpacity;
+  const right=W-RP();
   ctx.save();
   ctx.beginPath();ctx.rect(PL,PT,right-PL,H-PT-PB);ctx.clip();
+  let dbgBuy=0,dbgSell=0;
   for(const r of res){
     if(r.i<V.a-1||r.i>=V.b+1)continue;
-    if(r.score<cfg.trailScore)continue;
-    if(r.direction==='mixed_bull'||r.direction==='mixed_bear')continue;
+    if(!r.trailDir)continue;              // precisa de direção relaxada
+    if(r.score<cfg.trailScore)continue;   // score mínimo (default 40)
     const cx=x(r.i);
-    const bull=r.direction==='buy';
+    const bull=r.trailDir==='buy';
+    if(bull)dbgBuy++;else dbgSell++;
+    // opacidade: 0.18 mínimo → 0.45 máximo
     const intensity=Math.min(1,(r.score-cfg.trailScore)/(100-cfg.trailScore+0.001));
-    const a=op*(0.35+intensity*0.65);
-    const barW=Math.max(2,bw*0.72);
-    const barH=Math.max(3,Math.round(3+intensity*13));
+    const a=0.18+intensity*0.27;
+    const barW=Math.max(2,bw*0.85);
+    const barH=Math.max(4,Math.round(4+intensity*16));
     let y1,y2;
     if(bull){y1=sc.y(r.c.l)+1;y2=y1+barH;}
     else{y2=sc.y(r.c.h)-1;y1=y2-barH;}
     if(y2<PT||y1>H-PB)continue;
     y1=Math.max(PT,y1);y2=Math.min(H-PB,y2);
-    if(cfg.trailGlow&&r.score>=60){
-      ctx.shadowColor=flowColor(r.direction,r.score,0.7);
-      ctx.shadowBlur=5;
+    if(cfg.trailGlow&&r.score>=50){
+      ctx.shadowColor=trailColor(r.trailDir,r.score,0.8);
+      ctx.shadowBlur=6;
     }else ctx.shadowBlur=0;
-    ctx.fillStyle=flowColor(r.direction,r.score,a);
+    ctx.fillStyle=trailColor(r.trailDir,r.score,a);
     const rr=Math.min(2,(y2-y1)/2,barW/2);
     ctx.beginPath();
     ctx.moveTo(cx-barW/2+rr,y1);
@@ -9280,6 +9304,11 @@ function drawTrail(ctx,res,V,sc,x,bw,W,H,cfg){
     ctx.closePath();ctx.fill();
   }
   ctx.shadowBlur=0;ctx.restore();
+  // debug: window._dvlDebug = true no console para ativar
+  if(window._dvlDebug&&(dbgBuy||dbgSell)){
+    if(dbgBuy)console.log(`DVL Trail BUY ON: ${dbgBuy} candles`);
+    if(dbgSell)console.log(`DVL Trail SELL ON: ${dbgSell} candles`);
+  }
 }
 
 function drawPulse(ctx,res,V,sc,x,W,H,cfg){
