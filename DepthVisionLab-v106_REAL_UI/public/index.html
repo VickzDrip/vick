@@ -7576,9 +7576,11 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const r=S._rulers[i];
         const x1p=PL+(r.idx1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const x2p=PL+(r.idx2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
-        const xa=clamp(Math.min(x1p,x2p),PL,right),xb=clamp(Math.max(x1p,x2p),PL,right);
         const y1=sc.y(r.price1),y2=sc.y(r.price2);
-        if(xp>=xa-12&&xp<=xb+12&&yp>=Math.min(y1,y2)-12&&yp<=Math.max(y1,y2)+12)return{index:i};
+        if(Math.hypot(xp-x1p,yp-y1)<=14)return{index:i,part:'p1'};
+        if(Math.hypot(xp-x2p,yp-y2)<=14)return{index:i,part:'p2'};
+        const xa=clamp(Math.min(x1p,x2p),PL,right),xb=clamp(Math.max(x1p,x2p),PL,right);
+        if(xp>=xa-12&&xp<=xb+12&&yp>=Math.min(y1,y2)-12&&yp<=Math.max(y1,y2)+12)return{index:i,part:'body'};
       }
       return null;
     }
@@ -7663,7 +7665,9 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const sc=scale(visible().cs,H);
         const dIdx=(ev.clientX-S._rulerDragSv.lastX)*(S.view.end-S.view.start)/CW(W);
         const dP=priceFromY(ev.clientY-rect.top,H,sc)-priceFromY(S._rulerDragSv.lastY-rect.top,H,sc);
-        r.idx1+=dIdx;r.idx2+=dIdx;r.price1+=dP;r.price2+=dP;
+        if(S._rulerDragSv.part==='p1'){r.idx1+=dIdx;r.price1+=dP;}
+        else if(S._rulerDragSv.part==='p2'){r.idx2+=dIdx;r.price2+=dP;}
+        else{r.idx1+=dIdx;r.idx2+=dIdx;r.price1+=dP;r.price2+=dP;}
         S._rulerDragSv.lastX=ev.clientX;S._rulerDragSv.lastY=ev.clientY;
         drawSoon();
       }
@@ -7679,58 +7683,93 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     // ── Mobile (touch) — capture:true fires before native handlers and DVL ──
 
     wrap.addEventListener('touchstart',function(e){
-      if(S.tool!=='ruler')return;
-      if(e.touches.length!==1)return;
-      const rect=wrap.getBoundingClientRect();
-      const t=e.touches[0];
-      const tx=t.clientX-rect.left,ty=t.clientY-rect.top;
-      if(tx<PL||tx>rect.width-RP()||ty<PT||ty>rect.height-PB)return;
-      _rulerTouchId=t.identifier;
-      _tapX=t.clientX;_tapY=t.clientY;_rulerTapMoved=false;
-      _tapTX=tx;_tapTY=ty;
-      if(S._rulerNew){
-        S._cross={cx:tx,cy:ty};
-        const sc=scale(visible().cs,rect.height);
-        S._rulerNew.idx2=idxFromX(tx,rect.width);
-        S._rulerNew.price2=priceFromY(ty,rect.height,sc);
-        drawSoon();
-      }
-      e.stopImmediatePropagation();e.preventDefault();
-    },{capture:true,passive:false});
-
-    wrap.addEventListener('touchmove',function(e){
-      if(S.tool!=='ruler')return;
-      if(_rulerTouchId<0)return;
-      let t=null;
-      for(let i=0;i<e.touches.length;i++){if(e.touches[i].identifier===_rulerTouchId){t=e.touches[i];break;}}
-      if(!t)return;
-      e.stopImmediatePropagation();e.preventDefault();
-      const rect=wrap.getBoundingClientRect();
-      const tx=clamp(t.clientX-rect.left,PL,rect.width-RP());
-      const ty=clamp(t.clientY-rect.top,PT,rect.height-PB);
-      if(Math.hypot(t.clientX-_tapX,t.clientY-_tapY)>8)_rulerTapMoved=true;
-      if(_rulerTapMoved){
-        S._cross={cx:tx,cy:ty};
+      if(S.tool==='ruler'){
+        if(e.touches.length!==1)return;
+        const rect=wrap.getBoundingClientRect();
+        const t=e.touches[0];
+        const tx=t.clientX-rect.left,ty=t.clientY-rect.top;
+        if(tx<PL||tx>rect.width-RP()||ty<PT||ty>rect.height-PB)return;
+        _rulerTouchId=t.identifier;
+        _tapX=t.clientX;_tapY=t.clientY;_rulerTapMoved=false;
+        _tapTX=tx;_tapTY=ty;
         if(S._rulerNew){
+          S._cross={cx:tx,cy:ty};
           const sc=scale(visible().cs,rect.height);
           S._rulerNew.idx2=idxFromX(tx,rect.width);
           S._rulerNew.price2=priceFromY(ty,rect.height,sc);
+          drawSoon();
         }
+        e.stopImmediatePropagation();e.preventDefault();
+        return;
+      }
+      if(S._rulers.length>0&&!S._rulerNew&&e.touches.length===1){
+        const rect=wrap.getBoundingClientRect();
+        const t=e.touches[0];
+        const x=t.clientX-rect.left,y=t.clientY-rect.top;
+        const sc=scale(visible().cs,rect.height);
+        const hit=hitSaved(x,y,rect.width,rect.height,sc);
+        if(hit){S._rulerDragSv={...hit,lastX:t.clientX,lastY:t.clientY,touchId:t.identifier};e.stopImmediatePropagation();e.preventDefault();}
+      }
+    },{capture:true,passive:false});
+
+    wrap.addEventListener('touchmove',function(e){
+      if(S.tool==='ruler'){
+        if(_rulerTouchId<0)return;
+        let t=null;
+        for(let i=0;i<e.touches.length;i++){if(e.touches[i].identifier===_rulerTouchId){t=e.touches[i];break;}}
+        if(!t)return;
+        e.stopImmediatePropagation();e.preventDefault();
+        const rect=wrap.getBoundingClientRect();
+        const tx=clamp(t.clientX-rect.left,PL,rect.width-RP());
+        const ty=clamp(t.clientY-rect.top,PT,rect.height-PB);
+        if(Math.hypot(t.clientX-_tapX,t.clientY-_tapY)>8)_rulerTapMoved=true;
+        if(_rulerTapMoved){
+          S._cross={cx:tx,cy:ty};
+          if(S._rulerNew){
+            const sc=scale(visible().cs,rect.height);
+            S._rulerNew.idx2=idxFromX(tx,rect.width);
+            S._rulerNew.price2=priceFromY(ty,rect.height,sc);
+          }
+          drawSoon();
+        }
+        return;
+      }
+      if(S._rulerDragSv&&S._rulerDragSv.touchId!==undefined){
+        let t=null;
+        for(let i=0;i<e.touches.length;i++){if(e.touches[i].identifier===S._rulerDragSv.touchId){t=e.touches[i];break;}}
+        if(!t)return;
+        e.stopImmediatePropagation();e.preventDefault();
+        const r=S._rulers[S._rulerDragSv.index];if(!r)return;
+        const rect=wrap.getBoundingClientRect(),W=rect.width,H=rect.height;
+        const sc=scale(visible().cs,H);
+        const dIdx=(t.clientX-S._rulerDragSv.lastX)*(S.view.end-S.view.start)/CW(W);
+        const dP=priceFromY(t.clientY-rect.top,H,sc)-priceFromY(S._rulerDragSv.lastY-rect.top,H,sc);
+        if(S._rulerDragSv.part==='p1'){r.idx1+=dIdx;r.price1+=dP;}
+        else if(S._rulerDragSv.part==='p2'){r.idx2+=dIdx;r.price2+=dP;}
+        else{r.idx1+=dIdx;r.idx2+=dIdx;r.price1+=dP;r.price2+=dP;}
+        S._rulerDragSv.lastX=t.clientX;S._rulerDragSv.lastY=t.clientY;
         drawSoon();
       }
     },{capture:true,passive:false});
 
     wrap.addEventListener('touchend',function(e){
-      if(S.tool!=='ruler')return;
-      if(_rulerTouchId<0)return;
-      let found=false;
-      for(let i=0;i<e.changedTouches.length;i++){if(e.changedTouches[i].identifier===_rulerTouchId){found=true;break;}}
-      if(!found)return;
-      _rulerTouchId=-1;
-      e.stopImmediatePropagation();
-      if(!_rulerTapMoved){
-        if(!S._rulerNew)S._cross={cx:_tapTX,cy:_tapTY};
-        handleRulerConfirm();
+      if(S.tool==='ruler'){
+        if(_rulerTouchId<0)return;
+        let found=false;
+        for(let i=0;i<e.changedTouches.length;i++){if(e.changedTouches[i].identifier===_rulerTouchId){found=true;break;}}
+        if(!found)return;
+        _rulerTouchId=-1;
+        e.stopImmediatePropagation();
+        if(!_rulerTapMoved){
+          if(!S._rulerNew)S._cross={cx:_tapTX,cy:_tapTY};
+          handleRulerConfirm();
+        }
+        return;
+      }
+      if(S._rulerDragSv&&S._rulerDragSv.touchId!==undefined){
+        for(let i=0;i<e.changedTouches.length;i++){
+          if(e.changedTouches[i].identifier===S._rulerDragSv.touchId){S._rulerDragSv=null;draw();break;}
+        }
       }
     },{capture:true,passive:false});
 
