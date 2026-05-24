@@ -7551,7 +7551,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       btn.classList.toggle('tool-active',S.tool==='ruler'||S._rulers.length>0||!!S._rulerNew);
     }
     btn.addEventListener('click',function(){
-      if(S.tool==='ruler'||S._rulerNew){S.tool=null;S._rulerNew=null;S._cross=null;_crossWasPositioned=false;_savedAnchor=null;_rulerDraggingEp=false;}
+      if(S.tool==='ruler'||S._rulerNew){S.tool=null;S._rulerNew=null;S._cross=null;_crossWasPositioned=false;_savedAnchor=null;_rulerDraggingEp=false;_rulerTouchId=-1;}
       else if(S._rulers.length>0){S._rulers=[];S.tool=null;}
       else{
         S.tool='ruler';
@@ -7600,6 +7600,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
 
     let _tapX=0,_tapY=0,_crossJustActivated=false,_rulerDraggingEp=false,_crossWasPositioned=false,_savedAnchor=null;
+    let _rulerTouchId=-1,_rulerCrossStartX=0,_rulerCrossStartY=0,_rulerTouchStartX=0,_rulerTouchStartY=0;
 
     // capture: dispara antes do click nativo e do mousedown de pan
     wrap.addEventListener('pointerdown',function(ev){
@@ -7626,20 +7627,14 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
           draw();ev.stopImmediatePropagation();ev.preventDefault();return;
         }
 
-        // Touch: no Chrome Android, pointerdown dispara antes do touchstart (que é
-        // gerado como evento de compatibilidade). Chamar preventDefault() aqui suprimiria
-        // touchstart/touchmove, travando o cross. Por isso só prevenimos no 2º gesto (ep drag).
+        // Touch: 1º gesto (cross drag) é tratado pelos handlers touchstart/touchmove/touchend
+        // próprios da régua (capture:true). Aqui só tratamos o 2º gesto (ep drag anchor).
         if(ev.pointerType==='touch'){
           if(_crossWasPositioned&&_savedAnchor){
-            // 2º gesto → ancora e inicia ep drag
-            // preventDefault suprime touchstart/touchmove de compatibilidade (Chrome Android)
-            // para que pointermove controle o endpoint sem conflito
             S._rulerNew={state:'start_locked',idx1:_savedAnchor.idx,price1:_savedAnchor.price,idx2:_savedAnchor.idx,price2:_savedAnchor.price,isDraggingEnd:false};
             _rulerDraggingEp=true;_crossWasPositioned=false;_savedAnchor=null;
-            draw();
-            ev.stopImmediatePropagation();ev.preventDefault();return;
+            draw();ev.stopImmediatePropagation();ev.preventDefault();return;
           }
-          // 1º gesto → SEM preventDefault: deixa touchstart/touchmove mover o cross
           ev.stopImmediatePropagation();return;
         }
 
@@ -7664,9 +7659,47 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       }
     },{capture:true,passive:false});
 
-    // Durante ep drag: bloqueia touchmove nativo (Safari iOS não suprime via preventDefault no pointerdown)
+    // Handlers touch próprios da régua (capture:true → disparam antes dos nativos e do DVL)
+    // 1º gesto: arrasto do cross (independente do touchState.mode)
+    wrap.addEventListener('touchstart',function(e){
+      if(e.touches.length!==1)return;
+      if(S.tool!=='ruler'||!S._cross||S._rulerNew)return;
+      if(_crossWasPositioned&&_savedAnchor)return; // 2º gesto tratado pelo pointerdown
+      const rect=wrap.getBoundingClientRect();
+      const t=e.touches[0];
+      const tx=t.clientX-rect.left,ty=t.clientY-rect.top;
+      if(tx<PL||tx>rect.width-RP()||ty<PT||ty>rect.height-PB)return;
+      _rulerTouchId=t.identifier;
+      _tapX=t.clientX;_tapY=t.clientY;
+      _rulerCrossStartX=S._cross.cx;_rulerCrossStartY=S._cross.cy;
+      _rulerTouchStartX=tx;_rulerTouchStartY=ty;
+      e.stopImmediatePropagation();e.preventDefault();
+    },{capture:true,passive:false});
+
     wrap.addEventListener('touchmove',function(e){
-      if(S._rulerNew&&_rulerDraggingEp){e.stopImmediatePropagation();e.preventDefault();}
+      // Ep drag: bloqueia touchmove nativo (necessário no Safari onde preventDefault no pointerdown não suprime touch)
+      if(S._rulerNew&&_rulerDraggingEp){e.stopImmediatePropagation();e.preventDefault();return;}
+      // Cross drag: actualiza posição do cross
+      if(_rulerTouchId<0)return;
+      let t=null;
+      for(let i=0;i<e.touches.length;i++){if(e.touches[i].identifier===_rulerTouchId){t=e.touches[i];break;}}
+      if(!t)return;
+      e.stopImmediatePropagation();e.preventDefault();
+      const rect=wrap.getBoundingClientRect();
+      const tx=t.clientX-rect.left,ty=t.clientY-rect.top;
+      S._cross={cx:clamp(_rulerCrossStartX+(tx-_rulerTouchStartX),PL,rect.width-RP()),cy:clamp(_rulerCrossStartY+(ty-_rulerTouchStartY),PT,rect.height-PB)};
+      drawSoon();
+    },{capture:true,passive:false});
+
+    wrap.addEventListener('touchend',function(e){
+      if(S._rulerNew&&_rulerDraggingEp)return; // ep drag: pointerup trata
+      if(_rulerTouchId<0)return;
+      let found=false;
+      for(let i=0;i<e.changedTouches.length;i++){if(e.changedTouches[i].identifier===_rulerTouchId){found=true;break;}}
+      if(!found)return;
+      _rulerTouchId=-1;
+      e.stopImmediatePropagation();
+      if(S.tool==='ruler'&&S._cross){const p=getCrossChartPoint();if(p){_savedAnchor=p;_crossWasPositioned=true;draw();}}
     },{capture:true,passive:false});
 
     // Endpoint só atualiza durante arrasto ativo (_rulerDraggingEp=true)
