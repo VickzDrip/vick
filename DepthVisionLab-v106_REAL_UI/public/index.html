@@ -7688,6 +7688,13 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       _rulerTouchId=t.identifier;
       _tapX=t.clientX;_tapY=t.clientY;_rulerTapMoved=false;
       _tapTX=tx;_tapTY=ty;
+      if(S._rulerNew){
+        S._cross={cx:tx,cy:ty};
+        const sc=scale(visible().cs,rect.height);
+        S._rulerNew.idx2=idxFromX(tx,rect.width);
+        S._rulerNew.price2=priceFromY(ty,rect.height,sc);
+        drawSoon();
+      }
       e.stopImmediatePropagation();e.preventDefault();
     },{capture:true,passive:false});
 
@@ -7721,7 +7728,10 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       if(!found)return;
       _rulerTouchId=-1;
       e.stopImmediatePropagation();
-      if(!_rulerTapMoved){S._cross={cx:_tapTX,cy:_tapTY};handleRulerConfirm();}
+      if(!_rulerTapMoved){
+        if(!S._rulerNew)S._cross={cx:_tapTX,cy:_tapTY};
+        handleRulerConfirm();
+      }
     },{capture:true,passive:false});
 
     // ── Drawing ──────────────────────────────────────────────────────────────
