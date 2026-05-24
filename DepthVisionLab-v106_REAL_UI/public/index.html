@@ -7553,7 +7553,12 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     btn.addEventListener('click',function(){
       if(S.tool==='ruler'||S._rulerNew){S.tool=null;S._rulerNew=null;S._cross=null;}
       else if(S._rulers.length>0){S._rulers=[];S.tool=null;}
-      else{S.tool='ruler';if(typeof closeMobilePanel==='function')closeMobilePanel();}
+      else{
+        S.tool='ruler';
+        // Cross aparece imediatamente no centro do gráfico
+        if(wrap){const W=wrap.clientWidth,H=wrap.clientHeight;if(W&&H)S._cross={cx:Math.round((PL+(W-RP()))/2),cy:Math.round((PT+(H-PB))/2)};}
+        if(typeof closeMobilePanel==='function')closeMobilePanel();
+      }
       if(typeof syncToolBtns==='function')syncToolBtns();
       syncBtn();draw();
     });
@@ -7619,28 +7624,14 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
           ev.stopImmediatePropagation();ev.preventDefault();return;
         }
 
-        // Régua aguardando confirmação → tap finaliza
-        if(S._rulerNew&&S._rulerNew.state==='waiting_confirm'){
-          const p=getCrossChartPoint();
-          if(p){
-            const n=S._rulerNew;
-            n.idx2=p.idx;n.price2=p.price;
-            S._rulers.push({idx1:n.idx1,price1:n.price1,idx2:n.idx2,price2:n.price2});
-            S._rulerNew=null;S.tool=null;
-            if(typeof syncToolBtns==='function')syncToolBtns();
-            syncBtn();
-          }
-          draw();ev.stopImmediatePropagation();ev.preventDefault();return;
-        }
-
-        // Régua ancorada (start_locked) → inicia arrasto do endpoint (não finaliza ainda)
-        if(S._rulerNew&&S._rulerNew.state==='start_locked'){
+        // Régua já ancorada → inicia arrasto do endpoint
+        if(S._rulerNew){
           _rulerDraggingEp=true;
           if(x>=PL&&x<=W-RP()&&y>=PT&&y<=H-PB)S._cross={cx:x,cy:y};
           draw();ev.stopImmediatePropagation();ev.preventDefault();return;
         }
 
-        // Nenhuma régua ainda → ancora o ponto inicial (caminho desktop)
+        // Nenhuma régua → ancora (caminho desktop, touch vai pelo pointerup)
         _crossJustActivated=false;
         const p=getCrossChartPoint();if(!p)return;
         S._rulerNew={state:'start_locked',idx1:p.idx,price1:p.price,idx2:p.idx,price2:p.price,isDraggingEnd:false};
@@ -7689,19 +7680,25 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       }
     });
 
-    // Estado 4: soltar NÃO finaliza — fica em waiting_confirm
     window.addEventListener('pointerup',function(ev){
-      const dx=ev.clientX-_tapX,dy=ev.clientY-_tapY,isTap=Math.sqrt(dx*dx+dy*dy)<10;
+      const dx=ev.clientX-_tapX,dy=ev.clientY-_tapY,isTap=Math.sqrt(dx*dx+dy*dy)<8;
       if(S._rulerDragSv){S._rulerDragSv=null;draw();return;}
       if(S._rulerNew){
+        const wasDrag=_rulerDraggingEp&&!isTap;
         _rulerDraggingEp=false;
-        S._rulerNew.isDraggingEnd=false;
-        S._rulerNew.state='waiting_confirm';
+        if(wasDrag){
+          // Arrasto do endpoint concluído → salva régua imediatamente
+          const n=S._rulerNew;
+          S._rulers.push({idx1:n.idx1,price1:n.price1,idx2:n.idx2,price2:n.price2});
+          S._rulerNew=null;S.tool=null;
+          if(typeof syncToolBtns==='function')syncToolBtns();
+          syncBtn();
+        }
+        // Se foi tap (sem movimento): fica em start_locked, aguardando próximo arrasto
         draw();return;
       }
-      // Tap curto após arrastar o cross (touchState.mode='cross' → pointerdown foi ignorado)
-      // Ancora o ponto inicial agora, se o cross não foi apenas ativado neste tap
-      if(S.tool==='ruler'&&isTap&&S._cross&&!_crossJustActivated&&!touchState._moved){
+      // Soltou o cross → ancora automaticamente (tap ou arrasto)
+      if(S.tool==='ruler'&&S._cross&&!_crossJustActivated){
         const p=getCrossChartPoint();
         if(p){
           S._rulerNew={state:'start_locked',idx1:p.idx,price1:p.price,idx2:p.idx,price2:p.price,isDraggingEnd:false};
@@ -7709,6 +7706,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         }
       }
       _crossJustActivated=false;
+      // Toque em qualquer lugar sem ferramenta → limpa régua salva
       if(isTap&&S._rulers.length>0&&S.tool!=='ruler'){S._rulers=[];syncBtn();draw();}
     });
 
@@ -7779,15 +7777,14 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const x1px=PL+(n.idx1-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const x2px=PL+(n.idx2-S.view.start+.5)*CW(W)/(S.view.end-S.view.start);
         const y1=sc.y(n.price1),y2=sc.y(n.price2);
-        const waiting=n.state==='waiting_confirm';
-        drawBand(ctx,x1px,x2px,y1,y2,W,H,0.75,waiting);
+        const dashed=!_rulerDraggingEp; // tracejado enquanto aguarda arrasto
+        drawBand(ctx,x1px,x2px,y1,y2,W,H,0.75,dashed);
         const priceDiff=n.price2-n.price1;
         const pct=priceDiff/n.price1*100;
         const nb=Math.max(1,Math.abs(Math.round(n.idx2-n.idx1)));
         const ptStr=(priceDiff>=0?'+':'')+priceDiff.toFixed(2)+' pts';
         const pctStr=(pct>=0?'+':'')+pct.toFixed(2)+'%';
-        const hint=waiting?'click p/ confirmar':nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb);
-        drawLabel(ctx,ptStr,pctStr,hint,x2px,y2,W,H,0.75);
+        drawLabel(ctx,ptStr,pctStr,nb+' barra'+(nb!==1?'s':'')+'  '+fmtDur(nb),x2px,y2,W,H,0.75);
       }
 
       S._rulers.forEach(function(r){
