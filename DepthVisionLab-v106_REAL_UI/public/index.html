@@ -7586,7 +7586,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
     }
 
     let _tapX=0,_tapY=0,_rulerJustConfirmed=false;
-    let _rulerTouchId=-1,_rulerTapMoved=false,_tapTX=0,_tapTY=0;
+    let _rulerTouchId=-1,_rulerTapMoved=false,_tapTX=0,_tapTY=0,_crossDragX=0,_crossDragY=0;
 
     function handleRulerConfirm(){
       if(!S._rulerNew){
@@ -7692,13 +7692,8 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         _rulerTouchId=t.identifier;
         _tapX=t.clientX;_tapY=t.clientY;_rulerTapMoved=false;
         _tapTX=tx;_tapTY=ty;
-        if(S._rulerNew){
-          S._cross={cx:tx,cy:ty};
-          const sc=scale(visible().cs,rect.height);
-          S._rulerNew.idx2=idxFromX(tx,rect.width);
-          S._rulerNew.price2=priceFromY(ty,rect.height,sc);
-          drawSoon();
-        }
+        _crossDragX=S._cross?S._cross.cx:tx;
+        _crossDragY=S._cross?S._cross.cy:ty;
         e.stopImmediatePropagation();e.preventDefault();
         return;
       }
@@ -7720,15 +7715,15 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         if(!t)return;
         e.stopImmediatePropagation();e.preventDefault();
         const rect=wrap.getBoundingClientRect();
-        const tx=clamp(t.clientX-rect.left,PL,rect.width-RP());
-        const ty=clamp(t.clientY-rect.top,PT,rect.height-PB);
         if(Math.hypot(t.clientX-_tapX,t.clientY-_tapY)>8)_rulerTapMoved=true;
         if(_rulerTapMoved){
-          S._cross={cx:tx,cy:ty};
+          const ncx=clamp(_crossDragX+(t.clientX-_tapX),PL,rect.width-RP());
+          const ncy=clamp(_crossDragY+(t.clientY-_tapY),PT,rect.height-PB);
+          S._cross={cx:ncx,cy:ncy};
           if(S._rulerNew){
             const sc=scale(visible().cs,rect.height);
-            S._rulerNew.idx2=idxFromX(tx,rect.width);
-            S._rulerNew.price2=priceFromY(ty,rect.height,sc);
+            S._rulerNew.idx2=idxFromX(ncx,rect.width);
+            S._rulerNew.price2=priceFromY(ncy,rect.height,sc);
           }
           drawSoon();
         }
@@ -7760,10 +7755,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         if(!found)return;
         _rulerTouchId=-1;
         e.stopImmediatePropagation();
-        if(!_rulerTapMoved){
-          if(!S._rulerNew)S._cross={cx:_tapTX,cy:_tapTY};
-          handleRulerConfirm();
-        }
+        if(!_rulerTapMoved)handleRulerConfirm();
         return;
       }
       if(S._rulerDragSv&&S._rulerDragSv.touchId!==undefined){
