@@ -7594,7 +7594,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       return null;
     }
 
-    let _tapX=0,_tapY=0,_crossJustActivated=false;
+    let _tapX=0,_tapY=0,_crossJustActivated=false,_rulerDraggingEp=false;
 
     // capture: dispara antes do click nativo e do mousedown de pan
     wrap.addEventListener('pointerdown',function(ev){
@@ -7619,21 +7619,31 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
           ev.stopImmediatePropagation();ev.preventDefault();return;
         }
 
-        _crossJustActivated=false;
-        const p=getCrossChartPoint();
-        if(!p)return;
-        if(!S._rulerNew){
-          // Cross ativo: ancora o ponto inicial (régua no zero)
-          S._rulerNew={state:'start_locked',idx1:p.idx,price1:p.price,idx2:p.idx,price2:p.price,isDraggingEnd:true};
-        }else{
-          // Fixa a régua
-          const n=S._rulerNew;
-          n.idx2=p.idx;n.price2=p.price;
-          S._rulers.push({idx1:n.idx1,price1:n.price1,idx2:n.idx2,price2:n.price2});
-          S._rulerNew=null;S.tool=null;
-          if(typeof syncToolBtns==='function')syncToolBtns();
-          syncBtn();
+        // Régua aguardando confirmação → tap finaliza
+        if(S._rulerNew&&S._rulerNew.state==='waiting_confirm'){
+          const p=getCrossChartPoint();
+          if(p){
+            const n=S._rulerNew;
+            n.idx2=p.idx;n.price2=p.price;
+            S._rulers.push({idx1:n.idx1,price1:n.price1,idx2:n.idx2,price2:n.price2});
+            S._rulerNew=null;S.tool=null;
+            if(typeof syncToolBtns==='function')syncToolBtns();
+            syncBtn();
+          }
+          draw();ev.stopImmediatePropagation();ev.preventDefault();return;
         }
+
+        // Régua ancorada (start_locked) → inicia arrasto do endpoint (não finaliza ainda)
+        if(S._rulerNew&&S._rulerNew.state==='start_locked'){
+          _rulerDraggingEp=true;
+          if(x>=PL&&x<=W-RP()&&y>=PT&&y<=H-PB)S._cross={cx:x,cy:y};
+          draw();ev.stopImmediatePropagation();ev.preventDefault();return;
+        }
+
+        // Nenhuma régua ainda → ancora o ponto inicial (caminho desktop)
+        _crossJustActivated=false;
+        const p=getCrossChartPoint();if(!p)return;
+        S._rulerNew={state:'start_locked',idx1:p.idx,price1:p.price,idx2:p.idx,price2:p.price,isDraggingEnd:false};
         draw();ev.stopImmediatePropagation();ev.preventDefault();return;
       }
 
@@ -7651,7 +7661,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       }
     },{capture:true,passive:false});
 
-    // Estado 3+4: endpoint segue crosshair em tempo real
+    // Endpoint só atualiza durante arrasto ativo (_rulerDraggingEp=true)
     window.addEventListener('pointermove',function(ev){
       if(S._rulerNew){
         const rect=wrap.getBoundingClientRect();
@@ -7659,9 +7669,11 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         const W=rect.width,H=rect.height;
         if(x>=PL&&x<=W-RP()&&y>=PT&&y<=H-PB){
           S._cross={cx:x,cy:y};
-          const sc=scale(visible().cs,H);
-          S._rulerNew.idx2=idxFromX(x,W);
-          S._rulerNew.price2=priceFromY(y,H,sc);
+          if(_rulerDraggingEp){
+            const sc=scale(visible().cs,H);
+            S._rulerNew.idx2=idxFromX(x,W);
+            S._rulerNew.price2=priceFromY(y,H,sc);
+          }
         }
         drawSoon();return;
       }
@@ -7682,6 +7694,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       const dx=ev.clientX-_tapX,dy=ev.clientY-_tapY,isTap=Math.sqrt(dx*dx+dy*dy)<10;
       if(S._rulerDragSv){S._rulerDragSv=null;draw();return;}
       if(S._rulerNew){
+        _rulerDraggingEp=false;
         S._rulerNew.isDraggingEnd=false;
         S._rulerNew.state='waiting_confirm';
         draw();return;
