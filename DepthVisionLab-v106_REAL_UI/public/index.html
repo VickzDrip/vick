@@ -7626,17 +7626,21 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
           draw();ev.stopImmediatePropagation();ev.preventDefault();return;
         }
 
-        // Touch: pointerdown dispara ANTES do touchstart, então touchState.mode ainda é null
-        // Usamos ev.pointerType para separar mobile (touch) de desktop (mouse)
+        // Touch: no Chrome Android, pointerdown dispara antes do touchstart (que é
+        // gerado como evento de compatibilidade). Chamar preventDefault() aqui suprimiria
+        // touchstart/touchmove, travando o cross. Por isso só prevenimos no 2º gesto (ep drag).
         if(ev.pointerType==='touch'){
-          // Cross já posicionado num gesto anterior → ancora e inicia ep drag
           if(_crossWasPositioned&&_savedAnchor){
+            // 2º gesto → ancora e inicia ep drag
+            // preventDefault suprime touchstart/touchmove de compatibilidade (Chrome Android)
+            // para que pointermove controle o endpoint sem conflito
             S._rulerNew={state:'start_locked',idx1:_savedAnchor.idx,price1:_savedAnchor.price,idx2:_savedAnchor.idx,price2:_savedAnchor.price,isDraggingEnd:false};
             _rulerDraggingEp=true;_crossWasPositioned=false;_savedAnchor=null;
             draw();
+            ev.stopImmediatePropagation();ev.preventDefault();return;
           }
-          // Caso contrário: deixa touchstart → touchmove arrastar o cross livremente
-          ev.stopImmediatePropagation();ev.preventDefault();return;
+          // 1º gesto → SEM preventDefault: deixa touchstart/touchmove mover o cross
+          ev.stopImmediatePropagation();return;
         }
 
         // Desktop (mouse): ancora no clique
@@ -7658,6 +7662,11 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
           ev.stopImmediatePropagation();ev.preventDefault();
         }
       }
+    },{capture:true,passive:false});
+
+    // Durante ep drag: bloqueia touchmove nativo (Safari iOS não suprime via preventDefault no pointerdown)
+    wrap.addEventListener('touchmove',function(e){
+      if(S._rulerNew&&_rulerDraggingEp){e.stopImmediatePropagation();e.preventDefault();}
     },{capture:true,passive:false});
 
     // Endpoint só atualiza durante arrasto ativo (_rulerDraggingEp=true)
