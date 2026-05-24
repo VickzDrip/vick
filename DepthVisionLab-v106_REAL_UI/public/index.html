@@ -1894,6 +1894,37 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
+        <div class="ind-card" data-card="flowAccel">
+          <div class="ind-head">
+            <div class="row on" data-ind="flowAccel"><span class="name">DVL Flow Acceleration</span><span class="switch"></span></div>
+            <button class="gear" data-settings="flowAccel" title="Inputs DVL Flow Acceleration">⚙</button>
+          </div>
+          <div class="ind-settings" id="settings-flowAccel">
+            <div style="font-size:9px;color:#00d4ff;font-weight:700;letter-spacing:.08em;margin-bottom:6px;opacity:.8;">CAMADAS VISUAIS</div>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#00d4ff;font-weight:600;">Trail</span><input type="checkbox" id="faShowTrail" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#b06aff;font-weight:600;">Pulse</span><input type="checkbox" id="faShowPulse" checked style="width:14px;height:14px;accent-color:#b06aff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#f59e0b;font-weight:600;">Exhaustion</span><input type="checkbox" id="faShowExhaustion" checked style="width:14px;height:14px;accent-color:#f59e0b;cursor:pointer;flex-shrink:0;"></label>
+            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
+            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">SCORES</div>
+            <div class="kv"><span class="k">Trail Score mín.</span><input class="num" id="faTrailScore" type="number" min="20" max="80" step="5" value="45" style="width:52px"></div>
+            <div class="kv"><span class="k">Pulse Score mín.</span><input class="num" id="faPulseScore" type="number" min="50" max="95" step="5" value="75" style="width:52px"></div>
+            <div class="kv"><span class="k">Institutional Score</span><input class="num" id="faInstScore" type="number" min="60" max="100" step="5" value="85" style="width:52px"></div>
+            <div class="kv"><span class="k">Exhaustion Sens.</span><input class="num" id="faExhaustSens" type="number" min="0.1" max="0.9" step="0.05" value="0.35" style="width:52px"></div>
+            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
+            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">VISUAL</div>
+            <div class="kv"><span class="k">Trail Opacidade</span><input class="num" id="faTrailOpacity" type="number" min="0.1" max="1" step="0.05" value="0.35" style="width:52px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Trail Glow</span><input type="checkbox" id="faTrailGlow" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Max Pulses</span><input class="num" id="faMaxPulses" type="number" min="1" max="50" step="1" value="12" style="width:52px"></div>
+            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
+            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">DADOS</div>
+            <div class="kv"><span class="k">Vol MA Length</span><input class="num" id="faVolMA" type="number" min="3" max="100" step="1" value="20" style="width:52px"></div>
+            <div class="kv"><span class="k">Flow Lookback</span><input class="num" id="faLookback" type="number" min="2" max="20" step="1" value="5" style="width:52px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Footprint Real</span><input type="checkbox" id="faUseFP" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Fallback Sintético</span><input type="checkbox" id="faAllowSynth" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <div class="hint">Trail · Pulse · Exhaustion — Aceleração de fluxo. Ciano=compra · Laranja=venda · Roxo=institucional · Amarelo=exaustão.</div>
+          </div>
+        </div>
+
         <div class="ind-card" data-card="book" style="display:none!important">
           <div class="ind-head">
             <div class="row" data-ind="book"><span class="name">Orderbook Ladder</span><span class="switch"></span></div>
@@ -2052,7 +2083,7 @@ html.pre-ui .switch::after{transition:none!important}
 const API='https://api.binance.com', WS='wss://stream.binance.com:9443/stream?streams=';
 const LOCAL_API=location.origin; // our own server with persisted trades + depth history
 let depthRefreshTimer=null;
-const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal',_cross:null};
+const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true,flowAccel:true},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal',_cross:null};
 window.__bigTradesOverlayCache={key:'',items:[]};
 window.__bigTradesPersistentCache=new Map();
 window.__bigTradesLastGood=[];
@@ -2449,7 +2480,7 @@ function scale(vs,H){if(!vs||!vs.length)vs=S.candles.slice(-1);let hi=Math.max(.
 function draw(){
 
 const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_panDx=0;
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);if(window.__drawFlowAccel)safeLayer('DVL Flow',()=>window.__drawFlowAccel(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
 function drawGrid(ctx,W,H,sc){
   const rp=RP(),right=W-rp,cw=CW(W);
   ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);
@@ -9101,5 +9132,237 @@ function _pauseReplay(){
 function _stepFwd(){_pauseReplay();const all=S._allCandles||S.candles;if(S.replay.index<all.length-1)_setReplayIdx(S.replay.index+1);}
 function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.index-1);}
 
+})();
+</script>
+<script>
+<!-- ── DVL Flow Acceleration ── -->
+(function(){
+'use strict';
+function E(id){return document.getElementById(id);}
+function sn(id,def){const e=E(id);if(!e)return def;const v=+e.value;return Number.isFinite(v)?v:def;}
+function cb(id,def){const e=E(id);return e?e.checked:(def!==undefined?def:true);}
+
+function getCfg(){
+  return{
+    showTrail:cb('faShowTrail'),showPulse:cb('faShowPulse'),showExhaustion:cb('faShowExhaustion'),
+    useFP:cb('faUseFP'),allowSynth:cb('faAllowSynth'),
+    volMA:Math.max(3,sn('faVolMA',20)),lookback:Math.max(2,sn('faLookback',5)),
+    trailScore:sn('faTrailScore',45),pulseScore:sn('faPulseScore',75),
+    instScore:sn('faInstScore',85),exhaustSens:sn('faExhaustSens',0.35),
+    trailOpacity:sn('faTrailOpacity',0.35),trailGlow:cb('faTrailGlow'),
+    maxPulses:Math.max(1,sn('faMaxPulses',12))
+  };
+}
+
+function getFlowData(c,useFP){
+  if(useFP&&c.fp&&c.fp.size>0){
+    let buy=0,sell=0;
+    c.fp.forEach(r=>{buy+=(+r.buy||0);sell+=(+r.sell||0);});
+    if(buy+sell>0)return{buy,sell,delta:buy-sell,synthetic:false};
+  }
+  if(c.buy!=null&&c.sell!=null&&(c.buy+c.sell)>0)
+    return{buy:c.buy,sell:c.sell,delta:c.buy-c.sell,synthetic:false};
+  // synthetic fallback
+  const vol=c.v||1,range=Math.max(0.0001,c.h-c.l);
+  const closePos=(c.c-c.l)/range,bull=c.c>=c.o,body=Math.abs(c.c-c.o)/range;
+  const buy=vol*(0.3+closePos*0.5+(bull?body*0.2:0));
+  const sell=vol-buy;
+  return{buy:Math.max(0,buy),sell:Math.max(0,sell),delta:buy-sell,synthetic:true};
+}
+
+function computeVolMA(candles,len){
+  const ma=new Float64Array(candles.length);
+  for(let i=0;i<candles.length;i++){
+    let s=0,n=0;
+    for(let j=Math.max(0,i-len+1);j<=i;j++){s+=candles[j].v||0;n++;}
+    ma[i]=n?s/n:0;
+  }
+  return ma;
+}
+
+function analyzeFlow(candles,cfg){
+  if(!candles||!candles.length)return[];
+  const volMA=computeVolMA(candles,cfg.volMA);
+  const flows=candles.map(c=>getFlowData(c,cfg.useFP));
+  return candles.map((c,i)=>{
+    const f=flows[i];
+    const vol=c.v||0,avgVol=volMA[i]||1,bull=c.c>=c.o;
+    const lb=Math.max(0,i-cfg.lookback);
+    let pBuy=0,pSell=0,lc=i-lb;
+    for(let j=lb;j<i;j++){pBuy+=flows[j].buy;pSell+=flows[j].sell;}
+    const pBuyAvg=lc?pBuy/lc:0,pSellAvg=lc?pSell/lc:0;
+    const buyGrowth=pBuyAvg>0?(f.buy-pBuyAvg)/pBuyAvg:0;
+    const sellGrowth=pSellAvg>0?(f.sell-pSellAvg)/pSellAvg:0;
+    const prevDelta=i>0?flows[i-1].delta:0;
+    const deltaChange=f.delta-prevDelta;
+    const total=f.buy+f.sell||1;
+    const buyDom=f.buy>f.sell;
+    let dir=bull?(buyDom?'buy':'mixed_bull'):(buyDom?'mixed_bear':'sell');
+    let score=0;
+    if(dir==='buy'||dir==='sell')score+=20;else score+=5;
+    score+=Math.round(Math.abs(f.buy-f.sell)/total*20);
+    const vr=vol/avgVol;
+    score+=vr>1?Math.min(20,Math.round((vr-1)*10+10)):Math.round(vr*10);
+    if(dir==='buy'&&deltaChange>0)score+=Math.min(20,Math.round(deltaChange/(total*0.1+1)*10+10));
+    else if(dir==='sell'&&deltaChange<0)score+=Math.min(20,Math.round(-deltaChange/(total*0.1+1)*10+10));
+    else score+=5;
+    if(dir==='buy'&&buyGrowth>0)score+=Math.min(20,Math.round(buyGrowth*20));
+    else if(dir==='sell'&&sellGrowth>0)score+=Math.min(20,Math.round(sellGrowth*20));
+    score=Math.min(100,Math.max(0,score));
+    const confFactor=f.synthetic?0.75:1.0;
+    const adjScore=Math.round(score*confFactor);
+    let exhaustion=null;
+    if(i>=cfg.lookback&&i>0){
+      const prevC=candles[i-1];
+      const priceUp=c.h>=prevC.h||c.c>=prevC.c,priceDown=c.l<=prevC.l||c.c<=prevC.c;
+      const buyFalling=buyGrowth<-cfg.exhaustSens&&f.buy<(flows[i-1]?.buy||f.buy);
+      const sellFalling=sellGrowth<-cfg.exhaustSens&&f.sell<(flows[i-1]?.sell||f.sell);
+      const deltaShr=bull?(deltaChange<0&&f.delta<prevDelta):(deltaChange>0&&f.delta>prevDelta);
+      if(priceUp&&buyFalling&&deltaShr&&bull)exhaustion='bullExhaust';
+      else if(priceDown&&sellFalling&&deltaShr&&!bull)exhaustion='bearExhaust';
+    }
+    return{i,c,score:adjScore,direction:dir,buy:f.buy,sell:f.sell,buyGrowth,sellGrowth,synthetic:f.synthetic,exhaustion,volRatio:vr};
+  });
+}
+
+function flowColor(dir,score,a){
+  if(dir==='buy'){
+    if(score>=85)return`rgba(160,90,255,${a})`;
+    if(score>=75)return`rgba(0,220,180,${a})`;
+    if(score>=60)return`rgba(0,200,255,${a})`;
+    return`rgba(0,150,210,${a})`;
+  }
+  if(dir==='sell'){
+    if(score>=85)return`rgba(180,50,210,${a})`;
+    if(score>=75)return`rgba(255,75,55,${a})`;
+    if(score>=60)return`rgba(255,120,55,${a})`;
+    return`rgba(210,90,35,${a})`;
+  }
+  return`rgba(90,110,140,${a})`;
+}
+
+function drawTrail(ctx,res,V,sc,x,bw,W,H,cfg){
+  if(!cfg.showTrail)return;
+  const right=W-RP(),op=cfg.trailOpacity;
+  ctx.save();
+  ctx.beginPath();ctx.rect(PL,PT,right-PL,H-PT-PB);ctx.clip();
+  for(const r of res){
+    if(r.i<V.a-1||r.i>=V.b+1)continue;
+    if(r.score<cfg.trailScore)continue;
+    if(r.direction==='mixed_bull'||r.direction==='mixed_bear')continue;
+    const cx=x(r.i);
+    const bull=r.direction==='buy';
+    const intensity=Math.min(1,(r.score-cfg.trailScore)/(100-cfg.trailScore+0.001));
+    const a=op*(0.35+intensity*0.65);
+    const barW=Math.max(2,bw*0.72);
+    const barH=Math.max(3,Math.round(3+intensity*13));
+    let y1,y2;
+    if(bull){y1=sc.y(r.c.l)+1;y2=y1+barH;}
+    else{y2=sc.y(r.c.h)-1;y1=y2-barH;}
+    if(y2<PT||y1>H-PB)continue;
+    y1=Math.max(PT,y1);y2=Math.min(H-PB,y2);
+    if(cfg.trailGlow&&r.score>=60){
+      ctx.shadowColor=flowColor(r.direction,r.score,0.7);
+      ctx.shadowBlur=5;
+    }else ctx.shadowBlur=0;
+    ctx.fillStyle=flowColor(r.direction,r.score,a);
+    const rr=Math.min(2,(y2-y1)/2,barW/2);
+    ctx.beginPath();
+    ctx.moveTo(cx-barW/2+rr,y1);
+    ctx.lineTo(cx+barW/2-rr,y1);
+    ctx.quadraticCurveTo(cx+barW/2,y1,cx+barW/2,y1+rr);
+    ctx.lineTo(cx+barW/2,y2-rr);
+    ctx.quadraticCurveTo(cx+barW/2,y2,cx+barW/2-rr,y2);
+    ctx.lineTo(cx-barW/2+rr,y2);
+    ctx.quadraticCurveTo(cx-barW/2,y2,cx-barW/2,y2-rr);
+    ctx.lineTo(cx-barW/2,y1+rr);
+    ctx.quadraticCurveTo(cx-barW/2,y1,cx-barW/2+rr,y1);
+    ctx.closePath();ctx.fill();
+  }
+  ctx.shadowBlur=0;ctx.restore();
+}
+
+function drawPulse(ctx,res,V,sc,x,W,H,cfg){
+  if(!cfg.showPulse)return;
+  const right=W-RP();
+  const candidates=res.filter(r=>r.i>=V.a&&r.i<V.b&&r.score>=cfg.pulseScore&&(r.direction==='buy'||r.direction==='sell'));
+  if(!candidates.length)return;
+  const pulses=candidates.sort((a,b)=>b.score-a.score).slice(0,cfg.maxPulses);
+  ctx.save();
+  ctx.beginPath();ctx.rect(PL,PT,right-PL,H-PT-PB);ctx.clip();
+  for(const r of pulses){
+    const cx=x(r.i);const bull=r.direction==='buy';
+    const inst=r.score>=cfg.instScore;
+    const cy=bull?sc.y(r.c.l)+9:sc.y(r.c.h)-9;
+    if(cy<PT||cy>H-PB)continue;
+    const rad=inst?5:3.5;
+    const col=inst?(bull?'rgba(160,90,255,0.95)':'rgba(190,55,200,0.95)'):(bull?'rgba(0,210,255,0.92)':'rgba(255,100,50,0.92)');
+    ctx.shadowColor=col;ctx.shadowBlur=inst?9:6;
+    if(inst){
+      ctx.strokeStyle=col;ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(cx,cy,rad+3,0,Math.PI*2);ctx.stroke();
+    }
+    ctx.fillStyle=col;
+    ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.fill();
+  }
+  ctx.shadowBlur=0;ctx.restore();
+}
+
+function drawExhaustion(ctx,res,V,sc,x,W,H,cfg){
+  if(!cfg.showExhaustion)return;
+  const right=W-RP();
+  ctx.save();
+  ctx.beginPath();ctx.rect(PL,PT,right-PL,H-PT-PB);ctx.clip();
+  for(const r of res){
+    if(r.i<V.a||r.i>=V.b||!r.exhaustion)continue;
+    const cx=x(r.i);const isBull=r.exhaustion==='bullExhaust';
+    const cy=isBull?sc.y(r.c.h)-7:sc.y(r.c.l)+7;
+    if(cy<PT||cy>H-PB)continue;
+    ctx.shadowColor='rgba(245,158,11,0.75)';ctx.shadowBlur=4;
+    ctx.fillStyle='rgba(245,158,11,0.92)';
+    ctx.beginPath();ctx.arc(cx,cy,3.5,0,Math.PI*2);ctx.fill();
+  }
+  ctx.shadowBlur=0;ctx.restore();
+}
+
+let _cache=null,_cacheKey='';
+
+function drawFlowAccel(ctx,W,H,V,sc,x){
+  if(!window.S||!S.inds.flowAccel||!S.candles.length)return;
+  const cfg=getCfg();
+  if(!cfg.showTrail&&!cfg.showPulse&&!cfg.showExhaustion)return;
+  const cs=S.candles;
+  const bw=Math.max(1.2,CW(W)/Math.max(0.35,V.span)*0.66);
+  const ck=[cs.length,(cs[cs.length-1]||{}).t||0,V.a,V.b,
+    cfg.volMA,cfg.lookback,cfg.trailScore,cfg.pulseScore,cfg.instScore,
+    cfg.exhaustSens,+cfg.useFP,+cfg.allowSynth].join('|');
+  if(_cacheKey!==ck){_cache=analyzeFlow(cs,cfg);_cacheKey=ck;}
+  if(!_cache)return;
+  drawTrail(ctx,_cache,V,sc,x,bw,W,H,cfg);
+  drawPulse(ctx,_cache,V,sc,x,W,H,cfg);
+  drawExhaustion(ctx,_cache,V,sc,x,W,H,cfg);
+}
+
+window.__drawFlowAccel=drawFlowAccel;
+
+// init state
+(function(){
+  function init(){if(window.S&&S.inds&&!('flowAccel' in S.inds))S.inds.flowAccel=true;}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+  else init();
+})();
+
+// event wiring
+const FA_IDS=new Set(['faShowTrail','faShowPulse','faShowExhaustion','faUseFP','faAllowSynth',
+  'faTrailGlow','faVolMA','faLookback','faTrailScore','faPulseScore','faInstScore',
+  'faExhaustSens','faTrailOpacity','faMaxPulses']);
+document.addEventListener('input',function(ev){
+  if(!FA_IDS.has(ev.target?.id))return;
+  _cacheKey='';if(typeof drawSoon==='function')drawSoon();
+});
+document.addEventListener('change',function(ev){
+  if(!FA_IDS.has(ev.target?.id))return;
+  _cacheKey='';if(typeof drawSoon==='function')drawSoon();
+});
 })();
 </script>
