@@ -7551,7 +7551,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       btn.classList.toggle('tool-active',S.tool==='ruler'||S._rulers.length>0||!!S._rulerNew);
     }
     btn.addEventListener('click',function(){
-      if(S.tool==='ruler'||S._rulerNew){S.tool=null;S._rulerNew=null;S._cross=null;}
+      if(S.tool==='ruler'||S._rulerNew){S.tool=null;S._rulerNew=null;S._cross=null;_crossWasPositioned=false;_savedAnchor=null;_rulerDraggingEp=false;}
       else if(S._rulers.length>0){S._rulers=[];S.tool=null;}
       else{
         S.tool='ruler';
@@ -7599,7 +7599,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       return null;
     }
 
-    let _tapX=0,_tapY=0,_crossJustActivated=false,_rulerDraggingEp=false;
+    let _tapX=0,_tapY=0,_crossJustActivated=false,_rulerDraggingEp=false,_crossWasPositioned=false,_savedAnchor=null;
 
     // capture: dispara antes do click nativo e do mousedown de pan
     wrap.addEventListener('pointerdown',function(ev){
@@ -7607,8 +7607,14 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       _tapX=ev.clientX;_tapY=ev.clientY;
 
       if(S.tool==='ruler'){
-        // Touch em modo cross-drag: deixa o native cross mover, não ancora aqui
+        // Touch em modo cross-drag: se cross já foi posicionado, ancora e começa endpoint drag
         if(touchState.mode==='cross'){
+          if(_crossWasPositioned&&_savedAnchor&&!S._rulerNew){
+            S._rulerNew={state:'start_locked',idx1:_savedAnchor.idx,price1:_savedAnchor.price,idx2:_savedAnchor.idx,price2:_savedAnchor.price,isDraggingEnd:false};
+            _rulerDraggingEp=true;_crossWasPositioned=false;_savedAnchor=null;
+            touchState.mode=null; // evita que o touchmove nativo interfira no drag do endpoint
+            draw();
+          }
           ev.stopImmediatePropagation();ev.preventDefault();return;
         }
 
@@ -7697,11 +7703,12 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
         // Se foi tap (sem movimento): fica em start_locked, aguardando próximo arrasto
         draw();return;
       }
-      // Soltou o cross → ancora automaticamente (tap ou arrasto)
+      // Soltou o cross → salva âncora mas NÃO ancora ainda (permite reposicionar)
       if(S.tool==='ruler'&&S._cross&&!_crossJustActivated){
         const p=getCrossChartPoint();
         if(p){
-          S._rulerNew={state:'start_locked',idx1:p.idx,price1:p.price,idx2:p.idx,price2:p.price,isDraggingEnd:false};
+          _savedAnchor=p;
+          _crossWasPositioned=true;
           draw();return;
         }
       }
