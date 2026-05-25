@@ -9502,13 +9502,48 @@ function hexToRgba(hex,a){
   return`rgba(${r},${g},${b},${Math.max(0,Math.min(1,a)).toFixed(3)})`;
 }
 
+// ── TF-adaptive defaults ─────────────────────────────────────────────────────
+// volMA and lookback are in candle units; higher TFs need fewer candles for the
+// same time window. Scoring thresholds are also relaxed slightly on higher TFs
+// where each candle carries more weight and extremes are rarer.
+const _tfFlowDef={
+  '1s': {volMA:5, lookback:3,trailScore:30,pulseScore:65,instScore:78,exhaustSens:.30},
+  '15s':{volMA:8, lookback:3,trailScore:32,pulseScore:67,instScore:79,exhaustSens:.31},
+  '30s':{volMA:8, lookback:3,trailScore:33,pulseScore:68,instScore:80,exhaustSens:.32},
+  '1m': {volMA:10,lookback:3,trailScore:35,pulseScore:70,instScore:80,exhaustSens:.33},
+  '3m': {volMA:15,lookback:4,trailScore:37,pulseScore:72,instScore:83,exhaustSens:.34},
+  '5m': {volMA:20,lookback:5,trailScore:40,pulseScore:75,instScore:85,exhaustSens:.35},
+  '15m':{volMA:15,lookback:4,trailScore:38,pulseScore:73,instScore:83,exhaustSens:.34},
+  '30m':{volMA:12,lookback:3,trailScore:36,pulseScore:71,instScore:82,exhaustSens:.33},
+  '1h': {volMA:10,lookback:3,trailScore:34,pulseScore:68,instScore:80,exhaustSens:.33},
+  '2h': {volMA:8, lookback:3,trailScore:32,pulseScore:66,instScore:78,exhaustSens:.32},
+  '4h': {volMA:7, lookback:2,trailScore:30,pulseScore:64,instScore:76,exhaustSens:.30},
+  '6h': {volMA:6, lookback:2,trailScore:28,pulseScore:62,instScore:75,exhaustSens:.30},
+  '12h':{volMA:5, lookback:2,trailScore:27,pulseScore:60,instScore:73,exhaustSens:.28},
+  '1d': {volMA:5, lookback:2,trailScore:26,pulseScore:58,instScore:72,exhaustSens:.28},
+  '1w': {volMA:4, lookback:2,trailScore:24,pulseScore:55,instScore:70,exhaustSens:.26},
+  '1M': {volMA:4, lookback:2,trailScore:22,pulseScore:52,instScore:68,exhaustSens:.25},
+};
+function _getTfDef(){return _tfFlowDef[(window.S&&S.tf)||'5m']||_tfFlowDef['5m'];}
+
+// Update settings panel inputs to TF-appropriate values and force cache miss
+function _applyTfDefaults(tf){
+  const d=_tfFlowDef[tf]||_tfFlowDef['5m'];
+  function setV(id,v){const e=E(id);if(e)e.value=v;}
+  setV('faVolMA',d.volMA);setV('faLookback',d.lookback);
+  setV('faTrailScore',d.trailScore);setV('faPulseScore',d.pulseScore);
+  setV('faInstScore',d.instScore);setV('faExhaustSens',d.exhaustSens);
+  _cacheKey='';
+}
+
 function getCfg(){
+  const tfd=_getTfDef();
   return{
     showTrail:cb('faShowTrail'),showPulse:cb('faShowPulse'),showExhaustion:cb('faShowExhaustion'),
     useFP:cb('faUseFP'),allowSynth:cb('faAllowSynth'),
-    volMA:Math.max(3,sn('faVolMA',20)),lookback:Math.max(2,sn('faLookback',5)),
-    trailScore:sn('faTrailScore',40),pulseScore:sn('faPulseScore',75),
-    instScore:sn('faInstScore',85),exhaustSens:sn('faExhaustSens',0.35),
+    volMA:Math.max(3,sn('faVolMA',tfd.volMA)),lookback:Math.max(2,sn('faLookback',tfd.lookback)),
+    trailScore:sn('faTrailScore',tfd.trailScore),pulseScore:sn('faPulseScore',tfd.pulseScore),
+    instScore:sn('faInstScore',tfd.instScore),exhaustSens:sn('faExhaustSens',tfd.exhaustSens),
     trailOpacity:sn('faTrailOpacity',0.70),
     glowStr:sn('faGlowStr',8),thickMult:sn('faThickMult',1.5),
     centerBright:sn('faCenterBright',1.2),pulseGlow:sn('faPulseGlow',9),
@@ -9518,7 +9553,8 @@ function getCfg(){
     bullCenterColor:col('faBullCenterColor','#00ffff'),
     bearCenterColor:col('faBearCenterColor','#ff9500'),
     instColor:col('faInstColor','#a040ff'),
-    exhaustColor:col('faExhaustColor','#f59e0b')
+    exhaustColor:col('faExhaustColor','#f59e0b'),
+    tf:(window.S&&S.tf)||'5m'
   };
 }
 
@@ -9795,34 +9831,25 @@ function drawExhaustion(ctx,res,V,sc,x,W,H,cfg){
   ctx.shadowBlur=0;ctx.restore();
 }
 
-let _cache=null,_cacheKey='';
+let _cache=null,_cacheKey='',_lastTf='';
 
-function drawFlowAccel(ctx,W,H,V,sc,x){
-  if(!window.S||!S.inds.flowAccel||!S.candles.length)return;
-  const cfg=getCfg();
-  if(!cfg.showTrail&&!cfg.showPulse&&!cfg.showExhaustion)return;
-  const cs=S.candles;
-  const bw=Math.max(1.2,CW(W)/Math.max(0.35,V.span)*0.66);
-  const ck=[cs.length,(cs[cs.length-1]||{}).t||0,V.a,V.b,
+function _buildCk(cs,cfg){
+  return[cfg.tf,cs.length,(cs[cs.length-1]||{}).t||0,
     cfg.volMA,cfg.lookback,cfg.trailScore,cfg.pulseScore,cfg.instScore,
     cfg.exhaustSens,+cfg.useFP,+cfg.allowSynth].join('|');
-  if(_cacheKey!==ck){_cache=analyzeFlow(cs,cfg);_cacheKey=ck;}
-  if(!_cache)return;
-  drawTrail(ctx,_cache,V,sc,x,bw,W,H,cfg);
-  drawPulse(ctx,_cache,V,sc,x,W,H,cfg);
-  drawExhaustion(ctx,_cache,V,sc,x,W,H,cfg);
 }
 
 // Trail layer — deve ser chamado ANTES de drawCandles para ficar atrás das velas
 function drawFlowTrail(ctx,W,H,V,sc,x){
   if(!window.S||!S.inds.flowAccel||!S.candles.length)return;
+  // Detect TF change → update settings inputs to TF-calibrated defaults
+  const curTf=S.tf||'5m';
+  if(curTf!==_lastTf){_applyTfDefaults(curTf);_lastTf=curTf;}
   const cfg=getCfg();
   if(!cfg.showTrail)return;
   const cs=S.candles;
   const bw=Math.max(1.2,CW(W)/Math.max(0.35,V.span)*0.66);
-  const ck=[cs.length,(cs[cs.length-1]||{}).t||0,V.a,V.b,
-    cfg.volMA,cfg.lookback,cfg.trailScore,cfg.pulseScore,cfg.instScore,
-    cfg.exhaustSens,+cfg.useFP,+cfg.allowSynth].join('|');
+  const ck=_buildCk(cs,cfg);
   if(_cacheKey!==ck){_cache=analyzeFlow(cs,cfg);_cacheKey=ck;}
   if(!_cache)return;
   drawTrail(ctx,_cache,V,sc,x,bw,W,H,cfg);
@@ -9840,11 +9867,16 @@ function drawFlowMarkers(ctx,W,H,V,sc,x){
 window.__drawFlowTrail=drawFlowTrail;
 window.__drawFlowAccel=drawFlowMarkers;
 
-// init state
+// init state — also prime inputs with current TF defaults
 (function(){
-  function init(){if(window.S&&S.inds&&!('flowAccel' in S.inds))S.inds.flowAccel=true;}
+  function init(){
+    if(window.S&&S.inds&&!('flowAccel' in S.inds))S.inds.flowAccel=true;
+    _applyTfDefaults((window.S&&S.tf)||'5m');
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
   else init();
+  // Also apply after a short delay in case S.tf isn't set yet at DOMContentLoaded
+  setTimeout(function(){_applyTfDefaults((window.S&&S.tf)||'5m');},400);
 })();
 
 // event wiring
