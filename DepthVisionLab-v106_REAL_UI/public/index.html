@@ -1563,82 +1563,183 @@ html.pre-ui .switch::after{transition:none!important}
 </div>
 <!-- ── End Right Tools Panel ─────────────────────────────────────────── -->
 
+<style id="tb-premium">
+/* Row layout override */
+.topbar{height:auto!important;flex-direction:column!important;gap:0!important;padding:0!important;background:#06091a!important;border-bottom:1px solid #141f35!important;}
+/* ── Row 1: Header ── */
+.tb-header{display:flex;align-items:center;height:52px;padding:0 10px;gap:8px;border-bottom:1px solid rgba(20,31,53,.9);}
+.tb-menu-btn{width:36px;height:36px;border-radius:9px;background:rgba(11,16,34,.95);border:1px solid #1a2640;color:#7a93b0;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:.15s;}
+.tb-menu-btn:hover{border-color:#2d4060;color:#c8d8f0;}
+.tb-asset-wrap{position:relative;display:flex;align-items:center;gap:4px;flex-shrink:0;padding:5px 9px;border-radius:9px;border:1px solid #1a2640;cursor:pointer;background:rgba(11,16,34,.7);}
+.tb-asset-wrap:hover{border-color:#2d4060;}
+.tb-sym-name{font-size:15px;font-weight:800;letter-spacing:.02em;color:#fff;white-space:nowrap;pointer-events:none;}
+.tb-sym-chevron{color:#4a6080;flex-shrink:0;pointer-events:none;}
+.tb-asset-wrap select{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;font-size:14px;}
+.tb-logo-center{flex:1;display:flex;justify-content:center;align-items:center;min-width:0;}
+.tb-logo-center img{height:26px!important;width:auto!important;max-width:130px!important;object-fit:contain;display:block!important;cursor:pointer;}
+.tb-right-btns{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.tb-icon-btn{position:relative;width:36px;height:36px;border-radius:9px;background:rgba(11,16,34,.95);border:1px solid #1a2640;color:#7a93b0;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;overflow:hidden;transition:.15s;}
+.tb-icon-btn:hover,.tb-icon-btn:focus-within{border-color:rgba(0,212,255,.45);color:#00d4ff;background:rgba(0,212,255,.07);box-shadow:0 0 10px rgba(0,212,255,.13);}
+.tb-icon-btn select,.tb-icon-btn .hdr-icon-select{position:absolute!important;inset:0!important;opacity:0!important;cursor:pointer!important;width:100%!important;height:100%!important;font-size:14px!important;margin:0!important;padding:0!important;}
+/* ── Row 2: Price strip ── */
+.tb-price-strip{display:flex;align-items:center;padding:7px 11px;gap:0;border-bottom:1px solid rgba(20,31,53,.9);}
+.tb-price-left{display:flex;flex-direction:column;gap:3px;flex-shrink:0;}
+.tb-price-main{display:flex;align-items:center;gap:7px;}
+#pNow{font-size:22px!important;font-weight:900!important;color:#e8f4ff!important;letter-spacing:.01em!important;line-height:1!important;font-family:'Courier New',monospace!important;display:inline!important;visibility:visible!important;}
+#tbPriceArrow{flex-shrink:0;transition:transform .25s;}
+.tb-price-change-row{display:flex;align-items:center;gap:7px;}
+#p24Change{font-size:11.5px;font-weight:700;font-family:monospace;}
+#p24Change.up{color:#00e676;}#p24Change.dn{color:#ff3d57;}
+#pCh{font-size:11.5px!important;font-weight:700!important;font-family:monospace!important;display:inline!important;visibility:visible!important;}
+#pCh.up{color:#00e676!important;}#pCh.dn,#pCh.chg.dn{color:#ff3d57!important;}
+.tb-price-stats{display:flex;gap:14px;margin-left:auto;align-items:center;padding-left:10px;}
+.tb-stat-col{display:flex;flex-direction:column;gap:1px;}
+.tb-stat-label{font-size:8.5px;color:#3d5272;letter-spacing:.06em;font-family:monospace;white-space:nowrap;text-transform:uppercase;}
+.tb-stat-val{font-size:11.5px;font-weight:600;color:#b8cceb;font-family:monospace;white-space:nowrap;}
+/* ── Row 3: TF bar ── */
+.tb-tf-bar{display:flex;align-items:center;padding:0 8px;height:36px;gap:0;}
+.tb-tf-pills{display:flex;align-items:center;gap:0;flex:1;overflow:hidden;}
+.tb-tf-pill{font-family:monospace;font-size:11.5px;font-weight:600;color:#4a6080;background:transparent;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;white-space:nowrap;transition:.12s;flex-shrink:0;}
+.tb-tf-pill:hover{color:#c8d8f0;background:rgba(20,32,58,.6);}
+.tb-tf-pill.active{color:#00d4ff;background:rgba(0,212,255,.12);}
+.tb-tf-more{color:#2d4060;font-size:14px;letter-spacing:3px;padding:3px 5px;}
+.tb-tf-sep{width:1px;height:16px;background:rgba(20,31,53,.8);margin:0 5px;flex-shrink:0;}
+.tb-action-btn{display:flex;align-items:center;gap:5px;font-family:monospace;font-size:11px;font-weight:600;color:#6a83a0;background:transparent;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;white-space:nowrap;transition:.12s;flex-shrink:0;}
+.tb-action-btn:hover{color:#c8d8f0;background:rgba(20,32,58,.6);}
+.tb-action-fx{font-style:italic;font-size:13px;color:#00d4ff;font-weight:900;}
+/* TF more popup */
+#tbTfMorePopup{position:fixed;z-index:9999;background:#06091a;border:1px solid #1a2640;border-radius:8px;padding:6px;display:none;box-shadow:0 8px 28px rgba(0,0,0,.55);gap:4px;flex-wrap:wrap;width:120px;}
+#tbTfMorePopup.open{display:flex;}
+#tbTfMorePopup button{font-family:monospace;font-size:11px;font-weight:600;color:#5a7090;background:transparent;border:1px solid #1a2640;border-radius:5px;padding:4px 8px;cursor:pointer;flex:1;min-width:46px;text-align:center;}
+#tbTfMorePopup button:hover,#tbTfMorePopup button.active{color:#00d4ff;border-color:rgba(0,212,255,.35);background:rgba(0,212,255,.08);}
+</style>
+
 <div class="platform">
   <div class="topbar">
-    <!-- hidden status elements kept for JS compatibility -->
-    <span style="display:none" id="pNow">—</span><span style="display:none" id="pCh"></span>
-    <span style="display:none" class="dot" id="dot"></span><span style="display:none" id="statusTxt"></span>
+    <!-- compat elements: updated by existing JS, surfaced visually in Row 2 -->
+    <span style="display:none" class="dot" id="dot"></span>
+    <span style="display:none" id="statusTxt"></span>
     <span style="display:none" id="livePill">LIVE</span>
 
-    <button class="mini-btn header-menu" id="mobileMenu" title="Menu">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="4" y1="7" x2="20" y2="7"></line>
-        <line x1="4" y1="12" x2="20" y2="12"></line>
-        <line x1="4" y1="17" x2="20" y2="17"></line>
-      </svg>
-    </button>
-
-    <div class="top-asset">
-      <select class="asset-main topbar-sym-select" id="topSym">
-        <option value="BTCUSDT" selected>BTC/USDT</option>
-        <option value="ETHUSDT">ETH/USDT</option>
-        <option value="SOLUSDT">SOL/USDT</option>
-        <option value="BNBUSDT">BNB/USDT</option>
-      </select>
-    </div>
-
-    <div class="topbar-brand-dvl" title="DepthVisionLab" onclick="location.reload()" style="cursor:pointer">
-      <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab" style="height:60px!important;width:auto!important;max-width:300px!important;display:block!important;"/>
-    </div>
-
-    <div class="hdr-controls">
-      <!-- TF pictogram button — select is transparent overlay -->
-      <div class="hdr-icon-btn" id="tfIconWrap" title="Timeframe">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
-          <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
-          <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
-          <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
-          <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/>
-          <line x1="17" y1="16" x2="23" y2="16"/>
-        </svg>
-        <select id="tfSelect" class="hdr-icon-select" title="Timeframe">
-          <option value="1s">1s</option>
-          <option value="15s">15s</option>
-          <option value="30s">30s</option>
-          <option value="1m">1m</option>
-          <option value="5m" selected>5m</option>
-          <option value="15m">15m</option>
-          <option value="30m">30m</option>
-          <option value="1h">1h</option>
-          <option value="4h">4h</option>
-          <option value="6h">6h</option>
-          <option value="1d">1D</option>
-          <option value="1w">1W</option>
-          <option value="1M">1M</option>
-        </select>
-      </div>
-      <!-- Candle pictogram button — select is transparent overlay -->
-      <div class="hdr-icon-btn candleSelWrap" id="candleSelWrap" title="Tipo de candle">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
-          <line x1="7" y1="3" x2="7" y2="21"/><rect x="5" y="7" width="4" height="8"/>
-          <line x1="17" y1="3" x2="17" y2="21"/><rect x="15" y="5" width="4" height="12"/>
-        </svg>
-        <select class="hdr-icon-select candle-dd" id="chartStyle" title="Tipo de candle" aria-label="Tipo de candle">
-          <option value="normal" selected>Candles</option>
-          <option value="hollow">Hollow</option>
-          <option value="heikin">Heikin Ashi</option>
-          <option value="footprint">Footprint</option>
-          <option value="renko">Renko</option>
-        </select>
-      </div>
-      <!-- Gear button -->
-      <button class="mini-btn hdr-gear-btn" id="gearMenuBtn" title="Ferramentas" onclick="window._dvlRightPanel&&window._dvlRightPanel.open()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    <!-- ── ROW 1: Header ── -->
+    <div class="tb-header">
+      <button class="tb-menu-btn" id="mobileMenu" title="Menu">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>
         </svg>
       </button>
+
+      <div class="tb-asset-wrap">
+        <span class="tb-sym-name" id="tbSymName">BTC/USDT</span>
+        <svg class="tb-sym-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        <select id="topSym" class="asset-main topbar-sym-select">
+          <option value="BTCUSDT" selected>BTC/USDT</option>
+          <option value="ETHUSDT">ETH/USDT</option>
+          <option value="SOLUSDT">SOL/USDT</option>
+          <option value="BNBUSDT">BNB/USDT</option>
+        </select>
+      </div>
+
+      <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
+        <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
+      </div>
+
+      <div class="tb-right-btns">
+        <div class="tb-icon-btn" id="tfIconWrap" title="Timeframe">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
+            <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
+            <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
+          </svg>
+          <select id="tfSelect" class="hdr-icon-select" title="Timeframe">
+            <option value="1s">1s</option><option value="15s">15s</option><option value="30s">30s</option>
+            <option value="1m">1m</option><option value="5m" selected>5m</option><option value="15m">15m</option>
+            <option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option>
+            <option value="6h">6h</option><option value="1d">1D</option><option value="1w">1W</option><option value="1M">1M</option>
+          </select>
+        </div>
+
+        <div class="tb-icon-btn candleSelWrap" id="candleSelWrap" title="Tipo de candle">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="7" y1="3" x2="7" y2="21"/><rect x="5" y="7" width="4" height="8"/>
+            <line x1="17" y1="3" x2="17" y2="21"/><rect x="15" y="5" width="4" height="12"/>
+          </svg>
+          <select class="hdr-icon-select candle-dd" id="chartStyle" aria-label="Tipo de candle">
+            <option value="normal" selected>Candles</option><option value="hollow">Hollow</option>
+            <option value="heikin">Heikin Ashi</option><option value="footprint">Footprint</option><option value="renko">Renko</option>
+          </select>
+        </div>
+
+        <button class="tb-icon-btn" id="gearMenuBtn" title="Ferramentas" onclick="window._dvlRightPanel&&window._dvlRightPanel.open()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
     </div>
+
+    <!-- ── ROW 2: Price strip ── -->
+    <div class="tb-price-strip">
+      <div class="tb-price-left">
+        <div class="tb-price-main">
+          <span id="pNow">—</span>
+          <svg id="tbPriceArrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00e676" stroke-width="2.5" style="display:none;flex-shrink:0">
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
+        </div>
+        <div class="tb-price-change-row">
+          <span id="p24Change">—</span>
+          <span id="pCh">—</span>
+        </div>
+      </div>
+      <div class="tb-price-stats">
+        <div class="tb-stat-col">
+          <span class="tb-stat-label">24H High</span>
+          <span class="tb-stat-val" id="p24High">—</span>
+        </div>
+        <div class="tb-stat-col">
+          <span class="tb-stat-label">24H Low</span>
+          <span class="tb-stat-val" id="p24Low">—</span>
+        </div>
+        <div class="tb-stat-col">
+          <span class="tb-stat-label">24H Vol (USD)</span>
+          <span class="tb-stat-val" id="p24Vol">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ROW 3: Timeframe pills + actions ── -->
+    <div class="tb-tf-bar">
+      <div class="tb-tf-pills" id="tbTfPills">
+        <button class="tb-tf-pill tf" data-tf="1m">1m</button>
+        <button class="tb-tf-pill tf active" data-tf="5m">5m</button>
+        <button class="tb-tf-pill tf" data-tf="15m">15m</button>
+        <button class="tb-tf-pill tf" data-tf="1h">1h</button>
+        <button class="tb-tf-pill tf" data-tf="4h">4h</button>
+        <button class="tb-tf-pill tf" data-tf="1d">D</button>
+        <button class="tb-tf-pill tb-tf-more" id="tfMoreBtn" title="Mais timeframes">···</button>
+      </div>
+      <div class="tb-tf-sep"></div>
+      <button class="tb-action-btn" id="indicatorsBtn">
+        <span class="tb-action-fx">fx</span> Indicators
+      </button>
+      <div class="tb-tf-sep"></div>
+      <button class="tb-action-btn" id="templateBtn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+        </svg>
+        Template
+      </button>
+    </div>
+  </div>
+
+  <!-- TF more popup (shared) -->
+  <div id="tbTfMorePopup">
+    <button data-tf="1s">1s</button><button data-tf="15s">15s</button><button data-tf="30s">30s</button>
+    <button data-tf="30m">30m</button><button data-tf="6h">6h</button><button data-tf="1w">1W</button><button data-tf="1M">1M</button>
   </div>
   <div class="main">
     <aside class="sidebar">
@@ -2184,7 +2285,19 @@ async function boot(){
   }
 }
 function setStatus(ok,msg){el('dot').style.background=ok?'#00e676':'#ff3d57';el('statusTxt').textContent=msg||(ok?'AO VIVO · BINANCE':'DESCONECTADO');el('livePill').textContent=ok?'LIVE':'ERRO'}function showLoad(x){el('loader').style.display=x?'flex':'none';el('err').classList.remove('show')}
-function update24(t){if(!t)return;el('pCh').textContent=(+t.priceChangePercent>=0?'+':'')+(+t.priceChangePercent).toFixed(2)+'%';el('pCh').className='chg '+(+t.priceChangePercent>=0?'up':'dn')}
+function update24(t){
+  if(!t)return;
+  const pct=+t.priceChangePercent,up=pct>=0;
+  el('pCh').textContent=(up?'+':'')+pct.toFixed(2)+'%';
+  el('pCh').className='chg '+(up?'up':'dn');
+  const absChg=+t.priceChange;
+  const p24c=el('p24Change');if(p24c){p24c.textContent=(absChg>=0?'+':'')+priceFmt(Math.abs(absChg));p24c.className=absChg>=0?'tb-price-abs':'tb-price-abs dn';}
+  const p24h=el('p24High');if(p24h)p24h.textContent=priceFmt(+t.highPrice);
+  const p24l=el('p24Low');if(p24l)p24l.textContent=priceFmt(+t.lowPrice);
+  const p24v=el('p24Vol');if(p24v)p24v.textContent=fmtN(+t.quoteVolume);
+  const arr=el('tbPriceArrow');
+  if(arr){arr.style.display='inline';arr.style.transform=up?'none':'rotate(180deg)';arr.setAttribute('stroke',up?'#00e676':'#ff3d57');}
+}
 function closeWS(intentional=false){S.wsIntentional=intentional;if(S.ws){try{S.ws.close()}catch(e){}S.ws=null}}
 function startWS(seq=S.loadSeq,sym=S.sym,tf=S.tf){
   const s=sym.toLowerCase();
@@ -4298,6 +4411,49 @@ if(el('tfSelect')){
     bootDebounced();
   };
 }
+// Premium topbar wiring
+(function(){
+  // TF pills → tfSelect
+  document.querySelectorAll('.tb-tf-pill[data-tf]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const tf=btn.dataset.tf;const sel=el('tfSelect');
+      if(sel){sel.value=tf;sel.dispatchEvent(new Event('change'));}
+      document.querySelectorAll('.tb-tf-pill[data-tf]').forEach(b=>b.classList.toggle('active',b.dataset.tf===tf));
+    });
+  });
+  // ··· more TF popup
+  const _tfMoreBtn=el('tfMoreBtn'),_tfPopup=el('tbTfMorePopup');
+  if(_tfMoreBtn&&_tfPopup){
+    _tfMoreBtn.addEventListener('click',e=>{
+      const r=_tfMoreBtn.getBoundingClientRect();
+      _tfPopup.style.left=r.left+'px';_tfPopup.style.top=(r.bottom+4)+'px';
+      _tfPopup.classList.toggle('open');e.stopPropagation();
+    });
+    _tfPopup.querySelectorAll('button[data-tf]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const tf=btn.dataset.tf;const sel=el('tfSelect');
+        if(sel){sel.value=tf;sel.dispatchEvent(new Event('change'));}
+        document.querySelectorAll('.tb-tf-pill[data-tf]').forEach(b=>b.classList.remove('active'));
+        _tfPopup.classList.remove('open');
+      });
+    });
+    document.addEventListener('click',e=>{if(!_tfPopup.contains(e.target)&&e.target!==_tfMoreBtn)_tfPopup.classList.remove('open');});
+  }
+  // Sync symbol name label from topSym select
+  const _topSymEl=el('topSym'),_symNameEl=el('tbSymName');
+  if(_topSymEl&&_symNameEl){
+    const _syncSym=()=>{const opt=_topSymEl.options[_topSymEl.selectedIndex];if(opt)_symNameEl.textContent=opt.text.split(' ')[0]||opt.text;};
+    _topSymEl.addEventListener('change',_syncSym);_syncSym();
+  }
+  // Keep pills in sync when tfSelect changes externally
+  if(el('tfSelect'))el('tfSelect').addEventListener('change',()=>{
+    const v=el('tfSelect').value;
+    document.querySelectorAll('.tb-tf-pill[data-tf]').forEach(b=>b.classList.toggle('active',b.dataset.tf===v));
+  });
+  // Action buttons
+  el('indicatorsBtn')?.addEventListener('click',()=>el('mobileMenu')?.click());
+  el('templateBtn')?.addEventListener('click',()=>el('profileSaveBtn')?.click());
+})();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();bootDebounced()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();bootDebounced()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
 ['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
 ['bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});function syncBigTradeMinSizeUI(){
