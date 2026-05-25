@@ -2612,12 +2612,12 @@ const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWi
 function drawGrid(ctx,W,H,sc){
   const rp=RP(),right=W-rp,cw=CW(W);
   ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);
-  // Compute nice price step for grid labels
+  // Compute nice price step — target ~20 levels for denser scale
   const priceRange=sc.hi-sc.lo;
-  const rawStep=priceRange/14;
+  const rawStep=priceRange/22;
   const mag=Math.pow(10,Math.floor(Math.log10(Math.max(1,rawStep))));
-  let step=mag;
-  for(const n of[1,2,5,10]){if(n*mag>=rawStep){step=n*mag;break;}}
+  let step=mag*10;
+  for(const n of[1,2,2.5,5,10]){if(n*mag>=rawStep){step=n*mag;break;}}
   ctx.font='9px monospace';ctx.textAlign='left';
   // Sub-grid (half-step, very faint)
   const subStep=step/2;
@@ -2626,7 +2626,7 @@ function drawGrid(ctx,W,H,sc){
     const y=sc.y(p);if(y<PT-1||y>H-PB+1)continue;
     ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(right,y);ctx.stroke();
   }
-  // Main grid lines + labels at step intervals (rounded values)
+  // Main grid lines + labels
   ctx.strokeStyle='#0d1626';ctx.lineWidth=.6;
   for(let p=Math.ceil(sc.lo/step)*step;p<=sc.hi+step;p+=step){
     const y=sc.y(p);if(y<PT-1||y>H-PB+1)continue;
@@ -2642,9 +2642,9 @@ function drawGrid(ctx,W,H,sc){
     ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(right+.5,PT);ctx.lineTo(right+.5,H-PB);ctx.stroke();
     ctx.fillStyle='rgba(0,212,255,.35)';ctx.fillRect(right+1,PT,3,H-PT-PB);
   }
-  // Vertical grid lines
+  // Vertical grid lines — 14 segments for finer time references
   ctx.strokeStyle='#0d1626';ctx.lineWidth=.6;
-  for(let i=1;i<10;i++){const xx=PL+cw*i/10;ctx.beginPath();ctx.moveTo(xx,PT);ctx.lineTo(xx,H-PB);ctx.stroke();}
+  for(let i=1;i<14;i++){const xx=PL+cw*i/14;ctx.beginPath();ctx.moveTo(xx,PT);ctx.lineTo(xx,H-PB);ctx.stroke();}
 }
 function calcATR(cs,n=14){const tr=cs.map((c,i)=>i?Math.max(c.h-c.l,Math.abs(c.h-cs[i-1].c),Math.abs(c.l-cs[i-1].c)):c.h-c.l);return tr.map((_,i)=>i<n-1?null:tr.slice(i-n+1,i+1).reduce((a,b)=>a+b,0)/n)}
 function getDrawCandle(i,c){
@@ -4141,8 +4141,8 @@ function drawTimeAxis(){
   const tfMs={'1s':1e3,'15s':15e3,'30s':30e3,'1m':6e4,'5m':3e5,'15m':9e5,'30m':18e5,'1h':36e5,'4h':144e5,'6h':216e5,'1d':864e5,'1w':6048e5,'1M':2592e6};
   const cMs=tfMs[S.tf||'5m']||3e5;
   const pxPerCandle=cw/V.span;
-  // Work in candle-index units: pick step that guarantees >=60px between labels
-  const minCandles=Math.ceil(60/Math.max(pxPerCandle,0.001));
+  // Work in candle-index units: pick step that guarantees >=44px between labels
+  const minCandles=Math.ceil(44/Math.max(pxPerCandle,0.001));
   const niceC=[1,2,5,10,20,50,100,200,500,1000,2000,5000];
   const candleStep=niceC.find(s=>s>=minCandles)||5000;
   ctx.font='9px monospace';
@@ -7338,10 +7338,10 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   overflow:hidden!important;
 }
 
-/* Logo: bigger, more presence */
+/* Logo: bigger, more presence — JS override in tb-premium-logo-fix also enforces 46px */
 .tb-logo-center img,.tb-logo-center .dvl-logo-img{
-  height:38px!important;width:auto!important;
-  max-width:200px!important;min-width:80px!important;
+  height:46px!important;width:auto!important;
+  max-width:220px!important;min-width:80px!important;
   object-fit:contain!important;display:block!important;
   opacity:.97!important;
 }
@@ -7452,7 +7452,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   .tb-header{height:48px!important;min-height:48px!important;}
   .tb-price-strip{min-height:44px!important;padding:4px 10px!important;}
   .tb-tf-bar{height:36px!important;min-height:36px!important;}
-  .tb-logo-center img,.tb-logo-center .dvl-logo-img{height:32px!important;}
+  .tb-logo-center img,.tb-logo-center .dvl-logo-img{height:38px!important;}
   #pNow{font-size:15px!important;}
   #p24Change,#pCh{font-size:10px!important;}
   .tb-price-stats{gap:10px!important;}
@@ -7463,7 +7463,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 }
 @media(max-width:480px){
   .tb-price-stats .tb-stat-col:last-child{display:none!important;}
-  .tb-logo-center img,.tb-logo-center .dvl-logo-img{height:28px!important;}
+  .tb-logo-center img,.tb-logo-center .dvl-logo-img{height:32px!important;}
   .tb-action-btn span:not(.tb-action-fx){display:none!important;}
 }
 </style>
@@ -7504,17 +7504,26 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 })();
 </script>
 <script id="tb-premium-logo-fix">
-/* V107 sets inline height:60px!important on dvlLogoImgTop which beats CSS.
-   This script resets it so our CSS-controlled .tb-logo-center sizing applies. */
+/* V107 sets inline height:60px!important on dvlLogoImgTop (inline !important beats CSS).
+   We counter by setting our own inline !important AFTER V107's timers (300ms, 1000ms),
+   so the last inline setter (1100ms) wins. Target: 46px — fills the 52px header nicely. */
 (function(){
+  var _h='46px';
   function _fixTbLogo(){
     var el=document.getElementById('dvlLogoImgTop');
-    if(el){el.style.removeProperty('height');el.style.removeProperty('max-width');}
+    if(!el)return;
+    el.style.setProperty('height',_h,'important');
+    el.style.setProperty('width','auto','important');
+    el.style.setProperty('max-width','220px','important');
+    el.style.setProperty('object-fit','contain','important');
+    el.style.setProperty('display','block','important');
+    el.style.setProperty('opacity','.97','important');
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_fixTbLogo);
   else _fixTbLogo();
   setTimeout(_fixTbLogo,350);
   setTimeout(_fixTbLogo,1100);
+  setTimeout(_fixTbLogo,2200);
 })();
 </script>
 
