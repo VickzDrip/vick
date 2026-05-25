@@ -9262,116 +9262,98 @@ function trailColor(dir,score,a){
   return`rgba(90,110,140,${a})`;
 }
 
-// Draws a smooth bezier path through an array of {x,y} points.
-// rev=false: starts with moveTo (forward). rev=true: lineTo (backward, for closing a shape).
-function smoothCloud(ctx,pts,rev){
-  if(!pts.length)return;
-  if(rev){
-    ctx.lineTo(pts[pts.length-1].x,pts[pts.length-1].y);
-    for(let i=pts.length-2;i>=0;i--){
-      const mx=(pts[i].x+pts[i+1].x)*0.5,my=(pts[i].y+pts[i+1].y)*0.5;
-      ctx.quadraticCurveTo(pts[i+1].x,pts[i+1].y,mx,my);
-    }
-    ctx.lineTo(pts[0].x,pts[0].y);
-  }else{
-    ctx.moveTo(pts[0].x,pts[0].y);
-    for(let i=0;i<pts.length-1;i++){
-      const mx=(pts[i].x+pts[i+1].x)*0.5,my=(pts[i].y+pts[i+1].y)*0.5;
-      ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my);
-    }
-    ctx.lineTo(pts[pts.length-1].x,pts[pts.length-1].y);
+// Smooth stroke path: quadratic bezier through midpoints of {x,y} array.
+function strokeSmoothPath(ctx,pts){
+  if(pts.length<2)return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x,pts[0].y);
+  for(let i=0;i<pts.length-1;i++){
+    const mx=(pts[i].x+pts[i+1].x)*0.5,my=(pts[i].y+pts[i+1].y)*0.5;
+    ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my);
   }
+  ctx.lineTo(pts[pts.length-1].x,pts[pts.length-1].y);
+  ctx.stroke();
 }
 
+// Cloud lineWidth for the inner core stroke
 function scoreToThick(sc2,trailScore){
-  // Tier-based thickness (pixels)
-  if(sc2>=85)return 28+(sc2-85)*0.5;   // 28–33px
-  if(sc2>=75)return 18+(sc2-75)*1.0;   // 18–28px
-  if(sc2>=60)return 10+(sc2-60)*0.53;  // 10–18px
-  return 3+(sc2-trailScore)/Math.max(1,60-trailScore)*7; // 3–10px
+  if(sc2>=85)return 12+(sc2-85)*0.2;                              // 12–15px
+  if(sc2>=70)return 7+(sc2-70)*0.33;                             // 7–12px
+  if(sc2>=55)return 3+(sc2-55)*0.27;                             // 3–7px
+  return 1.5+(sc2-trailScore)/Math.max(1,55-trailScore)*1.5;     // 1.5–3px
 }
 
 function drawTrail(ctx,res,V,sc,x,bw,W,H,cfg){
   if(!cfg.showTrail)return;
   const right=W-RP();
 
-  // Only visible candles with a valid trail direction and minimum score
   const inView=res.filter(r=>r.i>=V.a-2&&r.i<V.b+2&&r.trailDir&&r.score>=cfg.trailScore);
   if(!inView.length)return;
 
-  // Group into segments of same trailDir; bridge gaps of 1 neutral candle
-  const segs=[];
-  let cur=null;
+  // Group consecutive same-direction candles; bridge gap of 1 neutral
+  const segs=[];let cur=null;
   for(const r of inView){
     if(cur&&cur.dir===r.trailDir&&r.i-cur.items[cur.items.length-1].i<=2){
       cur.items.push(r);
-    }else{
-      if(cur)segs.push(cur);
-      cur={dir:r.trailDir,items:[r]};
-    }
+    }else{if(cur)segs.push(cur);cur={dir:r.trailDir,items:[r]};}
   }
   if(cur)segs.push(cur);
 
   ctx.save();
   ctx.beginPath();ctx.rect(PL,PT,right-PL,H-PT-PB);ctx.clip();
+  ctx.lineCap='round';ctx.lineJoin='round';
 
   let dbgBuy=0,dbgSell=0;
 
   for(const seg of segs){
-    const {dir,items}=seg;
+    const{dir,items}=seg;
+    if(items.length<3)continue; // mínimo 3 candles para desenhar cloud
+
     const bull=dir==='buy';
     if(bull)dbgBuy+=items.length;else dbgSell+=items.length;
 
-    // Build top/bottom edge arrays for the cloud band
-    const topPts=[],botPts=[];
-    for(const r of items){
-      const thick=Math.max(3,Math.min(36,scoreToThick(r.score,cfg.trailScore)));
-      const cx=x(r.i);
-      if(bull){
-        // Cloud sits below the candle low
-        const ya=Math.min(H-PB-2,sc.y(r.c.l)+2);
-        topPts.push({x:cx,y:ya});
-        botPts.push({x:cx,y:Math.min(H-PB,ya+thick)});
-      }else{
-        // Cloud sits above the candle high
-        const ya=Math.max(PT+2,sc.y(r.c.h)-2);
-        botPts.push({x:cx,y:ya});
-        topPts.push({x:cx,y:Math.max(PT,ya-thick)});
-      }
-    }
-    if(!topPts.length)continue;
+    // Centro da cloud: hl2 suavizado com média de 3 pontos
+    const rawY=items.map(r=>sc.y((r.c.h+r.c.l)/2));
+    const smY=rawY.map((y,i)=>{
+      const slice=rawY.slice(Math.max(0,i-2),i+1);
+      return slice.reduce((s,v)=>s+v,0)/slice.length;
+    });
+    const pts=items.map((r,i)=>({x:x(r.i),y:smY[i]}));
 
-    const maxSc=items.reduce((m,r)=>Math.max(m,r.score),0);
     const avgSc=Math.round(items.reduce((s,r)=>s+r.score,0)/items.length);
-    const avgInt=(avgSc-cfg.trailScore)/Math.max(1,100-cfg.trailScore);
-    const fillA=Math.min(0.52,0.20+avgInt*0.32);   // 0.20 → 0.52
+    const maxSc=items.reduce((m,r)=>Math.max(m,r.score),0);
 
-    // Outer glow pass
+    // Espessura do core interno (lineWidth)
+    const coreW=scoreToThick(avgSc,cfg.trailScore);
+
+    // Opacidade base: 0.10 → 0.28 conforme score
+    const opBase=Math.min(0.28,0.10+(avgSc/100)*0.18);
+
+    // Pass 1 – halo externo largo (mais transparente, com glow)
     if(cfg.trailGlow&&maxSc>=50){
-      ctx.shadowColor=trailColor(dir,maxSc,0.75);
-      ctx.shadowBlur=maxSc>=85?18:maxSc>=75?12:maxSc>=60?7:4;
+      ctx.shadowColor=trailColor(dir,maxSc,0.55);
+      ctx.shadowBlur=maxSc>=85?12:maxSc>=70?7:4;
     }else ctx.shadowBlur=0;
+    ctx.strokeStyle=trailColor(dir,avgSc,opBase*0.28);
+    ctx.lineWidth=Math.min(coreW*2.2,38);
+    strokeSmoothPath(ctx,pts);
 
-    // Main cloud fill
-    ctx.fillStyle=trailColor(dir,avgSc,fillA);
-    ctx.beginPath();
-    smoothCloud(ctx,topPts,false);
-    smoothCloud(ctx,botPts,true);
-    ctx.closePath();
-    ctx.fill();
+    ctx.shadowBlur=0;
 
-    // Bright core for strong/extreme signals (inner 50% band)
-    if(maxSc>=75){
-      ctx.shadowBlur=0;
-      const coreTop=topPts.map((p,i)=>({x:p.x,y:bull?p.y:p.y+(botPts[i].y-p.y)*0.25}));
-      const coreBot=botPts.map((p,i)=>({x:p.x,y:bull?topPts[i].y+(p.y-topPts[i].y)*0.72:p.y}));
-      ctx.fillStyle=trailColor(dir,maxSc,fillA*0.55);
-      ctx.beginPath();
-      smoothCloud(ctx,coreTop,false);
-      smoothCloud(ctx,coreBot,true);
-      ctx.closePath();
-      ctx.fill();
-    }
+    // Pass 2 – banda média
+    ctx.strokeStyle=trailColor(dir,avgSc,opBase*0.52);
+    ctx.lineWidth=Math.min(coreW*1.25,22);
+    strokeSmoothPath(ctx,pts);
+
+    // Pass 3 – core interno
+    ctx.strokeStyle=trailColor(dir,avgSc,opBase*0.82);
+    ctx.lineWidth=Math.max(1,coreW*0.5);
+    strokeSmoothPath(ctx,pts);
+
+    // Pass 4 – espinha central fina (mais vívida)
+    ctx.strokeStyle=trailColor(dir,Math.min(100,avgSc+12),Math.min(0.38,opBase*1.55));
+    ctx.lineWidth=1.2;
+    strokeSmoothPath(ctx,pts);
   }
 
   ctx.shadowBlur=0;ctx.restore();
