@@ -2037,6 +2037,26 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Max Pulses</span><input class="num" id="faMaxPulses" type="number" min="1" max="50" step="1" value="12" style="width:52px"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Footprint Real</span><input type="checkbox" id="faUseFP" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Fallback Sintético</span><input type="checkbox" id="faAllowSynth" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
+            <div style="font-size:9px;color:#00d4ff;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">TIMEFRAME MTF</div>
+            <div class="kv">
+              <span class="k">Flow Timeframe</span>
+              <select class="select" id="faFlowTF" style="width:64px">
+                <option value="current" selected>Current</option>
+                <option value="1m">1m</option>
+                <option value="3m">3m</option>
+                <option value="5m">5m</option>
+                <option value="15m">15m</option>
+                <option value="30m">30m</option>
+                <option value="1h">1h</option>
+                <option value="2h">2h</option>
+                <option value="4h">4h</option>
+                <option value="6h">6h</option>
+                <option value="12h">12h</option>
+                <option value="1d">1D</option>
+              </select>
+            </div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Mostrar TF Label</span><input type="checkbox" id="faShowTFLabel" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <div class="hint">Trail · Pulse · Exhaustion — Aceleração de fluxo.</div>
           </div>
         </div>
@@ -9554,7 +9574,9 @@ function getCfg(){
     bearCenterColor:col('faBearCenterColor','#ff9500'),
     instColor:col('faInstColor','#a040ff'),
     exhaustColor:col('faExhaustColor','#f59e0b'),
-    tf:(window.S&&S.tf)||'5m'
+    tf:(window.S&&S.tf)||'5m',
+    flowTF:(document.getElementById('faFlowTF')&&document.getElementById('faFlowTF').value)||'current',
+    showTFLabel:cb('faShowTFLabel')
   };
 }
 
@@ -9832,27 +9854,75 @@ function drawExhaustion(ctx,res,V,sc,x,W,H,cfg){
 }
 
 let _cache=null,_cacheKey='',_lastTf='';
+let _projectedCache=null;
+const _mtfCandleCache=new Map();
+const _mtfFetching=new Set();
 
 function _buildCk(cs,cfg){
-  return[cfg.tf,cs.length,(cs[cs.length-1]||{}).t||0,
+  return[cfg.tf,cfg.flowTF,cs.length,(cs[cs.length-1]||{}).t||0,
     cfg.volMA,cfg.lookback,cfg.trailScore,cfg.pulseScore,cfg.instScore,
     cfg.exhaustSens,+cfg.useFP,+cfg.allowSynth].join('|');
+}
+
+function _timeToIdx(t,candles){
+  if(!candles.length)return -1;
+  let lo=0,hi=candles.length-1;
+  if(t<candles[0].t)return 0;
+  if(t>=candles[hi].t)return hi;
+  while(lo<hi){const mid=(lo+hi+1)>>1;if(candles[mid].t<=t)lo=mid;else hi=mid-1;}
+  return lo;
+}
+function _projectMtfResult(mtfRes,curCandles){
+  if(!curCandles.length||!mtfRes.length)return[];
+  return mtfRes.map(r=>{const i=_timeToIdx(r.c.t,curCandles);if(i<0)return null;return{...r,i};}).filter(Boolean);
+}
+async function _fetchMtfCandles(sym,tf){
+  const key=sym+'|'+tf;
+  if(_mtfFetching.has(key))return;
+  const cached=_mtfCandleCache.get(key);
+  if(cached&&cached.sym===sym&&Date.now()-cached.ts<60000)return;
+  _mtfFetching.add(key);
+  try{
+    const candles=await fetchKlinesForTF(sym,tf,500);
+    _mtfCandleCache.set(key,{candles,ts:Date.now(),sym,tf});
+    _cacheKey='';_projectedCache=null;
+    if(typeof drawSoon==='function')drawSoon();
+  }catch(e){console.warn('[DVL Flow MTF]',e);}
+  finally{_mtfFetching.delete(key);}
+}
+function _drawMtfLabel(ctx,W,H,flowTf){
+  ctx.save();
+  ctx.font='bold 9px monospace';
+  ctx.fillStyle='rgba(0,212,255,0.55)';
+  ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText('FLOW TF: '+flowTf.toUpperCase(),PL+6,PT+4);
+  ctx.restore();
 }
 
 // Trail layer — deve ser chamado ANTES de drawCandles para ficar atrás das velas
 function drawFlowTrail(ctx,W,H,V,sc,x){
   if(!window.S||!S.inds.flowAccel||!S.candles.length)return;
-  // Detect TF change → update settings inputs to TF-calibrated defaults
   const curTf=S.tf||'5m';
-  if(curTf!==_lastTf){_applyTfDefaults(curTf);_lastTf=curTf;}
+  if(curTf!==_lastTf){_applyTfDefaults(curTf);_lastTf=curTf;_mtfCandleCache.clear();}
   const cfg=getCfg();
   if(!cfg.showTrail)return;
-  const cs=S.candles;
+  const flowTf=cfg.flowTF;
+  const isMtf=flowTf!=='current'&&flowTf!==curTf;
+  let cs=S.candles;
+  if(isMtf){
+    const sym=S.sym;
+    const key=sym+'|'+flowTf;
+    const cached=_mtfCandleCache.get(key);
+    if(cached&&cached.candles.length)cs=cached.candles;
+    _fetchMtfCandles(sym,flowTf);
+  }
   const bw=Math.max(1.2,CW(W)/Math.max(0.35,V.span)*0.66);
   const ck=_buildCk(cs,cfg);
-  if(_cacheKey!==ck){_cache=analyzeFlow(cs,cfg);_cacheKey=ck;}
+  if(_cacheKey!==ck){_cache=analyzeFlow(cs,cfg);_cacheKey=ck;_projectedCache=null;}
   if(!_cache)return;
-  drawTrail(ctx,_cache,V,sc,x,bw,W,H,cfg);
+  const results=isMtf?(_projectedCache||(_projectedCache=_projectMtfResult(_cache,S.candles))):_cache;
+  drawTrail(ctx,results,V,sc,x,bw,W,H,cfg);
+  if(isMtf&&cfg.showTFLabel)_drawMtfLabel(ctx,W,H,flowTf);
 }
 
 // Markers layer (pulse + exhaustion) — chamado DEPOIS de drawCandles
@@ -9860,8 +9930,9 @@ function drawFlowMarkers(ctx,W,H,V,sc,x){
   if(!window.S||!S.inds.flowAccel||!S.candles.length||!_cache)return;
   const cfg=getCfg();
   if(!cfg.showPulse&&!cfg.showExhaustion)return;
-  drawPulse(ctx,_cache,V,sc,x,W,H,cfg);
-  drawExhaustion(ctx,_cache,V,sc,x,W,H,cfg);
+  const results=_projectedCache||_cache;
+  drawPulse(ctx,results,V,sc,x,W,H,cfg);
+  drawExhaustion(ctx,results,V,sc,x,W,H,cfg);
 }
 
 window.__drawFlowTrail=drawFlowTrail;
@@ -9883,7 +9954,8 @@ window.__drawFlowAccel=drawFlowMarkers;
 const FA_IDS=new Set(['faShowTrail','faShowPulse','faShowExhaustion','faUseFP','faAllowSynth',
   'faVolMA','faLookback','faTrailScore','faPulseScore','faInstScore','faExhaustSens',
   'faTrailOpacity','faGlowStr','faThickMult','faCenterBright','faPulseGlow','faMaxPulses',
-  'faBullColor','faBearColor','faBullCenterColor','faBearCenterColor','faInstColor','faExhaustColor']);
+  'faBullColor','faBearColor','faBullCenterColor','faBearCenterColor','faInstColor','faExhaustColor',
+  'faFlowTF','faShowTFLabel']);
 document.addEventListener('input',function(ev){
   if(!FA_IDS.has(ev.target?.id))return;
   _cacheKey='';if(typeof drawSoon==='function')drawSoon();
