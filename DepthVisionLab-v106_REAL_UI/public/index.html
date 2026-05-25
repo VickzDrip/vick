@@ -9332,7 +9332,7 @@ function drawTrail(ctx,res,V,sc,x,bw,W,H,cfg){
 
   for(const seg of segs){
     const{dir,items}=seg;
-    if(items.length<3)continue; // mínimo 3 candles para cloud aparecer
+    // sem mínimo — desenha desde o primeiro candle
 
     const bull=dir==='buy';
     if(bull)dbgBuy+=items.length;else dbgSell+=items.length;
@@ -9358,6 +9358,20 @@ function drawTrail(ctx,res,V,sc,x,bw,W,H,cfg){
     // glow conforme tier e glowStr do usuário
     const gs=cfg.glowStr;
     const glowBlur=gs>0?(maxSc>=85?gs*1.6:maxSc>=70?gs:maxSc>=55?gs*0.6:gs*0.3):0;
+
+    // Candle único: ponto de glow (origem do trail, visível imediatamente)
+    if(pts.length===1){
+      const p=pts[0];
+      const rad=Math.max(4,coreW*0.65);
+      if(glowBlur>0){ctx.shadowColor=trailColor(dir,opBase*0.8,cfg);ctx.shadowBlur=glowBlur*0.75;}
+      ctx.fillStyle=trailColor(dir,opBase*0.60,cfg);
+      ctx.beginPath();ctx.arc(p.x,p.y,rad,0,Math.PI*2);ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.fillStyle=centerColor(dir,Math.min(0.95,opBase*cfg.centerBright),cfg);
+      ctx.beginPath();ctx.arc(p.x,p.y,Math.max(1.5,rad*0.25),0,Math.PI*2);ctx.fill();
+      ctx.shadowBlur=0;
+      continue;
+    }
 
     // Pass 1 — halo externo largo (aura suave, bem visível atrás das velas)
     if(glowBlur>0){
