@@ -2182,6 +2182,11 @@ html.pre-ui .switch::after{transition:none!important}
           </button>
         </div>
 
+        <!-- ── Mini DVL logo — refresh button, bottom-right of chart ── -->
+        <button id="dvlMiniRefresh" title="Atualizar gráfico" aria-label="Refresh">
+          <img src="/dvl-logo-wide.png" alt="DVL" id="dvlMiniRefreshImg"/>
+        </button>
+
         <div class="toolDeck" id="toolDeck" style="display:none!important;height:0!important;overflow:hidden!important;position:absolute!important;">
           <!-- moved to header (tfSelect, candleSelWrap) and right panel (btnLong, btnShort) -->
           <button class="mini-btn dot-long pos-btn" id="btnLong" title="Long" style="display:none"></button>
@@ -2623,9 +2628,23 @@ function draw(){
 
 const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_panDx=0;
 const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(window.__drawFlowTrail)safeLayer('DVL Trail',()=>window.__drawFlowTrail(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);if(window.__drawFlowAccel)safeLayer('DVL Flow',()=>window.__drawFlowAccel(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
+// ── Chart watermark image (preloaded once) ──
+const _wmImg=(()=>{
+  const i=new Image();i.crossOrigin='anonymous';
+  i.onload=()=>{if(typeof drawSoon==='function')drawSoon();};
+  i.src='/dvl-logo-wide.png?v=110';
+  return i;
+})();
+
 function drawGrid(ctx,W,H,sc){
   const rp=RP(),right=W-rp,cw=CW(W);
   ctx.fillStyle='#050914';ctx.fillRect(0,0,W,H);
+  // Watermark: center the logo behind all chart elements
+  if(_wmImg.complete&&_wmImg.naturalWidth>0){
+    const ww=Math.min(cw*0.52,340),wh=ww*(_wmImg.naturalHeight/_wmImg.naturalWidth);
+    const wx=PL+(cw-ww)/2,wy=PT+(H-PT-PB-wh)/2;
+    ctx.save();ctx.globalAlpha=0.038;ctx.drawImage(_wmImg,wx,wy,ww,wh);ctx.restore();
+  }
   // Compute nice price step — target ~20 levels for denser scale
   const priceRange=sc.hi-sc.lo;
   const rawStep=priceRange/22;
@@ -4418,6 +4437,23 @@ document.querySelectorAll('.gear[data-settings]').forEach(g=>g.onclick=(ev)=>{ev
 if(inputModalClose)inputModalClose.onclick=closeInputModal;
 if(inputModalScrim)inputModalScrim.onclick=closeInputModal;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeInputModal();if(S._posDraft){S._posDraft=null;S.tool=null;syncToolBtns();drawSoon();}}});
+// ── Mini DVL logo: smart refresh ──
+(function(){
+  var btn=document.getElementById('dvlMiniRefresh');
+  if(!btn)return;
+  var img=document.getElementById('dvlMiniRefreshImg');
+  if(img)img.src='/dvl-logo-wide.png?v=110';
+  var _busy=false;
+  function doRefresh(){
+    if(_busy)return;_busy=true;
+    btn.classList.add('spinning');
+    if(typeof bootDebounced==='function')bootDebounced();
+    else if(typeof boot==='function')boot();
+    setTimeout(function(){_busy=false;btn.classList.remove('spinning');},1200);
+  }
+  btn.addEventListener('click',function(e){e.stopPropagation();doRefresh();});
+  btn.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();doRefresh();},{passive:false});
+})();
 syncIndControls();el('btnLive').onclick=fitAll;el('btnFit').onclick=fitClose;el('btnLong').onclick=()=>{S.tool=S.tool==='long'?null:'long';syncToolBtns()};el('btnShort').onclick=()=>{S.tool=S.tool==='short'?null:'short';syncToolBtns()};el('applyBtn').onclick=()=>{refreshDepth();draw();if(isMobile())closeMobilePanel()};el('retry').onclick=boot;const __brandReload=document.querySelector('.brand')||document.querySelector('.side-logo')||document.querySelector('#topSym');if(__brandReload)__brandReload.onclick=()=>location.reload();el('chartStyle').onchange=e=>{S.chartStyle=e.target.value;draw()};
 if(el('tfSelect')){
   el('tfSelect').onchange=e=>{
@@ -7449,6 +7485,35 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 /* ── Chart area ── */
 .main{flex:1 1 0%!important;min-height:0!important;overflow:hidden!important;}
 
+/* ── Mini logo refresh button ── */
+#dvlMiniRefresh{
+  position:absolute;
+  bottom:42px;
+  right:76px;
+  background:none!important;
+  border:none!important;
+  box-shadow:none!important;
+  padding:0!important;
+  margin:0!important;
+  cursor:pointer;
+  opacity:.28;
+  z-index:9;
+  transition:opacity .18s, filter .18s;
+  outline:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#dvlMiniRefresh:hover{opacity:.55;filter:drop-shadow(0 0 5px rgba(0,212,255,.4));}
+#dvlMiniRefresh:active{opacity:.8;filter:drop-shadow(0 0 8px rgba(0,212,255,.65));transform:scale(.94);}
+#dvlMiniRefresh.spinning{opacity:.7;filter:drop-shadow(0 0 6px rgba(0,212,255,.5));}
+#dvlMiniRefreshImg{
+  display:block;
+  height:22px;
+  width:auto;
+  max-width:72px;
+  object-fit:contain;
+  pointer-events:none;
+}
+
 /* ── Kill old single-row artefacts ── */
 .topbar .topbar-brand-dvl{display:none!important;}
 .topbar .price{display:none!important;}
@@ -7457,6 +7522,10 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 .topbar .tabs,.topbar .tfs{display:none!important;}
 .topbar .status,.topbar .pill{display:none!important;}
 .topbar .brand,.topbar .sub{display:none!important;}
+/* ── No logo in header — logo lives only in chart watermark ── */
+.tb-logo-center{display:none!important;}
+.tb-right-btns{margin-left:auto!important;}
+
 .topbar>#dot,.topbar>#statusTxt,.topbar>#livePill{display:none!important;}
 #tbTfMorePopup{display:none!important;}
 
@@ -7466,7 +7535,6 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   .tb-header{height:48px!important;min-height:48px!important;}
   .tb-price-strip{min-height:44px!important;padding:4px 10px!important;}
   .tb-tf-bar{height:36px!important;min-height:36px!important;}
-  .tb-logo-center img,.tb-logo-center .dvl-logo-img{height:38px!important;}
   #pNow{font-size:15px!important;}
   #p24Change,#pCh{font-size:10px!important;}
   .tb-price-stats{gap:10px!important;}
@@ -7477,7 +7545,6 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 }
 @media(max-width:480px){
   .tb-price-stats .tb-stat-col:last-child{display:none!important;}
-  .tb-logo-center img,.tb-logo-center .dvl-logo-img{height:32px!important;}
   .tb-action-btn span:not(.tb-action-fx){display:none!important;}
 }
 </style>
