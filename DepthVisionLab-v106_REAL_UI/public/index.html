@@ -2028,6 +2028,17 @@ html.pre-ui .switch::after{transition:none!important}
             <label class="kv" style="cursor:pointer;"><span class="k">Requer FP</span><input type="checkbox" id="hrUseFP" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Requer fechamento</span><input type="checkbox" id="hrReqClose" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Todo toque</span><input type="checkbox" id="hrShowEvery" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv"><span class="k">Modo visual</span>
+              <select id="hrVisMode" style="font-size:10px;background:#111;color:#ccc;border:1px solid #333;border-radius:3px;padding:1px 3px;">
+                <option value="balanced">Balanced</option>
+                <option value="minimal">Minimal</option>
+                <option value="full">Full</option>
+              </select>
+            </label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Mostrar pontos</span><input type="checkbox" id="hrShowDots" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv"><span class="k">Ponto até score</span><input type="number" id="hrDotMaxScore" value="55" min="10" max="80" style="width:48px;text-align:right;"></label>
+            <label class="kv"><span class="k">Badge mín. score</span><input type="number" id="hrBadgeMinScore" value="70" min="20" max="95" style="width:48px;text-align:right;"></label>
+            <label class="kv"><span class="k">Badge forte</span><input type="number" id="hrStrongScore" value="85" min="50" max="99" style="width:48px;text-align:right;"></label>
             <div class="hint">FAIL só aparece após reação BUY/SELL invalidada. Todo toque mostra pelo menos WEAK/WAIT. Requer HVN ativo.</div>
           </div>
         </div>
@@ -10441,7 +10452,8 @@ const _zoneState=new Map();
 const _hrCache={key:'',sigs:[]};  // stable signal cache — invalidated by data/config, not by pan/zoom
 // render-only settings that change display but not signal detection
 const _RENDER_ONLY=new Set(['hrSigSize','hrShowPct','hrShowBuy','hrShowSell','hrShowAbs','hrShowExh','hrShowFail','hrShowWeak','hrShowWait','hrMaxSigs',
-  'hrColorBuy','hrColorSell','hrColorAbs','hrColorExh','hrColorFail','hrColorWeak','hrColorWait']);
+  'hrColorBuy','hrColorSell','hrColorAbs','hrColorExh','hrColorFail','hrColorWeak','hrColorWait',
+  'hrVisMode','hrShowDots','hrDotMaxScore','hrBadgeMinScore','hrStrongScore']);
 
 function getState(zid){
   if(!_zoneState.has(zid))_zoneState.set(zid,{type:null,idx:-1,hi:0,lo:0,failed:false,cooldown:0,prevOutside:false});
@@ -10485,7 +10497,12 @@ function cfg(){
     colorExh:    cv('hrColorExh','#ffd60a'),
     colorFail:   cv('hrColorFail','#ff3d57'),
     colorWeak:   cv('hrColorWeak','#4a6080'),
-    colorWait:   cv('hrColorWait','#3a5070')
+    colorWait:   cv('hrColorWait','#3a5070'),
+    visMode:     sv('hrVisMode','balanced'),
+    showDots:    bv('hrShowDots',true),
+    dotMaxScore: nv('hrDotMaxScore',55),
+    badgeMinScore:nv('hrBadgeMinScore',70),
+    strongScore: nv('hrStrongScore',85)
   };
 }
 
@@ -10861,23 +10878,76 @@ function h2rgb(hex){
   return[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)];
 }
 
-function drawBadge(ctx,col,label,confStr,showPct,px,py,right,scale,alpha){
-  const a=alpha??1;
+function _getTier(sig,st){
+  if(sig.type==='FAIL')return'badge';
+  const sc=sig.conf;
+  const mode=st.visMode||'balanced';
+  const badgeMin=st.badgeMinScore||70;
+  const strongMin=st.strongScore||85;
+  if(sig.strong){
+    if(sc>=strongMin)return'badge-strong';
+    if(sc>=badgeMin)return'badge';
+    if(mode==='minimal')return'none';
+    return sc>=35?'ball':'dot-weak';
+  }
+  // WEAK/WAIT
+  if(mode==='minimal')return'none';
+  if(!st.showDots)return'none';
+  if(mode==='full')return sc>=35?'ball':sc>=20?'dot-weak':'dot-micro';
+  // balanced
+  return sc>=35?'dot-weak':'dot-micro';
+}
+
+function _drawDotMicro(ctx,col,px,py){
+  const[ri,gi,bi]=h2rgb(col);
+  ctx.save();
+  ctx.beginPath();ctx.arc(px,py,2.5,0,Math.PI*2);
+  ctx.fillStyle=`rgba(${ri},${gi},${bi},0.40)`;ctx.fill();
+  ctx.restore();
+}
+
+function _drawDotWeak(ctx,col,px,py){
+  const[ri,gi,bi]=h2rgb(col);
+  ctx.save();
+  ctx.shadowColor=col;ctx.shadowBlur=3;
+  ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);
+  ctx.fillStyle=`rgba(${ri},${gi},${bi},0.55)`;ctx.fill();
+  ctx.restore();
+}
+
+function _drawBall(ctx,col,letter,px,py,r){
+  const[ri,gi,bi]=h2rgb(col);
+  ctx.save();
+  ctx.shadowColor=col;ctx.shadowBlur=8;
+  ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);
+  ctx.fillStyle=`rgba(${ri},${gi},${bi},0.22)`;ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.strokeStyle=`rgba(${ri},${gi},${bi},0.75)`;ctx.lineWidth=1.5;ctx.stroke();
+  if(letter){
+    ctx.fillStyle=`rgba(${ri},${gi},${bi},0.9)`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=`bold ${Math.round(r*1.1)}px monospace`;
+    ctx.fillText(letter,px,py);
+  }
+  ctx.restore();
+}
+
+function drawBadge(ctx,col,label,confStr,showPct,px,py,right,scale,strong){
   const BW=Math.round(36*scale),BH=showPct?Math.round(28*scale):Math.round(17*scale),R=3;
   const x0=clamp(px-BW/2,PL+2,right-BW-2);
   const[ri,gi,bi]=h2rgb(col);
   ctx.save();
-  ctx.shadowColor=col;ctx.shadowBlur=a<0.8?2:6;
+  ctx.shadowColor=col;ctx.shadowBlur=strong?12:6;
   ctx.beginPath();
   ctx.moveTo(x0+R,py);ctx.lineTo(x0+BW-R,py);ctx.arcTo(x0+BW,py,x0+BW,py+R,R);
   ctx.lineTo(x0+BW,py+BH-R);ctx.arcTo(x0+BW,py+BH,x0+BW-R,py+BH,R);
   ctx.lineTo(x0+R,py+BH);ctx.arcTo(x0,py+BH,x0,py+BH-R,R);
   ctx.lineTo(x0,py+R);ctx.arcTo(x0,py,x0+R,py,R);
   ctx.closePath();
-  ctx.fillStyle=`rgba(${ri},${gi},${bi},${0.18*a})`;ctx.fill();
+  ctx.fillStyle=`rgba(${ri},${gi},${bi},${strong?0.28:0.18})`;ctx.fill();
   ctx.shadowBlur=0;
-  ctx.strokeStyle=`rgba(${ri},${gi},${bi},${0.82*a})`;ctx.lineWidth=1;ctx.stroke();
-  ctx.fillStyle=`rgba(${ri},${gi},${bi},${a})`;ctx.textAlign='center';
+  ctx.strokeStyle=`rgba(${ri},${gi},${bi},${strong?0.95:0.82})`;ctx.lineWidth=strong?1.5:1;ctx.stroke();
+  ctx.fillStyle=`rgba(${ri},${gi},${bi},1)`;ctx.textAlign='center';
   const cx=x0+BW/2;
   const fs1=Math.round(9*scale),fs2=Math.round(8*scale);
   if(showPct){
@@ -10895,42 +10965,51 @@ function drawHVNReact(ctx,W,H,AllV,sc,x){
   if(!zones||!zones.length)return;
   const st=cfg();
   const cs=S.candles;
-  // use cached signals — pan/zoom do not trigger recalculation
   const sigs=_getCachedSigs(cs,zones,st);
   if(!sigs.length)return;
   const right=W-RP();
   const scale=Math.max(0.6,st.sigSize||1);
-  const showPct=st.showPct;
-  const BH28=Math.round(28*scale),BH17=Math.round(17*scale);
   const GAP=5;
   const colorMap={BUY:st.colorBuy,SELL:st.colorSell,ABS:st.colorAbs,EXH:st.colorExh,FAIL:st.colorFail,WEAK:st.colorWeak,WAIT:st.colorWait};
   const showMap={BUY:st.showBuy,SELL:st.showSell,ABS:st.showAbs,EXH:st.showExh,FAIL:st.showFail,WEAK:st.showWeak,WAIT:st.showWait};
-  // WEAK/WAIT are drawn smaller and more transparent
-  const alphaOf={WEAK:0.45,WAIT:0.35};
-  const scaleOf={WEAK:scale*0.82,WAIT:scale*0.78};
+  const letterMap={BUY:'B',SELL:'S',ABS:'A',EXH:'E',FAIL:'F',WEAK:'W',WAIT:'?'};
+  const BH_badge=st.showPct?Math.round(28*scale):Math.round(17*scale);
   const vStart=S.view.start-2,vEnd=S.view.end+2;
   ctx.save();
   let drawn=0;
   for(const sig of sigs){
     if(sig.idx<vStart||sig.idx>vEnd)continue;
     if(!showMap[sig.type])continue;
-    // WEAK/WAIT bypass minConf (they are sub-threshold by definition)
     if(sig.strong&&sig.conf<st.minConf)continue;
     if(drawn>=st.maxSigs)break;
     const c=cs[sig.idx];
     const px=x(sig.idx);
     if(px<PL||px>right)continue;
-    const sc_=scaleOf[sig.type]||scale;
-    const alpha=alphaOf[sig.type]||1;
-    const BH=showPct?Math.round(28*sc_):Math.round(17*sc_);
+    const col=colorMap[sig.type]||'#fff';
+    const tier=_getTier(sig,st);
+    if(tier==='none'){drawn++;continue;}
+    // anchor py to candle direction
     let py;
     if(sig.isBull===true)      py=sc.y(c.l)+GAP;
-    else if(sig.isBull===false)py=sc.y(c.h)-BH-GAP;
-    else                       py=sc.y((c.h+c.l)/2)-BH/2;
-    py=clamp(py,PT+2,H-PB-BH-2);
-    const confStr=sig.type==='WAIT'?'--':sig.conf+'%';
-    const showP=showPct&&sig.type!=='WAIT';
-    drawBadge(ctx,colorMap[sig.type]||'#fff',sig.type,confStr,showP,px,py,right,sc_,alpha);
+    else if(sig.isBull===false)py=sc.y(c.h)-BH_badge-GAP;
+    else                       py=sc.y((c.h+c.l)/2)-BH_badge/2;
+    if(tier==='dot-micro'){
+      const cy=clamp(py+BH_badge/2,PT+5,H-PB-5);
+      _drawDotMicro(ctx,col,px,cy);
+    }else if(tier==='dot-weak'){
+      const cy=clamp(py+BH_badge/2,PT+5,H-PB-5);
+      _drawDotWeak(ctx,col,px,cy);
+    }else if(tier==='ball'){
+      const r=Math.round(7*scale);
+      const cy=clamp(py+BH_badge/2,PT+r+2,H-PB-r-2);
+      _drawBall(ctx,col,letterMap[sig.type],px,cy,r);
+    }else{
+      // badge or badge-strong
+      const cpy=clamp(py,PT+2,H-PB-BH_badge-2);
+      const confStr=sig.type==='WAIT'?'--':sig.conf+'%';
+      const showP=st.showPct&&sig.type!=='WAIT';
+      drawBadge(ctx,col,sig.type,confStr,showP,px,cpy,right,scale,tier==='badge-strong');
+    }
     drawn++;
   }
   ctx.restore();
@@ -10942,7 +11021,8 @@ const HR_IDS=new Set(['hrMinConf','hrCooldown','hrLookback','hrMaxSigs','hrSigSi
   'hrShowBuy','hrShowSell','hrShowAbs','hrShowExh','hrShowFail','hrShowWeak','hrShowWait','hrShowEvery','hrShowPct',
   'hrUseDelta','hrRequireVol','hrUseFP','hrReqClose',
   'hrVolWeight','hrCandleWeight','hrConfirmWeight','hrTouchWeight','hrMinVolRatio',
-  'hrColorBuy','hrColorSell','hrColorAbs','hrColorExh','hrColorFail','hrColorWeak','hrColorWait']);
+  'hrColorBuy','hrColorSell','hrColorAbs','hrColorExh','hrColorFail','hrColorWeak','hrColorWait',
+  'hrVisMode','hrShowDots','hrDotMaxScore','hrBadgeMinScore','hrStrongScore']);
 const _swMap={hrColorBuy:'hrColorBuySw',hrColorSell:'hrColorSellSw',hrColorAbs:'hrColorAbsSw',hrColorExh:'hrColorExhSw',hrColorFail:'hrColorFailSw',hrColorWeak:'hrColorWeakSw',hrColorWait:'hrColorWaitSw'};
 document.addEventListener('input',ev=>{
   const id=ev.target?.id;
