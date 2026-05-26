@@ -1722,12 +1722,14 @@ html.pre-ui .switch::after{transition:none!important}
           <span class="tb-action-fx">fx</span> Indicators
         </button>
         <div class="tb-tf-sep"></div>
-        <button class="tb-action-btn" id="templateBtn">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
-            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-          </svg>
-          Template
+        <button class="tb-action-btn tb-history-btn" id="tbUndoBtn" title="Desfazer (Ctrl+Z)">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" style="flex-shrink:0"><path d="M2 7c0-2.76 2.24-5 5-5 2.21 0 4.1 1.44 4.77 3.44"/><polyline points="2,3.5 2,7 5.5,7"/></svg>
+        </button>
+        <button class="tb-action-btn tb-history-btn" id="tbRedoBtn" title="Refazer (Ctrl+Y)">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" style="flex-shrink:0"><path d="M14 7c0-2.76-2.24-5-5-5C6.79 2 4.9 3.44 4.23 5.44"/><polyline points="14,3.5 14,7 10.5,7"/></svg>
+        </button>
+        <button class="tb-action-btn tb-history-btn" id="tbSaveBtn" title="Salvar desenhos">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" style="flex-shrink:0"><path d="M13 13H3a1 1 0 01-1-1V4l3-3h7a1 1 0 011 1v10a1 1 0 01-1 1z"/><rect x="5" y="9" width="6" height="4"/><rect x="5" y="2" width="5" height="3"/></svg>
         </button>
       </div>
     </div>
@@ -2196,18 +2198,8 @@ html.pre-ui .switch::after{transition:none!important}
         <div class="tip" id="tip"></div>
         <div class="loader" id="loader"><div class="ring"></div><div class="sub">BUSCANDO KLINES + AGGTRADES + DEPTH</div></div>
         <div class="err" id="err"><div id="errMsg">Falha</div><button class="btn" style="width:auto;padding:8px 18px" id="retry">TENTAR NOVAMENTE</button></div>
-        <!-- Drawing contextual button bar — shown only when a drawing is selected -->
-        <div id="dvlDrawCtxBar" style="display:none;align-items:center;gap:3px;position:absolute;z-index:24;top:10px;right:80px;">
-          <button id="dvlDrawUndo" class="dvl-ctx-btn" title="Desfazer (Ctrl+Z)">
-            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 7c0-2.76 2.24-5 5-5 2.21 0 4.1 1.44 4.77 3.44"/><polyline points="2,3.5 2,7 5.5,7"/></svg>
-          </button>
-          <button id="dvlDrawRedo" class="dvl-ctx-btn" title="Refazer (Ctrl+Y)">
-            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 7c0-2.76-2.24-5-5-5C6.79 2 4.9 3.44 4.23 5.44"/><polyline points="14,3.5 14,7 10.5,7"/></svg>
-          </button>
-          <button id="dvlDrawSave" class="dvl-ctx-btn" title="Salvar desenhos">
-            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 13H3a1 1 0 01-1-1V4l3-3h7a1 1 0 011 1v10a1 1 0 01-1 1z"/><rect x="5" y="9" width="6" height="4"/><rect x="5" y="2" width="5" height="3"/></svg>
-          </button>
-          <div style="width:1px;height:16px;background:rgba(255,255,255,0.1);margin:0 2px;flex-shrink:0;"></div>
+        <!-- Drawing contextual bar — Settings + Delete, shown only when a drawing is selected -->
+        <div id="dvlDrawCtxBar" style="display:none;align-items:center;gap:4px;position:absolute;z-index:24;top:10px;right:80px;">
           <button id="dvlDrawSettingsBtn" class="dvl-ctx-btn" title="Configurações do desenho">
             <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
           </button>
@@ -4513,7 +4505,10 @@ if(el('tfSelect')){
   }
   // ── Action buttons ──
   el('indicatorsBtn')?.addEventListener('click',()=>el('mobileMenu')?.click());
-  el('templateBtn')?.addEventListener('click',()=>window._dvlTemplate?.open());
+  // Topbar history buttons — delegate to drawing IIFE functions when available
+  el('tbUndoBtn')?.addEventListener('click',()=>{if(typeof _undo==='function')_undo();else window.__dvlUndo?.();});
+  el('tbRedoBtn')?.addEventListener('click',()=>{if(typeof _redo==='function')_redo();else window.__dvlRedo?.();});
+  el('tbSaveBtn')?.addEventListener('click',()=>{if(typeof _saveFlash==='function')_saveFlash();else window.__dvlSave?.();});
   // ── Drag-to-scroll on pill bar (mouse/pointer) ──
   const _pills=el('tbTfPills');
   if(_pills){
@@ -7504,6 +7499,14 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 .tb-action-btn:hover{color:#a0bbd8!important;background:rgba(20,32,58,.5)!important;}
 .tb-action-fx{font-style:italic!important;font-size:12px!important;
               color:#00d4ff!important;font-weight:900!important;}
+/* History buttons in topbar — icon-only, compact */
+.tb-history-btn{
+  padding:4px 7px!important;min-width:30px!important;
+  color:#5a7290!important;
+}
+.tb-history-btn:hover{color:#00d4ff!important;}
+.tb-history-btn.tb-disabled{opacity:.3!important;pointer-events:none!important;}
+.tb-history-btn.tb-save-ok{color:#00e676!important;}
 
 /* ── Chart area ── */
 .main{flex:1 1 0%!important;min-height:0!important;overflow:hidden!important;}
@@ -8846,7 +8849,7 @@ ready(()=>{
   else if(S.replay.selectingStart===undefined)S.replay.selectingStart=false;
   S.cursor=null;
   _initBtns();_initEvents();_patchDraw();_loadDrawings();_watchSymTf();
-  _history=[clone(S.drawings)];_histPtr=0;_syncCtxBar();
+  _history=[clone(S.drawings)];_histPtr=0;_syncHistoryBtns();
 });
 
 /* ─── BUTTONS ─── */
@@ -8857,9 +8860,6 @@ function _initBtns(){
     b.addEventListener('click',()=>_tool===tool?_clearTool():_setTool(tool));
   });
   const dBtn=el('dvlDrawDelete');if(dBtn)dBtn.addEventListener('click',_deleteSelected);
-  const uBtn=el('dvlDrawUndo');if(uBtn)uBtn.addEventListener('click',_undo);
-  const rBtn2=el('dvlDrawRedo');if(rBtn2)rBtn2.addEventListener('click',_redo);
-  const sBtn=el('dvlDrawSave');if(sBtn)sBtn.addEventListener('click',_saveFlash);
   const gBtn=el('dvlDrawSettingsBtn');if(gBtn)gBtn.addEventListener('click',_toggleSettings);
   const txOk=el('dvlTextOk'),txC=el('dvlTextCancel'),txI=el('dvlTextInput');
   if(txOk)txOk.addEventListener('click',_confirmText);
@@ -8901,27 +8901,34 @@ function _pushHistory(){
   if(_histPtr<_history.length-1)_history.splice(_histPtr+1);
   _history.push(clone(S.drawings));
   if(_history.length>30){_history.shift();}else{_histPtr++;}
-  _syncCtxBar();
+  _syncHistoryBtns();
 }
 function _undo(){
   if(_histPtr<=0)return;
   _histPtr--;S.drawings=clone(_history[_histPtr]);
-  _closeSettings();_deselect();_saveDrawings();drawSoon();_syncCtxBar();
+  _closeSettings();_deselect();_saveDrawings();drawSoon();_syncHistoryBtns();
 }
 function _redo(){
   if(_histPtr>=_history.length-1)return;
   _histPtr++;S.drawings=clone(_history[_histPtr]);
-  _closeSettings();_deselect();_saveDrawings();drawSoon();_syncCtxBar();
+  _closeSettings();_deselect();_saveDrawings();drawSoon();_syncHistoryBtns();
 }
+// Expose to topbar buttons (outside IIFE scope)
+window.__dvlUndo=()=>_undo();
+window.__dvlRedo=()=>_redo();
+window.__dvlSave=()=>_saveFlash();
 
-/* ─── CTX BAR SYNC ─── */
+/* ─── CTX BAR SYNC (in-chart: settings + delete) ─── */
 function _syncCtxBar(){
   const bar=el('dvlDrawCtxBar');
   if(bar)bar.style.display=_selId?'flex':'none';
-  // Undo/Redo dimmed when unavailable
-  const ub=el('dvlDrawUndo'),rb=el('dvlDrawRedo');
-  if(ub){ub.style.opacity=_histPtr>0?'1':'0.3';ub.style.pointerEvents=_histPtr>0?'':'none';}
-  if(rb){const can=_histPtr<_history.length-1;rb.style.opacity=can?'1':'0.3';rb.style.pointerEvents=can?'':'none';}
+}
+/* ─── TOPBAR HISTORY BUTTONS SYNC ─── */
+function _syncHistoryBtns(){
+  const ub=el('tbUndoBtn'),rb=el('tbRedoBtn');
+  const canUndo=_histPtr>0,canRedo=_histPtr<_history.length-1;
+  if(ub){ub.classList.toggle('tb-disabled',!canUndo);}
+  if(rb){rb.classList.toggle('tb-disabled',!canRedo);}
 }
 
 /* ─── SELECTION ─── */
@@ -8954,11 +8961,11 @@ function _dupSelected(){
 /* ─── SAVE FLASH ─── */
 function _saveFlash(){
   _saveDrawings();
-  const b=el('dvlDrawSave');if(!b)return;
+  const b=el('tbSaveBtn');if(!b)return;
   const prev=b.innerHTML;
-  b.innerHTML='<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="#00e676" stroke-width="2"><polyline points="3,8 7,12 13,5"/></svg>';
-  b.style.borderColor='rgba(0,230,118,0.5)';
-  setTimeout(()=>{b.innerHTML=prev;b.style.borderColor='';},1000);
+  b.classList.add('tb-save-ok');
+  b.innerHTML='<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,8 7,12 13,5"/></svg>';
+  setTimeout(()=>{b.innerHTML=prev;b.classList.remove('tb-save-ok');},900);
 }
 
 /* ─── EVENTS ─── */
