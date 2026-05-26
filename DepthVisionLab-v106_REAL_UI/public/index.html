@@ -2196,11 +2196,8 @@ html.pre-ui .switch::after{transition:none!important}
         <div class="tip" id="tip"></div>
         <div class="loader" id="loader"><div class="ring"></div><div class="sub">BUSCANDO KLINES + AGGTRADES + DEPTH</div></div>
         <div class="err" id="err"><div id="errMsg">Falha</div><button class="btn" style="width:auto;padding:8px 18px" id="retry">TENTAR NOVAMENTE</button></div>
-        <button id="dvlDrawDelete" style="display:none;position:absolute;z-index:20;top:10px;right:76px;background:rgba(12,16,30,0.88);border:1px solid rgba(255,61,87,0.5);border-radius:6px;color:#ff5252;font-size:11px;font-family:monospace;padding:5px 11px;cursor:pointer;backdrop-filter:blur(6px);letter-spacing:.02em;transition:background .15s,border-color .15s;">
-          <svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:-1px;margin-right:4px;"><polyline points="2,4 12,4"/><path d="M5,4V2h4v2"/><path d="M3,4l.8,8h6.4L11,4"/><line x1="5.5" y1="6.5" x2="5.5" y2="10"/><line x1="8.5" y1="6.5" x2="8.5" y2="10"/></svg>Delete
-        </button>
-        <!-- Drawing contextual button bar -->
-        <div id="dvlDrawCtxBar" style="display:flex;align-items:center;gap:3px;position:absolute;z-index:20;top:10px;right:76px;">
+        <!-- Drawing contextual button bar — shown only when a drawing is selected -->
+        <div id="dvlDrawCtxBar" style="display:none;align-items:center;gap:3px;position:absolute;z-index:24;top:10px;right:80px;">
           <button id="dvlDrawUndo" class="dvl-ctx-btn" title="Desfazer (Ctrl+Z)">
             <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 7c0-2.76 2.24-5 5-5 2.21 0 4.1 1.44 4.77 3.44"/><polyline points="2,3.5 2,7 5.5,7"/></svg>
           </button>
@@ -2210,11 +2207,11 @@ html.pre-ui .switch::after{transition:none!important}
           <button id="dvlDrawSave" class="dvl-ctx-btn" title="Salvar desenhos">
             <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 13H3a1 1 0 01-1-1V4l3-3h7a1 1 0 011 1v10a1 1 0 01-1 1z"/><rect x="5" y="9" width="6" height="4"/><rect x="5" y="2" width="5" height="3"/></svg>
           </button>
-          <div id="dvlCtxSep" style="width:1px;height:16px;background:rgba(255,255,255,0.1);margin:0 2px;display:none;"></div>
-          <button id="dvlDrawSettingsBtn" class="dvl-ctx-btn" title="Configurações do desenho" style="display:none">
+          <div style="width:1px;height:16px;background:rgba(255,255,255,0.1);margin:0 2px;flex-shrink:0;"></div>
+          <button id="dvlDrawSettingsBtn" class="dvl-ctx-btn" title="Configurações do desenho">
             <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
           </button>
-          <button id="dvlDrawDelete" class="dvl-ctx-btn dvl-ctx-del" title="Deletar desenho" style="display:none">
+          <button id="dvlDrawDelete" class="dvl-ctx-btn dvl-ctx-del" title="Deletar desenho">
             <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2,4 12,4"/><path d="M5,4V2h4v2"/><path d="M3,4l.8,8h6.4L11,4"/><line x1="5.5" y1="6.5" x2="5.5" y2="10"/><line x1="8.5" y1="6.5" x2="8.5" y2="10"/></svg>
           </button>
         </div>
@@ -7556,9 +7553,6 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 .dvl-ctx-del{border-color:rgba(255,61,87,0.25)!important;color:#c0607a!important;}
 .dvl-ctx-del:hover{background:rgba(255,61,87,0.14)!important;border-color:rgba(255,80,100,0.6)!important;color:#ff5252!important;}
 .dvl-ctx-del:active{background:rgba(255,61,87,0.24)!important;}
-/* Legacy single delete button (hidden, replaced by ctx bar) */
-#dvlDrawDelete:hover{background:rgba(255,61,87,0.18)!important;border-color:rgba(255,80,100,0.75)!important;}
-#dvlDrawDelete:active{background:rgba(255,61,87,0.28)!important;transform:scale(.96);}
 
 /* ── Kill old single-row artefacts ── */
 .topbar .topbar-brand-dvl{display:none!important;}
@@ -8922,14 +8916,12 @@ function _redo(){
 
 /* ─── CTX BAR SYNC ─── */
 function _syncCtxBar(){
+  const bar=el('dvlDrawCtxBar');
+  if(bar)bar.style.display=_selId?'flex':'none';
+  // Undo/Redo dimmed when unavailable
   const ub=el('dvlDrawUndo'),rb=el('dvlDrawRedo');
   if(ub){ub.style.opacity=_histPtr>0?'1':'0.3';ub.style.pointerEvents=_histPtr>0?'':'none';}
   if(rb){const can=_histPtr<_history.length-1;rb.style.opacity=can?'1':'0.3';rb.style.pointerEvents=can?'':'none';}
-  const gb=el('dvlDrawSettingsBtn'),db=el('dvlDrawDelete'),sep=el('dvlCtxSep');
-  const show=!!_selId;
-  if(gb)gb.style.display=show?'flex':'none';
-  if(db)db.style.display=show?'flex':'none';
-  if(sep)sep.style.display=show?'block':'none';
 }
 
 /* ─── SELECTION ─── */
