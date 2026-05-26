@@ -1995,6 +1995,23 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
+        <div class="ind-card" data-card="hvnReact">
+          <div class="ind-head">
+            <div class="row on" data-ind="hvnReact"><span class="name">HVN Reaction Signals</span><span class="switch"></span></div>
+            <button class="gear" data-settings="hvnReact" title="Inputs HVN Reactions">⚙</button>
+          </div>
+          <div class="ind-settings" id="settings-hvnReact">
+            <div class="kv"><span class="k">Confiança mín. %</span><input class="num" id="hrMinConf" type="number" min="0" max="99" step="1" value="55" style="width:60px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#00d4ff;">HOLD</span><input type="checkbox" id="hrShowHold" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#ff8c00;">REJECT</span><input type="checkbox" id="hrShowReject" checked style="width:14px;height:14px;accent-color:#ff8c00;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#9b5de5;">ABSORÇÃO</span><input type="checkbox" id="hrShowAbs" checked style="width:14px;height:14px;accent-color:#9b5de5;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#ffd60a;">EXHAUSTION</span><input type="checkbox" id="hrShowExh" checked style="width:14px;height:14px;accent-color:#ffd60a;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#ff3d57;">FAIL</span><input type="checkbox" id="hrShowFail" checked style="width:14px;height:14px;accent-color:#ff3d57;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Mostrar %</span><input type="checkbox" id="hrShowPct" style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="hint">Sinais de reação quando preço toca zona HVN. Requer HVN ativo.</div>
+          </div>
+        </div>
+
         <div class="ind-card" data-card="flowAccel">
           <div class="ind-head">
             <div class="row on" data-ind="flowAccel"><span class="name">DVL Flow Acceleration</span><span class="switch"></span></div>
@@ -2233,7 +2250,7 @@ html.pre-ui .switch::after{transition:none!important}
 const API='https://api.binance.com', WS='wss://stream.binance.com:9443/stream?streams=';
 const LOCAL_API=location.origin; // our own server with persisted trades + depth history
 let depthRefreshTimer=null;
-const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true,flowAccel:true},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal',_cross:null};
+const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true,flowAccel:true,hvnReact:true},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal',_cross:null};
 window.__bigTradesOverlayCache={key:'',items:[]};
 window.__bigTradesPersistentCache=new Map();
 window.__bigTradesLastGood=[];
@@ -2642,7 +2659,7 @@ function scale(vs,H){if(!vs||!vs.length)vs=S.candles.slice(-1);let hi=Math.max(.
 function draw(){
 
 const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_panDx=0;
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(window.__drawFlowTrail)safeLayer('DVL Trail',()=>window.__drawFlowTrail(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);if(window.__drawFlowAccel)safeLayer('DVL Flow',()=>window.__drawFlowAccel(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(window.__drawFlowTrail)safeLayer('DVL Trail',()=>window.__drawFlowTrail(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);if(window.__drawFlowAccel)safeLayer('DVL Flow',()=>window.__drawFlowAccel(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);if(window.__drawHVNReact&&S.inds.hvnReact)safeLayer('HVN Reactions',()=>window.__drawHVNReact(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
 // ── Chart watermark image (preloaded once) ──
 const _wmImg=(()=>{
   const i=new Image();i.crossOrigin='anonymous';
@@ -8728,6 +8745,7 @@ window._dvlTemplate={open:open,close:close};
   }
 
   window.__drawVolZones=drawVolZones;
+  window.__hvnZones=()=>_vzCache?.hvn;
 
   // ── Event wiring ──
   const VZ_INPUTS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','vzTf']);
@@ -10390,5 +10408,154 @@ document.addEventListener('change',function(ev){
   if(!FA_IDS.has(ev.target?.id))return;
   _cacheKey='';if(typeof drawSoon==='function')drawSoon();
 });
+})();
+
+/* ═══════════════════════════════════════════════════════════════
+   DVL HVN REACTION SIGNALS — overlay de reação nas zonas HVN
+   Não modifica o indicador HVN original.
+═══════════════════════════════════════════════════════════════ */
+(function DVL_HVNReactions(){
+'use strict';
+
+const TYPES={
+  HOLD:  {label:'HOLD',  color:'#00d4ff', isBull:true },
+  REJECT:{label:'RJCT',  color:'#ff8c00', isBull:false},
+  ABS:   {label:'ABS',   color:'#9b5de5', isBull:null },
+  EXH:   {label:'EXH',   color:'#ffd60a', isBull:null },
+  FAIL:  {label:'FAIL',  color:'#ff3d57', isBull:false}
+};
+
+function nv(id,def){const e=document.getElementById(id);return e?parseFloat(e.value)||def:def;}
+function bv(id,def){const e=document.getElementById(id);return e?e.checked:def!==false;}
+
+function cfg(){
+  return{
+    minConf:   nv('hrMinConf',55),
+    showHold:  bv('hrShowHold'),
+    showReject:bv('hrShowReject'),
+    showAbs:   bv('hrShowAbs'),
+    showExh:   bv('hrShowExh'),
+    showFail:  bv('hrShowFail'),
+    showPct:   bv('hrShowPct',false)
+  };
+}
+
+function detect(cs,s,e,zones,avgVol){
+  const sigs=[];
+  for(let i=Math.max(1,s);i<=Math.min(e,cs.length-1);i++){
+    const c=cs[i],p=cs[i-1];
+    const rng=c.h-c.l;
+    if(!rng||!isFinite(rng))continue;
+    for(const z of zones){
+      if(c.l>z.hi||c.h<z.lo)continue;
+      const body=Math.abs(c.c-c.o);
+      const bPct=body/rng;
+      const bull=c.c>=c.o;
+      const uWick=c.h-Math.max(c.c,c.o);
+      const lWick=Math.min(c.c,c.o)-c.l;
+      const volR=avgVol>0?c.v/avgVol:1;
+      const delta=(c.buy||0)-(c.sell||0);
+      const pRng=p.h-p.l;
+      const pBPct=pRng>0?Math.abs(p.c-p.o)/pRng:0;
+      let type=null,conf=0,isBull=null;
+      // HOLD — bullish bounce from support
+      if(c.l<=z.lo+(z.hi-z.lo)*.65&&c.c>z.lo&&bull&&lWick>rng*.18){
+        type='HOLD';isBull=true;
+        conf=44+lWick/rng*28+(volR>1.2?14:0)+(delta>0?9:0)+(bPct>.35?5:0);
+      }
+      // REJECT — bearish rejection from resistance
+      else if(c.h>=z.hi-(z.hi-z.lo)*.65&&c.c<z.hi&&!bull&&uWick>rng*.18){
+        type='REJECT';isBull=false;
+        conf=44+uWick/rng*28+(volR>1.2?14:0)+(delta<0?9:0)+(bPct>.35?5:0);
+      }
+      // ABS — absorption: high vol, small body
+      else if(volR>1.4&&bPct<.30){
+        type='ABS';isBull=delta>=0;
+        conf=50+(1-bPct)*20+Math.min(15,(volR-1.4)*8);
+      }
+      // EXH — exhaustion: small candle after strong prior move
+      else if(bPct<.28&&volR<.88&&pBPct>.58){
+        type='EXH';isBull=!(p.c>=p.o);
+        conf=47+(1-bPct)*14+(1-volR)*10;
+      }
+      // FAIL — zone breakdown: body crosses fully through zone
+      else if((c.o<z.lo&&c.c>z.hi&&bull)||(c.o>z.hi&&c.c<z.lo&&!bull)){
+        type='FAIL';isBull=bull;
+        conf=55+(volR>1.2?20:0)+bPct*14;
+      }
+      if(!type)continue;
+      sigs.push({idx:i,type,conf:Math.round(Math.min(99,conf)),isBull});
+      break;
+    }
+  }
+  return sigs;
+}
+
+function badge(ctx,type,conf,showPct,px,py,right){
+  const t=TYPES[type];
+  const col=t.color;
+  const ri=parseInt(col.slice(1,3),16),gi=parseInt(col.slice(3,5),16),bi=parseInt(col.slice(5,7),16);
+  const txt=showPct?t.label+' '+conf+'%':t.label;
+  const BW=txt.length*6+14,BH=15,R=3;
+  const x0=clamp(px-BW/2,PL+2,right-BW-2);
+  ctx.save();
+  ctx.globalCompositeOperation='source-over';
+  ctx.shadowColor=col;ctx.shadowBlur=5;
+  ctx.beginPath();
+  ctx.moveTo(x0+R,py);ctx.lineTo(x0+BW-R,py);ctx.arcTo(x0+BW,py,x0+BW,py+R,R);
+  ctx.lineTo(x0+BW,py+BH-R);ctx.arcTo(x0+BW,py+BH,x0+BW-R,py+BH,R);
+  ctx.lineTo(x0+R,py+BH);ctx.arcTo(x0,py+BH,x0,py+BH-R,R);
+  ctx.lineTo(x0,py+R);ctx.arcTo(x0,py,x0+R,py,R);
+  ctx.closePath();
+  ctx.fillStyle=`rgba(${ri},${gi},${bi},0.16)`;ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.strokeStyle=`rgba(${ri},${gi},${bi},0.78)`;ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle=col;ctx.font='bold 8px monospace';ctx.textAlign='center';
+  ctx.fillText(txt,x0+BW/2,py+10);
+  ctx.restore();
+}
+
+function drawHVNReact(ctx,W,H,AllV,sc,x){
+  if(!window.S||!S.inds.hvnReact||!S.candles.length)return;
+  const zones=window.__hvnZones?.();
+  if(!zones||!zones.length)return;
+  const st=cfg();
+  const cs=S.candles;
+  const s=Math.max(1,Math.floor(S.view.start)-1);
+  const e=Math.min(cs.length-1,Math.ceil(S.view.end));
+  let vSum=0,vN=0;
+  for(let i=s;i<=e;i++){vSum+=cs[i].v;vN++;}
+  const avgVol=vN?vSum/vN:1;
+  const sigs=detect(cs,s,e,zones,avgVol);
+  const right=W-RP();
+  const BH=15,GAP=6;
+  ctx.save();
+  for(const sig of sigs){
+    if(sig.conf<st.minConf)continue;
+    if(sig.type==='HOLD'  &&!st.showHold)  continue;
+    if(sig.type==='REJECT'&&!st.showReject)continue;
+    if(sig.type==='ABS'   &&!st.showAbs)   continue;
+    if(sig.type==='EXH'   &&!st.showExh)   continue;
+    if(sig.type==='FAIL'  &&!st.showFail)  continue;
+    const c=cs[sig.idx];
+    const px=x(sig.idx);
+    if(px<PL||px>right)continue;
+    let py;
+    if(sig.isBull===true)      py=sc.y(c.l)+GAP;
+    else if(sig.isBull===false)py=sc.y(c.h)-BH-GAP;
+    else                       py=sc.y((c.h+c.l)/2)-BH/2;
+    py=clamp(py,PT+2,H-PB-BH-2);
+    badge(ctx,sig.type,sig.conf,st.showPct,px,py,right);
+  }
+  ctx.restore();
+}
+
+window.__drawHVNReact=drawHVNReact;
+
+const HR_IDS=new Set(['hrMinConf','hrShowHold','hrShowReject','hrShowAbs','hrShowExh','hrShowFail','hrShowPct']);
+document.addEventListener('input',ev=>{if(HR_IDS.has(ev.target?.id))drawSoon();});
+document.addEventListener('change',ev=>{if(HR_IDS.has(ev.target?.id))drawSoon();});
+if(window.S&&S.inds&&!('hvnReact' in S.inds))S.inds.hvnReact=true;
+
 })();
 </script>
