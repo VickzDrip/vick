@@ -2538,10 +2538,11 @@ function addAggTrade(t,live=false,seq=S.loadSeq){
     rec.n=(rec.n||0)+1;
     rec.notional=(rec.notional||0)+notional;
     c.fp.set(row,rec);
+      c.__fpVer=(c.__fpVer||0)+1;c.__fpRowsCache=null;
   }
   if(live)updateTradeN();
 }
-function resetAggStats(){S.trades=[];S.candles.forEach(c=>{c.delta=0;c.buy=0;c.sell=0;c.fp=new Map()})}
+function resetAggStats(){S.trades=[];S.candles.forEach(c=>{c.delta=0;c.buy=0;c.sell=0;c.fp=new Map(),c.__fpVer=0,c.__fpRowsCache=null})}
 async function reloadAggTradesForBigBars(redraw=true,seq=S.loadSeq,sym=S.sym,tf=S.tf,barsOverride=0){
   if(!S.candles.length||S.aggLoading)return;
   S.aggLoading=true; S.aggSeq=seq;
@@ -2629,6 +2630,7 @@ async function loadFootprintFromServer(seq=S.loadSeq,sym=S.sym,tf=S.tf){
         const p=Math.round(+price/tick)*tick;
         c.fp.set(p,{buy:sides[0]||0,sell:sides[1]||0,n:0,notional:(sides[0]+sides[1])*p});
       }
+      c.__fpVer=(c.__fpVer||0)+1;c.__fpRowsCache=null;
     }
 
     // Bust only the per-candle cluster cache so historical bars rebuild with real footprint.
