@@ -2199,6 +2199,29 @@ html.pre-ui .switch::after{transition:none!important}
         <button id="dvlDrawDelete" style="display:none;position:absolute;z-index:20;top:10px;right:76px;background:rgba(12,16,30,0.88);border:1px solid rgba(255,61,87,0.5);border-radius:6px;color:#ff5252;font-size:11px;font-family:monospace;padding:5px 11px;cursor:pointer;backdrop-filter:blur(6px);letter-spacing:.02em;transition:background .15s,border-color .15s;">
           <svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:-1px;margin-right:4px;"><polyline points="2,4 12,4"/><path d="M5,4V2h4v2"/><path d="M3,4l.8,8h6.4L11,4"/><line x1="5.5" y1="6.5" x2="5.5" y2="10"/><line x1="8.5" y1="6.5" x2="8.5" y2="10"/></svg>Delete
         </button>
+        <!-- Drawing contextual button bar -->
+        <div id="dvlDrawCtxBar" style="display:flex;align-items:center;gap:3px;position:absolute;z-index:20;top:10px;right:76px;">
+          <button id="dvlDrawUndo" class="dvl-ctx-btn" title="Desfazer (Ctrl+Z)">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 7c0-2.76 2.24-5 5-5 2.21 0 4.1 1.44 4.77 3.44"/><polyline points="2,3.5 2,7 5.5,7"/></svg>
+          </button>
+          <button id="dvlDrawRedo" class="dvl-ctx-btn" title="Refazer (Ctrl+Y)">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 7c0-2.76-2.24-5-5-5C6.79 2 4.9 3.44 4.23 5.44"/><polyline points="14,3.5 14,7 10.5,7"/></svg>
+          </button>
+          <button id="dvlDrawSave" class="dvl-ctx-btn" title="Salvar desenhos">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 13H3a1 1 0 01-1-1V4l3-3h7a1 1 0 011 1v10a1 1 0 01-1 1z"/><rect x="5" y="9" width="6" height="4"/><rect x="5" y="2" width="5" height="3"/></svg>
+          </button>
+          <div id="dvlCtxSep" style="width:1px;height:16px;background:rgba(255,255,255,0.1);margin:0 2px;display:none;"></div>
+          <button id="dvlDrawSettingsBtn" class="dvl-ctx-btn" title="Configurações do desenho" style="display:none">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
+          </button>
+          <button id="dvlDrawDelete" class="dvl-ctx-btn dvl-ctx-del" title="Deletar desenho" style="display:none">
+            <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2,4 12,4"/><path d="M5,4V2h4v2"/><path d="M3,4l.8,8h6.4L11,4"/><line x1="5.5" y1="6.5" x2="5.5" y2="10"/><line x1="8.5" y1="6.5" x2="8.5" y2="10"/></svg>
+          </button>
+        </div>
+        <!-- Drawing settings panel -->
+        <div id="dvlDrawSettingsPanel" style="display:none;position:absolute;z-index:25;top:52px;right:76px;background:rgba(5,9,20,0.97);border:1px solid rgba(0,212,255,0.2);border-radius:10px;padding:14px 13px;min-width:215px;max-width:255px;backdrop-filter:blur(12px);font-family:monospace;font-size:11px;color:#c8d8f0;box-shadow:0 8px 32px rgba(0,0,0,0.65);">
+          <div id="dvlDrawSettingsPanelInner"></div>
+        </div>
       </div>
       <div id="timeAxisWrap"><canvas id="timeAxisCanvas"></canvas></div>
       <div class="pane-divider" id="volumeDivider"></div>
@@ -7516,6 +7539,24 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
   object-fit:contain;
   pointer-events:none;
 }
+/* ── Drawing contextual bar ── */
+.dvl-ctx-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;
+  background:rgba(8,13,28,0.88);
+  border:1px solid rgba(0,212,255,0.18);
+  border-radius:6px;color:#8da3c2;cursor:pointer;
+  transition:background .13s,border-color .13s,color .13s,opacity .13s;
+  backdrop-filter:blur(6px);outline:none;-webkit-tap-highlight-color:transparent;
+  padding:0;flex-shrink:0;
+}
+.dvl-ctx-btn:hover{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.45);color:#e8f0ff;}
+.dvl-ctx-btn:active{background:rgba(0,212,255,0.18);transform:scale(.92);}
+.dvl-ctx-btn.dvl-active{background:rgba(0,212,255,0.14);border-color:rgba(0,212,255,0.55);color:#00d4ff;}
+.dvl-ctx-del{border-color:rgba(255,61,87,0.25)!important;color:#c0607a!important;}
+.dvl-ctx-del:hover{background:rgba(255,61,87,0.14)!important;border-color:rgba(255,80,100,0.6)!important;color:#ff5252!important;}
+.dvl-ctx-del:active{background:rgba(255,61,87,0.24)!important;}
+/* Legacy single delete button (hidden, replaced by ctx bar) */
 #dvlDrawDelete:hover{background:rgba(255,61,87,0.18)!important;border-color:rgba(255,80,100,0.75)!important;}
 #dvlDrawDelete:active{background:rgba(255,61,87,0.28)!important;transform:scale(.96);}
 
@@ -8700,10 +8741,10 @@ window._dvlTemplate={open:open,close:close};
 /* ─── CONSTANTS & CONFIG ─── */
 const HIT_D=9,HIT_M=16,HDL_R_D=6,HDL_R_M=9;
 const STYLES={
-  line:{color:'#00d4ff',width:1.5,opacity:0.95},
-  rect:{borderColor:'#00d4ff',fillColor:'#0064b4',fillAlpha:0.07,borderWidth:1,opacity:0.95},
+  line:{color:'#00d4ff',width:1.5,opacity:0.95,dash:'solid'},
+  rect:{borderColor:'#00d4ff',fillColor:'#0064b4',fillAlpha:0.07,borderWidth:1,opacity:0.95,dash:'solid',midline:false,midColor:'#00d4ff',midWidth:1,midDash:'dashed'},
   text:{color:'#e8f0ff',fontSize:12,fontFamily:'monospace',bgColor:'rgba(6,12,22,0.72)'},
-  arrow:{color:'#00d4ff',width:2.5,opacity:0.97,headSize:18}
+  arrow:{color:'#00d4ff',width:2.5,opacity:0.97,headSize:18,dash:'solid'}
 };
 const CFG={snapToCandle:true,keepTool:false};
 
@@ -8755,12 +8796,14 @@ function _syncCursor(cs){
   if(!S._cross||!cs||!S.candles.length){S.cursor=null;return;}
   const{cx,cy}=S._cross;
   const raw=cs.iX(cx);
+  // Clamp to existing candles for candle-snap, but keep raw for future-space drawing
   const idx=Math.max(0,Math.min(Math.round(raw),S.candles.length-1));
   const c=S.candles[idx];
-  S.cursor={active:true,screenX:cs.xI(idx),screenY:cy,index:idx,time:c?c.t:0,price:cs.pY(cy)};
+  S.cursor={active:true,screenX:cx,screenY:cy,index:raw,snapIndex:idx,time:c?c.t:0,price:cs.pY(cy)};
 }
 function _cursorPoint(){
   if(!S.cursor)return null;
+  // index is the raw (possibly future) float; time from nearest real candle
   return{index:S.cursor.index,time:S.cursor.time,price:S.cursor.price};
 }
 
@@ -8768,14 +8811,19 @@ function _cursorPoint(){
 function screenToChartPoint(sx,sy,cs){
   cs=cs||getCS();if(!cs)return{index:0,time:0,price:0};
   const raw=cs.iX(sx);
-  const idx=CFG.snapToCandle?Math.round(Math.max(0,Math.min(raw,S.candles.length-1))):Math.max(0,Math.min(raw,S.candles.length-1));
+  // Allow raw index past last candle for future-space drawings
   const si=Math.round(Math.max(0,Math.min(raw,S.candles.length-1)));
   const c=S.candles[si];
   return{index:raw,time:c?c.t:0,price:cs.pY(sy)};
 }
 function chartPointToScreen(p,cs){
   cs=cs||getCS();if(!cs)return{x:0,y:0};
-  const idx=p.time?tToIdx(p.time):(p.index||0);
+  const n=S.candles.length;
+  let idx;
+  // If stored index extends past last candle, use it directly (future projection)
+  if(p.index!=null&&p.index>n-0.5)idx=p.index;
+  else if(p.time)idx=tToIdx(p.time);
+  else idx=p.index||0;
   return{x:cs.xI(idx),y:cs.yP(p.price)};
 }
 
@@ -8790,8 +8838,10 @@ let _editId=null;
 let _lpt=null;
 let _ctxMenu=null;
 let _dblTap=null;
-let _crossDragStart=null; // {fx,fy,cx,cy} — relative crosshair drag origin for mobile tools
-let _touchMoved=false;    // true when finger dragged significantly during current touch
+let _crossDragStart=null;
+let _touchMoved=false;
+let _history=[],_histPtr=-1;
+let _settingsOpen=false;
 
 /* ─── INIT ─── */
 ready(()=>{
@@ -8802,6 +8852,7 @@ ready(()=>{
   else if(S.replay.selectingStart===undefined)S.replay.selectingStart=false;
   S.cursor=null;
   _initBtns();_initEvents();_patchDraw();_loadDrawings();_watchSymTf();
+  _history=[clone(S.drawings)];_histPtr=0;_syncCtxBar();
 });
 
 /* ─── BUTTONS ─── */
@@ -8812,6 +8863,10 @@ function _initBtns(){
     b.addEventListener('click',()=>_tool===tool?_clearTool():_setTool(tool));
   });
   const dBtn=el('dvlDrawDelete');if(dBtn)dBtn.addEventListener('click',_deleteSelected);
+  const uBtn=el('dvlDrawUndo');if(uBtn)uBtn.addEventListener('click',_undo);
+  const rBtn2=el('dvlDrawRedo');if(rBtn2)rBtn2.addEventListener('click',_redo);
+  const sBtn=el('dvlDrawSave');if(sBtn)sBtn.addEventListener('click',_saveFlash);
+  const gBtn=el('dvlDrawSettingsBtn');if(gBtn)gBtn.addEventListener('click',_toggleSettings);
   const txOk=el('dvlTextOk'),txC=el('dvlTextCancel'),txI=el('dvlTextInput');
   if(txOk)txOk.addEventListener('click',_confirmText);
   if(txC)txC.addEventListener('click',_cancelText);
@@ -8847,32 +8902,71 @@ function _updateToolBtns(){
   .forEach(({id,t})=>{const b=el(id);if(b)b.classList.toggle('dvl-active',t===_tool);});
 }
 
+/* ─── HISTORY ─── */
+function _pushHistory(){
+  if(_histPtr<_history.length-1)_history.splice(_histPtr+1);
+  _history.push(clone(S.drawings));
+  if(_history.length>30){_history.shift();}else{_histPtr++;}
+  _syncCtxBar();
+}
+function _undo(){
+  if(_histPtr<=0)return;
+  _histPtr--;S.drawings=clone(_history[_histPtr]);
+  _closeSettings();_deselect();_saveDrawings();drawSoon();_syncCtxBar();
+}
+function _redo(){
+  if(_histPtr>=_history.length-1)return;
+  _histPtr++;S.drawings=clone(_history[_histPtr]);
+  _closeSettings();_deselect();_saveDrawings();drawSoon();_syncCtxBar();
+}
+
+/* ─── CTX BAR SYNC ─── */
+function _syncCtxBar(){
+  const ub=el('dvlDrawUndo'),rb=el('dvlDrawRedo');
+  if(ub){ub.style.opacity=_histPtr>0?'1':'0.3';ub.style.pointerEvents=_histPtr>0?'':'none';}
+  if(rb){const can=_histPtr<_history.length-1;rb.style.opacity=can?'1':'0.3';rb.style.pointerEvents=can?'':'none';}
+  const gb=el('dvlDrawSettingsBtn'),db=el('dvlDrawDelete'),sep=el('dvlCtxSep');
+  const show=!!_selId;
+  if(gb)gb.style.display=show?'flex':'none';
+  if(db)db.style.display=show?'flex':'none';
+  if(sep)sep.style.display=show?'block':'none';
+}
+
 /* ─── SELECTION ─── */
 function _select(id){
   _selId=id;S.selectedDrawing=id?S.drawings.find(d=>d.id===id):null;
   _sm=id?ST.SEL:ST.IDLE;
-  const dBtn=el('dvlDrawDelete');if(dBtn)dBtn.style.display=id?'block':'none';
-  drawSoon();
+  if(!id)_closeSettings();
+  _syncCtxBar();drawSoon();
 }
 function _deselect(){
   _selId=null;S.selectedDrawing=null;_drag=null;
   if(_sm===ST.SEL||_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL)_sm=ST.IDLE;
-  const dBtn=el('dvlDrawDelete');if(dBtn)dBtn.style.display='none';
+  _closeSettings();_syncCtxBar();
 }
 function _getSelected(){return _selId?S.drawings.find(d=>d.id===_selId):null;}
 function _deleteSelected(){
   if(!_selId)return;
   S.drawings=S.drawings.filter(d=>d.id!==_selId);
   _selId=null;S.selectedDrawing=null;_sm=ST.IDLE;_drag=null;
-  const dBtn=el('dvlDrawDelete');if(dBtn)dBtn.style.display='none';
-  _saveDrawings();drawSoon();
+  _closeSettings();_pushHistory();_saveDrawings();drawSoon();
 }
 function _dupSelected(){
   const orig=_getSelected();if(!orig)return;
   const d=clone(orig);d.id=uid();
   const shift=(S.candles.at(-1)?.c||0)*0.001||1;
   if(d.p1)d.p1.price+=shift;if(d.p2)d.p2.price+=shift;if(d.p)d.p.price+=shift;
-  S.drawings.push(d);_select(d.id);_saveDrawings();drawSoon();
+  S.drawings.push(d);_select(d.id);_pushHistory();_saveDrawings();drawSoon();
+}
+
+/* ─── SAVE FLASH ─── */
+function _saveFlash(){
+  _saveDrawings();
+  const b=el('dvlDrawSave');if(!b)return;
+  const prev=b.innerHTML;
+  b.innerHTML='<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="#00e676" stroke-width="2"><polyline points="3,8 7,12 13,5"/></svg>';
+  b.style.borderColor='rgba(0,230,118,0.5)';
+  setTimeout(()=>{b.innerHTML=prev;b.style.borderColor='';},1000);
 }
 
 /* ─── EVENTS ─── */
@@ -8888,10 +8982,13 @@ function _initEvents(){
   window.addEventListener('dblclick',_onDbl,true);
   window.addEventListener('keydown',e=>{
     if(e.key==='Escape'){
+      if(_settingsOpen){_closeSettings();return;}
       if(_sm===ST.DRAWING){_cancelDrawing();drawSoon();}
       else{_clearTool();_deselect();_closeCtx();drawSoon();}
     }
     if((e.key==='Delete'||e.key==='Backspace')&&_selId&&document.activeElement===document.body)_deleteSelected();
+    if(e.key==='z'&&(e.ctrlKey||e.metaKey)&&!e.shiftKey){e.preventDefault();_undo();}
+    if((e.key==='y'&&(e.ctrlKey||e.metaKey))||(e.key==='z'&&(e.ctrlKey||e.metaKey)&&e.shiftKey)){e.preventDefault();_redo();}
   });
   window.addEventListener('contextmenu',e=>{if(_sm===ST.DRAWING){e.preventDefault();_cancelDrawing();drawSoon();}});
   wrap.addEventListener('click',e=>{
@@ -8904,14 +9001,15 @@ function _initEvents(){
   });
 }
 
+const _CTX_GUARD='#dvlDrawCtxBar,#dvlDrawSettingsPanel,#dvlDrawDelete';
 function _onCk(e){
-  if(e.target&&e.target.closest&&e.target.closest('#dvlDrawDelete'))return;
+  if(e.target?.closest?.(_CTX_GUARD))return;
   if(_tool||_sm===ST.DRAWING||S.replay?.selectingStart)e.stopPropagation();
 }
 
 function _onMD(e){
   if(e.button!==0)return;
-  if(e.target&&e.target.closest&&e.target.closest('#dvlDrawDelete'))return;
+  if(e.target?.closest?.(_CTX_GUARD))return;
   _closeCtx();
   /* P0: replay start selection */
   if(S.replay?.selectingStart){
@@ -8962,7 +9060,7 @@ function _onMM(e){
 }
 
 function _onMU(e){
-  if(_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL){_sm=ST.SEL;if(_drag?.started)_saveDrawings();_drag=null;e.stopPropagation();return;}
+  if(_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL){_sm=ST.SEL;if(_drag?.started){_pushHistory();_saveDrawings();}; _drag=null;e.stopPropagation();return;}
   if(_drag){_drag=null;e.stopPropagation();}
 }
 
@@ -8970,7 +9068,7 @@ function _onMU(e){
    Slide finger to adjust. touchend → confirm point. */
 function _onTS(e){
   if(e.touches.length>1)return;
-  if(e.target&&e.target.closest&&e.target.closest('#dvlDrawDelete'))return;
+  if(e.target?.closest?.(_CTX_GUARD))return;
   _closeCtx();
   const wrap=el('chartWrap');if(!wrap)return;
   const r=wrap.getBoundingClientRect();
@@ -9064,7 +9162,7 @@ function _onTE(e){
     }
     return;
   }
-  if(_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL){_sm=ST.SEL;if(_drag?.started)_saveDrawings();_drag=null;return;}
+  if(_sm===ST.DRAG_BODY||_sm===ST.DRAG_HDL){_sm=ST.SEL;if(_drag?.started){_pushHistory();_saveDrawings();}; _drag=null;return;}
   if(_drag)_drag=null;
 }
 
@@ -9103,7 +9201,7 @@ function _finalize(){
   if(!_draft)return;
   S.drawings.push(_draft);const id=_draft.id;
   _draft=null;_sm=ST.SEL;if(!CFG.keepTool)_clearTool();
-  _select(id);_saveDrawings();drawSoon();
+  _select(id);_pushHistory();_saveDrawings();drawSoon();
 }
 
 
@@ -9195,9 +9293,9 @@ function _openTextPopup(sp,existingText,editId){
 function _confirmText(){
   const pop=el('dvlTextPopup');if(pop)pop.style.display='none';
   const txt=el('dvlTextInput')?.value||'';
-  if(_editId){const d=S.drawings.find(x=>x.id===_editId);if(d)d.text=txt;_editId=null;_sm=ST.SEL;_saveDrawings();drawSoon();return;}
+  if(_editId){const d=S.drawings.find(x=>x.id===_editId);if(d)d.text=txt;_editId=null;_sm=ST.SEL;_pushHistory();_saveDrawings();drawSoon();return;}
   if(_draft){
-    if(txt){_draft.text=txt;S.drawings.push(_draft);const id=_draft.id;_draft=null;_sm=ST.SEL;if(!CFG.keepTool)_clearTool();_select(id);_saveDrawings();}
+    if(txt){_draft.text=txt;S.drawings.push(_draft);const id=_draft.id;_draft=null;_sm=ST.SEL;if(!CFG.keepTool)_clearTool();_select(id);_pushHistory();_saveDrawings();}
     else{_draft=null;_sm=ST.IDLE;if(!CFG.keepTool)_clearTool();}
   }drawSoon();
 }
@@ -9317,23 +9415,45 @@ function _renderOne(ctx,cs,d,sel){
   else if(d.type==='arrow')_rArrow(ctx,cs,d,sel);
   ctx.restore();
 }
+/* dash helper: solid/dashed/dotted */
+function _applyDash(ctx,dash,lw){
+  const w=lw||1;
+  if(dash==='dashed')ctx.setLineDash([w*5,w*3]);
+  else if(dash==='dotted')ctx.setLineDash([w,w*2.5]);
+  else ctx.setLineDash([]);
+}
 function _rLine(ctx,cs,d,sel){
   const s1=chartPointToScreen(d.p1,cs),s2=chartPointToScreen(d.p2,cs);
-  ctx.beginPath();ctx.moveTo(s1.x,s1.y);ctx.lineTo(s2.x,s2.y);
-  ctx.strokeStyle=d.style?.color||'#00d4ff';ctx.lineWidth=sel?(d.style?.width||1.5)+0.8:(d.style?.width||1.5);
+  const lw=sel?(d.style?.width||1.5)+0.8:(d.style?.width||1.5);
+  ctx.strokeStyle=d.style?.color||'#00d4ff';ctx.lineWidth=lw;
   ctx.globalAlpha=d.style?.opacity||0.95;
+  _applyDash(ctx,d.style?.dash,lw);
   if(sel){ctx.shadowColor='rgba(0,212,255,0.5)';ctx.shadowBlur=6;}
-  ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;
+  ctx.beginPath();ctx.moveTo(s1.x,s1.y);ctx.lineTo(s2.x,s2.y);ctx.stroke();
+  ctx.shadowBlur=0;ctx.globalAlpha=1;ctx.setLineDash([]);
   if(sel){_rHandle(ctx,s1.x,s1.y);_rHandle(ctx,s2.x,s2.y);}
 }
 function _rRect(ctx,cs,d,sel){
   const s1=chartPointToScreen(d.p1,cs),s2=chartPointToScreen(d.p2,cs);
   const rx=Math.min(s1.x,s2.x),ry=Math.min(s1.y,s2.y),rw=Math.abs(s2.x-s1.x),rh=Math.abs(s2.y-s1.y);
+  // fill
   ctx.fillStyle=d.style?.fillColor||'#0064b4';ctx.globalAlpha=d.style?.fillAlpha??0.07;ctx.fillRect(rx,ry,rw,rh);
+  // border
+  const bw=d.style?.borderWidth||1;
   ctx.globalAlpha=d.style?.opacity||0.95;ctx.strokeStyle=d.style?.borderColor||'#00d4ff';
-  ctx.lineWidth=sel?(d.style?.borderWidth||1)+0.8:(d.style?.borderWidth||1);
-  if(sel){ctx.setLineDash([5,3]);ctx.shadowColor='rgba(0,212,255,0.4)';ctx.shadowBlur=4;}
-  ctx.strokeRect(rx,ry,rw,rh);ctx.setLineDash([]);ctx.shadowBlur=0;ctx.globalAlpha=1;
+  ctx.lineWidth=sel?bw+0.8:bw;
+  if(sel){ctx.shadowColor='rgba(0,212,255,0.4)';ctx.shadowBlur=4;}_applyDash(ctx,d.style?.dash,bw);
+  ctx.strokeRect(rx,ry,rw,rh);ctx.setLineDash([]);ctx.shadowBlur=0;
+  // midline 50%
+  if(d.style?.midline&&rh>4){
+    const mw=d.style?.midWidth||1;
+    ctx.strokeStyle=d.style?.midColor||'#00d4ff';ctx.lineWidth=mw;
+    _applyDash(ctx,d.style?.midDash||'dashed',mw);
+    const midY=ry+rh/2;
+    ctx.beginPath();ctx.moveTo(rx,midY);ctx.lineTo(rx+rw,midY);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.globalAlpha=1;
   if(sel){_rHandle(ctx,s1.x,s1.y);_rHandle(ctx,s2.x,s2.y);_rHandle(ctx,s2.x,s1.y);_rHandle(ctx,s1.x,s2.y);}
 }
 function _rText(ctx,cs,d,sel){
@@ -9365,11 +9485,13 @@ function _rArrow(ctx,cs,d,sel){
   ctx.lineCap='round';
   ctx.lineJoin='round';
   if(sel){ctx.shadowColor='rgba(0,212,255,0.6)';ctx.shadowBlur=8;}
+  _applyDash(ctx,d.style?.dash,lw);
   // Shaft — stop just before the head base so head tip is sharp
   ctx.beginPath();
   ctx.moveTo(s1.x,s1.y);
   ctx.lineTo(s2.x-ux*hs*0.65,s2.y-uy*hs*0.65);
   ctx.stroke();
+  ctx.setLineDash([]);
   // Filled arrowhead — wider angle for clear visibility
   const a=Math.atan2(dy,dx);
   const spread=Math.PI/5;
@@ -9475,6 +9597,97 @@ function _renderReplaySelect(ctx,cs){
   ctx.fillStyle='rgba(255,200,50,0.95)';ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillText(txt,bx+8,by+bh/2);
   ctx.restore();
+}
+
+/* ─── DRAW SETTINGS PANEL ─── */
+function _toggleSettings(){_settingsOpen?_closeSettings():_openSettings();}
+function _openSettings(){
+  const d=_getSelected();if(!d)return;
+  _settingsOpen=true;
+  _buildSettingsPanel(d);
+  const p=el('dvlDrawSettingsPanel');if(p)p.style.display='block';
+  const b=el('dvlDrawSettingsBtn');if(b)b.classList.add('dvl-active');
+}
+function _closeSettings(){
+  _settingsOpen=false;
+  const p=el('dvlDrawSettingsPanel');if(p)p.style.display='none';
+  const b=el('dvlDrawSettingsBtn');if(b)b.classList.remove('dvl-active');
+}
+function _buildSettingsPanel(d){
+  const inner=el('dvlDrawSettingsPanelInner');if(!inner)return;
+  inner.innerHTML='';
+  if(!d.style)d.style={};
+  const save=()=>{drawSoon();_saveDrawings();};
+  // Header
+  const hdr=document.createElement('div');
+  hdr.style.cssText='color:#00d4ff;font-size:9px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;font-weight:700;opacity:.8;';
+  const names={trendline:'Linha',rectangle:'Retângulo',text:'Texto',arrow:'Seta'};
+  hdr.textContent=names[d.type]||d.type;inner.appendChild(hdr);
+  // Row helper
+  const row=(lbl,ctrl)=>{
+    const div=document.createElement('div');
+    div.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid rgba(30,42,64,.4);';
+    const l=document.createElement('span');l.textContent=lbl;l.style.cssText='color:#8da3c2;font-size:10px;flex:1;min-width:0;white-space:nowrap;';
+    div.appendChild(l);div.appendChild(ctrl);inner.appendChild(div);
+  };
+  const mkColor=(val,cb)=>{
+    const i=document.createElement('input');i.type='color';i.value=val||'#00d4ff';
+    i.style.cssText='width:34px;height:22px;border:1px solid #1e2a40;border-radius:4px;cursor:pointer;background:none;padding:1px;';
+    i.addEventListener('input',e=>{cb(e.target.value);save();});return i;
+  };
+  const mkNum=(val,min,max,step,cb)=>{
+    const i=document.createElement('input');i.type='number';i.value=val;i.min=min;i.max=max;i.step=step;
+    i.style.cssText='width:50px;background:#06080f;border:1px solid #1e2a40;color:#c8d8f0;border-radius:3px;padding:2px 4px;font-family:monospace;font-size:10px;';
+    i.addEventListener('change',e=>{cb(+e.target.value);save();});return i;
+  };
+  const mkDash=(val,cb)=>{
+    const s=document.createElement('select');
+    s.style.cssText='background:#06080f;border:1px solid #1e2a40;color:#c8d8f0;border-radius:3px;padding:2px 4px;font-family:monospace;font-size:10px;';
+    [['solid','Sólida'],['dashed','Tracejada'],['dotted','Pontilhada']].forEach(([v,l])=>{
+      const o=document.createElement('option');o.value=v;o.textContent=l;if(v===val)o.selected=true;s.appendChild(o);
+    });s.addEventListener('change',e=>{cb(e.target.value);save();});return s;
+  };
+  const mkRange=(val,min,max,step,cb)=>{
+    const wrap2=document.createElement('div');wrap2.style.cssText='display:flex;align-items:center;gap:4px;';
+    const r=document.createElement('input');r.type='range';r.min=min;r.max=max;r.step=step;r.value=val;
+    r.style.cssText='width:70px;accent-color:#00d4ff;';
+    const lbl2=document.createElement('span');lbl2.textContent=Math.round(val*100)+'%';lbl2.style.cssText='color:#6a7fa0;font-size:9px;width:28px;';
+    r.addEventListener('input',e=>{cb(+e.target.value);lbl2.textContent=Math.round(+e.target.value*100)+'%';save();});
+    wrap2.appendChild(r);wrap2.appendChild(lbl2);return wrap2;
+  };
+  const mkCheck=(val,cb)=>{
+    const i=document.createElement('input');i.type='checkbox';i.checked=!!val;
+    i.style.cssText='accent-color:#00d4ff;width:15px;height:15px;cursor:pointer;';
+    i.addEventListener('change',e=>{cb(e.target.checked);save();_buildSettingsPanel(_getSelected());});return i;
+  };
+  if(d.type==='trendline'||d.type==='arrow'){
+    row('Cor',mkColor(d.style.color,v=>d.style.color=v));
+    row('Espessura',mkNum(d.style.width||1.5,0.5,8,0.5,v=>d.style.width=v));
+    row('Estilo',mkDash(d.style.dash||'solid',v=>d.style.dash=v));
+  }
+  if(d.type==='rectangle'){
+    row('Cor da borda',mkColor(d.style.borderColor||'#00d4ff',v=>d.style.borderColor=v));
+    row('Espessura borda',mkNum(d.style.borderWidth||1,0.5,6,0.5,v=>d.style.borderWidth=v));
+    row('Estilo borda',mkDash(d.style.dash||'solid',v=>d.style.dash=v));
+    row('Cor do fundo',mkColor(d.style.fillColor||'#0064b4',v=>d.style.fillColor=v));
+    row('Opacidade fundo',mkRange(d.style.fillAlpha??0.07,0,0.4,0.01,v=>d.style.fillAlpha=v));
+    row('Linha 50%',mkCheck(d.style.midline,v=>d.style.midline=v));
+    if(d.style.midline){
+      row('Cor linha 50%',mkColor(d.style.midColor||'#00d4ff',v=>d.style.midColor=v));
+      row('Espessura 50%',mkNum(d.style.midWidth||1,0.5,4,0.5,v=>d.style.midWidth=v));
+      row('Estilo 50%',mkDash(d.style.midDash||'dashed',v=>d.style.midDash=v));
+    }
+  }
+  if(d.type==='text'){
+    row('Cor do texto',mkColor(d.style.color||'#e8f0ff',v=>d.style.color=v));
+    row('Tamanho',mkNum(d.style.fontSize||12,8,28,1,v=>d.style.fontSize=v));
+  }
+  // Close btn
+  const close=document.createElement('button');
+  close.textContent='Fechar';
+  close.style.cssText='margin-top:10px;width:100%;background:none;border:1px solid rgba(0,212,255,0.2);border-radius:5px;color:#6a7fa0;font-size:10px;padding:5px;cursor:pointer;font-family:monospace;';
+  close.addEventListener('click',_closeSettings);
+  inner.appendChild(close);
 }
 
 /* ─── PERSISTENCE ─── */
