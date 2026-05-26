@@ -2024,6 +2024,7 @@ html.pre-ui .switch::after{transition:none!important}
             <label class="kv" style="cursor:pointer;"><span class="k">Delta confirm.</span><input type="checkbox" id="hrUseDelta" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Requer vol.</span><input type="checkbox" id="hrRequireVol" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Requer FP</span><input type="checkbox" id="hrUseFP" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Requer fechamento</span><input type="checkbox" id="hrReqClose" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <div class="hint">FAIL só aparece após reação anterior invalidada. Volume manda. Requer HVN ativo.</div>
           </div>
         </div>
@@ -10465,6 +10466,7 @@ function cfg(){
     useDelta:    bv('hrUseDelta',true),
     requireVol:  bv('hrRequireVol',true),
     useFP:       bv('hrUseFP',true),
+    reqClose:    bv('hrReqClose',true),
     volWeight:   nv('hrVolWeight',55),
     candleWeight:nv('hrCandleWeight',25),
     confirmWeight:nv('hrConfirmWeight',15),
@@ -10494,74 +10496,120 @@ function checkFail(st,c,failMode,z){
   }
 }
 
-// ── Volume / Orderflow components (0-100) ──────────────────────
-function _volBuy(c,volR,useDelta,useFP){
+// ── Footprint inside zone (primary orderflow source) ─────────
+function _fpInZone(c,z){
+  let buy=0,sell=0,real=false;
+  if(c.fp&&c.fp.size>0){
+    c.fp.forEach((r,price)=>{
+      const p=+price;
+      if(!isFinite(p)||p<z.lo||p>z.hi)return;
+      buy+=(+r.buy||0);sell+=(+r.sell||0);real=true;
+    });
+  }
+  const total=buy+sell;
+  return{buy,sell,total,delta:buy-sell,
+    buyShare:total?buy/total:0.5,sellShare:total?sell/total:0.5,real};
+}
+
+// ── Footprint / OF component for BUY (0-100) ──────────────────
+// cap at 40 when no real per-price FP — candle-level delta is not enough alone
+function _fpBuy(fp,c,z,volR,useDelta,useFP){
+  if(fp.real&&useFP){
+    // per-price FP data inside zone is the primary judge
+    let s=fp.buyShare>=0.65?90:fp.buyShare>=0.58?70:fp.buyShare>=0.52?45:fp.buyShare>=0.48?20:0;
+    if(fp.total>0){
+      const dr=fp.delta/fp.total;
+      if(dr>0.2)s=Math.min(100,s+10);
+      else if(dr<-0.1)s=Math.max(0,s-25); // net sellers in zone penalizes hard
+    }
+    if(volR>1.2&&s>0)s=Math.min(100,s+5); // volume activity bonus (minor)
+    return Math.min(100,Math.max(0,s));
+  }
+  // No real per-price FP — weak fallback via candle-level delta
+  let s=0;
   const tv=Math.max(1,c.v);
-  let v=Math.min(65,Math.max(0,(volR-0.8)*45)); // 0 at 0.8×, 65 at ~2.25×
-  if(useDelta){
+  if(useDelta&&c.buy>0){
     const dr=((c.buy||0)-(c.sell||0))/tv;
-    v+=dr>0?Math.min(22,dr*55):Math.max(-15,dr*20);
+    if(dr>0)s+=Math.min(20,dr*50);
+    else s=Math.max(0,s+dr*25);
   }
-  if(useFP&&c.buy>0){
-    const bf=c.buy/tv;
-    if(bf>0.52)v+=Math.min(13,(bf-0.5)*65);
-    else if(bf<0.45)v=Math.max(0,v-10);
-  }
-  return Math.min(100,Math.max(0,v));
+  s+=Math.min(12,Math.max(0,(volR-1.0)*10)); // volume as context only
+  return Math.min(40,Math.max(0,s)); // hard cap: no real FP = max 40
 }
-function _volSell(c,volR,useDelta,useFP){
+
+// ── Footprint / OF component for SELL (0-100) ─────────────────
+function _fpSell(fp,c,z,volR,useDelta,useFP){
+  if(fp.real&&useFP){
+    let s=fp.sellShare>=0.65?90:fp.sellShare>=0.58?70:fp.sellShare>=0.52?45:fp.sellShare>=0.48?20:0;
+    if(fp.total>0){
+      const dr=fp.delta/fp.total;
+      if(dr<-0.2)s=Math.min(100,s+10);
+      else if(dr>0.1)s=Math.max(0,s-25);
+    }
+    if(volR>1.2&&s>0)s=Math.min(100,s+5);
+    return Math.min(100,Math.max(0,s));
+  }
+  let s=0;
   const tv=Math.max(1,c.v);
-  let v=Math.min(65,Math.max(0,(volR-0.8)*45));
-  if(useDelta){
+  if(useDelta&&c.sell>0){
     const dr=((c.buy||0)-(c.sell||0))/tv;
-    v+=dr<0?Math.min(22,Math.abs(dr)*55):Math.max(-15,dr*20);
+    if(dr<0)s+=Math.min(20,Math.abs(dr)*50);
+    else s=Math.max(0,s-dr*25);
   }
-  if(useFP&&c.sell>0){
-    const sf=c.sell/tv;
-    if(sf>0.52)v+=Math.min(13,(sf-0.5)*65);
-    else if(sf<0.45)v=Math.max(0,v-10);
-  }
-  return Math.min(100,Math.max(0,v));
+  s+=Math.min(12,Math.max(0,(volR-1.0)*10));
+  return Math.min(40,Math.max(0,s));
 }
-function _volAbs(c,volR,useDelta,useFP){
-  if(volR<1.2)return 0;
-  const tv=Math.max(1,c.v);
-  let v=Math.min(70,(volR-1.0)*40);
-  if(useDelta){
-    const dr=Math.abs(((c.buy||0)-(c.sell||0))/tv);
-    v+=dr<0.3?15:dr>0.6?-10:0; // balanced delta = better absorption
+
+// ── Footprint / OF component for ABS (0-100) ──────────────────
+function _fpAbs(fp,c,volR,useDelta,useFP){
+  if(fp.real&&useFP&&fp.total>0){
+    const bal=Math.min(fp.buy,fp.sell)/Math.max(fp.buy+1,fp.sell+1);
+    let s=bal*55;
+    if(volR>1.3)s+=Math.min(30,(volR-1.0)*20);
+    if(Math.max(fp.buyShare,fp.sellShare)>0.72)s*=0.5; // too one-sided = not absorption
+    return Math.min(100,Math.max(0,s));
   }
-  if(useFP&&c.buy>0&&c.sell>0){
-    const bal=Math.min(c.buy,c.sell)/Math.max(c.buy,c.sell);
-    v+=bal*15;
-  }
-  return Math.min(100,Math.max(0,v));
+  if(volR<1.4)return 0;
+  const rng=c.h-c.l;
+  const bP=rng>0?Math.abs(c.c-c.o)/rng:1;
+  if(bP>0.35)return 0;
+  return Math.min(60,(1-bP)*55+Math.min(20,(volR-1.4)*18));
 }
-function _volExh(c,p,volR){
+
+// ── Footprint / OF component for EXH (0-100) ──────────────────
+function _fpExh(c,p,volR){
   if(volR>0.88)return 0;
-  let v=Math.min(60,(0.90-volR)*80);
-  if(p.v>0)v+=Math.min(25,Math.max(0,(1-c.v/p.v)*40));
-  return Math.min(100,Math.max(0,v));
+  let s=Math.min(60,(0.90-volR)*80);
+  if(p.v>0)s+=Math.min(25,Math.max(0,(1-c.v/p.v)*40));
+  return Math.min(100,Math.max(0,s));
 }
 
 // ── Candle reaction components (0-100) ────────────────────────
 function _candleBuy(c,z){
   const rng=c.h-c.l;if(!rng)return 0;
-  const zR=z.hi-z.lo;
+  const zMid=(z.lo+z.hi)/2;
+  // close below zone = support failed — can't be valid BUY candle
+  if(c.c<z.lo)return 0;
   let s=0;
-  if(c.c>=c.o)s+=35;
-  if(c.c>z.lo)s+=25;else if(c.c>z.lo-zR*0.1)s+=10;
-  s+=Math.min(30,(Math.min(c.c,c.o)-c.l)/rng*60);
+  if(c.c>=c.o)s+=30; // bullish close
+  if(c.c>z.hi)s+=35; // closed above zone = strong BUY
+  else if(c.c>=zMid)s+=20; // closed in upper half = OK
+  else s+=5; // closed in lower half = weak
+  s+=Math.min(25,(Math.min(c.c,c.o)-c.l)/rng*50); // lower wick
   if(Math.abs(c.c-c.o)/rng>0.4)s+=10;
   return Math.min(100,Math.max(0,s));
 }
 function _candleSell(c,z){
   const rng=c.h-c.l;if(!rng)return 0;
-  const zR=z.hi-z.lo;
+  const zMid=(z.lo+z.hi)/2;
+  // close above zone = resistance failed — can't be valid SELL candle
+  if(c.c>z.hi)return 0;
   let s=0;
-  if(c.c<c.o)s+=35;
-  if(c.c<z.hi)s+=25;else if(c.c<z.hi+zR*0.1)s+=10;
-  s+=Math.min(30,(c.h-Math.max(c.c,c.o))/rng*60);
+  if(c.c<c.o)s+=30; // bearish close
+  if(c.c<z.lo)s+=35; // closed below zone = strong SELL
+  else if(c.c<=zMid)s+=20; // closed in lower half = OK
+  else s+=5; // closed in upper half = weak
+  s+=Math.min(25,(c.h-Math.max(c.c,c.o))/rng*50); // upper wick
   if(Math.abs(c.c-c.o)/rng>0.4)s+=10;
   return Math.min(100,Math.max(0,s));
 }
@@ -10575,8 +10623,7 @@ function _candleExh(c,p){
   const rng=c.h-c.l,pRng=p.h-p.l;if(!rng||!pRng)return 0;
   const sizeR=rng/pRng;if(sizeR>0.7)return 0;
   let s=Math.min(60,(1-sizeR)*80);
-  const bP=Math.abs(c.c-c.o)/rng;
-  if(bP<0.35)s+=25;
+  if(Math.abs(c.c-c.o)/rng<0.35)s+=25;
   if(Math.abs(p.c-p.o)/pRng>0.55)s+=15;
   return Math.min(100,Math.max(0,s));
 }
@@ -10585,67 +10632,77 @@ function _candleExh(c,p){
 function _confirmBuy(nx,z,useDelta){
   if(!nx)return 50;
   let s=0;
-  if(nx.c>=nx.o)s+=40;
-  if(nx.c>z.lo)s+=30;
-  if(nx.l>z.lo)s+=15;
+  if(nx.c>=nx.o)s+=40;if(nx.c>z.lo)s+=30;if(nx.l>z.lo)s+=15;
   if(useDelta&&(nx.buy||0)-(nx.sell||0)>0)s+=15;
   return Math.min(100,Math.max(0,s));
 }
 function _confirmSell(nx,z,useDelta){
   if(!nx)return 50;
   let s=0;
-  if(nx.c<nx.o)s+=40;
-  if(nx.c<z.hi)s+=30;
-  if(nx.h<z.hi)s+=15;
+  if(nx.c<nx.o)s+=40;if(nx.c<z.hi)s+=30;if(nx.h<z.hi)s+=15;
   if(useDelta&&(nx.buy||0)-(nx.sell||0)<0)s+=15;
   return Math.min(100,Math.max(0,s));
 }
 function _confirmAbs(nx,z){
   if(!nx)return 50;
   let s=0;
-  const inZone=nx.l>=z.lo&&nx.h<=z.hi;
-  if(inZone)s+=60;else if(nx.l>=z.lo||nx.h<=z.hi)s+=30;
+  if(nx.l>=z.lo&&nx.h<=z.hi)s+=60;else if(nx.l>=z.lo||nx.h<=z.hi)s+=30;
   const rng=nx.h-nx.l;
   if(rng&&Math.abs(nx.c-nx.o)/rng<0.35)s+=40;
   return Math.min(100,Math.max(0,s));
 }
 function _confirmExh(nx,p){
   if(!nx)return 50;
-  const priorBull=p.c>=p.o;
-  let s=0;
-  if(priorBull&&nx.c<nx.o)s+=50;
-  else if(!priorBull&&nx.c>=nx.o)s+=50;
-  else if(priorBull&&nx.h<p.h)s+=30;
-  else if(!priorBull&&nx.l>p.l)s+=30;
+  const pb=p.c>=p.o;let s=0;
+  if(pb&&nx.c<nx.o)s+=50;else if(!pb&&nx.c>=nx.o)s+=50;
+  else if(pb&&nx.h<p.h)s+=30;else if(!pb&&nx.l>p.l)s+=30;
   return Math.min(100,Math.max(0,s));
 }
 
 // ── Weighted final score ───────────────────────────────────────
-function _wScore(vS,cS,fS,conf){
+function _wScore(fpS,cS,fS,conf){
   const tot=conf.volWeight+conf.candleWeight+conf.confirmWeight+conf.touchWeight||100;
-  return(vS*conf.volWeight+cS*conf.candleWeight+fS*conf.confirmWeight+100*conf.touchWeight)/tot;
+  return(fpS*conf.volWeight+cS*conf.candleWeight+fS*conf.confirmWeight+100*conf.touchWeight)/tot;
 }
 
 function scoreBuy(c,nx,z,volR,conf){
   const rng=c.h-c.l;if(!rng)return 0;
-  if(c.l>z.lo+(z.hi-z.lo)*0.65)return 0;
-  if(c.c<z.lo-(z.hi-z.lo)*0.12)return 0;
+  if(c.l>z.lo+(z.hi-z.lo)*0.65)return 0; // candle doesn't reach support
+  // close below zone = support failed; only survive if next candle recovers
+  if(c.c<z.lo&&(!nx||nx.c<z.lo))return 0;
   if(conf.requireVol&&volR<conf.minVolRatio)return 0;
-  return _wScore(_volBuy(c,volR,conf.useDelta,conf.useFP),_candleBuy(c,z),_confirmBuy(nx,z,conf.useDelta),conf);
+  const fp=_fpInZone(c,z);
+  // real FP explicitly shows sellers in zone — block BUY
+  if(fp.real&&conf.useFP&&fp.sellShare>0.55)return 0;
+  const fpS=_fpBuy(fp,c,z,volR,conf.useDelta,conf.useFP);
+  const cS=_candleBuy(c,z);
+  // reqClose: close inside zone + no next candle → weaken confirmation
+  const fS=_confirmBuy(nx,z,conf.useDelta);
+  const adjFS=(conf.reqClose&&c.c>=z.lo&&c.c<=z.hi&&(!nx||nx.c<z.hi))?fS*0.45:fS;
+  return _wScore(fpS,cS,adjFS,conf);
 }
 function scoreSell(c,nx,z,volR,conf){
   const rng=c.h-c.l;if(!rng)return 0;
-  if(c.h<z.hi-(z.hi-z.lo)*0.65)return 0;
-  if(c.c>z.hi+(z.hi-z.lo)*0.12)return 0;
+  if(c.h<z.hi-(z.hi-z.lo)*0.65)return 0; // candle doesn't reach resistance
+  // close above zone = resistance failed; only survive if next candle drops
+  if(c.c>z.hi&&(!nx||nx.c>z.hi))return 0;
   if(conf.requireVol&&volR<conf.minVolRatio)return 0;
-  return _wScore(_volSell(c,volR,conf.useDelta,conf.useFP),_candleSell(c,z),_confirmSell(nx,z,conf.useDelta),conf);
+  const fp=_fpInZone(c,z);
+  // real FP explicitly shows buyers in zone — block SELL
+  if(fp.real&&conf.useFP&&fp.buyShare>0.55)return 0;
+  const fpS=_fpSell(fp,c,z,volR,conf.useDelta,conf.useFP);
+  const cS=_candleSell(c,z);
+  const fS=_confirmSell(nx,z,conf.useDelta);
+  const adjFS=(conf.reqClose&&c.c>=z.lo&&c.c<=z.hi&&(!nx||nx.c>z.lo))?fS*0.45:fS;
+  return _wScore(fpS,cS,adjFS,conf);
 }
 function scoreAbs(c,nx,z,volR,conf){
   if(conf.requireVol&&volR<conf.minVolRatio*1.1)return 0;
-  return _wScore(_volAbs(c,volR,conf.useDelta,conf.useFP),_candleAbs(c),_confirmAbs(nx,z),conf);
+  const fp=_fpInZone(c,z);
+  return _wScore(_fpAbs(fp,c,volR,conf.useDelta,conf.useFP),_candleAbs(c),_confirmAbs(nx,z),conf);
 }
 function scoreExh(c,p,nx,volR,conf){
-  return _wScore(_volExh(c,p,volR),_candleExh(c,p),_confirmExh(nx,p),conf);
+  return _wScore(_fpExh(c,p,volR),_candleExh(c,p),_confirmExh(nx,p),conf);
 }
 
 // zones must be pre-sorted ascending by .lo for early-exit to work
@@ -10699,7 +10756,7 @@ function _getCacheKey(cs,zones,st){
     zones.length,zSum.toFixed(2),
     st.minConf,st.cooldown,st.lookback,st.failMode,
     st.volWeight,st.candleWeight,st.confirmWeight,st.touchWeight,
-    st.minVolRatio,st.requireVol?1:0,st.useDelta?1:0,st.useFP?1:0
+    st.minVolRatio,st.requireVol?1:0,st.useDelta?1:0,st.useFP?1:0,st.reqClose?1:0
   ].join('|');
 }
 
@@ -10797,7 +10854,7 @@ window.__drawHVNReact=drawHVNReact;
 
 const HR_IDS=new Set(['hrMinConf','hrCooldown','hrLookback','hrMaxSigs','hrSigSize','hrFailMode',
   'hrShowBuy','hrShowSell','hrShowAbs','hrShowExh','hrShowFail','hrShowPct',
-  'hrUseDelta','hrRequireVol','hrUseFP',
+  'hrUseDelta','hrRequireVol','hrUseFP','hrReqClose',
   'hrVolWeight','hrCandleWeight','hrConfirmWeight','hrTouchWeight','hrMinVolRatio',
   'hrColorBuy','hrColorSell','hrColorAbs','hrColorExh','hrColorFail']);
 const _swMap={hrColorBuy:'hrColorBuySw',hrColorSell:'hrColorSellSw',hrColorAbs:'hrColorAbsSw',hrColorExh:'hrColorExhSw',hrColorFail:'hrColorFailSw'};
