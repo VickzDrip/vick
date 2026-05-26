@@ -1841,65 +1841,29 @@ html.pre-ui .switch::after{transition:none!important}
             <button class="gear" data-settings="bigTrades" title="Inputs Bubbles">⚙</button>
           </div>
           <div class="ind-settings" id="settings-bigTrades">
-            <div class="kv"><span class="k">Filtro x média</span><input class="num" id="bigMult" type="number" min="1" max="30" step="0.5" value="5">
-<label class="row">
-  <span id="bigTradeMinSizeLabel">Min size (BTC)</span>
-  <input id="bigTradeMinSize" type="number" min="0" step="0.1" value="5">
-</label>
-<label class="row">
-  <span>Big trade unit</span>
-  <select id="bigTradeUnit">
-    <option value="qty" selected>Base qty</option>
-    <option value="notional">USDT value</option>
-  </select>
-</label>
-<label class="row">
-  <span>Big trade display</span>
-  <select id="bigTradeDisplay">
-    <option value="largestSide" selected>Largest buy + sell / candle</option>
-    <option value="largestOne">Largest only / candle</option>
-    <option value="all">All above filter</option>
-  </select>
-</label>
-<label class="row">
-  <span>Big trade label</span>
-  <select id="bigTradeLabel">
-    <option value="size" selected>size</option>
-    <option value="off">off</option>
-  </select>
-</label>
-<label class="row">
-  <span>Merge levels</span>
-  <input id="bigTradeMergeLevels" type="number" min="0" max="12" step="1" value="2">
-</label>
-<label class="row">
-  <span>Bubble scale</span>
-  <input id="bigTradeBubbleScale" type="number" min="0.4" max="3" step="0.05" value="1.15">
-</label>
-<label class="row">
-  <span>Exibir últimas velas</span>
-  <input id="bigTradeVisibleBars" type="number" min="1" max="2000" step="1" value="200" title="Mostra bolhas apenas nas últimas X velas visíveis">
-</label>
-<label class="row">
-  <span>Cor compra</span>
-  <label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden">
-    <div id="bigBuyColorSwatch" style="width:100%;height:100%;background:#00e676;pointer-events:none"></div>
-    <input id="bigBuyColor" type="color" value="#00e676" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0">
-  </label>
-</label>
-<label class="row">
-  <span>Cor venda</span>
-  <label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden">
-    <div id="bigSellColorSwatch" style="width:100%;height:100%;background:#ff3d57;pointer-events:none"></div>
-    <input id="bigSellColor" type="color" value="#ff3d57" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0">
-  </label>
-</label>
-</div>
-            <div class="kv"><span class="k">Últimas velas</span><input class="num" id="bigBars" type="number" min="1" max="500" step="1" value="30">
-
-
-</div>
-            <div class="hint">Bolhas por cluster do Footprint. Verde buyer / vermelho seller. Min size define nível forte.</div>
+            <div class="kv"><span class="k">Sensibilidade</span>
+              <select class="select tiny-select" id="bigTradeSensitivity">
+                <option value="high">Alta</option>
+                <option value="normal" selected>Normal</option>
+                <option value="low">Baixa</option>
+              </select>
+            </div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Mostrar labels</span><input type="checkbox" id="bigTradeShowLabels" style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Apenas fortes</span><input type="checkbox" id="bigTradeStrongOnly" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv"><span class="k">Cor compra</span>
+              <label style="position:relative;width:22px;height:22px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:3px;border:1px solid #1e2a40;overflow:hidden">
+                <div id="bigBuyColorSwatch" style="width:100%;height:100%;background:#00d4ff;pointer-events:none"></div>
+                <input id="bigBuyColor" type="color" value="#00d4ff" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0">
+              </label>
+            </label>
+            <label class="kv"><span class="k">Cor venda</span>
+              <label style="position:relative;width:22px;height:22px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:3px;border:1px solid #1e2a40;overflow:hidden">
+                <div id="bigSellColorSwatch" style="width:100%;height:100%;background:#ff7c3a;pointer-events:none"></div>
+                <input id="bigSellColor" type="color" value="#ff7c3a" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0">
+              </label>
+            </label>
+            <div class="kv"><span class="k">Últimas velas</span><input class="num" id="bigBars" type="number" min="1" max="500" step="1" value="30"></div>
+            <div class="hint">Bolhas derivadas do footprint real. Alta = mais trades. Baixa = só os maiores.</div>
           </div>
         </div>
 
@@ -3878,41 +3842,56 @@ function buildBigOrderGroups(V){
 }
 
 
-function bigTradeUnitValue(t){
-  const unit=(el('bigTradeUnit')?.value)||'qty';
-  return unit==='notional' ? (+t.notional||0) : (+t.q||0);
+function bigTradesConfig(){
+  const sens=(el('bigTradeSensitivity')?.value)||'normal';
+  return {
+    sensitivity:sens,
+    showLabels:!!(el('bigTradeShowLabels')?.checked),
+    strongOnly:!!(el('bigTradeStrongOnly')?.checked),
+    buyColor:el('bigBuyColor')?.value||'#00d4ff',
+    sellColor:el('bigSellColor')?.value||'#ff7c3a'
+  };
 }
-function bigTradeMinValue(){
-  return Math.max(0,+el('bigTradeMinSize')?.value||0);
+function _btThreshold(sens){
+  const vals=[];
+  const a=Math.max(0,Math.floor((S.view&&S.view.start)||0));
+  const b=Math.min(S.candles.length,Math.ceil((S.view&&S.view.end)||S.candles.length));
+  for(let i=a;i<b;i++){
+    const c=S.candles[i];
+    if(!c||!c.fp)continue;
+    for(const [price,row] of c.fp){
+      const p=+price;
+      const bv=(+row.buy||0)*Math.max(0,p);
+      const sv=(+row.sell||0)*Math.max(0,p);
+      if(bv>0)vals.push(bv);
+      if(sv>0)vals.push(sv);
+    }
+  }
+  if(!vals.length)return {minV:0,strongMult:4};
+  vals.sort((a,b)=>a-b);
+  const pct=sens==='high'?0.88:sens==='low'?0.95:0.90;
+  const mult=sens==='high'?2.5:sens==='low'?6:4;
+  const minV=vals[Math.floor(vals.length*pct)]||0;
+  return {minV,strongMult:mult};
 }
-function bigTradeDisplayMode(){
-  return (el('bigTradeDisplay')?.value)||'largestSide';
-}
-function bigTradeLabelMode(){
-  return (el('bigTradeLabel')?.value)||'size';
-}
+// Shims — unit fixed to notional, display fixed to auto
+function bigTradeUnitValue(t){return +t.notional||0;}
+function bigTradeMinValue(){return 0;}
+function bigTradeDisplayMode(){return 'auto';}
+function bigTradeLabelMode(){return (el('bigTradeShowLabels')?.checked)?'size':'off';}
 function formatBigTradeValue(v){
-  const unit=(el('bigTradeUnit')?.value)||'qty';
   const n=Math.abs(+v||0);
-  const prefix=unit==='notional'?'$':'';
-  if(n>=1e9)return prefix+Math.round(n/1e9)+'B';
-  if(n>=1e6)return prefix+Math.round(n/1e6)+'M';
-  if(n>=1e3)return prefix+Math.round(n/1e3)+'K';
-  return prefix+Math.round(n);
+  if(n>=1e9)return '$'+Math.round(n/1e9)+'B';
+  if(n>=1e6)return '$'+(n/1e6).toFixed(1)+'M';
+  if(n>=1e3)return '$'+Math.round(n/1e3)+'K';
+  return '$'+Math.round(n);
 }
-function bigTradeMergeLevels(){
-  return Math.max(0,Math.round(+el('bigTradeMergeLevels')?.value||2));
-}
-function bigTradeBubbleScale(){
-  return clamp(+el('bigTradeBubbleScale')?.value||1.15,0.4,3);
-}
-function bigTradeMaxBubbles(){
-  return Math.max(1,Math.round(+el('bigTradeMaxBubbles')?.value||4));
-}
+function bigTradeMergeLevels(){return 2;}
+function bigTradeBubbleScale(){return 1;}
+function bigTradeMaxBubbles(){return 2;}
 function footprintValueForBigTrade(price,row,side){
   const qty=side==='sell'?(+row.sell||0):(+row.buy||0);
-  const unit=(el('bigTradeUnit')?.value)||'qty';
-  return unit==='notional'?qty*Math.max(0,+price||0):qty;
+  return qty*Math.max(0,+price||0);
 }
 function medianGapFromRows(rows){
   const ps=rows.map(r=>+r[0]).filter(isFinite).sort((a,b)=>a-b);
@@ -3967,40 +3946,36 @@ function buildFootprintBigTradeClustersForSide(rows,side,minV,mergeLevels){
   }));
 }
 function bigTradeCacheConfigKey(){
-  // v3: pre-filter then merge — bump version to bust old caches
-  return 'v3|'+String(S.sym)+'|'+String(S.tf)+'|'+String(bigTradeMinValue())+'|'+String(bigTradeDisplayMode())+'|'+String(bigTradeMergeLevels())+'|'+String(bigTradeUnitValue({q:1,notional:1}));
+  const sens=(el('bigTradeSensitivity')?.value)||'normal';
+  return 'v4|'+String(S.sym)+'|'+String(S.tf)+'|'+sens;
 }
 function buildBigTradeClustersForCandle(idx){
   const c=S.candles[idx];
   if(!c)return [];
   const _fpc=fpCfg();const _cov=candleTradeCoverage(c);if(_fpc.requireReal&&_cov<_fpc.minCov)return[];
-  const minV=bigTradeMinValue();
-  const mergeLevels=bigTradeMergeLevels();
-  const mode=bigTradeDisplayMode();
+  const {minV}=_btThreshold((el('bigTradeSensitivity')?.value)||'normal');
   const range=Math.max(1e-9,(+c.h||0)-(+c.l||0));
-
   const rows=normalizedFootprintRows(c,Math.max(10,Math.min(28,Math.round(range/Math.max(range/22,1e-9)))));
   if(!rows||!rows.length)return [];
 
-  // Step 1: pre-filter — only levels where the DOMINANT side individually >= minV.
-  // This ensures we never merge a weak level with a strong one.
+  // Pre-filter: only levels where dominant side individually >= minV
   const qualRows=rows.filter(([price,row])=>{
     const buy=+row.buy||0,sell=+row.sell||0;
-    const buyV=bigTradeUnitValue({q:buy,notional:buy*Math.max(0,price)});
-    const sellV=bigTradeUnitValue({q:sell,notional:sell*Math.max(0,price)});
+    const buyV=buy*Math.max(0,+price);
+    const sellV=sell*Math.max(0,+price);
     return Math.max(buyV,sellV)>=minV;
   }).sort((a,b)=>a[0]-b[0]);
   if(!qualRows.length)return [];
 
-  // Step 2: merge only adjacent qualifying levels (both sides already qualified)
+  // Merge adjacent qualifying levels (fixed 2 levels)
   const baseGap=medianGapFromRows(rows);
-  const tol=baseGap>0?baseGap*Math.max(1,mergeLevels):0;
+  const tol=baseGap>0?baseGap*2:0;
   const merged=[];
   let cur=null;
   for(const [price,row] of qualRows){
     const buy=+row.buy||0,sell=+row.sell||0;
     if(!cur){cur={priceSum:price*(buy+sell+1e-9),wSum:buy+sell+1e-9,buy,sell,count:1,lastPrice:price};continue;}
-    if(mergeLevels>0&&tol>0&&Math.abs(price-cur.lastPrice)<=tol+1e-9){
+    if(tol>0&&Math.abs(price-cur.lastPrice)<=tol+1e-9){
       cur.priceSum+=price*(buy+sell+1e-9);cur.wSum+=buy+sell+1e-9;
       cur.buy+=buy;cur.sell+=sell;cur.count++;cur.lastPrice=price;
     }else{
@@ -4010,52 +3985,40 @@ function buildBigTradeClustersForCandle(idx){
   }
   if(cur)merged.push(cur);
 
-  // Step 3: score each cluster — color by dominant side, value = dominant side
+  // Score clusters — color by dominant side
   const all=[];
   for(const cl of merged){
     const p=cl.priceSum/Math.max(cl.wSum,1e-9);
-    const buyV=bigTradeUnitValue({q:cl.buy,notional:cl.buy*Math.max(0,p)});
-    const sellV=bigTradeUnitValue({q:cl.sell,notional:cl.sell*Math.max(0,p)});
+    const buyV=cl.buy*Math.max(0,p);
+    const sellV=cl.sell*Math.max(0,p);
     const isSell=sellV>buyV;
-    const v=Math.max(buyV,sellV);
-    all.push({p,btValue:v,qtyValue:Math.max(cl.buy,cl.sell),levelCount:cl.count,isSell});
+    all.push({p,btValue:Math.max(buyV,sellV),qtyValue:Math.max(cl.buy,cl.sell),levelCount:cl.count,isSell});
   }
-
   if(!all.length)return [];
   all.sort((a,b)=>b.btValue-a.btValue);
 
-  const g={buy:null,sell:null,one:null,all:[]};
+  // Auto mode: largest buy + largest sell per candle (max 2)
+  let bestBuy=null,bestSell=null;
   for(const item of all){
-    g.all.push(item);
-    if(!g.one||item.btValue>g.one.btValue)g.one=item;
-    if(item.isSell){if(!g.sell||item.btValue>g.sell.btValue)g.sell=item;}
-    else{if(!g.buy||item.btValue>g.buy.btValue)g.buy=item;}
+    if(item.isSell){if(!bestSell||item.btValue>bestSell.btValue)bestSell=item;}
+    else{if(!bestBuy||item.btValue>bestBuy.btValue)bestBuy=item;}
   }
-
   const out=[];
-  if(mode==='all'){g.all.forEach(t=>out.push({idx,t}));}
-  else if(mode==='largestOne'){if(g.one)out.push({idx,t:g.one});}
-  else{if(g.buy)out.push({idx,t:g.buy});if(g.sell)out.push({idx,t:g.sell});}
+  if(bestBuy)out.push({idx,t:bestBuy});
+  if(bestSell)out.push({idx,t:bestSell});
   return out;
 }
 function visibleBigTradesByCandle(V){
   const cfg=bigTradeCacheConfigKey();
   if(!window.__bigTradesPersistentCache)window.__bigTradesPersistentCache=new Map();
   const out=[];
-
-  // Only iterate candles within visible window + bigTradeVisibleBars limit to avoid
-  // rebuilding all 520 cached candles on every cache miss when an input changes.
-  const visibleBarsLimit=clamp(+(el('bigTradeVisibleBars')?.value||200),1,2000);
-  const a=Math.max(0,Math.min(Math.floor(V.a)-2,S.candles.length-visibleBarsLimit));
+  const a=Math.max(0,Math.floor(V.a)-2);
   const b=Math.min(S.candles.length,Math.ceil(V.b)+2);
   for(let idx=a;idx<b;idx++){
     const c=S.candles[idx];
     if(!c)continue;
-    // Key uses trade-derived buy/sell (not kline c.v which changes every tick)
     const candleKey=cfg+'|'+String(c.t)+'|'+String(c.h)+'|'+String(c.l)+'|'+String(Math.round((c.buy||0)*1e4))+'|'+String(Math.round((c.sell||0)*1e4));
     let cached=window.__bigTradesPersistentCache.get(candleKey);
-
-    // Recalcula candle atual e candles recentes, mas se der vazio conserva o último bom.
     const isRecent=idx>=S.candles.length-4;
     if(!cached||isRecent){
       const built=buildBigTradeClustersForCandle(idx);
@@ -4063,31 +4026,25 @@ function visibleBigTradesByCandle(V){
         cached={items:built,ts:Date.now(),idx};
         window.__bigTradesPersistentCache.set(candleKey,cached);
       }else if(cached&&cached.items&&cached.items.length){
-        // mantém
-      }else{
-        continue;
-      }
+        // keep stale
+      }else{continue;}
     }
-    if(cached&&cached.items&&cached.items.length){
-      cached.items.forEach(o=>out.push(o));
-    }
+    if(cached&&cached.items&&cached.items.length)cached.items.forEach(o=>out.push(o));
   }
-
-  // Limpa caches velhos só quando muda muita coisa, sem matar o frame atual.
   try{
     if(window.__bigTradesPersistentCache.size>4000){
       const keep=new Map();
       const recentTimes=new Set(S.candles.slice(-520).map(c=>String(c.t)));
-      window.__bigTradesPersistentCache.forEach((v,k)=>{ for(const t of recentTimes){ if(k.includes('|'+t+'|')){keep.set(k,v);break;} } });
+      window.__bigTradesPersistentCache.forEach((v,k)=>{for(const t of recentTimes){if(k.includes('|'+t+'|')){keep.set(k,v);break;}}});
       window.__bigTradesPersistentCache=keep;
     }
   }catch(_e){}
-
   if(out.length){window.__bigTradesLastGood=out.slice(0,1200);return out;}
   return window.__bigTradesLastGood||[];
 }
 try{
   window.visibleBigTradesByCandle=visibleBigTradesByCandle;
+  window.bigTradesConfig=bigTradesConfig;
   window.bigTradeUnitValue=bigTradeUnitValue;
   window.bigTradeMinValue=bigTradeMinValue;
   window.bigTradeDisplayMode=bigTradeDisplayMode;
@@ -4099,25 +4056,12 @@ try{
 }catch(_e){}
 
 function drawBigTrades(ctx,V,sc,x,W,H){
-  // v53: native fixed. Draws only inside chart plot, using real trade price/time.
-  // Old broken saved overrides are ignored by using the new v53 native storage key.
-  if(false && window.ETX_NATIVE_OVERRIDES&&window.ETX_NATIVE_OVERRIDES.bigTrades&&window.ETX_NATIVE_OVERRIDES.bigTrades.enabled){
-    try{
-      const api={ctx,candles:S.candles,trades:S.trades,depth:S.depth,visible:indicatorVisible(),scale:sc,x,y:(p)=>sc.y(p),W:W||canvasCssSize(ctx).w,H:H||canvasCssSize(ctx).h,bounds:chartBounds(W||canvasCssSize(ctx).w,H||canvasCssSize(ctx).h),S,utils:{fmtVol,fmtN,clamp,priceFmt,findCandleIndex,candleIndexByTime,bigTradeUnitValue,bigTradeMinValue,bigTradeDisplayMode,bigTradeLabelMode,formatBigTradeValue,bigTradeMergeLevels,bigTradeBubbleScale,bigTradeMaxBubbles,visibleBigTradesByCandle,canvasCssSize,chartBounds}};
-      window.ETX_NATIVE_OVERRIDES.bigTrades.draw(api);
-      return;
-    }catch(e){console.error('Big Trades native override error',e)}
-  }
-
+  const btc=bigTradesConfig();
   let items=visibleBigTradesByCandle(V);
-  // Filter to visible window, then apply user's "last X candles" limit
-  const visibleBarsLimit=clamp(+(el('bigTradeVisibleBars')?.value||200),1,2000);
-  const visibleFrom=Math.max(Math.floor(V.a), S.candles.length-visibleBarsLimit);
-  items=items.filter(o=>o.idx>=visibleFrom&&o.idx<=Math.ceil(V.b));
-  // v101: short cache to avoid flicker during agg-trade reloads
+  items=items.filter(o=>o.idx>=Math.floor(V.a)&&o.idx<=Math.ceil(V.b));
   try{
     const cacheKey=bigTradeCacheConfigKey()+'|'+String(S.candles.length);
-    if(items.length){window.__bigTradesOverlayCache={key:cacheKey,items:items,ts:Date.now()};}
+    if(items.length){window.__bigTradesOverlayCache={key:cacheKey,items,ts:Date.now()};}
     else if(window.__bigTradesOverlayCache&&window.__bigTradesOverlayCache.key===cacheKey&&(Date.now()-(window.__bigTradesOverlayCache.ts||0)<30000)){
       items=window.__bigTradesOverlayCache.items||[];
     }
@@ -4128,7 +4072,9 @@ function drawBigTrades(ctx,V,sc,x,W,H){
   const maxV=Math.max(...values,1);
   const p90=values.length?values[Math.floor(values.length*.90)]||maxV:maxV;
   const p98=values.length?values[Math.floor(values.length*.98)]||maxV:maxV;
-  const showLabel=bigTradeLabelMode()!=='off';
+  const filtered=btc.strongOnly?items.filter(o=>o.t.btValue>=p90):items;
+  if(!filtered.length)return;
+
   const size=canvasCssSize(ctx);
   const cssW=W||size.w;
   const cssH=H||size.h;
@@ -4136,10 +4082,8 @@ function drawBigTrades(ctx,V,sc,x,W,H){
   const top=PT;
   const bottom=cssH-PB;
 
-  // Pre-compute positions and radii for all visible items
-  const bscale=bigTradeBubbleScale();
   const drawItems=[];
-  items.forEach(({idx,t})=>{
+  filtered.forEach(({idx,t})=>{
     const xx=x(idx);
     const yy=sc.y(t.p);
     if(!isFinite(xx)||!isFinite(yy))return;
@@ -4148,11 +4092,11 @@ function drawBigTrades(ctx,V,sc,x,W,H){
     const strength=v/Math.max(1e-9,p90);
     const hot=v>=p98,big=v>=p90;
     const clusterBoost=1+Math.min(0.75,((t.levelCount||1)-1)*0.16);
-    const r=clamp((5+Math.sqrt(Math.max(0,strength))*5.0)*bscale*clusterBoost,5,hot?24:big?18:13);
+    const r=clamp((5+Math.sqrt(Math.max(0,strength))*5.0)*clusterBoost,5,hot?24:big?18:13);
     drawItems.push({xx,yy,adjY:yy,r,v,hot,big,t});
   });
 
-  // De-overlap step 1: within each candle column, sort by price then space apart
+  // De-overlap: within-column
   const cols=new Map();
   drawItems.forEach(item=>{
     const col=Math.round(item.xx);
@@ -4161,30 +4105,21 @@ function drawBigTrades(ctx,V,sc,x,W,H){
   });
   cols.forEach(group=>{
     if(group.length<2)return;
-    group.sort((a,b)=>a.yy-b.yy); // top→bottom by original price
+    group.sort((a,b)=>a.yy-b.yy);
     for(let pass=0;pass<5;pass++){
       for(let k=1;k<group.length;k++){
         const a=group[k-1],b=group[k];
         const need=a.r+b.r+3;
-        if(b.adjY-a.adjY<need){
-          const mid=(a.adjY+b.adjY)/2;
-          a.adjY=clamp(mid-need/2,top+a.r,bottom-a.r);
-          b.adjY=clamp(mid+need/2,top+b.r,bottom-b.r);
-        }
+        if(b.adjY-a.adjY<need){const mid=(a.adjY+b.adjY)/2;a.adjY=clamp(mid-need/2,top+a.r,bottom-a.r);b.adjY=clamp(mid+need/2,top+b.r,bottom-b.r);}
       }
       for(let k=group.length-2;k>=0;k--){
         const a=group[k],b=group[k+1];
         const need=a.r+b.r+3;
-        if(b.adjY-a.adjY<need){
-          const mid=(a.adjY+b.adjY)/2;
-          a.adjY=clamp(mid-need/2,top+a.r,bottom-a.r);
-          b.adjY=clamp(mid+need/2,top+b.r,bottom-b.r);
-        }
+        if(b.adjY-a.adjY<need){const mid=(a.adjY+b.adjY)/2;a.adjY=clamp(mid-need/2,top+a.r,bottom-a.r);b.adjY=clamp(mid+need/2,top+b.r,bottom-b.r);}
       }
     }
   });
-
-  // De-overlap step 2: cross-column (bubbles from adjacent candles)
+  // De-overlap: cross-column
   for(let pass=0;pass<2;pass++){
     for(let i=0;i<drawItems.length;i++){
       for(let j=0;j<i;j++){
@@ -4210,42 +4145,25 @@ function drawBigTrades(ctx,V,sc,x,W,H){
   ctx.textBaseline='middle';
 
   const _h2rgb=h=>{const n=parseInt(h.replace('#',''),16);return((n>>16)&255)+','+((n>>8)&255)+','+(n&255)};
-  const _buyRgb=_h2rgb(el('bigBuyColor')?.value||'#00e676');
-  const _sellRgb=_h2rgb(el('bigSellColor')?.value||'#ff3d57');
+  const _buyRgb=_h2rgb(btc.buyColor);
+  const _sellRgb=_h2rgb(btc.sellColor);
 
   drawItems.forEach(({xx,adjY,r,v,hot,big,t})=>{
     const rgb=t.isSell?_sellRgb:_buyRgb;
-    const strokeRgb=rgb;
-
-    // Halo externo
-    ctx.beginPath();
-    ctx.arc(xx,adjY,r+(hot?4:3),0,Math.PI*2);
-    ctx.fillStyle=`rgba(${rgb},${hot?.16:big?.09:.05})`;
-    ctx.fill();
-
-    // Círculo principal
-    ctx.beginPath();
-    ctx.arc(xx,adjY,r,0,Math.PI*2);
-    ctx.fillStyle=`rgba(${rgb},${hot?.40:big?.28:.20})`;
-    ctx.fill();
-
-    // Borda nítida
-    ctx.strokeStyle=`rgba(${strokeRgb},${hot?1:big?.92:.72})`;
-    ctx.lineWidth=hot?2.2:big?1.5:1.1;
-    ctx.stroke();
-
-    if(showLabel&&r>=6){
+    ctx.beginPath();ctx.arc(xx,adjY,r+(hot?4:3),0,Math.PI*2);
+    ctx.fillStyle=`rgba(${rgb},${hot?.16:big?.09:.05})`;ctx.fill();
+    ctx.beginPath();ctx.arc(xx,adjY,r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${rgb},${hot?.40:big?.28:.20})`;ctx.fill();
+    ctx.strokeStyle=`rgba(${rgb},${hot?1:big?.92:.72})`;
+    ctx.lineWidth=hot?2.2:big?1.5:1.1;ctx.stroke();
+    if(btc.showLabels&&r>=6){
       const label=formatBigTradeValue(v);
       ctx.font='bold 8px Inter,Arial';
-      ctx.beginPath();
-      ctx.arc(xx,adjY,Math.max(5.5,r*.60),0,Math.PI*2);
-      ctx.fillStyle='rgba(3,6,14,.80)';
-      ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,1)';
-      ctx.fillText(label,xx,adjY+.3);
+      ctx.beginPath();ctx.arc(xx,adjY,Math.max(5.5,r*.60),0,Math.PI*2);
+      ctx.fillStyle='rgba(3,6,14,.80)';ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,1)';ctx.fillText(label,xx,adjY+.3);
     }
   });
-
   ctx.restore();
 }
 function priceFromY(y,H,sc){const h=H-PT-PB;return sc.hi-(clamp(y,PT,H-PB)-PT)/h*(sc.hi-sc.lo)}
@@ -4713,24 +4631,8 @@ if(el('tfSelect')){
   }
 })();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();bootDebounced()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();bootDebounced()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
-['bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});function syncBigTradeMinSizeUI(){
-  const unit=el('bigTradeUnit')?.value||'qty';
-  const lbl=el('bigTradeMinSizeLabel');
-  const inp=el('bigTradeMinSize');
-  if(!inp)return;
-  if(unit==='notional'){
-    if(lbl)lbl.textContent='Min size (USDT $)';
-    inp.step='10000';inp.min='0';
-    if(+inp.value<100)inp.value='100000'; // $100K default when switching to USDT
-  }else{
-    if(lbl)lbl.textContent='Min size (BTC)';
-    inp.step='0.1';inp.min='0';
-    if(+inp.value>=100)inp.value='5'; // 5 BTC default when switching to qty
-  }
-}
-if(el('bigTradeUnit')){el('bigTradeUnit').addEventListener('change',()=>{syncBigTradeMinSizeUI();draw();});}
-syncBigTradeMinSizeUI();
+['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','bigTradeShowLabels','bigTradeStrongOnly','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
+['volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});
 if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
 let touchState={mode:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5};
 function touchDist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
