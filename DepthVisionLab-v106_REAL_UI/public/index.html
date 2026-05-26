@@ -2003,6 +2003,7 @@ html.pre-ui .switch::after{transition:none!important}
           <div class="ind-settings" id="settings-hvnReact">
             <div class="kv"><span class="k">Confiança mín. %</span><input class="num" id="hrMinConf" type="number" min="0" max="99" step="1" value="60" style="width:55px"></div>
             <div class="kv"><span class="k">Cooldown (barras)</span><input class="num" id="hrCooldown" type="number" min="1" max="50" step="1" value="5" style="width:55px"></div>
+            <div class="kv"><span class="k">Lookback (barras)</span><input class="num" id="hrLookback" type="number" min="100" max="5000" step="100" value="1000" style="width:55px"></div>
             <div class="kv"><span class="k">Máx. sinais</span><input class="num" id="hrMaxSigs" type="number" min="1" max="100" step="1" value="30" style="width:55px"></div>
             <div class="kv"><span class="k">Tamanho</span><input class="num" id="hrSigSize" type="number" min="0.6" max="2" step="0.1" value="1" style="width:55px"></div>
             <div class="kv"><span class="k">Modo FAIL</span><select class="select" id="hrFailMode" style="width:110px"><option value="close">Close Outside</option><option value="wick">Wick Break</option><option value="2close">2 Candle Close</option></select></div>
@@ -10432,8 +10433,12 @@ document.addEventListener('change',function(ev){
 (function DVL_HVNReactions(){
 'use strict';
 
-// per-zone state: type of last reaction, whether it FAILed, cooldown remaining
 const _zoneState=new Map();
+const _hrCache={key:'',sigs:[]};  // stable signal cache — invalidated by data/config, not by pan/zoom
+// render-only settings that change display but not signal detection
+const _RENDER_ONLY=new Set(['hrSigSize','hrShowPct','hrShowBuy','hrShowSell','hrShowAbs','hrShowExh','hrShowFail','hrMaxSigs',
+  'hrColorBuy','hrColorSell','hrColorAbs','hrColorExh','hrColorFail']);
+
 function getState(zid){
   if(!_zoneState.has(zid))_zoneState.set(zid,{type:null,idx:-1,hi:0,lo:0,failed:false,cooldown:0,prevOutside:false});
   return _zoneState.get(zid);
@@ -10465,6 +10470,7 @@ function cfg(){
     confirmWeight:nv('hrConfirmWeight',15),
     touchWeight: nv('hrTouchWeight',5),
     minVolRatio: nv('hrMinVolRatio',1.2),
+    lookback:    nv('hrLookback',1000),
     colorBuy:    cv('hrColorBuy','#00d4ff'),
     colorSell:   cv('hrColorSell','#ff8c00'),
     colorAbs:    cv('hrColorAbs','#9b5de5'),
@@ -10642,35 +10648,29 @@ function scoreExh(c,p,nx,volR,conf){
   return _wScore(_volExh(c,p,volR),_candleExh(c,p),_confirmExh(nx,p),conf);
 }
 
-function buildSignals(cs,s,e,zones,avgVol,conf){
+// zones must be pre-sorted ascending by .lo for early-exit to work
+function buildSignals(cs,s,e,zonesSorted,avgVol,conf){
   _zoneState.clear();
-  const from=Math.max(1,s-150);
   const sigs=[];
-  for(let i=from;i<=Math.min(e,cs.length-1);i++){
+  for(let i=Math.max(1,s);i<=Math.min(e,cs.length-1);i++){
     const c=cs[i],p=cs[i-1],nx=cs[i+1]||null;
     const rng=c.h-c.l;
     if(!rng||!isFinite(rng))continue;
     const volR=avgVol>0?c.v/avgVol:1;
-    const inView=i>=s;
-    for(let zi=0;zi<zones.length;zi++){
-      const z=zones[zi];
-      if(c.l>z.hi||c.h<z.lo)continue;
+    for(let zi=0;zi<zonesSorted.length;zi++){
+      const z=zonesSorted[zi];
+      if(z.hi<c.l)continue;   // zone entirely below candle — skip
+      if(z.lo>c.h)break;      // zone entirely above candle — all remaining are too
       const st=getState(zi);
       if(st.cooldown>0){st.cooldown--;continue;}
-      // FAIL — highest priority, only after prior BUY or SELL
       if((st.type==='BUY'||st.type==='SELL')&&!st.failed){
         if(checkFail(st,c,conf.failMode,z)){
           st.failed=true;st.cooldown=conf.cooldown;
-          if(inView){
-            const fConf=Math.round(Math.min(99,60+(volR>conf.minVolRatio?20:0)));
-            sigs.push({idx:i,type:'FAIL',conf:fConf,isBull:false,zi});
-          }
+          sigs.push({idx:i,type:'FAIL',conf:Math.round(Math.min(99,60+(volR>conf.minVolRatio?20:0))),isBull:false,zi});
           continue;
         }
       }
-      // skip new signal while active un-failed reaction exists
       if(st.type&&!st.failed)continue;
-      // score all types — volume is primary decision maker
       const sA=scoreAbs(c,nx,z,volR,conf);
       const sB=scoreBuy(c,nx,z,volR,conf);
       const sS=scoreSell(c,nx,z,volR,conf);
@@ -10682,12 +10682,43 @@ function buildSignals(cs,s,e,zones,avgVol,conf){
       if(sE>=conf.minConf&&sE>bScore){best='EXH';bScore=sE;}
       if(!best)continue;
       st.type=best;st.idx=i;st.hi=c.h;st.lo=c.l;st.failed=false;st.cooldown=conf.cooldown;st.prevOutside=false;
-      if(inView){
-        const isBull=best==='BUY'?true:best==='SELL'?false:((c.buy||0)-(c.sell||0))>=0;
-        sigs.push({idx:i,type:best,conf:Math.round(Math.min(99,bScore)),isBull,zi});
-      }
+      const isBull=best==='BUY'?true:best==='SELL'?false:((c.buy||0)-(c.sell||0))>=0;
+      sigs.push({idx:i,type:best,conf:Math.round(Math.min(99,bScore)),isBull,zi});
     }
   }
+  return sigs;
+}
+
+// cache key covers data + detection params only (not render-only settings)
+function _getCacheKey(cs,zones,st){
+  const last=cs[cs.length-1];
+  const zSum=zones.reduce((a,z)=>a+z.lo+z.hi,0);
+  return[
+    window.S?.sym||'',window.S?.tf||'',
+    cs.length,last?.t||0,
+    zones.length,zSum.toFixed(2),
+    st.minConf,st.cooldown,st.lookback,st.failMode,
+    st.volWeight,st.candleWeight,st.confirmWeight,st.touchWeight,
+    st.minVolRatio,st.requireVol?1:0,st.useDelta?1:0,st.useFP?1:0
+  ].join('|');
+}
+
+function _getCachedSigs(cs,zones,st){
+  const key=_getCacheKey(cs,zones,st);
+  if(_hrCache.key===key)return _hrCache.sigs;
+  // pre-sort zones by lo for O(log n) inner-loop early exit
+  const zs=zones.filter(z=>Number.isFinite(z.lo)&&Number.isFinite(z.hi)&&z.hi>z.lo).sort((a,b)=>a.lo-b.lo);
+  // compute avgVol from last 200 candles — stable across pan/zoom
+  const volFrom=Math.max(0,cs.length-200);
+  let vSum=0,vN=0;
+  for(let i=volFrom;i<cs.length;i++){vSum+=cs[i].v;vN++;}
+  const avgVol=vN?vSum/vN:1;
+  // fixed lookback range — independent of view
+  const from=Math.max(1,cs.length-Math.max(100,Math.min(5000,st.lookback|0)));
+  const to=cs.length-1;
+  const sigs=buildSignals(cs,from,to,zs,avgVol,st);
+  _hrCache.key=key;
+  _hrCache.sigs=sigs;
   return sigs;
 }
 
@@ -10728,12 +10759,9 @@ function drawHVNReact(ctx,W,H,AllV,sc,x){
   if(!zones||!zones.length)return;
   const st=cfg();
   const cs=S.candles;
-  const s=Math.max(1,Math.floor(S.view.start)-1);
-  const e=Math.min(cs.length-1,Math.ceil(S.view.end));
-  let vSum=0,vN=0;
-  for(let i=s;i<=e;i++){vSum+=cs[i].v;vN++;}
-  const avgVol=vN?vSum/vN:1;
-  const sigs=buildSignals(cs,s,e,zones,avgVol,st);
+  // use cached signals — pan/zoom do not trigger recalculation
+  const sigs=_getCachedSigs(cs,zones,st);
+  if(!sigs.length)return;
   const right=W-RP();
   const scale=Math.max(0.6,st.sigSize||1);
   const showPct=st.showPct;
@@ -10741,9 +10769,13 @@ function drawHVNReact(ctx,W,H,AllV,sc,x){
   const GAP=5;
   const colorMap={BUY:st.colorBuy,SELL:st.colorSell,ABS:st.colorAbs,EXH:st.colorExh,FAIL:st.colorFail};
   const showMap={BUY:st.showBuy,SELL:st.showSell,ABS:st.showAbs,EXH:st.showExh,FAIL:st.showFail};
+  // view bounds with margin to avoid pop-in at edges
+  const vStart=S.view.start-2,vEnd=S.view.end+2;
   ctx.save();
   let drawn=0;
   for(const sig of sigs){
+    // fast skip: outside visible range
+    if(sig.idx<vStart||sig.idx>vEnd)continue;
     if(!showMap[sig.type]||sig.conf<st.minConf)continue;
     if(drawn>=st.maxSigs)break;
     const c=cs[sig.idx];
@@ -10763,19 +10795,25 @@ function drawHVNReact(ctx,W,H,AllV,sc,x){
 
 window.__drawHVNReact=drawHVNReact;
 
-const HR_IDS=new Set(['hrMinConf','hrCooldown','hrMaxSigs','hrSigSize','hrFailMode',
+const HR_IDS=new Set(['hrMinConf','hrCooldown','hrLookback','hrMaxSigs','hrSigSize','hrFailMode',
   'hrShowBuy','hrShowSell','hrShowAbs','hrShowExh','hrShowFail','hrShowPct',
   'hrUseDelta','hrRequireVol','hrUseFP',
   'hrVolWeight','hrCandleWeight','hrConfirmWeight','hrTouchWeight','hrMinVolRatio',
   'hrColorBuy','hrColorSell','hrColorAbs','hrColorExh','hrColorFail']);
+const _swMap={hrColorBuy:'hrColorBuySw',hrColorSell:'hrColorSellSw',hrColorAbs:'hrColorAbsSw',hrColorExh:'hrColorExhSw',hrColorFail:'hrColorFailSw'};
 document.addEventListener('input',ev=>{
   const id=ev.target?.id;
   if(!HR_IDS.has(id))return;
-  const swMap={hrColorBuy:'hrColorBuySw',hrColorSell:'hrColorSellSw',hrColorAbs:'hrColorAbsSw',hrColorExh:'hrColorExhSw',hrColorFail:'hrColorFailSw'};
-  if(swMap[id]){const sw=document.getElementById(swMap[id]);if(sw)sw.style.background=ev.target.value;}
+  if(_swMap[id]){const sw=document.getElementById(_swMap[id]);if(sw)sw.style.background=ev.target.value;}
+  // invalidate detection cache only when detection params change, not render-only settings
+  if(!_RENDER_ONLY.has(id))_hrCache.key='';
   drawSoon();
 });
-document.addEventListener('change',ev=>{if(HR_IDS.has(ev.target?.id))drawSoon();});
+document.addEventListener('change',ev=>{
+  if(!HR_IDS.has(ev.target?.id))return;
+  if(!_RENDER_ONLY.has(ev.target.id))_hrCache.key='';
+  drawSoon();
+});
 if(window.S&&S.inds&&!('hvnReact' in S.inds))S.inds.hvnReact=true;
 
 })();
