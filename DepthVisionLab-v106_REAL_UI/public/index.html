@@ -8904,10 +8904,14 @@ function _initEvents(){
   });
 }
 
-function _onCk(e){if(_tool||_sm===ST.DRAWING||S.replay?.selectingStart)e.stopPropagation();}
+function _onCk(e){
+  if(e.target&&e.target.closest&&e.target.closest('#dvlDrawDelete'))return;
+  if(_tool||_sm===ST.DRAWING||S.replay?.selectingStart)e.stopPropagation();
+}
 
 function _onMD(e){
   if(e.button!==0)return;
+  if(e.target&&e.target.closest&&e.target.closest('#dvlDrawDelete'))return;
   _closeCtx();
   /* P0: replay start selection */
   if(S.replay?.selectingStart){
@@ -8966,6 +8970,7 @@ function _onMU(e){
    Slide finger to adjust. touchend → confirm point. */
 function _onTS(e){
   if(e.touches.length>1)return;
+  if(e.target&&e.target.closest&&e.target.closest('#dvlDrawDelete'))return;
   _closeCtx();
   const wrap=el('chartWrap');if(!wrap)return;
   const r=wrap.getBoundingClientRect();
