@@ -1817,6 +1817,24 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
+        <div class="ind-card" data-card="footprint">
+          <div class="ind-head">
+            <div class="row" style="pointer-events:none;"><span class="name" style="opacity:.75;">Footprint Candle</span></div>
+            <button class="gear" data-settings="footprint" title="Inputs Footprint">⚙</button>
+          </div>
+          <div class="ind-settings" id="settings-footprint">
+            <div class="kv"><span class="k">Detalhe visual</span><select class="select tiny-select" id="fpDetail"><option value="auto" selected>Auto</option><option value="minimal">Minimal</option><option value="balanced">Balanced</option><option value="full">Full</option></select></div>
+            <div class="kv"><span class="k">Exibir</span><select class="select tiny-select" id="fpMode"><option value="all" selected>Todos candles</option><option value="last">Últimas 90 velas</option></select></div>
+            <div class="kv"><span class="k">Cobertura real mín.</span><input class="num" id="fpMinCov" type="number" min="0" max="1" step="0.05" value="0.15"></div>
+            <div class="kv"><span class="k">Filtro rows (%)</span><input class="num" id="fpRowThresh" type="number" min="0" max="50" step="1" value="8"></div>
+            <div class="kv"><span class="k">Ratio imbalance</span><input class="num" id="fpImbalRatio" type="number" min="1.2" max="10" step="0.1" value="2.5"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Stacked imbalance</span><input type="checkbox" id="fpShowStacked" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Stacked mín. rows</span><input class="num" id="fpStackedMin" type="number" min="2" max="8" step="1" value="2"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Big trade só real FP</span><input type="checkbox" id="fpRequireReal" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="hint">Auto: zoom determina detalhe. Cobertura ≥35% = real. Sintético aparece desbotado (~).</div>
+          </div>
+        </div>
+
         <div class="ind-card" data-card="bigTrades">
           <div class="ind-head">
             <div class="row on" data-ind="bigTrades"><span class="name">Big Buyers/Sellers</span><span class="switch"></span></div>
@@ -3492,136 +3510,312 @@ function fmtVolClean(v){
   if(v>=1000)return Math.round(v/1000)+'K';
   return String(Math.round(v));
 }
+// ── Footprint settings reader ────────────────────────────────────
+function fpCfg(){
+  return{
+    detail:     (el('fpDetail')?.value)||'auto',
+    mode:       (el('fpMode')?.value)||'all',
+    minCov:     clamp(+(el('fpMinCov')?.value)||0.15,0,1),
+    rowThresh:  clamp(+(el('fpRowThresh')?.value)||8,0,50)/100,
+    imbalRatio: Math.max(1.2,+(el('fpImbalRatio')?.value)||2.5),
+    showStacked:el('fpShowStacked')?el('fpShowStacked').checked:true,
+    stackedMin: Math.max(2,+(el('fpStackedMin')?.value)||2),
+    requireReal:el('fpRequireReal')?el('fpRequireReal').checked:true
+  };
+}
+// ── Coverage category (real/partial/synthetic) ──────────────────
+function getCovCategory(c){
+  const cov=candleTradeCoverage(c);
+  if(cov>=0.35)return{cat:'real',cov,alpha:1.00};
+  if(cov>=0.10)return{cat:'partial',cov,alpha:0.62};
+  return{cat:'synthetic',cov,alpha:0.35};
+}
+// ── Shape-based buy pressure estimate (fallback) ─────────────────
 function footprintPressure(c){
-  const range=Math.max(1e-9,c.h-c.l), body=(c.c-c.o)/range, closePos=(c.c-c.l)/range;
-  let br=0.50 + body*0.35 + (closePos-0.5)*0.22;
-  if((c.buy+c.sell)>0) br=br*0.35 + (c.buy/(c.buy+c.sell))*0.65;
+  const range=Math.max(1e-9,c.h-c.l),body=(c.c-c.o)/range,closePos=(c.c-c.l)/range;
+  let br=0.50+body*0.35+(closePos-0.5)*0.22;
+  if((c.buy+c.sell)>0)br=br*0.35+(c.buy/(c.buy+c.sell))*0.65;
   return clamp(br,0.12,0.88);
 }
-function syntheticFootprintRows(c,maxRows=14){
-  const rows=[];
-  const range=Math.max(1e-9,c.h-c.l);
+// ── Synthetic rows (no real data) ────────────────────────────────
+function _syntheticFPRowsRaw(c,maxRows=14){
+  const rows=[],range=Math.max(1e-9,c.h-c.l);
   const n=clamp(Math.round(range/Math.max(range/maxRows,1e-9)),6,maxRows);
-  const buyRatio=footprintPressure(c), sellRatio=1-buyRatio;
-  const bodyMid=(c.o+c.c)/2, close=c.c;
+  const buyRatio=footprintPressure(c),bodyMid=(c.o+c.c)/2,close=c.c;
   let weights=[],sum=0;
   for(let k=0;k<n;k++){
     const price=c.l+range*(k+.5)/n;
-    const dBody=Math.abs(price-bodyMid)/range;
-    const dClose=Math.abs(price-close)/range;
-    const w=0.45+Math.exp(-dBody*5.5)*1.2+Math.exp(-dClose*8)*0.75+(k===0||k===n-1?0.25:0);
+    const dBody=Math.abs(price-bodyMid)/range,dClose=Math.abs(price-close)/range;
+    const w=0.45+Math.exp(-dBody*5.5)*1.2+Math.exp(-dClose*8)*.75+(k===0||k===n-1?.25:0);
     weights.push({price,w});sum+=w;
   }
   const total=Math.max(0,+c.v||0);
-  weights.forEach((r,k)=>{
+  weights.forEach(r=>{
     const vol=total*r.w/Math.max(1e-9,sum);
     const rowBias=(r.price-c.l)/range-.5;
-    const localBuy=clamp(buyRatio + rowBias*(c.c>=c.o?0.10:-0.10),0.08,0.92);
+    const localBuy=clamp(buyRatio+rowBias*(c.c>=c.o?.10:-.10),.08,.92);
     rows.push([r.price,{buy:vol*localBuy,sell:vol*(1-localBuy),synthetic:true}]);
   });
   return rows.sort((a,b)=>b[0]-a[0]);
 }
-function normalizedFootprintRows(c,maxRows=18){
+// ── Normalize FP rows (raw, uncached) ────────────────────────────
+function _normFPRowsRaw(c,maxRows=18){
   let rows=[...c.fp.entries()]
     .map(([p,r])=>[+p,{buy:+r.buy||0,sell:+r.sell||0,synthetic:false,n:r.n||0,notional:r.notional||0}])
     .filter(([p,r])=>isFinite(p)&&(r.buy+r.sell)>0)
     .sort((a,b)=>b[0]-a[0]);
-
   const fpTotal=rows.reduce((a,[_,r])=>a+r.buy+r.sell,0);
   const candleVol=Math.max(0,+c.v||0);
-
-  if(!rows.length || fpTotal<candleVol*0.035){
-    rows=syntheticFootprintRows(c,maxRows);
-  }else if(candleVol>0 && fpTotal>0){
+  if(!rows.length||fpTotal<candleVol*0.035){rows=_syntheticFPRowsRaw(c,maxRows);}
+  else if(candleVol>0&&fpTotal>0){
     const k=clamp(candleVol/fpTotal,0.18,12);
     rows=rows.map(([p,r])=>[p,{buy:r.buy*k,sell:r.sell*k,synthetic:false,n:r.n||0,notional:r.notional||0}]);
   }
-
-  rows=compressFootprintRows(rows,maxRows);
-  return rows;
+  return compressFootprintRows(rows,maxRows);
 }
-function drawFootprint(ctx,V,sc,x,bw){
-  const rightLimit=el('fpMode') ? (el('fpMode').value==='last'?90:9999) : 9999;
-  ctx.save();
-  ctx.textAlign='center';
-  ctx.textBaseline='middle';
-
-  V.cs.forEach((c,j)=>{
-    const i=V.a+j,xx=x(i);
-    const top=sc.y(c.h),bot=sc.y(c.l),hh=Math.max(2,bot-top);
-    const rows=normalizedFootprintRows(c,Math.max(8,Math.min(22,Math.floor(hh/9))));
-    const maxRow=Math.max(1,...rows.map(([_,r])=>r.buy+r.sell));
-    // Use c.buy/c.sell directly — raw from trades, not affected by k-normalization
-    const realDelta=(+c.buy||0)-(+c.sell||0);
-
-    // Se estiver afastado, mostra um mini footprint agregado, sem poluir.
-    if(V.n>rightLimit || bw<18 || hh<45){
-      const w=Math.max(6,bw*.82), left=xx-w/2;
-      const buyTotM=rows.reduce((a,[_,r])=>a+r.buy,0),sellTotM=rows.reduce((a,[_,r])=>a+r.sell,0),totalM=Math.max(1,buyTotM+sellTotM);
-      ctx.fillStyle='rgba(5,9,20,.65)';ctx.fillRect(left,top,w,hh);
-      ctx.strokeStyle=realDelta>=0?'rgba(0,230,118,.75)':'rgba(255,61,87,.75)';ctx.lineWidth=1.1;ctx.strokeRect(left,top,w,hh);
-      const mid=top+hh*(sellTotM/totalM);
-      ctx.fillStyle='rgba(255,61,87,.20)';ctx.fillRect(left+1,top,w-2,Math.max(1,mid-top));
-      ctx.fillStyle='rgba(0,230,118,.20)';ctx.fillRect(left+1,mid,w-2,Math.max(1,bot-mid));
-      return;
+// ── Compress rows (merge groups) ─────────────────────────────────
+function compressFootprintRows(rows,maxRows){
+  if(rows.length<=maxRows)return rows;
+  const out=[],group=Math.ceil(rows.length/maxRows);
+  for(let i=0;i<rows.length;i+=group){
+    const chunk=rows.slice(i,i+group);
+    let buy=0,sell=0,px=0,wt=0,synthetic=true;
+    chunk.forEach(([p,r])=>{const tv=(+r.buy||0)+(+r.sell||0);buy+=+r.buy||0;sell+=+r.sell||0;px+=p*Math.max(tv,1);wt+=Math.max(tv,1);if(!r.synthetic)synthetic=false;});
+    out.push([px/Math.max(1,wt),{buy,sell,synthetic}]);
+  }
+  return out.sort((a,b)=>b[0]-a[0]);
+}
+// ── Cached FP rows ────────────────────────────────────────────────
+function getCachedFPRows(c,maxRows){
+  const key=maxRows+'|'+(c.fp?.size||0)+'|'+Math.round((c.buy||0)*1e4)+'|'+Math.round((c.sell||0)*1e4)+'|'+Math.round((c.v||0)*1e4)+'|'+(c.__fpVer||0);
+  if(!c.__fpRowsCache)c.__fpRowsCache=Object.create(null);
+  if(c.__fpRowsCache[key])return c.__fpRowsCache[key];
+  return(c.__fpRowsCache[key]=_normFPRowsRaw(c,maxRows));
+}
+// Backwards-compat alias (used by HVN Reactions IIFE and custom code)
+function normalizedFootprintRows(c,maxRows=18){return getCachedFPRows(c,maxRows);}
+// ── Coverage fraction helper ──────────────────────────────────────
+function candleTradeCoverage(c){
+  const fpTotal=[...c.fp.values()].reduce((a,r)=>a+(+r.buy||0)+(+r.sell||0),0);
+  const v=Math.max(0,+c.v||0);
+  return v>0?fpTotal/v:0;
+}
+// ── Per-row imbalance + stacked runs ─────────────────────────────
+function computeRowImbalances(rows,imbalRatio){
+  const result=rows.map(([_,r])=>{
+    const tot=r.buy+r.sell;
+    if(!tot)return{flag:null,synthetic:r.synthetic,stackRun:0,stackDir:null};
+    const br=r.buy/Math.max(1e-9,r.sell),sr=r.sell/Math.max(1e-9,r.buy);
+    return{flag:br>=imbalRatio?'bull':sr>=imbalRatio?'bear':null,synthetic:r.synthetic,stackRun:0,stackDir:null};
+  });
+  let runDir=null,runLen=0;
+  for(let i=0;i<result.length;i++){
+    const f=result[i].flag;
+    if(f&&f===runDir)runLen++;else{runDir=f;runLen=f?1:0;}
+    result[i].stackRun=runLen;result[i].stackDir=runDir;
+  }
+  return result;
+}
+// ── footprintStatsInZone — utility for HVN Reactions ─────────────
+function footprintStatsInZone(c,zoneLo,zoneHi){
+  const rows=getCachedFPRows(c,40);
+  const cov=candleTradeCoverage(c);
+  const fpc=fpCfg();
+  const zoneRows=rows.filter(([p])=>p>=zoneLo&&p<=zoneHi);
+  let buy=0,sell=0,maxBuyRow=0,maxSellRow=0,imbalanceRows=0,stackedBuy=0,stackedSell=0,runBuy=0,runSell=0;
+  for(const[_,r]of zoneRows){
+    buy+=r.buy;sell+=r.sell;
+    if(r.buy>maxBuyRow)maxBuyRow=r.buy;
+    if(r.sell>maxSellRow)maxSellRow=r.sell;
+    const tot=r.buy+r.sell;
+    if(tot>0){
+      const br=r.buy/Math.max(1e-9,r.sell),sr=r.sell/Math.max(1e-9,r.buy);
+      if(br>=fpc.imbalRatio){imbalanceRows++;runBuy++;runSell=0;}
+      else if(sr>=fpc.imbalRatio){imbalanceRows++;runSell++;runBuy=0;}
+      else{runBuy=0;runSell=0;}
     }
-
-    const boxW=clamp(bw*2.75,54,116), left=xx-boxW/2, rowH=clamp(hh/Math.max(1,rows.length),9,18);
-    ctx.fillStyle='rgba(5,9,20,.78)';ctx.fillRect(left,top,boxW,hh);
-    ctx.strokeStyle=realDelta>=0?'rgba(0,180,90,.55)':'rgba(200,50,70,.55)';ctx.lineWidth=.95;ctx.strokeRect(left,top,boxW,hh);
-    ctx.strokeStyle='rgba(255,255,255,.12)';ctx.beginPath();ctx.moveTo(xx,top);ctx.lineTo(xx,bot);ctx.stroke();
-
-    rows.forEach(([price,r])=>{
-      const y=sc.y(price); if(y<PT-14||y>sc.y(sc.lo)+20)return;
-      const buy=r.buy||0,sell=r.sell||0,tot=buy+sell,pwr=clamp(tot/maxRow,0,1);
-      const imbal=(buy-sell)/Math.max(1e-9,tot);
-      const baseAlpha=clamp(.10+pwr*.45,.10,.62);
-      const mid=left+boxW/2;
-      const halfW=boxW/2-2;
-      // Fundo do row: ESCURO (sem branco), só com leve tint da cor dominante
-      ctx.fillStyle='rgba(5,9,20,.72)';
-      ctx.fillRect(left+1,y-rowH/2,boxW-2,rowH-1);
-      ctx.fillStyle=imbal>=0?`rgba(0,230,118,${baseAlpha})`:`rgba(255,61,87,${baseAlpha})`;
-      ctx.fillRect(left+1,y-rowH/2,boxW-2,rowH-1);
-      // Barras proporcionais: SELL à esquerda (vermelho), BUY à direita (verde)
-      if(tot>0){
-        const sellBar=clamp(sell/tot,0,1)*halfW;
-        const buyBar=clamp(buy/tot,0,1)*halfW;
-        ctx.fillStyle=`rgba(255,61,87,${clamp(.20+pwr*.42,.18,.68)})`;
-        ctx.fillRect(left+1,y-rowH/2+1,sellBar,rowH-2);
-        ctx.fillStyle=`rgba(0,230,118,${clamp(.20+pwr*.42,.18,.68)})`;
-        ctx.fillRect(mid,y-rowH/2+1,buyBar,rowH-2);
-      }
-      ctx.strokeStyle='rgba(30,42,64,.65)';ctx.lineWidth=.45;ctx.strokeRect(left+1,y-rowH/2,boxW-2,rowH-1);
-      ctx.strokeStyle='rgba(80,100,140,.50)';ctx.beginPath();ctx.moveTo(mid,y-rowH/2);ctx.lineTo(mid,y+rowH/2-1);ctx.stroke();
-      ctx.font=rowH>=13?'bold 9px monospace':'bold 8px monospace';
-      // Texto com sombra para contraste máximo sobre qualquer fundo
-      ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=3;
-      ctx.fillStyle=sell>buy?'rgba(255,110,130,1)':'rgba(160,170,190,.85)';ctx.fillText(fmtVolClean(sell*price),left+boxW*.25,y+.5);
-      ctx.fillStyle=buy>sell?'rgba(0,235,120,1)':'rgba(160,170,190,.85)';ctx.fillText(fmtVolClean(buy*price),left+boxW*.75,y+.5);
-      ctx.shadowBlur=0;
-      if(Math.abs(imbal)>.60&&pwr>.30){ctx.fillStyle=imbal>0?'rgba(0,212,255,.55)':'rgba(240,180,41,.50)';ctx.fillRect(left+2,y-rowH/2,boxW-4,2.5)}
-    });
-
-    const bull=c.c>=c.o,col=bull?'#00e676':'#ff3d57';
-    ctx.strokeStyle=col;ctx.lineWidth=2.1;ctx.beginPath();ctx.moveTo(xx,top);ctx.lineTo(xx,bot);ctx.stroke();
-    const yt=sc.y(Math.max(c.o,c.c)),yb=sc.y(Math.min(c.o,c.c));
-    ctx.fillStyle='rgba(5,9,20,.65)';ctx.fillRect(xx-2,yt,4,Math.max(2,yb-yt));
-    ctx.strokeStyle=col;ctx.strokeRect(xx-2,yt,4,Math.max(2,yb-yt));
-
-    // Totais do candle no rodapé do ladder.
-    if(boxW>62){
-      ctx.font='bold 9px monospace';
-      ctx.fillStyle='rgba(5,9,20,.92)';ctx.fillRect(left,bot+2,boxW,15);
-      ctx.strokeStyle=realDelta>=0?'rgba(0,180,90,.65)':'rgba(200,50,70,.65)';ctx.lineWidth=.7;ctx.strokeRect(left,bot+2,boxW,15);
-      ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=2;
-      ctx.fillStyle=realDelta>=0?'#00ff88':'#ff4466';
-      ctx.fillText((realDelta>=0?'▲ ':'▼ ')+fmtVolClean(Math.abs(realDelta)*c.c),xx,bot+11);
-      ctx.shadowBlur=0;
+    stackedBuy=Math.max(stackedBuy,runBuy);stackedSell=Math.max(stackedSell,runSell);
+  }
+  const total=buy+sell;
+  const allSyn=!zoneRows.length||zoneRows.every(([,r])=>r.synthetic);
+  return{buy,sell,total,delta:buy-sell,buyShare:total?buy/total:0.5,sellShare:total?sell/total:0.5,maxBuyRow,maxSellRow,imbalanceRows,stackedBuy,stackedSell,coverage:cov,real:cov>=0.10&&!allSyn};
+}
+window.footprintStatsInZone=footprintStatsInZone;
+// ── Mini tier: delta overlay only ───────────────────────────────
+function _fpDrawMini(ctx,c,rows,xx,top,bot,hh,bw,realDelta,covAlpha){
+  const w=Math.max(6,bw*.82),left=xx-w/2;
+  const buyTot=rows.reduce((a,[_,r])=>a+r.buy,0),sellTot=rows.reduce((a,[_,r])=>a+r.sell,0);
+  const total=Math.max(1,buyTot+sellTot);
+  ctx.globalAlpha=covAlpha;
+  ctx.fillStyle='rgba(5,9,20,.65)';ctx.fillRect(left,top,w,hh);
+  ctx.strokeStyle=realDelta>=0?'rgba(0,200,150,.65)':'rgba(255,115,45,.65)';ctx.lineWidth=1.1;ctx.strokeRect(left,top,w,hh);
+  const mid=top+hh*(sellTot/total);
+  ctx.fillStyle='rgba(255,115,45,.15)';ctx.fillRect(left+1,top,w-2,Math.max(1,mid-top));
+  ctx.fillStyle='rgba(0,200,150,.15)';ctx.fillRect(left+1,mid,w-2,Math.max(1,bot-mid));
+  ctx.globalAlpha=1;
+}
+// ── Normal tier: bars + imbalance, no text ───────────────────────
+function _fpDrawNormal(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,sc){
+  const boxW=clamp(bw*2.5,44,100),left=xx-boxW/2;
+  const rowH=clamp(hh/Math.max(1,rows.length),7,18);
+  ctx.globalAlpha=covAlpha;
+  ctx.fillStyle='rgba(5,9,20,.75)';ctx.fillRect(left,top,boxW,hh);
+  ctx.strokeStyle=realDelta>=0?'rgba(0,195,140,.45)':'rgba(220,90,45,.45)';ctx.lineWidth=.9;ctx.strokeRect(left,top,boxW,hh);
+  ctx.strokeStyle='rgba(255,255,255,.08)';ctx.beginPath();ctx.moveTo(xx,top);ctx.lineTo(xx,bot);ctx.stroke();
+  const imbs=computeRowImbalances(rows,fpc.imbalRatio);
+  const halfW=boxW/2-2,mid=left+boxW/2;
+  rows.forEach(([price,r],ri)=>{
+    const y=sc.y(price);if(y<PT-14||y>bot+20)return;
+    const tot=r.buy+r.sell,pwr=clamp(tot/maxRow,0,1);
+    if(pwr<fpc.rowThresh)return;
+    if(tot>0){
+      ctx.fillStyle=`rgba(255,115,45,${clamp(.14+pwr*.36,.10,.58)})`;ctx.fillRect(left+1,y-rowH/2+1,clamp(r.sell/tot,0,1)*halfW,rowH-2);
+      ctx.fillStyle=`rgba(0,200,150,${clamp(.14+pwr*.36,.10,.58)})`;ctx.fillRect(mid,y-rowH/2+1,clamp(r.buy/tot,0,1)*halfW,rowH-2);
+    }
+    const imb=imbs[ri];
+    if(imb?.flag&&!r.synthetic){
+      ctx.fillStyle=imb.flag==='bull'?'rgba(0,212,212,.55)':'rgba(240,110,35,.55)';
+      ctx.fillRect(left+1,y-rowH/2,boxW-2,2.5);
+    }
+    if(fpc.showStacked&&imb?.stackRun>=fpc.stackedMin&&imb.stackDir&&!r.synthetic){
+      ctx.fillStyle=imb.stackDir==='bull'?'rgba(0,220,220,.42)':'rgba(255,100,35,.42)';
+      ctx.fillRect(imb.stackDir==='bull'?left+boxW-4:left+1,y-rowH/2,3,rowH);
     }
   });
-  ctx.fillStyle='rgba(0,212,255,.82)';ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.font='9px monospace';ctx.fillText('FOOTPRINT · ESQ=S / DIR=B · volume em USDT',PL+6,PT+25);
+  ctx.globalAlpha=1;
+  _fpDrawSpine(ctx,c,xx,top,bot,sc);
+}
+// ── Full tier: complete ladder with numbers ──────────────────────
+function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,sc){
+  const boxW=clamp(bw*2.75,54,116),left=xx-boxW/2;
+  const rowH=clamp(hh/Math.max(1,rows.length),9,18);
+  ctx.globalAlpha=covAlpha;
+  ctx.fillStyle='rgba(5,9,20,.78)';ctx.fillRect(left,top,boxW,hh);
+  ctx.strokeStyle=realDelta>=0?'rgba(0,180,130,.55)':'rgba(210,85,45,.55)';ctx.lineWidth=.95;ctx.strokeRect(left,top,boxW,hh);
+  ctx.strokeStyle='rgba(255,255,255,.10)';ctx.beginPath();ctx.moveTo(xx,top);ctx.lineTo(xx,bot);ctx.stroke();
+  const imbs=computeRowImbalances(rows,fpc.imbalRatio);
+  const halfW=boxW/2-2,mid=left+boxW/2;
+  rows.forEach(([price,r],ri)=>{
+    const y=sc.y(price);if(y<PT-14||y>sc.y(sc.lo)+20)return;
+    const tot=r.buy+r.sell,pwr=clamp(tot/maxRow,0,1);
+    const isWeak=pwr<fpc.rowThresh;
+    const imbal=(r.buy-r.sell)/Math.max(1e-9,tot);
+    const baseAlpha=clamp(.10+pwr*.42,.10,.60);
+    ctx.fillStyle='rgba(5,9,20,.70)';ctx.fillRect(left+1,y-rowH/2,boxW-2,rowH-1);
+    if(!isWeak){
+      ctx.fillStyle=imbal>=0?`rgba(0,200,150,${baseAlpha})`:`rgba(255,115,45,${baseAlpha})`;
+      ctx.fillRect(left+1,y-rowH/2,boxW-2,rowH-1);
+    }
+    if(!isWeak&&tot>0){
+      ctx.fillStyle=`rgba(255,115,45,${clamp(.20+pwr*.40,.18,.68)})`;ctx.fillRect(left+1,y-rowH/2+1,clamp(r.sell/tot,0,1)*halfW,rowH-2);
+      ctx.fillStyle=`rgba(0,200,150,${clamp(.20+pwr*.40,.18,.68)})`;ctx.fillRect(mid,y-rowH/2+1,clamp(r.buy/tot,0,1)*halfW,rowH-2);
+    }
+    ctx.strokeStyle='rgba(30,42,64,.60)';ctx.lineWidth=.45;ctx.strokeRect(left+1,y-rowH/2,boxW-2,rowH-1);
+    ctx.strokeStyle='rgba(80,100,140,.45)';ctx.beginPath();ctx.moveTo(mid,y-rowH/2);ctx.lineTo(mid,y+rowH/2-1);ctx.stroke();
+    if(!isWeak){
+      ctx.font=rowH>=13?'bold 9px monospace':'bold 8px monospace';
+      ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=3;
+      ctx.fillStyle=r.sell>r.buy?'rgba(255,130,70,1)':'rgba(160,170,190,.80)';
+      ctx.fillText(fmtVolClean(r.sell*price),left+boxW*.25,y+.5);
+      ctx.fillStyle=r.buy>r.sell?'rgba(0,220,160,1)':'rgba(160,170,190,.80)';
+      ctx.fillText(fmtVolClean(r.buy*price),left+boxW*.75,y+.5);
+      ctx.shadowBlur=0;
+    }
+    const imb=imbs[ri];
+    if(imb?.flag&&!r.synthetic){
+      ctx.fillStyle=imb.flag==='bull'?'rgba(0,212,212,.55)':'rgba(240,110,35,.55)';
+      ctx.fillRect(left+2,y-rowH/2,boxW-4,2.5);
+    }
+    if(fpc.showStacked&&imb?.stackRun>=fpc.stackedMin&&imb.stackDir&&!r.synthetic){
+      ctx.fillStyle=imb.stackDir==='bull'?'rgba(0,220,220,.40)':'rgba(255,100,35,.40)';
+      ctx.fillRect(imb.stackDir==='bull'?left+boxW-4:left+1,y-rowH/2,3,rowH);
+    }
+  });
+  ctx.globalAlpha=1;
+  _fpDrawSpine(ctx,c,xx,top,bot,sc);
+  if(boxW>62){
+    const footerA=candleTradeCoverage(c)>=0.10?1:0.45;
+    ctx.globalAlpha=footerA;
+    ctx.font='bold 9px monospace';ctx.textAlign='center';
+    ctx.fillStyle='rgba(5,9,20,.92)';ctx.fillRect(left,bot+2,boxW,15);
+    ctx.strokeStyle=realDelta>=0?'rgba(0,175,120,.65)':'rgba(200,80,45,.65)';ctx.lineWidth=.7;ctx.strokeRect(left,bot+2,boxW,15);
+    ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=2;
+    ctx.fillStyle=realDelta>=0?'#00d494':'#ff7832';
+    ctx.fillText('Δ '+(realDelta>=0?'+':'')+fmtVolClean(Math.abs(realDelta)*c.c),xx,bot+11);
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
+  }
+  if(covAlpha<0.60){
+    ctx.globalAlpha=.35;ctx.font='7px monospace';ctx.textAlign='left';
+    ctx.fillStyle='rgba(200,200,200,1)';ctx.fillText('~',left+2,top+7);
+    ctx.globalAlpha=1;
+  }
+}
+// ── Shared spine draw ────────────────────────────────────────────
+function _fpDrawSpine(ctx,c,xx,top,bot,sc){
+  const bull=c.c>=c.o,col=bull?'#00d494':'#ff7832';
+  ctx.strokeStyle=col;ctx.lineWidth=2.1;
+  ctx.beginPath();ctx.moveTo(xx,top);ctx.lineTo(xx,bot);ctx.stroke();
+  const yt=sc.y(Math.max(c.o,c.c)),yb=sc.y(Math.min(c.o,c.c));
+  ctx.fillStyle='rgba(5,9,20,.65)';ctx.fillRect(xx-2,yt,4,Math.max(2,yb-yt));
+  ctx.strokeStyle=col;ctx.strokeRect(xx-2,yt,4,Math.max(2,yb-yt));
+}
+// ── Main draw entry point ────────────────────────────────────────
+function drawFootprint(ctx,V,sc,x,bw){
+  const fpc=fpCfg();
+  const lastLimit=fpc.mode==='last'?90:9999;
+  ctx.save();
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  V.cs.forEach((c,j)=>{
+    const i=V.a+j,xx=x(i),top=sc.y(c.h),bot=sc.y(c.l),hh=Math.max(2,bot-top);
+    const covInfo=getCovCategory(c);
+    const realDelta=(+c.buy||0)-(+c.sell||0);
+    let tier;
+    if(fpc.detail==='minimal')tier='mini';
+    else if(fpc.detail==='full')tier=hh>=45?'full':'normal';
+    else if(fpc.detail==='balanced')tier=hh>=30?'normal':'mini';
+    else tier=(bw<18||hh<45)?'mini':bw<42?'normal':'full';
+    if(V.n>lastLimit&&tier==='full')tier='normal';
+    const mr=tier==='full'?Math.max(8,Math.min(22,Math.floor(hh/9))):tier==='normal'?Math.max(6,Math.min(16,Math.floor(hh/10))):8;
+    const rows=getCachedFPRows(c,mr);
+    const maxRow=Math.max(1,...rows.map(([_,r])=>r.buy+r.sell));
+    if(tier==='mini')_fpDrawMini(ctx,c,rows,xx,top,bot,hh,bw,realDelta,covInfo.alpha);
+    else if(tier==='normal')_fpDrawNormal(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covInfo.alpha,fpc,sc);
+    else _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covInfo.alpha,fpc,sc);
+  });
+  ctx.fillStyle='rgba(0,212,255,.82)';ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.font='9px monospace';
+  ctx.fillText('FOOTPRINT · ESQ=S / DIR=B · volume em USDT',PL+6,PT+25);
   ctx.restore();
+}
+// ── Distribution rows (for Session Profile) ──────────────────────
+function candleDistributionRows(c,step){
+  const range=Math.max(c.h-c.l,1e-9);
+  const lo=Math.floor(c.l/step)*step,hi=Math.ceil(c.h/step)*step;
+  const rows=[];const buyShare=footprintPressure(c);let sumW=0;
+  for(let p=lo;p<=hi+step*.5;p+=step){
+    const cp=p+step*.5;if(cp<c.l||cp>c.h)continue;
+    const distBody=Math.abs(cp-(c.o+c.c)/2)/range,distClose=Math.abs(cp-c.c)/range;
+    const inBody=cp>=Math.min(c.o,c.c)&&cp<=Math.max(c.o,c.c);
+    const wickBoost=((cp<c.o&&cp<c.c)||(cp>c.o&&cp>c.c))?.85:1;
+    const w=(inBody?1.25:.58)+Math.exp(-distBody*5)*1.05+Math.exp(-distClose*8)*.70+wickBoost*.16;
+    rows.push({p:cp,w});sumW+=w;
+  }
+  const total=Math.max(0,+c.v||0);
+  return rows.map(r=>{
+    const local=(r.p-c.l)/range-.5;
+    const b=clamp(buyShare+local*(c.c>=c.o?.08:-.08),.07,.93);
+    const vol=total*r.w/Math.max(1e-9,sumW);
+    return[r.p,{buy:vol*b,sell:vol*(1-b),synthetic:true}];
+  }).sort((a,b)=>b[0]-a[0]);
+}
+function candleProfileRows(c,step){
+  let rows=[...c.fp.entries()].map(([p,r])=>[+p,{buy:+r.buy||0,sell:+r.sell||0,synthetic:false}]).filter(([p,r])=>isFinite(p)&&(r.buy+r.sell)>0);
+  const candleVol=Math.max(0,+c.v||0);
+  const fpVol=rows.reduce((a,[_,r])=>a+r.buy+r.sell,0);
+  if(rows.length&&fpVol>0){
+    const k=clamp(candleVol/fpVol,.20,10);
+    return rows.map(([p,r])=>[p,{buy:r.buy*k,sell:r.sell*k,synthetic:false}]).sort((a,b)=>b[0]-a[0]);
+  }
+  return candleDistributionRows(c,step);
 }
 
 function quantileSorted(arr,q){
@@ -3644,67 +3838,6 @@ function adaptivePriceStep(range,rows=80){
   const m=n<=1?1:n<=2?2:n<=5?5:10;
   return m*pow;
 }
-function candleTradeCoverage(c){
-  const fpTotal=[...c.fp.values()].reduce((a,r)=>a+(+r.buy||0)+(+r.sell||0),0);
-  const v=Math.max(0,+c.v||0);
-  return v>0?fpTotal/v:0;
-}
-function compressFootprintRows(rows,maxRows){
-  if(rows.length<=maxRows)return rows;
-  const out=[];
-  const group=Math.ceil(rows.length/maxRows);
-  for(let i=0;i<rows.length;i+=group){
-    const chunk=rows.slice(i,i+group);
-    let buy=0,sell=0,px=0,wt=0,synthetic=true;
-    chunk.forEach(([p,r])=>{
-      const tv=(+r.buy||0)+(+r.sell||0);
-      buy+=+r.buy||0;
-      sell+=+r.sell||0;
-      px+=p*Math.max(tv,1);
-      wt+=Math.max(tv,1);
-      if(!r.synthetic)synthetic=false;
-    });
-    out.push([px/Math.max(1,wt),{buy,sell,synthetic}]);
-  }
-  return out.sort((a,b)=>b[0]-a[0]);
-}
-function candleDistributionRows(c,step){
-  const range=Math.max(c.h-c.l,1e-9);
-  const lo=Math.floor(c.l/step)*step;
-  const hi=Math.ceil(c.h/step)*step;
-  const rows=[];
-  const buyShare=footprintPressure(c);
-  let sumW=0;
-  for(let p=lo;p<=hi+step*.5;p+=step){
-    const cp=p+step*.5;
-    if(cp<c.l||cp>c.h)continue;
-    const distBody=Math.abs(cp-(c.o+c.c)/2)/range;
-    const distClose=Math.abs(cp-c.c)/range;
-    const inBody=cp>=Math.min(c.o,c.c)&&cp<=Math.max(c.o,c.c);
-    const wickBoost=((cp<c.o&&cp<c.c)||(cp>c.o&&cp>c.c)) ? .85 : 1;
-    const w=(inBody?1.25:.58)+Math.exp(-distBody*5)*1.05+Math.exp(-distClose*8)*.70+wickBoost*.16;
-    rows.push({p:cp,w});
-    sumW+=w;
-  }
-  const total=Math.max(0,+c.v||0);
-  return rows.map(r=>{
-    const local=(r.p-c.l)/range-.5;
-    const b=clamp(buyShare + local*(c.c>=c.o ? .08 : -.08),.07,.93);
-    const vol=total*r.w/Math.max(1e-9,sumW);
-    return [r.p,{buy:vol*b,sell:vol*(1-b),synthetic:true}];
-  }).sort((a,b)=>b[0]-a[0]);
-}
-function candleProfileRows(c,step){
-  let rows=[...c.fp.entries()].map(([p,r])=>[+p,{buy:+r.buy||0,sell:+r.sell||0,synthetic:false}]).filter(([p,r])=>isFinite(p)&&(r.buy+r.sell)>0);
-  const candleVol=Math.max(0,+c.v||0);
-  const fpVol=rows.reduce((a,[_,r])=>a+r.buy+r.sell,0);
-  if(rows.length&&fpVol>0){
-    const k=clamp(candleVol/fpVol,.20,10);
-    return rows.map(([p,r])=>[p,{buy:r.buy*k,sell:r.sell*k,synthetic:false}]).sort((a,b)=>b[0]-a[0]);
-  }
-  return candleDistributionRows(c,step);
-}
-
 function avgNotional(){
   const s=robustTradeStats();
   return s.n?s.median:0;
@@ -3840,6 +3973,7 @@ function bigTradeCacheConfigKey(){
 function buildBigTradeClustersForCandle(idx){
   const c=S.candles[idx];
   if(!c)return [];
+  const _fpc=fpCfg();const _cov=candleTradeCoverage(c);if(_fpc.requireReal&&_cov<_fpc.minCov)return[];
   const minV=bigTradeMinValue();
   const mergeLevels=bigTradeMergeLevels();
   const mode=bigTradeDisplayMode();
@@ -4579,8 +4713,8 @@ if(el('tfSelect')){
   }
 })();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();bootDebounced()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();bootDebounced()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
-['bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});function syncBigTradeMinSizeUI(){
+['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeLabel','bigTradeDisplay','bigTradeUnit','bigTradeMinSize','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
+['bigTradeVisibleBars','bigTradeBubbleScale','bigTradeMergeLevels','bigTradeMinSize','volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});function syncBigTradeMinSizeUI(){
   const unit=el('bigTradeUnit')?.value||'qty';
   const lbl=el('bigTradeMinSizeLabel');
   const inp=el('bigTradeMinSize');
