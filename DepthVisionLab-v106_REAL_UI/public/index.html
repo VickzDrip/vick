@@ -9324,14 +9324,8 @@ function _hitDrawing(d,mx,my,cs){
     const xb=clamp(Math.max(cs.xI(d.x1),cs.xI(d.x2)),PL,right);
     const ye=cs.yP(d.entry),ys=cs.yP(d.stop),yt=cs.yP(d.target);
     const top=Math.min(ye,ys,yt),bot=Math.max(ye,ys,yt);
-    // Hit the extended horizontal lines
-    if(mx>=xa&&mx<=right){
-      if(Math.abs(my-ye)<R+5)return true;
-      if(Math.abs(my-ys)<R+5)return true;
-      if(Math.abs(my-yt)<R+5)return true;
-    }
-    // Hit the filled zone body
-    if(mx>=xa&&mx<=xb&&my>=top-R&&my<=bot+R)return true;
+    // Hit the box area (lines and fills are all within xa→xb)
+    if(mx>=xa-R&&mx<=xb+R&&my>=top-R&&my<=bot+R)return true;
     return false;
   }
   return false;
@@ -9609,7 +9603,7 @@ function _rPos(ctx,cs,d,sel){
   const x1=cs.xI(d.x1),x2=cs.xI(d.x2);
   const xa=clamp(Math.min(x1,x2),PL,right);
   const xb=clamp(Math.max(x1,x2),PL,right);
-  const visW=Math.max(40,xb-xa);
+  const bW=Math.max(20,xb-xa);
   const ye=cs.yP(d.entry),ys=cs.yP(d.stop),yt=cs.yP(d.target);
   const isLong=d.type==='longpos';
   const pCol=d.style?.tpColor||(isLong?'#00dc82':'#ff5a46');
@@ -9619,46 +9613,53 @@ function _rPos(ctx,cs,d,sel){
   const pRgb=h2r(pCol),sRgb=h2r(sCol),eRgb=h2r(eCol);
   const rr=d.entry!==d.stop?Math.abs((d.target-d.entry)/(d.stop-d.entry)):1;
   const alpha=d.style?.fillAlpha??0.12;
-  const showLabels=d.style?.showLabels!==false;
   ctx.save();
   ctx.globalCompositeOperation='source-over';
-  // Profit zone fill
+  // Zone fills — strictly within box (xa to xb)
   ctx.fillStyle=`rgba(${pRgb},${alpha})`;
-  ctx.fillRect(xa,Math.min(ye,yt),visW,Math.abs(yt-ye));
-  // Loss zone fill
+  ctx.fillRect(xa,Math.min(ye,yt),bW,Math.abs(yt-ye));
   ctx.fillStyle=`rgba(${sRgb},${alpha*0.833})`;
-  ctx.fillRect(xa,Math.min(ye,ys),visW,Math.abs(ys-ye));
-  // Zone dashed borders
-  ctx.setLineDash([5,5]);
-  ctx.lineWidth=sel?1.5:1;
-  ctx.strokeStyle=`rgba(${pRgb},${sel?0.90:0.75})`;
-  ctx.strokeRect(xa,Math.min(ye,yt)+0.5,visW,Math.abs(yt-ye));
-  ctx.strokeStyle=`rgba(${sRgb},${sel?0.90:0.75})`;
-  ctx.strokeRect(xa,Math.min(ye,ys)+0.5,visW,Math.abs(ys-ye));
+  ctx.fillRect(xa,Math.min(ye,ys),bW,Math.abs(ys-ye));
+  // Zone dashed borders — within box
+  ctx.setLineDash([4,4]);
+  ctx.lineWidth=1;
+  ctx.strokeStyle=`rgba(${pRgb},${sel?0.90:0.65})`;
+  ctx.strokeRect(xa+0.5,Math.min(ye,yt)+0.5,bW-1,Math.abs(yt-ye));
+  ctx.strokeStyle=`rgba(${sRgb},${sel?0.90:0.65})`;
+  ctx.strokeRect(xa+0.5,Math.min(ye,ys)+0.5,bW-1,Math.abs(ys-ye));
   ctx.setLineDash([]);
-  if(sel){ctx.shadowColor=`rgba(${pRgb},0.3)`;ctx.shadowBlur=6;}
-  // Entry line (extends to right edge)
-  ctx.strokeStyle=`rgba(${eRgb},${sel?0.90:0.65})`;
+  // Price lines — contained within box (xa to xb), never leak
   ctx.lineWidth=sel?2:1.5;
-  ctx.beginPath();ctx.moveTo(xa,ye);ctx.lineTo(right,ye);ctx.stroke();
-  // TP line
-  ctx.strokeStyle=`rgba(${pRgb},${sel?0.9:0.72})`;
+  ctx.strokeStyle=`rgba(${eRgb},${sel?0.88:0.52})`;
+  ctx.beginPath();ctx.moveTo(xa,ye);ctx.lineTo(xb,ye);ctx.stroke();
   ctx.lineWidth=sel?1.5:1;
-  ctx.beginPath();ctx.moveTo(xa,yt);ctx.lineTo(right,yt);ctx.stroke();
-  // SL line
-  ctx.strokeStyle=`rgba(${sRgb},${sel?0.85:0.68})`;
-  ctx.beginPath();ctx.moveTo(xa,ys);ctx.lineTo(right,ys);ctx.stroke();
-  ctx.shadowBlur=0;
-  // Labels
-  if(showLabels){
-    const lx=Math.min(xb+8,right-90);
-    ctx.font='9px monospace';ctx.textAlign='left';
-    ctx.fillStyle=`rgba(${eRgb},0.82)`;ctx.fillText('Entry '+priceFmt(d.entry),lx,ye+4);
-    ctx.fillStyle=`rgba(${pRgb},0.85)`;ctx.fillText('TP +'+rr.toFixed(2)+'R  '+priceFmt(d.target),lx,yt+4);
-    ctx.fillStyle=`rgba(${sRgb},0.85)`;ctx.fillText('SL −'+rr.toFixed(2)+'R  '+priceFmt(d.stop),lx,ys+4);
-  }
-  // Handles when selected
+  ctx.strokeStyle=`rgba(${pRgb},${sel?0.92:0.60})`;
+  ctx.beginPath();ctx.moveTo(xa,yt);ctx.lineTo(xb,yt);ctx.stroke();
+  ctx.strokeStyle=`rgba(${sRgb},${sel?0.92:0.60})`;
+  ctx.beginPath();ctx.moveTo(xa,ys);ctx.lineTo(xb,ys);ctx.stroke();
+  // Labels + handles — only when selected (TradingView style)
   if(sel){
+    const showLabels=d.style?.showLabels!==false;
+    if(showLabels){
+      // Label position: to the right of box if space, otherwise inside right-aligned
+      const outsideX=xb+8;
+      const insideX=xa+6;
+      const useOutside=outsideX+110<right;
+      const lx=useOutside?outsideX:insideX;
+      ctx.font='bold 10px monospace';ctx.textAlign='left';
+      // TP
+      ctx.fillStyle=pCol;
+      ctx.fillText('TP  '+priceFmt(d.target)+'  +'+rr.toFixed(2)+'R',lx,yt+4);
+      // Entry
+      ctx.font='10px monospace';
+      ctx.fillStyle=`rgba(${eRgb},0.88)`;
+      ctx.fillText('Entry  '+priceFmt(d.entry),lx,ye+4);
+      // SL
+      ctx.font='bold 10px monospace';
+      ctx.fillStyle=sCol;
+      ctx.fillText('SL  '+priceFmt(d.stop)+'  −'+rr.toFixed(2)+'R',lx,ys+4);
+    }
+    // Handles
     _rPosHandle(ctx,xa,ye,eCol);
     _rPosHandle(ctx,xa,yt,pCol);
     _rPosHandle(ctx,xa,ys,sCol);
