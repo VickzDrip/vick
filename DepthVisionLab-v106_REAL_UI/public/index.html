@@ -171,8 +171,8 @@
 .full-select{width:100%;min-height:36px}
 .theme-panel{display:none;margin-top:8px;background:#050b15;border:1px solid #16243a;border-radius:6px;padding:9px}
 .theme-panel.open{display:block}
-.color-row{display:grid;grid-template-columns:1fr 52px;gap:8px;align-items:center;font-size:10px;color:#8da3c2;margin-bottom:7px}
-.color-row input{width:52px;height:28px;background:#06080f;border:1px solid #1e2a40;border-radius:4px;padding:2px}
+.color-row{display:flex;flex-direction:column;align-items:flex-start;gap:5px;font-size:10px;color:#8da3c2;margin-bottom:9px}
+.color-row input{width:26px;height:26px;background:#06080f;border:1px solid #1e2a40;border-radius:4px;padding:2px;cursor:pointer;flex-shrink:0}
 .compact-save{height:34px;font-size:10px}
 .coming-section{padding:28px 12px 36px!important}
 .coming-soon{text-align:center;color:#26364f;font-size:25px;font-weight:900;letter-spacing:4px;line-height:1.2}
@@ -2007,12 +2007,12 @@ html.pre-ui .switch::after{transition:none!important}
             <label class="kv" style="cursor:pointer;"><span class="k" style="color:#f59e0b;font-weight:600;">Exhaustion</span><input type="checkbox" id="faShowExhaustion" checked style="width:14px;height:14px;accent-color:#f59e0b;cursor:pointer;flex-shrink:0;"></label>
             <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
             <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">CORES</div>
-            <div class="kv"><span class="k">Bullish Trail</span><input type="color" id="faBullColor" value="#00d4ff" style="width:36px;height:20px;border:1px solid #1a2840;cursor:pointer;border-radius:3px;padding:1px;background:none;"></div>
-            <div class="kv"><span class="k">Bearish Trail</span><input type="color" id="faBearColor" value="#ff6600" style="width:36px;height:20px;border:1px solid #1a2840;cursor:pointer;border-radius:3px;padding:1px;background:none;"></div>
-            <div class="kv"><span class="k">Bullish Center</span><input type="color" id="faBullCenterColor" value="#00ffff" style="width:36px;height:20px;border:1px solid #1a2840;cursor:pointer;border-radius:3px;padding:1px;background:none;"></div>
-            <div class="kv"><span class="k">Bearish Center</span><input type="color" id="faBearCenterColor" value="#ff9500" style="width:36px;height:20px;border:1px solid #1a2840;cursor:pointer;border-radius:3px;padding:1px;background:none;"></div>
-            <div class="kv"><span class="k">Institutional</span><input type="color" id="faInstColor" value="#a040ff" style="width:36px;height:20px;border:1px solid #1a2840;cursor:pointer;border-radius:3px;padding:1px;background:none;"></div>
-            <div class="kv"><span class="k">Exhaustion</span><input type="color" id="faExhaustColor" value="#f59e0b" style="width:36px;height:20px;border:1px solid #1a2840;cursor:pointer;border-radius:3px;padding:1px;background:none;"></div>
+            <div class="kv"><span class="k">Bullish Trail</span><input type="color" id="faBullColor" value="#00d4ff"></div>
+            <div class="kv"><span class="k">Bearish Trail</span><input type="color" id="faBearColor" value="#ff6600"></div>
+            <div class="kv"><span class="k">Bullish Center</span><input type="color" id="faBullCenterColor" value="#00ffff"></div>
+            <div class="kv"><span class="k">Bearish Center</span><input type="color" id="faBearCenterColor" value="#ff9500"></div>
+            <div class="kv"><span class="k">Institutional</span><input type="color" id="faInstColor" value="#a040ff"></div>
+            <div class="kv"><span class="k">Exhaustion</span><input type="color" id="faExhaustColor" value="#f59e0b"></div>
             <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
             <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">INTENSIDADE</div>
             <div class="kv"><span class="k">Trail Opacidade</span><input class="num" id="faTrailOpacity" type="number" min="0.1" max="1" step="0.05" value="0.70" style="width:52px"></div>
@@ -7167,10 +7167,29 @@ return {
   .asset-main{font-size:14px!important;}
   .topbar .pnow{font-size:18px!important;}
 }
-input[type=color]{-webkit-appearance:none;appearance:none;padding:0!important;border:none!important;cursor:pointer;display:block}
-input[type=color]::-webkit-color-swatch-wrapper{padding:0}
-input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
-input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
+/* ── Color inputs: compact square swatch ── */
+/* Width/height intentionally not !important so position:absolute overlay inputs
+   (opacity:0, inset:0) keep their inline width:100%;height:100% */
+input[type=color]{
+  -webkit-appearance:none;appearance:none;
+  width:26px;height:26px;
+  padding:2px!important;
+  border:1px solid #1e2a40!important;
+  border-radius:4px!important;
+  cursor:pointer!important;
+  display:block!important;
+  background:#06080f!important;
+  flex-shrink:0!important;
+}
+/* Ensure visible (non-overlay) color inputs are compact */
+.color-row input[type=color],
+.ind-settings .kv > input[type=color],
+.dvl-ctx-btn input[type=color]{
+  width:26px!important;height:26px!important;
+}
+input[type=color]::-webkit-color-swatch-wrapper{padding:0!important;}
+input[type=color]::-webkit-color-swatch{border:none!important;border-radius:2px!important;}
+input[type=color]::-moz-color-swatch{border:none!important;border-radius:2px!important;}
 
 /* ── Bottom bar: hide visually, keep in DOM for JS ── */
 .bottom{display:none!important;}
@@ -8948,7 +8967,7 @@ function _deleteSelected(){
   if(!_selId)return;
   S.drawings=S.drawings.filter(d=>d.id!==_selId);
   _selId=null;S.selectedDrawing=null;_sm=ST.IDLE;_drag=null;
-  _closeSettings();_pushHistory();_saveDrawings();drawSoon();
+  _closeSettings();_syncCtxBar();_pushHistory();_saveDrawings();drawSoon();
 }
 function _dupSelected(){
   const orig=_getSelected();if(!orig)return;
