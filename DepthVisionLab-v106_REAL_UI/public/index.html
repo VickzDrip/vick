@@ -2013,6 +2013,8 @@ html.pre-ui .switch::after{transition:none!important}
             <label class="kv" style="cursor:pointer;"><span class="k" style="color:#9b5de5;font-weight:600;">ABS</span><div style="display:flex;align-items:center;gap:6px;"><label style="position:relative;width:20px;height:20px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:3px;border:1px solid #1e2a40;overflow:hidden"><div id="hrColorAbsSw" style="width:100%;height:100%;background:#9b5de5;pointer-events:none"></div><input id="hrColorAbs" type="color" value="#9b5de5" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label><input type="checkbox" id="hrShowAbs" checked style="width:14px;height:14px;accent-color:#9b5de5;cursor:pointer;flex-shrink:0;"></div></label>
             <label class="kv" style="cursor:pointer;"><span class="k" style="color:#ffd60a;font-weight:600;">EXH</span><div style="display:flex;align-items:center;gap:6px;"><label style="position:relative;width:20px;height:20px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:3px;border:1px solid #1e2a40;overflow:hidden"><div id="hrColorExhSw" style="width:100%;height:100%;background:#ffd60a;pointer-events:none"></div><input id="hrColorExh" type="color" value="#ffd60a" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label><input type="checkbox" id="hrShowExh" checked style="width:14px;height:14px;accent-color:#ffd60a;cursor:pointer;flex-shrink:0;"></div></label>
             <label class="kv" style="cursor:pointer;"><span class="k" style="color:#ff3d57;font-weight:600;">FAIL</span><div style="display:flex;align-items:center;gap:6px;"><label style="position:relative;width:20px;height:20px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:3px;border:1px solid #1e2a40;overflow:hidden"><div id="hrColorFailSw" style="width:100%;height:100%;background:#ff3d57;pointer-events:none"></div><input id="hrColorFail" type="color" value="#ff3d57" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label><input type="checkbox" id="hrShowFail" checked style="width:14px;height:14px;accent-color:#ff3d57;cursor:pointer;flex-shrink:0;"></div></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#4a6080;font-weight:600;">WEAK</span><div style="display:flex;align-items:center;gap:6px;"><label style="position:relative;width:20px;height:20px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:3px;border:1px solid #1e2a40;overflow:hidden"><div id="hrColorWeakSw" style="width:100%;height:100%;background:#4a6080;pointer-events:none"></div><input id="hrColorWeak" type="color" value="#4a6080" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label><input type="checkbox" id="hrShowWeak" checked style="width:14px;height:14px;accent-color:#4a6080;cursor:pointer;flex-shrink:0;"></div></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#3a5070;font-weight:600;">WAIT</span><div style="display:flex;align-items:center;gap:6px;"><label style="position:relative;width:20px;height:20px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:3px;border:1px solid #1e2a40;overflow:hidden"><div id="hrColorWaitSw" style="width:100%;height:100%;background:#3a5070;pointer-events:none"></div><input id="hrColorWait" type="color" value="#3a5070" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label><input type="checkbox" id="hrShowWait" checked style="width:14px;height:14px;accent-color:#3a5070;cursor:pointer;flex-shrink:0;"></div></label>
             <div style="font-size:9px;color:#00d4ff;font-weight:700;letter-spacing:.08em;margin:6px 0 3px;opacity:.8;">PESOS DO SCORE</div>
             <div class="kv"><span class="k">Volume / OF %</span><input class="num" id="hrVolWeight" type="number" min="0" max="100" step="5" value="55" style="width:52px"></div>
             <div class="kv"><span class="k">Candle React. %</span><input class="num" id="hrCandleWeight" type="number" min="0" max="100" step="5" value="25" style="width:52px"></div>
@@ -2025,7 +2027,8 @@ html.pre-ui .switch::after{transition:none!important}
             <label class="kv" style="cursor:pointer;"><span class="k">Requer vol.</span><input type="checkbox" id="hrRequireVol" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Requer FP</span><input type="checkbox" id="hrUseFP" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Requer fechamento</span><input type="checkbox" id="hrReqClose" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <div class="hint">FAIL só aparece após reação anterior invalidada. Volume manda. Requer HVN ativo.</div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Todo toque</span><input type="checkbox" id="hrShowEvery" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="hint">FAIL só aparece após reação BUY/SELL invalidada. Todo toque mostra pelo menos WEAK/WAIT. Requer HVN ativo.</div>
           </div>
         </div>
 
@@ -10437,8 +10440,8 @@ document.addEventListener('change',function(ev){
 const _zoneState=new Map();
 const _hrCache={key:'',sigs:[]};  // stable signal cache — invalidated by data/config, not by pan/zoom
 // render-only settings that change display but not signal detection
-const _RENDER_ONLY=new Set(['hrSigSize','hrShowPct','hrShowBuy','hrShowSell','hrShowAbs','hrShowExh','hrShowFail','hrMaxSigs',
-  'hrColorBuy','hrColorSell','hrColorAbs','hrColorExh','hrColorFail']);
+const _RENDER_ONLY=new Set(['hrSigSize','hrShowPct','hrShowBuy','hrShowSell','hrShowAbs','hrShowExh','hrShowFail','hrShowWeak','hrShowWait','hrMaxSigs',
+  'hrColorBuy','hrColorSell','hrColorAbs','hrColorExh','hrColorFail','hrColorWeak','hrColorWait']);
 
 function getState(zid){
   if(!_zoneState.has(zid))_zoneState.set(zid,{type:null,idx:-1,hi:0,lo:0,failed:false,cooldown:0,prevOutside:false});
@@ -10467,6 +10470,9 @@ function cfg(){
     requireVol:  bv('hrRequireVol',true),
     useFP:       bv('hrUseFP',true),
     reqClose:    bv('hrReqClose',true),
+    showEvery:   bv('hrShowEvery',true),
+    showWeak:    bv('hrShowWeak',true),
+    showWait:    bv('hrShowWait',true),
     volWeight:   nv('hrVolWeight',55),
     candleWeight:nv('hrCandleWeight',25),
     confirmWeight:nv('hrConfirmWeight',15),
@@ -10477,7 +10483,9 @@ function cfg(){
     colorSell:   cv('hrColorSell','#ff8c00'),
     colorAbs:    cv('hrColorAbs','#9b5de5'),
     colorExh:    cv('hrColorExh','#ffd60a'),
-    colorFail:   cv('hrColorFail','#ff3d57')
+    colorFail:   cv('hrColorFail','#ff3d57'),
+    colorWeak:   cv('hrColorWeak','#4a6080'),
+    colorWait:   cv('hrColorWait','#3a5070')
   };
 }
 
@@ -10705,10 +10713,73 @@ function scoreExh(c,p,nx,volR,conf){
   return _wScore(_fpExh(c,p,volR),_candleExh(c,p),_confirmExh(nx,p),conf);
 }
 
+// ── Soft directional bias for WEAK/WAIT (no hard blocks) ─────
+function _touchBias(fp,c,z,volR,conf){
+  // returns [buyBias, sellBias] each 0-100, no blocking
+  let bS=0,sS=0;
+  if(fp.real&&conf.useFP){
+    bS=fp.buyShare*80;sS=fp.sellShare*80;
+    if(fp.total>0){
+      const dr=fp.delta/fp.total;
+      if(dr>0)bS+=Math.min(20,dr*40);else sS+=Math.min(20,Math.abs(dr)*40);
+    }
+  }else{
+    const tv=Math.max(1,c.v);
+    const dr=((c.buy||0)-(c.sell||0))/tv;
+    if(dr>0)bS+=Math.min(30,dr*50);else sS+=Math.min(30,Math.abs(dr)*50);
+    const vb=Math.min(10,(volR-1)*8);bS+=vb;sS+=vb;
+  }
+  const rng=c.h-c.l;
+  if(rng>0){
+    const lW=(Math.min(c.c,c.o)-c.l)/rng,uW=(c.h-Math.max(c.c,c.o))/rng;
+    bS+=lW*20;sS+=uW*20;
+    if(c.c>=c.o)bS+=10;else sS+=10;
+  }
+  return[Math.min(100,bS),Math.min(100,sS)];
+}
+
+// ── Classify a zone touch → signal or null ────────────────────
+function classifyTouch(c,p,nx,z,volR,conf){
+  // Try strict signals first (high-confidence)
+  const sB=scoreBuy(c,nx,z,volR,conf);
+  const sS_=scoreSell(c,nx,z,volR,conf);
+  const sA=scoreAbs(c,nx,z,volR,conf);
+  const sE=scoreExh(c,p,nx,volR,conf);
+  let best=null,bScore=0;
+  if(sA>=conf.minConf){best='ABS';bScore=sA;}
+  if(sB>=conf.minConf&&sB>bScore){best='BUY';bScore=sB;}
+  if(sS_>=conf.minConf&&sS_>bScore){best='SELL';bScore=sS_;}
+  if(sE>=conf.minConf&&sE>bScore){best='EXH';bScore=sE;}
+  if(best){
+    const fp=_fpInZone(c,z);
+    const isBull=best==='BUY'?true:best==='SELL'?false:fp.delta>=0;
+    return{type:best,conf:Math.round(Math.min(99,bScore)),isBull,strong:true};
+  }
+  // No strict signal — WEAK/WAIT if showEvery
+  if(!conf.showEvery)return null;
+  const fp=_fpInZone(c,z);
+  const[biasB,biasS]=_touchBias(fp,c,z,volR,conf);
+  const maxBias=Math.max(biasB,biasS);
+  const diff=Math.abs(biasB-biasS);
+  const rng=c.h-c.l;
+  const bP=rng>0?Math.abs(c.c-c.o)/rng:0;
+  // Weak ABS: elevated volume + small body below strict abs threshold
+  if(volR>1.1&&bP<0.30&&sA>15){
+    const wConf=Math.round(Math.max(20,Math.min(59,sA)));
+    return{type:'WEAK',conf:wConf,isBull:null,strong:false};
+  }
+  // WAIT: mixed/unclear
+  if(maxBias<25||diff<15)
+    return{type:'WAIT',conf:0,isBull:null,strong:false};
+  // WEAK: some direction but below minConf
+  const isBull=biasB>biasS;
+  return{type:'WEAK',conf:Math.round(Math.min(59,maxBias*0.7)),isBull,strong:false};
+}
+
 // zones must be pre-sorted ascending by .lo for early-exit to work
 function buildSignals(cs,s,e,zonesSorted,avgVol,conf){
   _zoneState.clear();
-  const sigs=[];
+  const rawSigs=[];
   for(let i=Math.max(1,s);i<=Math.min(e,cs.length-1);i++){
     const c=cs[i],p=cs[i-1],nx=cs[i+1]||null;
     const rng=c.h-c.l;
@@ -10716,34 +10787,40 @@ function buildSignals(cs,s,e,zonesSorted,avgVol,conf){
     const volR=avgVol>0?c.v/avgVol:1;
     for(let zi=0;zi<zonesSorted.length;zi++){
       const z=zonesSorted[zi];
-      if(z.hi<c.l)continue;   // zone entirely below candle — skip
-      if(z.lo>c.h)break;      // zone entirely above candle — all remaining are too
+      if(z.hi<c.l)continue;
+      if(z.lo>c.h)break;
       const st=getState(zi);
       if(st.cooldown>0){st.cooldown--;continue;}
+      // FAIL: only from directional reactions (BUY/SELL)
       if((st.type==='BUY'||st.type==='SELL')&&!st.failed){
         if(checkFail(st,c,conf.failMode,z)){
           st.failed=true;st.cooldown=conf.cooldown;
-          sigs.push({idx:i,type:'FAIL',conf:Math.round(Math.min(99,60+(volR>conf.minVolRatio?20:0))),isBull:false,zi});
+          rawSigs.push({idx:i,type:'FAIL',conf:Math.round(Math.min(99,60+(volR>conf.minVolRatio?20:0))),isBull:false,zi,strong:true});
           continue;
         }
       }
       if(st.type&&!st.failed)continue;
-      const sA=scoreAbs(c,nx,z,volR,conf);
-      const sB=scoreBuy(c,nx,z,volR,conf);
-      const sS=scoreSell(c,nx,z,volR,conf);
-      const sE=scoreExh(c,p,nx,volR,conf);
-      let best=null,bScore=0;
-      if(sA>=conf.minConf){best='ABS';bScore=sA;}
-      if(sB>=conf.minConf&&sB>bScore){best='BUY';bScore=sB;}
-      if(sS>=conf.minConf&&sS>bScore){best='SELL';bScore=sS;}
-      if(sE>=conf.minConf&&sE>bScore){best='EXH';bScore=sE;}
-      if(!best)continue;
-      st.type=best;st.idx=i;st.hi=c.h;st.lo=c.l;st.failed=false;st.cooldown=conf.cooldown;st.prevOutside=false;
-      const isBull=best==='BUY'?true:best==='SELL'?false:((c.buy||0)-(c.sell||0))>=0;
-      sigs.push({idx:i,type:best,conf:Math.round(Math.min(99,bScore)),isBull,zi});
+      const result=classifyTouch(c,p,nx,z,volR,conf);
+      if(!result)continue;
+      if(result.type==='WEAK'&&!conf.showWeak)continue;
+      if(result.type==='WAIT'&&!conf.showWait)continue;
+      st.type=result.type;st.idx=i;st.hi=c.h;st.lo=c.l;
+      st.failed=false;st.cooldown=conf.cooldown;st.prevOutside=false;
+      rawSigs.push({idx:i,...result,zi});
     }
   }
-  return sigs;
+  // Anti-spam: max 1 signal per candle, prefer stronger types
+  const PRIO={FAIL:7,BUY:6,SELL:6,ABS:5,EXH:4,WEAK:2,WAIT:1};
+  const byIdx=new Map();
+  for(const sig of rawSigs){
+    if(!byIdx.has(sig.idx)){byIdx.set(sig.idx,sig);}
+    else{
+      const prev=byIdx.get(sig.idx);
+      const pa=PRIO[sig.type]||0,pb=PRIO[prev.type]||0;
+      if(pa>pb||(pa===pb&&sig.conf>prev.conf))byIdx.set(sig.idx,sig);
+    }
+  }
+  return Array.from(byIdx.values()).sort((a,b)=>a.idx-b.idx);
 }
 
 // cache key covers data + detection params only (not render-only settings)
@@ -10756,7 +10833,8 @@ function _getCacheKey(cs,zones,st){
     zones.length,zSum.toFixed(2),
     st.minConf,st.cooldown,st.lookback,st.failMode,
     st.volWeight,st.candleWeight,st.confirmWeight,st.touchWeight,
-    st.minVolRatio,st.requireVol?1:0,st.useDelta?1:0,st.useFP?1:0,st.reqClose?1:0
+    st.minVolRatio,st.requireVol?1:0,st.useDelta?1:0,st.useFP?1:0,st.reqClose?1:0,
+    st.showEvery?1:0
   ].join('|');
 }
 
@@ -10783,22 +10861,23 @@ function h2rgb(hex){
   return[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)];
 }
 
-function drawBadge(ctx,col,label,confStr,showPct,px,py,right,scale){
+function drawBadge(ctx,col,label,confStr,showPct,px,py,right,scale,alpha){
+  const a=alpha??1;
   const BW=Math.round(36*scale),BH=showPct?Math.round(28*scale):Math.round(17*scale),R=3;
   const x0=clamp(px-BW/2,PL+2,right-BW-2);
   const[ri,gi,bi]=h2rgb(col);
   ctx.save();
-  ctx.shadowColor=col;ctx.shadowBlur=6;
+  ctx.shadowColor=col;ctx.shadowBlur=a<0.8?2:6;
   ctx.beginPath();
   ctx.moveTo(x0+R,py);ctx.lineTo(x0+BW-R,py);ctx.arcTo(x0+BW,py,x0+BW,py+R,R);
   ctx.lineTo(x0+BW,py+BH-R);ctx.arcTo(x0+BW,py+BH,x0+BW-R,py+BH,R);
   ctx.lineTo(x0+R,py+BH);ctx.arcTo(x0,py+BH,x0,py+BH-R,R);
   ctx.lineTo(x0,py+R);ctx.arcTo(x0,py,x0+R,py,R);
   ctx.closePath();
-  ctx.fillStyle=`rgba(${ri},${gi},${bi},0.18)`;ctx.fill();
+  ctx.fillStyle=`rgba(${ri},${gi},${bi},${0.18*a})`;ctx.fill();
   ctx.shadowBlur=0;
-  ctx.strokeStyle=`rgba(${ri},${gi},${bi},0.82)`;ctx.lineWidth=1;ctx.stroke();
-  ctx.fillStyle=col;ctx.textAlign='center';
+  ctx.strokeStyle=`rgba(${ri},${gi},${bi},${0.82*a})`;ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle=`rgba(${ri},${gi},${bi},${a})`;ctx.textAlign='center';
   const cx=x0+BW/2;
   const fs1=Math.round(9*scale),fs2=Math.round(8*scale);
   if(showPct){
@@ -10824,27 +10903,34 @@ function drawHVNReact(ctx,W,H,AllV,sc,x){
   const showPct=st.showPct;
   const BH28=Math.round(28*scale),BH17=Math.round(17*scale);
   const GAP=5;
-  const colorMap={BUY:st.colorBuy,SELL:st.colorSell,ABS:st.colorAbs,EXH:st.colorExh,FAIL:st.colorFail};
-  const showMap={BUY:st.showBuy,SELL:st.showSell,ABS:st.showAbs,EXH:st.showExh,FAIL:st.showFail};
-  // view bounds with margin to avoid pop-in at edges
+  const colorMap={BUY:st.colorBuy,SELL:st.colorSell,ABS:st.colorAbs,EXH:st.colorExh,FAIL:st.colorFail,WEAK:st.colorWeak,WAIT:st.colorWait};
+  const showMap={BUY:st.showBuy,SELL:st.showSell,ABS:st.showAbs,EXH:st.showExh,FAIL:st.showFail,WEAK:st.showWeak,WAIT:st.showWait};
+  // WEAK/WAIT are drawn smaller and more transparent
+  const alphaOf={WEAK:0.45,WAIT:0.35};
+  const scaleOf={WEAK:scale*0.82,WAIT:scale*0.78};
   const vStart=S.view.start-2,vEnd=S.view.end+2;
   ctx.save();
   let drawn=0;
   for(const sig of sigs){
-    // fast skip: outside visible range
     if(sig.idx<vStart||sig.idx>vEnd)continue;
-    if(!showMap[sig.type]||sig.conf<st.minConf)continue;
+    if(!showMap[sig.type])continue;
+    // WEAK/WAIT bypass minConf (they are sub-threshold by definition)
+    if(sig.strong&&sig.conf<st.minConf)continue;
     if(drawn>=st.maxSigs)break;
     const c=cs[sig.idx];
     const px=x(sig.idx);
     if(px<PL||px>right)continue;
-    const BH=showPct?BH28:BH17;
+    const sc_=scaleOf[sig.type]||scale;
+    const alpha=alphaOf[sig.type]||1;
+    const BH=showPct?Math.round(28*sc_):Math.round(17*sc_);
     let py;
     if(sig.isBull===true)      py=sc.y(c.l)+GAP;
     else if(sig.isBull===false)py=sc.y(c.h)-BH-GAP;
     else                       py=sc.y((c.h+c.l)/2)-BH/2;
     py=clamp(py,PT+2,H-PB-BH-2);
-    drawBadge(ctx,colorMap[sig.type]||'#fff',sig.type,sig.conf+'%',showPct,px,py,right,scale);
+    const confStr=sig.type==='WAIT'?'--':sig.conf+'%';
+    const showP=showPct&&sig.type!=='WAIT';
+    drawBadge(ctx,colorMap[sig.type]||'#fff',sig.type,confStr,showP,px,py,right,sc_,alpha);
     drawn++;
   }
   ctx.restore();
@@ -10853,11 +10939,11 @@ function drawHVNReact(ctx,W,H,AllV,sc,x){
 window.__drawHVNReact=drawHVNReact;
 
 const HR_IDS=new Set(['hrMinConf','hrCooldown','hrLookback','hrMaxSigs','hrSigSize','hrFailMode',
-  'hrShowBuy','hrShowSell','hrShowAbs','hrShowExh','hrShowFail','hrShowPct',
+  'hrShowBuy','hrShowSell','hrShowAbs','hrShowExh','hrShowFail','hrShowWeak','hrShowWait','hrShowEvery','hrShowPct',
   'hrUseDelta','hrRequireVol','hrUseFP','hrReqClose',
   'hrVolWeight','hrCandleWeight','hrConfirmWeight','hrTouchWeight','hrMinVolRatio',
-  'hrColorBuy','hrColorSell','hrColorAbs','hrColorExh','hrColorFail']);
-const _swMap={hrColorBuy:'hrColorBuySw',hrColorSell:'hrColorSellSw',hrColorAbs:'hrColorAbsSw',hrColorExh:'hrColorExhSw',hrColorFail:'hrColorFailSw'};
+  'hrColorBuy','hrColorSell','hrColorAbs','hrColorExh','hrColorFail','hrColorWeak','hrColorWait']);
+const _swMap={hrColorBuy:'hrColorBuySw',hrColorSell:'hrColorSellSw',hrColorAbs:'hrColorAbsSw',hrColorExh:'hrColorExhSw',hrColorFail:'hrColorFailSw',hrColorWeak:'hrColorWeakSw',hrColorWait:'hrColorWaitSw'};
 document.addEventListener('input',ev=>{
   const id=ev.target?.id;
   if(!HR_IDS.has(id))return;
