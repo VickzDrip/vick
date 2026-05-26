@@ -9257,10 +9257,28 @@ function _applyHandleDrag(p,cs){
   const d=_getSelected();if(!d||!_drag)return;
   const h=_drag.handle;
   if(d.type==='longpos'||d.type==='shortpos'){
-    if(h==='h_entry')d.entry=cs.pY(p.y);
-    else if(h==='h_target')d.target=cs.pY(p.y);
-    else if(h==='h_stop')d.stop=cs.pY(p.y);
-    else if(h==='h_right')d.x2=cs.iX(p.x);
+    const isLong=d.type==='longpos';
+    if(h==='h_entry'){
+      // Clamp entry between stop and target so it never leaves the zone
+      const lo=Math.min(d.stop,d.target),hi=Math.max(d.stop,d.target);
+      d.entry=Math.max(lo,Math.min(hi,cs.pY(p.y)));
+    } else if(h==='h_target'){
+      d.target=cs.pY(p.y);
+      // TP crossed entry → flip type and swap TP/SL
+      if((isLong&&d.target<d.entry)||(!isLong&&d.target>d.entry)){
+        const tmp=d.stop;d.stop=d.target;d.target=tmp;
+        d.type=isLong?'shortpos':'longpos';
+      }
+    } else if(h==='h_stop'){
+      d.stop=cs.pY(p.y);
+      // SL crossed entry → flip type and swap TP/SL
+      if((isLong&&d.stop>d.entry)||(!isLong&&d.stop<d.entry)){
+        const tmp=d.target;d.target=d.stop;d.stop=tmp;
+        d.type=isLong?'shortpos':'longpos';
+      }
+    } else if(h==='h_right'){
+      d.x2=cs.iX(p.x);
+    }
     return;
   }
   const cp=screenToChartPoint(p.x,p.y,cs);
