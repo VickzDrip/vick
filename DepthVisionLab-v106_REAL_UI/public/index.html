@@ -3736,23 +3736,17 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
   const lowerWick=wickAbs?wickAbs.lowerWick:(Math.min(c.o,c.c)-c.l)/range;
   const closePos=wickAbs?wickAbs.closePos:(c.c-c.l)/range;
   const trapEnabled=fpc.showWickAbs;
+  // Minimum fraction of row volume that must be on the aggressive side to signal trap.
+  // e.g. S:11K B:92K → buyFrac=0.89 ✓  S:100K B:3K → buyFrac=0.03 ✗ (buy is noise)
+  const MIN_TRAP_FRAC=0.15;
   rows.forEach(([price,r],ri)=>{
     const ry=top+ri*rowH;
     const yc=ry+rowH*.5;
-    // Per-row trap detection:
-    // isUpperTrap = buy dominated this row BUT the candle rejected upward → buyers trapped
-    // isLowerTrap = sell dominated this row BUT the candle rejected downward → sellers trapped
-    const isUpperTrap=trapEnabled&&!r.synthetic&&
-      price>=topThird&&r.buy>r.sell&&
-      upperWick>=fpc.wickMinPct&&closePos<=0.55;
-    const isLowerTrap=trapEnabled&&!r.synthetic&&
-      price<=botThird&&r.sell>r.buy&&
-      lowerWick>=fpc.wickMinPct&&closePos>=0.45;
     if(r.empty){
-      // Zone tint on empty rows when absorption context is present
-      if(isUpperTrap||(wickAbs?.upper&&price>=topThird))
+      // Empty bucket: tint based on candle-level absorption signal from wickAbs
+      if(wickAbs?.upper&&price>=topThird)
         {ctx.fillStyle='rgba(255,110,35,.15)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
-      else if(isLowerTrap||(wickAbs?.lower&&price<=botThird))
+      else if(wickAbs?.lower&&price<=botThird)
         {ctx.fillStyle='rgba(0,200,230,.10)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
       else
         {ctx.fillStyle='rgba(5,9,20,.50)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
@@ -3763,26 +3757,39 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
     const isWeak=pwr<fpc.rowThresh;
     const imbal=(r.buy-r.sell)/Math.max(1e-9,tot);
     const baseAlpha=clamp(.10+pwr*.42,.10,.60);
+    const buyFrac=r.buy/Math.max(1e-9,tot);
+    const sellFrac=r.sell/Math.max(1e-9,tot);
+    // Trap detection — based on aggressive volume PRESENCE, not dominance over opposite side.
+    // Footprint shows aggression (market orders). Absorption is PASSIVE (limit orders) — not visible.
+    // Buyers at the top who got rejected were absorbed by passive sell liquidity, not aggressive sellers.
+    // So: check that buyers were meaningfully present (buyFrac >= MIN_TRAP_FRAC), not that buy > sell.
+    const isUpperTrap=trapEnabled&&!r.synthetic&&
+      price>=topThird&&buyFrac>=MIN_TRAP_FRAC&&
+      upperWick>=fpc.wickMinPct&&closePos<=0.55;
+    const isLowerTrap=trapEnabled&&!r.synthetic&&
+      price<=botThird&&sellFrac>=MIN_TRAP_FRAC&&
+      lowerWick>=fpc.wickMinPct&&closePos>=0.45;
     ctx.fillStyle='rgba(5,9,20,.70)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
     if(isUpperTrap){
-      // Row has buy > sell but candle rejected up: paint orange/amber NOT green
-      // This communicates "failed buy aggression / buyers trapped"
+      // Buy aggression at top failed → buyers absorbed by passive sellers.
+      // Paint orange/amber regardless of buy/sell ratio — the fact that buyers were HERE and price
+      // rejected is what matters, not whether aggressive sellers also showed up.
       if(!isWeak){ctx.fillStyle=`rgba(210,90,25,${baseAlpha})`;ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
       const ta=clamp(.22+pwr*.26,.18,.52);
       ctx.fillStyle=`rgba(255,110,35,${ta})`;ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
     }else if(isLowerTrap){
-      // Row has sell > buy but candle rejected down: paint cyan NOT red
-      // This communicates "failed sell aggression / sellers trapped"
+      // Sell aggression at bottom failed → sellers absorbed by passive buyers.
+      // Paint cyan regardless of buy/sell ratio.
       if(!isWeak){ctx.fillStyle=`rgba(0,145,185,${baseAlpha})`;ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
       const ta=clamp(.22+pwr*.26,.18,.52);
       ctx.fillStyle=`rgba(0,210,240,${ta})`;ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
     }else{
-      // Normal delta-based coloring for rows outside trap context
+      // Normal delta-based coloring outside trap zones
       if(!isWeak){
         ctx.fillStyle=imbal>=0?`rgba(0,200,150,${baseAlpha})`:`rgba(255,115,45,${baseAlpha})`;
         ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
       }
-      // Soft ambient tint on zone rows that don't individually qualify as trap
+      // Soft ambient tint for zone rows that don't meet the per-row threshold but candle does
       if(wickAbs?.upper&&price>=topThird)
         {ctx.fillStyle='rgba(200,90,25,.09)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
       else if(wickAbs?.lower&&price<=botThird)
@@ -3796,17 +3803,20 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
     ctx.strokeStyle='rgba(30,42,64,.55)';ctx.lineWidth=.4;ctx.strokeRect(left+1,ry,boxW-2,rowH-0.5);
     ctx.strokeStyle='rgba(80,100,140,.40)';ctx.beginPath();ctx.moveTo(mid,ry);ctx.lineTo(mid,ry+rowH-0.5);ctx.stroke();
     if(canShowText&&tot>0){
-      // Trap rows: dominant side shown in "trapped" color (amber/cyan), not normal buy/sell color
-      // Numbers stay real — only the color changes to signal context
+      // Numbers stay real. Color signals context:
+      // Upper trap → buy numbers amber ("this buy was absorbed"), sell in faded warm
+      // Lower trap → sell numbers cyan ("this sell was absorbed"), buy in faded cool
       let sellCol,buyCol;
       if(isUpperTrap){
-        // Buy numbers in amber: "this buy got trapped"
         buyCol =isWeak?`rgba(255,155,55,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(255,160,55,1)';
-        sellCol=isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)';
+        sellCol=r.sell>0
+          ?(isWeak?`rgba(200,115,55,${clamp(.4+pwr*.4,.35,.80)}`:'rgba(210,125,60,.80)')
+          :(isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)');
       }else if(isLowerTrap){
-        // Sell numbers in cyan: "this sell got trapped"
         sellCol=isWeak?`rgba(0,200,235,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(0,215,245,1)';
-        buyCol =isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)';
+        buyCol =r.buy>0
+          ?(isWeak?`rgba(60,180,200,${clamp(.4+pwr*.4,.35,.80)}`:'rgba(70,190,210,.80)')
+          :(isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)');
       }else{
         sellCol=r.sell>r.buy
           ?(isWeak?`rgba(255,130,70,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(255,130,70,1)')
