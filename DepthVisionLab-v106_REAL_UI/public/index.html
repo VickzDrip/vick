@@ -1862,7 +1862,7 @@ html.pre-ui .switch::after{transition:none!important}
                 <input id="bigSellColor" type="color" value="#ff7c3a" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0">
               </label>
             </label>
-            <div class="kv"><span class="k">Últimas velas</span><input class="num" id="bigBars" type="number" min="1" max="500" step="1" value="30"></div>
+            <div class="kv"><span class="k">Últimos candles</span><input class="num" id="btLastCandles" type="number" min="20" max="2000" step="10" value="200"></div>
             <div class="hint">Bolhas derivadas do footprint real. Alta = mais trades. Baixa = só os maiores.</div>
           </div>
         </div>
@@ -2529,7 +2529,7 @@ async function reloadAggTradesForBigBars(redraw=true,seq=S.loadSeq,sym=S.sym,tf=
   if(!S.candles.length||S.aggLoading)return;
   S.aggLoading=true; S.aggSeq=seq;
   try{
-    const inputBars=barsOverride||+el('bigBars').value||80;
+    const inputBars=barsOverride||+(el('btLastCandles')?.value)||+(el('bigBars')?.value)||200;
     const bars=clamp(inputBars,1,500);
     // Targeted reset: only zero out bars we're about to reload — avoids full flash
     S.trades=[];
@@ -2598,7 +2598,7 @@ async function loadFootprintFromServer(seq=S.loadSeq,sym=S.sym,tf=S.tf){
 
     // Apply to candles that don't yet have real data (historical bars)
     // Recent bars already have high-res data from reloadAggTradesForBigBars
-    const bigBarsLimit=clamp(+(el('bigBars')?.value||80),1,500);
+    const bigBarsLimit=clamp(+(el('btLastCandles')?.value)||+(el('bigBars')?.value)||200,20,2000);
     const recentFrom=Math.max(0,S.candles.length-bigBarsLimit);
 
     for(const fp of data){
@@ -3846,6 +3846,7 @@ function bigTradesConfig(){
   const sens=(el('bigTradeSensitivity')?.value)||'normal';
   return {
     sensitivity:sens,
+    lastCandles:Math.max(20,Math.min(2000,+(el('btLastCandles')?.value)||200)),
     showLabels:!!(el('bigTradeShowLabels')?.checked),
     strongOnly:!!(el('bigTradeStrongOnly')?.checked),
     buyColor:el('bigBuyColor')?.value||'#00d4ff',
@@ -4010,11 +4011,15 @@ function buildBigTradeClustersForCandle(idx){
 }
 function visibleBigTradesByCandle(V){
   const cfg=bigTradeCacheConfigKey();
+  const btc=bigTradesConfig();
+  const lastX=btc.lastCandles;
+  const fromIdx=Math.max(0,S.candles.length-lastX);
   if(!window.__bigTradesPersistentCache)window.__bigTradesPersistentCache=new Map();
   const out=[];
-  const a=Math.max(0,Math.floor(V.a)-2);
+  const a=Math.max(Math.floor(V.a)-2,fromIdx);
   const b=Math.min(S.candles.length,Math.ceil(V.b)+2);
   for(let idx=a;idx<b;idx++){
+    if(idx<fromIdx)continue;
     const c=S.candles[idx];
     if(!c)continue;
     const candleKey=cfg+'|'+String(c.t)+'|'+String(c.h)+'|'+String(c.l)+'|'+String(Math.round((c.buy||0)*1e4))+'|'+String(Math.round((c.sell||0)*1e4));
@@ -4039,8 +4044,11 @@ function visibleBigTradesByCandle(V){
       window.__bigTradesPersistentCache=keep;
     }
   }catch(_e){}
-  if(out.length){window.__bigTradesLastGood=out.slice(0,1200);return out;}
-  return window.__bigTradesLastGood||[];
+  // Never return stale items from outside the allowed range
+  const filtered=out.filter(o=>o.idx>=fromIdx);
+  if(filtered.length){window.__bigTradesLastGood=filtered.slice(0,1200);return filtered;}
+  const lastGood=(window.__bigTradesLastGood||[]).filter(o=>o.idx>=fromIdx);
+  return lastGood;
 }
 try{
   window.visibleBigTradesByCandle=visibleBigTradesByCandle;
@@ -4057,13 +4065,15 @@ try{
 
 function drawBigTrades(ctx,V,sc,x,W,H){
   const btc=bigTradesConfig();
+  const fromIdx=Math.max(0,S.candles.length-btc.lastCandles);
   let items=visibleBigTradesByCandle(V);
-  items=items.filter(o=>o.idx>=Math.floor(V.a)&&o.idx<=Math.ceil(V.b));
+  // Apply lastCandles + visible range filter in all cases — including stale cache
+  items=items.filter(o=>o.idx>=fromIdx&&o.idx>=Math.floor(V.a)&&o.idx<=Math.ceil(V.b));
   try{
-    const cacheKey=bigTradeCacheConfigKey()+'|'+String(S.candles.length);
+    const cacheKey=bigTradeCacheConfigKey()+'|'+String(S.candles.length)+'|'+String(fromIdx);
     if(items.length){window.__bigTradesOverlayCache={key:cacheKey,items,ts:Date.now()};}
     else if(window.__bigTradesOverlayCache&&window.__bigTradesOverlayCache.key===cacheKey&&(Date.now()-(window.__bigTradesOverlayCache.ts||0)<30000)){
-      items=window.__bigTradesOverlayCache.items||[];
+      items=(window.__bigTradesOverlayCache.items||[]).filter(o=>o.idx>=fromIdx);
     }
   }catch(_e){}
   if(!items.length)return;
@@ -4631,9 +4641,9 @@ if(el('tfSelect')){
   }
 })();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();bootDebounced()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();bootDebounced()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','bigTradeShowLabels','bigTradeStrongOnly','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
-['volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});
-if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
+['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','bigTradeShowLabels','bigTradeStrongOnly','btLastCandles','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
+['volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin','btLastCandles'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});
+if(el('btLastCandles'))el('btLastCandles').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
 let touchState={mode:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5};
 function touchDist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
 wrap.addEventListener('touchstart',e=>{if(!S.candles.length)return;if(S._rulerNew||S._rulerDragSv)return;if(S.tool==='ruler'&&!S._cross)return;const r=wrap.getBoundingClientRect();if(e.touches.length===1){const x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if((S.tool==='long'||S.tool==='short')&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){e.preventDefault();if(!S._posDraft){S._cross={cx:x,cy:y};S._posDraft={type:S.tool};draw();}else{addPosition(S._posDraft.type,x,y,r.width,r.height,sc);S._posDraft=null;}return}if(bookResizeHit(x,y)){e.preventDefault();touchState.mode='bookResize';S.book.resize=true;draw();return}if(priceScaleHit(x,y,r.width,r.height)){e.preventDefault();touchState.mode='priceScale';S.yScale.drag=true;S.yScale.lastY=e.touches[0].clientY;draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){e.preventDefault();if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}touchState.mode='pos';S.dragPos={...hit,lastX:e.touches[0].clientX,lastY:e.touches[0].clientY};return}touchState._startCX=e.touches[0].clientX;touchState._startCY=e.touches[0].clientY;touchState._startX=x;touchState._startY=y;touchState._moved=false;touchState._justActivated=false;touchState._startTime=Date.now();if(touchState._lpt){clearTimeout(touchState._lpt);touchState._lpt=null;}if(S._cross&&x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){touchState.mode='cross';touchState._crossStartX=S._cross.cx;touchState._crossStartY=S._cross.cy;}else{touchState.mode='pan';touchState.lastX=e.touches[0].clientX;touchState.lastY=e.touches[0].clientY;S.view.auto=false;if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){touchState._lpt=setTimeout(()=>{touchState._lpt=null;touchState.mode='cross';touchState._justActivated=true;S._cross={cx:touchState._startX,cy:touchState._startY};drawSoon();},450);}}}else if(e.touches.length===2){e.preventDefault();touchState.mode='pinch';touchState.dist=touchDist(e.touches[0],e.touches[1]);touchState.midX=(e.touches[0].clientX+e.touches[1].clientX)/2;touchState.midY=(e.touches[0].clientY+e.touches[1].clientY)/2;touchState.anchorRel=clamp((touchState.midX-r.left-PL)/CW(r.width),0,1);S.view.auto=false}},{passive:false});
