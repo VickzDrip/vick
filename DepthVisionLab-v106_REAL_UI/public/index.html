@@ -1984,18 +1984,20 @@ html.pre-ui .switch::after{transition:none!important}
 
         <div class="ind-card" data-card="volZones">
           <div class="ind-head">
-            <div class="row on" data-ind="volZones"><span class="name">High Volume Zones</span><span class="switch"></span></div>
-            <button class="gear" data-settings="volZones" title="Inputs Volume Zones">⚙</button>
+            <div class="row on" data-ind="volZones"><span class="name">DVL HVN PRO</span><span class="switch"></span></div>
+            <button class="gear" data-settings="volZones" title="DVL HVN PRO settings">⚙</button>
           </div>
           <div class="ind-settings" id="settings-volZones">
-            <div class="kv"><span class="k">TF análise</span><select class="select" id="vzTf" style="width:72px"><option value="">Atual</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="2h">2h</option><option value="4h">4h</option><option value="6h">6h</option><option value="12h">12h</option><option value="1d">1d</option><option value="3d">3d</option><option value="1w">1w</option></select></div>
-            <div class="kv"><span class="k">Faixa % preço</span><input class="num" id="vzBucket" type="number" min="0.01" max="5" step="0.01" value="0.1" style="width:70px"></div>
-            <div class="kv"><span class="k">Top zonas</span><input class="num" id="vzTopN" type="number" min="1" max="30" step="1" value="12"></div>
-            <div class="kv"><span class="k">Mín. toques</span><input class="num" id="vzMinTouch" type="number" min="1" max="200" step="1" value="2"></div>
-            <div class="kv"><span class="k">Mesclar faixas</span><input class="num" id="vzMerge" type="number" min="0" max="20" step="1" value="0"></div>
-            <div class="kv"><span class="k">Extensão (barras)</span><input class="num" id="vzExtend" type="number" min="0" max="500" step="1" value="20"></div>
-            <div class="kv"><span class="k">Cor</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="vzColorSwatch" style="width:100%;height:100%;background:#f59e0b;pointer-events:none"></div><input id="vzColor" type="color" value="#f59e0b" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
-            <div class="hint">Zonas HVN — acumula volume de todos os candles por faixa de preço. Mostra onde o mercado mais negociou historicamente. Opacidade proporcional ao volume acumulado.</div>
+            <div class="kv"><span class="k">Analysis TF</span><select class="select" id="vzTf" style="width:72px"><option value="">Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="2h">2h</option><option value="4h">4h</option><option value="6h">6h</option><option value="12h">12h</option><option value="1d">1d</option><option value="3d">3d</option><option value="1w">1w</option></select></div>
+            <div class="kv"><span class="k">Bucket %</span><input class="num" id="vzBucket" type="number" min="0.01" max="5" step="0.01" value="0.1" style="width:60px"></div>
+            <div class="kv"><span class="k">Max zones</span><input class="num" id="vzTopN" type="number" min="1" max="30" step="1" value="8" style="width:60px"></div>
+            <div class="kv"><span class="k">Min touches</span><input class="num" id="vzMinTouch" type="number" min="1" max="200" step="1" value="2" style="width:60px"></div>
+            <div class="kv"><span class="k">Merge gap</span><input class="num" id="vzMerge" type="number" min="0" max="20" step="1" value="2" style="width:60px"></div>
+            <div class="kv"><span class="k">Extend bars</span><input class="num" id="vzExtend" type="number" min="0" max="500" step="1" value="20" style="width:60px"></div>
+            <div class="kv"><span class="k">Thickness ×</span><input class="num" id="vzThickness" type="number" min="0.3" max="3" step="0.1" value="1.0" style="width:60px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Auto mode</span><input type="checkbox" id="vzAutoMode" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Volume profile</span><input type="checkbox" id="vzShowProfile" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="hint">DVL HVN PRO — cluster-based zones from real volume concentration. Thickness follows detected distribution shape automatically.</div>
           </div>
         </div>
 
@@ -9480,10 +9482,12 @@ window._dvlTemplate={open:open,close:close};
 })();
 </script>
 
-<!-- ── High Volume Zones (HVN) ── -->
+<!-- ── High Volume Zones (HVN) — DVL HVN PRO ── -->
 <script>
-(function(){
-  function E(id){return document.getElementById(id)}
+(function DVL_HVN(){
+  'use strict';
+  const E=id=>document.getElementById(id);
+
   function nFmt(v){
     v=Number(v)||0;const a=Math.abs(v);const s=v<0?'-':'';
     if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';
@@ -9491,57 +9495,70 @@ window._dvlTemplate={open:open,close:close};
     if(a>=1e3)return s+(a/1e3).toFixed(0)+'K';
     return s+Math.round(a);
   }
-  function priceFmt(v){return v>=1000?v.toLocaleString('en-US',{maximumFractionDigits:0}):v.toFixed(2);}
+  function priceFmt(v){
+    if(v>=10000)return Math.round(v).toLocaleString('en-US');
+    if(v>=1000)return v.toFixed(1);
+    if(v>=1)return v.toFixed(2);
+    return v.toFixed(4);
+  }
   function numVal(id,def){const n=E(id);if(!n)return def;const v=parseFloat(n.value);return Number.isFinite(v)?v:def;}
+  function boolVal(id,def){const n=E(id);return n?n.checked:def;}
 
   function getSettings(){
     return{
       bucketPct:Math.max(0.01,numVal('vzBucket',0.1)),
-      topN:Math.max(1,Math.min(30,numVal('vzTopN',12))),
+      topN:Math.max(1,Math.min(30,numVal('vzTopN',8))),
       minTouch:Math.max(1,Math.round(numVal('vzMinTouch',2))),
-      mergeGap:Math.max(0,Math.round(numVal('vzMerge',0))),
+      mergeGap:Math.max(0,Math.round(numVal('vzMerge',2))),
       extend:Math.max(0,Math.round(numVal('vzExtend',20))),
-      color:E('vzColor')?.value||'#f59e0b'
+      thickness:Math.max(0.3,Math.min(3,numVal('vzThickness',1.0))),
+      showProfile:boolVal('vzShowProfile',true),
+      autoMode:boolVal('vzAutoMode',true),
     };
   }
 
-  function hexToRgb(hex){
-    const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-    return{r,g,b};
-  }
-
-  let _vzCache=null, _vzCacheKey='';
-
-  // ── Multi-TF candle fetch ──
-  let _vzExtCandles=null, _vzExtKey='', _vzExtFetching=false;
+  let _vzCache=null,_vzCacheKey='';
+  let _vzExtCandles=null,_vzExtKey='',_vzExtFetching=false;
 
   function getVZCandles(){
-    const sel=E('vzTf');
-    const vzTf=sel?sel.value:'';
-    if(!vzTf||vzTf===S.tf) return S.candles;
+    const sel=E('vzTf');const vzTf=sel?sel.value:'';
+    if(!vzTf||vzTf===S.tf)return S.candles;
     const wantKey=`${S.sym}|${vzTf}`;
-    if(_vzExtKey===wantKey&&_vzExtCandles) return _vzExtCandles;
+    if(_vzExtKey===wantKey&&_vzExtCandles)return _vzExtCandles;
     if(!_vzExtFetching||_vzExtKey!==wantKey){
-      _vzExtFetching=true; _vzExtKey=wantKey; _vzExtCandles=null;
+      _vzExtFetching=true;_vzExtKey=wantKey;_vzExtCandles=null;
       fetch(`${API}/api/v3/klines?symbol=${S.sym}&interval=${vzTf}&limit=1000`)
         .then(r=>r.ok?r.json():Promise.reject(r.status))
         .then(d=>{
-          if(_vzExtKey!==wantKey) return;
+          if(_vzExtKey!==wantKey)return;
           _vzExtCandles=d.map(klineToCandle);
-          _vzExtFetching=false; _vzCacheKey='';
-          if(typeof drawSoon==='function') drawSoon();
+          _vzExtFetching=false;_vzCacheKey='';
+          if(typeof drawSoon==='function')drawSoon();
         })
         .catch(e=>{_vzExtFetching=false;console.warn('HVN TF fetch:',e);});
     }
     return S.candles;
   }
 
-  // ── HVN bucket computation ──
-  function computeHVN(cs,bucketPct,topN,minTouch,mergeGap){
-    if(cs.length<2) return[];
+  // Local rounded-rect helper
+  function rr(ctx,x,y,w,h,rad){
+    rad=Math.min(rad,w/2,h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+rad,y);ctx.lineTo(x+w-rad,y);ctx.quadraticCurveTo(x+w,y,x+w,y+rad);
+    ctx.lineTo(x+w,y+h-rad);ctx.quadraticCurveTo(x+w,y+h,x+w-rad,y+h);
+    ctx.lineTo(x+rad,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-rad);
+    ctx.lineTo(x,y+rad);ctx.quadraticCurveTo(x,y,x+rad,y);
+    ctx.closePath();
+  }
+
+  // ── Cluster-based HVN computation ─────────────────────────────────────────────
+  function computeHVNPro(cs,cfg){
+    if(cs.length<2)return null;
+    const{bucketPct,topN,minTouch,mergeGap,thickness,autoMode}=cfg;
     const lastPrice=cs[cs.length-1].c;
     const bucketSize=lastPrice*bucketPct/100;
-    if(bucketSize<=0) return[];
+    if(bucketSize<=0)return null;
+
     let priceMin=Infinity,priceMax=-Infinity;
     for(const c of cs){if(c.l<priceMin)priceMin=c.l;if(c.h>priceMax)priceMax=c.h;}
     const nBuckets=Math.min(8000,Math.ceil((priceMax-priceMin)/bucketSize)+1);
@@ -9549,11 +9566,10 @@ window._dvlTemplate={open:open,close:close};
     const buyV=new Float64Array(nBuckets);
     const sellV=new Float64Array(nBuckets);
     const tchs=new Uint32Array(nBuckets);
+
     for(const c of cs){
-      const dv=c.v*c.c;
-      const range=c.h-c.l;
-      const bf=range>0?(c.c-c.l)/range:0.5;
-      const sf=1-bf;
+      const dv=c.v*c.c;const range=c.h-c.l;
+      const bf=range>0?(c.c-c.l)/range:0.5;const sf=1-bf;
       const loIdx=Math.max(0,Math.floor((c.l-priceMin)/bucketSize));
       const hiIdx=Math.min(nBuckets-1,Math.floor((c.h-priceMin)/bucketSize));
       if(loIdx===hiIdx){
@@ -9568,101 +9584,323 @@ window._dvlTemplate={open:open,close:close};
         }
       }
     }
-    const buckets=[];
-    for(let i=0;i<nBuckets;i++)
-      if(tchs[i]>=minTouch&&vols[i]>0) buckets.push({i,vol:vols[i],bv:buyV[i],sv:sellV[i],touches:tchs[i]});
-    if(!buckets.length) return[];
-    const byVol=[...buckets].sort((a,b)=>b.vol-a.vol);
-    const minSep=Math.max(1,Math.floor(nBuckets/(topN*1.5)));
-    const selIdx=[];
-    for(const b of byVol){
-      if(selIdx.every(i=>Math.abs(b.i-i)>=minSep)) selIdx.push(b.i);
-      if(selIdx.length>=topN*2) break;
+
+    // Gaussian-weighted 5-bucket smoothing for stable peak detection
+    const K=[0.06,0.24,0.40,0.24,0.06];
+    const smV=new Float64Array(nBuckets);
+    for(let i=0;i<nBuckets;i++){
+      let s=0;
+      for(let k=0;k<K.length;k++){const j=i-2+k;if(j>=0&&j<nBuckets)s+=vols[j]*K[k];}
+      smV[i]=s;
     }
-    if(!selIdx.length) return[];
-    const topSet=new Set(selIdx);
-    const top=buckets.filter(b=>topSet.has(b.i)).sort((a,b)=>a.i-b.i);
-    if(!top.length) return[];
-    const zones=[];
-    let lastI=top[0].i;
-    let zn={lo:priceMin+top[0].i*bucketSize,hi:priceMin+(top[0].i+1)*bucketSize,
-            totalVol:top[0].vol,totalBuyVol:top[0].bv,totalSellVol:top[0].sv,totalTouches:top[0].touches};
-    for(let k=1;k<top.length;k++){
-      const b=top[k];
-      if(b.i-lastI<=mergeGap+1){
-        zn.hi=priceMin+(b.i+1)*bucketSize;
-        zn.totalVol+=b.vol;zn.totalBuyVol+=b.bv;zn.totalSellVol+=b.sv;zn.totalTouches+=b.touches;
-      }else{
-        zones.push(zn);
-        zn={lo:priceMin+b.i*bucketSize,hi:priceMin+(b.i+1)*bucketSize,
-            totalVol:b.vol,totalBuyVol:b.bv,totalSellVol:b.sv,totalTouches:b.touches};
+
+    // Peak detection with adaptive window
+    let maxVol=0;for(let i=0;i<nBuckets;i++)if(smV[i]>maxVol)maxVol=smV[i];
+    const sigThresh=maxVol*(autoMode?0.09:0.05);
+    const winR=Math.max(2,Math.floor(nBuckets/(topN*2.5)));
+    const peaks=[];
+    for(let i=winR;i<nBuckets-winR;i++){
+      if(tchs[i]<minTouch||smV[i]<sigThresh)continue;
+      let ok=true;
+      for(let j=i-winR;j<=i+winR;j++){if(j!==i&&smV[j]>smV[i]){ok=false;break;}}
+      if(ok)peaks.push({i,vol:smV[i]});
+    }
+
+    // Select top candidates with minimum separation
+    peaks.sort((a,b)=>b.vol-a.vol);
+    const minSep=Math.max(2,Math.floor(nBuckets/(topN*1.6)));
+    const chosen=[];
+    for(const p of peaks){
+      if(chosen.every(c=>Math.abs(c.i-p.i)>=minSep))chosen.push(p);
+      if(chosen.length>=topN*2)break;
+    }
+    if(!chosen.length)return null;
+
+    // Natural cluster expansion: include all contiguous buckets above 35% of peak
+    const EXPAND_THRESH=0.35;
+    const clusters=[];
+    for(const peak of chosen){
+      const peakVol=smV[peak.i];
+      const thresh=peakVol*EXPAND_THRESH;
+      let lo=peak.i,hi=peak.i;
+      while(lo>0&&smV[lo-1]>=thresh)lo--;
+      while(hi<nBuckets-1&&smV[hi+1]>=thresh)hi++;
+      // Thickness multiplier: expand beyond natural edge proportionally
+      if(thickness>1.0){
+        const halfNat=(hi-lo)/2;
+        const exp=Math.max(1,Math.round(halfNat*(thickness-1)));
+        lo=Math.max(0,lo-exp);hi=Math.min(nBuckets-1,hi+exp);
       }
-      lastI=b.i;
+      // Accumulate volumes + find POC bucket
+      let tv=0,tbv=0,tsv=0,tt=0,pocIdx=lo,pocVol=0;
+      for(let b=lo;b<=hi;b++){
+        tv+=vols[b];tbv+=buyV[b];tsv+=sellV[b];tt+=tchs[b];
+        if(vols[b]>pocVol){pocVol=vols[b];pocIdx=b;}
+      }
+      clusters.push({
+        lo:priceMin+lo*bucketSize,
+        hi:priceMin+(hi+1)*bucketSize,
+        poc:priceMin+(pocIdx+0.5)*bucketSize,
+        totalVol:tv,totalBuyVol:tbv,totalSellVol:tsv,totalTouches:tt,
+        peakVol,rawBucketLo:lo,rawBucketHi:hi
+      });
     }
-    zones.push(zn);
-    zones.sort((a,b)=>a.totalVol-b.totalVol);
-    return{hvn:zones.slice(-topN),rawBuckets:{priceMin,bucketSize,nBuckets,bvArr:buyV,svArr:sellV,tchs}};
+
+    // Sort by price and merge adjacent clusters
+    clusters.sort((a,b)=>a.lo-b.lo);
+    const merged=[];
+    for(const c of clusters){
+      if(!merged.length){merged.push({...c});continue;}
+      const prev=merged[merged.length-1];
+      const gapB=(c.lo-prev.hi)/bucketSize;
+      if(gapB<=mergeGap+1){
+        if(c.hi>prev.hi)prev.hi=c.hi;
+        if(c.peakVol>prev.peakVol){prev.poc=c.poc;prev.peakVol=c.peakVol;}
+        prev.totalVol+=c.totalVol;prev.totalBuyVol+=c.totalBuyVol;
+        prev.totalSellVol+=c.totalSellVol;
+        prev.totalTouches=Math.max(prev.totalTouches,c.totalTouches);
+      }else merged.push({...c});
+    }
+
+    // Keep top N by volume, add backward-compat center price
+    merged.sort((a,b)=>b.totalVol-a.totalVol);
+    const top=merged.slice(0,topN).map(z=>({...z,price:(z.lo+z.hi)/2}));
+    return{hvn:top,rawBuckets:{priceMin,bucketSize,nBuckets,vols,tchs}};
   }
 
-  // ── Draw ──
+  // ── Left volume profile backbone ──────────────────────────────────────────────
+  function drawVolumeProfile(ctx,W,H,sc,xLeft,raw){
+    const{priceMin,bucketSize,nBuckets,vols}=raw;
+    if(!vols||nBuckets<=0)return;
+    const visLo=sc.lo,visHi=sc.hi;
+    const maxBarW=Math.min(46,CW(W)*0.07);
+    let maxV=0;
+    for(let i=0;i<nBuckets;i++){
+      const p=priceMin+(i+0.5)*bucketSize;
+      if(p<visLo||p>visHi)continue;
+      if(vols[i]>maxV)maxV=vols[i];
+    }
+    if(maxV<=0)return;
+    ctx.save();
+    for(let i=0;i<nBuckets;i++){
+      if(vols[i]<=0)continue;
+      const pMid=priceMin+(i+0.5)*bucketSize;
+      if(pMid<visLo-bucketSize*2||pMid>visHi+bucketSize*2)continue;
+      const y=sc.y(pMid);if(y<PT-2||y>H-PB+2)continue;
+      const barH=Math.max(0.6,Math.abs(sc.y(priceMin+i*bucketSize)-sc.y(priceMin+(i+1)*bucketSize)));
+      const rel=vols[i]/maxV;
+      const barW=rel*maxBarW;
+      ctx.fillStyle=`rgba(0,178,255,${(0.04+0.13*rel).toFixed(3)})`;
+      ctx.fillRect(xLeft,y-barH/2,barW,barH);
+    }
+    ctx.restore();
+  }
+
+  // ── Right-side info card ──────────────────────────────────────────────────────
+  function drawZoneCard(ctx,z,rel,y1,y2,pocY,xRight,H,chartRight,occupied){
+    if(xRight+6>chartRight-6)return;
+    const cardW=76,bigCard=(y2-y1)>=34,cardH=bigCard?44:24;
+    let cy=pocY-cardH/2;
+    cy=Math.max(PT+4,Math.min(H-PB-cardH-4,cy));
+    const cx=Math.min(chartRight-cardW-2,xRight+6);
+    if(cx<xRight+2)return;
+    // Push down if overlapping a previously placed card
+    for(const o of occupied){
+      if(cy<o.y+o.h+3&&cy+cardH>o.y){
+        cy=o.y+o.h+4;
+        cy=Math.max(PT+4,Math.min(H-PB-cardH-4,cy));
+      }
+    }
+    if(cy+cardH>H-PB+4)return; // off-screen
+    occupied.push({y:cy,h:cardH,x:cx});
+
+    rr(ctx,cx,cy,cardW,cardH,4);
+    ctx.fillStyle=`rgba(2,7,18,${(0.83+0.11*rel).toFixed(2)})`;
+    ctx.fill();
+    ctx.strokeStyle=`rgba(0,198,255,${(0.28+0.36*rel).toFixed(3)})`;
+    ctx.lineWidth=0.85;
+    rr(ctx,cx,cy,cardW,cardH,4);
+    ctx.stroke();
+    // Left accent stripe
+    ctx.fillStyle=`rgba(0,220,255,${(0.52+0.38*rel).toFixed(3)})`;
+    ctx.fillRect(cx,cy+3,2.5,cardH-6);
+
+    const mid=(z.lo+z.hi)/2;
+    const priceStr='HVN '+priceFmt(z.poc||mid);
+    const volStr=nFmt(z.totalVol);
+    const touchStr=z.totalTouches+'t';
+    ctx.textAlign='left';ctx.textBaseline='top';
+    if(bigCard){
+      ctx.font='700 8.5px monospace';
+      ctx.fillStyle=`rgba(0,238,255,${(0.82+0.14*rel).toFixed(3)})`;
+      ctx.fillText(priceStr,cx+8,cy+5);
+      ctx.font='700 7.5px monospace';
+      ctx.fillStyle='rgba(148,220,255,0.86)';
+      ctx.fillText(volStr,cx+8,cy+18);
+      ctx.fillStyle='rgba(108,190,240,0.72)';
+      ctx.fillText(touchStr,cx+8,cy+29);
+    }else{
+      ctx.font='700 7.5px monospace';
+      ctx.fillStyle=`rgba(0,238,255,${(0.78+0.16*rel).toFixed(3)})`;
+      ctx.fillText(priceStr,cx+6,cy+3);
+      ctx.fillStyle='rgba(138,210,255,0.74)';
+      ctx.fillText(`${volStr} · ${touchStr}`,cx+6,cy+13);
+    }
+  }
+
+  // ── Mini DVL HVN PRO toolbar ──────────────────────────────────────────────────
+  function drawHVNToolbar(ctx,W,H,settings){
+    const xLeft=PL,chartRight=W-RP();
+    const toolW=Math.min(296,chartRight-xLeft-14);
+    if(toolW<80)return;
+    const toolX=xLeft+8,toolY=PT+8,toolH=20;
+    rr(ctx,toolX,toolY,toolW,toolH,4);
+    ctx.fillStyle='rgba(2,6,18,0.85)';ctx.fill();
+    ctx.strokeStyle='rgba(0,165,255,0.20)';ctx.lineWidth=0.8;
+    rr(ctx,toolX,toolY,toolW,toolH,4);ctx.stroke();
+    const midY=toolY+toolH/2;
+    // "DVL HVN" text
+    ctx.font='700 8.5px monospace';ctx.fillStyle='rgba(0,218,255,0.88)';
+    ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText('DVL HVN',toolX+8,midY);
+    // PRO badge
+    const lblW=ctx.measureText('DVL HVN').width;
+    const bx=toolX+8+lblW+5,bw=28,bh=13;
+    rr(ctx,bx,midY-bh/2,bw,bh,2);
+    ctx.fillStyle='rgba(0,190,255,0.20)';ctx.fill();
+    ctx.strokeStyle='rgba(0,198,255,0.48)';ctx.lineWidth=0.7;
+    rr(ctx,bx,midY-bh/2,bw,bh,2);ctx.stroke();
+    ctx.font='700 7px monospace';ctx.fillStyle='rgba(0,230,255,0.92)';
+    ctx.textAlign='center';ctx.fillText('PRO',bx+bw/2,midY);
+    // Divider
+    const divX=bx+bw+9;
+    ctx.beginPath();ctx.moveTo(divX,toolY+4);ctx.lineTo(divX,toolY+toolH-4);
+    ctx.strokeStyle='rgba(0,125,200,0.20)';ctx.lineWidth=0.8;ctx.stroke();
+    // Mode pills
+    const modes=[
+      {label:'Auto',on:settings.autoMode},
+      {label:'Merged',on:settings.mergeGap>0},
+      {label:'Profile',on:settings.showProfile},
+    ];
+    let mx=divX+7;
+    ctx.font='700 7px monospace';
+    for(const m of modes){
+      const mw=ctx.measureText(m.label).width+8;
+      rr(ctx,mx,midY-6,mw,12,2);
+      ctx.fillStyle=m.on?'rgba(0,190,255,0.18)':'rgba(255,255,255,0.03)';ctx.fill();
+      ctx.strokeStyle=m.on?'rgba(0,198,255,0.40)':'rgba(255,255,255,0.09)';ctx.lineWidth=0.6;
+      rr(ctx,mx,midY-6,mw,12,2);ctx.stroke();
+      ctx.fillStyle=m.on?'rgba(0,222,255,0.88)':'rgba(96,128,162,0.58)';
+      ctx.textAlign='center';ctx.fillText(m.label,mx+mw/2,midY);
+      mx+=mw+4;
+    }
+    // gear
+    ctx.font='11px sans-serif';ctx.fillStyle='rgba(68,105,155,0.58)';
+    ctx.textAlign='right';ctx.fillText('⚙',toolX+toolW-7,midY+0.5);
+  }
+
+  // ── Main draw entry point ─────────────────────────────────────────────────────
   function drawVolZones(ctx,W,H,V,sc,x){
-    if(!window.S||!S.inds.volZones||!S.candles.length) return;
-    const{bucketPct,topN,minTouch,mergeGap,extend,color}=getSettings();
+    if(!window.S||!S.inds.volZones||!S.candles.length)return;
+    const settings=getSettings();
     const vzTfSel=E('vzTf');const vzTf=vzTfSel?vzTfSel.value:'';
     const cs=getVZCandles();
     const lastIdx=cs.length-1;
+    const key=[cs.length,cs[0]?.t||0,S.sym,vzTf||S.tf,
+               settings.bucketPct,settings.topN,settings.minTouch,
+               settings.mergeGap,settings.thickness].join('|');
+    if(key!==_vzCacheKey){_vzCache=computeHVNPro(cs,settings);_vzCacheKey=key;}
+    if(!_vzCache?.hvn?.length)return;
 
-    const key=`${cs.length}|${cs[0]?.t||0}|${S.sym}|${vzTf||S.tf}|${bucketPct}|${topN}|${minTouch}|${mergeGap}`;
-    if(key!==_vzCacheKey){_vzCache=computeHVN(cs,bucketPct,topN,minTouch,mergeGap);_vzCacheKey=key;}
-    const cache=_vzCache;
-    if(!cache?.hvn?.length) return;
-    const{hvn:zones}=cache;
-
-    const rgb=hexToRgb(color);
+    const{hvn:zones,rawBuckets}=_vzCache;
     const vspan=S.view.end-S.view.start;
-    const cw=CW(W);
-    const bw=cw/vspan;
-    const xRight=Math.min(W-RP(),x(lastIdx)+extend*bw);
-    const xLeft=PL;
-    const maxVol=zones[zones.length-1].totalVol;
+    const cw=CW(W);const bw=cw/vspan;
+    const xRight=Math.min(W-RP(),x(lastIdx)+settings.extend*bw);
+    const xLeft=PL;const chartRight=W-RP();
+    const maxVol=zones.reduce((m,z)=>Math.max(m,z.totalVol),0);
 
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
 
-    for(let zi=0;zi<zones.length;zi++){
-      const{hi,lo,totalVol,totalTouches}=zones[zi];
+    // 1. Volume profile backbone
+    if(settings.showProfile&&rawBuckets)drawVolumeProfile(ctx,W,H,sc,xLeft,rawBuckets);
+
+    // 2. Draw zones (weak→strong order so strongest is on top visually)
+    const byPrice=[...zones].sort((a,b)=>a.lo-b.lo);
+    const byStrength=[...byPrice].sort((a,b)=>a.totalVol-b.totalVol);
+    const occupied=[];
+
+    for(const z of byStrength){
+      const{hi,lo,poc,totalVol,totalTouches}=z;
       const rel=maxVol>0?totalVol/maxVol:1;
-      const mid=(hi+lo)/2;
-      const y1=sc.y(hi),y2=sc.y(lo),ym=sc.y(mid);
-      const boxH=Math.max(1,y2-y1);
+      const y1=sc.y(hi),y2=sc.y(lo);
+      const boxH=Math.max(1.5,y2-y1);
+      if(xRight<=xLeft||y2<PT-6||y1>H-PB+6)continue;
+      const pocY=poc?sc.y(poc):(y1+y2)/2;
+      const midY=(y1+y2)/2;
 
-      if(xRight<=xLeft||y2<PT||y1>H-PB) continue;
+      // Outer bloom glow
+      const bloomH=boxH+22,bloomY=y1-11;
+      const bg=ctx.createLinearGradient(0,bloomY,0,bloomY+bloomH);
+      bg.addColorStop(0,'rgba(0,168,255,0)');
+      bg.addColorStop(0.20,`rgba(0,180,255,${(0.025+0.055*rel).toFixed(3)})`);
+      bg.addColorStop(0.50,`rgba(0,198,255,${(0.042+0.090*rel).toFixed(3)})`);
+      bg.addColorStop(0.80,`rgba(0,180,255,${(0.025+0.055*rel).toFixed(3)})`);
+      bg.addColorStop(1,'rgba(0,168,255,0)');
+      ctx.fillStyle=bg;ctx.fillRect(xLeft,bloomY,xRight-xLeft,bloomH);
 
-      ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.03+0.10*rel).toFixed(3)})`;
-      ctx.fillRect(xLeft,y1,xRight-xLeft,boxH);
+      // Inner fill gradient
+      const fg=ctx.createLinearGradient(0,y1,0,y2);
+      const bA=0.035+0.078*rel,cA=0.075+0.145*rel;
+      fg.addColorStop(0,`rgba(0,148,220,${bA.toFixed(3)})`);
+      fg.addColorStop(0.38,`rgba(0,185,255,${cA.toFixed(3)})`);
+      fg.addColorStop(0.62,`rgba(0,185,255,${cA.toFixed(3)})`);
+      fg.addColorStop(1,`rgba(0,148,220,${bA.toFixed(3)})`);
+      ctx.fillStyle=fg;ctx.fillRect(xLeft,y1,xRight-xLeft,boxH);
 
-      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.25+0.45*rel).toFixed(3)})`;
-      ctx.lineWidth=rel>0.7?1.5:1;
-      ctx.setLineDash([]);
+      // Top & bottom borders
+      ctx.strokeStyle=`rgba(0,210,255,${(0.22+0.50*rel).toFixed(3)})`;
+      ctx.lineWidth=rel>0.62?1.5:1.0;ctx.setLineDash([]);
       ctx.beginPath();
       ctx.moveTo(xLeft,y1);ctx.lineTo(xRight,y1);
       ctx.moveTo(xLeft,y2);ctx.lineTo(xRight,y2);
       ctx.stroke();
 
-      if(boxH>12){
-        ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.15+0.28*rel).toFixed(3)})`;
-        ctx.lineWidth=1;ctx.setLineDash([3,5]);
-        ctx.beginPath();ctx.moveTo(xLeft,ym);ctx.lineTo(xRight,ym);ctx.stroke();
-        ctx.setLineDash([]);
+      // Left accent bar (gradient)
+      const acW=3.5;
+      const acG=ctx.createLinearGradient(0,y1,0,y2);
+      acG.addColorStop(0,`rgba(0,215,255,${(0.36+0.44*rel).toFixed(3)})`);
+      acG.addColorStop(0.5,`rgba(0,255,255,${(0.62+0.32*rel).toFixed(3)})`);
+      acG.addColorStop(1,`rgba(0,215,255,${(0.36+0.44*rel).toFixed(3)})`);
+      ctx.fillStyle=acG;ctx.fillRect(xLeft,y1,acW,boxH);
+
+      // POC line with glow
+      ctx.setLineDash([]);
+      if(boxH>=4){
+        if(poc){
+          ctx.shadowColor=`rgba(0,235,255,${(0.40+0.42*rel).toFixed(3)})`;
+          ctx.shadowBlur=2+5*rel;
+          ctx.strokeStyle=`rgba(0,248,255,${(0.52+0.38*rel).toFixed(3)})`;
+          ctx.lineWidth=rel>0.5?1.6:1.2;
+          ctx.beginPath();ctx.moveTo(xLeft+acW,pocY);ctx.lineTo(xRight,pocY);ctx.stroke();
+          ctx.shadowBlur=0;
+          // POC dot
+          ctx.fillStyle=`rgba(0,248,255,${(0.72+0.26*rel).toFixed(3)})`;
+          ctx.beginPath();ctx.arc(xLeft+acW+4,pocY,1.8+rel*0.8,0,Math.PI*2);ctx.fill();
+        }else if(boxH>9){
+          ctx.strokeStyle=`rgba(0,195,255,${(0.12+0.16*rel).toFixed(3)})`;
+          ctx.lineWidth=0.8;ctx.setLineDash([3,6]);
+          ctx.beginPath();ctx.moveTo(xLeft+acW,midY);ctx.lineTo(xRight,midY);ctx.stroke();
+          ctx.setLineDash([]);
+        }
       }
 
-      if(boxH>8){
-        ctx.textBaseline='middle';
-        ctx.font=`${rel>0.5?'bold ':''}9px monospace`;
-        ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.55+0.30*rel).toFixed(3)})`;
-        ctx.fillText(`HVN ${priceFmt(mid)} | $${nFmt(totalVol)} | ${totalTouches}t`,xLeft+6,ym);
-      }
+      // Info card
+      drawZoneCard(ctx,z,rel,y1,y2,pocY,xRight,H,chartRight,occupied);
     }
+
+    // 3. Mini toolbar
+    drawHVNToolbar(ctx,W,H,settings);
 
     window.__ETX_SKIP_COLORMAP=false;
     ctx.restore();
@@ -9671,24 +9909,20 @@ window._dvlTemplate={open:open,close:close};
   window.__drawVolZones=drawVolZones;
   window.__hvnZones=()=>_vzCache?.hvn;
 
-  // ── Event wiring ──
-  const VZ_INPUTS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','vzTf']);
-
+  const VZ_INPUTS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzThickness','vzTf','vzShowProfile','vzAutoMode']);
   function vzRedraw(){if(typeof drawSoon==='function')drawSoon();}
-
-  document.addEventListener('input',function(ev){
-    if(!VZ_INPUTS.has(ev.target?.id)) return;
-    if(ev.target.id==='vzColor'){const sw=E('vzColorSwatch');if(sw)sw.style.background=ev.target.value;}
+  document.addEventListener('input',ev=>{
+    if(!VZ_INPUTS.has(ev.target?.id))return;
     vzRedraw();
   });
-  document.addEventListener('change',function(ev){
+  document.addEventListener('change',ev=>{
     const id=ev.target?.id;
-    if(!VZ_INPUTS.has(id)) return;
+    if(!VZ_INPUTS.has(id))return;
     if(id==='vzTf'){_vzExtCandles=null;_vzExtKey='';_vzExtFetching=false;_vzCacheKey='';}
+    else _vzCacheKey='';
     vzRedraw();
   });
-
-  setTimeout(function(){if(typeof drawSoon==='function')drawSoon();},0);
+  setTimeout(()=>{if(typeof drawSoon==='function')drawSoon();},0);
 })();
 </script>
 <script>
