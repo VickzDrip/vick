@@ -3844,7 +3844,7 @@ function buildBigOrderGroups(V){
 
 function bigTradesConfig(){
   const sens=(el('bigTradeSensitivity')?.value)||'normal';
-  return {
+  return{
     sensitivity:sens,
     lastCandles:Math.max(20,Math.min(2000,+(el('btLastCandles')?.value)||200)),
     showLabels:!!(el('bigTradeShowLabels')?.checked),
@@ -3853,29 +3853,20 @@ function bigTradesConfig(){
     sellColor:el('bigSellColor')?.value||'#ff7c3a'
   };
 }
-function _btThreshold(sens){
-  const vals=[];
-  const a=Math.max(0,Math.floor((S.view&&S.view.start)||0));
-  const b=Math.min(S.candles.length,Math.ceil((S.view&&S.view.end)||S.candles.length));
-  for(let i=a;i<b;i++){
-    const c=S.candles[i];
-    if(!c||!c.fp)continue;
-    for(const [price,row] of c.fp){
-      const p=+price;
-      const bv=(+row.buy||0)*Math.max(0,p);
-      const sv=(+row.sell||0)*Math.max(0,p);
-      if(bv>0)vals.push(bv);
-      if(sv>0)vals.push(sv);
-    }
-  }
-  if(!vals.length)return {minV:0,strongMult:4};
-  vals.sort((a,b)=>a-b);
-  const pct=sens==='high'?0.88:sens==='low'?0.95:0.90;
-  const mult=sens==='high'?2.5:sens==='low'?6:4;
-  const minV=vals[Math.floor(vals.length*pct)]||0;
-  return {minV,strongMult:mult};
+// Stats from real trade quantities (contracts) in S.trades
+function _btQtyStats(){
+  const arr=S.trades.map(t=>+t.q||0).filter(v=>v>0).sort((a,b)=>a-b);
+  if(!arr.length)return{n:0,median:0,p90:0,p95:0,p98:0};
+  return{n:arr.length,median:quantileSorted(arr,.50),p90:quantileSorted(arr,.90),p95:quantileSorted(arr,.95),p98:quantileSorted(arr,.98)};
 }
-// Shims — unit fixed to notional, display fixed to auto
+// Contract threshold by sensitivity
+function _btQtyThreshold(sens,stats){
+  if(!stats||!stats.n)return Infinity;
+  if(sens==='high')return Math.max(stats.p90,stats.median*3);
+  if(sens==='low') return Math.max(stats.p98,stats.median*8);
+  return Math.max(stats.p95,stats.median*5);
+}
+// Shims for extension/lab API backward compat
 function bigTradeUnitValue(t){return +t.notional||0;}
 function bigTradeMinValue(){return 0;}
 function bigTradeDisplayMode(){return 'auto';}
@@ -3890,165 +3881,59 @@ function formatBigTradeValue(v){
 function bigTradeMergeLevels(){return 2;}
 function bigTradeBubbleScale(){return 1;}
 function bigTradeMaxBubbles(){return 2;}
-function footprintValueForBigTrade(price,row,side){
-  const qty=side==='sell'?(+row.sell||0):(+row.buy||0);
-  return qty*Math.max(0,+price||0);
-}
-function medianGapFromRows(rows){
-  const ps=rows.map(r=>+r[0]).filter(isFinite).sort((a,b)=>a-b);
-  const gaps=[];
-  for(let i=1;i<ps.length;i++){
-    const g=Math.abs(ps[i]-ps[i-1]);
-    if(g>0&&isFinite(g))gaps.push(g);
-  }
-  if(!gaps.length)return 0;
-  gaps.sort((a,b)=>a-b);
-  return gaps[Math.floor(gaps.length*.5)]||gaps[0]||0;
-}
-function buildFootprintBigTradeClustersForSide(rows,side,minV,mergeLevels){
-  const strong=[];
-  for(const [price,row] of rows){
-    const p=+price;
-    const v=footprintValueForBigTrade(p,row,side);
-    if(isFinite(p)&&isFinite(v)&&v>=minV){
-      strong.push({price:p,value:v,qty:side==='sell'?(+row.sell||0):(+row.buy||0)});
-    }
-  }
-  strong.sort((a,b)=>a.price-b.price);
-  if(!strong.length)return [];
-  const baseGap=medianGapFromRows(rows);
-  const tol=baseGap>0?baseGap*Math.max(1,mergeLevels):0;
-  const clusters=[];
-  let cur=null;
-  for(const it of strong){
-    if(!cur){
-      cur={priceSum:it.price*Math.max(it.value,1e-9),valueSum:it.value,qtySum:it.qty,count:1,lastPrice:it.price};
-      continue;
-    }
-    const near=mergeLevels>0 && tol>0 && Math.abs(it.price-cur.lastPrice)<=tol+1e-9;
-    if(near){
-      cur.priceSum+=it.price*Math.max(it.value,1e-9);
-      cur.valueSum+=it.value;
-      cur.qtySum+=it.qty;
-      cur.count+=1;
-      cur.lastPrice=it.price;
-    }else{
-      clusters.push(cur);
-      cur={priceSum:it.price*Math.max(it.value,1e-9),valueSum:it.value,qtySum:it.qty,count:1,lastPrice:it.price};
-    }
-  }
-  if(cur)clusters.push(cur);
-  return clusters.map(c=>({
-    p:c.priceSum/Math.max(c.valueSum,1e-9),
-    btValue:c.valueSum,
-    qtyValue:c.qtySum,
-    levelCount:c.count,
-    isSell:side==='sell'
-  }));
-}
 function bigTradeCacheConfigKey(){
   const sens=(el('bigTradeSensitivity')?.value)||'normal';
-  return 'v4|'+String(S.sym)+'|'+String(S.tf)+'|'+sens;
+  return 'v5|'+String(S.sym)+'|'+String(S.tf)+'|'+sens;
 }
-function buildBigTradeClustersForCandle(idx){
-  const c=S.candles[idx];
-  if(!c)return [];
-  const _fpc=fpCfg();const _cov=candleTradeCoverage(c);if(_fpc.requireReal&&_cov<_fpc.minCov)return[];
-  const {minV}=_btThreshold((el('bigTradeSensitivity')?.value)||'normal');
-  const range=Math.max(1e-9,(+c.h||0)-(+c.l||0));
-  const rows=normalizedFootprintRows(c,Math.max(10,Math.min(28,Math.round(range/Math.max(range/22,1e-9)))));
-  if(!rows||!rows.length)return [];
-
-  // Pre-filter: only levels where dominant side individually >= minV
-  const qualRows=rows.filter(([price,row])=>{
-    const buy=+row.buy||0,sell=+row.sell||0;
-    const buyV=buy*Math.max(0,+price);
-    const sellV=sell*Math.max(0,+price);
-    return Math.max(buyV,sellV)>=minV;
-  }).sort((a,b)=>a[0]-b[0]);
-  if(!qualRows.length)return [];
-
-  // Merge adjacent qualifying levels (fixed 2 levels)
-  const baseGap=medianGapFromRows(rows);
-  const tol=baseGap>0?baseGap*2:0;
-  const merged=[];
-  let cur=null;
-  for(const [price,row] of qualRows){
-    const buy=+row.buy||0,sell=+row.sell||0;
-    if(!cur){cur={priceSum:price*(buy+sell+1e-9),wSum:buy+sell+1e-9,buy,sell,count:1,lastPrice:price};continue;}
-    if(tol>0&&Math.abs(price-cur.lastPrice)<=tol+1e-9){
-      cur.priceSum+=price*(buy+sell+1e-9);cur.wSum+=buy+sell+1e-9;
-      cur.buy+=buy;cur.sell+=sell;cur.count++;cur.lastPrice=price;
-    }else{
-      merged.push(cur);
-      cur={priceSum:price*(buy+sell+1e-9),wSum:buy+sell+1e-9,buy,sell,count:1,lastPrice:price};
-    }
+// Build clusters from real trades in S.trades — no footprint, no synthetic data
+function buildRawBigTradeClusters(V){
+  const cfg=bigTradesConfig();
+  const fromIdx=Math.max(0,S.candles.length-cfg.lastCandles);
+  const stats=_btQtyStats();
+  const threshold=_btQtyThreshold(cfg.sensitivity,stats);
+  if(!isFinite(threshold)||threshold<=0||!S.trades.length)return[];
+  const tick=Math.max(S.tick||1,1e-8);
+  const groups=new Map();
+  for(const t of S.trades){
+    const contracts=+t.q||0;
+    if(contracts<threshold)continue;
+    const idx=candleIndexByTime(t.time);
+    if(idx<0||idx<fromIdx)continue;
+    if(idx<Math.floor(V.a)-2||idx>Math.ceil(V.b)+2)continue;
+    // Bucket by price tick so nearby trades in same candle merge
+    const priceBucket=Math.round(t.p/tick)*tick;
+    const key=idx+'|'+(t.isSell?1:0)+'|'+priceBucket;
+    let g=groups.get(key);
+    if(!g){g={idx,isSell:t.isSell,priceSum:0,weight:0,contracts:0,notional:0,count:0,maxContracts:0};groups.set(key,g);}
+    g.priceSum+=t.p*contracts;g.weight+=contracts;
+    g.contracts+=contracts;g.notional+=t.notional||t.p*contracts;
+    g.count++;g.maxContracts=Math.max(g.maxContracts,contracts);
   }
-  if(cur)merged.push(cur);
-
-  // Score clusters — color by dominant side
-  const all=[];
-  for(const cl of merged){
-    const p=cl.priceSum/Math.max(cl.wSum,1e-9);
-    const buyV=cl.buy*Math.max(0,p);
-    const sellV=cl.sell*Math.max(0,p);
-    const isSell=sellV>buyV;
-    all.push({p,btValue:Math.max(buyV,sellV),qtyValue:Math.max(cl.buy,cl.sell),levelCount:cl.count,isSell});
-  }
-  if(!all.length)return [];
-  all.sort((a,b)=>b.btValue-a.btValue);
-
-  // Auto mode: largest buy + largest sell per candle (max 2)
-  let bestBuy=null,bestSell=null;
-  for(const item of all){
-    if(item.isSell){if(!bestSell||item.btValue>bestSell.btValue)bestSell=item;}
-    else{if(!bestBuy||item.btValue>bestBuy.btValue)bestBuy=item;}
+  if(!groups.size)return[];
+  // Per-candle: keep only the strongest buy and strongest sell cluster
+  const best=new Map();
+  for(const g of groups.values()){
+    const k=g.idx+'|'+(g.isSell?1:0);
+    const ex=best.get(k);
+    if(!ex||g.contracts>ex.contracts)best.set(k,g);
   }
   const out=[];
-  if(bestBuy)out.push({idx,t:bestBuy});
-  if(bestSell)out.push({idx,t:bestSell});
+  for(const g of best.values()){
+    const p=g.priceSum/Math.max(g.weight,1e-9);
+    out.push({idx:g.idx,t:{p,contracts:g.contracts,notional:g.notional,btValue:g.contracts,isSell:g.isSell,count:g.count,maxContracts:g.maxContracts}});
+  }
   return out;
 }
+// S.trades ≤15K entries — rebuilding each frame is fast; keyed frame-cache avoids redundant work
 function visibleBigTradesByCandle(V){
-  const cfg=bigTradeCacheConfigKey();
   const btc=bigTradesConfig();
-  const lastX=btc.lastCandles;
-  const fromIdx=Math.max(0,S.candles.length-lastX);
-  if(!window.__bigTradesPersistentCache)window.__bigTradesPersistentCache=new Map();
-  const out=[];
-  const a=Math.max(Math.floor(V.a)-2,fromIdx);
-  const b=Math.min(S.candles.length,Math.ceil(V.b)+2);
-  for(let idx=a;idx<b;idx++){
-    if(idx<fromIdx)continue;
-    const c=S.candles[idx];
-    if(!c)continue;
-    const candleKey=cfg+'|'+String(c.t)+'|'+String(c.h)+'|'+String(c.l)+'|'+String(Math.round((c.buy||0)*1e4))+'|'+String(Math.round((c.sell||0)*1e4));
-    let cached=window.__bigTradesPersistentCache.get(candleKey);
-    const isRecent=idx>=S.candles.length-4;
-    if(!cached||isRecent){
-      const built=buildBigTradeClustersForCandle(idx);
-      if(built&&built.length){
-        cached={items:built,ts:Date.now(),idx};
-        window.__bigTradesPersistentCache.set(candleKey,cached);
-      }else if(cached&&cached.items&&cached.items.length){
-        // keep stale
-      }else{continue;}
-    }
-    if(cached&&cached.items&&cached.items.length)cached.items.forEach(o=>out.push(o));
-  }
-  try{
-    if(window.__bigTradesPersistentCache.size>4000){
-      const keep=new Map();
-      const recentTimes=new Set(S.candles.slice(-520).map(c=>String(c.t)));
-      window.__bigTradesPersistentCache.forEach((v,k)=>{for(const t of recentTimes){if(k.includes('|'+t+'|')){keep.set(k,v);break;}}});
-      window.__bigTradesPersistentCache=keep;
-    }
-  }catch(_e){}
-  // Never return stale items from outside the allowed range
-  const filtered=out.filter(o=>o.idx>=fromIdx);
-  if(filtered.length){window.__bigTradesLastGood=filtered.slice(0,1200);return filtered;}
-  const lastGood=(window.__bigTradesLastGood||[]).filter(o=>o.idx>=fromIdx);
-  return lastGood;
+  const fromIdx=Math.max(0,S.candles.length-btc.lastCandles);
+  const cfgKey=bigTradeCacheConfigKey()+'|'+String(S.trades.length)+'|'+String(fromIdx)+'|'+String(Math.floor(V.a))+'|'+String(Math.ceil(V.b));
+  if(window.__btFrameCache&&window.__btFrameCache.key===cfgKey)return window.__btFrameCache.items;
+  const items=buildRawBigTradeClusters(V).filter(o=>o.idx>=fromIdx);
+  window.__btFrameCache={key:cfgKey,items};
+  if(items.length){window.__bigTradesLastGood=items;return items;}
+  return(window.__bigTradesLastGood||[]).filter(o=>o.idx>=fromIdx);
 }
 try{
   window.visibleBigTradesByCandle=visibleBigTradesByCandle;
@@ -4067,92 +3952,54 @@ function drawBigTrades(ctx,V,sc,x,W,H){
   const btc=bigTradesConfig();
   const fromIdx=Math.max(0,S.candles.length-btc.lastCandles);
   let items=visibleBigTradesByCandle(V);
-  // Apply lastCandles + visible range filter in all cases — including stale cache
+  // Final range guard — covers all code paths including stale lastGood
   items=items.filter(o=>o.idx>=fromIdx&&o.idx>=Math.floor(V.a)&&o.idx<=Math.ceil(V.b));
-  try{
-    const cacheKey=bigTradeCacheConfigKey()+'|'+String(S.candles.length)+'|'+String(fromIdx);
-    if(items.length){window.__bigTradesOverlayCache={key:cacheKey,items,ts:Date.now()};}
-    else if(window.__bigTradesOverlayCache&&window.__bigTradesOverlayCache.key===cacheKey&&(Date.now()-(window.__bigTradesOverlayCache.ts||0)<30000)){
-      items=(window.__bigTradesOverlayCache.items||[]).filter(o=>o.idx>=fromIdx);
-    }
-  }catch(_e){}
   if(!items.length)return;
 
-  const values=items.map(o=>o.t.btValue).filter(v=>v>0).sort((a,b)=>a-b);
-  const maxV=Math.max(...values,1);
-  const p90=values.length?values[Math.floor(values.length*.90)]||maxV:maxV;
-  const p98=values.length?values[Math.floor(values.length*.98)]||maxV:maxV;
-  const filtered=btc.strongOnly?items.filter(o=>o.t.btValue>=p90):items;
-  if(!filtered.length)return;
+  // Tier by real contracts
+  const vals=items.map(o=>o.t.contracts).filter(v=>v>0).sort((a,b)=>a-b);
+  const p75=vals.length?vals[Math.floor(vals.length*.75)]||vals[vals.length-1]:1;
+  const p95=vals.length?vals[Math.floor(vals.length*.95)]||vals[vals.length-1]:1;
+  if(btc.strongOnly)items=items.filter(o=>o.t.contracts>=p75);
+  if(!items.length)return;
 
   const size=canvasCssSize(ctx);
-  const cssW=W||size.w;
-  const cssH=H||size.h;
-  const right=cssW-RP();
-  const top=PT;
-  const bottom=cssH-PB;
+  const cssW=W||size.w,cssH=H||size.h;
+  const right=cssW-RP(),top=PT,bottom=cssH-PB;
 
   const drawItems=[];
-  filtered.forEach(({idx,t})=>{
-    const xx=x(idx);
-    const yy=sc.y(t.p);
-    if(!isFinite(xx)||!isFinite(yy))return;
-    if(xx<PL||xx>right||yy<top||yy>bottom)return;
-    const v=t.btValue;
-    const strength=v/Math.max(1e-9,p90);
-    const hot=v>=p98,big=v>=p90;
-    const clusterBoost=1+Math.min(0.75,((t.levelCount||1)-1)*0.16);
-    const r=clamp((5+Math.sqrt(Math.max(0,strength))*5.0)*clusterBoost,5,hot?24:big?18:13);
+  items.forEach(({idx,t})=>{
+    const xx=x(idx),yy=sc.y(t.p);
+    if(!isFinite(xx)||!isFinite(yy)||xx<PL||xx>right||yy<top||yy>bottom)return;
+    const v=t.contracts;
+    const hot=v>=p95,big=v>=p75;
+    const strength=v/Math.max(1e-9,p75);
+    const r=clamp(4+Math.sqrt(Math.max(0,strength-1))*4,4,hot?22:big?15:10);
     drawItems.push({xx,yy,adjY:yy,r,v,hot,big,t});
   });
+  if(!drawItems.length)return;
 
-  // De-overlap: within-column
+  // De-overlap within each candle column
   const cols=new Map();
-  drawItems.forEach(item=>{
-    const col=Math.round(item.xx);
-    if(!cols.has(col))cols.set(col,[]);
-    cols.get(col).push(item);
-  });
+  drawItems.forEach(item=>{const col=Math.round(item.xx);if(!cols.has(col))cols.set(col,[]);cols.get(col).push(item);});
   cols.forEach(group=>{
     if(group.length<2)return;
     group.sort((a,b)=>a.yy-b.yy);
-    for(let pass=0;pass<5;pass++){
+    for(let pass=0;pass<4;pass++){
       for(let k=1;k<group.length;k++){
-        const a=group[k-1],b=group[k];
-        const need=a.r+b.r+3;
+        const a=group[k-1],b=group[k];const need=a.r+b.r+2;
         if(b.adjY-a.adjY<need){const mid=(a.adjY+b.adjY)/2;a.adjY=clamp(mid-need/2,top+a.r,bottom-a.r);b.adjY=clamp(mid+need/2,top+b.r,bottom-b.r);}
       }
       for(let k=group.length-2;k>=0;k--){
-        const a=group[k],b=group[k+1];
-        const need=a.r+b.r+3;
+        const a=group[k],b=group[k+1];const need=a.r+b.r+2;
         if(b.adjY-a.adjY<need){const mid=(a.adjY+b.adjY)/2;a.adjY=clamp(mid-need/2,top+a.r,bottom-a.r);b.adjY=clamp(mid+need/2,top+b.r,bottom-b.r);}
       }
     }
   });
-  // De-overlap: cross-column
-  for(let pass=0;pass<2;pass++){
-    for(let i=0;i<drawItems.length;i++){
-      for(let j=0;j<i;j++){
-        const a=drawItems[j],b=drawItems[i];
-        const dx=b.xx-a.xx,dy=b.adjY-a.adjY;
-        const dist=Math.sqrt(dx*dx+dy*dy);
-        const minDist=a.r+b.r+2;
-        if(dist>0&&dist<minDist){
-          const push=(minDist-dist)/2;
-          const py=dy/dist*push;
-          a.adjY=clamp(a.adjY-py,top+a.r,bottom-a.r);
-          b.adjY=clamp(b.adjY+py,top+b.r,bottom-b.r);
-        }
-      }
-    }
-  }
 
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(PL,top,Math.max(1,right-PL),Math.max(1,bottom-top));
-  ctx.clip();
-  ctx.textAlign='center';
-  ctx.textBaseline='middle';
+  ctx.beginPath();ctx.rect(PL,top,Math.max(1,right-PL),Math.max(1,bottom-top));ctx.clip();
+  ctx.textAlign='center';ctx.textBaseline='middle';
 
   const _h2rgb=h=>{const n=parseInt(h.replace('#',''),16);return((n>>16)&255)+','+((n>>8)&255)+','+(n&255)};
   const _buyRgb=_h2rgb(btc.buyColor);
@@ -4160,18 +4007,25 @@ function drawBigTrades(ctx,V,sc,x,W,H){
 
   drawItems.forEach(({xx,adjY,r,v,hot,big,t})=>{
     const rgb=t.isSell?_sellRgb:_buyRgb;
-    ctx.beginPath();ctx.arc(xx,adjY,r+(hot?4:3),0,Math.PI*2);
-    ctx.fillStyle=`rgba(${rgb},${hot?.16:big?.09:.05})`;ctx.fill();
+    // Outer glow on hot trades
+    if(hot){ctx.beginPath();ctx.arc(xx,adjY,r+6,0,Math.PI*2);ctx.fillStyle=`rgba(${rgb},.06)`;ctx.fill();}
+    // Halo ring
+    ctx.beginPath();ctx.arc(xx,adjY,r+3,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${rgb},${hot?.12:big?.07:.04})`;ctx.fill();
+    // Main fill — translucent
     ctx.beginPath();ctx.arc(xx,adjY,r,0,Math.PI*2);
-    ctx.fillStyle=`rgba(${rgb},${hot?.40:big?.28:.20})`;ctx.fill();
-    ctx.strokeStyle=`rgba(${rgb},${hot?1:big?.92:.72})`;
-    ctx.lineWidth=hot?2.2:big?1.5:1.1;ctx.stroke();
-    if(btc.showLabels&&r>=6){
-      const label=formatBigTradeValue(v);
-      ctx.font='bold 8px Inter,Arial';
-      ctx.beginPath();ctx.arc(xx,adjY,Math.max(5.5,r*.60),0,Math.PI*2);
-      ctx.fillStyle='rgba(3,6,14,.80)';ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,1)';ctx.fillText(label,xx,adjY+.3);
+    ctx.fillStyle=`rgba(${rgb},${hot?.35:big?.22:.13})`;ctx.fill();
+    // Sharp border
+    ctx.strokeStyle=`rgba(${rgb},${hot?1:big?.88:.62})`;
+    ctx.lineWidth=hot?2:big?1.4:1;ctx.stroke();
+    // Label: always on hot; on big when showLabels=true
+    if(hot||(btc.showLabels&&big)){
+      const contracts=t.contracts;
+      const label=contracts>=1?contracts.toFixed(contracts<10?2:0)+'c':formatBigTradeValue(t.notional);
+      const fs=Math.max(7,Math.min(10,Math.floor(r*.9)));
+      ctx.font=`bold ${fs}px Inter,Arial`;
+      if(r>=7){ctx.beginPath();ctx.arc(xx,adjY,Math.max(5,r*.58),0,Math.PI*2);ctx.fillStyle='rgba(3,6,14,.82)';ctx.fill();}
+      ctx.fillStyle=`rgba(255,255,255,${hot?1:.9})`;ctx.fillText(label,xx,adjY+.5);
     }
   });
   ctx.restore();
