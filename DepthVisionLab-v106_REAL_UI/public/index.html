@@ -3717,7 +3717,7 @@ function _fpDrawNormal(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc
   ctx.globalAlpha=1;
   _fpDrawSpine(ctx,c,xx,top,bot,sc);
 }
-// ── Full tier: continuous ladder with numbers ────────────────────
+// ── Full tier: continuous ladder with numbers + contextual trap reading ──
 function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,sc,wickAbs){
   const boxW=clamp(bw*2.75,54,116),left=xx-boxW/2;
   const n=rows.length,rowH=hh/Math.max(1,n);
@@ -3731,15 +3731,31 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
   const halfW=boxW/2-2,mid=left+boxW/2;
   const range=Math.max(1e-9,c.h-c.l);
   const topThird=c.h-range/3,botThird=c.l+range/3;
+  // Candle geometry for per-row trap evaluation (reuse from wickAbs when available)
+  const upperWick=wickAbs?wickAbs.upperWick:(c.h-Math.max(c.o,c.c))/range;
+  const lowerWick=wickAbs?wickAbs.lowerWick:(Math.min(c.o,c.c)-c.l)/range;
+  const closePos=wickAbs?wickAbs.closePos:(c.c-c.l)/range;
+  const trapEnabled=fpc.showWickAbs;
   rows.forEach(([price,r],ri)=>{
     const ry=top+ri*rowH;
     const yc=ry+rowH*.5;
-    const inUpper=!!(wickAbs?.upper&&price>=topThird);
-    const inLower=!!(wickAbs?.lower&&price<=botThird);
+    // Per-row trap detection:
+    // isUpperTrap = buy dominated this row BUT the candle rejected upward → buyers trapped
+    // isLowerTrap = sell dominated this row BUT the candle rejected downward → sellers trapped
+    const isUpperTrap=trapEnabled&&!r.synthetic&&
+      price>=topThird&&r.buy>r.sell&&
+      upperWick>=fpc.wickMinPct&&closePos<=0.55;
+    const isLowerTrap=trapEnabled&&!r.synthetic&&
+      price<=botThird&&r.sell>r.buy&&
+      lowerWick>=fpc.wickMinPct&&closePos>=0.45;
     if(r.empty){
-      if(inUpper){ctx.fillStyle='rgba(255,110,35,.15)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
-      else if(inLower){ctx.fillStyle='rgba(0,200,230,.10)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
-      else{ctx.fillStyle='rgba(5,9,20,.50)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
+      // Zone tint on empty rows when absorption context is present
+      if(isUpperTrap||(wickAbs?.upper&&price>=topThird))
+        {ctx.fillStyle='rgba(255,110,35,.15)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
+      else if(isLowerTrap||(wickAbs?.lower&&price<=botThird))
+        {ctx.fillStyle='rgba(0,200,230,.10)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
+      else
+        {ctx.fillStyle='rgba(5,9,20,.50)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
       ctx.strokeStyle='rgba(30,42,64,.28)';ctx.lineWidth=.3;ctx.strokeRect(left+1,ry,boxW-2,rowH-0.5);
       return;
     }
@@ -3748,17 +3764,29 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
     const imbal=(r.buy-r.sell)/Math.max(1e-9,tot);
     const baseAlpha=clamp(.10+pwr*.42,.10,.60);
     ctx.fillStyle='rgba(5,9,20,.70)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
-    if(!isWeak){
-      ctx.fillStyle=imbal>=0?`rgba(0,200,150,${baseAlpha})`:`rgba(255,115,45,${baseAlpha})`;
-      ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
-    }
-    // Absorption zone tint overlay
-    if(inUpper){
-      const ta=clamp(.18+pwr*.22,.14,.44);
+    if(isUpperTrap){
+      // Row has buy > sell but candle rejected up: paint orange/amber NOT green
+      // This communicates "failed buy aggression / buyers trapped"
+      if(!isWeak){ctx.fillStyle=`rgba(210,90,25,${baseAlpha})`;ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
+      const ta=clamp(.22+pwr*.26,.18,.52);
       ctx.fillStyle=`rgba(255,110,35,${ta})`;ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
-    } else if(inLower){
-      const ta=clamp(.18+pwr*.22,.14,.44);
+    }else if(isLowerTrap){
+      // Row has sell > buy but candle rejected down: paint cyan NOT red
+      // This communicates "failed sell aggression / sellers trapped"
+      if(!isWeak){ctx.fillStyle=`rgba(0,145,185,${baseAlpha})`;ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
+      const ta=clamp(.22+pwr*.26,.18,.52);
       ctx.fillStyle=`rgba(0,210,240,${ta})`;ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
+    }else{
+      // Normal delta-based coloring for rows outside trap context
+      if(!isWeak){
+        ctx.fillStyle=imbal>=0?`rgba(0,200,150,${baseAlpha})`:`rgba(255,115,45,${baseAlpha})`;
+        ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
+      }
+      // Soft ambient tint on zone rows that don't individually qualify as trap
+      if(wickAbs?.upper&&price>=topThird)
+        {ctx.fillStyle='rgba(200,90,25,.09)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
+      else if(wickAbs?.lower&&price<=botThird)
+        {ctx.fillStyle='rgba(0,170,200,.07)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
     }
     if(tot>0){
       const fa=isWeak?clamp(.08+pwr*.20,.06,.28):clamp(.20+pwr*.40,.18,.68);
@@ -3768,25 +3796,39 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
     ctx.strokeStyle='rgba(30,42,64,.55)';ctx.lineWidth=.4;ctx.strokeRect(left+1,ry,boxW-2,rowH-0.5);
     ctx.strokeStyle='rgba(80,100,140,.40)';ctx.beginPath();ctx.moveTo(mid,ry);ctx.lineTo(mid,ry+rowH-0.5);ctx.stroke();
     if(canShowText&&tot>0){
-      const sellCol=r.sell>r.buy
-        ?(isWeak?`rgba(255,130,70,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(255,130,70,1)')
-        :(isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)');
-      const buyCol=r.buy>r.sell
-        ?(isWeak?`rgba(0,210,150,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(0,220,160,1)')
-        :(isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)');
+      // Trap rows: dominant side shown in "trapped" color (amber/cyan), not normal buy/sell color
+      // Numbers stay real — only the color changes to signal context
+      let sellCol,buyCol;
+      if(isUpperTrap){
+        // Buy numbers in amber: "this buy got trapped"
+        buyCol =isWeak?`rgba(255,155,55,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(255,160,55,1)';
+        sellCol=isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)';
+      }else if(isLowerTrap){
+        // Sell numbers in cyan: "this sell got trapped"
+        sellCol=isWeak?`rgba(0,200,235,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(0,215,245,1)';
+        buyCol =isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)';
+      }else{
+        sellCol=r.sell>r.buy
+          ?(isWeak?`rgba(255,130,70,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(255,130,70,1)')
+          :(isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)');
+        buyCol=r.buy>r.sell
+          ?(isWeak?`rgba(0,210,150,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(0,220,160,1)')
+          :(isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)');
+      }
       ctx.font=`bold ${fontSize}px monospace`;
       ctx.shadowColor='rgba(0,0,0,.85)';ctx.shadowBlur=isWeak?2:3;
       ctx.textAlign='center';
       ctx.fillStyle=sellCol;ctx.fillText(fmtVolClean(r.sell*price),left+boxW*.25,yc+.5);
-      ctx.fillStyle=buyCol;ctx.fillText(fmtVolClean(r.buy*price),left+boxW*.75,yc+.5);
+      ctx.fillStyle=buyCol; ctx.fillText(fmtVolClean(r.buy*price), left+boxW*.75,yc+.5);
       ctx.shadowBlur=0;
     }
     const imb=imbs[ri];
-    if(imb?.flag&&!r.synthetic){
+    // Suppress bull/bear imbalance markers on trap rows — context makes them misleading
+    if(imb?.flag&&!r.synthetic&&!isUpperTrap&&!isLowerTrap){
       ctx.fillStyle=imb.flag==='bull'?'rgba(0,212,212,.55)':'rgba(240,110,35,.55)';
       ctx.fillRect(left+2,ry,boxW-4,2);
     }
-    if(fpc.showStacked&&imb?.stackRun>=fpc.stackedMin&&imb.stackDir&&!r.synthetic){
+    if(fpc.showStacked&&imb?.stackRun>=fpc.stackedMin&&imb.stackDir&&!r.synthetic&&!isUpperTrap&&!isLowerTrap){
       ctx.fillStyle=imb.stackDir==='bull'?'rgba(0,220,220,.40)':'rgba(255,100,35,.40)';
       ctx.fillRect(imb.stackDir==='bull'?left+boxW-4:left+1,ry,3,rowH);
     }
@@ -3804,7 +3846,7 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
       ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=3;
       ctx.fillStyle=lc;ctx.fillText(story,xx,bot+11);
       ctx.shadowBlur=0;
-    } else {
+    }else{
       ctx.strokeStyle=realDelta>=0?'rgba(0,175,120,.65)':'rgba(200,80,45,.65)';ctx.lineWidth=.7;ctx.strokeRect(left,bot+2,boxW,15);
       ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=2;
       ctx.fillStyle=realDelta>=0?'#00d494':'#ff7832';
