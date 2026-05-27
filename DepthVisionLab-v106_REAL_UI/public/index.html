@@ -1831,6 +1831,9 @@ html.pre-ui .switch::after{transition:none!important}
             <label class="kv" style="cursor:pointer;"><span class="k">Stacked imbalance</span><input type="checkbox" id="fpShowStacked" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <div class="kv"><span class="k">Stacked mín. rows</span><input class="num" id="fpStackedMin" type="number" min="2" max="8" step="1" value="2"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Big trade só real FP</span><input type="checkbox" id="fpRequireReal" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Wick absorption</span><input type="checkbox" id="fpWickAbs" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Wick mín. (%)</span><input class="num" id="fpWickMinPct" type="number" min="10" max="60" step="5" value="30"></div>
+            <div class="kv"><span class="k">Max FP scale</span><input class="num" id="fpMaxScale" type="number" min="1" max="10" step="0.5" value="3"></div>
             <div class="hint">Auto: zoom determina detalhe. Cobertura ≥35% = real. Sintético aparece desbotado (~).</div>
           </div>
         </div>
@@ -3484,7 +3487,10 @@ function fpCfg(){
     imbalRatio: Math.max(1.2,+(el('fpImbalRatio')?.value)||2.5),
     showStacked:el('fpShowStacked')?el('fpShowStacked').checked:true,
     stackedMin: Math.max(2,+(el('fpStackedMin')?.value)||2),
-    requireReal:el('fpRequireReal')?el('fpRequireReal').checked:true
+    requireReal:el('fpRequireReal')?el('fpRequireReal').checked:true,
+    showWickAbs:el('fpWickAbs')?el('fpWickAbs').checked:true,
+    wickMinPct:  clamp(+(el('fpWickMinPct')?.value)||30,5,80)/100,
+    maxFpScale:  Math.max(1,+(el('fpMaxScale')?.value)||3)
   };
 }
 // ── Coverage category (real/partial/synthetic) ──────────────────
@@ -3540,8 +3546,11 @@ function _buildLadder(c, maxRows){
       r.buy=vol*lb;r.sell=vol*(1-lb);r.synthetic=true;r.empty=false;
     });
   }else if(candleVol>0&&fpTotal>0){
-    const k=clamp(candleVol/fpTotal,0.18,12);
-    for(const[,r] of buckets){if(!r.empty){r.buy*=k;r.sell*=k;}}
+    const maxScale=Math.max(1,+(el('fpMaxScale')?.value)||3);
+    const k=clamp(candleVol/fpTotal,0.18,maxScale);
+    // If actual ratio exceeds maxScale, mark all real rows as low-confidence
+    const lowConf=(candleVol/fpTotal)>maxScale;
+    for(const[,r] of buckets){if(!r.empty){r.buy*=k;r.sell*=k;if(lowConf)r.lowConf=true;}}
   }
   return buckets;
 }
@@ -3601,6 +3610,61 @@ function footprintStatsInZone(c,zoneLo,zoneHi){
   return{buy,sell,total,delta:buy-sell,buyShare:total?buy/total:0.5,sellShare:total?sell/total:0.5,maxBuyRow,maxSellRow,imbalanceRows,stackedBuy,stackedSell,coverage:cov,real:cov>=0.10&&!allSyn};
 }
 window.footprintStatsInZone=footprintStatsInZone;
+// ── Region stats: top/mid/bottom thirds of candle ────────────────
+function footprintRegionStats(c){
+  const range=Math.max(1e-9,c.h-c.l);
+  const topLo=c.h-range/3,botHi=c.l+range/3;
+  const cov=candleTradeCoverage(c);
+  const real=cov>=0.10;
+  const rows=getCachedFPRows(c,24);
+  const reg={top:{buy:0,sell:0},mid:{buy:0,sell:0},bot:{buy:0,sell:0}};
+  for(const[p,r] of rows){
+    const zone=p>=topLo?'top':p<=botHi?'bot':'mid';
+    reg[zone].buy+=r.buy;reg[zone].sell+=r.sell;
+  }
+  for(const z of Object.values(reg)){
+    z.total=z.buy+z.sell;z.delta=z.buy-z.sell;
+    z.buyShare=z.total?z.buy/z.total:0.5;z.sellShare=z.total?z.sell/z.total:0.5;
+  }
+  return{...reg,coverage:cov,real};
+}
+// ── Wick absorption detector ─────────────────────────────────────
+// Returns {upper, lower, storyLabel} based on wick geometry + region volume.
+function detectWickAbsorption(c,regions,fpc){
+  const range=Math.max(1e-9,c.h-c.l);
+  const upperWick=(c.h-Math.max(c.o,c.c))/range;
+  const lowerWick=(Math.min(c.o,c.c)-c.l)/range;
+  const closePos=(c.c-c.l)/range;
+  const minWick=fpc.wickMinPct;
+  const cov=regions.coverage;
+  // Only fire on real footprint unless coverage is high enough
+  const canSignal=!fpc.requireReal||cov>=0.10;
+
+  let upper=false,lower=false;
+  // Upper wick absorption: large upper wick + close in lower half + sell dominance or buy trapped at top
+  if(canSignal&&upperWick>=minWick&&closePos<=0.55){
+    const topBuyShare=regions.top.buyShare;
+    // Buyers tried the top (buyShare high at top) but price rejected = trapped
+    // OR sellers absorbed heavily at top
+    if(regions.top.total>0)upper=true;
+  }
+  // Lower wick absorption: large lower wick + close in upper half + buy dominance or sell trapped at bottom
+  if(canSignal&&lowerWick>=minWick&&closePos>=0.45){
+    if(regions.bot.total>0)lower=true;
+  }
+
+  // Story label — summarise what happened
+  let storyLabel=null;
+  if(upper&&lower){storyLabel='BOTH ABS';}
+  else if(upper){
+    // Was it buyers trapped or sellers absorbing?
+    storyLabel=regions.top.buyShare>=0.52?'B.TRAP':'SELL ABS';
+  }else if(lower){
+    storyLabel=regions.bot.sellShare>=0.52?'S.TRAP':'BUY ABS';
+  }
+  return{upper,lower,storyLabel,upperWick,lowerWick,closePos};
+}
+window.footprintRegionStats=footprintRegionStats;
 // ── Mini tier: delta overlay only ───────────────────────────────
 function _fpDrawMini(ctx,c,rows,xx,top,bot,hh,bw,realDelta,covAlpha){
   const w=Math.max(6,bw*.82),left=xx-w/2;
@@ -3654,23 +3718,28 @@ function _fpDrawNormal(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc
   _fpDrawSpine(ctx,c,xx,top,bot,sc);
 }
 // ── Full tier: continuous ladder with numbers ────────────────────
-function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,sc){
+function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,sc,wickAbs){
   const boxW=clamp(bw*2.75,54,116),left=xx-boxW/2;
   const n=rows.length,rowH=hh/Math.max(1,n);
-  // Font tier: always try to show text; smaller font when rows are tight
   const fontSize=rowH>=13?9:rowH>=9?8:7;
-  const canShowText=rowH>=6; // absolute minimum to render any text
+  const canShowText=rowH>=6;
   ctx.globalAlpha=covAlpha;
   ctx.fillStyle='rgba(5,9,20,.78)';ctx.fillRect(left,top,boxW,hh);
   ctx.strokeStyle=realDelta>=0?'rgba(0,180,130,.55)':'rgba(210,85,45,.55)';ctx.lineWidth=.95;ctx.strokeRect(left,top,boxW,hh);
   ctx.strokeStyle='rgba(255,255,255,.10)';ctx.beginPath();ctx.moveTo(xx,top);ctx.lineTo(xx,bot);ctx.stroke();
   const imbs=computeRowImbalances(rows,fpc.imbalRatio);
   const halfW=boxW/2-2,mid=left+boxW/2;
+  const range=Math.max(1e-9,c.h-c.l);
+  const topThird=c.h-range/3,botThird=c.l+range/3;
   rows.forEach(([price,r],ri)=>{
     const ry=top+ri*rowH;
     const yc=ry+rowH*.5;
+    const inUpper=!!(wickAbs?.upper&&price>=topThird);
+    const inLower=!!(wickAbs?.lower&&price<=botThird);
     if(r.empty){
-      ctx.fillStyle='rgba(5,9,20,.50)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
+      if(inUpper){ctx.fillStyle='rgba(255,110,35,.15)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
+      else if(inLower){ctx.fillStyle='rgba(0,200,230,.10)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
+      else{ctx.fillStyle='rgba(5,9,20,.50)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);}
       ctx.strokeStyle='rgba(30,42,64,.28)';ctx.lineWidth=.3;ctx.strokeRect(left+1,ry,boxW-2,rowH-0.5);
       return;
     }
@@ -3678,24 +3747,27 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
     const isWeak=pwr<fpc.rowThresh;
     const imbal=(r.buy-r.sell)/Math.max(1e-9,tot);
     const baseAlpha=clamp(.10+pwr*.42,.10,.60);
-    // Row background — present even for weak rows
     ctx.fillStyle='rgba(5,9,20,.70)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
     if(!isWeak){
       ctx.fillStyle=imbal>=0?`rgba(0,200,150,${baseAlpha})`:`rgba(255,115,45,${baseAlpha})`;
       ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
     }
-    // Volume bars — always when volume exists
+    // Absorption zone tint overlay
+    if(inUpper){
+      const ta=clamp(.18+pwr*.22,.14,.44);
+      ctx.fillStyle=`rgba(255,110,35,${ta})`;ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
+    } else if(inLower){
+      const ta=clamp(.18+pwr*.22,.14,.44);
+      ctx.fillStyle=`rgba(0,210,240,${ta})`;ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
+    }
     if(tot>0){
       const fa=isWeak?clamp(.08+pwr*.20,.06,.28):clamp(.20+pwr*.40,.18,.68);
       ctx.fillStyle=`rgba(255,115,45,${fa})`;ctx.fillRect(left+1,ry+1,clamp(r.sell/tot,0,1)*halfW,rowH-2);
       ctx.fillStyle=`rgba(0,200,150,${fa})`;ctx.fillRect(mid,ry+1,clamp(r.buy/tot,0,1)*halfW,rowH-2);
     }
-    // Row border + center divider
     ctx.strokeStyle='rgba(30,42,64,.55)';ctx.lineWidth=.4;ctx.strokeRect(left+1,ry,boxW-2,rowH-0.5);
     ctx.strokeStyle='rgba(80,100,140,.40)';ctx.beginPath();ctx.moveTo(mid,ry);ctx.lineTo(mid,ry+rowH-0.5);ctx.stroke();
-    // Numbers — always show when buy+sell > 0 and physical space allows
     if(canShowText&&tot>0){
-      // Weak rows: smaller alpha text; strong rows: vivid color
       const sellCol=r.sell>r.buy
         ?(isWeak?`rgba(255,130,70,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(255,130,70,1)')
         :(isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)');
@@ -3705,13 +3777,10 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
       ctx.font=`bold ${fontSize}px monospace`;
       ctx.shadowColor='rgba(0,0,0,.85)';ctx.shadowBlur=isWeak?2:3;
       ctx.textAlign='center';
-      ctx.fillStyle=sellCol;
-      ctx.fillText(fmtVolClean(r.sell*price),left+boxW*.25,yc+.5);
-      ctx.fillStyle=buyCol;
-      ctx.fillText(fmtVolClean(r.buy*price),left+boxW*.75,yc+.5);
+      ctx.fillStyle=sellCol;ctx.fillText(fmtVolClean(r.sell*price),left+boxW*.25,yc+.5);
+      ctx.fillStyle=buyCol;ctx.fillText(fmtVolClean(r.buy*price),left+boxW*.75,yc+.5);
       ctx.shadowBlur=0;
     }
-    // Imbalance marker
     const imb=imbs[ri];
     if(imb?.flag&&!r.synthetic){
       ctx.fillStyle=imb.flag==='bull'?'rgba(0,212,212,.55)':'rgba(240,110,35,.55)';
@@ -3728,11 +3797,21 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
     const footerA=candleTradeCoverage(c)>=0.10?1:0.45;
     ctx.globalAlpha=footerA;ctx.font='bold 9px monospace';ctx.textAlign='center';
     ctx.fillStyle='rgba(5,9,20,.92)';ctx.fillRect(left,bot+2,boxW,15);
-    ctx.strokeStyle=realDelta>=0?'rgba(0,175,120,.65)':'rgba(200,80,45,.65)';ctx.lineWidth=.7;ctx.strokeRect(left,bot+2,boxW,15);
-    ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=2;
-    ctx.fillStyle=realDelta>=0?'#00d494':'#ff7832';
-    ctx.fillText('Δ '+(realDelta>=0?'+':'')+fmtVolClean(Math.abs(realDelta)*c.c),xx,bot+11);
-    ctx.shadowBlur=0;ctx.globalAlpha=1;
+    const story=wickAbs?.storyLabel;
+    if(story){
+      const lc=story==='BUY ABS'?'#00d4ff':story==='SELL ABS'?'#ff7832':story==='B.TRAP'?'#ff9a3c':story==='S.TRAP'?'#c87cff':'#e0c040';
+      ctx.strokeStyle=lc+'bb';ctx.lineWidth=1.1;ctx.strokeRect(left,bot+2,boxW,15);
+      ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=3;
+      ctx.fillStyle=lc;ctx.fillText(story,xx,bot+11);
+      ctx.shadowBlur=0;
+    } else {
+      ctx.strokeStyle=realDelta>=0?'rgba(0,175,120,.65)':'rgba(200,80,45,.65)';ctx.lineWidth=.7;ctx.strokeRect(left,bot+2,boxW,15);
+      ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=2;
+      ctx.fillStyle=realDelta>=0?'#00d494':'#ff7832';
+      ctx.fillText('Δ '+(realDelta>=0?'+':'')+fmtVolClean(Math.abs(realDelta)*c.c),xx,bot+11);
+      ctx.shadowBlur=0;
+    }
+    ctx.globalAlpha=1;
   }
   if(covAlpha<0.60){
     ctx.globalAlpha=.35;ctx.font='7px monospace';ctx.textAlign='left';
@@ -3770,7 +3849,10 @@ function drawFootprint(ctx,V,sc,x,bw){
     const maxRow=Math.max(1,...rows.map(([_,r])=>r.buy+r.sell));
     if(tier==='mini')_fpDrawMini(ctx,c,rows,xx,top,bot,hh,bw,realDelta,covInfo.alpha);
     else if(tier==='normal')_fpDrawNormal(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covInfo.alpha,fpc,sc);
-    else _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covInfo.alpha,fpc,sc);
+    else{
+      const wickAbs=(fpc.showWickAbs&&tier==='full')?detectWickAbsorption(c,footprintRegionStats(c),fpc):null;
+      _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covInfo.alpha,fpc,sc,wickAbs);
+    }
   });
   ctx.fillStyle='rgba(0,212,255,.82)';ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.font='9px monospace';
   ctx.fillText('FOOTPRINT · ESQ=S / DIR=B · volume em USDT',PL+6,PT+25);
@@ -4521,8 +4603,8 @@ if(el('tfSelect')){
   }
 })();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();bootDebounced()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();bootDebounced()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','bigTradeShowLabels','bigTradeStrongOnly','btLastCandles','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
-['volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin','btLastCandles'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});
+['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','bigTradeShowLabels','bigTradeStrongOnly','btLastCandles','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal','fpWickAbs','fpWickMinPct','fpMaxScale'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
+['volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin','btLastCandles','fpWickMinPct','fpMaxScale'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});
 if(el('btLastCandles'))el('btLastCandles').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
 let touchState={mode:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5};
 function touchDist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
