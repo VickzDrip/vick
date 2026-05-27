@@ -3657,8 +3657,9 @@ function _fpDrawNormal(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc
 function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,sc){
   const boxW=clamp(bw*2.75,54,116),left=xx-boxW/2;
   const n=rows.length,rowH=hh/Math.max(1,n);
-  // Text is readable only when rows are tall enough
-  const showText=rowH>=8.5;
+  // Font tier: always try to show text; smaller font when rows are tight
+  const fontSize=rowH>=13?9:rowH>=9?8:7;
+  const canShowText=rowH>=6; // absolute minimum to render any text
   ctx.globalAlpha=covAlpha;
   ctx.fillStyle='rgba(5,9,20,.78)';ctx.fillRect(left,top,boxW,hh);
   ctx.strokeStyle=realDelta>=0?'rgba(0,180,130,.55)':'rgba(210,85,45,.55)';ctx.lineWidth=.95;ctx.strokeRect(left,top,boxW,hh);
@@ -3666,41 +3667,47 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
   const imbs=computeRowImbalances(rows,fpc.imbalRatio);
   const halfW=boxW/2-2,mid=left+boxW/2;
   rows.forEach(([price,r],ri)=>{
-    const ry=top+ri*rowH;    // top edge of this row
-    const yc=ry+rowH*.5;     // center
+    const ry=top+ri*rowH;
+    const yc=ry+rowH*.5;
     if(r.empty){
-      // Empty row: very faint dark strip — keeps ladder continuous
-      ctx.fillStyle='rgba(5,9,20,.55)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
-      ctx.strokeStyle='rgba(30,42,64,.35)';ctx.lineWidth=.35;ctx.strokeRect(left+1,ry,boxW-2,rowH-0.5);
+      ctx.fillStyle='rgba(5,9,20,.50)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
+      ctx.strokeStyle='rgba(30,42,64,.28)';ctx.lineWidth=.3;ctx.strokeRect(left+1,ry,boxW-2,rowH-0.5);
       return;
     }
     const tot=r.buy+r.sell,pwr=clamp(tot/maxRow,0,1);
     const isWeak=pwr<fpc.rowThresh;
     const imbal=(r.buy-r.sell)/Math.max(1e-9,tot);
     const baseAlpha=clamp(.10+pwr*.42,.10,.60);
-    // Row background
+    // Row background — present even for weak rows
     ctx.fillStyle='rgba(5,9,20,.70)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
     if(!isWeak){
       ctx.fillStyle=imbal>=0?`rgba(0,200,150,${baseAlpha})`:`rgba(255,115,45,${baseAlpha})`;
       ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
     }
-    // Bars
-    if(!isWeak&&tot>0){
-      const fa=clamp(.20+pwr*.40,.18,.68);
+    // Volume bars — always when volume exists
+    if(tot>0){
+      const fa=isWeak?clamp(.08+pwr*.20,.06,.28):clamp(.20+pwr*.40,.18,.68);
       ctx.fillStyle=`rgba(255,115,45,${fa})`;ctx.fillRect(left+1,ry+1,clamp(r.sell/tot,0,1)*halfW,rowH-2);
       ctx.fillStyle=`rgba(0,200,150,${fa})`;ctx.fillRect(mid,ry+1,clamp(r.buy/tot,0,1)*halfW,rowH-2);
     }
-    // Row border + divider
+    // Row border + center divider
     ctx.strokeStyle='rgba(30,42,64,.55)';ctx.lineWidth=.4;ctx.strokeRect(left+1,ry,boxW-2,rowH-0.5);
     ctx.strokeStyle='rgba(80,100,140,.40)';ctx.beginPath();ctx.moveTo(mid,ry);ctx.lineTo(mid,ry+rowH-0.5);ctx.stroke();
-    // Text (only when row is tall enough and not weak)
-    if(showText&&!isWeak){
-      ctx.font=rowH>=12?'bold 9px monospace':'bold 8px monospace';
-      ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=3;
+    // Numbers — always show when buy+sell > 0 and physical space allows
+    if(canShowText&&tot>0){
+      // Weak rows: smaller alpha text; strong rows: vivid color
+      const sellCol=r.sell>r.buy
+        ?(isWeak?`rgba(255,130,70,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(255,130,70,1)')
+        :(isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)');
+      const buyCol=r.buy>r.sell
+        ?(isWeak?`rgba(0,210,150,${clamp(.5+pwr*.5,.45,.95)}`:'rgba(0,220,160,1)')
+        :(isWeak?`rgba(130,140,160,${clamp(.35+pwr*.3,.30,.65)}`:'rgba(160,170,190,.80)');
+      ctx.font=`bold ${fontSize}px monospace`;
+      ctx.shadowColor='rgba(0,0,0,.85)';ctx.shadowBlur=isWeak?2:3;
       ctx.textAlign='center';
-      ctx.fillStyle=r.sell>r.buy?'rgba(255,130,70,1)':'rgba(160,170,190,.80)';
+      ctx.fillStyle=sellCol;
       ctx.fillText(fmtVolClean(r.sell*price),left+boxW*.25,yc+.5);
-      ctx.fillStyle=r.buy>r.sell?'rgba(0,220,160,1)':'rgba(160,170,190,.80)';
+      ctx.fillStyle=buyCol;
       ctx.fillText(fmtVolClean(r.buy*price),left+boxW*.75,yc+.5);
       ctx.shadowBlur=0;
     }
