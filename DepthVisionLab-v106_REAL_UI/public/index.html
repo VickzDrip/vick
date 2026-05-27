@@ -2062,7 +2062,8 @@ html.pre-ui .switch::after{transition:none!important}
                 <option value="failed_breakout">Failed Breakout</option>
               </select>
             </div>
-            <div class="hint">Conecta zonas HVN com o painel Trend Clarity · Classifica contexto do preço em relação ao suporte/resistência HVN.</div>
+            <label class="kv"><span class="k">Lookback candles</span><input type="number" class="num" id="hvnClarityLookback" value="100" min="20" max="500" style="width:52px"></label>
+            <div class="hint">Exibe reações HVN históricas (REJ · BNC · BRK · FAIL) nos últimos X candles. Requer zonas HVN ativas.</div>
           </div>
         </div>
 
@@ -4421,6 +4422,8 @@ function _hvnRR(ctx,x,y,w,h,r){
 
 // Cached HVN clarity state — prevents callout jumping during pan/zoom
 let _hvnClarityCache=null;
+// Cached historical reactions list
+let _hvnReactsCache=null;
 
 function getHVNClarityState(){
   if(!S.inds.hvnClarity||!S.candles.length){_hvnClarityCache=null;return null;}
@@ -4556,35 +4559,143 @@ function getHVNClarityState(){
   return state;
 }
 
+// Detect all HVN reactions within the lookback window, cached for stability
+function _getHVNReactions(){
+  if(!S.inds.hvnClarity||!S.candles.length||!window.__lastHVNZones?.length)return[];
+  const N=S.candles.length;
+  const lookback=Math.min(N,Math.max(20,parseInt(el('hvnClarityLookback')?.value)||100));
+  const hvnFp=window.__lastHVNZones.slice(0,5).map(z=>Math.round(z.price)).join(',');
+  const key=`${N}_${lookback}_${hvnFp}`;
+  if(_hvnReactsCache&&_hvnReactsCache.key===key)return _hvnReactsCache.reactions;
+
+  const atrArr=calcATR(S.candles.slice(Math.max(0,N-28),N),14);
+  const atrVal=(atrArr.filter(v=>v).at(-1))||(S.candles[N-1].c*0.005);
+  const tol=atrVal*0.65;
+  const startIdx=Math.max(0,N-lookback);
+  const MIN_GAP=3;
+  const allReacts=[];
+
+  window.__lastHVNZones.forEach(zone=>{
+    const hvnP=zone.price;
+    let lastReactIdx=startIdx-MIN_GAP;
+    for(let i=startIdx;i<N;i++){
+      if(i-lastReactIdx<MIN_GAP)continue;
+      const c=S.candles[i];
+      const prev=i>0?S.candles[i-1]:c;
+      if(c.h<hvnP-tol||c.l>hvnP+tol)continue; // not near zone
+      const topWick=c.h-Math.max(c.o,c.c);
+      const botWick=Math.min(c.o,c.c)-c.l;
+      const totalRange=Math.max(1e-9,c.h-c.l);
+      let type=null,label=null,bullish=null;
+
+      // Failed breakout: was above HVN, closed back below
+      if(prev.c>hvnP&&c.c<hvnP&&(prev.c-hvnP)>tol*0.25){
+        type='failed_breakout';label='FAIL';bullish=false;
+      }
+      // Breakout acceptance: crossed above HVN with body confirmation
+      if(!type&&prev.c<hvnP&&c.c>hvnP&&(c.c-hvnP)>tol*0.25){
+        type='breakout';label='BRK';bullish=true;
+      }
+      // Wick rejection at resistance: wick reached HVN from below, closed below
+      if(!type&&c.h>=hvnP-tol*0.4&&c.c<hvnP&&topWick>totalRange*0.26){
+        type='rejection';label='REJ';bullish=false;
+      }
+      // Support bounce: low touched HVN, bullish close above
+      if(!type&&c.l<=hvnP+tol*0.4&&c.c>hvnP&&c.c>=c.o&&botWick>totalRange*0.15){
+        type='bounce';label='BNC';bullish=true;
+      }
+      // Support failure: price dipped through HVN support, bearish close below with no recovery
+      if(!type&&c.l<=hvnP+tol*0.4&&c.c<hvnP&&c.c<c.o&&botWick<totalRange*0.18){
+        type='support_fail';label='S↓';bullish=false;
+      }
+
+      if(type){allReacts.push({idx:i,type,label,bullish,hvnPrice:hvnP});lastReactIdx=i;}
+    }
+  });
+
+  // Sort by index, deduplicate candles too close together (across zones)
+  allReacts.sort((a,b)=>a.idx-b.idx);
+  const deduped=[];let lastIdx=-MIN_GAP;
+  allReacts.forEach(r=>{if(r.idx-lastIdx>=2){deduped.push(r);lastIdx=r.idx;}});
+
+  const final=deduped.slice(-24); // cap at 24 total
+  _hvnReactsCache={key,reactions:final};
+  return final;
+}
+
 function drawHVNClarityEngine(ctx,W,H,V,sc,x){
+  const rp=RP(),chartRight=W-rp;
+  const reactions=_getHVNReactions();
+
+  // ── Glow rings for the 3 most recent reactions ──
+  reactions.slice(-3).forEach(react=>{
+    const {idx,bullish}=react;
+    if(idx<V.a||idx>=V.b)return;
+    const c=S.candles[idx];if(!c)return;
+    const bx=x(idx),by=bullish?sc.y(c.l):sc.y(c.h);
+    const r=Math.max(12,Math.abs(sc.y(c.h)-sc.y(c.l))*0.4+8);
+    ctx.save();
+    const gc=bullish===false?'255,90,50':'0,210,255';
+    const grd=ctx.createRadialGradient(bx,by,r*0.2,bx,by,r*2.0);
+    grd.addColorStop(0,`rgba(${gc},0.13)`);grd.addColorStop(0.5,`rgba(${gc},0.05)`);grd.addColorStop(1,`rgba(${gc},0)`);
+    ctx.fillStyle=grd;ctx.beginPath();ctx.arc(bx,by,r*2.0,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(bx,by,r,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(${gc},0.42)`;ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+    ctx.restore();
+  });
+
+  // ── Historical mini-tags (all but the last, anchored to their HVN zone Y) ──
+  const histReacts=reactions.length>1?reactions.slice(0,-1):[];
+  const zoneLastRight=new Map(); // per-zone overlap tracking
+  ctx.save();
+  ctx.font='600 7px monospace';
+  histReacts.forEach(react=>{
+    const {idx,label,bullish,hvnPrice}=react;
+    if(idx<V.a||idx>=V.b)return;
+    const c=S.candles[idx];if(!c)return;
+    const rx=x(idx);
+    if(rx<PL||rx>chartRight)return;
+
+    const zoneY=sc.y(hvnPrice);
+    if(zoneY<PT+4||zoneY>H-PB-4)return;
+
+    const tagH=11,tagPad=4;
+    const tw=ctx.measureText(label).width+tagPad*2+2;
+    const tagX=clamp(rx-tw/2,PL+2,chartRight-tw-2);
+
+    // Per-zone overlap guard (only skip if same zone has a tag too close)
+    const zKey=Math.round(hvnPrice);
+    if(tagX<(zoneLastRight.get(zKey)||PL-tw)-3)return;
+    zoneLastRight.set(zKey,tagX+tw);
+
+    // Rejection tags go above the HVN line, bounce tags go below
+    const tagY=bullish?zoneY+3:zoneY-tagH-3;
+    if(tagY<PT+2||tagY+tagH>H-PB-2)return;
+
+    const bc=bullish===false?'rgba(255,88,48,0.60)':bullish===null?'rgba(100,128,188,0.48)':'rgba(0,188,228,0.60)';
+    const bg=bullish===false?'rgba(40,8,6,0.82)':bullish===null?'rgba(15,20,40,0.82)':'rgba(3,18,36,0.82)';
+    const tc=bullish===false?'rgba(255,162,130,0.90)':bullish===null?'rgba(160,185,232,0.84)':'rgba(162,220,252,0.90)';
+
+    ctx.fillStyle=bg;_hvnRR(ctx,tagX,tagY,tw,tagH,2);ctx.fill();
+    ctx.strokeStyle=bc;ctx.lineWidth=0.65;_hvnRR(ctx,tagX,tagY,tw,tagH,2);ctx.stroke();
+    ctx.fillStyle=tc;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(label,tagX+tw/2,tagY+tagH/2);
+
+    // Short stem from tag to candle
+    ctx.strokeStyle=bc;ctx.lineWidth=0.5;
+    ctx.beginPath();
+    if(bullish){ctx.moveTo(rx,tagY);ctx.lineTo(rx,zoneY);}
+    else{ctx.moveTo(rx,tagY+tagH);ctx.lineTo(rx,zoneY);}
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  // ── Primary callout (most recent reaction or cached state) ──
   const state=getHVNClarityState();
   if(!state)return;
-  const rp=RP(),chartRight=W-rp;
   const ay=sc.y(state.anchorPrice);
-
-  // Glow circle around bounce candle
-  const bi=state.bounceIdx;
-  if(bi>=V.a&&bi<V.b){
-    const c=S.candles[bi];
-    if(c){
-      const bx=x(bi),by=sc.y(c.l);
-      const bodyH=Math.max(8,Math.abs(sc.y(c.h)-sc.y(c.l)));
-      const r=Math.max(14,bodyH*0.5+10);
-      ctx.save();
-      const grd=ctx.createRadialGradient(bx,by,r*0.25,bx,by,r*2.2);
-      grd.addColorStop(0,'rgba(0,212,255,0.16)');
-      grd.addColorStop(0.5,'rgba(0,212,255,0.06)');
-      grd.addColorStop(1,'rgba(0,212,255,0)');
-      ctx.fillStyle=grd;ctx.beginPath();ctx.arc(bx,by,r*2.2,0,Math.PI*2);ctx.fill();
-      ctx.beginPath();ctx.arc(bx,by,r,0,Math.PI*2);
-      ctx.strokeStyle='rgba(0,200,255,0.52)';ctx.lineWidth=1.1;
-      ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
-      ctx.restore();
-    }
-  }
-
-  // Callout label
   if(ay<PT-2||ay>H-PB+2)return;
+
   ctx.save();
   ctx.font='600 9px monospace';
   const txt=state.callout;
@@ -4595,22 +4706,19 @@ function drawHVNClarityEngine(ctx,W,H,V,sc,x){
   const cy0=Math.max(PT+4,Math.min(H-PB-cH-4,ay-cH/2));
   const borderCol=state.bullish===false?'rgba(255,100,50,0.65)':state.bullish===null?'rgba(130,150,200,0.50)':'rgba(0,195,255,0.60)';
 
-  // Connector
-  const bx=x(state.bounceIdx);
-  if(bx>=PL&&bx<=chartRight&&Math.abs(bx-cx0)>4){
-    ctx.strokeStyle=state.bullish===false?'rgba(255,100,60,0.30)':'rgba(0,190,240,0.30)';
+  // Connector to primary anchor candle
+  const pbx=x(state.bounceIdx);
+  if(pbx>=PL&&pbx<=chartRight&&Math.abs(pbx-cx0)>4){
+    ctx.strokeStyle=state.bullish===false?'rgba(255,100,60,0.28)':'rgba(0,190,240,0.28)';
     ctx.lineWidth=0.9;ctx.setLineDash([3,3]);
-    ctx.beginPath();ctx.moveTo(Math.min(bx,cx0-2),ay);ctx.lineTo(cx0,cy0+cH/2);
+    ctx.beginPath();ctx.moveTo(Math.min(pbx,cx0-2),ay);ctx.lineTo(cx0,cy0+cH/2);
     ctx.stroke();ctx.setLineDash([]);
   }
 
   ctx.fillStyle='rgba(2,6,16,0.93)';_hvnRR(ctx,cx0,cy0,cW,cH,4);ctx.fill();
   ctx.strokeStyle=borderCol;ctx.lineWidth=1;_hvnRR(ctx,cx0,cy0,cW,cH,4);ctx.stroke();
-
-  // Left accent stripe
   const accentCol=state.bullish===false?'rgba(255,110,50,0.9)':state.bullish===null?'rgba(130,160,210,0.6)':'rgba(0,210,255,0.9)';
   ctx.fillStyle=accentCol;ctx.fillRect(cx0+1,cy0+4,2.5,cH-8);
-
   ctx.fillStyle=state.bullish===false?'rgba(255,190,160,0.95)':state.bullish===null?'rgba(180,200,240,0.90)':'rgba(180,230,255,0.95)';
   ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillText(txt,cx0+cPad+3,cy0+cH/2);
@@ -4781,7 +4889,7 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
   const state=getHVNClarityState();
   const isBear=state&&state.bullish===false;
   const isNeut=state&&state.bullish===null;
-  const cbW=48,cbH=44,cbX=pRight-cbW-12,cbY=caTop+4;
+  const cbW=40,cbH=34,cbX=pRight-cbW-12,cbY=caTop+4;
   const boxBorder=isBear?'rgba(255,95,50,0.58)':isNeut?'rgba(110,135,190,0.43)':'rgba(0,185,240,0.60)';
   const boxGlow=isBear?'rgba(255,90,40,0.32)':isNeut?'rgba(100,125,180,0.26)':'rgba(0,190,255,0.32)';
   const pctColor=isBear?'#ff6050':isNeut?'#8090c0':'#00d4ff';
@@ -4797,14 +4905,13 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
   const parts=trendState.split(' ');
   const midCB=cbX+cbW/2;
   ctx.textAlign='center';ctx.textBaseline='top';
-  ctx.font='700 7px monospace';ctx.fillStyle=labColor;
-  ctx.fillText(parts[0]||'',midCB,cbY+4);
-  if(parts[1])ctx.fillText(parts[1],midCB,cbY+12);
-  ctx.font='700 11px monospace';ctx.fillStyle=pctColor;
-  ctx.fillText(confidence+'%',midCB,cbY+21);
-  ctx.font='600 6px monospace';
-  ctx.fillStyle=isBear?'rgba(180,70,40,0.65)':isNeut?'rgba(90,110,160,0.65)':'rgba(0,128,170,0.70)';
-  ctx.fillText('CONFIDENCE',midCB,cbY+34);
+  ctx.font='600 6.5px monospace';ctx.fillStyle=labColor;
+  ctx.fillText((parts[0]||'')+(parts[1]?' '+parts[1]:''),midCB,cbY+5);
+  ctx.font='700 10px monospace';ctx.fillStyle=pctColor;
+  ctx.fillText(confidence+'%',midCB,cbY+14);
+  ctx.font='500 5.5px monospace';
+  ctx.fillStyle=isBear?'rgba(180,70,40,0.60)':isNeut?'rgba(90,110,160,0.60)':'rgba(0,128,170,0.65)';
+  ctx.fillText('CONFIDENCE',midCB,cbY+26);
 
   // ── Footer summary tag ──
   const footerY=pBot-15;
@@ -5213,7 +5320,7 @@ if(el('tfSelect')){
   }
 })();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();bootDebounced()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();bootDebounced()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','btShowLabels','btConfirmBars','btLastCandles','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal','fpWickAbs','fpWickMinPct','fpMaxScale','hvnClarityScenario'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
+['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','btShowLabels','btConfirmBars','btLastCandles','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal','fpWickAbs','fpWickMinPct','fpMaxScale','hvnClarityScenario','hvnClarityLookback'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',()=>{_hvnClarityCache=null;_hvnReactsCache=null;drawSoon();})});
 ['volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin','btLastCandles','fpWickMinPct','fpMaxScale'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','btAbsColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});
 if(el('btLastCandles'))el('btLastCandles').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
 let touchState={mode:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5};
