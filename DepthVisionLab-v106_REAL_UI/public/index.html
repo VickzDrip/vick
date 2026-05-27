@@ -1851,8 +1851,22 @@ html.pre-ui .switch::after{transition:none!important}
                 <option value="low">Baixa</option>
               </select>
             </div>
-            <label class="kv" style="cursor:pointer;"><span class="k">Mostrar labels</span><input type="checkbox" id="bigTradeShowLabels" style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <label class="kv" style="cursor:pointer;"><span class="k">Apenas fortes</span><input type="checkbox" id="bigTradeStrongOnly" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Confirmation Bars</span>
+              <select class="select tiny-select" id="btConfirmBars">
+                <option value="0">0</option>
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+              </select>
+            </div>
+            <div class="kv"><span class="k">Mostrar labels</span>
+              <select class="select tiny-select" id="btShowLabels">
+                <option value="off">Off</option>
+                <option value="auto" selected>Auto</option>
+                <option value="on">On</option>
+              </select>
+            </div>
+            <div class="kv"><span class="k">Últimos candles</span><input class="num" id="btLastCandles" type="number" min="20" max="2000" step="10" value="200"></div>
             <label class="kv"><span class="k">Cor compra</span>
               <label style="position:relative;width:22px;height:22px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:3px;border:1px solid #1e2a40;overflow:hidden">
                 <div id="bigBuyColorSwatch" style="width:100%;height:100%;background:#00d4ff;pointer-events:none"></div>
@@ -1865,8 +1879,13 @@ html.pre-ui .switch::after{transition:none!important}
                 <input id="bigSellColor" type="color" value="#ff7c3a" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0">
               </label>
             </label>
-            <div class="kv"><span class="k">Últimos candles</span><input class="num" id="btLastCandles" type="number" min="20" max="2000" step="10" value="200"></div>
-            <div class="hint">Bolhas derivadas do footprint real. Alta = mais trades. Baixa = só os maiores.</div>
+            <label class="kv"><span class="k">Cor absorção</span>
+              <label style="position:relative;width:22px;height:22px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:3px;border:1px solid #1e2a40;overflow:hidden">
+                <div id="btAbsColorSwatch" style="width:100%;height:100%;background:#c87cff;pointer-events:none"></div>
+                <input id="btAbsColor" type="color" value="#c87cff" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0">
+              </label>
+            </label>
+            <div class="hint">AGG = agressão continuou · ABS = foi absorvida · tape real</div>
           </div>
         </div>
 
@@ -4002,35 +4021,36 @@ function buildBigOrderGroups(V){
 }
 
 
-function bigTradesConfig(){
-  const sens=(el('bigTradeSensitivity')?.value)||'normal';
+// ════════════════════════════════════════════════════════════════
+//  BIG TRADES v2 — Tape orderflow: AGG = continuou · ABS = absorvido
+// ════════════════════════════════════════════════════════════════
+function btCfg(){
   return{
-    sensitivity:sens,
+    sensitivity:(el('bigTradeSensitivity')?.value)||'normal',
     lastCandles:Math.max(20,Math.min(2000,+(el('btLastCandles')?.value)||200)),
-    showLabels:!!(el('bigTradeShowLabels')?.checked),
-    strongOnly:!!(el('bigTradeStrongOnly')?.checked),
+    showLabels:(el('btShowLabels')?.value)||'auto',
+    confirmBars:Math.max(0,Math.min(3,+(el('btConfirmBars')?.value)||1)),
     buyColor:el('bigBuyColor')?.value||'#00d4ff',
-    sellColor:el('bigSellColor')?.value||'#ff7c3a'
+    sellColor:el('bigSellColor')?.value||'#ff7c3a',
+    absColor:el('btAbsColor')?.value||'#c87cff'
   };
 }
-// Stats from real trade quantities (contracts) in S.trades
+function bigTradesConfig(){return btCfg();}
 function _btQtyStats(){
   const arr=S.trades.map(t=>+t.q||0).filter(v=>v>0).sort((a,b)=>a-b);
   if(!arr.length)return{n:0,median:0,p90:0,p95:0,p98:0};
   return{n:arr.length,median:quantileSorted(arr,.50),p90:quantileSorted(arr,.90),p95:quantileSorted(arr,.95),p98:quantileSorted(arr,.98)};
 }
-// Contract threshold by sensitivity
 function _btQtyThreshold(sens,stats){
   if(!stats||!stats.n)return Infinity;
   if(sens==='high')return Math.max(stats.p90,stats.median*3);
   if(sens==='low') return Math.max(stats.p98,stats.median*8);
   return Math.max(stats.p95,stats.median*5);
 }
-// Shims for extension/lab API backward compat
 function bigTradeUnitValue(t){return +t.notional||0;}
 function bigTradeMinValue(){return 0;}
 function bigTradeDisplayMode(){return 'auto';}
-function bigTradeLabelMode(){return (el('bigTradeShowLabels')?.checked)?'size':'off';}
+function bigTradeLabelMode(){return(el('btShowLabels')?.value)||'auto';}
 function formatBigTradeValue(v){
   const n=Math.abs(+v||0);
   if(n>=1e9)return '$'+Math.round(n/1e9)+'B';
@@ -4043,12 +4063,13 @@ function bigTradeBubbleScale(){return 1;}
 function bigTradeMaxBubbles(){return 2;}
 function bigTradeCacheConfigKey(){
   const sens=(el('bigTradeSensitivity')?.value)||'normal';
-  return 'v5|'+String(S.sym)+'|'+String(S.tf)+'|'+sens;
+  return 'v6|'+String(S.sym)+'|'+String(S.tf)+'|'+sens;
 }
-// Build clusters from real trades in S.trades — no footprint, no synthetic data
-function buildRawBigTradeClusters(V){
-  const cfg=bigTradesConfig();
-  const fromIdx=Math.max(0,S.candles.length-cfg.lastCandles);
+// ── Step 1: collect big trades from tape ─────────────────────────
+// Returns flat array [{idx,isSell,price,contracts,notional,count,maxContracts}]
+// One entry per candle per side (strongest cluster wins).
+function _btCollect(fromIdx){
+  const cfg=btCfg();
   const stats=_btQtyStats();
   const threshold=_btQtyThreshold(cfg.sensitivity,stats);
   if(!isFinite(threshold)||threshold<=0||!S.trades.length)return[];
@@ -4059,8 +4080,6 @@ function buildRawBigTradeClusters(V){
     if(contracts<threshold)continue;
     const idx=candleIndexByTime(t.time);
     if(idx<0||idx<fromIdx)continue;
-    if(idx<Math.floor(V.a)-2||idx>Math.ceil(V.b)+2)continue;
-    // Bucket by price tick so nearby trades in same candle merge
     const priceBucket=Math.round(t.p/tick)*tick;
     const key=idx+'|'+(t.isSell?1:0)+'|'+priceBucket;
     let g=groups.get(key);
@@ -4070,31 +4089,78 @@ function buildRawBigTradeClusters(V){
     g.count++;g.maxContracts=Math.max(g.maxContracts,contracts);
   }
   if(!groups.size)return[];
-  // Per-candle: keep only the strongest buy and strongest sell cluster
   const best=new Map();
   for(const g of groups.values()){
     const k=g.idx+'|'+(g.isSell?1:0);
     const ex=best.get(k);
     if(!ex||g.contracts>ex.contracts)best.set(k,g);
   }
-  const out=[];
-  for(const g of best.values()){
-    const p=g.priceSum/Math.max(g.weight,1e-9);
-    out.push({idx:g.idx,t:{p,contracts:g.contracts,notional:g.notional,btValue:g.contracts,isSell:g.isSell,count:g.count,maxContracts:g.maxContracts}});
+  return[...best.values()].map(g=>({
+    idx:g.idx,isSell:g.isSell,
+    price:g.priceSum/Math.max(g.weight,1e-9),
+    contracts:g.contracts,notional:g.notional,count:g.count,maxContracts:g.maxContracts
+  }));
+}
+// ── Step 2: classify each cluster ────────────────────────────────
+// AGG = aggression continued price movement.
+// ABS = aggression failed; inferred when buyers hit top but price rejected
+//       (passive sell liquidity absorbed them — NOT aggressive sellers).
+// Returns: 'BUY_AGG'|'SELL_AGG'|'BUY_ABS'|'SELL_ABS'|'PENDING_BUY'|'PENDING_SELL'
+function _btClassify(cl,confirmBars){
+  const c=S.candles[cl.idx];
+  if(!c)return null;
+  const range=Math.max(1e-9,c.h-c.l);
+  const closePos=(c.c-c.l)/range;           // 0=low end, 1=high end
+  const tradePos=clamp((cl.price-c.l)/range,0,1); // where in candle trade hit
+  const uw=(c.h-Math.max(c.o,c.c))/range;   // upper wick fraction
+  const lw=(Math.min(c.o,c.c)-c.l)/range;   // lower wick fraction
+  const cIdx=cl.idx+confirmBars;
+  const isPending=confirmBars>0&&cIdx>=S.candles.length;
+  if(isPending)return cl.isSell?'PENDING_SELL':'PENDING_BUY';
+  const next=confirmBars>0?S.candles[cIdx]:null;
+  if(!cl.isSell){
+    // BUY: trade in upper zone, price rejected → buyers absorbed by passive sellers
+    const inUpper=tradePos>=0.58;
+    const rejected=closePos<=0.48||(uw>=0.20&&closePos<=0.55);
+    const nextBrokeUp=next&&next.h>c.h+range*0.02;
+    if(inUpper&&rejected&&!nextBrokeUp)return'BUY_ABS';
+    // BUY AGG: close strong and no dominant upper wick, or next bar broke above
+    const closeStrong=closePos>=0.60&&uw<0.30;
+    if(closeStrong||nextBrokeUp)return'BUY_AGG';
+    return closePos>=0.5?'BUY_AGG':'BUY_ABS';
+  }else{
+    // SELL: trade in lower zone, price recovered → sellers absorbed by passive buyers
+    const inLower=tradePos<=0.42;
+    const recovered=closePos>=0.52||(lw>=0.20&&closePos>=0.45);
+    const nextBrokeDown=next&&next.l<c.l-range*0.02;
+    if(inLower&&recovered&&!nextBrokeDown)return'SELL_ABS';
+    const closeWeak=closePos<=0.40&&lw<0.30;
+    if(closeWeak||nextBrokeDown)return'SELL_AGG';
+    return closePos<=0.5?'SELL_AGG':'SELL_ABS';
   }
-  return out;
 }
-// S.trades ≤15K entries — rebuilding each frame is fast; keyed frame-cache avoids redundant work
-function visibleBigTradesByCandle(V){
-  const btc=bigTradesConfig();
-  const fromIdx=Math.max(0,S.candles.length-btc.lastCandles);
-  const cfgKey=bigTradeCacheConfigKey()+'|'+String(S.trades.length)+'|'+String(fromIdx)+'|'+String(Math.floor(V.a))+'|'+String(Math.ceil(V.b));
-  if(window.__btFrameCache&&window.__btFrameCache.key===cfgKey)return window.__btFrameCache.items;
-  const items=buildRawBigTradeClusters(V).filter(o=>o.idx>=fromIdx);
-  window.__btFrameCache={key:cfgKey,items};
-  if(items.length){window.__bigTradesLastGood=items;return items;}
-  return(window.__bigTradesLastGood||[]).filter(o=>o.idx>=fromIdx);
+// ── Step 3: build + cache signal list ────────────────────────────
+let _btSigCache=null;
+function _getBtSignals(){
+  const cfg=btCfg();
+  const fromIdx=Math.max(0,S.candles.length-cfg.lastCandles);
+  const lastTs=S.candles.length>0?(S.candles[S.candles.length-1]?.t||0):0;
+  const key=`${S.sym}|${S.tf}|${cfg.sensitivity}|${cfg.lastCandles}|${cfg.confirmBars}|${S.trades.length}|${lastTs}`;
+  if(_btSigCache?.key===key)return _btSigCache.sigs;
+  const raw=_btCollect(fromIdx);
+  const sigs=raw.map(cl=>({...cl,state:_btClassify(cl,cfg.confirmBars)})).filter(s=>s.state);
+  _btSigCache={key,sigs};
+  return sigs;
 }
+// Backward compat wrappers for extension/lab API
+function buildRawBigTradeClusters(V){
+  const cfg=btCfg();
+  const fromIdx=Math.max(0,S.candles.length-cfg.lastCandles);
+  return _btCollect(fromIdx)
+    .filter(cl=>cl.idx>=Math.floor(V.a)-2&&cl.idx<=Math.ceil(V.b)+2)
+    .map(cl=>({idx:cl.idx,t:{p:cl.price,contracts:cl.contracts,notional:cl.notional,btValue:cl.contracts,isSell:cl.isSell,count:cl.count,maxContracts:cl.maxContracts}}));
+}
+function visibleBigTradesByCandle(V){return buildRawBigTradeClusters(V);}
 try{
   window.visibleBigTradesByCandle=visibleBigTradesByCandle;
   window.bigTradesConfig=bigTradesConfig;
@@ -4108,84 +4174,99 @@ try{
   window.bigTradeMaxBubbles=bigTradeMaxBubbles;
 }catch(_e){}
 
+// ── Draw ──────────────────────────────────────────────────────────
 function drawBigTrades(ctx,V,sc,x,W,H){
-  const btc=bigTradesConfig();
-  const fromIdx=Math.max(0,S.candles.length-btc.lastCandles);
-  let items=visibleBigTradesByCandle(V);
-  // Final range guard — covers all code paths including stale lastGood
-  items=items.filter(o=>o.idx>=fromIdx&&o.idx>=Math.floor(V.a)&&o.idx<=Math.ceil(V.b));
-  if(!items.length)return;
-
-  // Tier by real contracts
-  const vals=items.map(o=>o.t.contracts).filter(v=>v>0).sort((a,b)=>a-b);
-  const p75=vals.length?vals[Math.floor(vals.length*.75)]||vals[vals.length-1]:1;
-  const p95=vals.length?vals[Math.floor(vals.length*.95)]||vals[vals.length-1]:1;
-  if(btc.strongOnly)items=items.filter(o=>o.t.contracts>=p75);
-  if(!items.length)return;
-
+  const cfg=btCfg();
+  const fromIdx=Math.max(0,S.candles.length-cfg.lastCandles);
+  const sigs=_getBtSignals().filter(s=>
+    s.idx>=fromIdx&&s.idx>=Math.floor(V.a)&&s.idx<=Math.ceil(V.b)
+  );
+  if(!sigs.length)return;
   const size=canvasCssSize(ctx);
   const cssW=W||size.w,cssH=H||size.h;
   const right=cssW-RP(),top=PT,bottom=cssH-PB;
-
-  const drawItems=[];
-  items.forEach(({idx,t})=>{
-    const xx=x(idx),yy=sc.y(t.p);
+  // Sizing: sqrt scale anchored to p95 of visible contracts
+  const allC=sigs.map(s=>s.contracts).sort((a,b)=>a-b);
+  const p95c=allC[Math.floor(allC.length*.95)]||allC[allC.length-1]||1;
+  const bubbleR=c=>clamp(6+Math.sqrt(clamp(c/Math.max(1e-9,p95c),0,1))*12,6,18);
+  // Color helpers
+  const h2rgb=h=>{const n=parseInt(h.replace('#',''),16);return((n>>16)&255)+','+((n>>8)&255)+','+(n&255);};
+  const buyRgb=h2rgb(cfg.buyColor),sellRgb=h2rgb(cfg.sellColor),absRgb=h2rgb(cfg.absColor);
+  // Build draw items
+  const items=[];
+  sigs.forEach(s=>{
+    const xx=x(s.idx),yy=sc.y(s.price);
     if(!isFinite(xx)||!isFinite(yy)||xx<PL||xx>right||yy<top||yy>bottom)return;
-    const v=t.contracts;
-    const hot=v>=p95,big=v>=p75;
-    const strength=v/Math.max(1e-9,p75);
-    const r=clamp(4+Math.sqrt(Math.max(0,strength-1))*4,4,hot?22:big?15:10);
-    drawItems.push({xx,yy,adjY:yy,r,v,hot,big,t});
+    const r=bubbleR(s.contracts);
+    const isPending=s.state.startsWith('PENDING');
+    const isAbs=s.state.endsWith('_ABS');
+    const isAgg=s.state.endsWith('_AGG');
+    const isBuy=!s.isSell;
+    items.push({xx,yy,adjY:yy,r,s,isPending,isAbs,isAgg,isBuy,
+      mainRgb:isBuy?buyRgb:sellRgb,
+      rimRgb:isAbs?absRgb:(isBuy?buyRgb:sellRgb)});
   });
-  if(!drawItems.length)return;
-
-  // De-overlap within each candle column
+  if(!items.length)return;
+  // De-overlap within each candle column (both passes)
   const cols=new Map();
-  drawItems.forEach(item=>{const col=Math.round(item.xx);if(!cols.has(col))cols.set(col,[]);cols.get(col).push(item);});
-  cols.forEach(group=>{
-    if(group.length<2)return;
-    group.sort((a,b)=>a.yy-b.yy);
+  items.forEach(it=>{const c=Math.round(it.xx);if(!cols.has(c))cols.set(c,[]);cols.get(c).push(it);});
+  cols.forEach(grp=>{
+    if(grp.length<2)return;
+    grp.sort((a,b)=>a.yy-b.yy);
     for(let pass=0;pass<4;pass++){
-      for(let k=1;k<group.length;k++){
-        const a=group[k-1],b=group[k];const need=a.r+b.r+2;
+      for(let k=1;k<grp.length;k++){
+        const a=grp[k-1],b=grp[k],need=a.r+b.r+3;
         if(b.adjY-a.adjY<need){const mid=(a.adjY+b.adjY)/2;a.adjY=clamp(mid-need/2,top+a.r,bottom-a.r);b.adjY=clamp(mid+need/2,top+b.r,bottom-b.r);}
       }
-      for(let k=group.length-2;k>=0;k--){
-        const a=group[k],b=group[k+1];const need=a.r+b.r+2;
+      for(let k=grp.length-2;k>=0;k--){
+        const a=grp[k],b=grp[k+1],need=a.r+b.r+3;
         if(b.adjY-a.adjY<need){const mid=(a.adjY+b.adjY)/2;a.adjY=clamp(mid-need/2,top+a.r,bottom-a.r);b.adjY=clamp(mid+need/2,top+b.r,bottom-b.r);}
       }
     }
   });
-
   ctx.save();
   ctx.beginPath();ctx.rect(PL,top,Math.max(1,right-PL),Math.max(1,bottom-top));ctx.clip();
   ctx.textAlign='center';ctx.textBaseline='middle';
-
-  const _h2rgb=h=>{const n=parseInt(h.replace('#',''),16);return((n>>16)&255)+','+((n>>8)&255)+','+(n&255)};
-  const _buyRgb=_h2rgb(btc.buyColor);
-  const _sellRgb=_h2rgb(btc.sellColor);
-
-  drawItems.forEach(({xx,adjY,r,v,hot,big,t})=>{
-    const rgb=t.isSell?_sellRgb:_buyRgb;
-    // Outer glow on hot trades
-    if(hot){ctx.beginPath();ctx.arc(xx,adjY,r+6,0,Math.PI*2);ctx.fillStyle=`rgba(${rgb},.06)`;ctx.fill();}
-    // Halo ring
-    ctx.beginPath();ctx.arc(xx,adjY,r+3,0,Math.PI*2);
-    ctx.fillStyle=`rgba(${rgb},${hot?.12:big?.07:.04})`;ctx.fill();
-    // Main fill — translucent
+  items.forEach(({xx,adjY,r,s,isPending,isAbs,isAgg,isBuy,mainRgb,rimRgb})=>{
+    // Glow: AGG only
+    if(isAgg&&!isPending){
+      ctx.beginPath();ctx.arc(xx,adjY,r+8,0,Math.PI*2);ctx.fillStyle=`rgba(${mainRgb},.05)`;ctx.fill();
+      ctx.beginPath();ctx.arc(xx,adjY,r+4,0,Math.PI*2);ctx.fillStyle=`rgba(${mainRgb},.10)`;ctx.fill();
+    }
+    // ABS halo ring
+    if(isAbs&&!isPending){
+      ctx.beginPath();ctx.arc(xx,adjY,r+3.5,0,Math.PI*2);
+      ctx.fillStyle=`rgba(${absRgb},.08)`;ctx.fill();
+    }
+    // Main fill
     ctx.beginPath();ctx.arc(xx,adjY,r,0,Math.PI*2);
-    ctx.fillStyle=`rgba(${rgb},${hot?.35:big?.22:.13})`;ctx.fill();
-    // Sharp border
-    ctx.strokeStyle=`rgba(${rgb},${hot?1:big?.88:.62})`;
-    ctx.lineWidth=hot?2:big?1.4:1;ctx.stroke();
-    // Label: always on hot; on big when showLabels=true
-    if(hot||(btc.showLabels&&big)){
-      const contracts=t.contracts;
-      const label=contracts>=1?contracts.toFixed(contracts<10?2:0)+'c':formatBigTradeValue(t.notional);
-      const fs=Math.max(7,Math.min(10,Math.floor(r*.9)));
-      ctx.font=`bold ${fs}px Inter,Arial`;
-      if(r>=7){ctx.beginPath();ctx.arc(xx,adjY,Math.max(5,r*.58),0,Math.PI*2);ctx.fillStyle='rgba(3,6,14,.82)';ctx.fill();}
-      ctx.fillStyle=`rgba(255,255,255,${hot?1:.9})`;ctx.fillText(label,xx,adjY+.5);
+    ctx.fillStyle=`rgba(${mainRgb},${isPending?.08:isAbs?.16:.26})`;ctx.fill();
+    // Border: solid for AGG/ABS, dashed for PENDING
+    ctx.strokeStyle=`rgba(${rimRgb},${isPending?.45:1})`;
+    ctx.lineWidth=isPending?1:(isAbs?2.2:1.8);
+    if(isPending)ctx.setLineDash([3,3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Inner dot marks absorption point
+    if(isAbs&&!isPending&&r>=8){
+      ctx.beginPath();ctx.arc(xx,adjY,2.5,0,Math.PI*2);
+      ctx.fillStyle=`rgba(${rimRgb},.75)`;ctx.fill();
+    }
+    // Label
+    const lm=cfg.showLabels;
+    if((lm==='auto'&&r>=10)||(lm==='on'&&r>=6)){
+      const sl=s.state;
+      const tag=isPending?(isBuy?'B?':'S?'):
+        sl==='BUY_AGG'?'B':sl==='SELL_AGG'?'S':
+        sl==='BUY_ABS'?'B⊗':'S⊗';
+      const qty=s.contracts>=1?(s.contracts<10?s.contracts.toFixed(2):Math.round(s.contracts))+'c':'';
+      const label=(r>=14&&qty)?(tag+' '+qty):tag;
+      const fs=Math.max(7,Math.min(9,Math.floor(r*.65)));
+      ctx.font=`bold ${fs}px monospace`;
+      ctx.beginPath();ctx.arc(xx,adjY,Math.max(5,r*.58),0,Math.PI*2);
+      ctx.fillStyle='rgba(3,6,14,.78)';ctx.fill();
+      ctx.fillStyle=`rgba(255,255,255,${isPending?.55:.92})`;
+      ctx.fillText(label,xx,adjY+.5);
     }
   });
   ctx.restore();
@@ -4655,8 +4736,8 @@ if(el('tfSelect')){
   }
 })();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();bootDebounced()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();bootDebounced()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','bigTradeShowLabels','bigTradeStrongOnly','btLastCandles','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal','fpWickAbs','fpWickMinPct','fpMaxScale'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
-['volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin','btLastCandles','fpWickMinPct','fpMaxScale'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});
+['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','btShowLabels','btConfirmBars','btLastCandles','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal','fpWickAbs','fpWickMinPct','fpMaxScale'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',drawSoon)});
+['volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin','btLastCandles','fpWickMinPct','fpMaxScale'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','btAbsColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});
 if(el('btLastCandles'))el('btLastCandles').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
 let touchState={mode:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5};
 function touchDist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
