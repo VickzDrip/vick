@@ -2380,6 +2380,7 @@ async function boot(){
     startWS(seq,sym,tf);
     clearInterval(depthRefreshTimer);
     depthRefreshTimer=setInterval(function(){ if(!S.wsIntentional) refreshDepth(); }, 30000);
+    clearHVNClarityCache();
     draw();
 
     // ── Background: load aggTrades + depth history + footprint without blocking chart ──
@@ -4438,21 +4439,26 @@ let _hvnClarityCache=null;
 // Cached historical reactions list
 let _hvnReactsCache=null;
 
+function clearHVNClarityCache(){_hvnClarityCache=null;_hvnReactsCache=null;}
+
 function getHVNClarityState(){
   if(!S.inds.hvnClarity||!S.candles.length){_hvnClarityCache=null;return null;}
   const N=S.candles.length;
   const scenario=el('hvnClarityScenario')?.value||'support_bounce';
 
-  // Stable cache key: candle count + scenario + HVN fingerprint (independent of view)
-  const hvnFp=(window.__lastHVNZones||[]).slice(0,4).map(z=>Math.round(z.price)).join(',');
-  const key=`${N}_${scenario}_${hvnFp}`;
+  // Use live HVN zones from the zone indicator (window.__hvnZones is a getter fn)
+  const hvnZones=window.__hvnZones?.()?.map(z=>({price:(z.hi+z.lo)/2,vol:z.totalVol}))||[];
+
+  // Stable cache key: includes sym, tf, last-candle-ts so any TF/symbol change busts it
+  const hvnFp=hvnZones.slice(0,4).map(z=>Math.round(z.price)).join(',');
+  const key=`${S.sym}|${S.tf}|${N}|${S.candles.at(-1)?.t||0}|${scenario}|${hvnFp}`;
   if(_hvnClarityCache&&_hvnClarityCache.key===key)return _hvnClarityCache.state;
 
   // ── Anchor price: prefer absolute HVN zone (stable across pan) ──
   let anchorPrice;
-  if(window.__lastHVNZones&&window.__lastHVNZones.length){
+  if(hvnZones.length){
     const lastC=S.candles[N-1];
-    const sorted=[...window.__lastHVNZones].sort((a,b)=>Math.abs(a.price-lastC.c)-Math.abs(b.price-lastC.c));
+    const sorted=[...hvnZones].sort((a,b)=>Math.abs(a.price-lastC.c)-Math.abs(b.price-lastC.c));
     anchorPrice=sorted[0].price;
   }else{
     const V=visible();
@@ -4499,7 +4505,7 @@ function getHVNClarityState(){
 
   // ── Auto-detect pattern from candle evidence ──
   let detected=scenario;
-  if(window.__lastHVNZones?.length){
+  if(hvnZones.length){
     if(rejections>=2&&consBelow>=1)detected='rejection';
     else if(bounces>=2&&consAbove>=1)detected='support_bounce';
     else if(consAbove>=4&&rejections===0)detected='breakout';
@@ -4585,18 +4591,13 @@ function _getHVNReactions(){
   const showFail      =el('hvnShowFailedBreakout')?.checked!==false;
   const showSFail     =el('hvnShowSupportFail')?.checked!==false;
 
-  // Get zones: real HVN zones or fallback to estimated anchor
-  let zones=[];
-  if(window.__lastHVNZones?.length){
-    zones=window.__lastHVNZones;
-  }else{
-    const st=getHVNClarityState();
-    if(st)zones=[{price:st.anchorPrice}];
-  }
+  // Get zones from live HVN indicator; fallback to state anchor
+  const _rawZones=window.__hvnZones?.()?.map(z=>({price:(z.hi+z.lo)/2}))||[];
+  let zones=_rawZones.length?_rawZones:(()=>{const st=getHVNClarityState();return st?[{price:st.anchorPrice}]:[];})();
   if(!zones.length)return[];
 
   const hvnFp=zones.slice(0,5).map(z=>Math.round(z.price)).join(',');
-  const key=`${N}_${lookback}_${hvnFp}_${+showBounce}${+showRejection}${+showBreakout}${+showFail}${+showSFail}`;
+  const key=`${S.sym}|${S.tf}|${N}|${S.candles.at(-1)?.t||0}|${lookback}|${hvnFp}|${+showBounce}${+showRejection}${+showBreakout}${+showFail}${+showSFail}`;
   if(_hvnReactsCache&&_hvnReactsCache.key===key)return _hvnReactsCache.reactions;
 
   const atrArr=calcATR(S.candles.slice(Math.max(0,N-28),N),14);
