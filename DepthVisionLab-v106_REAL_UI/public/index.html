@@ -4578,20 +4578,18 @@ function getHVNClarityState(){
   return state;
 }
 
-// Detect all HVN reactions within the lookback window, cached for stability
+// Detect HVN reactions — strict thresholds + 1-candle confirmation + per-zone cooldowns
 function _getHVNReactions(){
   if(!S.inds.hvnClarity||!S.candles.length)return[];
   const N=S.candles.length;
   const lookback=Math.min(N,Math.max(20,parseInt(el('hvnClarityLookback')?.value)||150));
 
-  // Visibility filters
   const showBounce    =el('hvnShowBounce')?.checked!==false;
   const showRejection =el('hvnShowRejection')?.checked!==false;
   const showBreakout  =el('hvnShowBreakout')?.checked!==false;
   const showFail      =el('hvnShowFailedBreakout')?.checked!==false;
   const showSFail     =el('hvnShowSupportFail')?.checked!==false;
 
-  // Get zones from live HVN indicator; fallback to state anchor
   const _rawZones=window.__hvnZones?.()?.map(z=>({price:(z.hi+z.lo)/2}))||[];
   let zones=_rawZones.length?_rawZones:(()=>{const st=getHVNClarityState();return st?[{price:st.anchorPrice}]:[];})();
   if(!zones.length)return[];
@@ -4604,47 +4602,92 @@ function _getHVNReactions(){
   const atrVal=(atrArr.filter(v=>v).at(-1))||(S.candles[N-1].c*0.005);
   const tol=atrVal*0.65;
   const startIdx=Math.max(0,N-lookback);
-  const MIN_GAP=3;
-  const allReacts=[];
+
+  // Priority map (lower = higher priority)
+  const PRIO={failed_breakout:1,breakout:2,rejection:3,bounce:4,support_fail:5};
+  const TYPE_LABEL={failed_breakout:'FAIL',breakout:'BRK',rejection:'REJ',bounce:'BNC',support_fail:'S↓'};
+  const TYPE_BULL={failed_breakout:false,breakout:true,rejection:false,bounce:true,support_fail:false};
+
+  const COOLDOWN=12;   // candles between same type on same zone
+  const ZONE_GAP=8;    // candles between any two events on same zone
+
+  const allCandidates=[];
 
   zones.forEach(zone=>{
     const hvnP=zone.price;
-    let lastReactIdx=startIdx-MIN_GAP;
+    // Per-type cooldown tracking for this zone
+    const lastT={failed_breakout:startIdx-COOLDOWN,breakout:startIdx-COOLDOWN,
+                 rejection:startIdx-COOLDOWN,bounce:startIdx-COOLDOWN,support_fail:startIdx-COOLDOWN};
+    let zLast=startIdx-ZONE_GAP;
+
     for(let i=startIdx;i<N;i++){
-      if(i-lastReactIdx<MIN_GAP)continue;
+      if(i-zLast<ZONE_GAP)continue;
       const c=S.candles[i];
       const prev=i>0?S.candles[i-1]:c;
+      const next=i+1<N?S.candles[i+1]:null; // confirmation candle (null = live candle)
+
+      // Gate: candle must touch or enter the zone
       if(c.h<hvnP-tol||c.l>hvnP+tol)continue;
+
       const topWick=c.h-Math.max(c.o,c.c);
       const botWick=Math.min(c.o,c.c)-c.l;
-      const totalRange=Math.max(1e-9,c.h-c.l);
-      let type=null,label=null,bullish=null;
+      const body=Math.abs(c.c-c.o);
+      const rng=Math.max(1e-9,c.h-c.l);
+      const isBear=c.c<c.o, isBull=c.c>c.o;
 
-      if(showFail&&prev.c>hvnP&&c.c<hvnP&&(prev.c-hvnP)>tol*0.22){
-        type='failed_breakout';label='FAIL';bullish=false;
+      let type=null;
+
+      // ── Failed Breakout: prev above zone, collapses back through ──
+      if(showFail&&i-lastT.failed_breakout>=COOLDOWN){
+        const sig=prev.c>hvnP+tol*0.3&&c.c<hvnP-tol*0.3&&isBear;
+        const cfm=next?next.c<hvnP:(isBear&&body>rng*0.25);
+        if(sig&&cfm)type='failed_breakout';
       }
-      if(!type&&showBreakout&&prev.c<hvnP&&c.c>hvnP&&(c.c-hvnP)>tol*0.22){
-        type='breakout';label='BRK';bullish=true;
+      // ── Breakout: prev below zone, closes clearly above, holds ──
+      if(!type&&showBreakout&&i-lastT.breakout>=COOLDOWN){
+        const sig=prev.c<hvnP-tol*0.3&&c.c>hvnP+tol*0.8&&isBull;
+        const cfm=next?next.l>=hvnP-tol*0.5:(isBull&&body>rng*0.25);
+        if(sig&&cfm)type='breakout';
       }
-      if(!type&&showRejection&&c.h>=hvnP-tol*0.4&&c.c<hvnP&&topWick>totalRange*0.25){
-        type='rejection';label='REJ';bullish=false;
+      // ── Rejection: wick probed zone, bearish body closed well below, confirmed ──
+      if(!type&&showRejection&&i-lastT.rejection>=COOLDOWN){
+        const sig=c.h>=hvnP-tol*0.3&&c.c<hvnP-tol*0.2&&isBear&&topWick>rng*0.38&&body>rng*0.10;
+        const cfm=next?next.c<c.c:(isBear&&body>rng*0.20);
+        if(sig&&cfm)type='rejection';
       }
-      if(!type&&showBounce&&c.l<=hvnP+tol*0.4&&c.c>hvnP&&c.c>=c.o&&botWick>totalRange*0.14){
-        type='bounce';label='BNC';bullish=true;
+      // ── Bounce: wick touched support, bullish body closed above, confirmed ──
+      if(!type&&showBounce&&i-lastT.bounce>=COOLDOWN){
+        const sig=c.l<=hvnP+tol*0.3&&c.c>hvnP+tol*0.2&&isBull&&botWick>rng*0.28&&body>rng*0.10;
+        const cfm=next?next.c>c.c:(isBull&&body>rng*0.20);
+        if(sig&&cfm)type='bounce';
       }
-      if(!type&&showSFail&&c.l<=hvnP+tol*0.4&&c.c<hvnP&&c.c<c.o&&botWick<totalRange*0.20){
-        type='support_fail';label='S↓';bullish=false;
+      // ── Support Fail: closed below support, bearish, small bot wick, confirmed ──
+      if(!type&&showSFail&&i-lastT.support_fail>=COOLDOWN){
+        const sig=c.l<=hvnP+tol*0.3&&c.c<hvnP-tol*0.3&&isBear&&botWick<rng*0.18;
+        const cfm=next?next.c<hvnP:(isBear&&body>rng*0.25);
+        if(sig&&cfm)type='support_fail';
       }
 
-      if(type){allReacts.push({idx:i,type,label,bullish,hvnPrice:hvnP});lastReactIdx=i;}
+      if(type){
+        lastT[type]=i; zLast=i;
+        allCandidates.push({idx:i,type,label:TYPE_LABEL[type],bullish:TYPE_BULL[type],hvnPrice:hvnP,prio:PRIO[type]});
+      }
     }
   });
 
-  allReacts.sort((a,b)=>a.idx-b.idx);
-  const deduped=[];let lastDi=-MIN_GAP;
-  allReacts.forEach(r=>{if(r.idx-lastDi>=2){deduped.push(r);lastDi=r.idx;}});
+  // ── Global dedup: within 3-candle window keep highest priority; then enforce 8-candle gap ──
+  allCandidates.sort((a,b)=>a.idx-b.idx||(a.prio-b.prio));
+  const deduped=[];
+  for(const r of allCandidates){
+    const last=deduped[deduped.length-1];
+    if(last&&r.idx-last.idx<3){
+      if(r.prio<last.prio)deduped[deduped.length-1]=r;
+    }else if(!last||r.idx-last.idx>=8){
+      deduped.push(r);
+    }
+  }
 
-  const final=deduped.slice(-30);
+  const final=deduped.slice(-20);
   _hvnReactsCache={key,reactions:final};
   return final;
 }
@@ -4902,35 +4945,10 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
     ctx.restore();
   }
 
-  // ── Confidence box (only when panel is tall enough to avoid overflow) ──
+  // ── State for footer tag ──
   const state=getHVNClarityState();
   const isBear=state&&state.bullish===false;
   const isNeut=state&&state.bullish===null;
-  const cbW=40,cbH=34,cbX=pRight-cbW-12,cbY=caTop+4;
-  if(clarH>=90){
-    const boxBorder=isBear?'rgba(255,95,50,0.58)':isNeut?'rgba(110,135,190,0.43)':'rgba(0,185,240,0.60)';
-    const boxGlow=isBear?'rgba(255,90,40,0.32)':isNeut?'rgba(100,125,180,0.26)':'rgba(0,190,255,0.32)';
-    const pctColor=isBear?'#ff6050':isNeut?'#8090c0':'#00d4ff';
-    const labColor=isBear?'rgba(255,170,140,0.88)':'rgba(0,198,238,0.90)';
-
-    ctx.fillStyle='rgba(0,5,15,0.92)';_hvnRR(ctx,cbX,cbY,cbW,cbH,5);ctx.fill();
-    ctx.save();ctx.shadowColor=boxGlow;ctx.shadowBlur=5;
-    ctx.strokeStyle=boxBorder;ctx.lineWidth=1;_hvnRR(ctx,cbX,cbY,cbW,cbH,5);ctx.stroke();
-    ctx.restore();
-
-    const trendState=state?state.trendState:'CLEAR BULL';
-    const confidence=state?state.confidence:82;
-    const parts=trendState.split(' ');
-    const midCB=cbX+cbW/2;
-    ctx.textAlign='center';ctx.textBaseline='top';
-    ctx.font='600 6.5px monospace';ctx.fillStyle=labColor;
-    ctx.fillText((parts[0]||'')+(parts[1]?' '+parts[1]:''),midCB,cbY+5);
-    ctx.font='700 10px monospace';ctx.fillStyle=pctColor;
-    ctx.fillText(confidence+'%',midCB,cbY+14);
-    ctx.font='500 5.5px monospace';
-    ctx.fillStyle=isBear?'rgba(180,70,40,0.60)':isNeut?'rgba(90,110,160,0.60)':'rgba(0,128,170,0.65)';
-    ctx.fillText('CONFIDENCE',midCB,cbY+26);
-  }
 
   // ── Footer summary tag ──
   const footerY=pBot-15;
