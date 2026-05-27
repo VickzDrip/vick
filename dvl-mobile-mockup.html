@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390,initial-scale=1">
+<title>DepthVisionLab – Mobile Mockup</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#111;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif}
+  #phone{
+    width:390px;height:844px;background:#0d0d10;overflow:hidden;
+    position:relative;display:flex;flex-direction:column;
+    box-shadow:0 0 0 1px #333,0 32px 80px rgba(0,0,0,.9);
+    border-radius:44px;margin:32px auto;
+  }
+
+  /* Status bar */
+  #status-bar{
+    height:44px;background:#0d0d10;display:flex;align-items:center;
+    justify-content:space-between;padding:0 22px 0 26px;flex-shrink:0;
+    border-radius:44px 44px 0 0;
+  }
+  .sb-time{font-size:15px;font-weight:600;color:#fff;letter-spacing:.3px}
+  .sb-icons{display:flex;align-items:center;gap:6px}
+  .sb-icons svg{opacity:.9}
+
+  /* Browser bar */
+  #browser-bar{
+    height:44px;background:#161618;display:flex;align-items:center;
+    padding:0 12px;gap:8px;flex-shrink:0;border-bottom:1px solid #222;
+  }
+  .bb-url{
+    flex:1;background:#222;border-radius:10px;height:32px;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .bb-url-text{font-size:12.5px;color:#aaa;letter-spacing:.2px}
+  .bb-lock{color:#8e8e93;font-size:11px}
+  .bb-btn{color:#0a84ff;font-size:14px;font-weight:400;padding:0 4px;min-width:28px;text-align:center}
+
+  /* App header */
+  #app-header{
+    height:68px;background:#0d0d10;display:flex;align-items:center;
+    padding:0 14px 0 12px;gap:10px;flex-shrink:0;border-bottom:1px solid #1e1e22;
+  }
+  .ah-symbol-block{flex:1}
+  .ah-pair{font-size:17px;font-weight:700;color:#fff;letter-spacing:.2px;line-height:1.2}
+  .ah-exchange{font-size:10.5px;color:#555;margin-top:1px;letter-spacing:.6px;text-transform:uppercase}
+  .ah-price-block{text-align:right}
+  .ah-price{font-size:22px;font-weight:700;color:#ff4d52;letter-spacing:.5px;line-height:1.15}
+  .ah-change{font-size:11.5px;color:#ff4d52;margin-top:1px}
+  .ah-stats{display:flex;gap:14px;margin-top:4px}
+  .ah-stat{font-size:10px;color:#555;letter-spacing:.3px}
+  .ah-stat span{color:#888}
+  .ah-menu-btn{width:34px;height:34px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4.5px;cursor:pointer}
+  .ah-menu-btn div{width:20px;height:2px;background:#555;border-radius:1px}
+
+  /* Timeframe row */
+  #tf-row{
+    height:34px;background:#0d0d10;display:flex;align-items:center;
+    padding:0 10px;gap:2px;flex-shrink:0;border-bottom:1px solid #1a1a1e;
+    overflow-x:auto;scrollbar-width:none;
+  }
+  #tf-row::-webkit-scrollbar{display:none}
+  .tf-btn{
+    height:24px;min-width:32px;padding:0 7px;border-radius:5px;
+    font-size:11.5px;font-weight:500;color:#666;background:transparent;
+    border:none;cursor:pointer;white-space:nowrap;flex-shrink:0;letter-spacing:.2px;
+  }
+  .tf-btn.active{background:#1c3a5e;color:#0a84ff;font-weight:600}
+  .tf-sep{width:1px;height:16px;background:#222;margin:0 3px;flex-shrink:0}
+  .tf-indicators{
+    margin-left:auto;height:24px;padding:0 9px;border-radius:5px;
+    font-size:11px;font-weight:500;color:#0a84ff;background:#0a2040;
+    border:1px solid #0a3060;cursor:pointer;white-space:nowrap;flex-shrink:0;letter-spacing:.3px;
+  }
+
+  /* Chart container */
+  #chart-wrap{flex:1;position:relative;overflow:hidden;background:#0d0d10}
+  #chart-canvas{display:block;width:100%;height:100%}
+  #chart-overlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+
+  /* Trend Clarity panel */
+  #tc-panel{
+    height:148px;background:#0d0d10;flex-shrink:0;
+    border-top:1px solid #1a1a1e;display:flex;flex-direction:column;
+  }
+  #tc-header{
+    height:26px;display:flex;align-items:center;padding:0 12px;
+    border-bottom:1px solid #181820;
+  }
+  .tc-title{font-size:10.5px;font-weight:600;color:#888;letter-spacing:1.1px;text-transform:uppercase}
+  .tc-info{width:14px;height:14px;border-radius:50%;border:1px solid #444;display:flex;align-items:center;justify-content:center;margin-left:6px;font-size:8.5px;color:#555;cursor:pointer}
+  .tc-badge{
+    margin-left:auto;background:#0a1e2e;border:1px solid #0a3050;
+    border-radius:4px;padding:2px 7px;font-size:9px;color:#0a84ff;letter-spacing:.4px;font-weight:600;
+  }
+  #tc-body{flex:1;display:flex;position:relative;overflow:hidden}
+  #tc-labels-left{
+    width:44px;display:flex;flex-direction:column;justify-content:space-between;
+    padding:6px 4px 6px 10px;
+  }
+  .tc-label{font-size:8.5px;color:#444;letter-spacing:.7px;font-weight:500;text-transform:uppercase}
+  #tc-chart-area{flex:1;position:relative}
+  #tc-canvas{display:block;width:100%;height:100%}
+  #tc-labels-right{
+    width:60px;display:flex;flex-direction:column;
+  }
+  .tc-scale{
+    flex:1;display:flex;align-items:flex-start;justify-content:flex-end;
+    padding-top:6px;padding-right:6px;font-size:8px;color:#333;font-weight:500;letter-spacing:.3px;
+  }
+  .tc-scale:nth-child(2){align-items:center;padding-top:0}
+  .tc-scale:nth-child(3){align-items:flex-end;padding-top:0;padding-bottom:6px}
+  #tc-summary{
+    width:56px;position:absolute;right:4px;top:50%;transform:translateY(-50%);
+    background:#0d1520;border:1px solid #0d3050;border-radius:6px;
+    padding:6px 7px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  }
+  .tc-sum-label{font-size:7.5px;color:#0a84ff;letter-spacing:.8px;font-weight:600;text-transform:uppercase;text-align:center;line-height:1.3}
+  .tc-sum-pct{font-size:19px;font-weight:700;color:#00d4ff;line-height:1.1;letter-spacing:-0.5px;margin-top:1px}
+  .tc-sum-conf{font-size:7px;color:#3a6a88;letter-spacing:.7px;text-transform:uppercase;margin-top:1px}
+
+  /* Bottom safe area */
+  #safe-area{height:0px;background:#0d0d10;border-radius:0 0 44px 44px;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<div id="phone">
+
+  <!-- Status bar -->
+  <div id="status-bar">
+    <span class="sb-time">9:41</span>
+    <div class="sb-icons">
+      <!-- Signal -->
+      <svg width="17" height="12" viewBox="0 0 17 12" fill="none">
+        <rect x="0" y="8" width="3" height="4" rx=".5" fill="#fff"/>
+        <rect x="4.5" y="5.5" width="3" height="6.5" rx=".5" fill="#fff"/>
+        <rect x="9" y="3" width="3" height="9" rx=".5" fill="#fff"/>
+        <rect x="13.5" y="0" width="3" height="12" rx=".5" fill="#fff"/>
+      </svg>
+      <!-- Wifi -->
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="white" opacity=".9">
+        <path d="M8 9.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0-3.5a5.5 5.5 0 014.2 1.96l-1.56 1.56A3.3 3.3 0 008 8.3a3.3 3.3 0 00-2.64 1.22L3.8 7.96A5.5 5.5 0 018 6zm0-3.5a9 9 0 016.88 3.22l-1.6 1.6A6.8 6.8 0 008 5.2a6.8 6.8 0 00-5.28 2.12L1.12 5.72A9 9 0 018 2.5z"/>
+      </svg>
+      <!-- Battery -->
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none">
+        <rect x=".5" y=".5" width="21" height="11" rx="3.5" stroke="white" stroke-opacity=".35"/>
+        <rect x="1.5" y="1.5" width="18" height="9" rx="2.5" fill="white"/>
+        <path d="M22.5 4.5v3a1.5 1.5 0 000-3z" fill="white" fill-opacity=".4"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Browser bar -->
+  <div id="browser-bar">
+    <span class="bb-btn">‹</span>
+    <span class="bb-btn" style="opacity:.3">›</span>
+    <div class="bb-url">
+      <span class="bb-lock">🔒</span>
+      <span class="bb-url-text">depthvisionlab.com</span>
+    </div>
+    <span class="bb-btn">⤢</span>
+    <span class="bb-btn">⊕</span>
+  </div>
+
+  <!-- App header -->
+  <div id="app-header">
+    <div class="ah-symbol-block">
+      <div class="ah-pair">BTC/USDT</div>
+      <div class="ah-exchange">BINANCE · FUTURES</div>
+    </div>
+    <div style="flex:1">
+      <div class="ah-stats">
+        <div class="ah-stat">24H H <span>76,810</span></div>
+        <div class="ah-stat">24H L <span>74,220</span></div>
+        <div class="ah-stat">Vol <span>4.28B</span></div>
+      </div>
+    </div>
+    <div class="ah-price-block">
+      <div class="ah-price">75,983.34</div>
+      <div class="ah-change">▼ 764.01 · −0.99%</div>
+    </div>
+    <div class="ah-menu-btn"><div></div><div></div><div></div></div>
+  </div>
+
+  <!-- Timeframe row -->
+  <div id="tf-row">
+    <button class="tf-btn">1s</button>
+    <button class="tf-btn">5s</button>
+    <button class="tf-btn">15s</button>
+    <button class="tf-btn">30s</button>
+    <button class="tf-btn active">1m</button>
+    <button class="tf-btn">3m</button>
+    <button class="tf-btn">5m</button>
+    <div class="tf-sep"></div>
+    <button class="tf-btn">15m</button>
+    <button class="tf-btn">1h</button>
+    <button class="tf-indicators">Indicators ▾</button>
+  </div>
+
+  <!-- Chart area -->
+  <div id="chart-wrap">
+    <canvas id="chart-canvas"></canvas>
+  </div>
+
+  <!-- Trend Clarity panel -->
+  <div id="tc-panel">
+    <div id="tc-header">
+      <span class="tc-title">Trend Clarity</span>
+      <div class="tc-info">ⓘ</div>
+      <div class="tc-badge">LIVE</div>
+    </div>
+    <div id="tc-body">
+      <div id="tc-labels-left">
+        <span class="tc-label">Strong</span>
+        <span class="tc-label">Medium</span>
+        <span class="tc-label">Weak</span>
+      </div>
+      <div id="tc-chart-area">
+        <canvas id="tc-canvas"></canvas>
+      </div>
+      <div id="tc-labels-right">
+        <div class="tc-scale">100</div>
+        <div class="tc-scale">0</div>
+        <div class="tc-scale">−100</div>
+      </div>
+      <div id="tc-summary">
+        <div class="tc-sum-label">CLEAR<br>BULL</div>
+        <div class="tc-sum-pct">79%</div>
+        <div class="tc-sum-conf">CONFIDENCE</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="safe-area"></div>
+</div>
+
+<script>
+// ─── Chart Canvas ────────────────────────────────────────────────────────────
+(function(){
+  const wrap = document.getElementById('chart-wrap');
+  const canvas = document.getElementById('chart-canvas');
+
+  function resize(){
+    const dpr = window.devicePixelRatio || 1;
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    draw(canvas.getContext('2d'), w * dpr, h * dpr, dpr);
+  }
+
+  function seededRand(seed){
+    let s = seed;
+    return function(){ s = (s*1664525+1013904223)&0xffffffff; return (s>>>0)/4294967296; };
+  }
+
+  function draw(ctx, W, H, dpr){
+    ctx.clearRect(0,0,W,H);
+
+    // Axis areas
+    const PAD_L = 4 * dpr;
+    const PAD_R = 58 * dpr;
+    const PAD_T = 8 * dpr;
+    const VOL_H = 40 * dpr;
+    const PAD_B = VOL_H + 4 * dpr;
+    const chartW = W - PAD_L - PAD_R;
+    const chartH = H - PAD_T - PAD_B;
+
+    const rand = seededRand(42);
+
+    // Generate candles: V-shape
+    // Flat start ~76,060, drop to ~75,180, recovery to ~75,950
+    const N = 62;
+    const candles = [];
+    let price = 76060;
+
+    for(let i=0;i<N;i++){
+      const phase = i/N;
+      let drift;
+      if(phase < 0.30)       drift = rand()*8 - 5;        // slight drift down
+      else if(phase < 0.54)  drift = -(rand()*24 + 8);    // strong drop
+      else if(phase < 0.58)  drift = rand()*10 - 5;       // V bottom
+      else                   drift = rand()*22 + 4;        // recovery up
+
+      const o = price;
+      const c = price + drift;
+      const wick_up   = rand()*12 + 2;
+      const wick_down = rand()*12 + 2;
+      const h = Math.max(o,c) + wick_up;
+      const l = Math.min(o,c) - wick_down;
+      const vol = rand()*0.7 + 0.3;
+      candles.push({o,h,l,c,vol});
+      price = c;
+    }
+
+    // Price range
+    const prices = candles.flatMap(c=>[c.h,c.l]);
+    let pMin = Math.min(...prices) - 40;
+    let pMax = Math.max(...prices) + 40;
+    const pRange = pMax - pMin;
+
+    const py = p => PAD_T + chartH * (1 - (p - pMin)/pRange);
+    const cw = (chartW / N) * 0.78;
+    const cx = i => PAD_L + (i + 0.5) * (chartW / N);
+
+    // Background grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    for(let g=0;g<=4;g++){
+      const y = PAD_T + chartH * g/4;
+      ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W-PAD_R, y); ctx.stroke();
+    }
+
+    // Volume bars
+    const volMax = Math.max(...candles.map(c=>c.vol));
+    candles.forEach((c,i)=>{
+      const x = cx(i);
+      const bh = (c.vol/volMax) * VOL_H * 0.82;
+      const by = H - 4*dpr - bh;
+      const isBull = c.c >= c.o;
+      ctx.fillStyle = isBull ? 'rgba(0,190,130,0.35)' : 'rgba(255,80,60,0.35)';
+      ctx.fillRect(x - cw/2, by, cw, bh);
+    });
+
+    // HVN lines — distinctive platform feature
+    const hvns = [
+      { p: 76200, label: 'HVN · 12.8K @$951.2M · 5248' },
+      { p: 75820, label: 'HVN · 15.4K @$752.1M · 5816' },
+      { p: 75480, label: 'HVN · 9.2K @$697.5M · 3891' },
+      { p: 75200, label: 'HVN · 8.7K @$654.8M · 3542' },
+    ];
+
+    ctx.save();
+    ctx.setLineDash([3*dpr, 5*dpr]);
+    ctx.lineWidth = 0.9 * dpr;
+    hvns.forEach(hvn => {
+      const y = py(hvn.p);
+      if(y < PAD_T || y > PAD_T + chartH) return;
+      ctx.strokeStyle = 'rgba(30,120,220,0.55)';
+      ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R - 2*dpr, y); ctx.stroke();
+
+      // Label pill
+      const fs = 8.5 * dpr;
+      ctx.font = `${fs}px -apple-system,BlinkMacSystemFont,sans-serif`;
+      ctx.fillStyle = 'rgba(8,30,70,0.88)';
+      const tw = ctx.measureText(hvn.label).width + 6*dpr;
+      ctx.fillRect(PAD_L + 4*dpr, y - 8*dpr, tw, 14*dpr);
+      ctx.strokeStyle = 'rgba(30,100,200,0.5)';
+      ctx.setLineDash([]);
+      ctx.strokeRect(PAD_L + 4*dpr, y - 8*dpr, tw, 14*dpr);
+      ctx.setLineDash([3*dpr, 5*dpr]);
+      ctx.fillStyle = 'rgba(100,160,255,0.85)';
+      ctx.fillText(hvn.label, PAD_L + 7*dpr, y + 2*dpr);
+    });
+    ctx.restore();
+
+    // Candle bodies and wicks
+    candles.forEach((c,i)=>{
+      const x = cx(i);
+      const isBull = c.c >= c.o;
+      const bodyTop = py(Math.max(c.o,c.c));
+      const bodyBot = py(Math.min(c.o,c.c));
+      let bodyH = Math.max(1.2*dpr, bodyBot - bodyTop);
+
+      // Wick
+      ctx.strokeStyle = isBull ? 'rgba(0,210,140,0.70)' : 'rgba(255,80,60,0.70)';
+      ctx.lineWidth = 1.2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(x, py(c.h));
+      ctx.lineTo(x, py(c.l));
+      ctx.stroke();
+
+      // Body
+      const grad = ctx.createLinearGradient(x-cw/2, bodyTop, x+cw/2, bodyBot);
+      if(isBull){
+        grad.addColorStop(0,'rgba(0,220,145,0.88)');
+        grad.addColorStop(1,'rgba(0,160,100,0.72)');
+      } else {
+        grad.addColorStop(0,'rgba(255,90,65,0.88)');
+        grad.addColorStop(1,'rgba(200,50,40,0.72)');
+      }
+      ctx.fillStyle = grad;
+      ctx.fillRect(x - cw/2, bodyTop, cw, bodyH);
+
+      // Body border
+      ctx.strokeStyle = isBull ? 'rgba(0,240,160,0.4)' : 'rgba(255,110,85,0.4)';
+      ctx.lineWidth = 0.5 * dpr;
+      ctx.strokeRect(x - cw/2, bodyTop, cw, bodyH);
+    });
+
+    // Crosshair on last candle
+    const last = candles[candles.length - 1];
+    const lx = cx(N-1), ly = py(last.c);
+    ctx.save();
+    ctx.setLineDash([2*dpr, 3*dpr]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 0.8*dpr;
+    ctx.beginPath(); ctx.moveTo(lx, PAD_T); ctx.lineTo(lx, PAD_T+chartH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PAD_L, ly); ctx.lineTo(W-PAD_R, ly); ctx.stroke();
+    ctx.restore();
+
+    // Price axis on right
+    const numTicks = 5;
+    ctx.font = `${9.5*dpr}px -apple-system,BlinkMacSystemFont,sans-serif`;
+    ctx.textAlign = 'left';
+    for(let t=0;t<=numTicks;t++){
+      const frac = t/numTicks;
+      const p = pMin + pRange * (1-frac);
+      const y = PAD_T + chartH * frac;
+      const label = p.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
+      ctx.fillStyle = 'rgba(88,88,100,0.9)';
+      ctx.fillText(label, W - PAD_R + 4*dpr, y + 3*dpr);
+    }
+
+    // Current price tag
+    ctx.fillStyle = 'rgba(255,60,55,0.90)';
+    const tagY = py(last.c);
+    ctx.beginPath();
+    ctx.roundRect
+      ? ctx.roundRect(W-PAD_R+1*dpr, tagY-7*dpr, PAD_R-3*dpr, 14*dpr, 2*dpr)
+      : null;
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${9*dpr}px -apple-system,BlinkMacSystemFont,sans-serif`;
+    ctx.fillText('75,983', W-PAD_R+3*dpr, tagY+3*dpr);
+
+    // Bid/Ask spread indicator
+    ctx.fillStyle = 'rgba(0,0,0,0)';
+    ctx.font = `${8*dpr}px -apple-system,BlinkMacSystemFont,sans-serif`;
+  }
+
+  resize();
+  window.addEventListener('resize', resize);
+})();
+
+
+// ─── Trend Clarity Canvas ─────────────────────────────────────────────────────
+(function(){
+  const area = document.getElementById('tc-chart-area');
+  const canvas = document.getElementById('tc-canvas');
+
+  function resize(){
+    const dpr = window.devicePixelRatio || 1;
+    const w = area.clientWidth, h = area.clientHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    draw(canvas.getContext('2d'), w * dpr, h * dpr, dpr);
+  }
+
+  function draw(ctx, W, H, dpr){
+    ctx.clearRect(0,0,W,H);
+
+    const PAD_T = 5*dpr, PAD_B = 5*dpr, PAD_L = 2*dpr, PAD_R = 8*dpr;
+    const chartW = W - PAD_L - PAD_R;
+    const chartH = H - PAD_T - PAD_B;
+
+    // Reference lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 0.8;
+    // Zero line
+    const zeroY = PAD_T + chartH * 0.5;
+    ctx.beginPath(); ctx.moveTo(PAD_L, zeroY); ctx.lineTo(W-PAD_R, zeroY); ctx.stroke();
+    // +66 and -66 (strong threshold)
+    [0.167, 0.833].forEach(f=>{
+      const y = PAD_T + chartH * f;
+      ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W-PAD_R, y); ctx.stroke();
+    });
+
+    const N_BARS = 38;
+    const barW = (chartW / N_BARS) * 0.65;
+    const gap  = chartW / N_BARS;
+
+    // Seeded random for reproducibility
+    function seeded(s){ let x=s; return ()=>{ x=(x*1664525+1013904223)&0xffffffff; return (x>>>0)/4294967296; }; }
+    const rand = seeded(7);
+
+    // Generate signal: uptrend with recovery mirroring chart V-shape
+    const vals = [];
+    for(let i=0;i<N_BARS;i++){
+      const phase = i/N_BARS;
+      let base;
+      if(phase < 0.28)      base = 30 + rand()*25;          // moderate bull
+      else if(phase < 0.55) base = -(20 + rand()*55);       // bearish drop
+      else if(phase < 0.60) base = rand()*20 - 10;          // transition
+      else                  base = 55 + rand()*40;           // strong bull recovery
+      vals.push(base);
+    }
+
+    // Draw histogram bars
+    vals.forEach((v,i)=>{
+      const x = PAD_L + (i + 0.5) * gap - barW/2;
+      const isBull = v >= 0;
+      const norm = Math.abs(v)/100;
+      const barH = norm * (chartH*0.47);
+      const by = isBull ? zeroY - barH : zeroY;
+
+      // Color by strength
+      let col;
+      if(isBull){
+        if(Math.abs(v)>65) col = 'rgba(0,210,200,0.75)';
+        else if(Math.abs(v)>30) col = 'rgba(0,170,165,0.60)';
+        else col = 'rgba(0,120,130,0.40)';
+      } else {
+        if(Math.abs(v)>65) col = 'rgba(255,80,100,0.70)';
+        else if(Math.abs(v)>30) col = 'rgba(200,60,80,0.55)';
+        else col = 'rgba(130,50,60,0.38)';
+      }
+      ctx.fillStyle = col;
+      ctx.fillRect(x, by, barW, Math.max(barH, 1));
+    });
+
+    // Smooth oscillator line — the main visual element
+    const pts = vals.map((v,i)=>({
+      x: PAD_L + (i+0.5)*gap,
+      y: zeroY - (v/100)*(chartH*0.47)
+    }));
+
+    // Glow passes
+    for(let pass=0;pass<3;pass++){
+      const glowAlpha = [0.10, 0.18, 0.45][pass];
+      const glowWidth = [6, 3.5, 1.5][pass] * dpr;
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(0,210,240,${glowAlpha})`;
+      ctx.lineWidth = glowWidth;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      pts.forEach((pt,i)=>{
+        if(i===0) ctx.moveTo(pt.x, pt.y);
+        else {
+          // Smooth with cardinal spline
+          const prev = pts[i-1];
+          const cpX = (prev.x + pt.x)/2;
+          ctx.bezierCurveTo(cpX, prev.y, cpX, pt.y, pt.x, pt.y);
+        }
+      });
+      ctx.stroke();
+    }
+
+    // Fill under/above line
+    ctx.save();
+    ctx.beginPath();
+    pts.forEach((pt,i)=>{
+      if(i===0) ctx.moveTo(pt.x, pt.y);
+      else {
+        const prev = pts[i-1];
+        const cpX = (prev.x+pt.x)/2;
+        ctx.bezierCurveTo(cpX, prev.y, cpX, pt.y, pt.x, pt.y);
+      }
+    });
+    ctx.lineTo(pts[pts.length-1].x, zeroY);
+    ctx.lineTo(pts[0].x, zeroY);
+    ctx.closePath();
+    const fillGrad = ctx.createLinearGradient(0, PAD_T, 0, H);
+    fillGrad.addColorStop(0,'rgba(0,200,220,0.12)');
+    fillGrad.addColorStop(0.5,'rgba(0,180,200,0.04)');
+    fillGrad.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = fillGrad;
+    ctx.fill();
+    ctx.restore();
+
+    // Last point dot
+    const last = pts[pts.length-1];
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 3.5*dpr, 0, Math.PI*2);
+    ctx.fillStyle = '#00d4ff';
+    ctx.fill();
+    ctx.shadowColor = '#00d4ff';
+    ctx.shadowBlur = 8*dpr;
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 2*dpr, 0, Math.PI*2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  resize();
+  window.addEventListener('resize', resize);
+})();
+</script>
+</body>
+</html>
