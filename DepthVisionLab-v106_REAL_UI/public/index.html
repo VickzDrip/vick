@@ -2717,6 +2717,7 @@ function draw(){
 
 const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_panDx=0;
 const _clarH=(S.inds.hvnClarity&&S.candles.length)?158:0;PB=10+(_clarH?_clarH+2:0);
+const _logBtn=el('dvlMiniRefresh');if(_logBtn)_logBtn.style.bottom=(_clarH>0?_clarH+20:18)+'px';
 const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(window.__drawFlowTrail)safeLayer('DVL Trail',()=>window.__drawFlowTrail(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);if(window.__drawFlowAccel)safeLayer('DVL Flow',()=>window.__drawFlowAccel(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);if(window.__drawHVNReact&&S.inds.hvnReact)safeLayer('HVN Reactions',()=>window.__drawHVNReact(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.inds.hvnClarity)safeLayer('HVN Clarity Engine',()=>drawHVNClarityEngine(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
 // ── Chart watermark image (preloaded once) ──
 const _wmImg=(()=>{
@@ -4418,65 +4419,141 @@ function _hvnRR(ctx,x,y,w,h,r){
   ctx.closePath();
 }
 
+// Cached HVN clarity state — prevents callout jumping during pan/zoom
+let _hvnClarityCache=null;
+
 function getHVNClarityState(){
-  if(!S.inds.hvnClarity||!S.candles.length)return null;
-  const V=visible();
-  if(!V.cs.length)return null;
+  if(!S.inds.hvnClarity||!S.candles.length){_hvnClarityCache=null;return null;}
+  const N=S.candles.length;
   const scenario=el('hvnClarityScenario')?.value||'support_bounce';
-  const hi=Math.max(...V.cs.map(c=>c.h));
-  const lo=Math.min(...V.cs.map(c=>c.l));
-  const range=Math.max(1e-9,hi-lo);
 
-  // Estimate HVN support anchor (~25% up from visible low)
-  let anchorPrice=lo+range*0.25;
+  // Stable cache key: candle count + scenario + HVN fingerprint (independent of view)
+  const hvnFp=(window.__lastHVNZones||[]).slice(0,4).map(z=>Math.round(z.price)).join(',');
+  const key=`${N}_${scenario}_${hvnFp}`;
+  if(_hvnClarityCache&&_hvnClarityCache.key===key)return _hvnClarityCache.state;
+
+  // ── Anchor price: prefer absolute HVN zone (stable across pan) ──
+  let anchorPrice;
   if(window.__lastHVNZones&&window.__lastHVNZones.length){
-    const cands=window.__lastHVNZones.filter(z=>z.price>=lo&&z.price<=hi);
-    if(cands.length){
-      cands.sort((a,b)=>Math.abs(a.price-(lo+range*0.25))-Math.abs(b.price-(lo+range*0.25)));
-      anchorPrice=cands[0].price;
-    }
+    const lastC=S.candles[N-1];
+    const sorted=[...window.__lastHVNZones].sort((a,b)=>Math.abs(a.price-lastC.c)-Math.abs(b.price-lastC.c));
+    anchorPrice=sorted[0].price;
+  }else{
+    const V=visible();
+    if(!V.cs.length)return null;
+    const hi=Math.max(...V.cs.map(c=>c.h)),lo=Math.min(...V.cs.map(c=>c.l));
+    anchorPrice=lo+(hi-lo)*0.28;
   }
 
-  // Find best bounce candle: bullish, close to anchor, preferring recent
-  let bounceIdx=V.a;
-  let bestScore=Infinity;
-  V.cs.forEach((c,j)=>{
-    const dist=Math.abs(c.l-anchorPrice)+(V.cs.length-j)*range*0.004;
-    if(dist<bestScore&&c.c>=c.o){bestScore=dist;bounceIdx=V.a+j;}
-  });
+  // ── ATR-based proximity tolerance ──
+  const atrArr=calcATR(S.candles.slice(Math.max(0,N-28),N),14);
+  const atrVal=(atrArr.filter(v=>v).at(-1))||(anchorPrice*0.005);
+  const tol=atrVal*0.65;
 
-  // Scenario-specific state
-  const scenarios={
-    support_bounce:{callout:'Bounce from HVN support',trendState:'CLEAR BULL',confidence:82,summary:'HVN SUPPORT + CLARITY RISING',bullish:true},
-    rejection:{callout:'Rejection at HVN',trendState:'BEARISH SHIFT',confidence:76,summary:'HVN REJECTION + CLARITY FALLING',bullish:false},
-    breakout:{callout:'Breakout through HVN',trendState:'STRONG BULL',confidence:88,summary:'BREAKOUT THROUGH HVN + STRONG CLARITY',bullish:true},
-    rotation:{callout:'Rotation between HVNs',trendState:'NO CLEAR EDGE',confidence:41,summary:'HVN ROTATION + LOW CLARITY',bullish:null},
-    failed_breakout:{callout:'Failed breakout at HVN',trendState:'BEARISH SHIFT',confidence:71,summary:'FAILED BREAKOUT + CLARITY WEAKENING',bullish:false}
+  // ── Analyze last 25 candles vs HVN zone (stable: uses all candles, not just visible) ──
+  const LOOK=Math.min(25,Math.floor(N*0.12)+8);
+  const startIdx=Math.max(0,N-LOOK);
+  let rejections=0,bounces=0,crossings=0,lastAbove=S.candles[startIdx]?.c>anchorPrice;
+  let rejIdx=N-1,bounceIdx=N-1;
+
+  for(let i=startIdx;i<N;i++){
+    const c=S.candles[i];
+    const isAbove=c.c>anchorPrice;
+    const nearHVN=c.h>=anchorPrice-tol&&c.l<=anchorPrice+tol;
+    if(nearHVN){
+      const topWick=c.h-Math.max(c.o,c.c);
+      const totalRange=Math.max(1e-9,c.h-c.l);
+      // Wick rejection at HVN resistance: wick reached HVN, body closed below
+      if(c.h>=anchorPrice-tol*0.4&&c.c<anchorPrice&&topWick>totalRange*0.28){
+        rejections++;rejIdx=i;
+      }
+      // Support bounce: low touched HVN, closed above it bullishly
+      if(c.l<=anchorPrice+tol*0.4&&c.c>anchorPrice&&c.c>=c.o){
+        bounces++;bounceIdx=i;
+      }
+    }
+    if(i>startIdx&&isAbove!==lastAbove)crossings++;
+    lastAbove=isAbove;
+  }
+
+  // Consecutive closes above/below HVN (most recent streak)
+  let consAbove=0,consBelow=0;
+  for(let i=N-1;i>=startIdx;i--){if(S.candles[i].c>anchorPrice)consAbove++;else break;}
+  for(let i=N-1;i>=startIdx;i--){if(S.candles[i].c<anchorPrice)consBelow++;else break;}
+
+  // ── Auto-detect pattern from candle evidence ──
+  let detected=scenario;
+  if(window.__lastHVNZones?.length){
+    if(rejections>=2&&consBelow>=1)detected='rejection';
+    else if(bounces>=2&&consAbove>=1)detected='support_bounce';
+    else if(consAbove>=4&&rejections===0)detected='breakout';
+    else if(rejections>=1&&consBelow>=2&&bounces>0)detected='failed_breakout';
+    else if(crossings>=3)detected='rotation';
+  }
+
+  // Enrich callout text with detected evidence
+  const ap=anchorPrice>=1?anchorPrice.toFixed(0):anchorPrice.toFixed(4);
+  const rejLbl=rejections>=2?`${rejections}× wick rejection`:'Wick rejection';
+  const bncLbl=bounces>=2?`${bounces}× bounce`:'Bounce';
+
+  const stMap={
+    support_bounce:{
+      callout:bounces>=2?`${bncLbl} · HVN ${ap} holds as support`:`Bounce from HVN ${ap} support`,
+      trendState:'CLEAR BULL',
+      confidence:Math.min(93,74+bounces*5+consAbove*2),
+      summary:'HVN SUPPORT + CLARITY RISING',
+      bullish:true,
+      anchorIdx:bounceIdx
+    },
+    rejection:{
+      callout:rejections>=2?`${rejLbl} at HVN ${ap}`:`Rejection at HVN ${ap} resistance`,
+      trendState:'BEARISH SHIFT',
+      confidence:Math.min(92,68+rejections*5+consBelow*2),
+      summary:'HVN REJECTION + CLARITY FALLING',
+      bullish:false,
+      anchorIdx:rejIdx
+    },
+    breakout:{
+      callout:`Breakout accepted above HVN ${ap}`,
+      trendState:'STRONG BULL',
+      confidence:Math.min(95,80+consAbove*2),
+      summary:'HVN BREAKOUT ACCEPTED + CLARITY STRONG',
+      bullish:true,
+      anchorIdx:N-1
+    },
+    rotation:{
+      callout:`Price rotating between HVN zones`,
+      trendState:'NO CLEAR EDGE',
+      confidence:Math.max(28,Math.min(52,34+crossings*3)),
+      summary:'HVN ROTATION + LOW CLARITY',
+      bullish:null,
+      anchorIdx:Math.max(0,N-Math.floor(LOOK/2))
+    },
+    failed_breakout:{
+      callout:`Failed breakout · rejected at HVN ${ap}`,
+      trendState:'BEARISH SHIFT',
+      confidence:Math.min(90,60+rejections*5+consBelow*3),
+      summary:'FAILED BREAKOUT + CLARITY WEAKENING',
+      bullish:false,
+      anchorIdx:rejIdx
+    }
   };
-  const st=scenarios[scenario]||scenarios.support_bounce;
 
-  // Demo oscillator: V-shape recovery for bull, falling for bear, flat for neutral
-  const N=48,osc=[];
-  for(let i=0;i<N;i++){
-    const p=i/N;let v;
-    if(st.bullish===true){
-      if(p<0.25)v=-10+Math.sin(i*0.9)*10;
-      else if(p<0.48)v=-20-(p-0.25)*160+Math.sin(i*1.1)*8;
-      else if(p<0.54)v=-55+(p-0.48)*250;
-      else v=Math.min(80,-40+(p-0.54)*320)+Math.sin(i*0.65)*7;
-    }else if(st.bullish===false){
-      if(p<0.3)v=20+Math.sin(i*0.8)*12;
-      else if(p<0.55)v=20-(p-0.3)*200+Math.sin(i*1.0)*8;
-      else v=Math.max(-78,-30-(p-0.55)*180)+Math.sin(i*0.7)*6;
-    }else{
-      v=Math.sin(i*0.5)*22+Math.sin(i*1.3)*10;
-    }
-    osc.push(Math.max(-100,Math.min(100,v)));
-  }
+  const st=stMap[detected]||stMap.support_bounce;
+  const stableAnchorIdx=Math.max(0,Math.min(N-1,st.anchorIdx));
 
-  return{scenario,callout:st.callout,anchorPrice,bounceIdx,
-    trendState:st.trendState,confidence:st.confidence,summary:st.summary,
-    bullish:st.bullish,oscillator:osc};
+  const state={
+    scenario:detected,
+    callout:st.callout,
+    anchorPrice,
+    bounceIdx:stableAnchorIdx,
+    trendState:st.trendState,
+    confidence:st.confidence,
+    summary:st.summary,
+    bullish:st.bullish
+  };
+  _hvnClarityCache={key,state};
+  return state;
 }
 
 function drawHVNClarityEngine(ctx,W,H,V,sc,x){
@@ -4704,7 +4781,7 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
   const state=getHVNClarityState();
   const isBear=state&&state.bullish===false;
   const isNeut=state&&state.bullish===null;
-  const cbW=52,cbH=50,cbX=pRight-cbW-2,cbY=caTop+(caH-cbH)/2;
+  const cbW=48,cbH=44,cbX=pRight-cbW-12,cbY=caTop+4;
   const boxBorder=isBear?'rgba(255,95,50,0.58)':isNeut?'rgba(110,135,190,0.43)':'rgba(0,185,240,0.60)';
   const boxGlow=isBear?'rgba(255,90,40,0.32)':isNeut?'rgba(100,125,180,0.26)':'rgba(0,190,255,0.32)';
   const pctColor=isBear?'#ff6050':isNeut?'#8090c0':'#00d4ff';
@@ -4722,12 +4799,12 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
   ctx.textAlign='center';ctx.textBaseline='top';
   ctx.font='700 7px monospace';ctx.fillStyle=labColor;
   ctx.fillText(parts[0]||'',midCB,cbY+4);
-  if(parts[1])ctx.fillText(parts[1],midCB,cbY+13);
-  ctx.font='800 15px monospace';ctx.fillStyle=pctColor;
+  if(parts[1])ctx.fillText(parts[1],midCB,cbY+12);
+  ctx.font='700 11px monospace';ctx.fillStyle=pctColor;
   ctx.fillText(confidence+'%',midCB,cbY+21);
   ctx.font='600 6px monospace';
   ctx.fillStyle=isBear?'rgba(180,70,40,0.65)':isNeut?'rgba(90,110,160,0.65)':'rgba(0,128,170,0.70)';
-  ctx.fillText('CONFIDENCE',midCB,cbY+39);
+  ctx.fillText('CONFIDENCE',midCB,cbY+34);
 
   // ── Footer summary tag ──
   const footerY=pBot-15;
