@@ -3501,60 +3501,56 @@ function footprintPressure(c){
   if((c.buy+c.sell)>0)br=br*0.35+(c.buy/(c.buy+c.sell))*0.65;
   return clamp(br,0.12,0.88);
 }
-// ── Synthetic rows (no real data) ────────────────────────────────
-function _syntheticFPRowsRaw(c,maxRows=14){
-  const rows=[],range=Math.max(1e-9,c.h-c.l);
-  const n=clamp(Math.round(range/Math.max(range/maxRows,1e-9)),6,maxRows);
-  const buyRatio=footprintPressure(c),bodyMid=(c.o+c.c)/2,close=c.c;
-  let weights=[],sum=0;
-  for(let k=0;k<n;k++){
-    const price=c.l+range*(k+.5)/n;
-    const dBody=Math.abs(price-bodyMid)/range,dClose=Math.abs(price-close)/range;
-    const w=0.45+Math.exp(-dBody*5.5)*1.2+Math.exp(-dClose*8)*.75+(k===0||k===n-1?.25:0);
-    weights.push({price,w});sum+=w;
-  }
-  const total=Math.max(0,+c.v||0);
-  weights.forEach(r=>{
-    const vol=total*r.w/Math.max(1e-9,sum);
-    const rowBias=(r.price-c.l)/range-.5;
-    const localBuy=clamp(buyRatio+rowBias*(c.c>=c.o?.10:-.10),.08,.92);
-    rows.push([r.price,{buy:vol*localBuy,sell:vol*(1-localBuy),synthetic:true}]);
+// ── Continuous price ladder (replaces sparse rows + compress) ───────
+// Always returns exactly n rows from c.h to c.l — empty buckets included.
+// Format: [centerPrice, {buy, sell, synthetic, empty}]
+function _buildLadder(c, maxRows){
+  const n=clamp(Math.round(maxRows),4,36);
+  const range=Math.max(1e-9,c.h-c.l);
+  const step=range/n;
+  // Init: top bucket (i=0) is near c.h, bottom (i=n-1) near c.l
+  const buckets=Array.from({length:n},(_,i)=>{
+    const cp=c.h-(i+0.5)*step;
+    return[cp,{buy:0,sell:0,synthetic:false,empty:true}];
   });
-  return rows.sort((a,b)=>b[0]-a[0]);
-}
-// ── Normalize FP rows (raw, uncached) ────────────────────────────
-function _normFPRowsRaw(c,maxRows=18){
-  let rows=[...c.fp.entries()]
-    .map(([p,r])=>[+p,{buy:+r.buy||0,sell:+r.sell||0,synthetic:false,n:r.n||0,notional:r.notional||0}])
-    .filter(([p,r])=>isFinite(p)&&(r.buy+r.sell)>0)
-    .sort((a,b)=>b[0]-a[0]);
-  const fpTotal=rows.reduce((a,[_,r])=>a+r.buy+r.sell,0);
+  let fpTotal=0;
+  if(c.fp&&c.fp.size>0){
+    for(const[p,r] of c.fp){
+      const price=+p;
+      if(!isFinite(price))continue;
+      const bi=clamp(Math.floor((c.h-price)/step),0,n-1);
+      const bkt=buckets[bi][1];
+      bkt.buy+=(+r.buy||0);bkt.sell+=(+r.sell||0);
+      bkt.empty=false;fpTotal+=(+r.buy||0)+(+r.sell||0);
+    }
+  }
   const candleVol=Math.max(0,+c.v||0);
-  if(!rows.length||fpTotal<candleVol*0.035){rows=_syntheticFPRowsRaw(c,maxRows);}
-  else if(candleVol>0&&fpTotal>0){
+  if(fpTotal<candleVol*0.035){
+    // Synthetic distribution across all buckets
+    const buyRatio=footprintPressure(c),bodyMid=(c.o+c.c)/2,close=c.c;
+    let wsum=0;const ws=buckets.map(([cp])=>{
+      const dBody=Math.abs(cp-bodyMid)/range,dClose=Math.abs(cp-close)/range;
+      const w=0.45+Math.exp(-dBody*5.5)*1.2+Math.exp(-dClose*8)*.75;
+      wsum+=w;return w;
+    });
+    buckets.forEach(([cp,r],i)=>{
+      const vol=candleVol*ws[i]/Math.max(1e-9,wsum);
+      const rowBias=(cp-c.l)/range-.5;
+      const lb=clamp(buyRatio+rowBias*(c.c>=c.o?.10:-.10),.08,.92);
+      r.buy=vol*lb;r.sell=vol*(1-lb);r.synthetic=true;r.empty=false;
+    });
+  }else if(candleVol>0&&fpTotal>0){
     const k=clamp(candleVol/fpTotal,0.18,12);
-    rows=rows.map(([p,r])=>[p,{buy:r.buy*k,sell:r.sell*k,synthetic:false,n:r.n||0,notional:r.notional||0}]);
+    for(const[,r] of buckets){if(!r.empty){r.buy*=k;r.sell*=k;}}
   }
-  return compressFootprintRows(rows,maxRows);
+  return buckets;
 }
-// ── Compress rows (merge groups) ─────────────────────────────────
-function compressFootprintRows(rows,maxRows){
-  if(rows.length<=maxRows)return rows;
-  const out=[],group=Math.ceil(rows.length/maxRows);
-  for(let i=0;i<rows.length;i+=group){
-    const chunk=rows.slice(i,i+group);
-    let buy=0,sell=0,px=0,wt=0,synthetic=true;
-    chunk.forEach(([p,r])=>{const tv=(+r.buy||0)+(+r.sell||0);buy+=+r.buy||0;sell+=+r.sell||0;px+=p*Math.max(tv,1);wt+=Math.max(tv,1);if(!r.synthetic)synthetic=false;});
-    out.push([px/Math.max(1,wt),{buy,sell,synthetic}]);
-  }
-  return out.sort((a,b)=>b[0]-a[0]);
-}
-// ── Cached FP rows ────────────────────────────────────────────────
+// ── Cached FP rows (continuous ladder) ───────────────────────────
 function getCachedFPRows(c,maxRows){
   const key=maxRows+'|'+(c.fp?.size||0)+'|'+Math.round((c.buy||0)*1e4)+'|'+Math.round((c.sell||0)*1e4)+'|'+Math.round((c.v||0)*1e4)+'|'+(c.__fpVer||0);
   if(!c.__fpRowsCache)c.__fpRowsCache=Object.create(null);
   if(c.__fpRowsCache[key])return c.__fpRowsCache[key];
-  return(c.__fpRowsCache[key]=_normFPRowsRaw(c,maxRows));
+  return(c.__fpRowsCache[key]=_buildLadder(c,maxRows));
 }
 // Backwards-compat alias (used by HVN Reactions IIFE and custom code)
 function normalizedFootprintRows(c,maxRows=18){return getCachedFPRows(c,maxRows);}
@@ -3618,41 +3614,51 @@ function _fpDrawMini(ctx,c,rows,xx,top,bot,hh,bw,realDelta,covAlpha){
   ctx.fillStyle='rgba(0,200,150,.15)';ctx.fillRect(left+1,mid,w-2,Math.max(1,bot-mid));
   ctx.globalAlpha=1;
 }
-// ── Normal tier: bars + imbalance, no text ───────────────────────
+// ── Normal tier: continuous ladder + bars, no text ───────────────
 function _fpDrawNormal(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,sc){
   const boxW=clamp(bw*2.5,44,100),left=xx-boxW/2;
-  const rowH=clamp(hh/Math.max(1,rows.length),7,18);
+  const n=rows.length,rowH=hh/Math.max(1,n);
   ctx.globalAlpha=covAlpha;
   ctx.fillStyle='rgba(5,9,20,.75)';ctx.fillRect(left,top,boxW,hh);
   ctx.strokeStyle=realDelta>=0?'rgba(0,195,140,.45)':'rgba(220,90,45,.45)';ctx.lineWidth=.9;ctx.strokeRect(left,top,boxW,hh);
   ctx.strokeStyle='rgba(255,255,255,.08)';ctx.beginPath();ctx.moveTo(xx,top);ctx.lineTo(xx,bot);ctx.stroke();
   const imbs=computeRowImbalances(rows,fpc.imbalRatio);
   const halfW=boxW/2-2,mid=left+boxW/2;
-  rows.forEach(([price,r],ri)=>{
-    const y=sc.y(price);if(y<PT-14||y>bot+20)return;
-    const tot=r.buy+r.sell,pwr=clamp(tot/maxRow,0,1);
-    if(pwr<fpc.rowThresh)return;
-    if(tot>0){
-      ctx.fillStyle=`rgba(255,115,45,${clamp(.14+pwr*.36,.10,.58)})`;ctx.fillRect(left+1,y-rowH/2+1,clamp(r.sell/tot,0,1)*halfW,rowH-2);
-      ctx.fillStyle=`rgba(0,200,150,${clamp(.14+pwr*.36,.10,.58)})`;ctx.fillRect(mid,y-rowH/2+1,clamp(r.buy/tot,0,1)*halfW,rowH-2);
+  rows.forEach(([,r],ri)=>{
+    const ry=top+ri*rowH;   // top edge of this row
+    const yc=ry+rowH*.5;    // center
+    if(r.empty){
+      // Empty row: just a faint separator line
+      ctx.fillStyle='rgba(20,30,50,.22)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
+      return;
     }
+    const tot=r.buy+r.sell,pwr=clamp(tot/maxRow,0,1);
+    if(pwr<fpc.rowThresh*.5){
+      ctx.fillStyle='rgba(20,30,50,.28)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
+      return;
+    }
+    const fa=clamp(.14+pwr*.36,.10,.58);
+    ctx.fillStyle=`rgba(255,115,45,${fa})`;ctx.fillRect(left+1,ry+1,clamp(r.sell/Math.max(1e-9,tot),0,1)*halfW,rowH-2);
+    ctx.fillStyle=`rgba(0,200,150,${fa})`;ctx.fillRect(mid,ry+1,clamp(r.buy/Math.max(1e-9,tot),0,1)*halfW,rowH-2);
     const imb=imbs[ri];
     if(imb?.flag&&!r.synthetic){
       ctx.fillStyle=imb.flag==='bull'?'rgba(0,212,212,.55)':'rgba(240,110,35,.55)';
-      ctx.fillRect(left+1,y-rowH/2,boxW-2,2.5);
+      ctx.fillRect(left+1,ry,boxW-2,2);
     }
     if(fpc.showStacked&&imb?.stackRun>=fpc.stackedMin&&imb.stackDir&&!r.synthetic){
       ctx.fillStyle=imb.stackDir==='bull'?'rgba(0,220,220,.42)':'rgba(255,100,35,.42)';
-      ctx.fillRect(imb.stackDir==='bull'?left+boxW-4:left+1,y-rowH/2,3,rowH);
+      ctx.fillRect(imb.stackDir==='bull'?left+boxW-4:left+1,ry,3,rowH);
     }
   });
   ctx.globalAlpha=1;
   _fpDrawSpine(ctx,c,xx,top,bot,sc);
 }
-// ── Full tier: complete ladder with numbers ──────────────────────
+// ── Full tier: continuous ladder with numbers ────────────────────
 function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,sc){
   const boxW=clamp(bw*2.75,54,116),left=xx-boxW/2;
-  const rowH=clamp(hh/Math.max(1,rows.length),9,18);
+  const n=rows.length,rowH=hh/Math.max(1,n);
+  // Text is readable only when rows are tall enough
+  const showText=rowH>=8.5;
   ctx.globalAlpha=covAlpha;
   ctx.fillStyle='rgba(5,9,20,.78)';ctx.fillRect(left,top,boxW,hh);
   ctx.strokeStyle=realDelta>=0?'rgba(0,180,130,.55)':'rgba(210,85,45,.55)';ctx.lineWidth=.95;ctx.strokeRect(left,top,boxW,hh);
@@ -3660,47 +3666,60 @@ function _fpDrawFull(ctx,c,rows,xx,top,bot,hh,bw,maxRow,realDelta,covAlpha,fpc,s
   const imbs=computeRowImbalances(rows,fpc.imbalRatio);
   const halfW=boxW/2-2,mid=left+boxW/2;
   rows.forEach(([price,r],ri)=>{
-    const y=sc.y(price);if(y<PT-14||y>sc.y(sc.lo)+20)return;
+    const ry=top+ri*rowH;    // top edge of this row
+    const yc=ry+rowH*.5;     // center
+    if(r.empty){
+      // Empty row: very faint dark strip — keeps ladder continuous
+      ctx.fillStyle='rgba(5,9,20,.55)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
+      ctx.strokeStyle='rgba(30,42,64,.35)';ctx.lineWidth=.35;ctx.strokeRect(left+1,ry,boxW-2,rowH-0.5);
+      return;
+    }
     const tot=r.buy+r.sell,pwr=clamp(tot/maxRow,0,1);
     const isWeak=pwr<fpc.rowThresh;
     const imbal=(r.buy-r.sell)/Math.max(1e-9,tot);
     const baseAlpha=clamp(.10+pwr*.42,.10,.60);
-    ctx.fillStyle='rgba(5,9,20,.70)';ctx.fillRect(left+1,y-rowH/2,boxW-2,rowH-1);
+    // Row background
+    ctx.fillStyle='rgba(5,9,20,.70)';ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
     if(!isWeak){
       ctx.fillStyle=imbal>=0?`rgba(0,200,150,${baseAlpha})`:`rgba(255,115,45,${baseAlpha})`;
-      ctx.fillRect(left+1,y-rowH/2,boxW-2,rowH-1);
+      ctx.fillRect(left+1,ry,boxW-2,rowH-0.5);
     }
+    // Bars
     if(!isWeak&&tot>0){
-      ctx.fillStyle=`rgba(255,115,45,${clamp(.20+pwr*.40,.18,.68)})`;ctx.fillRect(left+1,y-rowH/2+1,clamp(r.sell/tot,0,1)*halfW,rowH-2);
-      ctx.fillStyle=`rgba(0,200,150,${clamp(.20+pwr*.40,.18,.68)})`;ctx.fillRect(mid,y-rowH/2+1,clamp(r.buy/tot,0,1)*halfW,rowH-2);
+      const fa=clamp(.20+pwr*.40,.18,.68);
+      ctx.fillStyle=`rgba(255,115,45,${fa})`;ctx.fillRect(left+1,ry+1,clamp(r.sell/tot,0,1)*halfW,rowH-2);
+      ctx.fillStyle=`rgba(0,200,150,${fa})`;ctx.fillRect(mid,ry+1,clamp(r.buy/tot,0,1)*halfW,rowH-2);
     }
-    ctx.strokeStyle='rgba(30,42,64,.60)';ctx.lineWidth=.45;ctx.strokeRect(left+1,y-rowH/2,boxW-2,rowH-1);
-    ctx.strokeStyle='rgba(80,100,140,.45)';ctx.beginPath();ctx.moveTo(mid,y-rowH/2);ctx.lineTo(mid,y+rowH/2-1);ctx.stroke();
-    if(!isWeak){
-      ctx.font=rowH>=13?'bold 9px monospace':'bold 8px monospace';
+    // Row border + divider
+    ctx.strokeStyle='rgba(30,42,64,.55)';ctx.lineWidth=.4;ctx.strokeRect(left+1,ry,boxW-2,rowH-0.5);
+    ctx.strokeStyle='rgba(80,100,140,.40)';ctx.beginPath();ctx.moveTo(mid,ry);ctx.lineTo(mid,ry+rowH-0.5);ctx.stroke();
+    // Text (only when row is tall enough and not weak)
+    if(showText&&!isWeak){
+      ctx.font=rowH>=12?'bold 9px monospace':'bold 8px monospace';
       ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=3;
+      ctx.textAlign='center';
       ctx.fillStyle=r.sell>r.buy?'rgba(255,130,70,1)':'rgba(160,170,190,.80)';
-      ctx.fillText(fmtVolClean(r.sell*price),left+boxW*.25,y+.5);
+      ctx.fillText(fmtVolClean(r.sell*price),left+boxW*.25,yc+.5);
       ctx.fillStyle=r.buy>r.sell?'rgba(0,220,160,1)':'rgba(160,170,190,.80)';
-      ctx.fillText(fmtVolClean(r.buy*price),left+boxW*.75,y+.5);
+      ctx.fillText(fmtVolClean(r.buy*price),left+boxW*.75,yc+.5);
       ctx.shadowBlur=0;
     }
+    // Imbalance marker
     const imb=imbs[ri];
     if(imb?.flag&&!r.synthetic){
       ctx.fillStyle=imb.flag==='bull'?'rgba(0,212,212,.55)':'rgba(240,110,35,.55)';
-      ctx.fillRect(left+2,y-rowH/2,boxW-4,2.5);
+      ctx.fillRect(left+2,ry,boxW-4,2);
     }
     if(fpc.showStacked&&imb?.stackRun>=fpc.stackedMin&&imb.stackDir&&!r.synthetic){
       ctx.fillStyle=imb.stackDir==='bull'?'rgba(0,220,220,.40)':'rgba(255,100,35,.40)';
-      ctx.fillRect(imb.stackDir==='bull'?left+boxW-4:left+1,y-rowH/2,3,rowH);
+      ctx.fillRect(imb.stackDir==='bull'?left+boxW-4:left+1,ry,3,rowH);
     }
   });
   ctx.globalAlpha=1;
   _fpDrawSpine(ctx,c,xx,top,bot,sc);
   if(boxW>62){
     const footerA=candleTradeCoverage(c)>=0.10?1:0.45;
-    ctx.globalAlpha=footerA;
-    ctx.font='bold 9px monospace';ctx.textAlign='center';
+    ctx.globalAlpha=footerA;ctx.font='bold 9px monospace';ctx.textAlign='center';
     ctx.fillStyle='rgba(5,9,20,.92)';ctx.fillRect(left,bot+2,boxW,15);
     ctx.strokeStyle=realDelta>=0?'rgba(0,175,120,.65)':'rgba(200,80,45,.65)';ctx.lineWidth=.7;ctx.strokeRect(left,bot+2,boxW,15);
     ctx.shadowColor='rgba(0,0,0,.90)';ctx.shadowBlur=2;
