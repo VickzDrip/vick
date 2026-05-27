@@ -2062,8 +2062,14 @@ html.pre-ui .switch::after{transition:none!important}
                 <option value="failed_breakout">Failed Breakout</option>
               </select>
             </div>
-            <label class="kv"><span class="k">Lookback candles</span><input type="number" class="num" id="hvnClarityLookback" value="100" min="20" max="500" style="width:52px"></label>
-            <div class="hint">Exibe reações HVN históricas (REJ · BNC · BRK · FAIL) nos últimos X candles. Requer zonas HVN ativas.</div>
+            <label class="kv"><span class="k">Lookback candles</span><input type="number" class="num" id="hvnClarityLookback" value="150" min="20" max="500" style="width:52px"></label>
+            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin:5px 0 3px;">MOSTRAR REAÇÕES</div>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#00d4ff;">Bounce</span><input type="checkbox" id="hvnShowBounce" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#ff6040;">Rejection</span><input type="checkbox" id="hvnShowRejection" checked style="width:14px;height:14px;accent-color:#ff6040;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#00e676;">Breakout</span><input type="checkbox" id="hvnShowBreakout" checked style="width:14px;height:14px;accent-color:#00e676;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#ffaa00;">Failed Breakout</span><input type="checkbox" id="hvnShowFailedBreakout" checked style="width:14px;height:14px;accent-color:#ffaa00;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k" style="color:#ff3d57;">Support Fail</span><input type="checkbox" id="hvnShowSupportFail" checked style="width:14px;height:14px;accent-color:#ff3d57;cursor:pointer;flex-shrink:0;"></label>
+            <div class="hint">Tags ancoradas ao wick de cada candle de reação. Arraste o divisor para redimensionar o painel.</div>
           </div>
         </div>
 
@@ -2260,6 +2266,8 @@ html.pre-ui .switch::after{transition:none!important}
         <button id="dvlMiniRefresh" title="Atualizar gráfico" aria-label="Refresh">
           <img src="/dvl-logo-wide.png" alt="DVL" id="dvlMiniRefreshImg"/>
         </button>
+        <!-- ── HVN Clarity oscillator resize handle ── -->
+        <div id="hvnResizeHandle" style="display:none" title="Drag to resize Trend Clarity panel"></div>
 
         <div class="toolDeck" id="toolDeck" style="display:none!important;height:0!important;overflow:hidden!important;position:absolute!important;">
           <!-- moved to header (tfSelect, candleSelWrap) and right panel (btnLong, btnShort) -->
@@ -2679,7 +2687,7 @@ function findCandleIndex(time){const ms=tfMs(S.tf);if(!S.candles.length)return-1
 let _rafPending=false;function drawSoon(){if(_rafPending)return;_rafPending=true;requestAnimationFrame(()=>{_rafPending=false;draw();})}
 let _panDx=0;
 let _bootTimer=null;function bootDebounced(){clearTimeout(_bootTimer);_bootTimer=setTimeout(boot,120);}
-const PL=18,PT=8; let PB=10; let PR=68;
+const PL=18,PT=8; let PB=10; let PR=68; let _hvnClarityH=(()=>{try{const v=parseInt(localStorage.getItem('dvl_hvnClarityH'));return(v>=60&&v<=280)?v:158;}catch(e){return 158;}})();
 function RP(){const sp=S.yScale?.hidden?14:PR;return sp+(S.inds.book?Math.max(128,Math.min(S.book.maxW,S.book.w)+18):0)}
 function CW(W){return Math.max(80,W-PL-RP())}
 function futureMax(){return (S.candles.length||1)+(S.view.future||650)}
@@ -2717,8 +2725,9 @@ function scale(vs,H){if(!vs||!vs.length)vs=S.candles.slice(-1);let hi=Math.max(.
 function draw(){
 
 const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_panDx=0;
-const _clarH=(S.inds.hvnClarity&&S.candles.length)?158:0;PB=10+(_clarH?_clarH+2:0);
+const _clarH=(S.inds.hvnClarity&&S.candles.length)?_hvnClarityH:0;PB=10+(_clarH?_clarH+2:0);
 const _logBtn=el('dvlMiniRefresh');if(_logBtn)_logBtn.style.bottom=(_clarH>0?_clarH+20:18)+'px';
+const _rh=el('hvnResizeHandle');if(_rh){_rh.style.display=_clarH>0?'block':'none';_rh.style.bottom=(10+_clarH-3)+'px';}
 const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(window.__drawFlowTrail)safeLayer('DVL Trail',()=>window.__drawFlowTrail(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);if(window.__drawFlowAccel)safeLayer('DVL Flow',()=>window.__drawFlowAccel(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);if(window.__drawHVNReact&&S.inds.hvnReact)safeLayer('HVN Reactions',()=>window.__drawHVNReact(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.inds.hvnClarity)safeLayer('HVN Clarity Engine',()=>drawHVNClarityEngine(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
 // ── Chart watermark image (preloaded once) ──
 const _wmImg=(()=>{
@@ -4561,11 +4570,29 @@ function getHVNClarityState(){
 
 // Detect all HVN reactions within the lookback window, cached for stability
 function _getHVNReactions(){
-  if(!S.inds.hvnClarity||!S.candles.length||!window.__lastHVNZones?.length)return[];
+  if(!S.inds.hvnClarity||!S.candles.length)return[];
   const N=S.candles.length;
-  const lookback=Math.min(N,Math.max(20,parseInt(el('hvnClarityLookback')?.value)||100));
-  const hvnFp=window.__lastHVNZones.slice(0,5).map(z=>Math.round(z.price)).join(',');
-  const key=`${N}_${lookback}_${hvnFp}`;
+  const lookback=Math.min(N,Math.max(20,parseInt(el('hvnClarityLookback')?.value)||150));
+
+  // Visibility filters
+  const showBounce    =el('hvnShowBounce')?.checked!==false;
+  const showRejection =el('hvnShowRejection')?.checked!==false;
+  const showBreakout  =el('hvnShowBreakout')?.checked!==false;
+  const showFail      =el('hvnShowFailedBreakout')?.checked!==false;
+  const showSFail     =el('hvnShowSupportFail')?.checked!==false;
+
+  // Get zones: real HVN zones or fallback to estimated anchor
+  let zones=[];
+  if(window.__lastHVNZones?.length){
+    zones=window.__lastHVNZones;
+  }else{
+    const st=getHVNClarityState();
+    if(st)zones=[{price:st.anchorPrice}];
+  }
+  if(!zones.length)return[];
+
+  const hvnFp=zones.slice(0,5).map(z=>Math.round(z.price)).join(',');
+  const key=`${N}_${lookback}_${hvnFp}_${+showBounce}${+showRejection}${+showBreakout}${+showFail}${+showSFail}`;
   if(_hvnReactsCache&&_hvnReactsCache.key===key)return _hvnReactsCache.reactions;
 
   const atrArr=calcATR(S.candles.slice(Math.max(0,N-28),N),14);
@@ -4575,37 +4602,32 @@ function _getHVNReactions(){
   const MIN_GAP=3;
   const allReacts=[];
 
-  window.__lastHVNZones.forEach(zone=>{
+  zones.forEach(zone=>{
     const hvnP=zone.price;
     let lastReactIdx=startIdx-MIN_GAP;
     for(let i=startIdx;i<N;i++){
       if(i-lastReactIdx<MIN_GAP)continue;
       const c=S.candles[i];
       const prev=i>0?S.candles[i-1]:c;
-      if(c.h<hvnP-tol||c.l>hvnP+tol)continue; // not near zone
+      if(c.h<hvnP-tol||c.l>hvnP+tol)continue;
       const topWick=c.h-Math.max(c.o,c.c);
       const botWick=Math.min(c.o,c.c)-c.l;
       const totalRange=Math.max(1e-9,c.h-c.l);
       let type=null,label=null,bullish=null;
 
-      // Failed breakout: was above HVN, closed back below
-      if(prev.c>hvnP&&c.c<hvnP&&(prev.c-hvnP)>tol*0.25){
+      if(showFail&&prev.c>hvnP&&c.c<hvnP&&(prev.c-hvnP)>tol*0.22){
         type='failed_breakout';label='FAIL';bullish=false;
       }
-      // Breakout acceptance: crossed above HVN with body confirmation
-      if(!type&&prev.c<hvnP&&c.c>hvnP&&(c.c-hvnP)>tol*0.25){
+      if(!type&&showBreakout&&prev.c<hvnP&&c.c>hvnP&&(c.c-hvnP)>tol*0.22){
         type='breakout';label='BRK';bullish=true;
       }
-      // Wick rejection at resistance: wick reached HVN from below, closed below
-      if(!type&&c.h>=hvnP-tol*0.4&&c.c<hvnP&&topWick>totalRange*0.26){
+      if(!type&&showRejection&&c.h>=hvnP-tol*0.4&&c.c<hvnP&&topWick>totalRange*0.25){
         type='rejection';label='REJ';bullish=false;
       }
-      // Support bounce: low touched HVN, bullish close above
-      if(!type&&c.l<=hvnP+tol*0.4&&c.c>hvnP&&c.c>=c.o&&botWick>totalRange*0.15){
+      if(!type&&showBounce&&c.l<=hvnP+tol*0.4&&c.c>hvnP&&c.c>=c.o&&botWick>totalRange*0.14){
         type='bounce';label='BNC';bullish=true;
       }
-      // Support failure: price dipped through HVN support, bearish close below with no recovery
-      if(!type&&c.l<=hvnP+tol*0.4&&c.c<hvnP&&c.c<c.o&&botWick<totalRange*0.18){
+      if(!type&&showSFail&&c.l<=hvnP+tol*0.4&&c.c<hvnP&&c.c<c.o&&botWick<totalRange*0.20){
         type='support_fail';label='S↓';bullish=false;
       }
 
@@ -4613,12 +4635,11 @@ function _getHVNReactions(){
     }
   });
 
-  // Sort by index, deduplicate candles too close together (across zones)
   allReacts.sort((a,b)=>a.idx-b.idx);
-  const deduped=[];let lastIdx=-MIN_GAP;
-  allReacts.forEach(r=>{if(r.idx-lastIdx>=2){deduped.push(r);lastIdx=r.idx;}});
+  const deduped=[];let lastDi=-MIN_GAP;
+  allReacts.forEach(r=>{if(r.idx-lastDi>=2){deduped.push(r);lastDi=r.idx;}});
 
-  const final=deduped.slice(-24); // cap at 24 total
+  const final=deduped.slice(-30);
   _hvnReactsCache={key,reactions:final};
   return final;
 }
@@ -4626,71 +4647,88 @@ function _getHVNReactions(){
 function drawHVNClarityEngine(ctx,W,H,V,sc,x){
   const rp=RP(),chartRight=W-rp;
   const reactions=_getHVNReactions();
+  if(!reactions.length)return;
 
-  // ── Glow rings for the 3 most recent reactions ──
+  const TYPE_STYLE={
+    rejection:      {gc:'255,90,50',  bc:'rgba(255,88,48,0.65)', bg:'rgba(40,8,5,0.88)',  tc:'rgba(255,165,130,0.95)',place:'above'},
+    failed_breakout:{gc:'255,148,0',  bc:'rgba(255,145,0,0.62)', bg:'rgba(40,22,0,0.88)', tc:'rgba(255,200,130,0.95)',place:'above'},
+    support_fail:   {gc:'255,60,80',  bc:'rgba(255,55,70,0.60)', bg:'rgba(40,5,10,0.88)', tc:'rgba(255,150,155,0.92)',place:'below'},
+    bounce:         {gc:'0,210,255',  bc:'rgba(0,190,230,0.65)', bg:'rgba(3,22,40,0.88)', tc:'rgba(162,222,255,0.95)',place:'below'},
+    breakout:       {gc:'0,230,118',  bc:'rgba(0,220,110,0.62)', bg:'rgba(3,30,14,0.88)', tc:'rgba(160,255,200,0.95)',place:'above'},
+  };
+
+  // ── Glow rings for last 3 reactions ──
+  ctx.save();
   reactions.slice(-3).forEach(react=>{
-    const {idx,bullish}=react;
+    const {idx,type,bullish}=react;
     if(idx<V.a||idx>=V.b)return;
     const c=S.candles[idx];if(!c)return;
-    const bx=x(idx),by=bullish?sc.y(c.l):sc.y(c.h);
+    const st=TYPE_STYLE[type]||TYPE_STYLE.bounce;
+    const bx=x(idx);
+    const by=st.place==='above'?sc.y(c.h):sc.y(c.l);
     const r=Math.max(12,Math.abs(sc.y(c.h)-sc.y(c.l))*0.4+8);
-    ctx.save();
-    const gc=bullish===false?'255,90,50':'0,210,255';
     const grd=ctx.createRadialGradient(bx,by,r*0.2,bx,by,r*2.0);
-    grd.addColorStop(0,`rgba(${gc},0.13)`);grd.addColorStop(0.5,`rgba(${gc},0.05)`);grd.addColorStop(1,`rgba(${gc},0)`);
+    grd.addColorStop(0,`rgba(${st.gc},0.14)`);grd.addColorStop(0.5,`rgba(${st.gc},0.05)`);grd.addColorStop(1,`rgba(${st.gc},0)`);
     ctx.fillStyle=grd;ctx.beginPath();ctx.arc(bx,by,r*2.0,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(bx,by,r,0,Math.PI*2);
-    ctx.strokeStyle=`rgba(${gc},0.42)`;ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
-    ctx.restore();
-  });
-
-  // ── Historical mini-tags (all but the last, anchored to their HVN zone Y) ──
-  const histReacts=reactions.length>1?reactions.slice(0,-1):[];
-  const zoneLastRight=new Map(); // per-zone overlap tracking
-  ctx.save();
-  ctx.font='600 7px monospace';
-  histReacts.forEach(react=>{
-    const {idx,label,bullish,hvnPrice}=react;
-    if(idx<V.a||idx>=V.b)return;
-    const c=S.candles[idx];if(!c)return;
-    const rx=x(idx);
-    if(rx<PL||rx>chartRight)return;
-
-    const zoneY=sc.y(hvnPrice);
-    if(zoneY<PT+4||zoneY>H-PB-4)return;
-
-    const tagH=11,tagPad=4;
-    const tw=ctx.measureText(label).width+tagPad*2+2;
-    const tagX=clamp(rx-tw/2,PL+2,chartRight-tw-2);
-
-    // Per-zone overlap guard (only skip if same zone has a tag too close)
-    const zKey=Math.round(hvnPrice);
-    if(tagX<(zoneLastRight.get(zKey)||PL-tw)-3)return;
-    zoneLastRight.set(zKey,tagX+tw);
-
-    // Rejection tags go above the HVN line, bounce tags go below
-    const tagY=bullish?zoneY+3:zoneY-tagH-3;
-    if(tagY<PT+2||tagY+tagH>H-PB-2)return;
-
-    const bc=bullish===false?'rgba(255,88,48,0.60)':bullish===null?'rgba(100,128,188,0.48)':'rgba(0,188,228,0.60)';
-    const bg=bullish===false?'rgba(40,8,6,0.82)':bullish===null?'rgba(15,20,40,0.82)':'rgba(3,18,36,0.82)';
-    const tc=bullish===false?'rgba(255,162,130,0.90)':bullish===null?'rgba(160,185,232,0.84)':'rgba(162,220,252,0.90)';
-
-    ctx.fillStyle=bg;_hvnRR(ctx,tagX,tagY,tw,tagH,2);ctx.fill();
-    ctx.strokeStyle=bc;ctx.lineWidth=0.65;_hvnRR(ctx,tagX,tagY,tw,tagH,2);ctx.stroke();
-    ctx.fillStyle=tc;ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(label,tagX+tw/2,tagY+tagH/2);
-
-    // Short stem from tag to candle
-    ctx.strokeStyle=bc;ctx.lineWidth=0.5;
-    ctx.beginPath();
-    if(bullish){ctx.moveTo(rx,tagY);ctx.lineTo(rx,zoneY);}
-    else{ctx.moveTo(rx,tagY+tagH);ctx.lineTo(rx,zoneY);}
-    ctx.stroke();
+    ctx.strokeStyle=`rgba(${st.gc},0.40)`;ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
   });
   ctx.restore();
 
-  // ── Primary callout (most recent reaction or cached state) ──
+  // ── All reactions as mini-tags anchored to candle wicks + collision grid ──
+  const BUCKET=24; // px per collision column
+  const colGrid=new Map(); // colIdx -> array of [top,bot] occupied ranges
+  const colOccupied=(colIdx,top,bot)=>{
+    const slots=colGrid.get(colIdx)||[];
+    for(const [t,b] of slots){if(top<=b+2&&bot>=t-2)return true;}
+    return false;
+  };
+  const colReserve=(colIdx,top,bot)=>{
+    if(!colGrid.has(colIdx))colGrid.set(colIdx,[]);
+    colGrid.get(colIdx).push([top,bot]);
+  };
+
+  const latest=reactions[reactions.length-1];
+  ctx.save();
+  reactions.forEach(react=>{
+    const {idx,type,label}=react;
+    if(idx<V.a||idx>=V.b)return;
+    const c=S.candles[idx];if(!c)return;
+    const rx=x(idx);
+    if(rx<PL+2||rx>chartRight-2)return;
+    const st=TYPE_STYLE[type]||TYPE_STYLE.bounce;
+    const isLatest=react===latest;
+    const tagH=isLatest?16:11,tagPad=isLatest?5:3;
+    ctx.font=`${isLatest?'700':'600'} ${isLatest?8:7}px monospace`;
+    const tw=ctx.measureText(label).width+tagPad*2+2;
+
+    // Anchor to wick
+    const wickY=st.place==='above'?sc.y(c.h):sc.y(c.l);
+    const tagY=st.place==='above'?wickY-tagH-4:wickY+4;
+    if(tagY<PT+2||tagY+tagH>H-PB-2)return;
+
+    // Collision check
+    const colIdx=Math.floor(rx/BUCKET);
+    if(colOccupied(colIdx,tagY,tagY+tagH))return;
+    colReserve(colIdx,tagY,tagY+tagH);
+
+    const tagX=clamp(rx-tw/2,PL+2,chartRight-tw-2);
+
+    ctx.fillStyle=st.bg;_hvnRR(ctx,tagX,tagY,tw,tagH,2);ctx.fill();
+    ctx.strokeStyle=st.bc;ctx.lineWidth=isLatest?0.85:0.60;_hvnRR(ctx,tagX,tagY,tw,tagH,2);ctx.stroke();
+    ctx.fillStyle=st.tc;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(label,tagX+tw/2,tagY+tagH/2);
+
+    // Stem from tag to wick
+    ctx.strokeStyle=st.bc;ctx.lineWidth=0.55;ctx.setLineDash([2,2]);
+    ctx.beginPath();
+    if(st.place==='above'){ctx.moveTo(rx,tagY+tagH);ctx.lineTo(rx,wickY);}
+    else{ctx.moveTo(rx,tagY);ctx.lineTo(rx,wickY);}
+    ctx.stroke();ctx.setLineDash([]);
+  });
+  ctx.restore();
+
+  // ── Primary callout for most recent visible reaction ──
   const state=getHVNClarityState();
   if(!state)return;
   const ay=sc.y(state.anchorPrice);
@@ -4699,17 +4737,19 @@ function drawHVNClarityEngine(ctx,W,H,V,sc,x){
   ctx.save();
   ctx.font='600 9px monospace';
   const txt=state.callout;
-  const tw=ctx.measureText(txt).width;
-  const cPad=7,cH=18,cW=tw+cPad*2+5;
+  const ctw=ctx.measureText(txt).width;
+  const cPad=7,cH=18,cW=ctw+cPad*2+5;
   const midX=(PL+chartRight)*0.62;
   const cx0=Math.min(midX,chartRight-cW-12);
   const cy0=Math.max(PT+4,Math.min(H-PB-cH-4,ay-cH/2));
-  const borderCol=state.bullish===false?'rgba(255,100,50,0.65)':state.bullish===null?'rgba(130,150,200,0.50)':'rgba(0,195,255,0.60)';
+  const stLatest=latest?TYPE_STYLE[latest.type]||TYPE_STYLE.bounce:null;
+  const borderCol=stLatest?stLatest.bc:(state.bullish===false?'rgba(255,100,50,0.65)':'rgba(0,195,255,0.60)');
+  const accentCol=stLatest?`rgba(${stLatest.gc},0.9)`:(state.bullish===false?'rgba(255,110,50,0.9)':'rgba(0,210,255,0.9)');
+  const textCol=stLatest?stLatest.tc:(state.bullish===false?'rgba(255,190,160,0.95)':'rgba(180,230,255,0.95)');
 
-  // Connector to primary anchor candle
   const pbx=x(state.bounceIdx);
   if(pbx>=PL&&pbx<=chartRight&&Math.abs(pbx-cx0)>4){
-    ctx.strokeStyle=state.bullish===false?'rgba(255,100,60,0.28)':'rgba(0,190,240,0.28)';
+    ctx.strokeStyle=stLatest?`rgba(${stLatest.gc},0.22)`:'rgba(0,190,240,0.22)';
     ctx.lineWidth=0.9;ctx.setLineDash([3,3]);
     ctx.beginPath();ctx.moveTo(Math.min(pbx,cx0-2),ay);ctx.lineTo(cx0,cy0+cH/2);
     ctx.stroke();ctx.setLineDash([]);
@@ -4717,10 +4757,8 @@ function drawHVNClarityEngine(ctx,W,H,V,sc,x){
 
   ctx.fillStyle='rgba(2,6,16,0.93)';_hvnRR(ctx,cx0,cy0,cW,cH,4);ctx.fill();
   ctx.strokeStyle=borderCol;ctx.lineWidth=1;_hvnRR(ctx,cx0,cy0,cW,cH,4);ctx.stroke();
-  const accentCol=state.bullish===false?'rgba(255,110,50,0.9)':state.bullish===null?'rgba(130,160,210,0.6)':'rgba(0,210,255,0.9)';
   ctx.fillStyle=accentCol;ctx.fillRect(cx0+1,cy0+4,2.5,cH-8);
-  ctx.fillStyle=state.bullish===false?'rgba(255,190,160,0.95)':state.bullish===null?'rgba(180,200,240,0.90)':'rgba(180,230,255,0.95)';
-  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillStyle=textCol;ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillText(txt,cx0+cPad+3,cy0+cH/2);
   ctx.restore();
 }
@@ -4885,33 +4923,35 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
     ctx.restore();
   }
 
-  // ── Confidence box ──
+  // ── Confidence box (only when panel is tall enough to avoid overflow) ──
   const state=getHVNClarityState();
   const isBear=state&&state.bullish===false;
   const isNeut=state&&state.bullish===null;
   const cbW=40,cbH=34,cbX=pRight-cbW-12,cbY=caTop+4;
-  const boxBorder=isBear?'rgba(255,95,50,0.58)':isNeut?'rgba(110,135,190,0.43)':'rgba(0,185,240,0.60)';
-  const boxGlow=isBear?'rgba(255,90,40,0.32)':isNeut?'rgba(100,125,180,0.26)':'rgba(0,190,255,0.32)';
-  const pctColor=isBear?'#ff6050':isNeut?'#8090c0':'#00d4ff';
-  const labColor=isBear?'rgba(255,170,140,0.88)':'rgba(0,198,238,0.90)';
+  if(clarH>=90){
+    const boxBorder=isBear?'rgba(255,95,50,0.58)':isNeut?'rgba(110,135,190,0.43)':'rgba(0,185,240,0.60)';
+    const boxGlow=isBear?'rgba(255,90,40,0.32)':isNeut?'rgba(100,125,180,0.26)':'rgba(0,190,255,0.32)';
+    const pctColor=isBear?'#ff6050':isNeut?'#8090c0':'#00d4ff';
+    const labColor=isBear?'rgba(255,170,140,0.88)':'rgba(0,198,238,0.90)';
 
-  ctx.fillStyle='rgba(0,5,15,0.92)';_hvnRR(ctx,cbX,cbY,cbW,cbH,5);ctx.fill();
-  ctx.save();ctx.shadowColor=boxGlow;ctx.shadowBlur=5;
-  ctx.strokeStyle=boxBorder;ctx.lineWidth=1;_hvnRR(ctx,cbX,cbY,cbW,cbH,5);ctx.stroke();
-  ctx.restore();
+    ctx.fillStyle='rgba(0,5,15,0.92)';_hvnRR(ctx,cbX,cbY,cbW,cbH,5);ctx.fill();
+    ctx.save();ctx.shadowColor=boxGlow;ctx.shadowBlur=5;
+    ctx.strokeStyle=boxBorder;ctx.lineWidth=1;_hvnRR(ctx,cbX,cbY,cbW,cbH,5);ctx.stroke();
+    ctx.restore();
 
-  const trendState=state?state.trendState:'CLEAR BULL';
-  const confidence=state?state.confidence:82;
-  const parts=trendState.split(' ');
-  const midCB=cbX+cbW/2;
-  ctx.textAlign='center';ctx.textBaseline='top';
-  ctx.font='600 6.5px monospace';ctx.fillStyle=labColor;
-  ctx.fillText((parts[0]||'')+(parts[1]?' '+parts[1]:''),midCB,cbY+5);
-  ctx.font='700 10px monospace';ctx.fillStyle=pctColor;
-  ctx.fillText(confidence+'%',midCB,cbY+14);
-  ctx.font='500 5.5px monospace';
-  ctx.fillStyle=isBear?'rgba(180,70,40,0.60)':isNeut?'rgba(90,110,160,0.60)':'rgba(0,128,170,0.65)';
-  ctx.fillText('CONFIDENCE',midCB,cbY+26);
+    const trendState=state?state.trendState:'CLEAR BULL';
+    const confidence=state?state.confidence:82;
+    const parts=trendState.split(' ');
+    const midCB=cbX+cbW/2;
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.font='600 6.5px monospace';ctx.fillStyle=labColor;
+    ctx.fillText((parts[0]||'')+(parts[1]?' '+parts[1]:''),midCB,cbY+5);
+    ctx.font='700 10px monospace';ctx.fillStyle=pctColor;
+    ctx.fillText(confidence+'%',midCB,cbY+14);
+    ctx.font='500 5.5px monospace';
+    ctx.fillStyle=isBear?'rgba(180,70,40,0.60)':isNeut?'rgba(90,110,160,0.60)':'rgba(0,128,170,0.65)';
+    ctx.fillText('CONFIDENCE',midCB,cbY+26);
+  }
 
   // ── Footer summary tag ──
   const footerY=pBot-15;
@@ -5320,7 +5360,8 @@ if(el('tfSelect')){
   }
 })();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();bootDebounced()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();bootDebounced()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
-['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','btShowLabels','btConfirmBars','btLastCandles','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal','fpWickAbs','fpWickMinPct','fpMaxScale','hvnClarityScenario','hvnClarityLookback'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',()=>{_hvnClarityCache=null;_hvnReactsCache=null;drawSoon();})});
+['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','btShowLabels','btConfirmBars','btLastCandles','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal','fpWickAbs','fpWickMinPct','fpMaxScale','hvnClarityScenario','hvnClarityLookback','hvnShowBounce','hvnShowRejection','hvnShowBreakout','hvnShowFailedBreakout','hvnShowSupportFail'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',()=>{_hvnClarityCache=null;_hvnReactsCache=null;drawSoon();})});
+(()=>{let _rhDrag=null;const rh=el('hvnResizeHandle');if(!rh)return;rh.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();rh.setPointerCapture(e.pointerId);_rhDrag={y:e.clientY,h:_hvnClarityH};rh.classList.add('active');});rh.addEventListener('pointermove',e=>{if(!_rhDrag)return;_hvnClarityH=clamp(_rhDrag.h-(e.clientY-_rhDrag.y),60,280);drawSoon();});rh.addEventListener('pointerup',()=>{if(!_rhDrag)return;_rhDrag=null;rh.classList.remove('active');try{localStorage.setItem('dvl_hvnClarityH',Math.round(_hvnClarityH));}catch(_){}});rh.addEventListener('pointercancel',()=>{_rhDrag=null;rh.classList.remove('active');});})();
 ['volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin','btLastCandles','fpWickMinPct','fpMaxScale'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','btAbsColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});
 if(el('btLastCandles'))el('btLastCandles').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
 let touchState={mode:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5};
@@ -8351,6 +8392,10 @@ input[type=color]::-moz-color-swatch{border:none!important;border-radius:2px!imp
   object-fit:contain;
   pointer-events:none;
 }
+/* ── HVN Clarity resize handle ── */
+#hvnResizeHandle{position:absolute;left:0;right:0;height:8px;cursor:ns-resize;z-index:15;background:transparent;touch-action:none;user-select:none;}
+#hvnResizeHandle::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:2px;background:rgba(0,212,255,0.20);border-radius:1px;transition:background .15s;}
+#hvnResizeHandle:hover::after,#hvnResizeHandle.active::after{background:rgba(0,212,255,0.55);}
 /* ── Drawing contextual bar ── */
 .dvl-ctx-btn{
   display:flex;align-items:center;justify-content:center;
