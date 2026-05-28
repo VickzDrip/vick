@@ -2185,11 +2185,12 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Max Bars After Zone</span><input class="num" id="confMaxBars" type="number" min="1" max="20" step="1" value="5" style="width:56px"></div>
             <div class="kv"><span class="k">Clarity Threshold</span><input class="num" id="confClarThr" type="number" min="5" max="60" step="5" value="15" style="width:56px"></div>
             <div class="kv"><span class="k">Flow Threshold</span><input class="num" id="confFlowThr" type="number" min="5" max="60" step="5" value="15" style="width:56px"></div>
-            <div class="kv"><span class="k">Cooldown (bars)</span><input class="num" id="confCooldown" type="number" min="2" max="30" step="1" value="5" style="width:56px"></div>
-            <div class="kv"><span class="k">Min Confluence (1-3)</span><input class="num" id="confMinScore" type="number" min="1" max="3" step="1" value="2" style="width:56px"></div>
+            <div class="kv"><span class="k">Cooldown (bars)</span><input class="num" id="confCooldown" type="number" min="2" max="50" step="1" value="12" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Score (1-8)</span><input class="num" id="confMinScore" type="number" min="1" max="8" step="1" value="4" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Visible</span><input class="num" id="confMaxVisible" type="number" min="5" max="100" step="5" value="30" style="width:56px"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Show BUY</span><input type="checkbox" id="confShowBuy" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Show SELL</span><input type="checkbox" id="confShowSell" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <div class="hint">Confluência: zona HVN + Trend Clarity + DVL Flow Acceleration.</div>
+            <div class="hint">Confluência: zona + Clarity + Flow. Score máx. 8.</div>
           </div>
         </div>
 
@@ -12814,10 +12815,11 @@ function getConfCfg(){
     maxBars:Math.max(1,sn('confMaxBars',5)),
     clarThr:Math.max(1,sn('confClarThr',15)),
     flowThr:Math.max(1,sn('confFlowThr',15)),
-    cooldown:Math.max(1,sn('confCooldown',5)),
-    minScore:Math.max(1,Math.min(3,sn('confMinScore',2))),
+    cooldown:Math.max(1,sn('confCooldown',12)),
+    minScore:Math.max(1,Math.min(8,sn('confMinScore',4))),
     showBuy:cb('confShowBuy',true),
     showSell:cb('confShowSell',true),
+    maxVisible:Math.max(5,Math.min(100,sn('confMaxVisible',30))),
   };
 }
 
@@ -12856,18 +12858,36 @@ function zoneReaction(ci,cs,zones){
     const wickBot=(Math.min(c.o,c.c)-c.l)/rng;
     const wickTop=(c.h-Math.max(c.o,c.c))/rng;
     if(c.l<=z.lo+tol&&c.c>=z.lo-tol&&isBull&&closePos>=0.45&&wickBot>=0.18)
-      return{bullish:true,type:'bounce',zone:z};
+      return{bullish:true,type:'bounce',zone:z,wickBot,wickTop};
     if(c.h>=z.hi-tol&&c.c<=z.hi+tol&&!isBull&&closePos<=0.55&&wickTop>=0.18)
-      return{bullish:false,type:'rejection',zone:z};
+      return{bullish:false,type:'rejection',zone:z,wickBot,wickTop};
     if(c.c>z.hi+tol&&c.o<=z.hi+tol&&isBull&&closePos>=0.5)
-      return{bullish:true,type:'breakout',zone:z};
+      return{bullish:true,type:'breakout',zone:z,wickBot,wickTop};
     if(c.c<z.lo-tol&&c.o>=z.lo-tol&&!isBull&&closePos<=0.5)
-      return{bullish:false,type:'breakdown',zone:z};
+      return{bullish:false,type:'breakdown',zone:z,wickBot,wickTop};
   }
   return null;
 }
 
-// Stable cache key: uses N-2 (last confirmed closed candle) — never the live candle
+// Directional oscillator helpers
+function _isClarityRising(idx){
+  if(typeof getTrendClarityValue!=='function')return false;
+  return getTrendClarityValue(idx)>getTrendClarityValue(Math.max(0,idx-2));
+}
+function _isClarityFalling(idx){
+  if(typeof getTrendClarityValue!=='function')return false;
+  return getTrendClarityValue(idx)<getTrendClarityValue(Math.max(0,idx-2));
+}
+function _isFlowRising(idx){
+  if(!window.__getFlowOscValue)return false;
+  return window.__getFlowOscValue(idx)>window.__getFlowOscValue(Math.max(0,idx-2));
+}
+function _isFlowFalling(idx){
+  if(!window.__getFlowOscValue)return false;
+  return window.__getFlowOscValue(idx)<window.__getFlowOscValue(Math.max(0,idx-2));
+}
+
+// Stable cache key: anchored on N-2 (last confirmed closed candle)
 let _confStableKey='';
 
 function computeConfluenceSignals(){
@@ -12877,11 +12897,10 @@ function computeConfluenceSignals(){
   if(!cs||cs.length<10){S.confluenceSignals=[];return;}
   const cfg=getConfCfg();
   const N=cs.length;
-  // Key anchored on closed-candle data only (N-2 = last fully closed candle)
   const lastClosed=cs[N-2]||{};
   const ck=[S.sym,S.tf,N,lastClosed.t||0,
     cfg.zoneSource,cfg.maxBars,cfg.clarThr,cfg.flowThr,cfg.cooldown,cfg.minScore].join('|');
-  if(_confStableKey===ck&&S.confluenceSignals&&S.confluenceSignals.length>0)return; // data unchanged — keep existing signals
+  if(_confStableKey===ck&&S.confluenceSignals&&S.confluenceSignals.length>0)return;
   _confStableKey=ck;
 
   const zones=getZones(cfg.zoneSource);
@@ -12890,24 +12909,36 @@ function computeConfluenceSignals(){
   const signals=[];
   let lastBuy=-99,lastSell=-99;
 
-  // Iterate only closed candles [0..N-2], never touch live candle at N-1
   for(let ci=Math.max(2,cfg.maxBars);ci<N-1;ci++){
     let zr=null;
     for(let j=Math.max(1,ci-cfg.maxBars);j<=ci&&!zr;j++) zr=zoneReaction(j,cs,zones);
     if(!zr)continue;
 
+    const c=cs[ci];
     const clVal=typeof getTrendClarityValue==='function'?getTrendClarityValue(ci):0;
     const flVal=window.__getFlowOscValue?window.__getFlowOscValue(ci):0;
-    const c=cs[ci];
-    const candleBull=c.c>c.o,candleBear=c.c<c.o;
+    const clarRising=_isClarityRising(ci);
+    const clarFalling=_isClarityFalling(ci);
+    const flowRising=_isFlowRising(ci);
+    const flowFalling=_isFlowFalling(ci);
+    const candleBull=c.c>c.o;
+    const candleBear=c.c<c.o;
+    const rng=Math.max(1e-9,c.h-c.l);
+    const strongWickBull=(Math.min(c.o,c.c)-c.l)/rng>=0.35;
+    const strongWickBear=(c.h-Math.max(c.o,c.c))/rng>=0.35;
 
     if(zr.bullish){
       if(!cfg.showBuy)continue;
+      // Hard veto: both oscillators strongly bearish
       if(clVal<=-cfg.clarThr*1.6&&flVal<=-cfg.flowThr*1.6)continue;
-      let score=1;
-      if(clVal>=cfg.clarThr)score++;
-      if(flVal>=cfg.flowThr)score++;
-      if(candleBull)score++;
+      let score=1;                            // zone reaction: +1
+      if(candleBull)score++;                  // candle closed bullish
+      if(clVal>=cfg.clarThr)score++;          // clarity bullish
+      if(clarRising)score++;                  // clarity rising
+      if(flVal>=cfg.flowThr)score++;          // flow bullish
+      if(flowRising)score++;                  // flow rising
+      if(strongWickBull)score++;              // strong rejection wick
+      if(zr.type==='breakout')score++;        // breakout hold
       if(score>=cfg.minScore&&ci-lastBuy>=cfg.cooldown){
         const id=S.sym+'|'+S.tf+'|'+c.t+'|buy';
         signals.push({id,idx:ci,time:c.t,type:'buy',price:c.c,score,zone:zr.zone,ztype:zr.type,symbol:S.sym,tf:S.tf});
@@ -12917,9 +12948,13 @@ function computeConfluenceSignals(){
       if(!cfg.showSell)continue;
       if(clVal>=cfg.clarThr*1.6&&flVal>=cfg.flowThr*1.6)continue;
       let score=1;
-      if(clVal<=-cfg.clarThr)score++;
-      if(flVal<=-cfg.flowThr)score++;
       if(candleBear)score++;
+      if(clVal<=-cfg.clarThr)score++;
+      if(clarFalling)score++;
+      if(flVal<=-cfg.flowThr)score++;
+      if(flowFalling)score++;
+      if(strongWickBear)score++;
+      if(zr.type==='breakdown')score++;
       if(score>=cfg.minScore&&ci-lastSell>=cfg.cooldown){
         const id=S.sym+'|'+S.tf+'|'+c.t+'|sell';
         signals.push({id,idx:ci,time:c.t,type:'sell',price:c.c,score,zone:zr.zone,ztype:zr.type,symbol:S.sym,tf:S.tf});
@@ -12930,42 +12965,99 @@ function computeConfluenceSignals(){
   S.confluenceSignals=signals;
 }
 
+// ── Draw: rounded-rectangle label + triangle pointer ─────────────────────────
+
+function _drawRR(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function _drawSignal(ctx,sig,candle,cx,sc,W,H){
+  const isBuy=sig.type==='buy';
+  // Theme
+  const borderC=isBuy?'rgba(0,220,160,0.88)':'rgba(255,70,90,0.88)';
+  const fillC  =isBuy?'rgba(0,65,50,0.55)'  :'rgba(80,15,25,0.55)';
+  const textC  =isBuy?'rgba(0,255,195,0.97)':'rgba(255,95,115,0.97)';
+  const glowC  =isBuy?'rgba(0,220,160,0.50)':'rgba(255,70,90,0.50)';
+  const label  =isBuy?'BUY':'SELL';
+
+  // Measure text first to get dynamic label width
+  ctx.font='bold 9px monospace';
+  const tW=ctx.measureText(label).width;
+  const lW=Math.ceil(tW)+18;  // 9px padding each side
+  const lH=18;
+  const rad=4;
+  const tSz=5;     // triangle half-base
+  const triH=6;    // triangle height
+  const gap=5;     // candle tip ↔ triangle tip
+  const space=2;   // triangle base ↔ label edge
+  const lX=cx-lW/2;
+
+  if(isBuy){
+    // Layout top-to-bottom: candle.low → gap → tri tip → triH → space → label
+    const anchorY=sc.y(candle.l);
+    const triTipY=anchorY+gap;
+    const triBaseY=triTipY+triH;
+    const lY=triBaseY+space;
+    if(lY+lH>H-PB-4)return; // no room at bottom
+
+    ctx.shadowColor=glowC;ctx.shadowBlur=6;
+    // Triangle ▲ pointing up toward candle low
+    ctx.fillStyle=borderC;
+    ctx.beginPath();ctx.moveTo(cx,triTipY);ctx.lineTo(cx-tSz,triBaseY);ctx.lineTo(cx+tSz,triBaseY);ctx.closePath();ctx.fill();
+    ctx.shadowBlur=0;
+    // Label box
+    _drawRR(ctx,lX,lY,lW,lH,rad);
+    ctx.fillStyle=fillC;ctx.fill();
+    ctx.strokeStyle=borderC;ctx.lineWidth=1;ctx.stroke();
+    // Text
+    ctx.fillStyle=textC;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(label,cx,lY+lH/2);
+
+  } else {
+    // Layout top-to-bottom: label → space → tri base → triH → gap → candle.high
+    const anchorY=sc.y(candle.h);
+    const triTipY=anchorY-gap;
+    const triBaseY=triTipY-triH;
+    const lY=triBaseY-space-lH;
+    if(lY<PT+4)return; // no room at top
+
+    ctx.shadowColor=glowC;ctx.shadowBlur=6;
+    // Triangle ▼ pointing down toward candle high
+    ctx.fillStyle=borderC;
+    ctx.beginPath();ctx.moveTo(cx,triTipY);ctx.lineTo(cx-tSz,triBaseY);ctx.lineTo(cx+tSz,triBaseY);ctx.closePath();ctx.fill();
+    ctx.shadowBlur=0;
+    // Label box
+    _drawRR(ctx,lX,lY,lW,lH,rad);
+    ctx.fillStyle=fillC;ctx.fill();
+    ctx.strokeStyle=borderC;ctx.lineWidth=1;ctx.stroke();
+    // Text
+    ctx.fillStyle=textC;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(label,cx,lY+lH/2);
+  }
+  ctx.shadowBlur=0;
+}
+
 function drawConfluenceSignals(ctx,W,H,V,sc,x,bw){
   if(!window.S||!S.inds.dvlConf||!S.candles.length)return;
+  const cfg=getConfCfg();
   const signals=S.confluenceSignals;
   if(!signals||!signals.length)return;
   const right=W-RP();
   ctx.save();
   ctx.beginPath();ctx.rect(PL,PT,right-PL,H-PT-PB);ctx.clip();
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  const mkR=Math.max(3.5,Math.min(6,bw*0.38));
-  for(const sig of signals){
-    if(sig.idx<V.a||sig.idx>V.b)continue;
+  ctx.setLineDash([]);
+  const visibleSigs=signals.filter(s=>s.idx>=V.a&&s.idx<=V.b).slice(-cfg.maxVisible);
+  for(const sig of visibleSigs){
     const c=S.candles[sig.idx];if(!c)continue;
     const cx=x(sig.idx);
-    const strong=sig.score>=3;
-    const voff=mkR+5;
-    if(sig.type==='buy'){
-      const cy=sc.y(c.l)+voff;
-      if(cy>H-PB-6)continue;
-      ctx.shadowColor='rgba(0,210,170,0.60)';ctx.shadowBlur=strong?9:5;
-      ctx.fillStyle=strong?'rgba(0,225,185,0.95)':'rgba(0,190,150,0.78)';
-      ctx.beginPath();ctx.moveTo(cx,cy-mkR);ctx.lineTo(cx-mkR*0.82,cy+mkR*0.5);ctx.lineTo(cx+mkR*0.82,cy+mkR*0.5);ctx.closePath();ctx.fill();
-      ctx.shadowBlur=0;
-      ctx.font=(strong?'800':'700')+' 7px monospace';
-      ctx.fillStyle=strong?'rgba(0,240,195,0.96)':'rgba(0,200,160,0.84)';
-      ctx.fillText('B',cx,cy+mkR+6);
-    } else {
-      const cy=sc.y(c.h)-voff;
-      if(cy<PT+6)continue;
-      ctx.shadowColor='rgba(255,100,55,0.60)';ctx.shadowBlur=strong?9:5;
-      ctx.fillStyle=strong?'rgba(255,110,55,0.95)':'rgba(220,80,40,0.78)';
-      ctx.beginPath();ctx.moveTo(cx,cy+mkR);ctx.lineTo(cx-mkR*0.82,cy-mkR*0.5);ctx.lineTo(cx+mkR*0.82,cy-mkR*0.5);ctx.closePath();ctx.fill();
-      ctx.shadowBlur=0;
-      ctx.font=(strong?'800':'700')+' 7px monospace';
-      ctx.fillStyle=strong?'rgba(255,130,65,0.96)':'rgba(220,90,50,0.84)';
-      ctx.fillText('S',cx,cy-mkR-6);
-    }
+    if(cx<PL-30||cx>right+30)continue;
+    _drawSignal(ctx,sig,c,cx,sc,W,H);
   }
   ctx.restore();
 }
@@ -12974,8 +13066,7 @@ window.__drawConfluenceSignals=drawConfluenceSignals;
 window.__computeConfluenceSignals=computeConfluenceSignals;
 window.__resetConfluenceCache=function(){_confStableKey='';};
 
-// Force recompute on settings change; clear stable key on sym/tf reset
-const CONF_IDS=new Set(['confZoneSource','confMaxBars','confClarThr','confFlowThr','confCooldown','confMinScore','confShowBuy','confShowSell']);
+const CONF_IDS=new Set(['confZoneSource','confMaxBars','confClarThr','confFlowThr','confCooldown','confMinScore','confShowBuy','confShowSell','confMaxVisible']);
 ['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
   if(!CONF_IDS.has(e.target?.id))return;
   _confStableKey='';computeConfluenceSignals();if(typeof drawSoon==='function')drawSoon();
