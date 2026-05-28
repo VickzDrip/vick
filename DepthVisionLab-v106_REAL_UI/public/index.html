@@ -2186,11 +2186,14 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Clarity Threshold</span><input class="num" id="confClarThr" type="number" min="5" max="60" step="5" value="15" style="width:56px"></div>
             <div class="kv"><span class="k">Flow Threshold</span><input class="num" id="confFlowThr" type="number" min="5" max="60" step="5" value="15" style="width:56px"></div>
             <div class="kv"><span class="k">Cooldown (bars)</span><input class="num" id="confCooldown" type="number" min="2" max="50" step="1" value="12" style="width:56px"></div>
-            <div class="kv"><span class="k">Min Score (1-8)</span><input class="num" id="confMinScore" type="number" min="1" max="8" step="1" value="4" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Score (1-8)</span><input class="num" id="confMinScore" type="number" min="1" max="11" step="1" value="6" style="width:56px"></div>
             <div class="kv"><span class="k">Max Visible</span><input class="num" id="confMaxVisible" type="number" min="5" max="100" step="5" value="30" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Room (ATR)</span><input class="num" id="confMinRoomATR" type="number" min="0.1" max="3" step="0.1" value="0.8" style="width:56px"></div>
+            <div class="kv"><span class="k">Pullback (ATR)</span><input class="num" id="confPullbackATR" type="number" min="0.1" max="3" step="0.1" value="0.6" style="width:56px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Req. Pullback</span><input type="checkbox" id="confRequirePullback" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Show BUY</span><input type="checkbox" id="confShowBuy" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Show SELL</span><input type="checkbox" id="confShowSell" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <div class="hint">Confluência: zona + Clarity + Flow. Score máx. 8.</div>
+            <div class="hint">Score máx. 11 · BUY=suporte · SELL=resistência · espaço obrigatório</div>
           </div>
         </div>
 
@@ -12816,10 +12819,13 @@ function getConfCfg(){
     clarThr:Math.max(1,sn('confClarThr',15)),
     flowThr:Math.max(1,sn('confFlowThr',15)),
     cooldown:Math.max(1,sn('confCooldown',12)),
-    minScore:Math.max(1,Math.min(8,sn('confMinScore',4))),
+    minScore:Math.max(1,Math.min(11,sn('confMinScore',6))),
     showBuy:cb('confShowBuy',true),
     showSell:cb('confShowSell',true),
     maxVisible:Math.max(5,Math.min(100,sn('confMaxVisible',30))),
+    minRoomATR:Math.max(0.1,sn('confMinRoomATR',0.8)),
+    pullbackATR:Math.max(0.1,sn('confPullbackATR',0.6)),
+    requirePullback:cb('confRequirePullback',true),
   };
 }
 
@@ -12887,6 +12893,37 @@ function _isFlowFalling(idx){
   return window.__getFlowOscValue(idx)<window.__getFlowOscValue(Math.max(0,idx-2));
 }
 
+// ATR: 14-period average true range at candle idx
+function _calcATR(cs,idx){
+  let sum=0,n=0;
+  for(let i=Math.max(1,idx-13);i<=idx;i++){
+    const c=cs[i],p=cs[i-1];if(!c||!p)continue;
+    sum+=Math.max(c.h-c.l,Math.abs(c.h-p.c),Math.abs(c.l-p.c));n++;
+  }
+  return n?sum/n:(cs[idx]?cs[idx].c*0.003:1);
+}
+
+// Room check: is there enough space to the nearest opposing zone?
+// Excludes the reaction zone itself so we don't measure against our own zone.
+function _hasRoom(price,zones,rxZone,direction,atr,minRoomATR){
+  const minD=atr*minRoomATR;
+  if(direction==='buy'){
+    let nearest=Infinity;
+    for(const z of zones){
+      if(z===rxZone)continue;
+      if(z.lo>price+atr*0.15)nearest=Math.min(nearest,z.lo);
+    }
+    return nearest===Infinity||(nearest-price)>=minD;
+  } else {
+    let nearest=-Infinity;
+    for(const z of zones){
+      if(z===rxZone)continue;
+      if(z.hi<price-atr*0.15)nearest=Math.max(nearest,z.hi);
+    }
+    return nearest===-Infinity||(price-nearest)>=minD;
+  }
+}
+
 // Stable cache key: anchored on N-2 (last confirmed closed candle)
 let _confStableKey='';
 
@@ -12894,12 +12931,13 @@ function computeConfluenceSignals(){
   const S=window.S;
   if(!S||!S.inds||!S.inds.dvlConf){if(S)S.confluenceSignals=[];return;}
   const cs=S.candles;
-  if(!cs||cs.length<10){S.confluenceSignals=[];return;}
+  if(!cs||cs.length<20){S.confluenceSignals=[];return;}
   const cfg=getConfCfg();
   const N=cs.length;
   const lastClosed=cs[N-2]||{};
-  const ck=[S.sym,S.tf,N,lastClosed.t||0,
-    cfg.zoneSource,cfg.maxBars,cfg.clarThr,cfg.flowThr,cfg.cooldown,cfg.minScore].join('|');
+  const ck=[S.sym,S.tf,N,lastClosed.t||0,cfg.zoneSource,cfg.maxBars,
+    cfg.clarThr,cfg.flowThr,cfg.cooldown,cfg.minScore,
+    cfg.minRoomATR,cfg.requirePullback,cfg.pullbackATR].join('|');
   if(_confStableKey===ck&&S.confluenceSignals&&S.confluenceSignals.length>0)return;
   _confStableKey=ck;
 
@@ -12907,14 +12945,30 @@ function computeConfluenceSignals(){
   if(!zones.length){S.confluenceSignals=[];return;}
 
   const signals=[];
-  let lastBuy=-99,lastSell=-99;
+  // Separate per-direction state for pullback tracking
+  let lastBuyIdx=-999,lastBuyPrice=0,pullbackOKBuy=true;
+  let lastSellIdx=-999,lastSellPrice=0,pullbackOKSell=true;
+  let loBuy=Infinity,hiSell=-Infinity;
 
-  for(let ci=Math.max(2,cfg.maxBars);ci<N-1;ci++){
+  for(let ci=Math.max(3,cfg.maxBars);ci<N-1;ci++){
+    const c=cs[ci];
+    const atr=_calcATR(cs,ci);
+
+    // ── Advance pullback state ────────────────────────────────────────────────
+    if(lastBuyIdx>=0){
+      loBuy=Math.min(loBuy,c.l);
+      if(!pullbackOKBuy&&loBuy<=lastBuyPrice-atr*cfg.pullbackATR)pullbackOKBuy=true;
+    }
+    if(lastSellIdx>=0){
+      hiSell=Math.max(hiSell,c.h);
+      if(!pullbackOKSell&&hiSell>=lastSellPrice+atr*cfg.pullbackATR)pullbackOKSell=true;
+    }
+
+    // ── Zone reaction search ──────────────────────────────────────────────────
     let zr=null;
     for(let j=Math.max(1,ci-cfg.maxBars);j<=ci&&!zr;j++) zr=zoneReaction(j,cs,zones);
     if(!zr)continue;
 
-    const c=cs[ci];
     const clVal=typeof getTrendClarityValue==='function'?getTrendClarityValue(ci):0;
     const flVal=window.__getFlowOscValue?window.__getFlowOscValue(ci):0;
     const clarRising=_isClarityRising(ci);
@@ -12924,41 +12978,73 @@ function computeConfluenceSignals(){
     const candleBull=c.c>c.o;
     const candleBear=c.c<c.o;
     const rng=Math.max(1e-9,c.h-c.l);
-    const strongWickBull=(Math.min(c.o,c.c)-c.l)/rng>=0.35;
-    const strongWickBear=(c.h-Math.max(c.o,c.c))/rng>=0.35;
+    const wickBot=(Math.min(c.o,c.c)-c.l)/rng;
+    const wickTop=(c.h-Math.max(c.o,c.c))/rng;
 
     if(zr.bullish){
       if(!cfg.showBuy)continue;
-      // Hard veto: both oscillators strongly bearish
+
+      // ── HARD FILTERS (any fail → skip) ───────────────────────────────────
+      // 1. Zone must be acting as SUPPORT: close must be at/above zone lo
+      if(c.c<zr.zone.lo-atr*0.2)continue;
+      // 2. Room above: must have enough space to next resistance
+      if(!_hasRoom(c.c,zones,zr.zone,'buy',atr,cfg.minRoomATR))continue;
+      // 3. Cooldown
+      if(ci-lastBuyIdx<cfg.cooldown)continue;
+      // 4. Pullback required before repeating same direction
+      if(cfg.requirePullback&&lastBuyIdx>=0&&!pullbackOKBuy)continue;
+      // 5. Hard veto: both oscillators strongly opposed
       if(clVal<=-cfg.clarThr*1.6&&flVal<=-cfg.flowThr*1.6)continue;
-      let score=1;                            // zone reaction: +1
-      if(candleBull)score++;                  // candle closed bullish
-      if(clVal>=cfg.clarThr)score++;          // clarity bullish
-      if(clarRising)score++;                  // clarity rising
-      if(flVal>=cfg.flowThr)score++;          // flow bullish
-      if(flowRising)score++;                  // flow rising
-      if(strongWickBull)score++;              // strong rejection wick
-      if(zr.type==='breakout')score++;        // breakout hold
-      if(score>=cfg.minScore&&ci-lastBuy>=cfg.cooldown){
+
+      // ── SCORE (max 11) ────────────────────────────────────────────────────
+      let score=2;                               // zone context valid: +2
+      if(c.c>=zr.zone.mid)score++;              // close in upper zone half (held support well)
+      if(candleBull)score++;                     // candle closed bullish
+      if(wickBot>=0.35)score++;                  // strong bullish wick rejection
+      if(clVal>=cfg.clarThr)score++;             // Clarity bullish
+      if(clarRising)score++;                     // Clarity rising
+      if(flVal>=cfg.flowThr)score++;             // Flow bullish
+      if(flowRising)score++;                     // Flow rising
+      if(zr.type==='breakout')score++;           // breakout confirmation
+      if(pullbackOKBuy&&lastBuyIdx>=0)score++;   // valid pullback since last BUY
+
+      if(score>=cfg.minScore){
         const id=S.sym+'|'+S.tf+'|'+c.t+'|buy';
         signals.push({id,idx:ci,time:c.t,type:'buy',price:c.c,score,zone:zr.zone,ztype:zr.type,symbol:S.sym,tf:S.tf});
-        lastBuy=ci;
+        lastBuyIdx=ci;lastBuyPrice=c.c;loBuy=c.l;pullbackOKBuy=false;
       }
+
     } else {
       if(!cfg.showSell)continue;
+
+      // ── HARD FILTERS ─────────────────────────────────────────────────────
+      // 1. Zone must be acting as RESISTANCE: close must be at/below zone hi
+      if(c.c>zr.zone.hi+atr*0.2)continue;
+      // 2. Room below: must have enough space to next support
+      if(!_hasRoom(c.c,zones,zr.zone,'sell',atr,cfg.minRoomATR))continue;
+      // 3. Cooldown
+      if(ci-lastSellIdx<cfg.cooldown)continue;
+      // 4. Pullback required before repeating same direction
+      if(cfg.requirePullback&&lastSellIdx>=0&&!pullbackOKSell)continue;
+      // 5. Hard veto
       if(clVal>=cfg.clarThr*1.6&&flVal>=cfg.flowThr*1.6)continue;
-      let score=1;
+
+      // ── SCORE (max 11) ────────────────────────────────────────────────────
+      let score=2;
+      if(c.c<=zr.zone.mid)score++;              // close in lower zone half
       if(candleBear)score++;
+      if(wickTop>=0.35)score++;
       if(clVal<=-cfg.clarThr)score++;
       if(clarFalling)score++;
       if(flVal<=-cfg.flowThr)score++;
       if(flowFalling)score++;
-      if(strongWickBear)score++;
       if(zr.type==='breakdown')score++;
-      if(score>=cfg.minScore&&ci-lastSell>=cfg.cooldown){
+      if(pullbackOKSell&&lastSellIdx>=0)score++;
+
+      if(score>=cfg.minScore){
         const id=S.sym+'|'+S.tf+'|'+c.t+'|sell';
         signals.push({id,idx:ci,time:c.t,type:'sell',price:c.c,score,zone:zr.zone,ztype:zr.type,symbol:S.sym,tf:S.tf});
-        lastSell=ci;
+        lastSellIdx=ci;lastSellPrice=c.c;hiSell=c.h;pullbackOKSell=false;
       }
     }
   }
@@ -13066,7 +13152,7 @@ window.__drawConfluenceSignals=drawConfluenceSignals;
 window.__computeConfluenceSignals=computeConfluenceSignals;
 window.__resetConfluenceCache=function(){_confStableKey='';};
 
-const CONF_IDS=new Set(['confZoneSource','confMaxBars','confClarThr','confFlowThr','confCooldown','confMinScore','confShowBuy','confShowSell','confMaxVisible']);
+const CONF_IDS=new Set(['confZoneSource','confMaxBars','confClarThr','confFlowThr','confCooldown','confMinScore','confShowBuy','confShowSell','confMaxVisible','confMinRoomATR','confPullbackATR','confRequirePullback']);
 ['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
   if(!CONF_IDS.has(e.target?.id))return;
   _confStableKey='';computeConfluenceSignals();if(typeof drawSoon==='function')drawSoon();
