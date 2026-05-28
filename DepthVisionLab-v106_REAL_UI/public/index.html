@@ -2171,7 +2171,7 @@ html.pre-ui .switch::after{transition:none!important}
               </select>
             </div>
             <label class="kv" style="cursor:pointer;"><span class="k">Mostrar TF Label</span><input type="checkbox" id="faShowTFLabel" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
-            <div class="hint">Trail · Pulse · Exhaustion — Aceleração de fluxo.</div>
+            <div class="hint">Trail · Pulse · Exhaustion — Aceleração de fluxo.</div><div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div><div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">OSCILLATOR PANEL</div><div class="kv"><span class="k">Hist. Opacity</span><input class="num" id="faHistOpacity" type="number" min="0.1" max="2.0" step="0.1" value="1.0" style="width:56px"></div><div class="kv"><span class="k">Line Glow</span><input class="num" id="faLineGlow" type="number" min="0" max="2.0" step="0.1" value="1.0" style="width:56px"></div><div class="kv"><span class="k">Smoothing</span><input class="num" id="faLineSmoothing" type="number" min="1" max="20" step="1" value="5" style="width:56px"></div><label class="kv" style="cursor:pointer;"><span class="k">Flow State Tag</span><input type="checkbox" id="faShowFlowTag" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
           </div>
         </div>
 
@@ -2308,6 +2308,8 @@ html.pre-ui .switch::after{transition:none!important}
         </button>
         <!-- ── HVN Clarity oscillator resize handle ── -->
         <div id="hvnResizeHandle" style="display:none" title="Drag to resize Trend Clarity panel"></div>
+        <!-- ── DVL Flow Acceleration panel resize handle ── -->
+        <div id="flowResizeHandle" style="display:none" title="Drag to resize DVL Flow panel"></div>
 
         <div class="toolDeck" id="toolDeck" style="display:none!important;height:0!important;overflow:hidden!important;position:absolute!important;">
           <!-- moved to header (tfSelect, candleSelWrap) and right panel (btnLong, btnShort) -->
@@ -2728,7 +2730,7 @@ function findCandleIndex(time){const ms=tfMs(S.tf);if(!S.candles.length)return-1
 let _rafPending=false;function drawSoon(){if(_rafPending)return;_rafPending=true;requestAnimationFrame(()=>{_rafPending=false;draw();})}
 let _panDx=0;
 let _bootTimer=null;function bootDebounced(){clearTimeout(_bootTimer);_bootTimer=setTimeout(boot,120);}
-const PL=18,PT=8; let PB=10; let PR=68; let _hvnClarityH=(()=>{try{const v=parseInt(localStorage.getItem('dvl_hvnClarityH'));return(v>=72&&v<=300)?v:166;}catch(e){return 166;}})();
+const PL=18,PT=8; let PB=10; let PR=68; let _hvnClarityH=(()=>{try{const v=parseInt(localStorage.getItem('dvl_hvnClarityH'));return(v>=72&&v<=300)?v:166;}catch(e){return 166;}})();let _flowAccelH=(()=>{try{const v=parseInt(localStorage.getItem('dvl_flowH'));return(v>=60&&v<=240)?v:120;}catch(e){return 120;}})();
 function RP(){const sp=S.yScale?.hidden?14:PR;return sp+(S.inds.book?Math.max(128,Math.min(S.book.maxW,S.book.w)+18):0)}
 function CW(W){return Math.max(80,W-PL-RP())}
 function futureMax(){return (S.candles.length||1)+(S.view.future||650)}
@@ -2766,10 +2768,10 @@ function scale(vs,H){if(!vs||!vs.length)vs=S.candles.slice(-1);let hi=Math.max(.
 function draw(){
 
 const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_panDx=0;
-const _clarH=(S.inds.hvnClarity&&S.candles.length)?_hvnClarityH:0;PB=10+(_clarH?_clarH+2:0);
-const _logBtn=el('dvlMiniRefresh');if(_logBtn)_logBtn.style.bottom=(_clarH>0?_clarH+20:18)+'px';
-const _rh=el('hvnResizeHandle');if(_rh){_rh.style.display=_clarH>0?'block':'none';_rh.style.bottom=(10+_clarH-3)+'px';}
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawHVNPro)safeLayer('DVL HVN PRO',()=>window.__drawHVNPro(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(window.__drawFlowTrail)safeLayer('DVL Trail',()=>window.__drawFlowTrail(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);if(window.__drawFlowAccel)safeLayer('DVL Flow',()=>window.__drawFlowAccel(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);if(window.__drawHVNReact&&S.inds.hvnReact)safeLayer('HVN Reactions',()=>window.__drawHVNReact(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.inds.hvnClarity)safeLayer('HVN Clarity Engine',()=>drawHVNClarityEngine(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
+const _clarH=(S.inds.hvnClarity&&S.candles.length)?_hvnClarityH:0;const _fah=(S.inds.flowAccel&&S.candles.length)?_flowAccelH:0;PB=10+(_fah?_fah+2:0)+(_clarH?_clarH+2:0);
+const _logBtn=el('dvlMiniRefresh');if(_logBtn)_logBtn.style.bottom=(PB+8)+'px';
+const _rh=el('hvnResizeHandle');if(_rh){_rh.style.display=_clarH>0?'block':'none';_rh.style.bottom=(10+(_fah?_fah+2:0)+_clarH-3)+'px';}const _frh=el('flowResizeHandle');if(_frh){_frh.style.display=_fah>0?'block':'none';_frh.style.bottom=(10+(_clarH?_clarH+2:0)+_fah-3)+'px';}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawHVNPro)safeLayer('DVL HVN PRO',()=>window.__drawHVNPro(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);if(window.__drawHVNReact&&S.inds.hvnReact)safeLayer('HVN Reactions',()=>window.__drawHVNReact(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.inds.hvnClarity)safeLayer('HVN Clarity Engine',()=>drawHVNClarityEngine(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_fah>0&&window.__drawFlowPanel)safeLayer('DVL Flow Panel',()=>window.__drawFlowPanel(ctx,W,H,V,sc,x,_fah,_clarH));resetCtxState(ctx);if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
 // ── Chart watermark image (preloaded once) ──
 const _wmImg=(()=>{
   const i=new Image();i.crossOrigin='anonymous';
@@ -5452,7 +5454,7 @@ if(el('tfSelect')){
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.sym=b.dataset.s;closeMobilePanel();bootDebounced()});document.querySelectorAll('.tf').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tf').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.tf=b.dataset.tf;closeMobilePanel();bootDebounced()});el('addCustom').onclick=()=>{const name=el('customName').value.trim()||'Custom',code=el('customCode').value.trim();if(!code)return;S.custom.push({name,code,color:'#f0b429'});renderCustom();draw()};function renderCustom(){el('customList').innerHTML=S.custom.map((c,i)=>`<div class="customItem"><span>${c.name}</span><span class="x" onclick="S.custom.splice(${i},1);renderCustom();draw()">✕</span></div>`).join('')}
 ['profileRows','profileAnchor','bigMult','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','volMaLen','depthLimit','volShowCVD','bigTradeSensitivity','btShowLabels','btConfirmBars','btLastCandles','fpDetail','fpMode','fpMinCov','fpRowThresh','fpImbalRatio','fpShowStacked','fpStackedMin','fpRequireReal','fpWickAbs','fpWickMinPct','fpMaxScale'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',()=>{drawSoon();})});
 ['hvnClarityScenario','hvnClarityLookback','hvnMinScore','hvnMaxLabels','hvnShowBounce','hvnShowRejection','hvnShowBreakout','hvnShowFailedBreakout','hvnShowSupportFail','hvnShowRotation','hvnLineGlow','hvnHistOpac'].forEach(id=>{const n=el(id);if(n)n.addEventListener('change',()=>{clearHVNClarityCache();drawSoon();})});
-(()=>{let _rhDrag=null;const rh=el('hvnResizeHandle');if(!rh)return;rh.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();rh.setPointerCapture(e.pointerId);_rhDrag={y:e.clientY,h:_hvnClarityH};rh.classList.add('active');});rh.addEventListener('pointermove',e=>{if(!_rhDrag)return;_hvnClarityH=clamp(_rhDrag.h-(e.clientY-_rhDrag.y),72,300);drawSoon();});rh.addEventListener('pointerup',()=>{if(!_rhDrag)return;_rhDrag=null;rh.classList.remove('active');try{localStorage.setItem('dvl_hvnClarityH',Math.round(_hvnClarityH));}catch(_){}});rh.addEventListener('pointercancel',()=>{_rhDrag=null;rh.classList.remove('active');});})();
+(()=>{let _rhDrag=null;const rh=el('hvnResizeHandle');if(!rh)return;rh.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();rh.setPointerCapture(e.pointerId);_rhDrag={y:e.clientY,h:_hvnClarityH};rh.classList.add('active');});rh.addEventListener('pointermove',e=>{if(!_rhDrag)return;_hvnClarityH=clamp(_rhDrag.h-(e.clientY-_rhDrag.y),72,300);drawSoon();});rh.addEventListener('pointerup',()=>{if(!_rhDrag)return;_rhDrag=null;rh.classList.remove('active');try{localStorage.setItem('dvl_hvnClarityH',Math.round(_hvnClarityH));}catch(_){}});rh.addEventListener('pointercancel',()=>{_rhDrag=null;rh.classList.remove('active');});})();(()=>{let _frhDrag=null;const frh=el('flowResizeHandle');if(!frh)return;frh.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();frh.setPointerCapture(e.pointerId);_frhDrag={y:e.clientY,h:_flowAccelH};frh.classList.add('active');});frh.addEventListener('pointermove',e=>{if(!_frhDrag)return;_flowAccelH=clamp(_frhDrag.h-(e.clientY-_frhDrag.y),60,240);drawSoon();});frh.addEventListener('pointerup',()=>{if(!_frhDrag)return;_frhDrag=null;frh.classList.remove('active');try{localStorage.setItem('dvl_flowH',Math.round(_flowAccelH));}catch(_){}});frh.addEventListener('pointercancel',()=>{_frhDrag=null;frh.classList.remove('active');});})();
 ['volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin','btLastCandles','fpWickMinPct','fpMaxScale'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});
 ['hvnLineGlow','hvnHistOpac','hvnMinScore','hvnMaxLabels'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',()=>{clearHVNClarityCache();drawSoon();})});['bigBuyColor','bigSellColor','btAbsColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});
 if(el('btLastCandles'))el('btLastCandles').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
@@ -8487,7 +8489,7 @@ input[type=color]::-moz-color-swatch{border:none!important;border-radius:2px!imp
 /* ── HVN Clarity resize handle ── */
 #hvnResizeHandle{position:absolute;left:0;right:0;height:8px;cursor:ns-resize;z-index:15;background:transparent;touch-action:none;user-select:none;}
 #hvnResizeHandle::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:2px;background:rgba(0,212,255,0.20);border-radius:1px;transition:background .15s;}
-#hvnResizeHandle:hover::after,#hvnResizeHandle.active::after{background:rgba(0,212,255,0.55);}
+#hvnResizeHandle:hover::after,#hvnResizeHandle.active::after{background:rgba(0,212,255,0.55);}#flowResizeHandle{position:absolute;left:0;right:0;height:8px;cursor:ns-resize;z-index:15;background:transparent;touch-action:none;user-select:none;}#flowResizeHandle::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:2px;background:rgba(0,212,255,0.20);border-radius:1px;transition:background .15s;}#flowResizeHandle:hover::after,#flowResizeHandle.active::after{background:rgba(0,212,255,0.55);}
 /* ── Drawing contextual bar ── */
 .dvl-ctx-btn{
   display:flex;align-items:center;justify-content:center;
@@ -11972,8 +11974,189 @@ function drawFlowMarkers(ctx,W,H,V,sc,x){
   drawExhaustion(ctx,results,V,sc,x,W,H,cfg);
 }
 
+
+// ── DVL Flow Acceleration oscillator panel ────────────────────────────────
+function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH){
+  if(!fah||fah<=0)return;
+  const cfg=getCfg();
+  const curTf=S.tf||'5m';
+  if(curTf!==_lastTf){_applyTfDefaults(curTf);_lastTf=curTf;}
+  const cs=S.candles;
+  if(!cs||cs.length<2)return;
+  const ck=_buildCk(cs,cfg);
+  if(_cacheKey!==ck){_cache=analyzeFlow(cs,cfg);_cacheKey=ck;_projectedCache=null;}
+  if(!_cache||!_cache.length)return;
+
+  const histOp=Math.max(0.1,Math.min(2,parseFloat(E('faHistOpacity')?.value)||1));
+  const lineGlow=Math.max(0,Math.min(2,parseFloat(E('faLineGlow')?.value)||1));
+  const smooth=Math.max(1,Math.min(20,parseInt(E('faLineSmoothing')?.value)||5));
+  const showTag=E('faShowFlowTag')?.checked!==false;
+
+  const clarOff=clarH?clarH+2:0;
+  const pBot=H-10-clarOff;
+  const pTop=pBot-fah;
+  const pMid=(pTop+pBot)/2;
+  const xL=PL,xR=W-RP(),panW=xR-xL;
+  if(panW<=0)return;
+
+  // Background
+  ctx.fillStyle='rgba(3,7,15,0.97)';
+  ctx.fillRect(xL,pTop,panW,fah);
+
+  // Top separator
+  ctx.strokeStyle='rgba(0,100,160,0.32)';
+  ctx.lineWidth=0.8;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(xL,pTop);ctx.lineTo(xR,pTop);ctx.stroke();
+
+  // Grid ±50
+  ctx.strokeStyle='rgba(30,60,90,0.22)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(xL,pTop+fah*0.25);ctx.lineTo(xR,pTop+fah*0.25);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xL,pTop+fah*0.75);ctx.lineTo(xR,pTop+fah*0.75);ctx.stroke();
+  // Zero line
+  ctx.strokeStyle='rgba(0,140,190,0.26)';ctx.lineWidth=0.75;ctx.setLineDash([4,6]);
+  ctx.beginPath();ctx.moveTo(xL,pMid);ctx.lineTo(xR,pMid);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Right scale
+  ctx.font='700 7px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(60,100,140,0.60)';
+  ctx.fillText('100',xR-4,pTop+7);
+  ctx.fillText('0',xR-4,pMid);
+  ctx.fillText('-100',xR-4,pBot-5);
+
+  // Left labels
+  if(fah>=80){
+    ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(0,200,160,0.38)';ctx.fillText('BULLISH',xL+6,pTop+fah*0.22);
+    ctx.fillStyle='rgba(80,110,150,0.30)';ctx.fillText('NEUTRAL',xL+6,pMid);
+    ctx.fillStyle='rgba(255,100,55,0.38)';ctx.fillText('BEARISH',xL+6,pTop+fah*0.78);
+  }
+
+  // Oscillator values array
+  const N=_cache.length;
+  const raw=new Float32Array(N);
+  for(let i=0;i<N;i++){
+    const r=_cache[i];if(!r){raw[i]=0;continue;}
+    const d=r.direction||'',s=r.score||0;
+    if(d==='buy')raw[i]=s;
+    else if(d==='sell')raw[i]=-s;
+    else if(d==='mixed_bull')raw[i]=s*0.5;
+    else if(d==='mixed_bear')raw[i]=-s*0.5;
+    else raw[i]=0;
+  }
+
+  // Smooth
+  const half=Math.floor(smooth/2);
+  const smV=new Float32Array(N);
+  for(let i=0;i<N;i++){
+    let sum=0,cnt=0;
+    for(let j=Math.max(0,i-half);j<=Math.min(N-1,i+half);j++){sum+=raw[j];cnt++;}
+    smV[i]=cnt?sum/cnt:0;
+  }
+
+  function valToY(v){return pMid-(Math.max(-100,Math.min(100,v))/100)*(fah/2);}
+
+  const vStart=S.view.start,vEnd=S.view.end;
+  const vspan=S.view.end-S.view.start;
+  const bw=CW(W)/Math.max(1,vspan);
+  const barW=Math.max(1,bw*0.65);
+
+  // Histogram bars
+  ctx.save();
+  for(let ci=vStart;ci<=vEnd&&ci<N;ci++){
+    const v=smV[ci];if(Math.abs(v)<0.5)continue;
+    const cx=x(ci);
+    const yv=valToY(v);
+    const y1=v>=0?yv:pMid;
+    const bh=Math.max(1,Math.abs(yv-pMid));
+    const rel=Math.abs(v)/100;
+    const a=Math.min(1,(0.25+0.52*rel)*histOp);
+    ctx.fillStyle=v>=0?`rgba(0,210,170,${a.toFixed(3)})`:`rgba(255,100,55,${a.toFixed(3)})`;
+    ctx.fillRect(cx-barW/2,y1,barW,bh);
+  }
+  ctx.restore();
+
+  // Smooth line
+  const pStart=Math.max(0,vStart-1),pEnd=Math.min(N-1,vEnd+1);
+  const pts=[];
+  for(let ci=pStart;ci<=pEnd;ci++)pts.push({cx:x(ci),cy:valToY(smV[ci]),v:smV[ci]});
+
+  if(pts.length>=2){
+    function drawSeg(seg,bull,pass){
+      if(seg.length<2)return;
+      const r=bull?0:255,g=bull?210:100,b2=bull?170:55;
+      ctx.strokeStyle=`rgba(${r},${g},${b2},${pass.alpha.toFixed(3)})`;
+      ctx.lineWidth=pass.width;
+      ctx.shadowColor=`rgba(${r},${g},${b2},0.65)`;
+      ctx.shadowBlur=pass.blur*lineGlow;
+      ctx.lineJoin='round';ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(seg[0].cx,seg[0].cy);
+      for(let p=1;p<seg.length-1;p++){
+        const cpx=(seg[p].cx+seg[p+1].cx)/2,cpy=(seg[p].cy+seg[p+1].cy)/2;
+        ctx.quadraticCurveTo(seg[p].cx,seg[p].cy,cpx,cpy);
+      }
+      ctx.lineTo(seg[seg.length-1].cx,seg[seg.length-1].cy);
+      ctx.stroke();
+    }
+    const passes=[{blur:6,width:3.2,alpha:0.12},{blur:2.5,width:1.7,alpha:0.42},{blur:0,width:0.9,alpha:0.82}];
+    ctx.save();
+    for(const pass of passes){
+      let seg=[],prevBull=pts[0].v>=0;
+      for(let p=0;p<pts.length;p++){
+        const bull=pts[p].v>=0;
+        if(bull!==prevBull&&seg.length>0){drawSeg(seg,prevBull,pass);seg=[seg[seg.length-1]];}
+        seg.push(pts[p]);prevBull=bull;
+      }
+      if(seg.length>=2)drawSeg(seg,prevBull,pass);
+    }
+    // Last value dot
+    const last=pts[pts.length-1];const isBull=last.v>=0;
+    ctx.shadowColor=isBull?'rgba(0,210,170,0.85)':'rgba(255,100,55,0.85)';ctx.shadowBlur=5*lineGlow;
+    ctx.fillStyle=isBull?'rgba(0,220,180,0.92)':'rgba(255,110,60,0.92)';
+    ctx.beginPath();ctx.arc(last.cx,last.cy,2.5,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;ctx.fillStyle='rgba(255,255,255,0.80)';
+    ctx.beginPath();ctx.arc(last.cx,last.cy,1,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  // Panel title (drawn after bars so it's always readable)
+  ctx.font='700 8px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(0,195,255,0.72)';
+  ctx.fillText('DVL FLOW ACCELERATION',xL+8,pTop+9);
+
+  // State tag (top-right)
+  if(showTag&&pts.length>0){
+    const lv=pts[pts.length-1].v;
+    let tag,tc;
+    if(lv>30){tag='FLOW BULLISH';tc='rgba(0,210,170,0.88)';}
+    else if(lv>10){tag='FLOW ACCEL UP';tc='rgba(0,180,150,0.75)';}
+    else if(lv<-30){tag='FLOW BEARISH';tc='rgba(255,100,55,0.88)';}
+    else if(lv<-10){tag='FLOW ACCEL DOWN';tc='rgba(220,80,40,0.75)';}
+    else{tag='FLOW NEUTRAL';tc='rgba(90,120,155,0.70)';}
+    ctx.font='700 7.5px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillStyle=tc;ctx.fillText(tag,xR-8,pTop+9);
+  }
+
+  // Crosshair value guide
+  if(S._cross&&S._cross.cx>=xL&&S._cross.cx<=xR){
+    const ci=Math.max(vStart,Math.min(vEnd,Math.round(vStart+(S._cross.cx-xL)/bw-0.5)));
+    if(ci>=0&&ci<N){
+      const v=smV[ci];
+      const yv=valToY(v);
+      ctx.strokeStyle=v>=0?'rgba(0,210,170,0.32)':'rgba(255,100,55,0.32)';
+      ctx.lineWidth=0.7;ctx.setLineDash([3,4]);
+      ctx.beginPath();ctx.moveTo(xL,yv);ctx.lineTo(xR,yv);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font='700 7px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+      ctx.fillStyle=v>=0?'rgba(0,210,170,0.90)':'rgba(255,100,55,0.90)';
+      ctx.fillText((v>=0?'+':'')+Math.round(v),xR-4,yv-6);
+    }
+  }
+}
+
 window.__drawFlowTrail=drawFlowTrail;
 window.__drawFlowAccel=drawFlowMarkers;
+window.__drawFlowPanel=drawFlowAccelPanel;
 
 // init state — also prime inputs with current TF defaults
 (function(){
@@ -11992,7 +12175,8 @@ const FA_IDS=new Set(['faShowTrail','faShowPulse','faShowExhaustion','faUseFP','
   'faVolMA','faLookback','faTrailScore','faPulseScore','faInstScore','faExhaustSens',
   'faTrailOpacity','faGlowStr','faThickMult','faCenterBright','faPulseGlow','faMaxPulses',
   'faBullColor','faBearColor','faBullCenterColor','faBearCenterColor','faInstColor','faExhaustColor',
-  'faFlowTF','faShowTFLabel']);
+  'faFlowTF','faShowTFLabel',
+  'faHistOpacity','faLineGlow','faLineSmoothing','faShowFlowTag']);
 document.addEventListener('input',function(ev){
   if(!FA_IDS.has(ev.target?.id))return;
   _cacheKey='';if(typeof drawSoon==='function')drawSoon();
