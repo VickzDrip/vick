@@ -12989,12 +12989,13 @@ function computeConfluenceSignals(){
       if(c.c<zr.zone.lo-atr*0.2)continue;
       // 2. Room above: must have enough space to next resistance
       if(!_hasRoom(c.c,zones,zr.zone,'buy',atr,cfg.minRoomATR))continue;
-      // 3. Cooldown
-      if(ci-lastBuyIdx<cfg.cooldown)continue;
-      // 4. Pullback required before repeating same direction
-      if(cfg.requirePullback&&lastBuyIdx>=0&&!pullbackOKBuy)continue;
-      // 5. Hard veto: both oscillators strongly opposed
-      if(clVal<=-cfg.clarThr*1.6&&flVal<=-cfg.flowThr*1.6)continue;
+      // 3. Cooldown: min 5 bars always; skip full cooldown only if pullback confirmed
+      const cdBuy=ci-lastBuyIdx;
+      if(cdBuy<5)continue;
+      if(cdBuy<cfg.cooldown&&(!cfg.requirePullback||!pullbackOKBuy))continue;
+      // 4. Pullback required before repeating same direction (enforced above)
+      // 5. Both oscillators must confirm BUY direction (neither neutral nor bearish)
+      if(clVal<=0||flVal<=0)continue;
 
       // ── SCORE (max 11) ────────────────────────────────────────────────────
       let score=2;                               // zone context valid: +2
@@ -13022,12 +13023,13 @@ function computeConfluenceSignals(){
       if(c.c>zr.zone.hi+atr*0.2)continue;
       // 2. Room below: must have enough space to next support
       if(!_hasRoom(c.c,zones,zr.zone,'sell',atr,cfg.minRoomATR))continue;
-      // 3. Cooldown
-      if(ci-lastSellIdx<cfg.cooldown)continue;
-      // 4. Pullback required before repeating same direction
-      if(cfg.requirePullback&&lastSellIdx>=0&&!pullbackOKSell)continue;
-      // 5. Hard veto
-      if(clVal>=cfg.clarThr*1.6&&flVal>=cfg.flowThr*1.6)continue;
+      // 3. Cooldown: min 5 bars always; skip full cooldown only if pullback confirmed
+      const cdSell=ci-lastSellIdx;
+      if(cdSell<5)continue;
+      if(cdSell<cfg.cooldown&&(!cfg.requirePullback||!pullbackOKSell))continue;
+      // 4. Pullback required before repeating same direction (enforced above)
+      // 5. Both oscillators must confirm SELL direction (neither neutral nor bullish)
+      if(clVal>=0||flVal>=0)continue;
 
       // ── SCORE (max 11) ────────────────────────────────────────────────────
       let score=2;
