@@ -2000,7 +2000,11 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Density %</span><input class="num" id="vzDensity" type="number" min="10" max="70" step="5" value="40" style="width:56px"></div>
             <div class="kv"><span class="k">Valley sep %</span><input class="num" id="vzValley" type="number" min="10" max="65" step="5" value="35" style="width:56px"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Volume profile</span><input type="checkbox" id="vzShowProfile" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <div class="hint">DVL HVN PRO — each zone born from a distinct volume peak. Valley sep prevents merge across LVN gaps. Max ATR× caps zone height.</div>
+            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin:5px 0 3px;">MEMORY</div>
+            <div class="kv"><span class="k">Memory candles</span><input class="num" id="vzMemory" type="number" min="100" max="5000" step="100" value="1000" style="width:56px"></div>
+            <div class="kv"><span class="k">Min bars confirm</span><input class="num" id="vzMinBars" type="number" min="1" max="100" step="1" value="8" style="width:56px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show historical</span><input type="checkbox" id="vzShowHistorical" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="hint">HVN PRO v3 — Confirmed (C): visited ≥MinBars times in Lookback. Historical (H): memory zones with decay. Developing (D): new zones not yet in memory.</div>
           </div>
         </div>
 
@@ -9485,7 +9489,7 @@ window._dvlTemplate={open:open,close:close};
 })();
 </script>
 
-<!-- ── High Volume Zones (HVN) — DVL HVN PRO v2 ── -->
+<!-- ── High Volume Zones (HVN) — DVL HVN PRO v3 ── -->
 <script>
 (function DVL_HVN(){
   'use strict';
@@ -9510,20 +9514,25 @@ window._dvlTemplate={open:open,close:close};
 
   function getSettings(){
     return{
-      bucketPct: clp(numVal('vzBucket',0.1),0.01,5),
-      topN:      clp(Math.round(numVal('vzTopN',6)),1,20),
-      lookback:  clp(Math.round(numVal('vzLookback',300)),50,2000),
-      minTouch:  clp(Math.round(numVal('vzMinTouch',2)),1,200),
-      extend:    clp(Math.round(numVal('vzExtend',20)),0,500),
-      mergeSens: E('vzMergeSens')?.value||'normal',
-      maxAtrMult:clp(numVal('vzMaxAtr',1.2),0.3,5),
-      densityPct:clp(numVal('vzDensity',40),10,70),
-      valleyPct: clp(numVal('vzValley',35),10,65),
+      bucketPct:  clp(numVal('vzBucket',0.1),0.01,5),
+      topN:       clp(Math.round(numVal('vzTopN',6)),1,20),
+      lookback:   clp(Math.round(numVal('vzLookback',300)),50,2000),
+      minTouch:   clp(Math.round(numVal('vzMinTouch',2)),1,200),
+      extend:     clp(Math.round(numVal('vzExtend',20)),0,500),
+      mergeSens:  E('vzMergeSens')?.value||'normal',
+      maxAtrMult: clp(numVal('vzMaxAtr',1.2),0.3,5),
+      densityPct: clp(numVal('vzDensity',40),10,70),
+      valleyPct:  clp(numVal('vzValley',35),10,65),
       showProfile:boolVal('vzShowProfile',true),
+      memory:     clp(Math.round(numVal('vzMemory',1000)),100,5000),
+      minBars:    clp(Math.round(numVal('vzMinBars',8)),1,100),
+      showHistorical:boolVal('vzShowHistorical',true),
     };
   }
 
-  let _vzCache=null,_vzCacheKey='';
+  let _vzMemCache=null,_vzMemKey='';
+  let _vzCurrCache=null,_vzCurrKey='';
+  let _vzClassified=null,_vzClassKey='';
   let _vzExtCandles=null,_vzExtKey='',_vzExtFetching=false;
 
   function getVZCandles(){
@@ -9538,7 +9547,7 @@ window._dvlTemplate={open:open,close:close};
         .then(d=>{
           if(_vzExtKey!==wantKey)return;
           _vzExtCandles=d.map(klineToCandle);
-          _vzExtFetching=false;_vzCacheKey='';
+          _vzExtFetching=false;_vzMemKey='';_vzCurrKey='';_vzClassKey='';
           if(typeof drawSoon==='function')drawSoon();
         })
         .catch(e=>{_vzExtFetching=false;console.warn('HVN TF fetch:',e);});
@@ -9556,12 +9565,11 @@ window._dvlTemplate={open:open,close:close};
     ctx.closePath();
   }
 
-  // ── Multi-peak cluster detection with valley-aware merge and ATR cap ─────────
+  // ── Multi-peak cluster detection with valley-aware merge and ATR cap ──────────
   function computeHVNPro(cs,cfg){
     if(!cs||cs.length<2)return null;
-    const{bucketPct,topN,lookback,minTouch,mergeSens,maxAtrMult,densityPct,valleyPct}=cfg;
+    const{bucketPct,topN,lookback,minTouch,mergeSens,maxAtrMult,densityPct}=cfg;
 
-    // Slice to lookback window
     const csl=cs.slice(-Math.min(lookback,cs.length));
     if(csl.length<2)return null;
 
@@ -9569,7 +9577,6 @@ window._dvlTemplate={open:open,close:close};
     const bucketSize=lastPrice*bucketPct/100;
     if(bucketSize<=0)return null;
 
-    // ATR from recent 30 candles
     let atrSum=0,atrN=0;
     for(let i=Math.max(1,csl.length-30);i<csl.length;i++){
       atrSum+=Math.max(csl[i].h-csl[i].l,
@@ -9578,10 +9585,8 @@ window._dvlTemplate={open:open,close:close};
       atrN++;
     }
     const atr=atrN>0?atrSum/atrN:lastPrice*0.015;
-    // Max zone height in buckets (hard cap)
     const maxZoneB=Math.max(3,Math.round(atr/bucketSize*maxAtrMult));
 
-    // Build histogram
     let priceMin=Infinity,priceMax=-Infinity;
     for(const c of csl){if(c.l<priceMin)priceMin=c.l;if(c.h>priceMax)priceMax=c.h;}
     const nBuckets=Math.min(8000,Math.ceil((priceMax-priceMin)/bucketSize)+1);
@@ -9608,7 +9613,6 @@ window._dvlTemplate={open:open,close:close};
       }
     }
 
-    // Smooth with a narrow 5-bucket Gaussian (keep peaks distinct)
     const K=[0.08,0.24,0.36,0.24,0.08];
     const smV=new Float64Array(nBuckets);
     for(let i=0;i<nBuckets;i++){
@@ -9617,16 +9621,12 @@ window._dvlTemplate={open:open,close:close};
       smV[i]=s;
     }
 
-    // Find global max
     let maxVol=0;
     for(let i=0;i<nBuckets;i++)if(smV[i]>maxVol)maxVol=smV[i];
     if(maxVol<=0)return null;
 
-    // Peak detection
-    // Window radius = 30% of maxZoneB (smaller → more peaks detected)
     const winR=Math.max(1,Math.round(maxZoneB*0.28));
-    const sigThresh=maxVol*0.07; // 7% of max vol → lenient, find many candidates
-
+    const sigThresh=maxVol*0.07;
     const peaks=[];
     for(let i=winR;i<nBuckets-winR;i++){
       if(tchs[i]<minTouch||smV[i]<sigThresh)continue;
@@ -9635,9 +9635,7 @@ window._dvlTemplate={open:open,close:close};
       if(ok)peaks.push({i,vol:smV[i]});
     }
 
-    // Select top candidates — use larger pool (topN*4) then apply strict min separation
     peaks.sort((a,b)=>b.vol-a.vol);
-    // Min separation = half of maxZoneB so peaks don't crowd
     const minSep=Math.max(Math.ceil(maxZoneB*0.5),2);
     const chosen=[];
     for(const p of peaks){
@@ -9646,42 +9644,21 @@ window._dvlTemplate={open:open,close:close};
     }
     if(!chosen.length)return null;
 
-    // Expand each peak into a cluster
-    // DENSITY_THRESH = densityPct/100 — stop expanding when vol < thresh * peakVol
-    // HARD CAP = maxZoneB/2 buckets from peak center
     const DENS=densityPct/100;
     const maxHalf=Math.max(1,Math.floor(maxZoneB/2));
-
     const clusters=[];
     for(const peak of chosen){
       const pv=smV[peak.i];
       const thresh=pv*DENS;
       let lo=peak.i,hi=peak.i;
-
-      // Expand left — stop at density threshold OR ATR cap
-      while(lo>0&&peak.i-lo<maxHalf){
-        if(smV[lo-1]<thresh)break;
-        lo--;
-      }
-      // Expand right
-      while(hi<nBuckets-1&&hi-peak.i<maxHalf){
-        if(smV[hi+1]<thresh)break;
-        hi++;
-      }
-
-      // Hard clip around peak if still too wide
-      if(hi-lo>maxZoneB){
-        lo=Math.max(0,peak.i-maxHalf);
-        hi=Math.min(nBuckets-1,peak.i+maxHalf);
-      }
-
-      // Accumulate volumes + POC
+      while(lo>0&&peak.i-lo<maxHalf){if(smV[lo-1]<thresh)break;lo--;}
+      while(hi<nBuckets-1&&hi-peak.i<maxHalf){if(smV[hi+1]<thresh)break;hi++;}
+      if(hi-lo>maxZoneB){lo=Math.max(0,peak.i-maxHalf);hi=Math.min(nBuckets-1,peak.i+maxHalf);}
       let tv=0,tbv=0,tsv=0,tt=0,pocIdx=lo,pocVol=0;
       for(let b=lo;b<=hi;b++){
         tv+=vols[b];tbv+=buyV[b];tsv+=sellV[b];tt+=tchs[b];
         if(vols[b]>pocVol){pocVol=vols[b];pocIdx=b;}
       }
-
       clusters.push({
         lo:priceMin+lo*bucketSize,
         hi:priceMin+(hi+1)*bucketSize,
@@ -9691,54 +9668,40 @@ window._dvlTemplate={open:open,close:close};
       });
     }
 
-    // Sort by price
     clusters.sort((a,b)=>a.lo-b.lo);
 
-    // De-overlap: trim overlapping adjacent zones at their gap midpoint
     for(let i=1;i<clusters.length;i++){
       const a=clusters[i-1],b=clusters[i];
       if(a.rHi>=b.rLo){
         const mid=Math.round((a.rHi+b.rLo)/2);
-        a.rHi=Math.max(a.rLo,mid-1);
-        b.rLo=Math.min(b.rHi,mid+1);
-        a.hi=priceMin+(a.rHi+1)*bucketSize;
-        b.lo=priceMin+b.rLo*bucketSize;
+        a.rHi=Math.max(a.rLo,mid-1);b.rLo=Math.min(b.rHi,mid+1);
+        a.hi=priceMin+(a.rHi+1)*bucketSize;b.lo=priceMin+b.rLo*bucketSize;
       }
     }
 
-    // Valley-aware merge
     const mergeCfg={
-      low:   {gapB:0,valR:0.65},   // merge only if touching + high valley floor
-      normal:{gapB:1,valR:0.50},   // 1-bucket gap ok + valley > 50% of smaller peak
-      high:  {gapB:4,valR:0.28},   // wider gap + shallower valley ok
+      low:   {gapB:0,valR:0.65},
+      normal:{gapB:1,valR:0.50},
+      high:  {gapB:4,valR:0.28},
     };
     const mc=mergeCfg[mergeSens]||mergeCfg.normal;
-
     const merged=[];
     for(const c of clusters){
       if(!merged.length){merged.push({...c});continue;}
       const prev=merged[merged.length-1];
-
-      // Gap in buckets between prev.hi and c.lo
       const gapBuckets=(c.rLo-prev.rHi-1);
       if(gapBuckets>mc.gapB){merged.push({...c});continue;}
-
-      // Check minimum valley volume between the two clusters
       const searchLo=prev.rHi+1,searchHi=c.rLo-1;
       let minValley=Infinity;
       if(searchLo<=searchHi){
         for(let b=searchLo;b<=searchHi;b++)if(smV[b]<minValley)minValley=smV[b];
       }else{
-        // Adjacent/touching — no valley bucket to sample
         minValley=Math.min(prev.peakVol,c.peakVol);
       }
-
       const valleyFloor=Math.min(prev.peakVol,c.peakVol)*mc.valR;
       if(minValley<valleyFloor){
-        // Clear valley → separate zones
         merged.push({...c});
       }else{
-        // Merge: extend prev
         prev.hi=c.hi;prev.rHi=c.rHi;
         if(c.peakVol>prev.peakVol){prev.poc=c.poc;prev.peakVol=c.peakVol;prev.rPoc=c.rPoc;}
         prev.totalVol+=c.totalVol;prev.totalBuyVol+=c.totalBuyVol;
@@ -9746,56 +9709,88 @@ window._dvlTemplate={open:open,close:close};
       }
     }
 
-    // Enforce ATR height cap on merged zones (re-clip around POC)
     const maxPxH=atr*maxAtrMult;
     for(const z of merged){
-      if(z.hi-z.lo>maxPxH){
-        const half=maxPxH/2;
-        z.lo=z.poc-half;z.hi=z.poc+half;
-      }
+      if(z.hi-z.lo>maxPxH){const half=maxPxH/2;z.lo=z.poc-half;z.hi=z.poc+half;}
     }
 
-    // Score zones for ranking
     let maxTV=0,maxTT=0;
     for(const z of merged){if(z.totalVol>maxTV)maxTV=z.totalVol;if(z.totalTouches>maxTT)maxTT=z.totalTouches;}
     const priceSpan=Math.max(priceMax-priceMin,atr);
-
     for(const z of merged){
       const vS=maxTV>0?z.totalVol/maxTV:0;
       const tS=maxTT>0?Math.min(1,z.totalTouches/maxTT):0;
-      // Proximity: 0=far, 1=at current price
-      const dist=Math.min(
-        Math.abs(z.hi-lastPrice),
-        Math.abs(z.lo-lastPrice),
-        Math.abs(z.poc-lastPrice)
-      );
+      const dist=Math.min(Math.abs(z.hi-lastPrice),Math.abs(z.lo-lastPrice),Math.abs(z.poc-lastPrice));
       const pS=1-Math.min(1,dist/(priceSpan*0.35));
       z.score=vS*0.55+tS*0.20+pS*0.25;
     }
 
-    // Diversity selection: balance above / at price / below
-    const above =merged.filter(z=>z.lo>lastPrice).sort((a,b)=>b.score-a.score);
-    const below =merged.filter(z=>z.hi<lastPrice).sort((a,b)=>b.score-a.score);
-    const atPx  =merged.filter(z=>z.lo<=lastPrice&&z.hi>=lastPrice).sort((a,b)=>b.score-a.score);
-
+    const above=merged.filter(z=>z.lo>lastPrice).sort((a,b)=>b.score-a.score);
+    const below=merged.filter(z=>z.hi<lastPrice).sort((a,b)=>b.score-a.score);
+    const atPx =merged.filter(z=>z.lo<=lastPrice&&z.hi>=lastPrice).sort((a,b)=>b.score-a.score);
     const result=[];
-    // Include at-price zone (if any)
     if(atPx.length)result.push(atPx[0]);
-
     let slots=topN-result.length;
     const nAbove=Math.ceil(slots/2),nBelow=Math.floor(slots/2);
-    // Fill above then below, then swap fill if one side short
     let ia=0,ib=0;
     for(let i=0;i<nAbove&&ia<above.length;i++)result.push(above[ia++]);
     for(let i=0;i<nBelow&&ib<below.length;i++)result.push(below[ib++]);
-    // Fill any remaining with unused from each side (highest score first)
     const used=new Set(result.map(z=>z.poc));
     const pool=[...above,...below,...atPx.slice(1)].filter(z=>!used.has(z.poc)).sort((a,b)=>b.score-a.score);
     for(const z of pool){if(result.length>=topN)break;result.push(z);}
 
-    // Add backward-compat price field
     const final=result.slice(0,topN).map(z=>({...z,price:(z.lo+z.hi)/2}));
     return{hvn:final,rawBuckets:{priceMin,bucketSize,nBuckets,vols,smV,tchs},atr};
+  }
+
+  // ── Two-layer classification: confirmed / historical / developing ─────────────
+  function classifyZones(cs,cfg,memResult,currResult){
+    if(!memResult&&!currResult)return null;
+    const N=cs.length;
+    const atr=memResult?.atr||currResult?.atr||0;
+    const matchDist=atr*0.5;
+    const memZones=memResult?.hvn||[];
+    const currZones=currResult?.hvn||[];
+    const confirmed=[],historical=[],developing=[];
+
+    // Classify each memory zone based on recent activity
+    const recentStart=Math.max(0,N-cfg.lookback);
+    for(const z of memZones){
+      let recentTouches=0,lastTouched=-1;
+      for(let i=recentStart;i<N;i++){
+        const c=cs[i];
+        if(c.h>=z.lo&&c.l<=z.hi){recentTouches++;lastTouched=i;}
+      }
+      z.recentTouches=recentTouches;
+      z.lastTouched=lastTouched;
+      if(recentTouches>=cfg.minBars){
+        z.zoneType='confirmed';z.decay=1.0;
+        confirmed.push(z);
+      }else{
+        const halfLife=cfg.lookback*1.2;
+        const ageBars=lastTouched>=0?N-1-lastTouched:cfg.memory;
+        z.decay=Math.max(0.15,Math.min(1,Math.exp(-ageBars/halfLife)));
+        z.zoneType='historical';
+        historical.push(z);
+      }
+    }
+
+    // Developing: current zones not matched by any memory zone
+    for(const cz of currZones){
+      const inMem=memZones.some(mz=>Math.abs(mz.poc-cz.poc)<=matchDist);
+      if(!inMem){cz.zoneType='developing';cz.decay=1.0;developing.push(cz);}
+    }
+
+    confirmed.sort((a,b)=>b.score-a.score);
+    historical.sort((a,b)=>(b.decay*b.score)-(a.decay*a.score));
+    developing.sort((a,b)=>b.score-a.score);
+
+    return{
+      confirmed:confirmed.slice(0,cfg.topN),
+      historical:cfg.showHistorical?historical.slice(0,Math.ceil(cfg.topN*0.5)):[],
+      developing:developing.slice(0,Math.ceil(cfg.topN*0.4)),
+      atr,
+    };
   }
 
   // ── Left volume profile backbone ──────────────────────────────────────────────
@@ -9804,8 +9799,6 @@ window._dvlTemplate={open:open,close:close};
     if(!vols||nBuckets<=0)return;
     const visLo=sc.lo,visHi=sc.hi;
     const maxBarW=Math.min(52,CW(W)*0.075);
-
-    // Max vol in visible range
     let maxV=0;
     for(let i=0;i<nBuckets;i++){
       const p=priceMin+(i+0.5)*bucketSize;
@@ -9813,14 +9806,11 @@ window._dvlTemplate={open:open,close:close};
       if(smV[i]>maxV)maxV=smV[i];
     }
     if(maxV<=0)return;
-
-    // Build set of HVN bucket ranges for highlight
     const hvnRanges=hvnZones.map(z=>({
       lo:Math.floor((z.lo-priceMin)/bucketSize),
       hi:Math.ceil((z.hi-priceMin)/bucketSize),
     }));
     function inHVN(i){return hvnRanges.some(r=>i>=r.lo&&i<=r.hi);}
-
     ctx.save();
     for(let i=0;i<nBuckets;i++){
       if(smV[i]<=0)continue;
@@ -9831,18 +9821,13 @@ window._dvlTemplate={open:open,close:close};
       const rel=smV[i]/maxV;
       const barW=rel*maxBarW;
       const isH=inHVN(i);
-      // HVN buckets glow more, LVN buckets are very dim
-      if(isH){
-        ctx.fillStyle=`rgba(0,198,255,${(0.07+0.18*rel).toFixed(3)})`;
-      }else{
-        ctx.fillStyle=`rgba(0,155,220,${(0.02+0.06*rel).toFixed(3)})`;
-      }
+      ctx.fillStyle=isH?`rgba(0,198,255,${(0.07+0.18*rel).toFixed(3)})`:`rgba(0,155,220,${(0.02+0.06*rel).toFixed(3)})`;
       ctx.fillRect(xLeft,y-barH/2,barW,barH);
     }
     ctx.restore();
   }
 
-  // ── Right-side info card ──────────────────────────────────────────────────────
+  // ── Zone info card ────────────────────────────────────────────────────────────
   function drawZoneCard(ctx,z,rel,y1,y2,pocY,xRight,H,chartRight,occupied){
     if(xRight+5>chartRight-4)return;
     const cardW=78,bigCard=(y2-y1)>=36,cardH=bigCard?46:25;
@@ -9850,8 +9835,6 @@ window._dvlTemplate={open:open,close:close};
     cy=Math.max(PT+4,Math.min(H-PB-cardH-4,cy));
     const cx=Math.min(chartRight-cardW-2,xRight+5);
     if(cx<xRight+2)return;
-
-    // Push down if overlapping
     for(const o of occupied){
       if(cy<o.y+o.h+2&&cy+cardH>o.y){
         cy=o.y+o.h+3;
@@ -9861,39 +9844,161 @@ window._dvlTemplate={open:open,close:close};
     if(cy+cardH>H-PB+4)return;
     occupied.push({y:cy,h:cardH});
 
-    rr(ctx,cx,cy,cardW,cardH,4);
-    ctx.fillStyle=`rgba(2,7,18,${(0.83+0.11*rel).toFixed(2)})`;ctx.fill();
-    ctx.strokeStyle=`rgba(0,198,255,${(0.25+0.40*rel).toFixed(3)})`;ctx.lineWidth=0.85;
-    rr(ctx,cx,cy,cardW,cardH,4);ctx.stroke();
+    const isHist=z.zoneType==='historical';
+    const isDev=z.zoneType==='developing';
+    const d=isHist?(z.decay||0.5):1.0;
+    const prefix=isDev?'DEV ':(isHist?'HST ':'HVN ');
+    const bR=isDev?100:0,bG=isDev?120:198;
+    const lR=isDev?160:0,lG=isDev?180:238;
 
-    // Left accent
-    ctx.fillStyle=`rgba(0,220,255,${(0.50+0.42*rel).toFixed(3)})`;
+    rr(ctx,cx,cy,cardW,cardH,4);
+    ctx.fillStyle=`rgba(2,7,18,${(d*(0.83+0.11*rel)).toFixed(2)})`;ctx.fill();
+    ctx.strokeStyle=`rgba(${bR},${bG},255,${(d*(0.25+0.40*rel)).toFixed(3)})`;ctx.lineWidth=0.85;
+    rr(ctx,cx,cy,cardW,cardH,4);ctx.stroke();
+    ctx.fillStyle=`rgba(${bR},${isDev?140:220},255,${(d*(0.50+0.42*rel)).toFixed(3)})`;
     ctx.fillRect(cx,cy+3,2.5,cardH-6);
 
     const mid=(z.lo+z.hi)/2;
     ctx.textAlign='left';ctx.textBaseline='top';
     if(bigCard){
       ctx.font='700 8.5px monospace';
-      ctx.fillStyle=`rgba(0,238,255,${(0.82+0.14*rel).toFixed(3)})`;
-      ctx.fillText('HVN '+priceFmt(z.poc||mid),cx+8,cy+5);
+      ctx.fillStyle=`rgba(${lR},${lG},255,${(d*(0.82+0.14*rel)).toFixed(3)})`;
+      ctx.fillText(prefix+priceFmt(z.poc||mid),cx+8,cy+5);
       ctx.font='700 7.5px monospace';
-      ctx.fillStyle='rgba(148,222,255,0.86)';
+      ctx.fillStyle=`rgba(148,222,255,${(d*0.86).toFixed(2)})`;
       ctx.fillText(nFmt(z.totalVol),cx+8,cy+18);
-      ctx.fillStyle='rgba(108,192,242,0.72)';
+      ctx.fillStyle=`rgba(108,192,242,${(d*0.72).toFixed(2)})`;
       ctx.fillText(z.totalTouches+'t',cx+8,cy+29);
     }else{
       ctx.font='700 7.5px monospace';
-      ctx.fillStyle=`rgba(0,238,255,${(0.78+0.16*rel).toFixed(3)})`;
-      ctx.fillText('HVN '+priceFmt(z.poc||mid),cx+6,cy+3);
-      ctx.fillStyle='rgba(140,212,255,0.74)';
+      ctx.fillStyle=`rgba(${lR},${lG},255,${(d*(0.78+0.16*rel)).toFixed(3)})`;
+      ctx.fillText(prefix+priceFmt(z.poc||mid),cx+6,cy+3);
+      ctx.fillStyle=`rgba(140,212,255,${(d*0.74).toFixed(2)})`;
       ctx.fillText(nFmt(z.totalVol)+' · '+z.totalTouches+'t',cx+6,cy+13);
     }
   }
 
+  // ── Zone renderer (all three types) ──────────────────────────────────────────
+  function drawZone(ctx,z,xLeft,xRight,sc,H,chartRight,maxVol,occupied){
+    const{hi,lo,poc,totalVol,zoneType,decay}=z;
+    const rel=maxVol>0?totalVol/maxVol:1;
+    const y1=sc.y(hi),y2=sc.y(lo);
+    const boxH=Math.max(1.5,y2-y1);
+    if(xRight<=xLeft||y2<PT-8||y1>H-PB+8)return;
+    const pocY=poc?sc.y(poc):(y1+y2)/2;
+    const midY=(y1+y2)/2;
+    const isHist=zoneType==='historical';
+    const isDev=zoneType==='developing';
+    const isConf=zoneType==='confirmed';
+    const d=isHist?(decay||0.5):1.0;
+
+    // Outer bloom — skip for developing
+    if(!isDev){
+      const bH2=boxH+24,bY2=y1-12;
+      const bg=ctx.createLinearGradient(0,bY2,0,bY2+bH2);
+      const bC=isHist?'0,155,220':'0,165,255';
+      bg.addColorStop(0,`rgba(${bC},0)`);
+      bg.addColorStop(0.18,`rgba(${bC},${(d*(0.02+0.06*rel)).toFixed(3)})`);
+      bg.addColorStop(0.50,`rgba(${bC},${(d*(0.04+0.10*rel)).toFixed(3)})`);
+      bg.addColorStop(0.82,`rgba(${bC},${(d*(0.02+0.06*rel)).toFixed(3)})`);
+      bg.addColorStop(1,`rgba(${bC},0)`);
+      ctx.fillStyle=bg;ctx.fillRect(xLeft,bY2,xRight-xLeft,bH2);
+    }
+
+    // Inner fill
+    const fg=ctx.createLinearGradient(0,y1,0,y2);
+    const bA=d*(0.032+0.08*rel),cA=d*(0.07+0.15*rel);
+    if(isDev){
+      fg.addColorStop(0,`rgba(80,90,220,${bA.toFixed(3)})`);
+      fg.addColorStop(0.5,`rgba(100,120,255,${cA.toFixed(3)})`);
+      fg.addColorStop(1,`rgba(80,90,220,${bA.toFixed(3)})`);
+    }else if(isHist){
+      fg.addColorStop(0,`rgba(0,140,200,${bA.toFixed(3)})`);
+      fg.addColorStop(0.5,`rgba(0,165,225,${cA.toFixed(3)})`);
+      fg.addColorStop(1,`rgba(0,140,200,${bA.toFixed(3)})`);
+    }else{
+      fg.addColorStop(0,`rgba(0,148,222,${bA.toFixed(3)})`);
+      fg.addColorStop(0.36,`rgba(0,183,255,${cA.toFixed(3)})`);
+      fg.addColorStop(0.64,`rgba(0,183,255,${cA.toFixed(3)})`);
+      fg.addColorStop(1,`rgba(0,148,222,${bA.toFixed(3)})`);
+    }
+    ctx.fillStyle=fg;ctx.fillRect(xLeft,y1,xRight-xLeft,boxH);
+
+    // Borders
+    const borderA=Math.min(1,d*(0.20+0.52*rel));
+    if(isDev){
+      ctx.strokeStyle=`rgba(120,140,255,${borderA.toFixed(3)})`;
+      ctx.setLineDash([3,4]);
+    }else if(isHist){
+      ctx.strokeStyle=`rgba(0,195,230,${borderA.toFixed(3)})`;
+      ctx.setLineDash([]);
+    }else{
+      ctx.strokeStyle=`rgba(0,210,255,${borderA.toFixed(3)})`;
+      ctx.setLineDash([]);
+    }
+    ctx.lineWidth=isHist?(rel>0.6?0.9:0.6):isDev?0.9:(rel>0.60?1.5:1.0);
+    ctx.beginPath();
+    ctx.moveTo(xLeft,y1);ctx.lineTo(xRight,y1);
+    ctx.moveTo(xLeft,y2);ctx.lineTo(xRight,y2);
+    ctx.stroke();ctx.setLineDash([]);
+
+    // Left accent bar
+    if(isConf){
+      const acG=ctx.createLinearGradient(0,y1,0,y2);
+      acG.addColorStop(0,`rgba(0,215,255,${(0.34+0.46*rel).toFixed(3)})`);
+      acG.addColorStop(0.5,`rgba(0,255,255,${(0.60+0.34*rel).toFixed(3)})`);
+      acG.addColorStop(1,`rgba(0,215,255,${(0.34+0.46*rel).toFixed(3)})`);
+      ctx.fillStyle=acG;ctx.fillRect(xLeft,y1,3.5,boxH);
+    }else if(isDev){
+      ctx.fillStyle=`rgba(120,140,255,${(0.30+0.40*rel).toFixed(3)})`;
+      ctx.fillRect(xLeft,y1,2.5,boxH);
+    }else{
+      ctx.fillStyle=`rgba(0,185,220,${(d*(0.20+0.30*rel)).toFixed(3)})`;
+      ctx.fillRect(xLeft,y1,1.5,boxH);
+    }
+
+    // POC line
+    if(boxH>=3){
+      if(poc){
+        if(isConf){
+          ctx.shadowColor=`rgba(0,235,255,${(0.38+0.44*rel).toFixed(3)})`;
+          ctx.shadowBlur=2+5*rel;
+          ctx.strokeStyle=`rgba(0,248,255,${(0.50+0.40*rel).toFixed(3)})`;
+          ctx.lineWidth=rel>0.5?1.6:1.2;
+        }else if(isDev){
+          ctx.shadowColor='rgba(140,160,255,0.40)';ctx.shadowBlur=2;
+          ctx.strokeStyle=`rgba(160,180,255,${(0.35+0.30*rel).toFixed(3)})`;
+          ctx.lineWidth=0.9;
+        }else{
+          ctx.shadowColor=`rgba(0,200,230,${(d*0.30).toFixed(3)})`;
+          ctx.shadowBlur=d*(1+2*rel);
+          ctx.strokeStyle=`rgba(0,220,240,${(d*(0.35+0.30*rel)).toFixed(3)})`;
+          ctx.lineWidth=0.8;
+        }
+        const acW=isConf?3.5:2.5;
+        ctx.beginPath();ctx.moveTo(xLeft+acW,pocY);ctx.lineTo(xRight,pocY);ctx.stroke();
+        ctx.shadowBlur=0;
+        if(isConf){
+          ctx.fillStyle=`rgba(0,248,255,${(0.72+0.24*rel).toFixed(3)})`;
+          ctx.beginPath();ctx.arc(xLeft+acW+4,pocY,1.8+rel*0.8,0,Math.PI*2);ctx.fill();
+        }
+      }else if(boxH>8){
+        ctx.strokeStyle=isConf
+          ?`rgba(0,195,255,${(0.12+0.14*rel).toFixed(3)})`
+          :`rgba(100,120,200,${(d*0.12).toFixed(3)})`;
+        ctx.lineWidth=0.8;ctx.setLineDash([3,6]);
+        ctx.beginPath();ctx.moveTo(xLeft+1.5,midY);ctx.lineTo(xRight,midY);ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    drawZoneCard(ctx,z,rel,y1,y2,pocY,xRight,H,chartRight,occupied);
+  }
+
   // ── Mini DVL HVN PRO toolbar ──────────────────────────────────────────────────
-  function drawHVNToolbar(ctx,W,H,settings,nZones){
+  function drawHVNToolbar(ctx,W,H,settings,counts){
     const xLeft=PL,chartRight=W-RP();
-    const toolW=Math.min(306,chartRight-xLeft-14);
+    const toolW=Math.min(340,chartRight-xLeft-14);
     if(toolW<80)return;
     const toolX=xLeft+8,toolY=PT+8,toolH=20;
     rr(ctx,toolX,toolY,toolW,toolH,4);
@@ -9905,7 +10010,6 @@ window._dvlTemplate={open:open,close:close};
     ctx.textAlign='left';ctx.textBaseline='middle';
     ctx.fillText('DVL HVN',toolX+8,midY);
     const lblW=ctx.measureText('DVL HVN').width;
-    // PRO badge
     const bx=toolX+8+lblW+5,bw=28,bh=13;
     rr(ctx,bx,midY-bh/2,bw,bh,2);
     ctx.fillStyle='rgba(0,190,255,0.22)';ctx.fill();
@@ -9913,15 +10017,15 @@ window._dvlTemplate={open:open,close:close};
     rr(ctx,bx,midY-bh/2,bw,bh,2);ctx.stroke();
     ctx.font='700 7px monospace';ctx.fillStyle='rgba(0,232,255,0.92)';
     ctx.textAlign='center';ctx.fillText('PRO',bx+bw/2,midY);
-    // Divider
     const divX=bx+bw+9;
     ctx.beginPath();ctx.moveTo(divX,toolY+4);ctx.lineTo(divX,toolY+toolH-4);
     ctx.strokeStyle='rgba(0,128,200,0.20)';ctx.lineWidth=0.8;ctx.stroke();
-    // State pills
     const modes=[
-      {label:`${nZones}Z`,  on:true},
-      {label:settings.mergeSens[0].toUpperCase()+settings.mergeSens.slice(1)+' M', on:settings.mergeSens!=='high'},
-      {label:'Profile',     on:settings.showProfile},
+      {label:`${counts.confirmed}C`,  on:counts.confirmed>0,  col:'rgba(0,222,255,0.90)'},
+      {label:`${counts.historical}H`, on:counts.historical>0, col:'rgba(0,180,220,0.72)'},
+      {label:`${counts.developing}D`, on:counts.developing>0, col:'rgba(140,160,255,0.85)'},
+      {label:settings.mergeSens[0].toUpperCase()+settings.mergeSens.slice(1)+' M',
+       on:settings.mergeSens!=='high',col:'rgba(0,222,255,0.90)'},
     ];
     let mx=divX+7;
     ctx.font='700 7px monospace';
@@ -9931,7 +10035,7 @@ window._dvlTemplate={open:open,close:close};
       ctx.fillStyle=m.on?'rgba(0,190,255,0.18)':'rgba(255,255,255,0.03)';ctx.fill();
       ctx.strokeStyle=m.on?'rgba(0,198,255,0.42)':'rgba(255,255,255,0.10)';ctx.lineWidth=0.6;
       rr(ctx,mx,midY-6,mw,12,2);ctx.stroke();
-      ctx.fillStyle=m.on?'rgba(0,222,255,0.90)':'rgba(96,128,162,0.58)';
+      ctx.fillStyle=m.on?m.col:'rgba(96,128,162,0.58)';
       ctx.textAlign='center';ctx.fillText(m.label,mx+mw/2,midY);
       mx+=mw+4;
     }
@@ -9945,114 +10049,78 @@ window._dvlTemplate={open:open,close:close};
     const settings=getSettings();
     const vzTfSel=E('vzTf');const vzTf=vzTfSel?vzTfSel.value:'';
     const cs=getVZCandles();
-    const lastIdx=cs.length-1;
+    const N=cs.length;
+    const lastIdx=N-1;
 
-    // Derive lookback-sliced candles for cache key
-    const csl=cs.slice(-Math.min(settings.lookback,cs.length));
-    const key=[csl.length,csl[0]?.t||0,csl.at(-1)?.t||0,S.sym,vzTf||S.tf,
-               settings.bucketPct,settings.topN,settings.lookback,settings.minTouch,
-               settings.mergeSens,settings.maxAtrMult,settings.densityPct,settings.valleyPct].join('|');
-    if(key!==_vzCacheKey){_vzCache=computeHVNPro(cs,settings);_vzCacheKey=key;}
-    if(!_vzCache?.hvn?.length)return;
+    // Memory cache key — refreshes every 20 candles
+    const memKey=[S.sym,vzTf||S.tf,Math.floor(N/20),settings.memory,
+                  settings.bucketPct,settings.mergeSens,settings.maxAtrMult,
+                  settings.densityPct,settings.valleyPct,settings.minTouch].join('|');
+    if(memKey!==_vzMemKey){
+      _vzMemCache=computeHVNPro(cs,{...settings,lookback:settings.memory,topN:Math.max(settings.topN*2,12)});
+      _vzMemKey=memKey;_vzClassKey='';
+    }
 
-    const{hvn:zones,rawBuckets}=_vzCache;
+    // Current cache key — refreshes every candle
+    const csl=cs.slice(-Math.min(settings.lookback,N));
+    const currKey=[csl.length,csl[0]?.t||0,csl.at(-1)?.t||0,S.sym,vzTf||S.tf,
+                   settings.bucketPct,settings.topN,settings.lookback,settings.minTouch,
+                   settings.mergeSens,settings.maxAtrMult,settings.densityPct,settings.valleyPct].join('|');
+    if(currKey!==_vzCurrKey){
+      _vzCurrCache=computeHVNPro(cs,settings);
+      _vzCurrKey=currKey;_vzClassKey='';
+    }
+
+    // Classification cache
+    const classKey=memKey+'||'+currKey+'|'+settings.minBars+'|'+(settings.showHistorical?1:0);
+    if(classKey!==_vzClassKey){
+      _vzClassified=classifyZones(cs,settings,_vzMemCache,_vzCurrCache);
+      _vzClassKey=classKey;
+    }
+    if(!_vzClassified)return;
+
+    const{confirmed,historical,developing}=_vzClassified;
+    const allZones=[...confirmed,...historical,...developing];
+    if(!allZones.length)return;
+
+    const rawBuckets=_vzMemCache?.rawBuckets||_vzCurrCache?.rawBuckets;
     const vspan=S.view.end-S.view.start;
     const cw=CW(W);const bw=cw/vspan;
     const xRight=Math.min(W-RP(),x(lastIdx)+settings.extend*bw);
     const xLeft=PL;const chartRight=W-RP();
-    const maxVol=zones.reduce((m,z)=>Math.max(m,z.totalVol),0);
+    const maxVol=allZones.reduce((m,z)=>Math.max(m,z.totalVol),0);
 
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
 
-    // 1. Volume profile backbone
-    if(settings.showProfile&&rawBuckets)drawVolumeProfile(ctx,W,H,sc,xLeft,rawBuckets,zones);
+    if(settings.showProfile&&rawBuckets)
+      drawVolumeProfile(ctx,W,H,sc,xLeft,rawBuckets,confirmed);
 
-    // 2. Draw zones — weak→strong for correct z-order
-    const sortedByStrength=[...zones].sort((a,b)=>a.totalVol-b.totalVol);
+    // Draw order: historical (back) → developing → confirmed (front)
     const occupied=[];
+    for(const z of [...historical,...developing,...confirmed])
+      drawZone(ctx,z,xLeft,xRight,sc,H,chartRight,maxVol,occupied);
 
-    for(const z of sortedByStrength){
-      const{hi,lo,poc,totalVol,totalTouches}=z;
-      const rel=maxVol>0?totalVol/maxVol:1;
-      const y1=sc.y(hi),y2=sc.y(lo);
-      const boxH=Math.max(1.5,y2-y1);
-      if(xRight<=xLeft||y2<PT-8||y1>H-PB+8)continue;
-      const pocY=poc?sc.y(poc):(y1+y2)/2;
-      const midY=(y1+y2)/2;
-
-      // ── Outer bloom (feathered glow beyond zone borders) ─────────────────
-      const bH2=boxH+24,bY2=y1-12;
-      const bg=ctx.createLinearGradient(0,bY2,0,bY2+bH2);
-      bg.addColorStop(0,'rgba(0,165,255,0)');
-      bg.addColorStop(0.18,`rgba(0,178,255,${(0.02+0.06*rel).toFixed(3)})`);
-      bg.addColorStop(0.50,`rgba(0,196,255,${(0.04+0.10*rel).toFixed(3)})`);
-      bg.addColorStop(0.82,`rgba(0,178,255,${(0.02+0.06*rel).toFixed(3)})`);
-      bg.addColorStop(1,'rgba(0,165,255,0)');
-      ctx.fillStyle=bg;ctx.fillRect(xLeft,bY2,xRight-xLeft,bH2);
-
-      // ── Inner fill gradient ───────────────────────────────────────────────
-      const fg=ctx.createLinearGradient(0,y1,0,y2);
-      const bA=0.032+0.08*rel,cA=0.07+0.15*rel;
-      fg.addColorStop(0,`rgba(0,148,222,${bA.toFixed(3)})`);
-      fg.addColorStop(0.36,`rgba(0,183,255,${cA.toFixed(3)})`);
-      fg.addColorStop(0.64,`rgba(0,183,255,${cA.toFixed(3)})`);
-      fg.addColorStop(1,`rgba(0,148,222,${bA.toFixed(3)})`);
-      ctx.fillStyle=fg;ctx.fillRect(xLeft,y1,xRight-xLeft,boxH);
-
-      // ── Top & bottom borders ──────────────────────────────────────────────
-      ctx.strokeStyle=`rgba(0,210,255,${(0.20+0.52*rel).toFixed(3)})`;
-      ctx.lineWidth=rel>0.60?1.5:1.0;ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.moveTo(xLeft,y1);ctx.lineTo(xRight,y1);
-      ctx.moveTo(xLeft,y2);ctx.lineTo(xRight,y2);
-      ctx.stroke();
-
-      // ── Left accent bar ───────────────────────────────────────────────────
-      const acW=3.5;
-      const acG=ctx.createLinearGradient(0,y1,0,y2);
-      acG.addColorStop(0,`rgba(0,215,255,${(0.34+0.46*rel).toFixed(3)})`);
-      acG.addColorStop(0.5,`rgba(0,255,255,${(0.60+0.34*rel).toFixed(3)})`);
-      acG.addColorStop(1,`rgba(0,215,255,${(0.34+0.46*rel).toFixed(3)})`);
-      ctx.fillStyle=acG;ctx.fillRect(xLeft,y1,acW,boxH);
-
-      // ── POC line ─────────────────────────────────────────────────────────
-      ctx.setLineDash([]);
-      if(boxH>=3){
-        if(poc){
-          ctx.shadowColor=`rgba(0,235,255,${(0.38+0.44*rel).toFixed(3)})`;
-          ctx.shadowBlur=2+5*rel;
-          ctx.strokeStyle=`rgba(0,248,255,${(0.50+0.40*rel).toFixed(3)})`;
-          ctx.lineWidth=rel>0.5?1.6:1.2;
-          ctx.beginPath();ctx.moveTo(xLeft+acW,pocY);ctx.lineTo(xRight,pocY);ctx.stroke();
-          ctx.shadowBlur=0;
-          ctx.fillStyle=`rgba(0,248,255,${(0.72+0.24*rel).toFixed(3)})`;
-          ctx.beginPath();ctx.arc(xLeft+acW+4,pocY,1.8+rel*0.8,0,Math.PI*2);ctx.fill();
-        }else if(boxH>8){
-          ctx.strokeStyle=`rgba(0,195,255,${(0.12+0.14*rel).toFixed(3)})`;
-          ctx.lineWidth=0.8;ctx.setLineDash([3,6]);
-          ctx.beginPath();ctx.moveTo(xLeft+acW,midY);ctx.lineTo(xRight,midY);ctx.stroke();
-          ctx.setLineDash([]);
-        }
-      }
-
-      // ── Info card ────────────────────────────────────────────────────────
-      drawZoneCard(ctx,z,rel,y1,y2,pocY,xRight,H,chartRight,occupied);
-    }
-
-    // 3. Toolbar
-    drawHVNToolbar(ctx,W,H,settings,zones.length);
+    drawHVNToolbar(ctx,W,H,settings,{
+      confirmed:confirmed.length,
+      historical:historical.length,
+      developing:developing.length,
+    });
 
     window.__ETX_SKIP_COLORMAP=false;
     ctx.restore();
   }
 
   window.__drawVolZones=drawVolZones;
-  window.__hvnZones=()=>_vzCache?.hvn;
+  window.__hvnZones=()=>{
+    const c=_vzClassified;
+    if(!c)return _vzCurrCache?.hvn||[];
+    return[...(c.confirmed||[]),...(c.historical||[])];
+  };
 
   const VZ_INPUTS=new Set(['vzBucket','vzTopN','vzLookback','vzMinTouch','vzExtend',
                             'vzMergeSens','vzMaxAtr','vzDensity','vzValley',
-                            'vzShowProfile','vzTf']);
+                            'vzShowProfile','vzTf','vzMemory','vzMinBars','vzShowHistorical']);
   function vzRedraw(){if(typeof drawSoon==='function')drawSoon();}
   document.addEventListener('input',ev=>{
     if(!VZ_INPUTS.has(ev.target?.id))return;
@@ -10062,13 +10130,12 @@ window._dvlTemplate={open:open,close:close};
     const id=ev.target?.id;
     if(!VZ_INPUTS.has(id))return;
     if(id==='vzTf'){_vzExtCandles=null;_vzExtKey='';_vzExtFetching=false;}
-    _vzCacheKey='';
+    _vzMemKey='';_vzCurrKey='';_vzClassKey='';
     vzRedraw();
   });
   setTimeout(()=>{if(typeof drawSoon==='function')drawSoon();},0);
 })();
-</script>
-<script>
+</script><script>
 /* DVL Drawing Tools v4 + Replay — Crosshair-driven, TradingView-like */
 (function DVL_DrawReplay(){
 'use strict';
