@@ -2175,6 +2175,24 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
+        <div class="ind-card" data-card="dvlConf">
+          <div class="ind-head">
+            <div class="row" data-ind="dvlConf"><span class="name">DVL Confluence Signals</span><span class="switch"></span></div>
+            <button class="gear" data-settings="dvlConf" title="Inputs Confluence">⚙</button>
+          </div>
+          <div class="ind-settings" id="settings-dvlConf">
+            <div class="kv"><span class="k">Zone Source</span><select class="select tiny-select" id="confZoneSource"><option value="HVN">HVN Zones</option><option value="BOTH">HVN + DVL PRO</option><option value="DVL_HVN_PRO">DVL HVN PRO</option></select></div>
+            <div class="kv"><span class="k">Max Bars After Zone</span><input class="num" id="confMaxBars" type="number" min="1" max="20" step="1" value="5" style="width:56px"></div>
+            <div class="kv"><span class="k">Clarity Threshold</span><input class="num" id="confClarThr" type="number" min="5" max="60" step="5" value="15" style="width:56px"></div>
+            <div class="kv"><span class="k">Flow Threshold</span><input class="num" id="confFlowThr" type="number" min="5" max="60" step="5" value="15" style="width:56px"></div>
+            <div class="kv"><span class="k">Cooldown (bars)</span><input class="num" id="confCooldown" type="number" min="2" max="30" step="1" value="5" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Confluence (1-3)</span><input class="num" id="confMinScore" type="number" min="1" max="3" step="1" value="2" style="width:56px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show BUY</span><input type="checkbox" id="confShowBuy" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show SELL</span><input type="checkbox" id="confShowSell" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="hint">Confluência: zona HVN + Trend Clarity + DVL Flow Acceleration.</div>
+          </div>
+        </div>
+
         <div class="ind-card" data-card="book" style="display:none!important">
           <div class="ind-head">
             <div class="row" data-ind="book"><span class="name">Orderbook Ladder</span><span class="switch"></span></div>
@@ -2356,7 +2374,7 @@ html.pre-ui .switch::after{transition:none!important}
 const API='https://api.binance.com', WS='wss://stream.binance.com:9443/stream?streams=';
 const LOCAL_API=location.origin; // our own server with persisted trades + depth history
 let depthRefreshTimer=null;
-const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true,hvnPro:false,flowAccel:true,hvnReact:true,hvnClarity:false},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal',_cross:null};
+const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,bigTrades:true,book:false,stdVolume:true,volZones:true,hvnPro:false,flowAccel:true,hvnReact:true,hvnClarity:false,dvlConf:false},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal',_cross:null};
 window.__bigTradesOverlayCache={key:'',items:[]};
 window.__bigTradesPersistentCache=new Map();
 window.__bigTradesLastGood=[];
@@ -2771,7 +2789,7 @@ const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_
 const _clarH=(S.inds.hvnClarity&&S.candles.length)?_hvnClarityH:0;const _fah=(S.inds.flowAccel&&S.candles.length)?_flowAccelH:0;PB=10+(_fah?_fah+2:0)+(_clarH?_clarH+2:0);
 const _logBtn=el('dvlMiniRefresh');if(_logBtn)_logBtn.style.bottom=(PB+8)+'px';
 const _rh=el('hvnResizeHandle');if(_rh){_rh.style.display=_clarH>0?'block':'none';_rh.style.bottom=(10+_clarH-3)+'px';}const _frh=el('flowResizeHandle');if(_frh){_frh.style.display=_fah>0?'block':'none';_frh.style.bottom=(10+(_clarH?_clarH+2:0)+_fah-3)+'px';}
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawHVNPro)safeLayer('DVL HVN PRO',()=>window.__drawHVNPro(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);if(window.__drawHVNReact&&S.inds.hvnReact)safeLayer('HVN Reactions',()=>window.__drawHVNReact(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.inds.hvnClarity)safeLayer('HVN Clarity Engine',()=>drawHVNClarityEngine(ctx,W,H,AllV,sc,x));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_fah>0&&window.__drawFlowPanel)safeLayer('DVL Flow Panel',()=>window.__drawFlowPanel(ctx,W,H,V,sc,x,_fah,_clarH));resetCtxState(ctx);if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawHVNPro)safeLayer('DVL HVN PRO',()=>window.__drawHVNPro(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.bigTrades)safeLayer('Big Trades TOP Overlay',()=>drawBigTrades(ctx,AllV,sc,x,W,H));resetCtxState(ctx);if(window.__drawHVNReact&&S.inds.hvnReact)safeLayer('HVN Reactions',()=>window.__drawHVNReact(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.inds.hvnClarity)safeLayer('HVN Clarity Engine',()=>drawHVNClarityEngine(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(S.inds.dvlConf&&window.__drawConfluenceSignals)safeLayer('DVL Confluence',()=>window.__drawConfluenceSignals(ctx,W,H,V,sc,x,bw));resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_fah>0&&window.__drawFlowPanel)safeLayer('DVL Flow Panel',()=>window.__drawFlowPanel(ctx,W,H,V,sc,x,_fah,_clarH));resetCtxState(ctx);if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
 // ── Chart watermark image (preloaded once) ──
 const _wmImg=(()=>{
   const i=new Image();i.crossOrigin='anonymous';
@@ -8778,6 +8796,7 @@ document.addEventListener('DOMContentLoaded',function(){
       if(S.inds.heatmap!==undefined)S.inds.heatmap=true;
       if(S.inds.volZones!==undefined)S.inds.volZones=true;
       if(S.inds.hvnPro!==undefined)S.inds.hvnPro=false;
+      if(S.inds.dvlConf!==undefined)S.inds.dvlConf=false;
     }
     document.querySelectorAll('[data-ind]').forEach(function(row){
       var key=row.dataset.ind;
@@ -12050,9 +12069,8 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH){
   // Zero line
   ctx.strokeStyle='rgba(0,140,190,0.28)';ctx.lineWidth=0.75;ctx.setLineDash([4,6]);
   ctx.beginPath();ctx.moveTo(xL,pMid);ctx.lineTo(xR,pMid);ctx.stroke();ctx.setLineDash([]);
-  // Title
-  ctx.font='700 8px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.fillStyle='rgba(0,195,255,0.72)';ctx.fillText('DVL FLOW ACCELERATION',xL+8,pTop+9);
+  // Tiny panel ID dot (title removed to reduce visual clutter)
+  ctx.fillStyle='rgba(0,195,255,0.40)';ctx.beginPath();ctx.arc(xL+7,pTop+8,2.5,0,Math.PI*2);ctx.fill();
   // Right scale — in PR zone, Y aligned with actual valToY positions
   const yF100=valToY(100),yFm100=valToY(-100);
   ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
@@ -12150,6 +12168,7 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH){
 window.__drawFlowTrail=drawFlowTrail;
 window.__drawFlowAccel=drawFlowMarkers;
 window.__drawFlowPanel=drawFlowAccelPanel;
+window.__getFlowOscValue=function(idx){return _flowOscCache?(+_flowOscCache[idx]||0):0;};
 
 // init state — also prime inputs with current TF defaults
 (function(){
@@ -12778,5 +12797,187 @@ document.addEventListener('change',ev=>{
 });
 if(window.S&&S.inds&&!('hvnReact' in S.inds))S.inds.hvnReact=true;
 
+})();
+</script>
+
+<!-- ── DVL Confluence Signals ── -->
+<script>
+(function(){
+'use strict';
+function E(id){return document.getElementById(id);}
+function sn(id,def){const e=E(id);if(!e)return def;const v=+e.value;return Number.isFinite(v)?v:def;}
+function cb(id,def){const e=E(id);return e?e.checked:(def!==undefined?def:true);}
+
+function getConfCfg(){
+  return{
+    zoneSource:E('confZoneSource')?.value||'HVN',
+    maxBars:Math.max(1,sn('confMaxBars',5)),
+    clarThr:Math.max(1,sn('confClarThr',15)),
+    flowThr:Math.max(1,sn('confFlowThr',15)),
+    cooldown:Math.max(1,sn('confCooldown',5)),
+    minScore:Math.max(1,Math.min(3,sn('confMinScore',2))),
+    showBuy:cb('confShowBuy',true),
+    showSell:cb('confShowSell',true),
+  };
+}
+
+function getZones(src){
+  const zones=[];
+  if(src==='HVN'||src==='BOTH'){
+    const raw=window.__hvnZones?.()||[];
+    for(const z of raw){
+      const lo=+z.lo||+z.price||NaN,hi=+z.hi||+z.price||NaN;
+      const mid=Number.isFinite(lo)&&Number.isFinite(hi)?(lo+hi)/2:+z.price||NaN;
+      if(!Number.isFinite(mid))continue;
+      zones.push({lo:Math.min(lo,hi)||mid,hi:Math.max(lo,hi)||mid,mid,src:'hvn'});
+    }
+  }
+  if((src==='DVL_HVN_PRO'||src==='BOTH')&&window.__hvnProZones){
+    const raw=window.__hvnProZones()||[];
+    for(const z of raw){
+      const lo=+z.lo||NaN,hi=+z.hi||NaN,mid=+z.mid||+z.price||NaN;
+      if(!Number.isFinite(mid))continue;
+      zones.push({lo:lo||mid,hi:hi||mid,mid,src:'pro'});
+    }
+  }
+  return zones;
+}
+
+// Detect zone reaction for candle at ci
+function zoneReaction(ci,cs,zones){
+  if(ci<1)return null;
+  const c=cs[ci],p=cs[ci-1];
+  const tol=c.c*0.0015;
+  for(const z of zones){
+    const zLo=z.lo-tol,zHi=z.hi+tol;
+    if(c.h<zLo||c.l>zHi)continue;
+    const isBull=c.c>=c.o;
+    const rng=Math.max(1e-9,c.h-c.l);
+    const closePos=(c.c-c.l)/rng;
+    const wickBot=(Math.min(c.o,c.c)-c.l)/rng;
+    const wickTop=(c.h-Math.max(c.o,c.c))/rng;
+    // Bounce: from below zone lo, closed above with bullish body + lower shadow
+    if(c.l<=z.lo+tol&&c.c>=z.lo-tol&&isBull&&closePos>=0.45&&wickBot>=0.18)
+      return{bullish:true,type:'bounce',zone:z};
+    // Rejection: from above zone hi, closed below with bearish body + upper wick
+    if(c.h>=z.hi-tol&&c.c<=z.hi+tol&&!isBull&&closePos<=0.55&&wickTop>=0.18)
+      return{bullish:false,type:'rejection',zone:z};
+    // Breakout up: candle closed clearly above zone hi
+    if(c.c>z.hi+tol&&c.o<=z.hi+tol&&isBull&&closePos>=0.5)
+      return{bullish:true,type:'breakout',zone:z};
+    // Breakdown: candle closed clearly below zone lo
+    if(c.c<z.lo-tol&&c.o>=z.lo-tol&&!isBull&&closePos<=0.5)
+      return{bullish:false,type:'breakdown',zone:z};
+  }
+  return null;
+}
+
+let _confCache=null,_confCacheKey='';
+
+function computeSignals(cfg){
+  const cs=window.S?.candles;if(!cs||cs.length<10)return[];
+  const zones=getZones(cfg.zoneSource);if(!zones.length)return[];
+  const N=cs.length;
+  const ck=[window.S.sym,window.S.tf,N,(cs[N-1]||{}).t||0,
+    cfg.zoneSource,cfg.maxBars,cfg.clarThr,cfg.flowThr,cfg.cooldown,cfg.minScore].join('|');
+  if(_confCacheKey===ck&&_confCache)return _confCache;
+
+  const signals=[];
+  let lastBuy=-99,lastSell=-99;
+
+  for(let ci=Math.max(2,cfg.maxBars);ci<N-1;ci++){
+    // Find any zone reaction in [ci-maxBars, ci]
+    let zr=null;
+    for(let j=Math.max(1,ci-cfg.maxBars);j<=ci&&!zr;j++) zr=zoneReaction(j,cs,zones);
+    if(!zr)continue;
+
+    // Clarity value
+    const clVal=typeof getTrendClarityValue==='function'?getTrendClarityValue(ci):0;
+    // Flow oscillator value
+    const flVal=window.__getFlowOscValue?window.__getFlowOscValue(ci):0;
+    // Candle
+    const c=cs[ci];
+    const candleBull=c.c>c.o,candleBear=c.c<c.o;
+
+    if(zr.bullish){
+      if(!cfg.showBuy)continue;
+      // Strong contradiction → skip (both clarity and flow strongly bearish)
+      if(clVal<=-cfg.clarThr*1.6&&flVal<=-cfg.flowThr*1.6)continue;
+      let score=1;
+      if(clVal>=cfg.clarThr)score++;
+      if(flVal>=cfg.flowThr)score++;
+      if(candleBull)score++;
+      if(score>=cfg.minScore&&ci-lastBuy>=cfg.cooldown){
+        signals.push({idx:ci,type:'buy',score,zone:zr.zone,ztype:zr.type});
+        lastBuy=ci;
+      }
+    } else {
+      if(!cfg.showSell)continue;
+      if(clVal>=cfg.clarThr*1.6&&flVal>=cfg.flowThr*1.6)continue;
+      let score=1;
+      if(clVal<=-cfg.clarThr)score++;
+      if(flVal<=-cfg.flowThr)score++;
+      if(candleBear)score++;
+      if(score>=cfg.minScore&&ci-lastSell>=cfg.cooldown){
+        signals.push({idx:ci,type:'sell',score,zone:zr.zone,ztype:zr.type});
+        lastSell=ci;
+      }
+    }
+  }
+  _confCache=signals;_confCacheKey=ck;
+  return signals;
+}
+
+function drawConfluenceSignals(ctx,W,H,V,sc,x,bw){
+  if(!window.S||!S.inds.dvlConf||!S.candles.length)return;
+  const cfg=getConfCfg();
+  const signals=computeSignals(cfg);
+  if(!signals.length)return;
+  const right=W-RP();
+  ctx.save();
+  ctx.beginPath();ctx.rect(PL,PT,right-PL,H-PT-PB);ctx.clip();
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  const mkR=Math.max(3.5,Math.min(6,bw*0.38));
+  for(const sig of signals){
+    if(sig.idx<V.a||sig.idx>V.b)continue;
+    const c=S.candles[sig.idx];if(!c)continue;
+    const cx=x(sig.idx);
+    const strong=sig.score>=3;
+    const voff=mkR+5;
+    if(sig.type==='buy'){
+      const cy=sc.y(c.l)+voff;
+      if(cy>H-PB-6)continue;
+      ctx.shadowColor='rgba(0,210,170,0.60)';ctx.shadowBlur=strong?9:5;
+      // Triangle up
+      ctx.fillStyle=strong?'rgba(0,225,185,0.95)':'rgba(0,190,150,0.78)';
+      ctx.beginPath();ctx.moveTo(cx,cy-mkR);ctx.lineTo(cx-mkR*0.82,cy+mkR*0.5);ctx.lineTo(cx+mkR*0.82,cy+mkR*0.5);ctx.closePath();ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.font=(strong?'800':'700')+' 7px monospace';
+      ctx.fillStyle=strong?'rgba(0,240,195,0.96)':'rgba(0,200,160,0.84)';
+      ctx.fillText('B',cx,cy+mkR+6);
+    } else {
+      const cy=sc.y(c.h)-voff;
+      if(cy<PT+6)continue;
+      ctx.shadowColor='rgba(255,100,55,0.60)';ctx.shadowBlur=strong?9:5;
+      // Triangle down
+      ctx.fillStyle=strong?'rgba(255,110,55,0.95)':'rgba(220,80,40,0.78)';
+      ctx.beginPath();ctx.moveTo(cx,cy+mkR);ctx.lineTo(cx-mkR*0.82,cy-mkR*0.5);ctx.lineTo(cx+mkR*0.82,cy-mkR*0.5);ctx.closePath();ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.font=(strong?'800':'700')+' 7px monospace';
+      ctx.fillStyle=strong?'rgba(255,130,65,0.96)':'rgba(220,90,50,0.84)';
+      ctx.fillText('S',cx,cy-mkR-6);
+    }
+  }
+  ctx.restore();
+}
+
+window.__drawConfluenceSignals=drawConfluenceSignals;
+
+// Cache invalidation on settings change
+const CONF_IDS=new Set(['confZoneSource','confMaxBars','confClarThr','confFlowThr','confCooldown','confMinScore','confShowBuy','confShowSell']);
+['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
+  if(!CONF_IDS.has(e.target?.id))return;
+  _confCacheKey='';if(typeof drawSoon==='function')drawSoon();
+}));
 })();
 </script>
