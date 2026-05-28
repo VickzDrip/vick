@@ -4983,6 +4983,10 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
   // Fundo card premium
   ctx.save();
   ctx.fillStyle='#030713';ctx.fillRect(0,pTop,W,pH);
+  // Scale strip — mirrors drawGrid's right strip for visual continuity
+  ctx.strokeStyle='rgba(200,216,240,0.10)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pRight+.5,pTop);ctx.lineTo(pRight+.5,pBot);ctx.stroke();
+  ctx.fillStyle='rgba(0,212,255,0.22)';ctx.fillRect(pRight+1,pTop,3,pH);
   ctx.fillStyle='rgba(3,7,15,0.96)';
   _hvnRR(ctx,pLeft-8,pTop+3,pRight-pLeft+16,pH-6,7);ctx.fill();
   ctx.strokeStyle='rgba(80,115,160,0.18)';ctx.lineWidth=0.8;
@@ -5010,10 +5014,10 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
   ctx.setLineDash([5,6]);ctx.strokeStyle='rgba(0,215,255,0.11)';ctx.beginPath();ctx.moveTo(pLeft,zY);ctx.lineTo(pRight,zY);ctx.stroke();ctx.setLineDash([]);
 
   ctx.font='700 7.5px monospace';ctx.textBaseline='middle';
-  ctx.textAlign='right';
-  [{t:'STRONG',y:topY,c:'rgba(0,230,230,0.95)'},{t:'MEDIUM',y:zY,c:'rgba(180,190,205,0.82)'},{t:'WEAK',y:botY,c:'rgba(140,155,185,0.72)'}].forEach(o=>{ctx.fillStyle=o.c;ctx.fillText(o.t,pLeft-4,o.y);});
   ctx.textAlign='left';
-  [{t:'100',y:topY},{t:'0',y:zY},{t:'-100',y:botY}].forEach(o=>{ctx.fillStyle='rgba(105,130,170,0.78)';ctx.fillText(o.t,pRight+4,o.y);});
+  [{t:'STRONG',y:valY(100),c:'rgba(0,230,230,0.95)'},{t:'NEUTRAL',y:zY,c:'rgba(180,190,205,0.82)'},{t:'WEAK',y:valY(-100),c:'rgba(140,155,185,0.72)'}].forEach(o=>{ctx.fillStyle=o.c;ctx.fillText(o.t,pLeft+4,o.y);});
+  ctx.textAlign='left';
+  [{t:'100',y:valY(100)},{t:'0',y:zY},{t:'-100',y:valY(-100)}].forEach(o=>{ctx.fillStyle='rgba(105,130,170,0.78)';ctx.fillText(o.t,pRight+4,o.y);});
 
   // values
   const cw=CW(W);
@@ -12029,37 +12033,46 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH){
   const bw=Math.max(1.2,CW(W)/Math.max(1,V.span)*0.66);
   const barW=Math.max(1,bw*0.65);
   function valToY(v){return pMid-(Math.max(-100,Math.min(100,v))/100)*(fah*0.48);}
-  // Background
+  // Background full-width
   ctx.fillStyle='rgba(3,7,15,0.97)';ctx.fillRect(0,pTop,W,fah);
+  // Top separator
   ctx.strokeStyle='rgba(0,100,160,0.35)';ctx.lineWidth=0.8;ctx.setLineDash([]);
   ctx.beginPath();ctx.moveTo(0,pTop);ctx.lineTo(W,pTop);ctx.stroke();
-  // ±50 grid
+  // Scale strip — mirrors drawGrid's strip for visual continuity
+  ctx.strokeStyle='rgba(200,216,240,0.10)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(xR+.5,pTop);ctx.lineTo(xR+.5,pBot);ctx.stroke();
+  ctx.fillStyle='rgba(0,212,255,0.22)';ctx.fillRect(xR+1,pTop,3,fah);
+  // ±50 grid — at actual oscillator y-positions
+  const yF50hi=valToY(50),yF50lo=valToY(-50);
   ctx.strokeStyle='rgba(30,60,90,0.22)';ctx.lineWidth=0.5;
-  ctx.beginPath();ctx.moveTo(xL,pTop+fah*0.26);ctx.lineTo(xR,pTop+fah*0.26);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(xL,pTop+fah*0.74);ctx.lineTo(xR,pTop+fah*0.74);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xL,yF50hi);ctx.lineTo(xR,yF50hi);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xL,yF50lo);ctx.lineTo(xR,yF50lo);ctx.stroke();
   // Zero line
   ctx.strokeStyle='rgba(0,140,190,0.28)';ctx.lineWidth=0.75;ctx.setLineDash([4,6]);
   ctx.beginPath();ctx.moveTo(xL,pMid);ctx.lineTo(xR,pMid);ctx.stroke();ctx.setLineDash([]);
   // Title
   ctx.font='700 8px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(0,195,255,0.72)';ctx.fillText('DVL FLOW ACCELERATION',xL+8,pTop+9);
-  // Right scale
-  ctx.font='700 7px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
-  ctx.fillStyle='rgba(60,100,140,0.60)';
-  ctx.fillText('100',xR-4,pTop+7);ctx.fillText('0',xR-4,pMid);ctx.fillText('-100',xR-4,pBot-5);
+  // Right scale — in PR zone, Y aligned with actual valToY positions
+  const yF100=valToY(100),yFm100=valToY(-100);
+  ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(60,100,140,0.70)';
+  ctx.fillText('100',xR+5,Math.max(pTop+5,yF100));
+  ctx.fillText('0',xR+5,pMid);
+  ctx.fillText('-100',xR+5,Math.min(pBot-5,yFm100));
   // Left labels
   if(fah>=80){
     ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.fillStyle='rgba(0,200,160,0.38)';ctx.fillText('BULLISH',xL+6,pTop+fah*0.22);
-    ctx.fillStyle='rgba(80,110,150,0.30)';ctx.fillText('NEUTRAL',xL+6,pMid);
-    ctx.fillStyle='rgba(255,100,55,0.38)';ctx.fillText('BEARISH',xL+6,pTop+fah*0.78);
+    ctx.fillStyle='rgba(0,200,160,0.30)';ctx.fillText('BULLISH',xL+6,pTop+fah*0.22);
+    ctx.fillStyle='rgba(80,110,150,0.24)';ctx.fillText('NEUTRAL',xL+6,pMid);
+    ctx.fillStyle='rgba(255,100,55,0.30)';ctx.fillText('BEARISH',xL+6,pTop+fah*0.78);
   }
   // Histogram — use integer V.a/V.b indices
   const iStart=Math.max(0,V.a),iEnd=Math.min(N-1,V.b);
   ctx.save();
   for(let ci=iStart;ci<=iEnd;ci++){
     const v=osc[ci];if(Math.abs(v)<0.3)continue;
-    const cx=x(ci);if(cx<xL-barW||cx>xR+barW)continue;
+    const cx=x(ci);if(cx+barW/2<xL||cx-barW/2>xR)continue;
     const yv=valToY(v);
     const y1=v>=0?yv:pMid,bh=Math.max(1,Math.abs(yv-pMid));
     const rel=Math.abs(v)/100;
