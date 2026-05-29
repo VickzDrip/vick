@@ -2107,6 +2107,8 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Zone Timeout Bars</span><input class="num" id="confMaxBarsAfterExit" type="number" min="1" max="30" step="1" value="5" style="width:56px"></div>
             <div class="kv"><span class="k">Signal Cooldown Bars</span><input class="num" id="confCooldown" type="number" min="2" max="50" step="1" value="8" style="width:56px"></div>
             <div class="kv"><span class="k">Exit Buffer (ATR)</span><input class="num" id="confExitBuffer" type="number" min="0" max="0.5" step="0.01" value="0" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Room Next Zone (ATR)</span><input class="num" id="confMinRoomATR" type="number" min="0" max="5" step="0.1" value="0.5" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Exit Dist (ATR)</span><input class="num" id="confMaxExitATR" type="number" min="0" max="10" step="0.1" value="2" style="width:56px"></div>
             <div class="kv"><span class="k">Max Visible</span><input class="num" id="confMaxVisible" type="number" min="5" max="100" step="5" value="30" style="width:56px"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Show Buy Signals</span><input type="checkbox" id="confShowBuy" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Show Sell Signals</span><input type="checkbox" id="confShowSell" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
@@ -12835,6 +12837,8 @@ function getConfCfg(){
     maxBarsAfterExit:Math.max(1,Math.min(30,_sn('confMaxBarsAfterExit',5))),
     cooldown:Math.max(2,_sn('confCooldown',8)),
     exitBuffer:Math.max(0,Math.min(0.5,_sn('confExitBuffer',0))),
+    minRoomATR:Math.max(0,_sn('confMinRoomATR',0.5)),
+    maxExitATR:Math.max(0,_sn('confMaxExitATR',2)),
     maxVisible:Math.max(5,_sn('confMaxVisible',30)),
     showBuy:_cb('confShowBuy',true),
     showSell:_cb('confShowSell',true),
@@ -13039,7 +13043,7 @@ function computeConfluenceSignals(){
   const isMtfFlow=cfg.flowTf!=='current'&&cfg.flowTf!==S.tf;
   const ck=[S.sym,S.tf,N,lastClosed.t||0,
     cfg.zoneSource,cfg.clarTf,cfg.flowTf,cfg.flowStrMin,cfg.clarStrMin,
-    cfg.maxBarsAfterExit,cfg.cooldown,cfg.exitBuffer,
+    cfg.maxBarsAfterExit,cfg.cooldown,cfg.exitBuffer,cfg.minRoomATR,cfg.maxExitATR,
     cfg.requireReentry?1:0,cfg.showBuy?1:0,cfg.showSell?1:0].join('|');
   if(_confStableKey===ck&&S.confluenceSignals)return;
   _confStableKey=ck;
@@ -13072,7 +13076,7 @@ function computeConfluenceSignals(){
       const z=zones[zi];
       const st=zoneState[zi];
 
-      const atr=cfg.exitBuffer>0?_calcATR(cs,ci):0;
+      const atr=_calcATR(cs,ci);
       const buf=cfg.exitBuffer*atr;
 
       // Candle touches zone (wick or body) — used for ENTRY detection
@@ -13124,7 +13128,21 @@ function computeConfluenceSignals(){
       // Oscillator values with MTF / fallback
       const flVal=(isMtfFlow&&mtfFlowArr!=null)?mtfFlowArr[ci]:(window.__getFlowOscValue?window.__getFlowOscValue(ci):0);
       const clVal=(isMtfClar&&mtfClarArr!=null)?mtfClarArr[ci]:_smoothClar(ci);
-      const exitDir=closedAbove?'UP':'DOWN';
+      const exitDir=closedAbove?'BUY':'SELL';
+
+      // Build ALL blocking reasons before deciding
+      const blocked=[];
+      if(closedAbove){
+        if(flVal<cfg.flowStrMin)  blocked.push('flow='+flVal.toFixed(1)+'<'+cfg.flowStrMin);
+        if(clVal<cfg.clarStrMin)  blocked.push('clar='+clVal.toFixed(1)+'<'+cfg.clarStrMin);
+        if(cfg.minRoomATR>0&&!_hasRoom(c.c,zones,z,'buy',atr,cfg.minRoomATR)) blocked.push('no-room-above');
+        if(cfg.maxExitATR>0){const d=(c.c-z.hi)/atr;if(d>cfg.maxExitATR)blocked.push('exit-too-far='+d.toFixed(2)+'x>'+cfg.maxExitATR);}
+      }else{
+        if(flVal>-cfg.flowStrMin) blocked.push('flow='+flVal.toFixed(1)+'>=-'+cfg.flowStrMin);
+        if(clVal>-cfg.clarStrMin) blocked.push('clar='+clVal.toFixed(1)+'>=-'+cfg.clarStrMin);
+        if(cfg.minRoomATR>0&&!_hasRoom(c.c,zones,z,'sell',atr,cfg.minRoomATR)) blocked.push('no-room-below');
+        if(cfg.maxExitATR>0){const d=(z.lo-c.c)/atr;if(d>cfg.maxExitATR)blocked.push('exit-too-far='+d.toFixed(2)+'x>'+cfg.maxExitATR);}
+      }
 
       if(dbg){
         console.debug('[DVL Conf]',{
@@ -13133,30 +13151,26 @@ function computeConfluenceSignals(){
           zone:{lo:+z.lo.toFixed(4),hi:+z.hi.toFixed(4)},
           flow:+flVal.toFixed(1),flowMin:cfg.flowStrMin,
           clar:+clVal.toFixed(1),clarMin:cfg.clarStrMin,
+          atr:+atr.toFixed(4),
+          blocked:blocked.length?blocked.join(' | '):'PASS',
           mtfFlow:isMtfFlow,mtfClar:isMtfClar,
         });
       }
 
+      if(blocked.length>0)continue;
+
       if(closedAbove&&cfg.showBuy){
-        if(flVal>=cfg.flowStrMin&&clVal>=cfg.clarStrMin){
-          signals.push({id:S.sym+'|'+S.tf+'|'+c.t+'|buy',idx:ci,time:c.t,type:'buy',price:c.c,score:1,zone:z,symbol:S.sym,tf:S.tf});
-          st.signalPlottedForExit=true;
-          lastSignalIdx=ci;
-          if(cfg.requireReentry)st.wasInside=false;
-          if(dbg)console.debug('[DVL Conf] z'+zi+' BUY confirmed ci='+ci);
-        }else{
-          if(dbg)console.debug('[DVL Conf] z'+zi+' ci='+ci+' BUY blocked: flow='+flVal.toFixed(1)+'<'+cfg.flowStrMin+' OR clar='+clVal.toFixed(1)+'<'+cfg.clarStrMin);
-        }
+        signals.push({id:S.sym+'|'+S.tf+'|'+c.t+'|buy',idx:ci,time:c.t,type:'buy',price:c.c,score:1,zone:z,symbol:S.sym,tf:S.tf});
+        st.signalPlottedForExit=true;
+        lastSignalIdx=ci;
+        if(cfg.requireReentry)st.wasInside=false;
+        if(dbg)console.debug('[DVL Conf] z'+zi+' BUY confirmed ci='+ci);
       }else if(closedBelow&&cfg.showSell){
-        if(flVal<=-cfg.flowStrMin&&clVal<=-cfg.clarStrMin){
-          signals.push({id:S.sym+'|'+S.tf+'|'+c.t+'|sell',idx:ci,time:c.t,type:'sell',price:c.c,score:1,zone:z,symbol:S.sym,tf:S.tf});
-          st.signalPlottedForExit=true;
-          lastSignalIdx=ci;
-          if(cfg.requireReentry)st.wasInside=false;
-          if(dbg)console.debug('[DVL Conf] z'+zi+' SELL confirmed ci='+ci);
-        }else{
-          if(dbg)console.debug('[DVL Conf] z'+zi+' ci='+ci+' SELL blocked: flow='+flVal.toFixed(1)+'>=-'+cfg.flowStrMin+' OR clar='+clVal.toFixed(1)+'>=-'+cfg.clarStrMin);
-        }
+        signals.push({id:S.sym+'|'+S.tf+'|'+c.t+'|sell',idx:ci,time:c.t,type:'sell',price:c.c,score:1,zone:z,symbol:S.sym,tf:S.tf});
+        st.signalPlottedForExit=true;
+        lastSignalIdx=ci;
+        if(cfg.requireReentry)st.wasInside=false;
+        if(dbg)console.debug('[DVL Conf] z'+zi+' SELL confirmed ci='+ci);
       }
     }
   }
@@ -13272,7 +13286,7 @@ window.__drawConfluenceSignals=drawConfluenceSignals;
 window.__computeConfluenceSignals=computeConfluenceSignals;
 window.__resetConfluenceCache=function(){_confStableKey='';};
 
-const CONF_IDS=new Set(['confZoneSource','confClarTf','confFlowTf','confFlowStrMin','confClarStrMin','confMaxBarsAfterExit','confCooldown','confExitBuffer','confMaxVisible','confShowBuy','confShowSell','confRequireReentry','confDebug']);
+const CONF_IDS=new Set(['confZoneSource','confClarTf','confFlowTf','confFlowStrMin','confClarStrMin','confMaxBarsAfterExit','confCooldown','confExitBuffer','confMinRoomATR','confMaxExitATR','confMaxVisible','confShowBuy','confShowSell','confRequireReentry','confDebug']);
 ['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
   if(!CONF_IDS.has(e.target?.id))return;
   _confStableKey='';computeConfluenceSignals();if(typeof drawSoon==='function')drawSoon();
