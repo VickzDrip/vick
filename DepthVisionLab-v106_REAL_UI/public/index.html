@@ -2191,9 +2191,17 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Min Room (ATR)</span><input class="num" id="confMinRoomATR" type="number" min="0.1" max="3" step="0.1" value="0.8" style="width:56px"></div>
             <div class="kv"><span class="k">Pullback (ATR)</span><input class="num" id="confPullbackATR" type="number" min="0.1" max="3" step="0.1" value="0.6" style="width:56px"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Req. Pullback</span><input type="checkbox" id="confRequirePullback" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Min Clarity Amp.</span><input class="num" id="confMinClarAmp" type="number" min="5" max="60" step="1" value="18" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Flow Amp.</span><input class="num" id="confMinFlowAmp" type="number" min="5" max="60" step="1" value="18" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Clarity Slope</span><input class="num" id="confMinClarSlope" type="number" min="1" max="30" step="1" value="6" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Flow Slope</span><input class="num" id="confMinFlowSlope" type="number" min="1" max="30" step="1" value="6" style="width:56px"></div>
+            <div class="kv"><span class="k">Slope Lookback</span><input class="num" id="confSlopeLB" type="number" min="2" max="10" step="1" value="4" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Clarity Range</span><input class="num" id="confMinClarRange" type="number" min="5" max="80" step="5" value="25" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Flow Range</span><input class="num" id="confMinFlowRange" type="number" min="5" max="80" step="5" value="25" style="width:56px"></div>
+            <div class="kv"><span class="k">Range Lookback</span><input class="num" id="confRangeLB" type="number" min="3" max="20" step="1" value="10" style="width:56px"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Show BUY</span><input type="checkbox" id="confShowBuy" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Show SELL</span><input type="checkbox" id="confShowSell" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <div class="hint">Score máx. 11 · BUY=suporte · SELL=resistência · espaço obrigatório</div>
+            <div class="hint">Score máx. 11 · BUY=suporte · SELL=resistência · osciladores com força obrigatória</div>
           </div>
         </div>
 
@@ -12826,6 +12834,14 @@ function getConfCfg(){
     minRoomATR:Math.max(0.1,sn('confMinRoomATR',0.8)),
     pullbackATR:Math.max(0.1,sn('confPullbackATR',0.6)),
     requirePullback:cb('confRequirePullback',true),
+    minClarAmp:Math.max(1,sn('confMinClarAmp',18)),
+    minFlowAmp:Math.max(1,sn('confMinFlowAmp',18)),
+    minClarSlope:Math.max(0,sn('confMinClarSlope',6)),
+    minFlowSlope:Math.max(0,sn('confMinFlowSlope',6)),
+    slopeLB:Math.max(2,Math.min(10,sn('confSlopeLB',4))),
+    minClarRange:Math.max(1,sn('confMinClarRange',25)),
+    minFlowRange:Math.max(1,sn('confMinFlowRange',25)),
+    rangeLB:Math.max(3,Math.min(20,sn('confRangeLB',10))),
   };
 }
 
@@ -12924,6 +12940,42 @@ function _hasRoom(price,zones,rxZone,direction,atr,minRoomATR){
   }
 }
 
+// Oscillator amplitude/range/slope helpers
+function _clarRange(idx,lb){
+  if(typeof getTrendClarityValue!=='function')return 999;
+  let mn=Infinity,mx=-Infinity;
+  for(let i=Math.max(0,idx-lb+1);i<=idx;i++){const v=getTrendClarityValue(i);if(v<mn)mn=v;if(v>mx)mx=v;}
+  return mx===-Infinity?0:mx-mn;
+}
+function _flowRange(idx,lb){
+  if(!window.__getFlowOscValue)return 999;
+  let mn=Infinity,mx=-Infinity;
+  for(let i=Math.max(0,idx-lb+1);i<=idx;i++){const v=window.__getFlowOscValue(i);if(v<mn)mn=v;if(v>mx)mx=v;}
+  return mx===-Infinity?0:mx-mn;
+}
+function _clarSlope(idx,lb){
+  if(typeof getTrendClarityValue!=='function')return 0;
+  return getTrendClarityValue(idx)-getTrendClarityValue(Math.max(0,idx-lb));
+}
+function _flowSlope(idx,lb){
+  if(!window.__getFlowOscValue)return 0;
+  return window.__getFlowOscValue(idx)-window.__getFlowOscValue(Math.max(0,idx-lb));
+}
+// Returns false if oscillators lack real force in the signal direction
+function _oscillatorOK(clVal,flVal,clarSlope,flowSlope,clarRng,flowRng,cfg,direction){
+  // Block: both values too close to zero (no amplitude)
+  if(Math.abs(clVal)<cfg.minClarAmp&&Math.abs(flVal)<cfg.minFlowAmp)return false;
+  // Block: both oscillators compressed (no recent movement)
+  if(clarRng<cfg.minClarRange&&flowRng<cfg.minFlowRange)return false;
+  // Block: neither oscillator is expanding in the signal direction
+  if(direction==='buy'){
+    if(clarSlope<cfg.minClarSlope&&flowSlope<cfg.minFlowSlope)return false;
+  }else{
+    if(clarSlope>-cfg.minClarSlope&&flowSlope>-cfg.minFlowSlope)return false;
+  }
+  return true;
+}
+
 // Stable cache key: anchored on N-2 (last confirmed closed candle)
 let _confStableKey='';
 
@@ -12937,7 +12989,9 @@ function computeConfluenceSignals(){
   const lastClosed=cs[N-2]||{};
   const ck=[S.sym,S.tf,N,lastClosed.t||0,cfg.zoneSource,cfg.maxBars,
     cfg.clarThr,cfg.flowThr,cfg.cooldown,cfg.minScore,
-    cfg.minRoomATR,cfg.requirePullback,cfg.pullbackATR].join('|');
+    cfg.minRoomATR,cfg.requirePullback,cfg.pullbackATR,
+    cfg.minClarAmp,cfg.minFlowAmp,cfg.minClarSlope,cfg.minFlowSlope,
+    cfg.slopeLB,cfg.minClarRange,cfg.minFlowRange,cfg.rangeLB].join('|');
   if(_confStableKey===ck&&S.confluenceSignals&&S.confluenceSignals.length>0)return;
   _confStableKey=ck;
 
@@ -12975,6 +13029,12 @@ function computeConfluenceSignals(){
     const clarFalling=_isClarityFalling(ci);
     const flowRising=_isFlowRising(ci);
     const flowFalling=_isFlowFalling(ci);
+    // Oscillator volatility metrics
+    const clarRng=_clarRange(ci,cfg.rangeLB);
+    const flowRng=_flowRange(ci,cfg.rangeLB);
+    const clarSlope=_clarSlope(ci,cfg.slopeLB);
+    const flowSlope=_flowSlope(ci,cfg.slopeLB);
+    const bothAmpOK=Math.abs(clVal)>=cfg.minClarAmp&&Math.abs(flVal)>=cfg.minFlowAmp;
     const candleBull=c.c>c.o;
     const candleBear=c.c<c.o;
     const rng=Math.max(1e-9,c.h-c.l);
@@ -12996,17 +13056,19 @@ function computeConfluenceSignals(){
       // 4. Pullback required before repeating same direction (enforced above)
       // 5. Both oscillators must confirm BUY direction (neither neutral nor bearish)
       if(clVal<=0||flVal<=0)continue;
+      // 6. Oscillators must have real force: amplitude, range, and expansion
+      if(!_oscillatorOK(clVal,flVal,clarSlope,flowSlope,clarRng,flowRng,cfg,'buy'))continue;
 
       // ── SCORE (max 11) ────────────────────────────────────────────────────
       let score=2;                               // zone context valid: +2
       if(c.c>=zr.zone.mid)score++;              // close in upper zone half (held support well)
       if(candleBull)score++;                     // candle closed bullish
       if(wickBot>=0.35)score++;                  // strong bullish wick rejection
-      if(clVal>=cfg.clarThr)score++;             // Clarity bullish
-      if(clarRising)score++;                     // Clarity rising
-      if(flVal>=cfg.flowThr)score++;             // Flow bullish
-      if(flowRising)score++;                     // Flow rising
-      if(zr.type==='breakout')score++;           // breakout confirmation
+      if(clVal>=cfg.clarThr)score++;             // Clarity bullish above threshold
+      if(clarSlope>=cfg.minClarSlope)score++;    // Clarity expanding upward
+      if(flVal>=cfg.flowThr)score++;             // Flow bullish above threshold
+      if(flowSlope>=cfg.minFlowSlope)score++;    // Flow expanding upward
+      if(bothAmpOK)score++;                      // both oscillators with strong amplitude
       if(pullbackOKBuy&&lastBuyIdx>=0)score++;   // valid pullback since last BUY
 
       if(score>=cfg.minScore){
@@ -13030,17 +13092,19 @@ function computeConfluenceSignals(){
       // 4. Pullback required before repeating same direction (enforced above)
       // 5. Both oscillators must confirm SELL direction (neither neutral nor bullish)
       if(clVal>=0||flVal>=0)continue;
+      // 6. Oscillators must have real force: amplitude, range, and expansion
+      if(!_oscillatorOK(clVal,flVal,clarSlope,flowSlope,clarRng,flowRng,cfg,'sell'))continue;
 
       // ── SCORE (max 11) ────────────────────────────────────────────────────
       let score=2;
       if(c.c<=zr.zone.mid)score++;              // close in lower zone half
       if(candleBear)score++;
       if(wickTop>=0.35)score++;
-      if(clVal<=-cfg.clarThr)score++;
-      if(clarFalling)score++;
-      if(flVal<=-cfg.flowThr)score++;
-      if(flowFalling)score++;
-      if(zr.type==='breakdown')score++;
+      if(clVal<=-cfg.clarThr)score++;           // Clarity bearish below threshold
+      if(clarSlope<=-cfg.minClarSlope)score++;  // Clarity expanding downward
+      if(flVal<=-cfg.flowThr)score++;           // Flow bearish below threshold
+      if(flowSlope<=-cfg.minFlowSlope)score++;  // Flow expanding downward
+      if(bothAmpOK)score++;                     // both oscillators with strong amplitude
       if(pullbackOKSell&&lastSellIdx>=0)score++;
 
       if(score>=cfg.minScore){
@@ -13154,7 +13218,7 @@ window.__drawConfluenceSignals=drawConfluenceSignals;
 window.__computeConfluenceSignals=computeConfluenceSignals;
 window.__resetConfluenceCache=function(){_confStableKey='';};
 
-const CONF_IDS=new Set(['confZoneSource','confMaxBars','confClarThr','confFlowThr','confCooldown','confMinScore','confShowBuy','confShowSell','confMaxVisible','confMinRoomATR','confPullbackATR','confRequirePullback']);
+const CONF_IDS=new Set(['confZoneSource','confMaxBars','confClarThr','confFlowThr','confCooldown','confMinScore','confShowBuy','confShowSell','confMaxVisible','confMinRoomATR','confPullbackATR','confRequirePullback','confMinClarAmp','confMinFlowAmp','confMinClarSlope','confMinFlowSlope','confSlopeLB','confMinClarRange','confMinFlowRange','confRangeLB']);
 ['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
   if(!CONF_IDS.has(e.target?.id))return;
   _confStableKey='';computeConfluenceSignals();if(typeof drawSoon==='function')drawSoon();
