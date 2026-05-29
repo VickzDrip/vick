@@ -2199,9 +2199,14 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Min Clarity Range</span><input class="num" id="confMinClarRange" type="number" min="5" max="80" step="5" value="25" style="width:56px"></div>
             <div class="kv"><span class="k">Min Flow Range</span><input class="num" id="confMinFlowRange" type="number" min="5" max="80" step="5" value="25" style="width:56px"></div>
             <div class="kv"><span class="k">Range Lookback</span><input class="num" id="confRangeLB" type="number" min="3" max="20" step="1" value="10" style="width:56px"></div>
+            <div class="kv"><span class="k">Flow Strength Min</span><input class="num" id="confFlowStrMin" type="number" min="5" max="80" step="5" value="20" style="width:56px"></div>
+            <div class="kv"><span class="k">Clarity Strength Min</span><input class="num" id="confClarStrMin" type="number" min="5" max="80" step="5" value="20" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Body ATR</span><input class="num" id="confMaxBodyATR" type="number" min="0.3" max="3" step="0.1" value="1.2" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Range ATR</span><input class="num" id="confMaxRangeATR" type="number" min="0.5" max="5" step="0.1" value="1.8" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Zone Dist ATR</span><input class="num" id="confMaxZoneDistATR" type="number" min="0.1" max="2" step="0.1" value="0.6" style="width:56px"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Show BUY</span><input type="checkbox" id="confShowBuy" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Show SELL</span><input type="checkbox" id="confShowSell" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <div class="hint">Score máx. 11 · BUY=suporte · SELL=resistência · osciladores com força obrigatória</div>
+            <div class="hint">Flow/Clarity Strength Min = força mínima direcional · Max Body/Range ATR = candle não estendido · Max Zone Dist = entrada não atrasada</div>
           </div>
         </div>
 
@@ -12883,6 +12888,13 @@ function getConfCfg(){
     minClarRange:Math.max(1,sn('confMinClarRange',25)),
     minFlowRange:Math.max(1,sn('confMinFlowRange',25)),
     rangeLB:Math.max(3,Math.min(20,sn('confRangeLB',10))),
+    // Directional strength thresholds (absolute minimum in signal direction)
+    flowStrMin:Math.max(1,sn('confFlowStrMin',20)),
+    clarStrMin:Math.max(1,sn('confClarStrMin',20)),
+    // Oversized / late candle filters
+    maxBodyATR:Math.max(0.3,sn('confMaxBodyATR',1.2)),
+    maxRangeATR:Math.max(0.5,sn('confMaxRangeATR',1.8)),
+    maxZoneDistATR:Math.max(0.1,sn('confMaxZoneDistATR',0.6)),
   };
 }
 
@@ -13041,7 +13053,8 @@ function computeConfluenceSignals(){
     cfg.clarThr,cfg.flowThr,cfg.cooldown,cfg.minScore,
     cfg.minRoomATR,cfg.requirePullback,cfg.pullbackATR,
     cfg.minClarAmp,cfg.minFlowAmp,cfg.minClarSlope,cfg.minFlowSlope,
-    cfg.slopeLB,cfg.minClarRange,cfg.minFlowRange,cfg.rangeLB].join('|');
+    cfg.slopeLB,cfg.minClarRange,cfg.minFlowRange,cfg.rangeLB,
+    cfg.flowStrMin,cfg.clarStrMin,cfg.maxBodyATR,cfg.maxRangeATR,cfg.maxZoneDistATR].join('|');
   if(_confStableKey===ck&&S.confluenceSignals&&S.confluenceSignals.length>0)return;
   _confStableKey=ck;
 
@@ -13108,6 +13121,14 @@ function computeConfluenceSignals(){
       if(clVal<=0||flVal<=0)continue;
       // 6. Oscillators must have real force: amplitude, range, and expansion
       if(!_oscillatorOK(clVal,flVal,clarSlope,flowSlope,clarRng,flowRng,cfg,'buy'))continue;
+      // 7. Directional strength: both oscillators must reach minimum threshold for BUY
+      if(clVal<cfg.clarStrMin||flVal<cfg.flowStrMin)continue;
+      // 8. Candle not oversized — reject extended / late entries
+      if(Math.abs(c.c-c.o)/atr>cfg.maxBodyATR)continue;
+      if(rng/atr>cfg.maxRangeATR)continue;
+      // 9. Close not too far from the relevant zone edge (entry not already extended)
+      {const refEdge=zr.type==='breakout'?zr.zone.hi:zr.zone.lo;
+      if((c.c-refEdge)/atr>cfg.maxZoneDistATR)continue;}
 
       // ── SCORE (max 11) ────────────────────────────────────────────────────
       let score=2;                               // zone context valid: +2
@@ -13144,6 +13165,14 @@ function computeConfluenceSignals(){
       if(clVal>=0||flVal>=0)continue;
       // 6. Oscillators must have real force: amplitude, range, and expansion
       if(!_oscillatorOK(clVal,flVal,clarSlope,flowSlope,clarRng,flowRng,cfg,'sell'))continue;
+      // 7. Directional strength: both oscillators must reach minimum threshold for SELL
+      if(clVal>-cfg.clarStrMin||flVal>-cfg.flowStrMin)continue;
+      // 8. Candle not oversized — reject extended / late entries
+      if(Math.abs(c.c-c.o)/atr>cfg.maxBodyATR)continue;
+      if(rng/atr>cfg.maxRangeATR)continue;
+      // 9. Close not too far from the relevant zone edge (entry not already extended)
+      {const refEdge=zr.type==='breakdown'?zr.zone.lo:zr.zone.hi;
+      if((refEdge-c.c)/atr>cfg.maxZoneDistATR)continue;}
 
       // ── SCORE (max 11) ────────────────────────────────────────────────────
       let score=2;
@@ -13268,7 +13297,7 @@ window.__drawConfluenceSignals=drawConfluenceSignals;
 window.__computeConfluenceSignals=computeConfluenceSignals;
 window.__resetConfluenceCache=function(){_confStableKey='';};
 
-const CONF_IDS=new Set(['confZoneSource','confMaxBars','confClarThr','confFlowThr','confCooldown','confMinScore','confShowBuy','confShowSell','confMaxVisible','confMinRoomATR','confPullbackATR','confRequirePullback','confMinClarAmp','confMinFlowAmp','confMinClarSlope','confMinFlowSlope','confSlopeLB','confMinClarRange','confMinFlowRange','confRangeLB']);
+const CONF_IDS=new Set(['confZoneSource','confMaxBars','confClarThr','confFlowThr','confCooldown','confMinScore','confShowBuy','confShowSell','confMaxVisible','confMinRoomATR','confPullbackATR','confRequirePullback','confMinClarAmp','confMinFlowAmp','confMinClarSlope','confMinFlowSlope','confSlopeLB','confMinClarRange','confMinFlowRange','confRangeLB','confFlowStrMin','confClarStrMin','confMaxBodyATR','confMaxRangeATR','confMaxZoneDistATR']);
 ['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
   if(!CONF_IDS.has(e.target?.id))return;
   _confStableKey='';computeConfluenceSignals();if(typeof drawSoon==='function')drawSoon();
