@@ -2104,12 +2104,14 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Flow Strength Min</span><input class="num" id="confFlowStrMin" type="number" min="5" max="80" step="5" value="20" style="width:56px"></div>
             <div class="kv"><span class="k">Clarity Strength Min</span><input class="num" id="confClarStrMin" type="number" min="5" max="80" step="5" value="25" style="width:56px"></div>
             <div class="hint" style="font-size:8px;margin:1px 0 5px;">Minimum oscillator strength. BUY requires positive, SELL requires negative values.</div>
-            <div class="kv"><span class="k">Max Bars After Exit</span><input class="num" id="confMaxBarsAfterExit" type="number" min="1" max="10" step="1" value="1" style="width:56px"></div>
+            <div class="kv"><span class="k">Zone Timeout Bars</span><input class="num" id="confMaxBarsAfterExit" type="number" min="1" max="30" step="1" value="5" style="width:56px"></div>
             <div class="kv"><span class="k">Signal Cooldown Bars</span><input class="num" id="confCooldown" type="number" min="2" max="50" step="1" value="8" style="width:56px"></div>
+            <div class="kv"><span class="k">Exit Buffer (ATR)</span><input class="num" id="confExitBuffer" type="number" min="0" max="0.5" step="0.01" value="0" style="width:56px"></div>
             <div class="kv"><span class="k">Max Visible</span><input class="num" id="confMaxVisible" type="number" min="5" max="100" step="5" value="30" style="width:56px"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Show Buy Signals</span><input type="checkbox" id="confShowBuy" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Show Sell Signals</span><input type="checkbox" id="confShowSell" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Require Re-entry</span><input type="checkbox" id="confRequireReentry" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Debug (console)</span><input type="checkbox" id="confDebug" style="width:14px;height:14px;accent-color:#ffa500;cursor:pointer;flex-shrink:0;"></label>
           </div>
         </div>
 
@@ -12830,12 +12832,14 @@ function getConfCfg(){
     flowTf:el('confFlowTf')?.value||'current',
     flowStrMin:Math.max(5,_sn('confFlowStrMin',20)),
     clarStrMin:Math.max(5,_sn('confClarStrMin',25)),
-    maxBarsAfterExit:Math.max(1,Math.min(10,_sn('confMaxBarsAfterExit',1))),
+    maxBarsAfterExit:Math.max(1,Math.min(30,_sn('confMaxBarsAfterExit',5))),
     cooldown:Math.max(2,_sn('confCooldown',8)),
+    exitBuffer:Math.max(0,Math.min(0.5,_sn('confExitBuffer',0))),
     maxVisible:Math.max(5,_sn('confMaxVisible',30)),
     showBuy:_cb('confShowBuy',true),
     showSell:_cb('confShowSell',true),
     requireReentry:_cb('confRequireReentry',true),
+    debug:_cb('confDebug',false),
   };
 }
 
@@ -13035,7 +13039,7 @@ function computeConfluenceSignals(){
   const isMtfFlow=cfg.flowTf!=='current'&&cfg.flowTf!==S.tf;
   const ck=[S.sym,S.tf,N,lastClosed.t||0,
     cfg.zoneSource,cfg.clarTf,cfg.flowTf,cfg.flowStrMin,cfg.clarStrMin,
-    cfg.maxBarsAfterExit,cfg.cooldown,
+    cfg.maxBarsAfterExit,cfg.cooldown,cfg.exitBuffer,
     cfg.requireReentry?1:0,cfg.showBuy?1:0,cfg.showSell?1:0].join('|');
   if(_confStableKey===ck&&S.confluenceSignals)return;
   _confStableKey=ck;
@@ -13047,56 +13051,111 @@ function computeConfluenceSignals(){
   const mtfFlowArr=isMtfFlow?_buildFlowMtfMap(cs,cfg.flowTf):null;
   const mtfClarArr=isMtfClar?_buildClarMtfMap(cs,cfg.clarTf):null;
 
-  // Per-zone state machine
-  const zoneState=zones.map(()=>({wasInside:false,lastInsideIdx:-1,signalPlottedForExit:false}));
+  // Per-zone state: track entry and last touch separately
+  // lastTouchedIdx = any touch (wick or close); used for stale-zone timeout
+  // lastCloseInsideIdx = last bar where close was inside zone; used to reset signal gate
+  const zoneState=zones.map(()=>({
+    wasInside:false,
+    lastTouchedIdx:-1,
+    lastCloseInsideIdx:-1,
+    signalPlottedForExit:false,
+  }));
 
   const signals=[];
   let lastSignalIdx=-999;
+  const dbg=cfg.debug;
 
-  // Only scan closed candles — skip index N-1 (live candle)
-  for(let ci=1;ci<N-1;ci++){
+  for(let ci=1;ci<N-1;ci++){  // skip live candle N-1
     const c=cs[ci];
 
     for(let zi=0;zi<zones.length;zi++){
       const z=zones[zi];
       const st=zoneState[zi];
-      const insideNow=_candleOverlapsZone(c,z);
 
-      if(insideNow){
+      const atr=cfg.exitBuffer>0?_calcATR(cs,ci):0;
+      const buf=cfg.exitBuffer*atr;
+
+      // Candle touches zone (wick or body) — used for ENTRY detection
+      const touchesZone=c.h>=z.lo&&c.l<=z.hi;
+      // Candle close position relative to zone — used for EXIT detection
+      const closedAbove=c.c>z.hi+buf;
+      const closedBelow=c.c<z.lo-buf;
+      const closedInside=!closedAbove&&!closedBelow;
+
+      // ── ENTRY / TOUCH TRACKING ──────────────────────────────────────
+      // Any wick or body contact activates the zone.
+      // Close inside the zone resets the signal gate (allows new signal after re-entry).
+      if(touchesZone){
         if(!st.wasInside){
+          // Fresh entry — clear signal gate
           st.wasInside=true;
           st.signalPlottedForExit=false;
+          if(dbg)console.debug('[DVL Conf] z'+zi+' ENTRY ci='+ci+' close='+c.c.toFixed(2)+' zone=['+z.lo.toFixed(2)+','+z.hi.toFixed(2)+']');
+        } else if(closedInside&&st.signalPlottedForExit){
+          // Price came back inside zone after a signal — allow new signal
+          st.signalPlottedForExit=false;
+          if(dbg)console.debug('[DVL Conf] z'+zi+' RE-ENTRY ci='+ci+' signal gate reset');
         }
-        st.lastInsideIdx=ci;
-      } else if(st.wasInside&&!st.signalPlottedForExit){
-        const barsAfter=ci-st.lastInsideIdx;
+        st.lastTouchedIdx=ci;
+        if(closedInside)st.lastCloseInsideIdx=ci;
+      }
 
-        if(barsAfter>cfg.maxBarsAfterExit){
+      // ── STALE ZONE CLEANUP ──────────────────────────────────────────
+      // If zone was activated but price hasn't touched it for too long → reset
+      if(st.wasInside&&!touchesZone&&st.lastTouchedIdx>=0){
+        if(ci-st.lastTouchedIdx>cfg.maxBarsAfterExit&&!st.signalPlottedForExit){
+          if(dbg)console.debug('[DVL Conf] z'+zi+' STALE ci='+ci+' barsSinceTouch='+(ci-st.lastTouchedIdx));
           if(cfg.requireReentry)st.wasInside=false;
           continue;
         }
+      }
 
-        const exitedAbove=c.c>z.hi;
-        const exitedBelow=c.c<z.lo;
-        if(!exitedAbove&&!exitedBelow)continue;
+      // ── EXIT CHECK ─────────────────────────────────────────────────
+      // Runs whenever zone was activated AND close is outside — even if wick touched zone
+      if(!st.wasInside||st.signalPlottedForExit)continue;
+      if(!closedAbove&&!closedBelow)continue;
 
-        if(ci-lastSignalIdx<cfg.cooldown)continue;
+      // Cooldown guard
+      if(ci-lastSignalIdx<cfg.cooldown){
+        if(dbg)console.debug('[DVL Conf] z'+zi+' ci='+ci+' blocked: cooldown ('+(ci-lastSignalIdx)+' of '+cfg.cooldown+')');
+        continue;
+      }
 
-        const flVal=(isMtfFlow&&mtfFlowArr)?mtfFlowArr[ci]:(window.__getFlowOscValue?window.__getFlowOscValue(ci):0);
-        const clVal=(isMtfClar&&mtfClarArr)?mtfClarArr[ci]:_smoothClar(ci);
+      // Oscillator values with MTF / fallback
+      const flVal=(isMtfFlow&&mtfFlowArr!=null)?mtfFlowArr[ci]:(window.__getFlowOscValue?window.__getFlowOscValue(ci):0);
+      const clVal=(isMtfClar&&mtfClarArr!=null)?mtfClarArr[ci]:_smoothClar(ci);
+      const exitDir=closedAbove?'UP':'DOWN';
 
-        if(exitedAbove&&cfg.showBuy&&flVal>=cfg.flowStrMin&&clVal>=cfg.clarStrMin){
-          const id=S.sym+'|'+S.tf+'|'+c.t+'|buy';
-          signals.push({id,idx:ci,time:c.t,type:'buy',price:c.c,score:1,zone:z,symbol:S.sym,tf:S.tf});
+      if(dbg){
+        console.debug('[DVL Conf]',{
+          zi,ci,time:new Date(c.t).toISOString().slice(11,19),
+          exit:exitDir,close:+c.c.toFixed(4),
+          zone:{lo:+z.lo.toFixed(4),hi:+z.hi.toFixed(4)},
+          flow:+flVal.toFixed(1),flowMin:cfg.flowStrMin,
+          clar:+clVal.toFixed(1),clarMin:cfg.clarStrMin,
+          mtfFlow:isMtfFlow,mtfClar:isMtfClar,
+        });
+      }
+
+      if(closedAbove&&cfg.showBuy){
+        if(flVal>=cfg.flowStrMin&&clVal>=cfg.clarStrMin){
+          signals.push({id:S.sym+'|'+S.tf+'|'+c.t+'|buy',idx:ci,time:c.t,type:'buy',price:c.c,score:1,zone:z,symbol:S.sym,tf:S.tf});
           st.signalPlottedForExit=true;
           lastSignalIdx=ci;
           if(cfg.requireReentry)st.wasInside=false;
-        } else if(exitedBelow&&cfg.showSell&&flVal<=-cfg.flowStrMin&&clVal<=-cfg.clarStrMin){
-          const id=S.sym+'|'+S.tf+'|'+c.t+'|sell';
-          signals.push({id,idx:ci,time:c.t,type:'sell',price:c.c,score:1,zone:z,symbol:S.sym,tf:S.tf});
+          if(dbg)console.debug('[DVL Conf] z'+zi+' BUY confirmed ci='+ci);
+        }else{
+          if(dbg)console.debug('[DVL Conf] z'+zi+' ci='+ci+' BUY blocked: flow='+flVal.toFixed(1)+'<'+cfg.flowStrMin+' OR clar='+clVal.toFixed(1)+'<'+cfg.clarStrMin);
+        }
+      }else if(closedBelow&&cfg.showSell){
+        if(flVal<=-cfg.flowStrMin&&clVal<=-cfg.clarStrMin){
+          signals.push({id:S.sym+'|'+S.tf+'|'+c.t+'|sell',idx:ci,time:c.t,type:'sell',price:c.c,score:1,zone:z,symbol:S.sym,tf:S.tf});
           st.signalPlottedForExit=true;
           lastSignalIdx=ci;
           if(cfg.requireReentry)st.wasInside=false;
+          if(dbg)console.debug('[DVL Conf] z'+zi+' SELL confirmed ci='+ci);
+        }else{
+          if(dbg)console.debug('[DVL Conf] z'+zi+' ci='+ci+' SELL blocked: flow='+flVal.toFixed(1)+'>=-'+cfg.flowStrMin+' OR clar='+clVal.toFixed(1)+'>=-'+cfg.clarStrMin);
         }
       }
     }
@@ -13213,7 +13272,7 @@ window.__drawConfluenceSignals=drawConfluenceSignals;
 window.__computeConfluenceSignals=computeConfluenceSignals;
 window.__resetConfluenceCache=function(){_confStableKey='';};
 
-const CONF_IDS=new Set(['confZoneSource','confClarTf','confFlowTf','confFlowStrMin','confClarStrMin','confMaxBarsAfterExit','confCooldown','confMaxVisible','confShowBuy','confShowSell','confRequireReentry']);
+const CONF_IDS=new Set(['confZoneSource','confClarTf','confFlowTf','confFlowStrMin','confClarStrMin','confMaxBarsAfterExit','confCooldown','confExitBuffer','confMaxVisible','confShowBuy','confShowSell','confRequireReentry','confDebug']);
 ['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
   if(!CONF_IDS.has(e.target?.id))return;
   _confStableKey='';computeConfluenceSignals();if(typeof drawSoon==='function')drawSoon();
