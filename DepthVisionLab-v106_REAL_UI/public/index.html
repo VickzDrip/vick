@@ -12181,6 +12181,13 @@ window.__drawFlowTrail=drawFlowTrail;
 window.__drawFlowAccel=drawFlowMarkers;
 window.__drawFlowPanel=drawFlowAccelPanel;
 window.__getFlowOscValue=function(idx){return _flowOscCache?(+_flowOscCache[idx]||0):0;};
+// Ensures flow cache is up-to-date for current candles — call before reading oscillator values
+window.__ensureFlowCache=function(){
+  const cs=window.S?.candles;if(!cs||cs.length<2)return;
+  const smooth=Math.max(1,Math.min(20,parseInt(document.getElementById('faLineSmoothing')?.value)||5));
+  const ck=[S.tf||'5m',cs.length,(cs[cs.length-1]||{}).t||0,smooth].join('|');
+  if(_flowOscCacheKey!==ck){_flowOscCache=_computeFlowOsc(cs,smooth);_flowOscCacheKey=ck;}
+};
 
 // init state — also prime inputs with current TF defaults
 (function(){
@@ -12891,14 +12898,23 @@ function zoneReaction(ci,cs,zones){
   return null;
 }
 
-// Directional oscillator helpers
+// Smoothed clarity: applies same weighted average as the visual display panel
+// (a + 2b + 3c + d) / 7 — matches _smoothClarity() used in drawTrendClarityOnCanvas
+function _smoothClar(idx){
+  if(typeof getTrendClarityValue!=='function')return 0;
+  const maxIdx=Math.max(0,(window.S?.candles?.length||1)-2); // never read live candle
+  const a=getTrendClarityValue(Math.max(0,idx-2));
+  const b=getTrendClarityValue(Math.max(0,idx-1));
+  const c=getTrendClarityValue(idx);
+  const d=getTrendClarityValue(Math.min(maxIdx,idx+1));
+  return(a+b*2+c*3+d)/7;
+}
+// Directional oscillator helpers (all use smoothed clarity to match display)
 function _isClarityRising(idx){
-  if(typeof getTrendClarityValue!=='function')return false;
-  return getTrendClarityValue(idx)>getTrendClarityValue(Math.max(0,idx-2));
+  return _smoothClar(idx)>_smoothClar(Math.max(0,idx-2));
 }
 function _isClarityFalling(idx){
-  if(typeof getTrendClarityValue!=='function')return false;
-  return getTrendClarityValue(idx)<getTrendClarityValue(Math.max(0,idx-2));
+  return _smoothClar(idx)<_smoothClar(Math.max(0,idx-2));
 }
 function _isFlowRising(idx){
   if(!window.__getFlowOscValue)return false;
@@ -12940,11 +12956,10 @@ function _hasRoom(price,zones,rxZone,direction,atr,minRoomATR){
   }
 }
 
-// Oscillator amplitude/range/slope helpers
+// Oscillator amplitude/range/slope helpers (clarity uses smoothed values)
 function _clarRange(idx,lb){
-  if(typeof getTrendClarityValue!=='function')return 999;
   let mn=Infinity,mx=-Infinity;
-  for(let i=Math.max(0,idx-lb+1);i<=idx;i++){const v=getTrendClarityValue(i);if(v<mn)mn=v;if(v>mx)mx=v;}
+  for(let i=Math.max(0,idx-lb+1);i<=idx;i++){const v=_smoothClar(i);if(v<mn)mn=v;if(v>mx)mx=v;}
   return mx===-Infinity?0:mx-mn;
 }
 function _flowRange(idx,lb){
@@ -12954,8 +12969,7 @@ function _flowRange(idx,lb){
   return mx===-Infinity?0:mx-mn;
 }
 function _clarSlope(idx,lb){
-  if(typeof getTrendClarityValue!=='function')return 0;
-  return getTrendClarityValue(idx)-getTrendClarityValue(Math.max(0,idx-lb));
+  return _smoothClar(idx)-_smoothClar(Math.max(0,idx-lb));
 }
 function _flowSlope(idx,lb){
   if(!window.__getFlowOscValue)return 0;
@@ -12984,6 +12998,8 @@ function computeConfluenceSignals(){
   if(!S||!S.inds||!S.inds.dvlConf){if(S)S.confluenceSignals=[];return;}
   const cs=S.candles;
   if(!cs||cs.length<20){S.confluenceSignals=[];return;}
+  // Ensure flow cache matches current TF/candles before reading any oscillator values
+  if(window.__ensureFlowCache)window.__ensureFlowCache();
   const cfg=getConfCfg();
   const N=cs.length;
   const lastClosed=cs[N-2]||{};
@@ -13023,7 +13039,7 @@ function computeConfluenceSignals(){
     for(let j=Math.max(1,ci-cfg.maxBars);j<=ci&&!zr;j++) zr=zoneReaction(j,cs,zones);
     if(!zr)continue;
 
-    const clVal=typeof getTrendClarityValue==='function'?getTrendClarityValue(ci):0;
+    const clVal=_smoothClar(ci); // smoothed value = matches what's displayed on Trend Clarity panel
     const flVal=window.__getFlowOscValue?window.__getFlowOscValue(ci):0;
     const clarRising=_isClarityRising(ci);
     const clarFalling=_isClarityFalling(ci);
