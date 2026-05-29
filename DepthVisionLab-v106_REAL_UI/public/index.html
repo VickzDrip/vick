@@ -2106,10 +2106,13 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="hint" style="font-size:8px;margin:1px 0 5px;">Minimum oscillator strength. BUY requires positive, SELL requires negative values.</div>
             <div class="kv"><span class="k">Zone Timeout Bars</span><input class="num" id="confMaxBarsAfterExit" type="number" min="0" max="30" step="1" value="10" style="width:56px"></div>
             <div class="kv"><span class="k">Signal Cooldown Bars</span><input class="num" id="confCooldown" type="number" min="0" max="50" step="1" value="3" style="width:56px"></div>
-            <div class="kv"><span class="k">Exit Buffer (ATR)</span><input class="num" id="confExitBuffer" type="number" min="0" max="0.5" step="0.01" value="0" style="width:56px"></div>
-            <div class="kv"><span class="k">Min Room Next Zone (ATR)</span><input class="num" id="confMinRoomATR" type="number" min="0" max="5" step="0.1" value="0" style="width:56px"></div>
-            <div class="kv"><span class="k">Max Exit Dist (ATR)</span><input class="num" id="confMaxExitATR" type="number" min="0" max="10" step="0.1" value="0" style="width:56px"></div>
-            <div class="hint" style="font-size:8px;margin:1px 0 5px;">Zone Timeout/Cooldown/Min Room/Max Exit = 0 desativa o filtro.</div>
+            <div class="kv"><span class="k">Max Exit Dist Zone %</span><input class="num" id="confMaxExitDistZonePct" type="number" min="0" max="400" step="5" value="75" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Exit Dist ATR</span><input class="num" id="confMaxExitATR" type="number" min="0" max="5" step="0.1" value="0.8" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Exit Candle ATR</span><input class="num" id="confMaxExitCandleATR" type="number" min="0" max="5" step="0.1" value="1.5" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Candle Zone×</span><input class="num" id="confMaxExitCandleZoneMult" type="number" min="0" max="10" step="0.1" value="2" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Room ATR</span><input class="num" id="confMinRoomATR" type="number" min="0" max="5" step="0.1" value="0.8" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Room Zone×</span><input class="num" id="confMinRoomZoneMult" type="number" min="0" max="5" step="0.1" value="1" style="width:56px"></div>
+            <div class="hint" style="font-size:8px;margin:1px 0 5px;">0 desativa o filtro. Exit buffer é automático (8% da zona ou 3% do ATR, o maior).</div>
             <div class="kv"><span class="k">Max Visible</span><input class="num" id="confMaxVisible" type="number" min="5" max="100" step="5" value="30" style="width:56px"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Show Buy Signals</span><input type="checkbox" id="confShowBuy" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Show Sell Signals</span><input type="checkbox" id="confShowSell" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
@@ -12837,9 +12840,12 @@ function getConfCfg(){
     clarStrMin:Math.max(5,_sn('confClarStrMin',25)),
     maxBarsAfterExit:Math.max(0,Math.min(30,_sn('confMaxBarsAfterExit',10))),
     cooldown:Math.max(0,_sn('confCooldown',3)),
-    exitBuffer:Math.max(0,Math.min(0.5,_sn('confExitBuffer',0))),
-    minRoomATR:Math.max(0,_sn('confMinRoomATR',0)),
-    maxExitATR:Math.max(0,_sn('confMaxExitATR',0)),
+    maxExitDistZonePct:Math.max(0,_sn('confMaxExitDistZonePct',75)),
+    maxExitATR:Math.max(0,_sn('confMaxExitATR',0.8)),
+    maxExitCandleATR:Math.max(0,_sn('confMaxExitCandleATR',1.5)),
+    maxExitCandleZoneMult:Math.max(0,_sn('confMaxExitCandleZoneMult',2)),
+    minRoomATR:Math.max(0,_sn('confMinRoomATR',0.8)),
+    minRoomZoneMult:Math.max(0,_sn('confMinRoomZoneMult',1)),
     maxVisible:Math.max(5,_sn('confMaxVisible',30)),
     showBuy:_cb('confShowBuy',true),
     showSell:_cb('confShowSell',true),
@@ -12892,21 +12898,20 @@ function _calcATR(cs,idx){
 }
 
 // Room check: is there enough space to the nearest opposing zone?
-// Excludes the reaction zone itself so we don't measure against our own zone.
-function _hasRoom(price,zones,rxZone,direction,atr,minRoomATR){
-  const minD=atr*minRoomATR;
+// minD is already computed by the caller as max(atr*minRoomATR, zoneH*minRoomZoneMult).
+function _hasRoom(price,zones,rxZone,direction,minD){
   if(direction==='buy'){
     let nearest=Infinity;
     for(const z of zones){
       if(z===rxZone)continue;
-      if(z.lo>price+atr*0.15)nearest=Math.min(nearest,z.lo);
+      if(z.lo>price)nearest=Math.min(nearest,z.lo);
     }
     return nearest===Infinity||(nearest-price)>=minD;
-  } else {
+  }else{
     let nearest=-Infinity;
     for(const z of zones){
       if(z===rxZone)continue;
-      if(z.hi<price-atr*0.15)nearest=Math.max(nearest,z.hi);
+      if(z.hi<price)nearest=Math.max(nearest,z.hi);
     }
     return nearest===-Infinity||(price-nearest)>=minD;
   }
@@ -12984,7 +12989,9 @@ function computeConfluenceSignals(){
   const lastClosed=cs[N-2]||{};
   const ck=[S.sym,S.tf,N,lastClosed.t||0,
     cfg.zoneSource,cfg.clarTf,cfg.flowTf,cfg.flowStrMin,cfg.clarStrMin,
-    cfg.maxBarsAfterExit,cfg.cooldown,cfg.exitBuffer,cfg.minRoomATR,cfg.maxExitATR,
+    cfg.maxBarsAfterExit,cfg.cooldown,
+    cfg.maxExitDistZonePct,cfg.maxExitATR,cfg.maxExitCandleATR,cfg.maxExitCandleZoneMult,
+    cfg.minRoomATR,cfg.minRoomZoneMult,
     cfg.requireReentry?1:0,cfg.showBuy?1:0,cfg.showSell?1:0,zonesHash].join('|');
   if(_confStableKey===ck&&S.confluenceSignals)return;
   _confStableKey=ck;
@@ -13015,7 +13022,8 @@ function computeConfluenceSignals(){
       const st=zoneState[zi];
 
       const atr=_calcATR(cs,ci);
-      const buf=cfg.exitBuffer*atr;
+      const zoneH=Math.max(z.hi-z.lo, atr*0.001); // zone height; floored to avoid zero
+      const buf=Math.max(zoneH*0.08, atr*0.03);   // auto-buffer: proportional to zone
 
       const touchesZone=c.h>=z.lo&&c.l<=z.hi;
       const closedAbove=c.c>z.hi+buf;
@@ -13061,6 +13069,12 @@ function computeConfluenceSignals(){
       const flVal=_getConfFlow(ci,mtfFlowArr,isMtfFlow);
       const clVal=_getConfClar(ci,mtfClarArr,isMtfClar);
 
+      // Zone-aware derived limits (computed once per zone/candle)
+      const candleRange=c.h-c.l;
+      const exitDist=isBuy?(c.c-z.hi):(z.lo-c.c);
+      const maxExitDist=Math.max(zoneH*(cfg.maxExitDistZonePct/100),atr*cfg.maxExitATR)||Infinity;
+      const minRoomAbs=Math.max(atr*cfg.minRoomATR, zoneH*cfg.minRoomZoneMult);
+
       // Collect every reason this signal is blocked
       const blocked=[];
       if(!mtfFlowReady)blocked.push('mtf-flow-loading');
@@ -13068,23 +13082,29 @@ function computeConfluenceSignals(){
       if(isBuy){
         if(flVal<cfg.flowStrMin)  blocked.push('flow='+flVal.toFixed(1)+'<'+cfg.flowStrMin);
         if(clVal<cfg.clarStrMin)  blocked.push('clar='+clVal.toFixed(1)+'<'+cfg.clarStrMin);
-        if(cfg.minRoomATR>0&&!_hasRoom(c.c,zones,z,'buy',atr,cfg.minRoomATR))blocked.push('no-room-above');
-        if(cfg.maxExitATR>0){const d=(c.c-z.hi)/atr;if(d>cfg.maxExitATR)blocked.push('exit-too-far='+d.toFixed(2)+'x');}
+        if(exitDist>maxExitDist)  blocked.push('exit-far='+exitDist.toFixed(4)+'>'+maxExitDist.toFixed(4));
+        if(cfg.maxExitCandleATR>0&&candleRange>atr*cfg.maxExitCandleATR) blocked.push('candle-big(ATR)='+candleRange.toFixed(4)+'>'+( atr*cfg.maxExitCandleATR).toFixed(4));
+        if(cfg.maxExitCandleZoneMult>0&&candleRange>zoneH*cfg.maxExitCandleZoneMult) blocked.push('candle-big(zone×'+cfg.maxExitCandleZoneMult+')='+candleRange.toFixed(4)+'>'+( zoneH*cfg.maxExitCandleZoneMult).toFixed(4));
+        if(minRoomAbs>0&&!_hasRoom(c.c,zones,z,'buy',minRoomAbs)) blocked.push('no-room-above(need='+minRoomAbs.toFixed(4)+')');
       }else{
         if(flVal>-cfg.flowStrMin) blocked.push('flow='+flVal.toFixed(1)+'(need<=-'+cfg.flowStrMin+')');
         if(clVal>-cfg.clarStrMin) blocked.push('clar='+clVal.toFixed(1)+'(need<=-'+cfg.clarStrMin+')');
-        if(cfg.minRoomATR>0&&!_hasRoom(c.c,zones,z,'sell',atr,cfg.minRoomATR))blocked.push('no-room-below');
-        if(cfg.maxExitATR>0){const d=(z.lo-c.c)/atr;if(d>cfg.maxExitATR)blocked.push('exit-too-far='+d.toFixed(2)+'x');}
+        if(exitDist>maxExitDist)  blocked.push('exit-far='+exitDist.toFixed(4)+'>'+maxExitDist.toFixed(4));
+        if(cfg.maxExitCandleATR>0&&candleRange>atr*cfg.maxExitCandleATR) blocked.push('candle-big(ATR)='+candleRange.toFixed(4)+'>'+( atr*cfg.maxExitCandleATR).toFixed(4));
+        if(cfg.maxExitCandleZoneMult>0&&candleRange>zoneH*cfg.maxExitCandleZoneMult) blocked.push('candle-big(zone×'+cfg.maxExitCandleZoneMult+')='+candleRange.toFixed(4)+'>'+( zoneH*cfg.maxExitCandleZoneMult).toFixed(4));
+        if(minRoomAbs>0&&!_hasRoom(c.c,zones,z,'sell',minRoomAbs)) blocked.push('no-room-below(need='+minRoomAbs.toFixed(4)+')');
       }
 
       if(dbg){
         console.debug('[DVL Conf]',{
           zi,ci,t:new Date(c.t).toISOString().slice(11,19),
           exit:isBuy?'BUY':'SELL',close:+c.c.toFixed(4),
-          z:{lo:+z.lo.toFixed(4),hi:+z.hi.toFixed(4)},
+          z:{lo:+z.lo.toFixed(4),hi:+z.hi.toFixed(4),h:+zoneH.toFixed(4)},
           flow:+flVal.toFixed(1),flowMin:cfg.flowStrMin,
           clar:+clVal.toFixed(1),clarMin:cfg.clarStrMin,
-          atr:+atr.toFixed(5),
+          atr:+atr.toFixed(4),buf:+buf.toFixed(4),
+          exitDist:+exitDist.toFixed(4),maxExitDist:+maxExitDist.toFixed(4),
+          candleRange:+candleRange.toFixed(4),
           mtfFlowReady,mtfClarReady,
           result:blocked.length?'BLOCKED':'PASS',
           blocked:blocked.join(' | ')||'—',
@@ -13213,7 +13233,7 @@ window.__drawConfluenceSignals=drawConfluenceSignals;
 window.__computeConfluenceSignals=computeConfluenceSignals;
 window.__resetConfluenceCache=function(){_confStableKey='';};
 
-const CONF_IDS=new Set(['confZoneSource','confClarTf','confFlowTf','confFlowStrMin','confClarStrMin','confMaxBarsAfterExit','confCooldown','confExitBuffer','confMinRoomATR','confMaxExitATR','confMaxVisible','confShowBuy','confShowSell','confRequireReentry','confDebug']);
+const CONF_IDS=new Set(['confZoneSource','confClarTf','confFlowTf','confFlowStrMin','confClarStrMin','confMaxBarsAfterExit','confCooldown','confMaxExitDistZonePct','confMaxExitATR','confMaxExitCandleATR','confMaxExitCandleZoneMult','confMinRoomATR','confMinRoomZoneMult','confMaxVisible','confShowBuy','confShowSell','confRequireReentry','confDebug']);
 ['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
   if(!CONF_IDS.has(e.target?.id))return;
   _confStableKey='';computeConfluenceSignals();if(typeof drawSoon==='function')drawSoon();
