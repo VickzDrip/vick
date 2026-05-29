@@ -2142,7 +2142,10 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Extremity High Zone</span><input class="num" id="wfExtHigh" type="number" min="0.50" max="0.95" step="0.05" value="0.75"></div>
             <div class="kv"><span class="k">Extremity Low Zone</span><input class="num" id="wfExtLow" type="number" min="0.05" max="0.50" step="0.05" value="0.25"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Show Internal Wicks</span><input type="checkbox" id="wfShowInternal" style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
-            <div class="hint">Fast Extreme: seller somente em topos locais, buyer somente em fundos locais · Confirmed Swing: aguarda confirmação posterior (atraso) · All Wicks: detecta todos os pavios · Range filter bloqueia pavios no meio do range.</div>
+            <div style="font-size:9px;color:#00d4ff;font-weight:700;letter-spacing:.08em;margin:6px 0 3px;opacity:.8;">REACTION ARROWS</div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show Reaction Arrows</span><input type="checkbox" id="wfShowReactions" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Min Reaction Spacing</span><input class="num" id="wfReactionSpacing" type="number" min="1" max="20" step="1" value="3"></div>
+            <div class="hint">Fast Extreme: seller somente em topos locais, buyer somente em fundos locais · Confirmed Swing: aguarda confirmação posterior · Reaction Arrows: ↑/↓ mostram reações bidirecionais em cada toque da zona (independente do tipo do cluster).</div>
           </div>
         </div>
 
@@ -13275,6 +13278,8 @@ function _getWFCfg(){
     extHigh:Math.max(0.50,Math.min(0.95,_sn('wfExtHigh',0.75))),
     extLow:Math.max(0.05,Math.min(0.50,_sn('wfExtLow',0.25))),
     showInternal:_cb('wfShowInternal',false),
+    showReactions:_cb('wfShowReactions',true),
+    reactionSpacing:Math.max(1,Math.min(20,_sn('wfReactionSpacing',3))),
   };
 }
 
@@ -13538,6 +13543,70 @@ function _computePressure(cs,smooth){
   return out;
 }
 
+// ── Touch-based reaction arrows (bidirectional, independent of zone type) ─
+function _detectTouchReactions(zones,cs,cfg){
+  const n=cs.length;
+  const spacing=cfg.reactionSpacing;
+
+  for(const z of zones){
+    z.reactions=[];
+    if(!cfg.showReactions)continue;
+    const zmid=(z.zoneLo+z.zoneHi)*0.5;
+    let lastBull=-999,lastBear=-999;
+
+    for(let i=Math.max(z.createdIdx+1,1);i<n-1;i++){
+      const c=cs[i];
+      // Must touch zone
+      if(c.h<z.zoneLo||c.l>z.zoneHi)continue;
+      const range=c.h-c.l;
+      if(range<1e-10)continue;
+      const avgV=_wfAvgVol(cs,i);
+      const vol=c.v||0;
+      // Require at least 70% of average volume — no noise candles
+      if(avgV>0&&vol<avgV*0.7)continue;
+
+      const bodyTop=Math.max(c.o,c.c);
+      const bodyBot=Math.min(c.o,c.c);
+      const upperWick=c.h-bodyTop;
+      const lowerWick=bodyBot-c.l;
+      const closePos=(c.c-c.l)/range;
+      const nxt=cs[i+1];
+
+      // ─ Bullish reaction ─
+      // price touches lower half of zone, closes strong, next bar confirms
+      if(c.l<=zmid){
+        const strongClose=closePos>=0.55;
+        const wickBounce=lowerWick>=range*0.38;
+        const bullishDir=c.c>=c.o||wickBounce;
+        if((strongClose||wickBounce)&&bullishDir&&i-lastBull>=spacing){
+          const nextConf=nxt.c>c.c||nxt.c>nxt.o;
+          if(nextConf){
+            const str=Math.min(1,closePos*Math.min(1.5,avgV>0?vol/avgV:1));
+            z.reactions.push({idx:i,dir:'bull',price:c.l,strength:str});
+            lastBull=i;
+          }
+        }
+      }
+
+      // ─ Bearish reaction ─
+      // price touches upper half of zone, closes weak, next bar confirms
+      if(c.h>=zmid){
+        const weakClose=closePos<=0.45;
+        const wickReject=upperWick>=range*0.38;
+        const bearishDir=c.c<c.o||wickReject;
+        if((weakClose||wickReject)&&bearishDir&&i-lastBear>=spacing){
+          const nextConf=nxt.c<c.c||nxt.c<nxt.o;
+          if(nextConf){
+            const str=Math.min(1,(1-closePos)*Math.min(1.5,avgV>0?vol/avgV:1));
+            z.reactions.push({idx:i,dir:'bear',price:c.h,strength:str});
+            lastBear=i;
+          }
+        }
+      }
+    }
+  }
+}
+
 // ── Cache ─────────────────────────────────────────────────────────────────
 let _wfCache={key:'',zones:[],pressure:null};
 
@@ -13549,7 +13618,8 @@ function _cacheKey(cs,cfg){
     cfg.lookback,cfg.minWickRatio,cfg.minVolMult,
     cfg.mergeATR,cfg.minRejects,cfg.pressureSmooth,
     cfg.detectMode,cfg.extremityLB,cfg.swingLeft,cfg.swingRight,
-    cfg.rangeLB,cfg.extHigh,cfg.extLow,cfg.showInternal?1:0
+    cfg.rangeLB,cfg.extHigh,cfg.extLow,cfg.showInternal?1:0,
+    cfg.showReactions?1:0,cfg.reactionSpacing
   ].join('|');
 }
 
@@ -13565,6 +13635,7 @@ function _compute(){
   _checkBroken(zones,cs);
   zones.forEach(z=>{z.score=_scoreZone(z,cs);});
   zones.sort((a,b)=>b.score-a.score);
+  _detectTouchReactions(zones,cs,cfg);
   const pressure=_computePressure(cs,cfg.pressureSmooth);
   _wfCache={key,zones,pressure};
 }
@@ -13637,16 +13708,24 @@ function _drawZones(ctx,W,H,V,sc,x,bw){
       ctx.fillStyle=lColor;
       ctx.fillText(label,lx,ly);
       if(zH>=24){
-        const total=z.buyers+z.sellers;
         const bStr=_fv(z.buyers);const sStr=_fv(z.sellers);
         const dStr=(z.delta>=0?'+':'')+_fv(z.delta);
         ctx.font='6.5px monospace';
         ctx.fillStyle=isSeller?'rgba(220,180,160,0.75)':'rgba(160,225,255,0.75)';
         ctx.fillText(`B ${bStr}  S ${sStr}  Δ ${dStr}  ${z.rejectionCount}✕`,lx,ly+11);
       }
+      // Reaction counts — always green/red regardless of zone type
+      if(zH>=36&&cfg.showReactions&&z.reactions&&z.reactions.length){
+        const bCnt=z.reactions.filter(r=>r.dir==='bull').length;
+        const sCnt=z.reactions.filter(r=>r.dir==='bear').length;
+        ctx.font='bold 6px monospace';
+        let rx2=lx;
+        if(bCnt>0){ctx.fillStyle='rgba(0,220,120,0.88)';ctx.fillText(`↑${bCnt}`,rx2,ly+22);rx2+=16;}
+        if(sCnt>0){ctx.fillStyle='rgba(255,80,60,0.88)';ctx.fillText(`↓${sCnt}`,rx2,ly+22);}
+      }
     }
 
-    // Wick markers + guide lines
+    // Wick markers + guide lines (original rejection events that built the zone)
     if(cfg.showMarkers){
       let mCount=0;
       for(const ev of z.events){
@@ -13672,6 +13751,31 @@ function _drawZones(ctx,W,H,V,sc,x,bw){
           }
         }
         mCount++;
+      }
+    }
+
+    // Reaction arrows — bidirectional, color = direction (never zone type)
+    if(cfg.showReactions&&z.reactions&&z.reactions.length){
+      for(const rx of z.reactions){
+        if(rx.idx<Math.floor(V.a)||rx.idx>Math.ceil(V.b))continue;
+        const ex=x(rx.idx);
+        if(ex<xL||ex>xR)continue;
+        const rxOp=Math.max(0.60,Math.min(1.0,0.60+rx.strength*0.40));
+        if(rx.dir==='bull'){
+          // Green up-arrow below candle low
+          const ay=sc.y(rx.price)+14;
+          ctx.fillStyle=`rgba(0,210,90,${rxOp})`;
+          ctx.beginPath();ctx.moveTo(ex,ay-9);ctx.lineTo(ex-5,ay);ctx.lineTo(ex+5,ay);ctx.closePath();ctx.fill();
+          ctx.fillStyle=`rgba(80,255,150,${rxOp*0.55})`;
+          ctx.beginPath();ctx.arc(ex,ay-11,1.8,0,Math.PI*2);ctx.fill();
+        } else {
+          // Red down-arrow above candle high
+          const ay=sc.y(rx.price)-14;
+          ctx.fillStyle=`rgba(255,55,55,${rxOp})`;
+          ctx.beginPath();ctx.moveTo(ex,ay+9);ctx.lineTo(ex-5,ay);ctx.lineTo(ex+5,ay);ctx.closePath();ctx.fill();
+          ctx.fillStyle=`rgba(255,120,90,${rxOp*0.55})`;
+          ctx.beginPath();ctx.arc(ex,ay+11,1.8,0,Math.PI*2);ctx.fill();
+        }
       }
     }
     shown++;
@@ -13820,7 +13924,8 @@ const WF_IDS=new Set(['wfLookback','wfMinWickRatio','wfMinVolMult','wfMergeATR',
   'wfShowSeller','wfShowBuyer','wfShowMarkers','wfShowGuides','wfShowLabels','wfShowPressure',
   'wfWickZoneATR','wfDomThresh','wfMaxZones','wfMaxMarkers','wfPressureSmooth',
   'wfDetectMode','wfExtremityLB','wfSwingLeft','wfSwingRight',
-  'wfRangeLB','wfExtHigh','wfExtLow','wfShowInternal']);
+  'wfRangeLB','wfExtHigh','wfExtLow','wfShowInternal',
+  'wfShowReactions','wfReactionSpacing']);
 ['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
   if(!WF_IDS.has(e.target?.id))return;
   _wfCache.key='';
