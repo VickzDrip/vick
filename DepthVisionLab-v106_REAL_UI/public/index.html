@@ -2104,11 +2104,12 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Flow Strength Min</span><input class="num" id="confFlowStrMin" type="number" min="5" max="80" step="5" value="20" style="width:56px"></div>
             <div class="kv"><span class="k">Clarity Strength Min</span><input class="num" id="confClarStrMin" type="number" min="5" max="80" step="5" value="25" style="width:56px"></div>
             <div class="hint" style="font-size:8px;margin:1px 0 5px;">Minimum oscillator strength. BUY requires positive, SELL requires negative values.</div>
-            <div class="kv"><span class="k">Zone Timeout Bars</span><input class="num" id="confMaxBarsAfterExit" type="number" min="1" max="30" step="1" value="5" style="width:56px"></div>
-            <div class="kv"><span class="k">Signal Cooldown Bars</span><input class="num" id="confCooldown" type="number" min="2" max="50" step="1" value="8" style="width:56px"></div>
+            <div class="kv"><span class="k">Zone Timeout Bars</span><input class="num" id="confMaxBarsAfterExit" type="number" min="0" max="30" step="1" value="10" style="width:56px"></div>
+            <div class="kv"><span class="k">Signal Cooldown Bars</span><input class="num" id="confCooldown" type="number" min="0" max="50" step="1" value="3" style="width:56px"></div>
             <div class="kv"><span class="k">Exit Buffer (ATR)</span><input class="num" id="confExitBuffer" type="number" min="0" max="0.5" step="0.01" value="0" style="width:56px"></div>
-            <div class="kv"><span class="k">Min Room Next Zone (ATR)</span><input class="num" id="confMinRoomATR" type="number" min="0" max="5" step="0.1" value="0.5" style="width:56px"></div>
-            <div class="kv"><span class="k">Max Exit Dist (ATR)</span><input class="num" id="confMaxExitATR" type="number" min="0" max="10" step="0.1" value="2" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Room Next Zone (ATR)</span><input class="num" id="confMinRoomATR" type="number" min="0" max="5" step="0.1" value="0" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Exit Dist (ATR)</span><input class="num" id="confMaxExitATR" type="number" min="0" max="10" step="0.1" value="0" style="width:56px"></div>
+            <div class="hint" style="font-size:8px;margin:1px 0 5px;">Zone Timeout/Cooldown/Min Room/Max Exit = 0 desativa o filtro.</div>
             <div class="kv"><span class="k">Max Visible</span><input class="num" id="confMaxVisible" type="number" min="5" max="100" step="5" value="30" style="width:56px"></div>
             <label class="kv" style="cursor:pointer;"><span class="k">Show Buy Signals</span><input type="checkbox" id="confShowBuy" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Show Sell Signals</span><input type="checkbox" id="confShowSell" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
@@ -12834,11 +12835,11 @@ function getConfCfg(){
     flowTf:el('confFlowTf')?.value||'current',
     flowStrMin:Math.max(5,_sn('confFlowStrMin',20)),
     clarStrMin:Math.max(5,_sn('confClarStrMin',25)),
-    maxBarsAfterExit:Math.max(1,Math.min(30,_sn('confMaxBarsAfterExit',5))),
-    cooldown:Math.max(2,_sn('confCooldown',8)),
+    maxBarsAfterExit:Math.max(0,Math.min(30,_sn('confMaxBarsAfterExit',10))),
+    cooldown:Math.max(0,_sn('confCooldown',3)),
     exitBuffer:Math.max(0,Math.min(0.5,_sn('confExitBuffer',0))),
-    minRoomATR:Math.max(0,_sn('confMinRoomATR',0.5)),
-    maxExitATR:Math.max(0,_sn('confMaxExitATR',2)),
+    minRoomATR:Math.max(0,_sn('confMinRoomATR',0)),
+    maxExitATR:Math.max(0,_sn('confMaxExitATR',0)),
     maxVisible:Math.max(5,_sn('confMaxVisible',30)),
     showBuy:_cb('confShowBuy',true),
     showSell:_cb('confShowSell',true),
@@ -12869,30 +12870,6 @@ function getZones(src){
   return zones;
 }
 
-function zoneReaction(ci,cs,zones){
-  if(ci<1)return null;
-  const c=cs[ci];
-  const tol=c.c*0.0015;
-  for(const z of zones){
-    const zLo=z.lo-tol,zHi=z.hi+tol;
-    if(c.h<zLo||c.l>zHi)continue;
-    const isBull=c.c>=c.o;
-    const rng=Math.max(1e-9,c.h-c.l);
-    const closePos=(c.c-c.l)/rng;
-    const wickBot=(Math.min(c.o,c.c)-c.l)/rng;
-    const wickTop=(c.h-Math.max(c.o,c.c))/rng;
-    if(c.l<=z.lo+tol&&c.c>=z.lo-tol&&isBull&&closePos>=0.45&&wickBot>=0.18)
-      return{bullish:true,type:'bounce',zone:z,wickBot,wickTop};
-    if(c.h>=z.hi-tol&&c.c<=z.hi+tol&&!isBull&&closePos<=0.55&&wickTop>=0.18)
-      return{bullish:false,type:'rejection',zone:z,wickBot,wickTop};
-    if(c.c>z.hi+tol&&c.o<=z.hi+tol&&isBull&&closePos>=0.5)
-      return{bullish:true,type:'breakout',zone:z,wickBot,wickTop};
-    if(c.c<z.lo-tol&&c.o>=z.lo-tol&&!isBull&&closePos<=0.5)
-      return{bullish:false,type:'breakdown',zone:z,wickBot,wickTop};
-  }
-  return null;
-}
-
 // Smoothed clarity: applies same weighted average as the visual display panel
 // (a + 2b + 3c + d) / 7 — matches _smoothClarity() used in drawTrendClarityOnCanvas
 function _smoothClar(idx){
@@ -12904,22 +12881,6 @@ function _smoothClar(idx){
   const d=getTrendClarityValue(Math.min(maxIdx,idx+1));
   return(a+b*2+c*3+d)/7;
 }
-// Directional oscillator helpers (all use smoothed clarity to match display)
-function _isClarityRising(idx){
-  return _smoothClar(idx)>_smoothClar(Math.max(0,idx-2));
-}
-function _isClarityFalling(idx){
-  return _smoothClar(idx)<_smoothClar(Math.max(0,idx-2));
-}
-function _isFlowRising(idx){
-  if(!window.__getFlowOscValue)return false;
-  return window.__getFlowOscValue(idx)>window.__getFlowOscValue(Math.max(0,idx-2));
-}
-function _isFlowFalling(idx){
-  if(!window.__getFlowOscValue)return false;
-  return window.__getFlowOscValue(idx)<window.__getFlowOscValue(Math.max(0,idx-2));
-}
-
 // ATR: 14-period average true range at candle idx
 function _calcATR(cs,idx){
   let sum=0,n=0;
@@ -12951,40 +12912,6 @@ function _hasRoom(price,zones,rxZone,direction,atr,minRoomATR){
   }
 }
 
-// Oscillator amplitude/range/slope helpers (clarity uses smoothed values)
-function _clarRange(idx,lb){
-  let mn=Infinity,mx=-Infinity;
-  for(let i=Math.max(0,idx-lb+1);i<=idx;i++){const v=_smoothClar(i);if(v<mn)mn=v;if(v>mx)mx=v;}
-  return mx===-Infinity?0:mx-mn;
-}
-function _flowRange(idx,lb){
-  if(!window.__getFlowOscValue)return 999;
-  let mn=Infinity,mx=-Infinity;
-  for(let i=Math.max(0,idx-lb+1);i<=idx;i++){const v=window.__getFlowOscValue(i);if(v<mn)mn=v;if(v>mx)mx=v;}
-  return mx===-Infinity?0:mx-mn;
-}
-function _clarSlope(idx,lb){
-  return _smoothClar(idx)-_smoothClar(Math.max(0,idx-lb));
-}
-function _flowSlope(idx,lb){
-  if(!window.__getFlowOscValue)return 0;
-  return window.__getFlowOscValue(idx)-window.__getFlowOscValue(Math.max(0,idx-lb));
-}
-// Returns false if oscillators lack real force in the signal direction
-function _oscillatorOK(clVal,flVal,clarSlope,flowSlope,clarRng,flowRng,cfg,direction){
-  // Block: both values too close to zero (no amplitude)
-  if(Math.abs(clVal)<cfg.minClarAmp&&Math.abs(flVal)<cfg.minFlowAmp)return false;
-  // Block: both oscillators compressed (no recent movement)
-  if(clarRng<cfg.minClarRange&&flowRng<cfg.minFlowRange)return false;
-  // Block: neither oscillator is expanding in the signal direction
-  if(direction==='buy'){
-    if(clarSlope<cfg.minClarSlope&&flowSlope<cfg.minFlowSlope)return false;
-  }else{
-    if(clarSlope>-cfg.minClarSlope&&flowSlope>-cfg.minFlowSlope)return false;
-  }
-  return true;
-}
-
 // Stable cache key: anchored on N-2 (last confirmed closed candle)
 let _confStableKey='';
 
@@ -13003,7 +12930,7 @@ function _buildFlowMtfMap(chartCandles,flowTf){
   for(let ci=0;ci<chartCandles.length;ci++){
     const t=chartCandles[ci].t;
     while(mi+1<mtfCs.length&&mtfCs[mi+1].t<=t)mi++;
-    if(mtfCs[mi]&&mtfCs[mi].t<=t)result[ci]=flowVals[mi]||0;
+    if(mtfCs[mi]&&mtfCs[mi].t<=t)result[ci]=flowVals[mi]??0;
   }
   return result;
 }
@@ -13021,14 +12948,22 @@ function _buildClarMtfMap(chartCandles,clarTf){
   for(let ci=0;ci<chartCandles.length;ci++){
     const t=chartCandles[ci].t;
     while(mi+1<mtfCs.length&&mtfCs[mi+1].t<=t)mi++;
-    if(mtfCs[mi]&&mtfCs[mi].t<=t)result[ci]=clarVals[mi]||0;
+    if(mtfCs[mi]&&mtfCs[mi].t<=t)result[ci]=clarVals[mi]??0;
   }
   return result;
 }
 
-function _candleOverlapsZone(c,z){
-  return c.h>=z.lo&&c.l<=z.hi;
+// Unified oscillator readers — used by both compute and debug
+function _getConfFlow(idx,mtfFlowArr,isMtfFlow){
+  if(isMtfFlow&&mtfFlowArr!==null)return mtfFlowArr[idx]??0;
+  return window.__getFlowOscValue?window.__getFlowOscValue(idx):0;
 }
+function _getConfClar(idx,mtfClarArr,isMtfClar){
+  if(isMtfClar&&mtfClarArr!==null)return mtfClarArr[idx]??0;
+  return _smoothClar(idx);
+}
+window.__getConfluenceFlowValue=_getConfFlow;
+window.__getConfluenceClarValue=_getConfClar;
 
 function computeConfluenceSignals(){
   const S=window.S;
@@ -13038,38 +12973,41 @@ function computeConfluenceSignals(){
   if(window.__ensureFlowCache)window.__ensureFlowCache();
   const cfg=getConfCfg();
   const N=cs.length;
-  const lastClosed=cs[N-2]||{};
   const isMtfClar=cfg.clarTf!=='current'&&cfg.clarTf!==S.tf;
   const isMtfFlow=cfg.flowTf!=='current'&&cfg.flowTf!==S.tf;
+
+  // Zones built first so their hash can anchor the cache key
+  const zones=getZones(cfg.zoneSource);
+  if(!zones.length){S.confluenceSignals=[];return;}
+  const zonesHash=zones.map(z=>z.src[0]+Math.round(z.lo*1000)+'-'+Math.round(z.hi*1000)).join(';');
+
+  const lastClosed=cs[N-2]||{};
   const ck=[S.sym,S.tf,N,lastClosed.t||0,
     cfg.zoneSource,cfg.clarTf,cfg.flowTf,cfg.flowStrMin,cfg.clarStrMin,
     cfg.maxBarsAfterExit,cfg.cooldown,cfg.exitBuffer,cfg.minRoomATR,cfg.maxExitATR,
-    cfg.requireReentry?1:0,cfg.showBuy?1:0,cfg.showSell?1:0].join('|');
+    cfg.requireReentry?1:0,cfg.showBuy?1:0,cfg.showSell?1:0,zonesHash].join('|');
   if(_confStableKey===ck&&S.confluenceSignals)return;
   _confStableKey=ck;
 
-  const zones=getZones(cfg.zoneSource);
-  if(!zones.length){S.confluenceSignals=[];return;}
-
-  // Precompute MTF value maps (O(N) forward-fill, avoids per-bar lookups)
+  // Precompute MTF value maps (O(N) forward-fill)
   const mtfFlowArr=isMtfFlow?_buildFlowMtfMap(cs,cfg.flowTf):null;
   const mtfClarArr=isMtfClar?_buildClarMtfMap(cs,cfg.clarTf):null;
+  const mtfFlowReady=!isMtfFlow||mtfFlowArr!==null;
+  const mtfClarReady=!isMtfClar||mtfClarArr!==null;
 
-  // Per-zone state: track entry and last touch separately
-  // lastTouchedIdx = any touch (wick or close); used for stale-zone timeout
-  // lastCloseInsideIdx = last bar where close was inside zone; used to reset signal gate
+  // Per-zone state — rebuilt from scratch on every compute run
   const zoneState=zones.map(()=>({
-    wasInside:false,
-    lastTouchedIdx:-1,
-    lastCloseInsideIdx:-1,
-    signalPlottedForExit:false,
+    wasTouched:false,      // zone has received at least one wick/body contact
+    lastTouchedIdx:-1,     // most recent bar with any contact
+    lastInsideIdx:-1,      // most recent bar where close was inside zone
+    signalDone:false,      // one signal per visit; reset on confirmed re-entry
+    lastSignalIdx:-999,    // per-zone cooldown
   }));
 
   const signals=[];
-  let lastSignalIdx=-999;
   const dbg=cfg.debug;
 
-  for(let ci=1;ci<N-1;ci++){  // skip live candle N-1
+  for(let ci=1;ci<N-1;ci++){  // N-1 is the live (unclosed) candle — always skip
     const c=cs[ci];
 
     for(let zi=0;zi<zones.length;zi++){
@@ -13079,109 +13017,98 @@ function computeConfluenceSignals(){
       const atr=_calcATR(cs,ci);
       const buf=cfg.exitBuffer*atr;
 
-      // Candle touches zone (wick or body) — used for ENTRY detection
       const touchesZone=c.h>=z.lo&&c.l<=z.hi;
-      // Candle close position relative to zone — used for EXIT detection
       const closedAbove=c.c>z.hi+buf;
       const closedBelow=c.c<z.lo-buf;
       const closedInside=!closedAbove&&!closedBelow;
 
-      // ── ENTRY / TOUCH TRACKING ──────────────────────────────────────
-      // Any wick or body contact activates the zone.
-      // Close inside the zone resets the signal gate (allows new signal after re-entry).
+      // ── TOUCH / ENTRY TRACKING ─────────────────────────────────────
       if(touchesZone){
-        if(!st.wasInside){
-          // Fresh entry — clear signal gate
-          st.wasInside=true;
-          st.signalPlottedForExit=false;
-          if(dbg)console.debug('[DVL Conf] z'+zi+' ENTRY ci='+ci+' close='+c.c.toFixed(2)+' zone=['+z.lo.toFixed(2)+','+z.hi.toFixed(2)+']');
-        } else if(closedInside&&st.signalPlottedForExit){
-          // Price came back inside zone after a signal — allow new signal
-          st.signalPlottedForExit=false;
-          if(dbg)console.debug('[DVL Conf] z'+zi+' RE-ENTRY ci='+ci+' signal gate reset');
+        if(!st.wasTouched){
+          st.wasTouched=true;st.signalDone=false;
+          if(dbg)console.debug('[DVL Conf] z'+zi+' ARMED ci='+ci+' ['+z.lo.toFixed(4)+'-'+z.hi.toFixed(4)+']');
+        }else if(closedInside&&st.signalDone){
+          st.signalDone=false; // re-entered zone after signal — new signal allowed
+          if(dbg)console.debug('[DVL Conf] z'+zi+' RE-ARMED ci='+ci);
         }
         st.lastTouchedIdx=ci;
-        if(closedInside)st.lastCloseInsideIdx=ci;
+        if(closedInside)st.lastInsideIdx=ci;
       }
 
-      // ── STALE ZONE CLEANUP ──────────────────────────────────────────
-      // If zone was activated but price hasn't touched it for too long → reset
-      if(st.wasInside&&!touchesZone&&st.lastTouchedIdx>=0){
-        if(ci-st.lastTouchedIdx>cfg.maxBarsAfterExit&&!st.signalPlottedForExit){
-          if(dbg)console.debug('[DVL Conf] z'+zi+' STALE ci='+ci+' barsSinceTouch='+(ci-st.lastTouchedIdx));
-          if(cfg.requireReentry)st.wasInside=false;
+      // ── STALE ZONE DISARM ──────────────────────────────────────────
+      // No contact for >N bars and signal hasn't fired yet → disarm zone
+      if(st.wasTouched&&!touchesZone&&cfg.maxBarsAfterExit>0&&st.lastTouchedIdx>=0){
+        if(ci-st.lastTouchedIdx>cfg.maxBarsAfterExit&&!st.signalDone){
+          if(dbg)console.debug('[DVL Conf] z'+zi+' STALE ci='+ci+' gap='+(ci-st.lastTouchedIdx));
+          if(cfg.requireReentry)st.wasTouched=false;
           continue;
         }
       }
 
       // ── EXIT CHECK ─────────────────────────────────────────────────
-      // Runs whenever zone was activated AND close is outside — even if wick touched zone
-      if(!st.wasInside||st.signalPlottedForExit)continue;
+      if(!st.wasTouched||st.signalDone)continue;
       if(!closedAbove&&!closedBelow)continue;
+      const isBuy=closedAbove;
+      if(isBuy&&!cfg.showBuy)continue;
+      if(!isBuy&&!cfg.showSell)continue;
 
-      // Cooldown guard
-      if(ci-lastSignalIdx<cfg.cooldown){
-        if(dbg)console.debug('[DVL Conf] z'+zi+' ci='+ci+' blocked: cooldown ('+(ci-lastSignalIdx)+' of '+cfg.cooldown+')');
+      // Per-zone cooldown (0 = disabled)
+      if(cfg.cooldown>0&&ci-st.lastSignalIdx<cfg.cooldown){
+        if(dbg)console.debug('[DVL Conf] z'+zi+' ci='+ci+' blocked:cooldown '+(ci-st.lastSignalIdx)+'/'+cfg.cooldown);
         continue;
       }
 
-      // Oscillator values with MTF / fallback
-      const flVal=(isMtfFlow&&mtfFlowArr!=null)?mtfFlowArr[ci]:(window.__getFlowOscValue?window.__getFlowOscValue(ci):0);
-      const clVal=(isMtfClar&&mtfClarArr!=null)?mtfClarArr[ci]:_smoothClar(ci);
-      const exitDir=closedAbove?'BUY':'SELL';
+      const flVal=_getConfFlow(ci,mtfFlowArr,isMtfFlow);
+      const clVal=_getConfClar(ci,mtfClarArr,isMtfClar);
 
-      // Build ALL blocking reasons before deciding
+      // Collect every reason this signal is blocked
       const blocked=[];
-      if(closedAbove){
+      if(!mtfFlowReady)blocked.push('mtf-flow-loading');
+      if(!mtfClarReady)blocked.push('mtf-clar-loading');
+      if(isBuy){
         if(flVal<cfg.flowStrMin)  blocked.push('flow='+flVal.toFixed(1)+'<'+cfg.flowStrMin);
         if(clVal<cfg.clarStrMin)  blocked.push('clar='+clVal.toFixed(1)+'<'+cfg.clarStrMin);
-        if(cfg.minRoomATR>0&&!_hasRoom(c.c,zones,z,'buy',atr,cfg.minRoomATR)) blocked.push('no-room-above');
-        if(cfg.maxExitATR>0){const d=(c.c-z.hi)/atr;if(d>cfg.maxExitATR)blocked.push('exit-too-far='+d.toFixed(2)+'x>'+cfg.maxExitATR);}
+        if(cfg.minRoomATR>0&&!_hasRoom(c.c,zones,z,'buy',atr,cfg.minRoomATR))blocked.push('no-room-above');
+        if(cfg.maxExitATR>0){const d=(c.c-z.hi)/atr;if(d>cfg.maxExitATR)blocked.push('exit-too-far='+d.toFixed(2)+'x');}
       }else{
-        if(flVal>-cfg.flowStrMin) blocked.push('flow='+flVal.toFixed(1)+'>=-'+cfg.flowStrMin);
-        if(clVal>-cfg.clarStrMin) blocked.push('clar='+clVal.toFixed(1)+'>=-'+cfg.clarStrMin);
-        if(cfg.minRoomATR>0&&!_hasRoom(c.c,zones,z,'sell',atr,cfg.minRoomATR)) blocked.push('no-room-below');
-        if(cfg.maxExitATR>0){const d=(z.lo-c.c)/atr;if(d>cfg.maxExitATR)blocked.push('exit-too-far='+d.toFixed(2)+'x>'+cfg.maxExitATR);}
+        if(flVal>-cfg.flowStrMin) blocked.push('flow='+flVal.toFixed(1)+'(need<=-'+cfg.flowStrMin+')');
+        if(clVal>-cfg.clarStrMin) blocked.push('clar='+clVal.toFixed(1)+'(need<=-'+cfg.clarStrMin+')');
+        if(cfg.minRoomATR>0&&!_hasRoom(c.c,zones,z,'sell',atr,cfg.minRoomATR))blocked.push('no-room-below');
+        if(cfg.maxExitATR>0){const d=(z.lo-c.c)/atr;if(d>cfg.maxExitATR)blocked.push('exit-too-far='+d.toFixed(2)+'x');}
       }
 
       if(dbg){
         console.debug('[DVL Conf]',{
-          zi,ci,time:new Date(c.t).toISOString().slice(11,19),
-          exit:exitDir,close:+c.c.toFixed(4),
-          zone:{lo:+z.lo.toFixed(4),hi:+z.hi.toFixed(4)},
+          zi,ci,t:new Date(c.t).toISOString().slice(11,19),
+          exit:isBuy?'BUY':'SELL',close:+c.c.toFixed(4),
+          z:{lo:+z.lo.toFixed(4),hi:+z.hi.toFixed(4)},
           flow:+flVal.toFixed(1),flowMin:cfg.flowStrMin,
           clar:+clVal.toFixed(1),clarMin:cfg.clarStrMin,
-          atr:+atr.toFixed(4),
-          blocked:blocked.length?blocked.join(' | '):'PASS',
-          mtfFlow:isMtfFlow,mtfClar:isMtfClar,
+          atr:+atr.toFixed(5),
+          mtfFlowReady,mtfClarReady,
+          result:blocked.length?'BLOCKED':'PASS',
+          blocked:blocked.join(' | ')||'—',
         });
       }
 
       if(blocked.length>0)continue;
 
-      if(closedAbove&&cfg.showBuy){
-        signals.push({id:S.sym+'|'+S.tf+'|'+c.t+'|buy',idx:ci,time:c.t,type:'buy',price:c.c,score:1,zone:z,symbol:S.sym,tf:S.tf});
-        st.signalPlottedForExit=true;
-        lastSignalIdx=ci;
-        if(cfg.requireReentry)st.wasInside=false;
-        if(dbg)console.debug('[DVL Conf] z'+zi+' BUY confirmed ci='+ci);
-      }else if(closedBelow&&cfg.showSell){
-        signals.push({id:S.sym+'|'+S.tf+'|'+c.t+'|sell',idx:ci,time:c.t,type:'sell',price:c.c,score:1,zone:z,symbol:S.sym,tf:S.tf});
-        st.signalPlottedForExit=true;
-        lastSignalIdx=ci;
-        if(cfg.requireReentry)st.wasInside=false;
-        if(dbg)console.debug('[DVL Conf] z'+zi+' SELL confirmed ci='+ci);
-      }
+      signals.push({
+        id:S.sym+'|'+S.tf+'|'+c.t+'|'+(isBuy?'buy':'sell'),
+        idx:ci,time:c.t,type:isBuy?'buy':'sell',
+        price:c.c,score:1,zone:z,symbol:S.sym,tf:S.tf,
+      });
+      st.signalDone=true;
+      st.lastSignalIdx=ci;
+      if(cfg.requireReentry)st.wasTouched=false;
+      if(dbg)console.debug('[DVL Conf] CONFIRMED z'+zi+(isBuy?' BUY':' SELL')+' ci='+ci);
     }
   }
 
   // Dedup: one signal per candle+type across overlapping zones
   const seen=new Set();
   S.confluenceSignals=signals.filter(s=>{
-    const k=s.idx+'|'+s.type;
-    if(seen.has(k))return false;
-    seen.add(k);
-    return true;
+    const k=s.idx+'|'+s.type;if(seen.has(k))return false;seen.add(k);return true;
   });
 }
 
