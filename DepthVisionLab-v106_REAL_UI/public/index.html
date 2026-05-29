@@ -4458,37 +4458,45 @@ function drawCrosshair(ctx,W,H,sc,xFn,V){
   if(!S._cross){S._crossIdx=null;return;}
   const{cx,cy}=S._cross;
   const right=W-RP();
-  if(cx<PL||cx>right||cy<PT||cy>H-PB){S._crossIdx=null;return;}
+  // Crosshair is active in the main chart AND in the oscillator panels below it
+  if(cx<PL||cx>right||cy<PT||cy>H-10){S._crossIdx=null;return;}
   const idx=clamp(Math.floor(S.view.start+(cx-PL)/CW(W)*V.span),0,S.candles.length-1);
   S._crossIdx=idx;
   const snapX=xFn(idx);
-  // Magnet: snap Y to nearest OHLC within 18px
-  const c=S.candles[idx];
-  let hy=cy;
-  if(c){let best=18;for(const p of[c.h,c.l,c.o,c.c]){const d=Math.abs(cy-sc.y(p));if(d<best){best=d;hy=sc.y(p);}}}
-  const price=sc.lo+(1-(hy-PT)/(H-PT-PB))*(sc.hi-sc.lo);
   ctx.save();
-  ctx.setLineDash([3,4]);
   ctx.strokeStyle='rgba(210,220,240,0.55)';
   ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(PL,hy);ctx.lineTo(right,hy);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(snapX,PT);ctx.lineTo(snapX,H-PB);ctx.stroke();
-  ctx.setLineDash([]);
-  if(!S.yScale.hidden){
-    const lbl=priceFmt(price);
-    const lblW=Math.max(74,Math.min(92,RP()-4)),lblH=18;
-    const lblX=right+2,lblY=clamp(hy-lblH/2,PT,H-PB-lblH);
-    ctx.fillStyle='rgba(12,28,70,0.97)';
-    ctx.fillRect(lblX,lblY,lblW,lblH);
-    ctx.strokeStyle='rgba(140,170,240,0.55)';
-    ctx.lineWidth=0.8;
-    ctx.strokeRect(lblX+.5,lblY+.5,lblW-1,lblH-1);
-    ctx.fillStyle='#dce8ff';
-    ctx.font='10px monospace';
-    ctx.textAlign='center';
-    ctx.textBaseline='middle';
-    ctx.fillText(lbl,lblX+lblW/2,lblY+lblH/2);
+  // Horizontal price line + label — only when cursor is in the main chart area
+  if(cy<=H-PB){
+    const c=S.candles[idx];
+    let hy=cy;
+    if(c){let best=18;for(const p of[c.h,c.l,c.o,c.c]){const d=Math.abs(cy-sc.y(p));if(d<best){best=d;hy=sc.y(p);}}}
+    const price=sc.lo+(1-(hy-PT)/(H-PT-PB))*(sc.hi-sc.lo);
+    ctx.setLineDash([3,4]);
+    ctx.beginPath();ctx.moveTo(PL,hy);ctx.lineTo(right,hy);ctx.stroke();
+    ctx.setLineDash([]);
+    if(!S.yScale.hidden){
+      const lbl=priceFmt(price);
+      const lblW=Math.max(74,Math.min(92,RP()-4)),lblH=18;
+      const lblX=right+2,lblY=clamp(hy-lblH/2,PT,H-PB-lblH);
+      ctx.fillStyle='rgba(12,28,70,0.97)';
+      ctx.fillRect(lblX,lblY,lblW,lblH);
+      ctx.strokeStyle='rgba(140,170,240,0.55)';
+      ctx.lineWidth=0.8;
+      ctx.strokeRect(lblX+.5,lblY+.5,lblW-1,lblH-1);
+      ctx.fillStyle='#dce8ff';
+      ctx.font='10px monospace';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText(lbl,lblX+lblW/2,lblY+lblH/2);
+    }
   }
+  // Vertical crosshair — extends from chart top through all active oscillator panels
+  ctx.strokeStyle='rgba(210,220,240,0.55)';
+  ctx.lineWidth=1;
+  ctx.setLineDash([3,4]);
+  ctx.beginPath();ctx.moveTo(snapX,PT);ctx.lineTo(snapX,H-10);ctx.stroke();
+  ctx.setLineDash([]);
   ctx.restore();
 }
 function drawCustom(ctx,V,sc,x){S.custom.forEach(ind=>{let vals=[];try{vals=evalCustom(ind.code)}catch(e){return}ctx.strokeStyle=ind.color;ctx.lineWidth=1.4;ctx.beginPath();let on=false;for(let i=V.a;i<V.b;i++){const v=vals[i];if(v==null||!isFinite(v))continue;const xx=x(i),yy=sc.y(v);if(!on){ctx.moveTo(xx,yy);on=true}else ctx.lineTo(xx,yy)}ctx.stroke()})}
@@ -5098,20 +5106,35 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
     ctx.shadowBlur=0;ctx.fillStyle='#eaffff';ctx.beginPath();ctx.arc(last.px,valY(last.v),1.35,0,Math.PI*2);ctx.fill();
   }
 
-  // Crosshair no painel
+  // Crosshair no painel — vertical line is drawn by main crosshair extending to H-10
   if(S._cross){
-    const cx=S._cross.cx;
-    if(cx>=pLeft&&cx<=pRight){
-      ctx.strokeStyle='rgba(220,225,240,0.25)';ctx.lineWidth=0.9;ctx.setLineDash([4,5]);
-      ctx.beginPath();ctx.moveTo(cx,pTop+4);ctx.lineTo(cx,pBot-4);ctx.stroke();ctx.setLineDash([]);
-      const timeTxt=(()=>{
-        const idx=Math.min(V.b-1,Math.max(V.a,Math.round(S.view.start+(cx-PL)/(CW(W)/V.span)-0.5)));
-        const t=S.candles[idx]?.t; if(!t)return '';
-        try{return new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});}catch(e){return '';}
-      })();
+    const snapX=S._crossIdx!=null?x(S._crossIdx):S._cross.cx;
+    if(snapX>=pLeft&&snapX<=pRight){
+      const ci=S._crossIdx!=null?S._crossIdx:clamp(Math.floor(S.view.start+(snapX-PL)/CW(W)*V.span),V.a,V.b-1);
+      // Find smoothed clarity value from already-computed vals array
+      const vEntry=vals.find(e=>e.idx===ci);
+      const cv=vEntry?vEntry.v:getTrendClarityValue(ci);
+      const cvY=valY(cv);
+      const isBull=cv>=0;
+      // Horizontal guide line at the clarity value
+      ctx.strokeStyle=isBull?'rgba(0,215,255,0.28)':'rgba(255,75,90,0.28)';
+      ctx.lineWidth=0.7;ctx.setLineDash([3,4]);
+      ctx.beginPath();ctx.moveTo(pLeft,cvY);ctx.lineTo(pRight,cvY);ctx.stroke();ctx.setLineDash([]);
+      // Circle highlight on the clarity line
+      ctx.shadowColor=isBull?'rgba(0,215,255,0.70)':'rgba(255,70,90,0.70)';ctx.shadowBlur=4;
+      ctx.fillStyle=isBull?'rgba(0,225,255,0.90)':'rgba(255,80,100,0.90)';
+      ctx.beginPath();ctx.arc(snapX,cvY,3.5,0,Math.PI*2);ctx.fill();
+      ctx.shadowBlur=0;ctx.fillStyle='rgba(255,255,255,0.75)';
+      ctx.beginPath();ctx.arc(snapX,cvY,1.4,0,Math.PI*2);ctx.fill();
+      // Value label: Clarity +/-XX
+      ctx.font='700 7px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+      ctx.fillStyle=isBull?'rgba(0,215,255,0.92)':'rgba(255,80,100,0.92)';
+      ctx.fillText('Clarity:'+(cv>=0?'+':'')+Math.round(cv),pRight-4,clamp(cvY-7,caTop+8,caBot-8));
+      // Time label at panel bottom
+      const timeTxt=(()=>{const t=S.candles[ci]?.t;if(!t)return '';try{return new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}catch(e){return '';}})();
       if(timeTxt){
         ctx.font='700 9px monospace';const w=ctx.measureText(timeTxt).width+12,h=15;
-        const tx=_hvnClamp(cx-w/2,pLeft,pRight-w),ty=pBot-footerH-1;
+        const tx=_hvnClamp(snapX-w/2,pLeft,pRight-w),ty=pBot-footerH-1;
         ctx.fillStyle='rgba(10,18,34,0.95)';_hvnRR(ctx,tx,ty,w,h,3);ctx.fill();
         ctx.strokeStyle='rgba(120,150,200,0.38)';_hvnRR(ctx,tx,ty,w,h,3);ctx.stroke();
         ctx.fillStyle='rgba(230,235,245,0.92)';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(timeTxt,tx+w/2,ty+h/2+0.3);
@@ -12056,7 +12079,7 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH){
   if(_flowOscCacheKey!==ck){_flowOscCache=_computeFlowOsc(cs,smooth);_flowOscCacheKey=ck;}
   const osc=_flowOscCache;if(!osc||!osc.length)return;
   const N=osc.length;
-  const clarOff=clarH?clarH+2:0;
+  const clarOff=clarH?clarH+8:0;  // 8 = PANEL_GAP: aligns with PB calculation
   const pBot=H-10-clarOff,pTop=pBot-fah,pMid=(pTop+pBot)/2;
   const xL=PL,xR=W-RP(),panW=xR-xL;
   if(panW<=0||pTop>=pBot)return;
@@ -12159,20 +12182,31 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH){
       ctx.fillStyle=tc;ctx.fillText(tag,xR-8,pTop+9);
     }
   }
-  // Crosshair
+  // Crosshair — use same candle index as main crosshair for consistency
   if(S._cross&&S._cross.cx>=xL&&S._cross.cx<=xR){
-    const ci=Math.max(0,Math.min(N-1,Math.round(S.view.start+(S._cross.cx-xL)/bw-0.5)));
+    const ci=S._crossIdx!=null?S._crossIdx:clamp(Math.floor(S.view.start+(S._cross.cx-xL)/CW(W)*V.span),0,N-1);
     if(ci>=0&&ci<N){
       const v=osc[ci],yv=valToY(v);
       const bh2=Math.max(1,Math.abs(yv-pMid)),y1h=v>=0?yv:pMid;
-      ctx.fillStyle=v>=0?'rgba(0,210,170,0.18)':'rgba(255,100,55,0.18)';
+      const isBull=v>=0;
+      // Highlight bar at crosshair
+      ctx.fillStyle=isBull?'rgba(0,210,170,0.18)':'rgba(255,100,55,0.18)';
       ctx.fillRect(x(ci)-barW/2-1,y1h,barW+2,bh2);
-      ctx.strokeStyle=v>=0?'rgba(0,210,170,0.32)':'rgba(255,100,55,0.32)';
+      // Horizontal guide line at flow value
+      ctx.strokeStyle=isBull?'rgba(0,210,170,0.32)':'rgba(255,100,55,0.32)';
       ctx.lineWidth=0.7;ctx.setLineDash([3,4]);
       ctx.beginPath();ctx.moveTo(xL,yv);ctx.lineTo(xR,yv);ctx.stroke();ctx.setLineDash([]);
+      // Circle highlight on the flow line at crosshair position
+      const snapX=x(ci);
+      ctx.shadowColor=isBull?'rgba(0,210,170,0.80)':'rgba(255,100,55,0.80)';ctx.shadowBlur=4;
+      ctx.fillStyle=isBull?'rgba(0,220,180,0.92)':'rgba(255,110,60,0.92)';
+      ctx.beginPath();ctx.arc(snapX,yv,3.5,0,Math.PI*2);ctx.fill();
+      ctx.shadowBlur=0;ctx.fillStyle='rgba(255,255,255,0.75)';
+      ctx.beginPath();ctx.arc(snapX,yv,1.4,0,Math.PI*2);ctx.fill();
+      // Value label: Flow +/-XX
       ctx.font='700 7px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
-      ctx.fillStyle=v>=0?'rgba(0,210,170,0.90)':'rgba(255,100,55,0.90)';
-      ctx.fillText('Flow:'+(v>=0?'+':'')+Math.round(v),xR-4,yv-6);
+      ctx.fillStyle=isBull?'rgba(0,210,170,0.90)':'rgba(255,100,55,0.90)';
+      ctx.fillText('Flow:'+(v>=0?'+':'')+Math.round(v),xR-4,Math.max(pTop+10,Math.min(pBot-6,yv-7)));
     }
   }
 }
