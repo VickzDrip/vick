@@ -2133,7 +2133,16 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Max Zones</span><input class="num" id="wfMaxZones" type="number" min="1" max="30" step="1" value="6"></div>
             <div class="kv"><span class="k">Max Markers/Zone</span><input class="num" id="wfMaxMarkers" type="number" min="1" max="30" step="1" value="12"></div>
             <div class="kv"><span class="k">Pressure Smooth</span><input class="num" id="wfPressureSmooth" type="number" min="1" max="20" step="1" value="5"></div>
-            <div class="hint">Seller = upper wick rejections · Buyer = lower wick rejections · Zonas criadas somente após múltiplas rejeições sobrepostas.</div>
+            <div style="font-size:9px;color:#00d4ff;font-weight:700;letter-spacing:.08em;margin:6px 0 3px;opacity:.8;">EXTREMITY FILTER</div>
+            <div class="kv"><span class="k">Detection Mode</span><select class="select tiny-select" id="wfDetectMode"><option value="fast" selected>Fast Extreme</option><option value="confirmed">Confirmed Swing</option><option value="all">All Wicks</option></select></div>
+            <div class="kv"><span class="k">Extremity Lookback</span><input class="num" id="wfExtremityLB" type="number" min="3" max="30" step="1" value="8"></div>
+            <div class="kv"><span class="k">Swing Left Bars</span><input class="num" id="wfSwingLeft" type="number" min="2" max="20" step="1" value="5"></div>
+            <div class="kv"><span class="k">Swing Right Bars</span><input class="num" id="wfSwingRight" type="number" min="1" max="10" step="1" value="3"></div>
+            <div class="kv"><span class="k">Range Lookback</span><input class="num" id="wfRangeLB" type="number" min="10" max="200" step="5" value="50"></div>
+            <div class="kv"><span class="k">Extremity High Zone</span><input class="num" id="wfExtHigh" type="number" min="0.50" max="0.95" step="0.05" value="0.75"></div>
+            <div class="kv"><span class="k">Extremity Low Zone</span><input class="num" id="wfExtLow" type="number" min="0.05" max="0.50" step="0.05" value="0.25"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show Internal Wicks</span><input type="checkbox" id="wfShowInternal" style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <div class="hint">Fast Extreme: seller somente em topos locais, buyer somente em fundos locais · Confirmed Swing: aguarda confirmação posterior (atraso) · All Wicks: detecta todos os pavios · Range filter bloqueia pavios no meio do range.</div>
           </div>
         </div>
 
@@ -13258,6 +13267,14 @@ function _getWFCfg(){
     maxZones:Math.max(1,Math.min(30,_sn('wfMaxZones',6))),
     maxMarkers:Math.max(1,Math.min(30,_sn('wfMaxMarkers',12))),
     pressureSmooth:Math.max(1,Math.min(20,_sn('wfPressureSmooth',5))),
+    detectMode:_E('wfDetectMode')?.value||'fast',
+    extremityLB:Math.max(3,Math.min(30,_sn('wfExtremityLB',8))),
+    swingLeft:Math.max(2,Math.min(20,_sn('wfSwingLeft',5))),
+    swingRight:Math.max(1,Math.min(10,_sn('wfSwingRight',3))),
+    rangeLB:Math.max(10,Math.min(200,_sn('wfRangeLB',50))),
+    extHigh:Math.max(0.50,Math.min(0.95,_sn('wfExtHigh',0.75))),
+    extLow:Math.max(0.05,Math.min(0.50,_sn('wfExtLow',0.25))),
+    showInternal:_cb('wfShowInternal',false),
   };
 }
 
@@ -13308,6 +13325,13 @@ function _detectEvents(cs,cfg){
   const events=[];
   const n=cs.length;
   const lb=Math.min(n-2,cfg.lookback);
+  const mode=cfg.detectMode;        // 'fast' | 'confirmed' | 'all'
+  const useExtremity=(mode!=='all');
+  const rLB=cfg.rangeLB;
+  const eLB=cfg.extremityLB;
+  const sL=cfg.swingLeft;
+  const sR=cfg.swingRight;
+
   for(let i=Math.max(1,n-1-lb);i<n-1;i++){
     const c=cs[i];
     const range=c.h-c.l;
@@ -13324,22 +13348,60 @@ function _detectEvents(cs,cfg){
     const volOK=avgV<=0||vol>=avgV*cfg.minVolMult;
     if(!volOK)continue;
 
+    // Range position filter — only when extremity mode is active
+    let posHigh=0.5,posLow=0.5;
+    if(useExtremity){
+      let rHi=-Infinity,rLo=Infinity;
+      for(let j=Math.max(0,i-rLB);j<=i;j++){
+        if(cs[j].h>rHi)rHi=cs[j].h;
+        if(cs[j].l<rLo)rLo=cs[j].l;
+      }
+      const rng=rHi-rLo;
+      if(rng>1e-10){posHigh=(c.h-rLo)/rng;posLow=(c.l-rLo)/rng;}
+    }
+
+    // Local top/bottom checks
+    const _isTop=()=>{
+      if(mode==='fast'){
+        for(let j=Math.max(0,i-eLB);j<i;j++)if(cs[j].h>c.h)return false;
+        return true;
+      }
+      // confirmed swing — requires right bars
+      for(let j=Math.max(0,i-sL);j<i;j++)if(cs[j].h>c.h)return false;
+      for(let j=i+1;j<=Math.min(n-1,i+sR);j++)if(cs[j].h>c.h)return false;
+      return true;
+    };
+    const _isBot=()=>{
+      if(mode==='fast'){
+        for(let j=Math.max(0,i-eLB);j<i;j++)if(cs[j].l<c.l)return false;
+        return true;
+      }
+      for(let j=Math.max(0,i-sL);j<i;j++)if(cs[j].l<c.l)return false;
+      for(let j=i+1;j<=Math.min(n-1,i+sR);j++)if(cs[j].l<c.l)return false;
+      return true;
+    };
+
     // ─ Seller rejection (upper wick) ─
     if(uRatio>=cfg.minWickRatio){
       const closePos=(c.c-c.l)/range;
       if(closePos<=(1-cfg.minWickRatio*0.4)){
-        const fp=_wickFP(c,bodyTop,c.h,'seller');
-        const sellerFrac=fp.buy+fp.sell>0?fp.sell/(fp.buy+fp.sell):0.5;
-        const strength=Math.min(1,uRatio*1.6)*
-          Math.min(2,avgV>0?vol/avgV:1)*0.5*
-          (0.35+sellerFrac*0.65);
-        const zH=Math.max(atr*cfg.wickZoneATR,upperWick*0.35);
-        events.push({
-          type:'seller',idx:i,wickHi:c.h,wickLo:bodyTop,
-          zoneLo:Math.max(bodyTop,c.h-zH),zoneHi:c.h,
-          buyers:fp.buy,sellers:fp.sell,delta:fp.buy-fp.sell,
-          volume:vol,strength,atr,ratio:uRatio
-        });
+        let isExtreme=true;
+        if(useExtremity)isExtreme=(posHigh>=cfg.extHigh)&&_isTop();
+        if(isExtreme||cfg.showInternal){
+          const strMult=isExtreme?1.0:0.35;
+          const fp=_wickFP(c,bodyTop,c.h,'seller');
+          const sellerFrac=fp.buy+fp.sell>0?fp.sell/(fp.buy+fp.sell):0.5;
+          const strength=Math.min(1,uRatio*1.6)*
+            Math.min(2,avgV>0?vol/avgV:1)*0.5*
+            (0.35+sellerFrac*0.65)*strMult;
+          const zH=Math.max(atr*cfg.wickZoneATR,upperWick*0.35);
+          events.push({
+            type:'seller',idx:i,wickHi:c.h,wickLo:bodyTop,
+            zoneLo:Math.max(bodyTop,c.h-zH),zoneHi:c.h,
+            buyers:fp.buy,sellers:fp.sell,delta:fp.buy-fp.sell,
+            volume:vol,strength,atr,ratio:uRatio,extreme:isExtreme
+          });
+        }
       }
     }
 
@@ -13347,18 +13409,23 @@ function _detectEvents(cs,cfg){
     if(lRatio>=cfg.minWickRatio){
       const closePos=(c.c-c.l)/range;
       if(closePos>=(cfg.minWickRatio*0.4)){
-        const fp=_wickFP(c,c.l,bodyBot,'buyer');
-        const buyerFrac=fp.buy+fp.sell>0?fp.buy/(fp.buy+fp.sell):0.5;
-        const strength=Math.min(1,lRatio*1.6)*
-          Math.min(2,avgV>0?vol/avgV:1)*0.5*
-          (0.35+buyerFrac*0.65);
-        const zH=Math.max(atr*cfg.wickZoneATR,lowerWick*0.35);
-        events.push({
-          type:'buyer',idx:i,wickHi:bodyBot,wickLo:c.l,
-          zoneLo:c.l,zoneHi:Math.min(bodyBot,c.l+zH),
-          buyers:fp.buy,sellers:fp.sell,delta:fp.buy-fp.sell,
-          volume:vol,strength,atr,ratio:lRatio
-        });
+        let isExtreme=true;
+        if(useExtremity)isExtreme=(posLow<=cfg.extLow)&&_isBot();
+        if(isExtreme||cfg.showInternal){
+          const strMult=isExtreme?1.0:0.35;
+          const fp=_wickFP(c,c.l,bodyBot,'buyer');
+          const buyerFrac=fp.buy+fp.sell>0?fp.buy/(fp.buy+fp.sell):0.5;
+          const strength=Math.min(1,lRatio*1.6)*
+            Math.min(2,avgV>0?vol/avgV:1)*0.5*
+            (0.35+buyerFrac*0.65)*strMult;
+          const zH=Math.max(atr*cfg.wickZoneATR,lowerWick*0.35);
+          events.push({
+            type:'buyer',idx:i,wickHi:bodyBot,wickLo:c.l,
+            zoneLo:c.l,zoneHi:Math.min(bodyBot,c.l+zH),
+            buyers:fp.buy,sellers:fp.sell,delta:fp.buy-fp.sell,
+            volume:vol,strength,atr,ratio:lRatio,extreme:isExtreme
+          });
+        }
       }
     }
   }
@@ -13408,7 +13475,21 @@ function _scoreZone(z,cs){
   const rejScore=Math.min(1,z.rejectionCount/8);
   const total=z.buyers+z.sellers;
   const dom=total>0?(z.type==='seller'?z.sellers/total:z.buyers/total):0.5;
-  return Math.round((rejScore*35+recency*30+dom*20+z.strength*15)*100)/100;
+
+  // Extremity proximity: how close is this zone to the recent range extreme?
+  let extBonus=0;
+  let rHi=-Infinity,rLo=Infinity;
+  for(let j=Math.max(0,n-50);j<=n;j++){
+    if(cs[j]){if(cs[j].h>rHi)rHi=cs[j].h;if(cs[j].l<rLo)rLo=cs[j].l;}
+  }
+  const rng=rHi-rLo;
+  if(rng>1e-10){
+    const zCtr=(z.zoneLo+z.zoneHi)/2;
+    const pos=(zCtr-rLo)/rng;
+    extBonus=z.type==='seller'?Math.max(0,(pos-0.5)*2):Math.max(0,(0.5-pos)*2);
+  }
+
+  return Math.round((rejScore*30+recency*25+dom*18+z.strength*12+extBonus*15)*100)/100;
 }
 
 // ── Invalidation check ───────────────────────────────────────────────────
@@ -13466,7 +13547,9 @@ function _cacheKey(cs,cfg){
     (window.S?.sym||''),(window.S?.tf||''),
     cs.length,last.t||0,
     cfg.lookback,cfg.minWickRatio,cfg.minVolMult,
-    cfg.mergeATR,cfg.minRejects,cfg.pressureSmooth
+    cfg.mergeATR,cfg.minRejects,cfg.pressureSmooth,
+    cfg.detectMode,cfg.extremityLB,cfg.swingLeft,cfg.swingRight,
+    cfg.rangeLB,cfg.extHigh,cfg.extLow,cfg.showInternal?1:0
   ].join('|');
 }
 
@@ -13735,7 +13818,9 @@ window.__drawWickPressurePanel=_drawPressurePanel;
 // ── Invalidate cache on settings change ──────────────────────────────────
 const WF_IDS=new Set(['wfLookback','wfMinWickRatio','wfMinVolMult','wfMergeATR','wfMinRejects',
   'wfShowSeller','wfShowBuyer','wfShowMarkers','wfShowGuides','wfShowLabels','wfShowPressure',
-  'wfWickZoneATR','wfDomThresh','wfMaxZones','wfMaxMarkers','wfPressureSmooth']);
+  'wfWickZoneATR','wfDomThresh','wfMaxZones','wfMaxMarkers','wfPressureSmooth',
+  'wfDetectMode','wfExtremityLB','wfSwingLeft','wfSwingRight',
+  'wfRangeLB','wfExtHigh','wfExtLow','wfShowInternal']);
 ['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
   if(!WF_IDS.has(e.target?.id))return;
   _wfCache.key='';
