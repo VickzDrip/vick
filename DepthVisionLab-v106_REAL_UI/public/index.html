@@ -1452,42 +1452,47 @@ html.pre-ui .tfs .tf,html.pre-ui .sidebar .ind-card{visibility:hidden}
 html.pre-ui .switch::after{transition:none!important}
 </style>
 <style id="dvl-pc-style">
-/* ── PC sidebar collapse ─────────────────────────────────────────────────── */
+/* ── Desktop sidebar: fixed overlay, closed by default ───────────────────── */
 @media(min-width:901px){
-  .sidebar{transition:width .2s ease;overflow:hidden;}
-  body.sidebar-collapsed .sidebar{width:0;min-width:0;border-right:none;}
-  #sidebarExpandTab{
-    position:fixed;left:0;top:50%;transform:translateY(-50%);
-    width:14px;height:52px;
-    background:#070c18;border:1px solid #1e2a40;border-left:none;
-    border-radius:0 6px 6px 0;color:#6a7fa0;cursor:pointer;
-    display:none;align-items:center;justify-content:center;
-    z-index:60;font-size:10px;writing-mode:vertical-rl;letter-spacing:1px;
+  .sidebar{
+    position:fixed!important;
+    z-index:1000!important;
+    top:0!important;left:0!important;
+    height:100dvh!important;
+    width:260px!important;
+    transform:translateX(-102%)!important;
+    transition:transform .18s ease!important;
+    border-right:1px solid #2a3a5a!important;
+    box-shadow:18px 0 40px rgba(0,0,0,.5)!important;
+    overflow:auto!important;
   }
-  #sidebarExpandTab:hover{color:#00d4ff;border-color:#00d4ff;}
-  body.sidebar-collapsed #sidebarExpandTab{display:flex;}
-  #sidebarCollapseBtn{
-    display:flex;align-items:center;justify-content:center;gap:5px;
-    width:100%;padding:9px 0 11px;border:none;
-    border-top:1px solid #101b2d;
-    background:#070c18;color:#56698a;cursor:pointer;
-    font-family:monospace;font-size:9px;letter-spacing:1.2px;
-  }
-  #sidebarCollapseBtn:hover{color:#00d4ff;}
+  body.desktop-sidebar-open .sidebar{transform:translateX(0)!important;}
+  body.desktop-sidebar-open .mobile-scrim{display:block!important;z-index:999!important;}
+  #sidebarCollapseBtn,#sidebarExpandTab{display:none!important;}
+  /* PC sidebar text */
+  .sidebar .name{font-size:13px!important;}
+  .sidebar .kv{font-size:12.5px!important;}
+  .sidebar .k{font-size:11px!important;}
+  .sidebar .title{font-size:9.5px!important;letter-spacing:2px!important;}
+  .sidebar .ind-settings .k{font-size:10.5px!important;}
+  .sidebar .hint{font-size:9.5px!important;}
+  .sidebar .row{padding:5px 0!important;}
+  .sidebar .section{padding:8px 10px!important;}
+  .sidebar .input,.sidebar .num,.sidebar .select,.sidebar .btn{font-size:13px!important;}
 }
 @media(max-width:900px){
   #sidebarCollapseBtn,#sidebarExpandTab{display:none!important;}
 }
-/* ── PC sidebar UI text – slightly larger than mobile ───────────────────── */
+/* ── Desktop typography ──────────────────────────────────────────────────── */
 @media(min-width:901px){
-  .sidebar .name{font-size:12.5px;}
-  .sidebar .kv{font-size:12px;}
-  .sidebar .k{font-size:10.5px;}
-  .sidebar .title{font-size:9px;letter-spacing:2px;}
-  .sidebar .ind-settings .k{font-size:10px;}
-  .sidebar .hint{font-size:9px;}
-  .sidebar .row{padding:5px 0;}
-  .sidebar .section{padding:8px 10px;}
+  #pNow{font-size:36px!important;}
+  .tb-sym-name{font-size:17px!important;}
+  .tb-tf-pill{font-size:13px!important;padding:4px 10px!important;}
+  .tb-stat-val{font-size:12.5px!important;}
+  .tb-stat-label{font-size:9px!important;}
+  .cleanNav .mini-btn,.cleanNav .tool-select{font-size:13px!important;height:36px!important;}
+  .mini-btn{font-size:13px!important;}
+  .input,.num,.select,.btn{font-size:13px!important;}
 }
 </style>
 <div class="mobile-scrim" id="mobileScrim"></div>
@@ -2716,7 +2721,7 @@ const LEFT_LABEL_W=44,RIGHT_SCALE_W=42,PANEL_PAD_TOP=18,PANEL_PAD_BOTTOM=14,PANE
 let _rafPending=false;function drawSoon(){if(_rafPending)return;_rafPending=true;requestAnimationFrame(()=>{_rafPending=false;draw();})}
 let _panDx=0;
 let _bootTimer=null;function bootDebounced(){clearTimeout(_bootTimer);_bootTimer=setTimeout(boot,120);}
-const PL=18,PT=8; let PB=10; let PR=68; const _csf=window.innerWidth>900?1.18:1.0; let _hvnClarityH=(()=>{try{const v=parseInt(localStorage.getItem('dvl_hvnClarityH'));return(v>=90&&v<=300)?v:166;}catch(e){return 166;}})();let _flowAccelH=(()=>{try{const v=parseInt(localStorage.getItem('dvl_flowH'));return(v>=70&&v<=240)?v:120;}catch(e){return 120;}})();function RP(){const sp=S.yScale?.hidden?14:PR;return sp+(S.inds.book?Math.max(128,Math.min(S.book.maxW,S.book.w)+18):0)}
+const PL=18,PT=8; let PB=10; let PR=68; const _csf=window.innerWidth>900?1.35:1.0; let _hvnClarityH=(()=>{try{const v=parseInt(localStorage.getItem('dvl_hvnClarityH'));return(v>=90&&v<=300)?v:166;}catch(e){return 166;}})();let _flowAccelH=(()=>{try{const v=parseInt(localStorage.getItem('dvl_flowH'));return(v>=70&&v<=240)?v:120;}catch(e){return 120;}})();function RP(){const sp=S.yScale?.hidden?14:PR;return sp+(S.inds.book?Math.max(128,Math.min(S.book.maxW,S.book.w)+18):0)}
 function CW(W){return Math.max(80,W-PL-RP())}
 function futureMax(){return (S.candles.length||1)+(S.view.future||650)}
 function setupCanvas(c,w){const nw=Math.round(w.clientWidth*devicePixelRatio),nh=Math.round(w.clientHeight*devicePixelRatio);if(c.width!==nw||c.height!==nh){c.width=nw;c.height=nh;}const ctx=c.getContext('2d');ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);return ctx}
@@ -4407,11 +4412,21 @@ function drawVolumeOverlay(ctx,W,H,V,xFn,bw){
   window.__ETX_SKIP_COLORMAP=false;
   ctx.restore();
 }
+function getPanelAtY(y,H){
+  if(y<=H-PB)return 'mainChart';
+  if(_clarH>0&&y>=H-10-_clarH&&y<=H-10)return 'trendClarity';
+  if(_fah>0){
+    const clarOff=_clarH>0?_clarH+PANEL_GAP:0;
+    const flowBot=H-10-clarOff;
+    const flowTop=flowBot-_fah;
+    if(y>=flowTop&&y<=flowBot)return 'flow';
+  }
+  return 'none';
+}
 function drawCrosshair(ctx,W,H,sc,xFn,V){
   if(!S._cross){S._crossIdx=null;return;}
   const{cx,cy}=S._cross;
   const right=W-RP();
-  // Crosshair is active in the main chart AND in the oscillator panels below it
   if(cx<PL||cx>right||cy<PT||cy>H-10){S._crossIdx=null;return;}
   const idx=clamp(Math.floor(S.view.start+(cx-PL)/CW(W)*V.span),0,S.candles.length-1);
   S._crossIdx=idx;
@@ -4419,8 +4434,8 @@ function drawCrosshair(ctx,W,H,sc,xFn,V){
   ctx.save();
   ctx.strokeStyle='rgba(210,220,240,0.55)';
   ctx.lineWidth=1;
-  // Horizontal price line + label — only when cursor is in the main chart area
-  if(cy<=H-PB){
+  const panel=getPanelAtY(cy,H);
+  if(panel==='mainChart'){
     const c=S.candles[idx];
     let hy=cy;
     if(c){let best=18;for(const p of[c.h,c.l,c.o,c.c]){const d=Math.abs(cy-sc.y(p));if(d<best){best=d;hy=sc.y(p);}}}
@@ -4432,19 +4447,34 @@ function drawCrosshair(ctx,W,H,sc,xFn,V){
       const lbl=priceFmt(price);
       const lblW=Math.max(74,Math.min(92,RP()-4)),lblH=18;
       const lblX=right+2,lblY=clamp(hy-lblH/2,PT,H-PB-lblH);
-      ctx.fillStyle='rgba(12,28,70,0.97)';
-      ctx.fillRect(lblX,lblY,lblW,lblH);
-      ctx.strokeStyle='rgba(140,170,240,0.55)';
-      ctx.lineWidth=0.8;
-      ctx.strokeRect(lblX+.5,lblY+.5,lblW-1,lblH-1);
-      ctx.fillStyle='#dce8ff';
-      ctx.font=Math.round(10*_csf)+'px monospace';
-      ctx.textAlign='center';
-      ctx.textBaseline='middle';
-      ctx.fillText(lbl,lblX+lblW/2,lblY+lblH/2);
+      ctx.fillStyle='rgba(12,28,70,0.97)';ctx.fillRect(lblX,lblY,lblW,lblH);
+      ctx.strokeStyle='rgba(140,170,240,0.55)';ctx.lineWidth=0.8;ctx.strokeRect(lblX+.5,lblY+.5,lblW-1,lblH-1);
+      ctx.fillStyle='#dce8ff';ctx.font=Math.round(10*_csf)+'px monospace';
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(lbl,lblX+lblW/2,lblY+lblH/2);
+    }
+  } else if(panel==='flow'||panel==='trendClarity'){
+    let val=0,lbl='';
+    if(panel==='flow'){
+      val=window.__getFlowOscValue?window.__getFlowOscValue(idx):0;
+      lbl='Flow '+(val>=0?'+':'')+Math.round(val);
+    } else {
+      val=typeof getTrendClarityValue==='function'?getTrendClarityValue(idx):0;
+      lbl='Clar '+(val>=0?'+':'')+val.toFixed(1);
+    }
+    ctx.setLineDash([3,4]);
+    ctx.beginPath();ctx.moveTo(PL,cy);ctx.lineTo(right,cy);ctx.stroke();
+    ctx.setLineDash([]);
+    if(!S.yScale.hidden){
+      const lblW=Math.max(74,Math.min(92,RP()-4)),lblH=18;
+      const panTop=panel==='trendClarity'?(H-10-_clarH):(H-10-(_clarH>0?_clarH+PANEL_GAP:0)-_fah);
+      const panBot=panel==='trendClarity'?(H-10):(H-10-(_clarH>0?_clarH+PANEL_GAP:0));
+      const lblX=right+2,lblY=clamp(cy-lblH/2,panTop,panBot-lblH);
+      ctx.fillStyle='rgba(12,28,70,0.97)';ctx.fillRect(lblX,lblY,lblW,lblH);
+      ctx.strokeStyle='rgba(140,170,240,0.55)';ctx.lineWidth=0.8;ctx.strokeRect(lblX+.5,lblY+.5,lblW-1,lblH-1);
+      ctx.fillStyle='#dce8ff';ctx.font=Math.round(10*_csf)+'px monospace';
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(lbl,lblX+lblW/2,lblY+lblH/2);
     }
   }
-  // Vertical crosshair — extends from chart top through all active oscillator panels
   ctx.strokeStyle='rgba(210,220,240,0.55)';
   ctx.lineWidth=1;
   ctx.setLineDash([3,4]);
@@ -4936,7 +4966,10 @@ function showTip(x,y,r){const V=visible();if(x<PL||x>r.width-RP())return el('tip
 function isMobile(){return window.matchMedia('(max-width: 900px)').matches}
 function closeMobilePanel(){const sb=document.querySelector('.sidebar'),sc=el('mobileScrim');document.body.classList.remove('sidebar-open');if(sb)sb.classList.remove('open');if(sc)sc.classList.remove('show')}
 function openMobilePanel(){const sb=document.querySelector('.sidebar'),sc=el('mobileScrim');document.body.classList.add('sidebar-open');if(sb)sb.classList.add('open');if(sc)sc.classList.add('show')}
-const mm=el('mobileMenu'), ms=el('mobileScrim');if(mm)mm.onclick=openMobilePanel;if(ms)ms.onclick=closeMobilePanel;
+function closeSidebar(){const sc=el('mobileScrim');if(isMobile()){closeMobilePanel();}else{document.body.classList.remove('desktop-sidebar-open');if(sc)sc.classList.remove('show');try{localStorage.setItem('dvl_desktopSidebar','0');}catch(_){}drawSoon();}}
+function openDesktopSidebar(){const sc=el('mobileScrim');document.body.classList.add('desktop-sidebar-open');if(sc)sc.classList.add('show');try{localStorage.setItem('dvl_desktopSidebar','1');}catch(_){}drawSoon();}
+function toggleSidebar(){if(isMobile()){if(document.body.classList.contains('sidebar-open'))closeSidebar();else openMobilePanel();}else{if(document.body.classList.contains('desktop-sidebar-open'))closeSidebar();else openDesktopSidebar();}}
+const mm=el('mobileMenu'), ms=el('mobileScrim');if(mm)mm.onclick=toggleSidebar;if(ms)ms.onclick=closeSidebar;
 function syncIndControls(){
   document.querySelectorAll('[data-ind]').forEach(node=>{
     const k=node.dataset.ind;
@@ -5010,13 +5043,12 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeInputModal();i
   btn.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();doRefresh();},{passive:false});
 })();
 (()=>{
-  if(isMobile())return;
-  if(localStorage.getItem('dvl_sidebarCollapsed')==='1')document.body.classList.add('sidebar-collapsed');
-  const btnCollapse=el('sidebarCollapseBtn'),btnExpand=el('sidebarExpandTab');
-  if(btnCollapse)btnCollapse.onclick=()=>{document.body.classList.add('sidebar-collapsed');try{localStorage.setItem('dvl_sidebarCollapsed','1');}catch(_){}drawSoon();};
-  if(btnExpand)btnExpand.onclick=()=>{document.body.classList.remove('sidebar-collapsed');try{localStorage.setItem('dvl_sidebarCollapsed','0');}catch(_){}drawSoon();};
+  if(!isMobile()&&localStorage.getItem('dvl_desktopSidebar')==='1'){
+    document.body.classList.add('desktop-sidebar-open');
+    const sc=el('mobileScrim');if(sc)sc.classList.add('show');
+  }
 })();
-syncIndControls();el('btnLive').onclick=fitAll;el('btnFit').onclick=fitClose;el('btnLong').onclick=()=>{S.tool=S.tool==='long'?null:'long';syncToolBtns()};el('btnShort').onclick=()=>{S.tool=S.tool==='short'?null:'short';syncToolBtns()};el('applyBtn').onclick=()=>{refreshDepth();draw();if(isMobile())closeMobilePanel()};el('retry').onclick=boot;const __brandReload=document.querySelector('.brand')||document.querySelector('.side-logo')||document.querySelector('#topSym');if(__brandReload)__brandReload.onclick=()=>location.reload();el('chartStyle').onchange=e=>{S.chartStyle=e.target.value;draw()};
+syncIndControls();el('btnLive').onclick=fitAll;el('btnFit').onclick=fitClose;el('btnLong').onclick=()=>{S.tool=S.tool==='long'?null:'long';syncToolBtns()};el('btnShort').onclick=()=>{S.tool=S.tool==='short'?null:'short';syncToolBtns()};el('applyBtn').onclick=()=>{refreshDepth();draw();closeSidebar()};el('retry').onclick=boot;const __brandReload=document.querySelector('.brand')||document.querySelector('.side-logo')||document.querySelector('#topSym');if(__brandReload)__brandReload.onclick=()=>location.reload();el('chartStyle').onchange=e=>{S.chartStyle=e.target.value;draw()};
 if(el('tfSelect')){
   el('tfSelect').onchange=e=>{
     const next=e.target.value;
