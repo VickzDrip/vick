@@ -5469,17 +5469,20 @@ window.addEventListener('resize',draw);boot();
     });
   }
 
-  // Rebind menu button if original script bound old element before replacement.
+  // Rebind menu button to unified toggleSidebar (handles both mobile and desktop).
   setTimeout(()=>{
     const mm = $("mobileMenu");
-    if(mm){
-      mm.onclick = function(){
-        const sb = document.querySelector(".sidebar"), sc = $("mobileScrim");
+    if(mm) mm.onclick = typeof toggleSidebar==='function'?toggleSidebar:function(){
+      const sb=document.querySelector(".sidebar"),sc=$("mobileScrim");
+      if(!window.matchMedia('(max-width:900px)').matches){
+        document.body.classList.toggle("desktop-sidebar-open");
+        if(sc)sc.classList.toggle("show",document.body.classList.contains("desktop-sidebar-open"));
+      } else {
         document.body.classList.add("sidebar-open");
-        if(sb) sb.classList.add("open");
-        if(sc) sc.classList.add("show");
-      };
-    }
+        if(sb)sb.classList.add("open");
+        if(sc)sc.classList.add("show");
+      }
+    };
     updateTopSymbol();
     applyTheme();
   }, 250);
