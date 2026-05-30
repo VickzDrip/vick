@@ -2093,6 +2093,29 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
+        <div class="ind-card" data-card="fvgConf">
+          <div class="ind-head">
+            <div class="row" data-ind="fvgConf"><span class="name">DVL FVG Confluence</span><span class="switch"></span></div>
+            <button class="gear" data-settings="fvgConf" title="Inputs FVG Confluence">⚙</button>
+          </div>
+          <div class="ind-settings" id="settings-fvgConf">
+            <div class="hint">BUY/SELL when price mitigates an FVG with Flow + Trend Clarity confirmation. Requires FVG Volume Zones enabled.</div>
+            <div class="kv"><span class="k">Trend Clarity TF</span><select class="select tiny-select" id="fvgConfClarTf"><option value="current" selected>Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1D</option></select></div>
+            <div class="kv"><span class="k">DVL Flow TF</span><select class="select tiny-select" id="fvgConfFlowTf"><option value="current" selected>Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1D</option></select></div>
+            <div class="kv"><span class="k">Mitigation Mode</span><select class="select tiny-select" id="fvgConfMitMode"><option value="touch">Touch</option><option value="midpoint" selected>Midpoint</option><option value="full">Full Fill</option></select></div>
+            <div class="kv"><span class="k">Flow Strength Min</span><input class="num" id="fvgConfFlowMin" type="number" min="5" max="80" step="5" value="20" style="width:56px"></div>
+            <div class="kv"><span class="k">Clarity Strength Min</span><input class="num" id="fvgConfClarMin" type="number" min="5" max="80" step="5" value="25" style="width:56px"></div>
+            <div class="kv"><span class="k">Max FVG Age Bars</span><input class="num" id="fvgConfMaxAge" type="number" min="0" max="500" step="10" value="300" style="width:56px"></div>
+            <div class="kv"><span class="k">Signal Cooldown Bars</span><input class="num" id="fvgConfCooldown" type="number" min="0" max="50" step="1" value="8" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Visible</span><input class="num" id="fvgConfMaxVisible" type="number" min="5" max="100" step="5" value="30" style="width:56px"></div>
+            <div class="hint" style="font-size:8px;margin:1px 0 5px;">0 = filter disabled. BUY from bullish FVG, SELL from bearish FVG.</div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show Buy Signals</span><input type="checkbox" id="fvgConfShowBuy" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show Sell Signals</span><input type="checkbox" id="fvgConfShowSell" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Require Candle Reaction</span><input type="checkbox" id="fvgConfRequireReact" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Require Re-entry</span><input type="checkbox" id="fvgConfRequireReentry" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Debug (console)</span><input type="checkbox" id="fvgConfDebug" style="width:14px;height:14px;accent-color:#ffa500;cursor:pointer;flex-shrink:0;"></label>
+          </div>
+        </div>
 
         <div class="ind-card" data-card="book" style="display:none!important">
           <div class="ind-head">
@@ -2277,7 +2300,7 @@ html.pre-ui .switch::after{transition:none!important}
 const API='https://api.binance.com', WS='wss://stream.binance.com:9443/stream?streams=';
 const LOCAL_API=location.origin; // our own server with persisted trades + depth history
 let depthRefreshTimer=null;
-const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,book:false,stdVolume:true,volZones:true,hvnPro:false,flowAccel:true,hvnClarity:false,dvlConf:false},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal',_cross:null,confluenceSignals:[]};
+const S={sym:(window.__savedSym||'BTCUSDT'),tf:(window.__savedTf||'5m'),candles:[],depth:{bids:[],asks:[],bidMap:new Map(),askMap:new Map()},heatHist:[],heatDenom:1,trades:[],byCandle:new Map(),ws:null,wsIntentional:false,retryTimer:null,loadSeq:0,wsSeq:0,aggSeq:0,aggLoading:false,view:{start:0,end:0,auto:true,future:650},yScale:{zoom:1,drag:false,lastY:0,hidden:false},yVolScale:{zoom:1},mouse:{x:0,y:0,down:false,lastX:0,lastY:0},book:{w:154,minW:92,maxW:280,resize:false,bounds:null,handle:null},inds:Object.assign({heatmap:true,profile:true,book:false,stdVolume:true,volZones:true,hvnPro:false,flowAccel:true,hvnClarity:false,dvlConf:false,fvgConf:false},window.__savedInds||{}),custom:[],tool:null,positions:[],dragPos:null,chartStyle:'normal',_cross:null,confluenceSignals:[],fvgConfSignals:[]};
 window.__bigTradesOverlayCache={key:'',items:[]};
 window.__bigTradesPersistentCache=new Map();
 window.__bigTradesLastGood=[];
@@ -2324,7 +2347,7 @@ async function boot(){
 
     if(seq!==S.loadSeq||sym!==S.sym||tf!==S.tf)return;
 
-    S.candles=Array.isArray(k)?k:[];S.confluenceSignals=[];if(window.__resetConfluenceCache)window.__resetConfluenceCache();
+    S.candles=Array.isArray(k)?k:[];S.confluenceSignals=[];S.fvgConfSignals=[];if(window.__resetConfluenceCache)window.__resetConfluenceCache();if(window.__resetFVGConfCache)window.__resetFVGConfCache();
     setDepthSnapshot(d);
 
     S.view.end=S.candles.length+35;
@@ -2692,7 +2715,7 @@ const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_
 const _clarH=(S.inds.hvnClarity&&S.candles.length)?_hvnClarityH:0;const _fah=(S.inds.flowAccel&&S.candles.length)?_flowAccelH:0;PB=10+(_fah?_fah+PANEL_GAP:0)+(_clarH?_clarH+PANEL_GAP:0);
 const _logBtn=el('dvlMiniRefresh');if(_logBtn)_logBtn.style.bottom=(PB+8)+'px';
 const _rh=el('hvnResizeHandle');if(_rh){_rh.style.display=_clarH>0?'block':'none';_rh.style.bottom=(10+_clarH-PANEL_GAP/2)+'px';}const _frh=el('flowResizeHandle');if(_frh){_frh.style.display=_fah>0?'block':'none';_frh.style.bottom=(10+(_clarH?_clarH+PANEL_GAP:0)+_fah-PANEL_GAP/2)+'px';}
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;if(!indicatorsReady){const V=visible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);drawCandles(ctx,V,sc,x,bw);resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawTimeAxis();updateUI(V,sc);return;}const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawHVNPro)safeLayer('DVL HVN PRO',()=>window.__drawHVNPro(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.dvlConf){if(window.__computeConfluenceSignals)window.__computeConfluenceSignals();if(window.__drawConfluenceSignals)safeLayer('DVL Confluence',()=>window.__drawConfluenceSignals(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_fah>0&&window.__drawFlowPanel)safeLayer('DVL Flow Panel',()=>window.__drawFlowPanel(ctx,W,H,V,sc,x,_fah,_clarH,0));resetCtxState(ctx);if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;if(!indicatorsReady){const V=visible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);drawCandles(ctx,V,sc,x,bw);resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawTimeAxis();updateUI(V,sc);return;}const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawHVNPro)safeLayer('DVL HVN PRO',()=>window.__drawHVNPro(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.dvlConf){if(window.__computeConfluenceSignals)window.__computeConfluenceSignals();if(window.__drawConfluenceSignals)safeLayer('DVL Confluence',()=>window.__drawConfluenceSignals(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.fvgConf){if(window.__computeFVGConfSignals)window.__computeFVGConfSignals();if(window.__drawFVGConfSignals)safeLayer('DVL FVG Confluence',()=>window.__drawFVGConfSignals(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_fah>0&&window.__drawFlowPanel)safeLayer('DVL Flow Panel',()=>window.__drawFlowPanel(ctx,W,H,V,sc,x,_fah,_clarH,0));resetCtxState(ctx);if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
 // ── Chart watermark image (preloaded once) ──
 const _wmImg=(()=>{
   const i=new Image();i.crossOrigin='anonymous';
@@ -7304,6 +7327,7 @@ return {
   }
 
   window.__drawFVGVolumeZones=drawFVGVolumeZones;
+  window.__fvgZones=fvgZones;
 
   ready(function(){
     if(typeof S==='undefined')return;
@@ -12764,6 +12788,170 @@ const CONF_IDS=new Set(['confZoneSource','confClarTf','confFlowTf','confFlowStrM
 ['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
   if(!CONF_IDS.has(e.target?.id))return;
   _confStableKey='';computeConfluenceSignals();if(typeof drawSoon==='function')drawSoon();
+}));
+
+// ── DVL FVG CONFLUENCE SIGNALS ────────────────────────────────────────────────
+
+let _fvgConfStableKey='';
+
+function _getFVGConfCfg(){
+  const _n=(id,def)=>{const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?def:v;};
+  const _cb=(id,def)=>{const n=document.getElementById(id);return n?n.checked:def;};
+  const _s=(id,def)=>document.getElementById(id)?.value||def;
+  return{
+    clarTf:_s('fvgConfClarTf','current'),
+    flowTf:_s('fvgConfFlowTf','current'),
+    mitMode:_s('fvgConfMitMode','midpoint'),
+    flowMin:Math.max(5,_n('fvgConfFlowMin',20)),
+    clarMin:Math.max(5,_n('fvgConfClarMin',25)),
+    maxAge:Math.max(0,_n('fvgConfMaxAge',300)),
+    cooldown:Math.max(0,_n('fvgConfCooldown',8)),
+    maxVisible:Math.max(5,_n('fvgConfMaxVisible',30)),
+    showBuy:_cb('fvgConfShowBuy',true),
+    showSell:_cb('fvgConfShowSell',true),
+    requireReact:_cb('fvgConfRequireReact',true),
+    requireReentry:_cb('fvgConfRequireReentry',true),
+    debug:_cb('fvgConfDebug',false),
+  };
+}
+
+function _fvgId(z){return z.type+'|'+z.origin+'|'+z.from;}
+function _fvgTouchesFVG(c,z){return c.l<=z.high&&c.h>=z.low;}
+
+function _fvgMeetsMode(c,z,mode){
+  if(mode==='touch')return _fvgTouchesFVG(c,z);
+  const mid=(z.low+z.high)/2;
+  if(mode==='midpoint')return z.type==='bull'?(c.l<=mid):(c.h>=mid);
+  return z.type==='bull'?(c.l<=z.low):(c.h>=z.high); // full fill
+}
+
+function _fvgHasReaction(c,z){
+  if(z.type==='bull'){
+    const mid=(z.low+z.high)/2;
+    return c.c>mid||c.c>c.o||(c.l<=z.high&&c.c>z.high);
+  }
+  const mid=(z.low+z.high)/2;
+  return c.c<mid||c.c<c.o||(c.h>=z.low&&c.c<z.low);
+}
+
+function computeFVGConfSignals(){
+  if(!window.S||!S.inds.fvgConf||!S.candles.length){S.fvgConfSignals=[];return;}
+  const cfg=_getFVGConfCfg();
+  const cs=S.candles;
+  const fvgs=window.__fvgZones?window.__fvgZones():[];
+  if(!fvgs.length){S.fvgConfSignals=[];return;}
+
+  const zonesHash=fvgs.map(z=>z.type[0]+z.origin+'-'+Math.round(z.low*1000)+'-'+Math.round(z.high*1000)).join(';');
+  const cacheKey=[S.sym,S.tf,cs.length,cs.at(-1)?.t,
+    cfg.clarTf,cfg.flowTf,cfg.mitMode,cfg.flowMin,cfg.clarMin,
+    cfg.maxAge,cfg.cooldown,cfg.showBuy,cfg.showSell,
+    cfg.requireReact,cfg.requireReentry,zonesHash].join('|');
+  if(_fvgConfStableKey===cacheKey)return;
+  _fvgConfStableKey=cacheKey;
+
+  const isMtfFlow=cfg.flowTf!=='current';
+  const isMtfClar=cfg.clarTf!=='current';
+  const mtfFlowArr=isMtfFlow?_buildFlowMtfMap(cs,cfg.flowTf):null;
+  const mtfClarArr=isMtfClar?_buildClarMtfMap(cs,cfg.clarTf):null;
+  const mtfFlowReady=!isMtfFlow||mtfFlowArr!==null;
+  const mtfClarReady=!isMtfClar||mtfClarArr!==null;
+
+  const signals=[];
+  const dbg=cfg.debug;
+  const now=cs.length-1;
+
+  for(const z of fvgs){
+    if(z.status==='MITIGATED')continue;
+    const fid=_fvgId(z);
+    const isBull=z.type==='bull';
+    if(isBull&&!cfg.showBuy)continue;
+    if(!isBull&&!cfg.showSell)continue;
+
+    const st={touched:false,touchedAtIdx:-1,signalDone:false,lastSignalIdx:-1};
+    const scanStart=Math.max(z.origin+1,0);
+    const scanEnd=Math.min(z.endIdx??now,now-1);
+
+    for(let ci=scanStart;ci<=scanEnd;ci++){
+      const c=cs[ci];if(!c)continue;
+      if(cfg.maxAge>0&&(ci-z.origin)>cfg.maxAge)break;
+
+      const touches=_fvgTouchesFVG(c,z);
+
+      if(!st.touched&&touches){st.touched=true;st.touchedAtIdx=ci;st.signalDone=false;}
+      if(cfg.requireReentry&&st.signalDone&&!touches){st.signalDone=false;st.touched=false;}
+      if(!st.touched||st.signalDone)continue;
+      if(st.lastSignalIdx>=0&&(ci-st.lastSignalIdx)<cfg.cooldown)continue;
+
+      const modeOk=_fvgMeetsMode(c,z,cfg.mitMode);
+      const reacted=!cfg.requireReact||_fvgHasReaction(c,z);
+      const flVal=_getConfFlow(ci,mtfFlowArr,isMtfFlow);
+      const clVal=_getConfClar(ci,mtfClarArr,isMtfClar);
+
+      const blocked=[];
+      if(!mtfFlowReady)blocked.push('mtf-flow-loading');
+      if(!mtfClarReady)blocked.push('mtf-clar-loading');
+      if(!modeOk)blocked.push('mitigation-mode-not-reached');
+      if(!reacted)blocked.push('no-reaction');
+      if(isBull){
+        if(flVal<cfg.flowMin)blocked.push('flow='+flVal.toFixed(1)+'<'+cfg.flowMin);
+        if(clVal<cfg.clarMin)blocked.push('clar='+clVal.toFixed(1)+'<'+cfg.clarMin);
+      }else{
+        if(flVal>-cfg.flowMin)blocked.push('flow='+flVal.toFixed(1)+'>-'+cfg.flowMin);
+        if(clVal>-cfg.clarMin)blocked.push('clar='+clVal.toFixed(1)+'>-'+cfg.clarMin);
+      }
+
+      if(dbg){
+        console.debug('[DVL FVG Confluence]',{
+          idx:ci,time:new Date(c.t).toISOString(),fvgId:fid,fvgType:z.type,
+          mitigationMode:cfg.mitMode,touched:touches,reacted,
+          flowValue:flVal,clarityValue:clVal,flowMin:cfg.flowMin,clarityMin:cfg.clarMin,
+          result:blocked.length>0?'BLOCKED':'CONFIRMED',reason:blocked.join(', ')||'all ok',
+        });
+      }
+
+      if(blocked.length>0)continue;
+
+      signals.push({
+        id:S.sym+'|'+S.tf+'|'+fid+'|'+c.t,
+        idx:ci,time:c.t,type:isBull?'buy':'sell',
+        price:c.c,fvgId:fid,symbol:S.sym,tf:S.tf,
+      });
+      st.signalDone=true;st.lastSignalIdx=ci;
+      if(dbg)console.debug('[DVL FVG Confluence] CONFIRMED',(isBull?'BUY':'SELL'),'ci='+ci,'fvg='+fid);
+    }
+  }
+
+  const seen=new Set();
+  S.fvgConfSignals=signals.filter(s=>{const k=s.idx+'|'+s.type;if(seen.has(k))return false;seen.add(k);return true;});
+}
+
+function drawFVGConfSignals(ctx,W,H,V,sc,x,bw){
+  if(!window.S||!S.inds.fvgConf||!S.candles.length)return;
+  const cfg=_getFVGConfCfg();
+  const signals=S.fvgConfSignals||[];
+  if(!signals.length)return;
+  const right=W-RP();
+  ctx.save();
+  ctx.beginPath();ctx.rect(PL,PT,right-PL,H-PT-PB);ctx.clip();
+  ctx.setLineDash([]);
+  const visibleSigs=signals.filter(s=>s.idx>=V.a&&s.idx<=V.b).slice(-cfg.maxVisible);
+  for(const sig of visibleSigs){
+    const c=S.candles[sig.idx];if(!c)continue;
+    const cx=x(sig.idx);
+    if(cx<PL-30||cx>right+30)continue;
+    _drawSignal(ctx,sig,c,cx,sc,W,H);
+  }
+  ctx.restore();
+}
+
+window.__computeFVGConfSignals=computeFVGConfSignals;
+window.__drawFVGConfSignals=drawFVGConfSignals;
+window.__resetFVGConfCache=function(){_fvgConfStableKey='';};
+
+const FVG_CONF_IDS=new Set(['fvgConfClarTf','fvgConfFlowTf','fvgConfMitMode','fvgConfFlowMin','fvgConfClarMin','fvgConfMaxAge','fvgConfCooldown','fvgConfMaxVisible','fvgConfShowBuy','fvgConfShowSell','fvgConfRequireReact','fvgConfRequireReentry','fvgConfDebug']);
+['input','change'].forEach(ev=>document.addEventListener(ev,e=>{
+  if(!FVG_CONF_IDS.has(e.target?.id))return;
+  _fvgConfStableKey='';computeFVGConfSignals();if(typeof drawSoon==='function')drawSoon();
 }));
 })();
 </script>
