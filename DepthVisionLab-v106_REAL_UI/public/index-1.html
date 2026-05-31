@@ -1,3 +1,61 @@
+<!--
+████████████████████████████████████████████████████████
+  DVL MAINTENANCE CONTRACT — READ BEFORE EDITING
+████████████████████████████████████████████████████████
+
+This file is the single-source DepthVisionLab trading platform.
+It must NOT accumulate random patch layers.
+
+BEFORE CHANGING CSS/JS:
+  1. Search for existing rules/functions controlling the same component.
+  2. Modify or consolidate the existing source of truth.
+  3. Do NOT add a new vXX patch if an older block can be corrected.
+  4. Do NOT create multiple competing rules for the same selector.
+  5. Avoid !important unless there is no alternative.
+  6. If !important is used, explain why in a comment.
+  7. Theme colors must come from DVL_THEME_TOKENS only.
+  8. Oscillator panels must use shared oscillator layout functions.
+  9. Sidebar/topbar/chart/oscillators must use the same theme tokens.
+  10. Any new feature must be added in the correct section, NOT as a random final override.
+  11. Every code change MUST increment DVL_APP_VERSION by +0.001.
+  12. Every code change MUST update the visible version badge in the header.
+  13. Every code change MUST add a short changelog entry in DVL_CHANGELOG.
+
+SOURCE OF TRUTH SECTIONS:
+  DVL_APP_VERSION          — version constant, changelog, badge apply function
+  DVL_THEME_TOKENS         — canonical CSS vars, flat backgrounds, badge styles
+  DVL_LAYOUT_CORE          — body, platform, topbar, sidebar, chartPanel, chartWrap
+  DVL_COMPONENTS           — buttons, inputs, switches, cards, modals, menus
+  DVL_HOTBAR_LAYOUT        — toolDeck, timeframe pills, candle selector
+  DVL_PRICE_SCALE_CONTROLS — scaleDockV19, auto/zoom/reset buttons
+  DVL_OSCILLATOR_SYSTEM    — Flow + Clarity panels, eye toggle, clipping, scale
+  DVL_CHART_INTERACTION    — crosshair, pan, zoom, vertical scale, touch/mouse
+  DVL_INDICATOR_ENGINES    — HVN, FVG, Big Trades, DVL Confluence, etc.
+  DVL_FINAL_OVERRIDES      — emergencies only; each rule MUST have a comment
+
+Do NOT add new scattered <style> blocks.
+Do NOT add new scattered <script> blocks.
+Consolidate changes into the correct section.
+If a change requires overriding old code, remove or neutralize the old conflicting rule first.
+
+████████████████████████████████████████████████████████
+  DVL CHANGELOG
+████████████████████████████████████████████████████████
+
+Beta 0.001
+  - Added DVL_APP_VERSION versioning system (const + visible badge + increment rule).
+  - Added DVL_MAINTENANCE_CONTRACT and DVL_CHANGELOG in-file documentation.
+  - Added DVL_THEME_TOKENS as canonical CSS token block (replaces dvl-unified-fix).
+  - Added dvl-version-badge element in topbar logo area.
+  - Added DVL_MAINTENANCE_GUARD dev-mode console checks.
+  - Oscillator backgrounds set to #070c18 (matches --dvl-ui-bg token).
+  - Oscillator left gutter reduced: xL=6 (was xL=PL=18).
+  - Vertical pan direction corrected: (dy) replaces (-dy) in mouse+touch.
+  - scaleDockV19 bottom now dynamic: (PB+12)px set on every draw() call.
+  - Touch eye-toggle: pointerdown capture listener added for mobile.
+
+████████████████████████████████████████████████████████
+-->
 <!DOCTYPE html>
 <html lang="pt">
 <head>
@@ -1251,24 +1309,55 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 }
 </style>
 
-<style id="dvl-unified-fix">
-/* Unified background — replaces accumulated radial/linear gradients with flat base colours.
-   UI base: #070c18 | Chart canvas: #050914 (set in drawGrid, unchanged) */
+<style id="DVL_THEME_TOKENS">
+/* ── DVL canonical design tokens ─────────────────────────────────────────────
+   RULE: All new components must use these vars. Do NOT use raw hex in new code.
+   UI base: #070c18 | Chart canvas: #050914 (painted in drawGrid — unchanged)
+   ──────────────────────────────────────────────────────────────────────────── */
 :root{
-  --dvl-bg:#070c18!important;
-  --dvl-bg2:#070c18!important;
-  --dvl-panel:#070c18!important;
-  --dvl-card:#0a1020!important;
-  --dvl-border:rgba(255,255,255,.07)!important;
-  --dvl-border2:rgba(255,255,255,.10)!important;
+  --dvl-ui-bg:    #070c18;
+  --dvl-chart-bg: #050914;
+  --dvl-panel-bg: #070c18;
+  --dvl-card-bg:  #0a1020;
+  --dvl-border:   #1e2a40;
+  --dvl-border-soft: rgba(30,42,64,.65);
+  --dvl-text:     #c8d8f0;
+  --dvl-muted:    #6a7fa0;
+  --dvl-green:    #00e676;
+  --dvl-red:      #ff3d57;
+  --dvl-cyan:     #00d4ff;
+  /* alias vars so v104/v105 consumers resolve to the same palette */
+  --dvl-bg:  #070c18;
+  --dvl-bg2: #070c18;
+  --dvl-panel: #070c18;
+  --dvl-card: #0a1020;
 }
-html,body{background:#070c18!important;}
-.platform,.loader,.err{background:#070c18!important;}
-.chartWrap,.panes{background:#050914!important;}
-.topbar{background:#070c18!important;}
-.sidebar,.bottom,.toolDeck.toolDeckOutOfChart,.toolbar,.input-modal,.input-modal-head{background:#070c18!important;}
-.side-brand{background:#070c18!important;}
-.ind-card{background:rgba(10,16,32,.88)!important;}
+/* Flatten v104/v105 gradient backgrounds to the canonical flat colour.
+   !important is required here because the earlier theme blocks use !important. */
+html,body{background:var(--dvl-ui-bg)!important;}
+.platform,.loader,.err{background:var(--dvl-ui-bg)!important;}
+.chartWrap,.panes{background:var(--dvl-chart-bg)!important;}
+.topbar{background:var(--dvl-ui-bg)!important;}
+.sidebar,.bottom,.toolDeck.toolDeckOutOfChart,.toolbar,.input-modal,.input-modal-head{background:var(--dvl-ui-bg)!important;}
+.side-brand{background:var(--dvl-ui-bg)!important;}
+.ind-card{background:var(--dvl-card-bg)!important;}
+
+/* ── Version badge ────────────────────────────────────────────────────────── */
+.dvl-version-badge{
+  font-size:10px;
+  color:var(--dvl-muted);
+  letter-spacing:.08em;
+  font-weight:600;
+  opacity:.85;
+  white-space:nowrap;
+  pointer-events:none;
+  user-select:none;
+  display:block;
+  text-align:center;
+  margin-top:1px;
+}
+@media(min-width:901px){.dvl-version-badge{font-size:11px;}}
+@media(max-width:900px){.dvl-version-badge{font-size:9px;}}
 </style>
 
 <style id="v106-candle-iconic-dropdown">
@@ -1462,6 +1551,18 @@ html,body{background:#070c18!important;}
   }
 })();
 </script>
+
+<script id="DVL_APP_VERSION">
+/* ── DVL Version — increment by +0.001 on EVERY change ── */
+window.DVL_APP_VERSION = "Beta 0.001";
+
+function applyDVLVersionBadge(){
+  var el = document.getElementById('dvlVersionBadge');
+  if(el) el.textContent = window.DVL_APP_VERSION;
+}
+document.addEventListener('DOMContentLoaded', applyDVLVersionBadge);
+</script>
+
 </head>
 <body>
 <script>
@@ -1898,6 +1999,7 @@ html.pre-ui .switch::after{transition:none!important}
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
+        <span id="dvlVersionBadge" class="dvl-version-badge">Beta 0.001</span>
       </div>
 
       <div class="tb-right-btns">
@@ -7333,6 +7435,23 @@ window._dvlClarEyeHit = null;
     if(typeof drawSoon === 'function') drawSoon();
   });
 
+})();
+</script>
+
+<script id="DVL_MAINTENANCE_GUARD">
+(function(){
+  var DEV=true;
+  if(!DEV)return;
+  var styles=[].slice.call(document.querySelectorAll('style[id]'));
+  var ids={};
+  for(var i=0;i<styles.length;i++){var sid=styles[i].id;ids[sid]=(ids[sid]||0)+1;}
+  for(var id in ids){if(ids[id]>1)console.warn('[DVL Guard] Duplicate style id:',id,ids[id]);}
+  var suspicious=styles.filter(function(s){return /v\d+|final|fix|override|patch/i.test(s.id);});
+  if(suspicious.length>8)console.warn('[DVL Guard] Too many patch blocks:',suspicious.map(function(s){return s.id;}));
+  var importantCount=styles.reduce(function(n,s){return n+((s.textContent.match(/!important/g)||[]).length);},0);
+  if(importantCount>80)console.warn('[DVL Guard] High !important count:',importantCount);
+  if(!window.DVL_APP_VERSION&&!window.S?.appVersion)console.warn('[DVL Guard] Missing app version.');
+  else console.info('[DVL] Version:',window.DVL_APP_VERSION||window.S?.appVersion);
 })();
 </script>
 
