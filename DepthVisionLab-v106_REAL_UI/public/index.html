@@ -4868,141 +4868,166 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
   const _clarTFSel=document.getElementById('hvnClarityTF')?.value||'current';
   const _clarIsMtf=_clarTFSel!=='current'&&_clarTFSel!==(S.tf||'');
   if(_clarIsMtf&&S.sym)_fetchClarMtf(S.sym,_clarTFSel);
-  const rp=RP();
-  const pLeft=PL,pRight=W-rp;
-  const pTop=H-10-clarH;
-  const pBot=H-10;
-  const pH=clarH;
-
-  // Fundo card premium
+  // ── Same coordinate system as DVL Flow ──────────────────────────────────
+  const xL=PL,xR=W-RP();
+  const pTop=H-10-clarH,pBot=H-10;
+  const hdrH=20,plotTop=pTop+hdrH,plotBot=pBot,pMid=(plotTop+plotBot)/2;
+  const panW=xR-xL;
+  if(panW<=0||pTop>=pBot)return;
+  const histOp=Math.max(0.1,cfg.histOpac||1);
+  // ── Background (flat, same as DVL Flow) ─────────────────────────────────
   ctx.save();
-  ctx.fillStyle='#030713';ctx.fillRect(0,pTop,W,pH);
-  // Scale strip — mirrors drawGrid's right strip for visual continuity
+  ctx.fillStyle='rgba(3,7,15,0.97)';ctx.fillRect(0,pTop,W,clarH);
+  // Top separator — same style as Flow
+  ctx.strokeStyle='rgba(0,100,160,0.35)';ctx.lineWidth=0.8;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(0,pTop);ctx.lineTo(W,pTop);ctx.stroke();
+  // Scale strip — same as Flow (right gutter)
   ctx.strokeStyle='rgba(200,216,240,0.10)';ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(pRight+.5,pTop);ctx.lineTo(pRight+.5,pBot);ctx.stroke();
-  ctx.fillStyle='rgba(0,212,255,0.22)';ctx.fillRect(pRight+1,pTop,3,pH);
-  ctx.fillStyle='rgba(3,7,15,0.96)';
-  _hvnRR(ctx,pLeft-8,pTop+3,pRight-pLeft+16,pH-6,7);ctx.fill();
-  ctx.strokeStyle='rgba(80,115,160,0.18)';ctx.lineWidth=0.8;
-  _hvnRR(ctx,pLeft-8,pTop+3,pRight-pLeft+16,pH-6,7);ctx.stroke();
-
-  ctx.beginPath();ctx.rect(0,pTop,W,pH);ctx.clip();
-  const hdrH=20;
-  ctx.font='700 '+Math.round(10*_csf)+'px monospace';ctx.fillStyle='rgba(150,170,205,0.88)';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.beginPath();ctx.moveTo(xR+.5,pTop);ctx.lineTo(xR+.5,pBot);ctx.stroke();
+  ctx.fillStyle='rgba(0,212,255,0.22)';ctx.fillRect(xR+1,pTop,3,clarH);
+  // ── Grid lines at ±50 equivalent — same style as Flow ───────────────────
+  function valY(v){return pMid-(Math.max(-100,Math.min(100,v))/100)*((clarH-hdrH)*0.48);}
+  const yHi=valY(50),yLo=valY(-50);
+  ctx.strokeStyle='rgba(30,60,90,0.22)';ctx.lineWidth=0.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(xL,yHi);ctx.lineTo(xR,yHi);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xL,yLo);ctx.lineTo(xR,yLo);ctx.stroke();
+  // Zero line — same as Flow
+  ctx.strokeStyle='rgba(0,140,190,0.28)';ctx.lineWidth=0.75;ctx.setLineDash([4,6]);
+  ctx.beginPath();ctx.moveTo(xL,pMid);ctx.lineTo(xR,pMid);ctx.stroke();ctx.setLineDash([]);
+  // ── Header title — same font/color/position as DVL Flow ─────────────────
   const _clarTitleStr='TREND CLARITY'+(_clarIsMtf?' · '+_clarTFSel.toUpperCase():'');
-  ctx.fillText(_clarTitleStr,pLeft,pTop+hdrH/2+1);
-  const iiX=pLeft+ctx.measureText(_clarTitleStr).width+11,iiY=pTop+hdrH/2+1;
-  ctx.beginPath();ctx.arc(iiX,iiY,4.7,0,Math.PI*2);ctx.strokeStyle='rgba(90,120,170,0.48)';ctx.stroke();
-  ctx.font='700 6px monospace';ctx.fillStyle='rgba(90,120,170,0.70)';ctx.textAlign='center';ctx.fillText('i',iiX,iiY+0.6);
-  // Header separator (matches DVL Flow panel)
+  ctx.font='700 '+Math.round(10*_csf)+'px monospace';ctx.fillStyle='rgba(150,170,205,0.88)';
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(_clarTitleStr,xL+8,pTop+hdrH/2);
+  // Info icon beside title
+  const iiX=xL+8+ctx.measureText(_clarTitleStr).width+11,iiY=pTop+hdrH/2;
+  ctx.strokeStyle='rgba(90,120,170,0.48)';ctx.lineWidth=0.8;
+  ctx.beginPath();ctx.arc(iiX,iiY,4.7,0,Math.PI*2);ctx.stroke();
+  ctx.font='700 6px monospace';ctx.fillStyle='rgba(90,120,170,0.70)';ctx.textAlign='center';ctx.fillText('i',iiX,iiY+0.5);
+  // Header separator — same as Flow
   ctx.strokeStyle='rgba(0,90,140,0.22)';ctx.lineWidth=0.7;ctx.setLineDash([]);
-  ctx.beginPath();ctx.moveTo(pLeft-4,pTop+hdrH);ctx.lineTo(pRight+4,pTop+hdrH);ctx.stroke();
-
-  const footerH=4;
-  const caTop=pTop+hdrH+3;
-  const caBot=pBot-footerH-3;
-  const caH=Math.max(42,caBot-caTop);
-  const zY=caTop+caH*0.52;
-  const topY=caTop+caH*0.15;
-  const botY=caTop+caH*0.86;
-  const valY=v=>zY-(v/100)*(caH*0.43);
-
-  // grid / scale
-  ctx.strokeStyle='rgba(255,255,255,0.045)';ctx.lineWidth=0.65;
-  [topY,botY].forEach(y=>{ctx.beginPath();ctx.moveTo(pLeft,y);ctx.lineTo(pRight,y);ctx.stroke();});
-  ctx.setLineDash([5,6]);ctx.strokeStyle='rgba(0,215,255,0.11)';ctx.beginPath();ctx.moveTo(pLeft,zY);ctx.lineTo(pRight,zY);ctx.stroke();ctx.setLineDash([]);
-
-  ctx.font='700 '+Math.round(7.5*_csf)+'px monospace';ctx.textBaseline='middle';
-  ctx.textAlign='left';
-  [{t:'STRONG',y:valY(100),c:'rgba(0,230,230,0.95)'},{t:'NEUTRAL',y:zY,c:'rgba(180,190,205,0.82)'},{t:'WEAK',y:valY(-100),c:'rgba(140,155,185,0.72)'}].forEach(o=>{ctx.fillStyle=o.c;ctx.fillText(o.t,pLeft+4,o.y);});
-  ctx.textAlign='left';
-  [{t:'100',y:valY(100)},{t:'0',y:zY},{t:'-100',y:valY(-100)}].forEach(o=>{ctx.fillStyle='rgba(105,130,170,0.78)';ctx.fillText(o.t,pRight+4,o.y);});
-
-  // values
+  ctx.beginPath();ctx.moveTo(0,plotTop);ctx.lineTo(W,plotTop);ctx.stroke();
+  // ── Right scale — same font/color/gutter as Flow ─────────────────────────
+  const yS100=valY(100),ySminus100=valY(-100);
+  ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(60,100,140,0.70)';
+  ctx.fillText('100',xR+5,Math.max(plotTop+5,yS100));
+  ctx.fillText('0',xR+5,pMid);
+  ctx.fillText('-100',xR+5,Math.min(pBot-5,ySminus100));
+  // ── Left labels — same low-opacity ghost style as Flow ───────────────────
+  if(clarH-hdrH>=60){
+    const plH=plotBot-plotTop;
+    ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(0,200,200,0.30)';ctx.fillText('STRONG',xL+6,plotTop+plH*0.18);
+    ctx.fillStyle='rgba(80,110,150,0.24)';ctx.fillText('NEUTRAL',xL+6,pMid);
+    ctx.fillStyle='rgba(255,80,80,0.28)';ctx.fillText('WEAK',xL+6,plotTop+plH*0.82);
+  }
+  // ── Collect + smooth values ───────────────────────────────────────────────
   const cw=CW(W);
   const bw=Math.max(1.2,Math.min(7,cw/V.span*0.62));
   let vals=[];
   for(let i=V.a;i<V.b;i++){
     const px=x(i);
-    if(px<pLeft-bw||px>pRight+bw)continue;
+    if(px<xL-bw||px>xR+bw)continue;
     const v=_clarIsMtf?(_getClarMtfAt(S.candles[i]?.t,_clarTFSel)??getTrendClarityValue(i)):getTrendClarityValue(i);
     vals.push({idx:i,v,px});
   }
   vals=_smoothClarity(vals);
-
-  // Histogram forte igual mockup
-  for(const {v,px} of vals){
+  vals.forEach(e=>{e.py=valY(e.v);});
+  // ── Histogram clipped to plot area — same opacity formula as Flow ─────────
+  ctx.save();
+  ctx.beginPath();ctx.rect(xL,plotTop,xR-xL,clarH-hdrH);ctx.clip();
+  for(const{v,px}of vals){
     const abs=Math.abs(v)/100;
-    const h=Math.max(0.5,abs*caH*0.42);
-    const y=v>=0?zY-h:zY;
-    const alpha=(0.32+abs*0.58)*cfg.histOpac;
-    const col=v>=0?`rgba(0,210,230,${Math.min(1,alpha)})`:`rgba(255,70,90,${Math.min(1,alpha*0.95)})`;
-    ctx.fillStyle=col;
-    ctx.fillRect(px-bw/2,y,bw,h);
-    // brilho vertical só nas barras fortes
-    if(abs>0.55){ctx.fillStyle=v>=0?'rgba(115,255,255,0.22)':'rgba(255,150,150,0.16)';ctx.fillRect(px-bw/2,y,bw,Math.min(h,4));}
+    if(abs<0.003)continue;
+    const bh=Math.max(0.5,abs*(clarH-hdrH)*0.42);
+    const y=v>=0?pMid-bh:pMid;
+    const a=Math.min(1,(0.28+0.55*abs)*histOp);
+    ctx.fillStyle=v>=0?`rgba(0,210,230,${a.toFixed(3)})`:`rgba(255,70,90,${a.toFixed(3)})`;
+    ctx.fillRect(px-bw/2,y,bw,bh);
+    if(abs>0.55){ctx.fillStyle=v>=0?'rgba(115,255,255,0.22)':'rgba(255,150,150,0.16)';ctx.fillRect(px-bw/2,y,bw,Math.min(bh,4));}
   }
-
-  // Linha suave cyan/vermelha conforme sinal, core com glow
+  ctx.restore();
+  // ── Smooth line — same 3-pass glow system as Flow ────────────────────────
   if(vals.length>=2){
-    const drawPath=(lw,alpha,color)=>{
-      ctx.beginPath();
-      for(let i=0;i<vals.length;i++){
-        const p=vals[i], py=valY(p.v);
-        if(i===0){ctx.moveTo(p.px,py);continue;}
-        const q=vals[i-1]; const cpx=(q.px+p.px)/2;
-        ctx.bezierCurveTo(cpx,valY(q.v),cpx,py,p.px,py);
+    const passes=[{blur:6,width:3.2,alpha:0.12},{blur:2.5,width:1.7,alpha:0.42},{blur:0,width:0.9,alpha:0.82}];
+    ctx.save();
+    for(const pass of passes){
+      let seg=[],prevBull=vals[0].v>=0;
+      for(let p=0;p<vals.length;p++){
+        const bull=vals[p].v>=0;
+        if(bull!==prevBull&&seg.length>0){
+          _drawClarSeg(ctx,seg,prevBull,pass,cfg.lineGlow);
+          seg=[seg[seg.length-1]];
+        }
+        seg.push(vals[p]);prevBull=bull;
       }
-      ctx.lineWidth=lw;ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle=color.replace('__A__',alpha);ctx.stroke();
-    };
-    drawPath(8,Math.min(0.12,cfg.lineGlow*0.09),'rgba(0,220,255,__A__)');
-    drawPath(4,Math.min(0.22,cfg.lineGlow*0.16),'rgba(0,220,255,__A__)');
-    drawPath(1.7,0.93,'rgba(0,225,255,__A__)');
-
-    const last=vals[vals.length-1];
-    ctx.shadowColor='rgba(0,220,255,0.9)';ctx.shadowBlur=5*cfg.lineGlow;
-    ctx.fillStyle='#00dfff';ctx.beginPath();ctx.arc(last.px,valY(last.v),3.2,0,Math.PI*2);ctx.fill();
-    ctx.shadowBlur=0;ctx.fillStyle='#eaffff';ctx.beginPath();ctx.arc(last.px,valY(last.v),1.35,0,Math.PI*2);ctx.fill();
+      if(seg.length>=2)_drawClarSeg(ctx,seg,prevBull,pass,cfg.lineGlow);
+    }
+    ctx.shadowBlur=0;
+    const last=vals[vals.length-1];const isBullLast=last.v>=0;
+    ctx.shadowColor=isBullLast?'rgba(0,220,255,0.85)':'rgba(255,70,90,0.85)';ctx.shadowBlur=5*cfg.lineGlow;
+    ctx.fillStyle=isBullLast?'#00dfff':'rgba(255,80,100,0.92)';
+    ctx.beginPath();ctx.arc(last.px,valY(last.v),3.2,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;ctx.fillStyle='#eaffff';
+    ctx.beginPath();ctx.arc(last.px,valY(last.v),1.35,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+    // ── Header right: state tag (same system as Flow's showTag) ─────────────
+    const lv=last.v;let tag,tc;
+    if(lv>30){tag='CLARITY STRONG';tc='rgba(0,210,230,0.88)';}
+    else if(lv>8){tag='CLARITY UP';tc='rgba(0,180,200,0.75)';}
+    else if(lv<-30){tag='CLARITY WEAK';tc='rgba(255,70,90,0.88)';}
+    else if(lv<-8){tag='CLARITY DN';tc='rgba(200,60,80,0.75)';}
+    else{tag='CLARITY NEUTRAL';tc='rgba(90,120,155,0.70)';}
+    ctx.font='700 7.5px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillStyle=tc;ctx.fillText(tag,xR-8,pTop+hdrH/2);
   }
-
-  // Crosshair no painel — vertical line is drawn by main crosshair extending to H-10
+  // ── Crosshair — same structure as Flow ───────────────────────────────────
   if(S._cross){
     const snapX=S._crossIdx!=null?x(S._crossIdx):S._cross.cx;
-    if(snapX>=pLeft&&snapX<=pRight){
+    if(snapX>=xL&&snapX<=xR){
       const ci=S._crossIdx!=null?S._crossIdx:clamp(Math.floor(S.view.start+(snapX-PL)/CW(W)*V.span),V.a,V.b-1);
-      // Find smoothed clarity value from already-computed vals array
       const vEntry=vals.find(e=>e.idx===ci);
       const cv=vEntry?vEntry.v:getTrendClarityValue(ci);
       const cvY=valY(cv);
       const isBull=cv>=0;
-      // Horizontal guide line at the clarity value
+      // Highlight bar at crosshair (same as Flow)
+      const bh2=Math.max(1,Math.abs(cvY-pMid));
+      const y1h=cv>=0?cvY:pMid;
+      ctx.fillStyle=isBull?'rgba(0,210,230,0.18)':'rgba(255,70,90,0.18)';
+      ctx.fillRect(x(ci)-bw/2-1,y1h,bw+2,bh2);
+      // Horizontal guide line
       ctx.strokeStyle=isBull?'rgba(0,215,255,0.28)':'rgba(255,75,90,0.28)';
       ctx.lineWidth=0.7;ctx.setLineDash([3,4]);
-      ctx.beginPath();ctx.moveTo(pLeft,cvY);ctx.lineTo(pRight,cvY);ctx.stroke();ctx.setLineDash([]);
-      // Circle highlight on the clarity line
+      ctx.beginPath();ctx.moveTo(xL,cvY);ctx.lineTo(xR,cvY);ctx.stroke();ctx.setLineDash([]);
+      // Circle highlight on line
+      const snapXs=x(ci);
       ctx.shadowColor=isBull?'rgba(0,215,255,0.70)':'rgba(255,70,90,0.70)';ctx.shadowBlur=4;
       ctx.fillStyle=isBull?'rgba(0,225,255,0.90)':'rgba(255,80,100,0.90)';
-      ctx.beginPath();ctx.arc(snapX,cvY,3.5,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(snapXs,cvY,3.5,0,Math.PI*2);ctx.fill();
       ctx.shadowBlur=0;ctx.fillStyle='rgba(255,255,255,0.75)';
-      ctx.beginPath();ctx.arc(snapX,cvY,1.4,0,Math.PI*2);ctx.fill();
-      // Value label in header — top right, never overlaps bars
+      ctx.beginPath();ctx.arc(snapXs,cvY,1.4,0,Math.PI*2);ctx.fill();
+      // Value in header right — "CLARITY +/-XX" (overrides tag)
       ctx.font='700 '+Math.round(9*_csf)+'px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
       ctx.fillStyle=isBull?'rgba(0,215,255,0.92)':'rgba(255,80,100,0.92)';
-      ctx.fillText((cv>=0?'+':'')+Math.round(cv),pRight-8,pTop+hdrH/2);
-      // Time label at panel bottom
-      const timeTxt=(()=>{const t=S.candles[ci]?.t;if(!t)return '';try{return new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}catch(e){return '';}})();
-      if(timeTxt){
-        ctx.font='700 9px monospace';const w=ctx.measureText(timeTxt).width+12,h=15;
-        const tx=_hvnClamp(snapX-w/2,pLeft,pRight-w),ty=pBot-footerH-1;
-        ctx.fillStyle='rgba(10,18,34,0.95)';_hvnRR(ctx,tx,ty,w,h,3);ctx.fill();
-        ctx.strokeStyle='rgba(120,150,200,0.38)';_hvnRR(ctx,tx,ty,w,h,3);ctx.stroke();
-        ctx.fillStyle='rgba(230,235,245,0.92)';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(timeTxt,tx+w/2,ty+h/2+0.3);
-      }
+      ctx.fillText('CLARITY '+(cv>=0?'+':'')+Math.round(cv),xR-8,pTop+hdrH/2);
     }
   }
-
-
   ctx.restore();
+}
+// Helper: draw a colored segment for the clarity line
+function _drawClarSeg(ctx,seg,bull,pass,lineGlow){
+  if(seg.length<2)return;
+  const r=bull?0:255,g=bull?210:70,b2=bull?230:90;
+  ctx.strokeStyle=`rgba(${r},${g},${b2},${pass.alpha.toFixed(3)})`;
+  ctx.lineWidth=pass.width;ctx.shadowColor=`rgba(${r},${g},${b2},0.65)`;
+  ctx.shadowBlur=(pass.blur||0)*(lineGlow||1);ctx.lineJoin='round';ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(seg[0].px,seg[0].py);
+  for(let p=1;p<seg.length;p++){
+    const cpx=(seg[p-1].px+seg[p].px)/2;
+    ctx.bezierCurveTo(cpx,seg[p-1].py,cpx,seg[p].py,seg[p].px,seg[p].py);
+  }
+  ctx.stroke();
 }
 
 
@@ -12179,7 +12204,7 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH,wpah){wpah=wpah||0;
       // Value label in header — top right, never overlaps bars
       ctx.font='700 '+Math.round(9*_csf)+'px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
       ctx.fillStyle=isBull?'rgba(0,210,170,0.92)':'rgba(255,100,55,0.92)';
-      ctx.fillText((v>=0?'+':'')+Math.round(v),xR-8,pTop+hdrH/2);
+      ctx.fillText('FLOW '+(v>=0?'+':'')+Math.round(v),xR-8,pTop+hdrH/2);
     }
   }
 }
