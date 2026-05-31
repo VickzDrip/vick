@@ -41,6 +41,12 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.048
+  - Fixed price scale not resetting when changing symbol.
+  - boot() now calls _dvlResetAutoYScale() after loading new candles.
+  - Clears S.yScale.manual, center, range, offset on every symbol change.
+  - Symbol changes now always refit to the new pair candles via auto-scale.
+
 Beta 0.047
   - Updated DVL_THEME_TOKENS palette: ui-bg #06091a, chart-bg #050810, border #141f35, muted #4a6080.
   - Added --dvl-control, --dvl-control-bg, --dvl-control-hover, --dvl-border-strong tokens.
@@ -226,7 +232,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.047";
+  const LOCAL_VERSION = "Beta 0.048";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -1403,7 +1409,7 @@ html,body{/* bg → DVL_THEME_TOKENS */color:var(--dvl-text)!important;font-fami
 </style>
 
 <style id="DVL_THEME_TOKENS">
-/* ── DVL canonical design tokens — Beta 0.047 ────────────────────────────── */
+/* ── DVL canonical design tokens — Beta 0.048 ────────────────────────────── */
 :root{
   --dvl-ui-bg:#06091a;
   --dvl-chart-bg:#050810;
@@ -1775,7 +1781,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.047";
+window.DVL_APP_VERSION = "Beta 0.048";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -1818,7 +1824,7 @@ html.pre-ui [data-ind]{visibility:hidden!important;}
 
 
 <style id="DVL_BETA_0005_BLACK_THEME_AND_PROFILE_FIX">
-/* Beta 0.047: :root removed — tokens live in DVL_THEME_TOKENS only. */
+/* Beta 0.048: :root removed — tokens live in DVL_THEME_TOKENS only. */
 html,body,.platform,.main,.chartPanel,.chartWrap,.panes,.bottom,.topbar,.sidebar,
 .toolDeck,.toolDeck.toolDeckOutOfChart,.toolbar,.input-modal,.input-modal-head,.loader,.err{
   background:#03060b!important;
@@ -1842,7 +1848,7 @@ html.pre-ui .switch::after{transition:none!important;}
 
 
 <style id="DVL_BETA_0006_TRUE_DARK_UI_AND_PROFILE_GUARD">
-/* Beta 0.047: :root removed — tokens live in DVL_THEME_TOKENS only. */
+/* Beta 0.048: :root removed — tokens live in DVL_THEME_TOKENS only. */
 html,body,.platform,.main,.chartPanel,.chartWrap,.panes,.bottom,.topbar,.sidebar,
 .toolDeck,.toolDeck.toolDeckOutOfChart,.toolbar,.input-modal,.input-modal-head,.loader,.err{
   background:var(--dvl-ui-bg)!important;
@@ -1858,7 +1864,7 @@ body:before{display:none!important;background:none!important;}
 
 
 <style id="DVL_STABLE_FOUNDATION_GUARD_BETA_0009">
-/* Beta 0.047: uses tokens from DVL_THEME_TOKENS — no hardcoded colors. */
+/* Beta 0.048: uses tokens from DVL_THEME_TOKENS — no hardcoded colors. */
 html,body{background:var(--dvl-ui-bg);}
 .chartWrap,.panes{background:var(--dvl-ui-bg);}
 .topbar,.sidebar,.bottom,.toolDeck,.toolbar{background-color:var(--dvl-ui-bg);}
@@ -1866,7 +1872,7 @@ html,body{background:var(--dvl-ui-bg);}
 
 
 <style id="DVL_BETA_0012_UI_CONTROL_AND_OSC_FIX">
-/* Beta 0.047: :root removed — tokens live in DVL_THEME_TOKENS only. */
+/* Beta 0.048: :root removed — tokens live in DVL_THEME_TOKENS only. */
 html,body,.platform,.main,.chartPanel,.chartWrap,.panes,.bottom,.topbar,.sidebar,.toolDeck,.toolDeck.toolDeckOutOfChart,.toolbar,.input-modal,.input-modal-head,.loader,.err{
   background:var(--dvl-ui-bg)!important;
   background-image:none!important;
@@ -1924,7 +1930,7 @@ html,body,.platform,.main,.chartPanel,.chartWrap,.panes,.bottom,.topbar,.sidebar
 
 
 <style id="DVL_BETA_0013_MODAL_ZOOM_BUTTONS">
-/* Beta 0.047: :root removed — tokens live in DVL_THEME_TOKENS only. */
+/* Beta 0.048: :root removed — tokens live in DVL_THEME_TOKENS only. */
 button,.btn,.mini-btn,.tool-select,.select,.num,.input,.gear,.header-menu,.input-modal-x,.scaleDockV19 .scale-btn,.dvl-ctx-btn,.tb-action-btn,.tb-icon-btn,#dvlVersionBadge,#btnLong,#btnShort,#btnClearPos,.rp-btn,.dvl-hdr-btn,.dvl-pc-tbtn,.dvl-draw-tbtn{
   background:var(--dvl-control)!important;
   border:1px solid var(--dvl-border)!important;
@@ -1976,7 +1982,7 @@ button:active,.btn:active,.mini-btn:active,.gear:active,.dvl-ctx-btn:active,.sca
 
 
 <style id="DVL_BETA_0046_REMOVE_HEADER_MENU_BUTTON">
-/* Beta 0.047: the sidebar is opened only from the Indicators button, not from a header hamburger next to BTC/USDT. */
+/* Beta 0.048: the sidebar is opened only from the Indicators button, not from a header hamburger next to BTC/USDT. */
 #mobileMenu,.tb-menu-btn,.header-menu{display:none!important;}
 .tb-header{gap:8px!important;}
 </style>
@@ -2409,11 +2415,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.047</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.048</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.047</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.048</span>
       </div>
 
       <div class="tb-right-btns">
@@ -3189,7 +3195,7 @@ async function boot(){
     S.view.end=S.candles.length+35;
     S.view.start=Math.max(0,S.view.end-180);
     S.view.auto=true;
-    S.yScale.zoom=1;
+    _dvlResetAutoYScale();
 
     // ── Show chart immediately with candle data ──
     update24(hr);
@@ -3583,12 +3589,12 @@ function _dvlEnterManualYScale(){
 function _dvlPanManualY(dy,plotH){
   _dvlEnterManualYScale();
   const range=Math.max(+S.yScale.range||1,1e-12);
-  // Beta 0.047: true free manual Y pan. No auto-fit/reframe; content moves opposite to drag as requested.
+  // Beta 0.048: true free manual Y pan. No auto-fit/reframe; content moves opposite to drag as requested.
   S.yScale.center+=( -dy )*range/Math.max(1,plotH||1);
 }
 function _dvlZoomManualY(dy){
   _dvlEnterManualYScale();
-  // Beta 0.047: extremely loose manual zoom, no candle-fit correction.
+  // Beta 0.048: extremely loose manual zoom, no candle-fit correction.
   const factor=Math.exp(dy*0.018);
   S.yScale.range=Math.max((+S.yScale.range||1)*factor,1e-12);
   S.yScale.zoom=1;
@@ -7950,7 +7956,7 @@ window._dvlClarEyeHit = null;
     window.addEventListener(type,function(e){
       const t=e.target;
       if(!(t&&t.closest&&t.closest(BLOCK_SEL))) return;
-      // Beta 0.047: do not kill clicks for modal buttons, close X, Save, drawing gear/delete, inputs.
+      // Beta 0.048: do not kill clicks for modal buttons, close X, Save, drawing gear/delete, inputs.
       // We only shield the chart behind floating panels. Controls inside panels must still work.
       if(type==='click' || t.closest('button,input,select,textarea,[role=button],.dvl-setting-actions')) return;
       e.stopPropagation();
@@ -7992,33 +7998,33 @@ window._dvlClarEyeHit = null;
 </script>
 
 <script id="DVL_BETA_0014_DRAW_OSC_FIXES">
-/* NEUTRALIZED in Beta 0.047 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
+/* NEUTRALIZED in Beta 0.048 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
 </script>
 
 
 
 <script id="DVL_BETA_0022_DRAW_TRADING_OSC_SCALE_FIXES">
-/* NEUTRALIZED in Beta 0.047 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
+/* NEUTRALIZED in Beta 0.048 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
 </script>
 
 
 
 <script id="DVL_BETA_0023_OSC_SCALE_WHEEL_FINAL">
-/* NEUTRALIZED in Beta 0.047 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
+/* NEUTRALIZED in Beta 0.048 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
 </script>
 
 
 <style id="DVL_BETA_0024_OSC_WHEEL_ZONES_CSS">
-/* NEUTRALIZED in Beta 0.047 — old oscillator wheel/axis overlay logic replaced by DVL_BETA_0042_OSC_FREE_SCALE */
+/* NEUTRALIZED in Beta 0.048 — old oscillator wheel/axis overlay logic replaced by DVL_BETA_0042_OSC_FREE_SCALE */
 </style>
 <script id="DVL_BETA_0024_OSC_WHEEL_ZONES">
-/* NEUTRALIZED in Beta 0.047 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
+/* NEUTRALIZED in Beta 0.048 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
 </script>
 
 
 
 <script id="DVL_BETA_0026_OSCILLATOR_AXIS_ZOOM_LOCK">
-/* NEUTRALIZED in Beta 0.047 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
+/* NEUTRALIZED in Beta 0.048 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
 </script>
 
 
@@ -8042,26 +8048,26 @@ window._dvlClarEyeHit = null;
   new MutationObserver(bind).observe(document.documentElement,{childList:true,subtree:true});
 })();
 </script>
-<!-- DVL_BETA_0028_FULL_OSC_CROSSHAIR removed in Beta 0.047: restored original native crosshair pipeline. -->
-<!-- DVL_BETA_0032_RELATIVE_CROSS_DRAG removed in Beta 0.047: restored original native crosshair pipeline. -->
-<!-- DVL_CROSSHAIR_TOP_LAYER_CSS removed in Beta 0.047: legacy canvas crosshair is visible again. -->
-<!-- DVL_CROSSHAIR_TOP_LAYER_JS removed in Beta 0.047: restored original native crosshair pipeline. -->
-<!-- DVL_BETA_0031_SINGLE_CROSSHAIR_CSS removed in Beta 0.047: legacy canvas crosshair is visible again. -->
-<!-- DVL_BETA_0031_SINGLE_CROSSHAIR_JS removed in Beta 0.047: restored original native crosshair pipeline. -->
-<!-- DVL_BETA_0033_CROSS_DISMISS_CSS removed in Beta 0.047: legacy canvas crosshair is visible again. -->
-<!-- DVL_BETA_0033_CROSS_DISMISS_JS removed in Beta 0.047: restored original native crosshair pipeline. -->
-<!-- DVL_BETA_0036_STABLE_LONGPRESS_CROSSHAIR removed in Beta 0.047: restored original native crosshair pipeline. -->
+<!-- DVL_BETA_0028_FULL_OSC_CROSSHAIR removed in Beta 0.048: restored original native crosshair pipeline. -->
+<!-- DVL_BETA_0032_RELATIVE_CROSS_DRAG removed in Beta 0.048: restored original native crosshair pipeline. -->
+<!-- DVL_CROSSHAIR_TOP_LAYER_CSS removed in Beta 0.048: legacy canvas crosshair is visible again. -->
+<!-- DVL_CROSSHAIR_TOP_LAYER_JS removed in Beta 0.048: restored original native crosshair pipeline. -->
+<!-- DVL_BETA_0031_SINGLE_CROSSHAIR_CSS removed in Beta 0.048: legacy canvas crosshair is visible again. -->
+<!-- DVL_BETA_0031_SINGLE_CROSSHAIR_JS removed in Beta 0.048: restored original native crosshair pipeline. -->
+<!-- DVL_BETA_0033_CROSS_DISMISS_CSS removed in Beta 0.048: legacy canvas crosshair is visible again. -->
+<!-- DVL_BETA_0033_CROSS_DISMISS_JS removed in Beta 0.048: restored original native crosshair pipeline. -->
+<!-- DVL_BETA_0036_STABLE_LONGPRESS_CROSSHAIR removed in Beta 0.048: restored original native crosshair pipeline. -->
 
 <style id="DVL_BETA_0037_NATIVE_CROSS_RESTORE">
-/* Beta 0.047: restore original native canvas crosshair behavior. No top overlay crosshair. */
+/* Beta 0.048: restore original native canvas crosshair behavior. No top overlay crosshair. */
 #dvlCrosshairTopLayer{display:none!important;visibility:hidden!important;opacity:0!important;}
 .chartWrap .cross.v,.chartWrap .cross.h,#chartWrap .cross.v,#chartWrap .cross.h{visibility:visible;opacity:1;}
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.047'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.048'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.047';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.048';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8070,9 +8076,9 @@ window._dvlClarEyeHit = null;
 
 
 
-<!-- DVL Beta 0.047 — visual cross overlay across chart + oscillators, driven by original S._cross only -->
+<!-- DVL Beta 0.048 — visual cross overlay across chart + oscillators, driven by original S._cross only -->
 
-<!-- DVL Beta 0.047 — oscillator-only cross overlay, native/original cross remains source of truth -->
+<!-- DVL Beta 0.048 — oscillator-only cross overlay, native/original cross remains source of truth -->
 <style id="DVL_BETA_0041_OSC_CROSS_OVERLAY_CSS">
   #dvlOscCrossOverlay{
     position:absolute;
@@ -8099,7 +8105,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.047';
+  const VERSION='Beta 0.048';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8193,7 +8199,7 @@ window._dvlClarEyeHit = null;
 
 
 <style id="DVL_BETA_0044_UI_CLEANUP_CSS">
-/* Beta 0.047 — indicator-first header and compact TF typography */
+/* Beta 0.048 — indicator-first header and compact TF typography */
 .header-menu{display:none!important;visibility:hidden!important;pointer-events:none!important;}
 .tb-tf-pill{font-size:9px!important;line-height:1!important;padding:4px 7px!important;height:24px!important;min-height:24px!important;border-radius:7px!important;}
 @media(max-width:760px){.tb-tf-pill{font-size:8.5px!important;padding:4px 6px!important;height:23px!important;min-height:23px!important;}}
@@ -8351,7 +8357,7 @@ window._dvlClarEyeHit = null;
 
 
 <style id="DVL_BETA_0045_PREMIUM_POLISH_CSS">
-/* Beta 0.047: :root removed — tokens live in DVL_THEME_TOKENS only. */
+/* Beta 0.048: :root removed — tokens live in DVL_THEME_TOKENS only. */
 html,body,.platform,.chartPanel,.topbar,.symbolbar,.toolDeck,.bottomNav,.indicatorDock,.sidePanel,.modal,.drawer,.ind-card,.ind-settings{
   background-color:var(--dvl-bg)!important;
 }
@@ -8401,7 +8407,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.047';
+  const VERSION='Beta 0.048';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -14629,7 +14635,7 @@ const FVG_CONF_IDS=new Set(['fvgConfClarTf','fvgConfFlowTf','fvgConfMitMode','fv
 
 
 <style id="DVL_BETA_0011_UI_LOCK_FINAL">
-/* Beta 0.047: :root removed — tokens live in DVL_THEME_TOKENS only. */
+/* Beta 0.048: :root removed — tokens live in DVL_THEME_TOKENS only. */
 html,body,.platform,.main,.chartPanel,.chartWrap,.panes,.bottom,.topbar,.sidebar,
 .toolDeck,.toolDeck.toolDeckOutOfChart,.toolbar,.cleanNav,.input-modal,.input-modal-head,.loader,.err{
   background:var(--dvl-ui-bg)!important;
@@ -14648,7 +14654,7 @@ body:before{display:none!important;background:none!important;}
 </style>
 
 <style id="DVL_BETA_0011_OSCILLATOR_BUTTON_LOCK">
-/* Beta 0.047: :root removed — tokens live in DVL_THEME_TOKENS only. */
+/* Beta 0.048: :root removed — tokens live in DVL_THEME_TOKENS only. */
 .panes,#volumePaneWrap,.bottom{background:var(--dvl-ui-bg)!important;background-color:var(--dvl-ui-bg)!important;background-image:none!important;}
 .toolDeck,.toolbar,.cleanNav,.topbar,.sidebar,.chartPanel,.chartWrap{background:var(--dvl-ui-bg)!important;background-color:var(--dvl-ui-bg)!important;background-image:none!important;}
 .mini-btn,.tf,.tab,.btn,.gear,.tool-select,.select,.input,.num,button{
@@ -14673,11 +14679,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.047';
+  window.DVL_APP_VERSION='Beta 0.048';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.047';
+    if(b)b.textContent='Beta 0.048';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -14689,17 +14695,17 @@ body:before{display:none!important;background:none!important;}
 
 
 <style id="DVL_BETA_0025_OSC_SCALE_NATIVE_CSS">
-/* NEUTRALIZED in Beta 0.047 — old oscillator wheel/axis overlay logic replaced by DVL_BETA_0042_OSC_FREE_SCALE */
+/* NEUTRALIZED in Beta 0.048 — old oscillator wheel/axis overlay logic replaced by DVL_BETA_0042_OSC_FREE_SCALE */
 </style>
 <script id="DVL_BETA_0025_OSC_SCALE_NATIVE">
-/* NEUTRALIZED in Beta 0.047 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
+/* NEUTRALIZED in Beta 0.048 — old oscillator scale handlers replaced by DVL_BETA_0042_OSC_FREE_SCALE */
 </script>
 
 
 <script id="DVL_BETA_0043_SEPARATED_OSC_SCROLL">
 (function(){
   'use strict';
-  const VERSION = 'Beta 0.047';
+  const VERSION = 'Beta 0.048';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function byId(id){ return document.getElementById(id); }
   function syncVersion(){
