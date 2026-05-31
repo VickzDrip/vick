@@ -231,18 +231,24 @@ function connectDepth(){
   ws.on("error", () => ws.close());
 }
 
-// ── Version detection (auto-reload when index.html changes) ───────────────
+// ── Version detection — reads DVL_APP_VERSION from index.html ────────────
 const INDEX_FILE = path.join(__dirname, "public", "index.html");
-let indexVersion = "0";
+let indexVersion = "Beta 0.047";
 function refreshVersion(){
-  try { indexVersion = String(fs.statSync(INDEX_FILE).mtimeMs); } catch(e){}
+  try {
+    const html = fs.readFileSync(INDEX_FILE, "utf8");
+    const m = html.match(/DVL_APP_VERSION\s*=\s*["']([^"']+)["']/);
+    if (m) indexVersion = m[1];
+  } catch(e){}
 }
 refreshVersion();
 setInterval(refreshVersion, 15000);
 
 // ── HTTP API ───────────────────────────────────────────────────────────────
 app.get("/api/version", (req, res) => {
-  res.set("Cache-Control", "no-store");
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
   res.json({ v: indexVersion });
 });
 
