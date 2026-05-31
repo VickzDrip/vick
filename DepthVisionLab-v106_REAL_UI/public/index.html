@@ -2526,16 +2526,6 @@ html.pre-ui .switch::after{transition:none!important}
         <canvas id="chart"></canvas>
 
         <!-- ── Oscillator panel headers (positioned dynamically by JS) ── -->
-        <div id="dvlFlowHeader" class="dvl-osc-header">
-          <span class="dvl-osc-hdr-name">DVL Flow</span>
-          <div class="dvl-osc-hdr-sep"></div>
-          <span class="dvl-osc-hdr-val neu" id="dvlFlowHdrVal">—</span>
-        </div>
-        <div id="dvlClarHeader" class="dvl-osc-header">
-          <span class="dvl-osc-hdr-name">HVN Clarity</span>
-          <div class="dvl-osc-hdr-sep"></div>
-          <span class="dvl-osc-hdr-val neu" id="dvlClarHdrVal">—</span>
-        </div>
 
         <div id="viewBtnDock">
           <button class="vdock-btn" id="btnLive" title="Ver histórico completo">
@@ -4904,6 +4894,9 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
   const iiX=pLeft+ctx.measureText(_clarTitleStr).width+11,iiY=pTop+hdrH/2+1;
   ctx.beginPath();ctx.arc(iiX,iiY,4.7,0,Math.PI*2);ctx.strokeStyle='rgba(90,120,170,0.48)';ctx.stroke();
   ctx.font='700 6px monospace';ctx.fillStyle='rgba(90,120,170,0.70)';ctx.textAlign='center';ctx.fillText('i',iiX,iiY+0.6);
+  // Header separator (matches DVL Flow panel)
+  ctx.strokeStyle='rgba(0,90,140,0.22)';ctx.lineWidth=0.7;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(pLeft-4,pTop+hdrH);ctx.lineTo(pRight+4,pTop+hdrH);ctx.stroke();
 
   const footerH=4;
   const caTop=pTop+hdrH+3;
@@ -4992,10 +4985,10 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
       ctx.beginPath();ctx.arc(snapX,cvY,3.5,0,Math.PI*2);ctx.fill();
       ctx.shadowBlur=0;ctx.fillStyle='rgba(255,255,255,0.75)';
       ctx.beginPath();ctx.arc(snapX,cvY,1.4,0,Math.PI*2);ctx.fill();
-      // Value label: Clarity +/-XX
-      ctx.font='700 7px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+      // Value label in header — top right, never overlaps bars
+      ctx.font='700 '+Math.round(9*_csf)+'px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
       ctx.fillStyle=isBull?'rgba(0,215,255,0.92)':'rgba(255,80,100,0.92)';
-      ctx.fillText('Clarity:'+(cv>=0?'+':'')+Math.round(cv),pRight-4,clamp(cvY-7,caTop+8,caBot-8));
+      ctx.fillText((cv>=0?'+':'')+Math.round(cv),pRight-8,pTop+hdrH/2);
       // Time label at panel bottom
       const timeTxt=(()=>{const t=S.candles[ci]?.t;if(!t)return '';try{return new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}catch(e){return '';}})();
       if(timeTxt){
@@ -7253,67 +7246,6 @@ return {
     btmPct.classList.toggle('on');
     if(typeof drawSoon === 'function') drawSoon();
   });
-
-  /* ── 5. Oscillator panel headers: position + live values ── */
-  const PANEL_GAP_OSC = 8;
-
-  function updateOscHeaders(){
-    var wrap = document.getElementById('chartWrap');
-    var rh   = document.getElementById('hvnResizeHandle');
-    var frh  = document.getElementById('flowResizeHandle');
-    var fHdr = document.getElementById('dvlFlowHeader');
-    var cHdr = document.getElementById('dvlClarHeader');
-    if(!wrap || !fHdr || !cHdr) return;
-
-    var H = wrap.clientHeight;
-    var clarBottomPx = (rh && rh.style.display !== 'none') ? parseInt(rh.style.bottom) || 0 : 0;
-    var flowBottomPx = (frh && frh.style.display !== 'none') ? parseInt(frh.style.bottom) || 0 : 0;
-
-    // rh.style.bottom = (10 + _clarH - PANEL_GAP/2) → _clarH = clarBottomPx - 10 + 4
-    var _clarH = clarBottomPx > 0 ? clarBottomPx - 10 + PANEL_GAP_OSC / 2 : 0;
-    // frh.style.bottom = (10 + clarOff + _fah - PANEL_GAP/2) → _fah = flowBottomPx - 10 - clarOff + 4
-    var clarOff = _clarH > 0 ? _clarH + PANEL_GAP_OSC : 0;
-    var _fah = flowBottomPx > 0 ? flowBottomPx - 10 - clarOff + PANEL_GAP_OSC / 2 : 0;
-
-    /* Clarity header */
-    if(_clarH > 32){
-      var clarTop = H - 10 - _clarH;
-      cHdr.style.top = clarTop + 'px';
-      cHdr.style.display = 'flex';
-      var idx = (typeof S !== 'undefined' && S.candles && S.candles.length) ? S.candles.length - 1 : -1;
-      if(idx >= 0 && typeof getTrendClarityValue === 'function'){
-        var v = getTrendClarityValue(idx);
-        var valEl = document.getElementById('dvlClarHdrVal');
-        if(valEl){
-          valEl.textContent = (v >= 0 ? '+' : '') + (typeof v === 'number' ? v.toFixed(1) : v);
-          valEl.className = 'dvl-osc-hdr-val ' + (v > 0 ? 'pos' : v < 0 ? 'neg' : 'neu');
-        }
-      }
-    } else {
-      cHdr.style.display = 'none';
-    }
-
-    /* Flow header */
-    if(_fah > 32){
-      var flowTop = H - 10 - clarOff - _fah;
-      fHdr.style.top = flowTop + 'px';
-      fHdr.style.display = 'flex';
-      var idx2 = (typeof S !== 'undefined' && S.candles && S.candles.length) ? S.candles.length - 1 : -1;
-      if(idx2 >= 0 && typeof window.__getFlowOscValue === 'function'){
-        var v2 = window.__getFlowOscValue(idx2);
-        var valEl2 = document.getElementById('dvlFlowHdrVal');
-        if(valEl2 && v2 !== null && v2 !== undefined){
-          valEl2.textContent = (v2 >= 0 ? '+' : '') + Math.round(v2);
-          valEl2.className = 'dvl-osc-hdr-val ' + (v2 > 0 ? 'pos' : v2 < 0 ? 'neg' : 'neu');
-        }
-      }
-    } else {
-      fHdr.style.display = 'none';
-    }
-  }
-
-  /* Poll at 4Hz — lightweight, avoids modifying draw loop */
-  setInterval(updateOscHeaders, 250);
 
 })();
 </script>
@@ -12116,12 +12048,13 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH,wpah){wpah=wpah||0;
   const osc=_flowOscCache;if(!osc||!osc.length)return;
   const N=osc.length;
   const clarOff=clarH?clarH+8:0;  // 8 = PANEL_GAP: aligns with PB calculation
-  const pBot=H-10-clarOff,pTop=pBot-fah,pMid=(pTop+pBot)/2;
+  const pBot=H-10-clarOff,pTop=pBot-fah;
+  const hdrH=20,plotTop=pTop+hdrH,plotBot=pBot,pMid=(plotTop+plotBot)/2;
   const xL=PL,xR=W-RP(),panW=xR-xL;
   if(panW<=0||pTop>=pBot)return;
   const bw=Math.max(1.2,CW(W)/Math.max(1,V.span)*0.66);
   const barW=Math.max(1,bw*0.65);
-  function valToY(v){return pMid-(Math.max(-100,Math.min(100,v))/100)*(fah*0.48);}
+  function valToY(v){return pMid-(Math.max(-100,Math.min(100,v))/100)*((fah-hdrH)*0.48);}
   // Background full-width
   ctx.fillStyle='rgba(3,7,15,0.97)';ctx.fillRect(0,pTop,W,fah);
   // Top separator
@@ -12139,26 +12072,30 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH,wpah){wpah=wpah||0;
   // Zero line
   ctx.strokeStyle='rgba(0,140,190,0.28)';ctx.lineWidth=0.75;ctx.setLineDash([4,6]);
   ctx.beginPath();ctx.moveTo(xL,pMid);ctx.lineTo(xR,pMid);ctx.stroke();ctx.setLineDash([]);
-  // Tiny panel ID dot (title removed to reduce visual clutter)
-  ctx.fillStyle='rgba(0,195,255,0.40)';ctx.beginPath();ctx.arc(xL+7,pTop+8,2.5,0,Math.PI*2);ctx.fill();
+  // Header title + separator (same layout as Trend Clarity panel)
+  ctx.font='700 '+Math.round(10*_csf)+'px monospace';ctx.fillStyle='rgba(150,170,205,0.88)';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText('DVL FLOW',xL+8,pTop+hdrH/2);
+  ctx.strokeStyle='rgba(0,90,140,0.22)';ctx.lineWidth=0.7;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(0,plotTop);ctx.lineTo(W,plotTop);ctx.stroke();
   // Right scale — in PR zone, Y aligned with actual valToY positions
   const yF100=valToY(100),yFm100=valToY(-100);
   ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(60,100,140,0.70)';
-  ctx.fillText('100',xR+5,Math.max(pTop+5,yF100));
+  ctx.fillText('100',xR+5,Math.max(plotTop+5,yF100));
   ctx.fillText('0',xR+5,pMid);
   ctx.fillText('-100',xR+5,Math.min(pBot-5,yFm100));
   // Left labels
-  if(fah>=80){
+  if(fah-hdrH>=60){
+    const plH=plotBot-plotTop;
     ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.fillStyle='rgba(0,200,160,0.30)';ctx.fillText('BULLISH',xL+6,pTop+fah*0.22);
+    ctx.fillStyle='rgba(0,200,160,0.30)';ctx.fillText('BULLISH',xL+6,plotTop+plH*0.18);
     ctx.fillStyle='rgba(80,110,150,0.24)';ctx.fillText('NEUTRAL',xL+6,pMid);
-    ctx.fillStyle='rgba(255,100,55,0.30)';ctx.fillText('BEARISH',xL+6,pTop+fah*0.78);
+    ctx.fillStyle='rgba(255,100,55,0.30)';ctx.fillText('BEARISH',xL+6,plotTop+plH*0.82);
   }
   // Histogram — use integer V.a/V.b indices
   const iStart=Math.max(0,V.a),iEnd=Math.min(N-1,V.b);
   ctx.save();
-  ctx.beginPath();ctx.rect(xL,pTop,xR-xL,fah);ctx.clip();
+  ctx.beginPath();ctx.rect(xL,plotTop,xR-xL,fah-hdrH);ctx.clip();
   for(let ci=iStart;ci<=iEnd;ci++){
     const v=osc[ci];if(Math.abs(v)<0.3)continue;
     const cx=x(ci);if(cx+barW/2<xL||cx-barW/2>xR)continue;
@@ -12215,7 +12152,7 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH,wpah){wpah=wpah||0;
       else if(lv<-8){tag='FLOW ACCEL DN';tc='rgba(220,80,40,0.75)';}
       else{tag='FLOW NEUTRAL';tc='rgba(90,120,155,0.70)';}
       ctx.font='700 7.5px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
-      ctx.fillStyle=tc;ctx.fillText(tag,xR-8,pTop+9);
+      ctx.fillStyle=tc;ctx.fillText(tag,xR-8,pTop+hdrH/2);
     }
   }
   // Crosshair — use same candle index as main crosshair for consistency
@@ -12239,10 +12176,10 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH,wpah){wpah=wpah||0;
       ctx.beginPath();ctx.arc(snapX,yv,3.5,0,Math.PI*2);ctx.fill();
       ctx.shadowBlur=0;ctx.fillStyle='rgba(255,255,255,0.75)';
       ctx.beginPath();ctx.arc(snapX,yv,1.4,0,Math.PI*2);ctx.fill();
-      // Value label: Flow +/-XX
-      ctx.font='700 7px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
-      ctx.fillStyle=isBull?'rgba(0,210,170,0.90)':'rgba(255,100,55,0.90)';
-      ctx.fillText('Flow:'+(v>=0?'+':'')+Math.round(v),xR-4,Math.max(pTop+10,Math.min(pBot-6,yv-7)));
+      // Value label in header — top right, never overlaps bars
+      ctx.font='700 '+Math.round(9*_csf)+'px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+      ctx.fillStyle=isBull?'rgba(0,210,170,0.92)':'rgba(255,100,55,0.92)';
+      ctx.fillText((v>=0?'+':'')+Math.round(v),xR-8,pTop+hdrH/2);
     }
   }
 }
