@@ -42,6 +42,15 @@ If a change requires overriding old code, remove or neutralize the old conflicti
   DVL CHANGELOG
 ████████████████████████████████████████████████████████
 
+Beta 0.002
+  - Consolidated scaleDockV19 into DVL_PRICE_SCALE_CONTROLS (single source of truth).
+  - Consolidated toolDeck/toolbar/hotbar into DVL_HOTBAR_LAYOUT (single source of truth).
+  - Neutralized competing CSS blocks: v19, v86, v87 (content replaced with comments).
+  - Stripped scaleDockV19 rules from v20 and v24 patch blocks.
+  - Stripped scaleDockV19 from v83's multi-selector z-index rule.
+  - Removed competing background declarations from dvl-premium-theme-v104.
+  - Removed competing background declarations from dvl-v105-final-theme.
+
 Beta 0.001
   - Added DVL_APP_VERSION versioning system (const + visible badge + increment rule).
   - Added DVL_MAINTENANCE_CONTRACT and DVL_CHANGELOG in-file documentation.
@@ -306,70 +315,12 @@ html,body,button,select,input,textarea{
 
 
 <style id="v19-v15-only-buttons">
-.scaleDockV19{
-  position:absolute;
-  right:8px;
-  bottom:108px;
-  z-index:999;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  pointer-events:auto;
-}
-.scaleDockV19 .scale-btn{
-  width:36px!important;
-  height:34px!important;
-  min-width:36px!important;
-  padding:0!important;
-  border-radius:8px!important;
-  background:rgba(9,17,31,.94)!important;
-  border:1px solid #22344f!important;
-  color:#90a3bf!important;
-  display:flex!important;
-  align-items:center!important;
-  justify-content:center!important;
-  box-shadow:0 8px 18px rgba(0,0,0,.28);
-}
-.scaleDockV19 .scale-btn svg{
-  width:18px!important;
-  height:18px!important;
-}
-.scaleDockV19 .scale-btn:active{
-  transform:scale(.94);
-  color:#00d4ff!important;
-  border-color:#00d4ff88!important;
-}
-@media(max-width:760px){
-  .scaleDockV19{
-    right:6px;
-    bottom:112px;
-  }
-  .scaleDockV19 .scale-btn{
-    width:34px!important;
-    height:32px!important;
-    min-width:34px!important;
-  }
-}
+/* NEUTRALIZED — All scaleDockV19 rules consolidated into DVL_PRICE_SCALE_CONTROLS. */
 </style>
 
 
 <style id="v20-color-fix-scale-buttons">
-.scaleDockV19{
-  bottom:66px!important;
-  right:6px!important;
-  gap:5px!important;
-}
-.scaleDockV19 .scale-btn{
-  width:30px!important;
-  height:29px!important;
-  min-width:30px!important;
-  border-radius:7px!important;
-  font-size:11px!important;
-}
-.scaleDockV19 .scale-btn svg{
-  width:15px!important;
-  height:15px!important;
-}
+/* NEUTRALIZED — scaleDockV19 rules moved to DVL_PRICE_SCALE_CONTROLS. */
 :root{
   --etx-candle-bull:#00e676;
   --etx-candle-bear:#ff3d57;
@@ -442,29 +393,7 @@ html,body,button,select,input,textarea{
   order:3!important;
 }
 
-/* Botões da escala menores e mais baixos */
-.scaleDockV19{
-  bottom:30px!important;
-  right:4px!important;
-  gap:4px!important;
-}
-.scaleDockV19 .scale-btn{
-  width:24px!important;
-  height:24px!important;
-  min-width:24px!important;
-  padding:0!important;
-  border-radius:6px!important;
-  font-size:10px!important;
-  opacity:.84!important;
-}
-.scaleDockV19 .scale-btn svg{
-  width:12px!important;
-  height:12px!important;
-}
-.scaleDockV19 .scale-btn:active,
-.scaleDockV19 .scale-btn:hover{
-  opacity:1!important;
-}
+/* NEUTRALIZED — scaleDockV19 rules moved to DVL_PRICE_SCALE_CONTROLS. */
 
 /* Garante que dropdown TF receba toque/click normal */
 #tfSelect{
@@ -966,7 +895,8 @@ button, .btn, .mini-btn, .gear, .scale-btn{
   inset:0!important;
   z-index:0!important;
 }
-.chartWrap .scaleDockV19,.chartWrap .hud,.chartWrap .cross,.chartWrap .tip,.chartWrap .loader,.chartWrap .err{z-index:8!important;}
+/* .chartWrap .scaleDockV19 z-index moved to DVL_PRICE_SCALE_CONTROLS */
+.chartWrap .hud,.chartWrap .cross,.chartWrap .tip,.chartWrap .loader,.chartWrap .err{z-index:8!important;}
 .toolDeck .mini-btn,.toolDeck .tool-select{
   width:auto!important;
   min-width:auto!important;
@@ -976,47 +906,9 @@ button, .btn, .mini-btn, .gear, .scale-btn{
 </style>
 
 <style id="v86-restore-chart-compact-hotbar">
-/* v86: restore stable chart engine. Keep hotbar compact and reserve chart drawing below it via PT=62. */
-.toolDeck{
-  top:7px!important;
-  left:8px!important;
-  right:8px!important;
-  max-width:calc(100% - 16px)!important;
-  height:42px!important;
-  min-height:42px!important;
-  padding:2px 0 3px 0!important;
-  align-items:center!important;
-  z-index:30!important;
-  pointer-events:auto!important;
-}
-.toolDeck .toolbar{
-  height:38px!important;
-  min-height:38px!important;
-  padding:3px 4px!important;
-  gap:4px!important;
-  border-radius:7px!important;
-}
-.toolDeck .mini-btn,
-.toolDeck .tool-select{
-  height:32px!important;
-  min-height:32px!important;
-  width:auto!important;
-  min-width:0!important;
-  padding:5px 9px!important;
-  border-radius:6px!important;
-  line-height:1!important;
-  font-size:11px!important;
-}
-.toolDeck .tool-select{max-width:150px!important;}
-.candleBar .tool-select{min-width:122px!important;}
-.chartWrap{overflow:hidden!important;isolation:isolate!important;}
-.chartWrap #chart{z-index:0!important;}
-.chartWrap .scaleDockV19{z-index:22!important;}
-@media(max-width:760px){
-  .toolDeck{height:40px!important;min-height:40px!important;top:6px!important;gap:5px!important;}
-  .toolDeck .toolbar{height:36px!important;min-height:36px!important;padding:2px 4px!important;}
-  .toolDeck .mini-btn,.toolDeck .tool-select{height:31px!important;min-height:31px!important;padding:5px 8px!important;font-size:10.5px!important;}
-}
+/* NEUTRALIZED — toolDeck/toolbar rules consolidated into DVL_HOTBAR_LAYOUT.
+   .chartWrap .scaleDockV19 z-index moved to DVL_PRICE_SCALE_CONTROLS.
+   .chartWrap overflow/isolation moved to DVL_HOTBAR_LAYOUT. */
 </style>
 <script id="v86-hotbar-event-shield">
 (function(){
@@ -1035,48 +927,9 @@ button, .btn, .mini-btn, .gear, .scale-btn{
 
 
 <style id="v87-chart-fit-hotbar-center">
-/* v87: encaixe do gráfico e centralização do ícone de candles */
-.toolDeck{
-  height:38px!important;
-  min-height:38px!important;
-  top:5px!important;
-  padding:1px 0 2px 0!important;
-}
-.toolDeck .toolbar{
-  height:34px!important;
-  min-height:34px!important;
-  padding:2px 4px!important;
-  gap:5px!important;
-}
-.toolDeck .mini-btn,
-.toolDeck .tool-select{
-  height:30px!important;
-  min-height:30px!important;
-  padding:4px 8px!important;
-}
-.icon-wrap{
-  display:flex!important;
-  align-items:center!important;
-  gap:0!important;
-}
-.icon-wrap .chart-icon{
-  width:18px!important;
-  height:18px!important;
-  margin-left:10px!important;
-  margin-right:10px!important;
-  flex:0 0 auto!important;
-}
-#tfSelect{width:66px!important;}
-.candleBar .tool-select,
-#chartStyle{min-width:118px!important;max-width:138px!important;}
-#volumePaneWrap,.panes{display:none!important;height:0!important;min-height:0!important;flex-basis:0!important;overflow:hidden!important;}
-.scaleDockV19{bottom:22px!important;}
-@media(max-width:760px){
-  .toolDeck{height:38px!important;min-height:38px!important;top:5px!important;}
-  .toolDeck .toolbar{height:34px!important;min-height:34px!important;}
-  .toolDeck .mini-btn,.toolDeck .tool-select{height:30px!important;min-height:30px!important;font-size:10.5px!important;}
-  #volumePaneWrap,.panes{display:none!important;height:0!important;min-height:0!important;flex-basis:0!important;}
-}
+/* NEUTRALIZED — toolDeck/toolbar/icon-wrap rules consolidated into DVL_HOTBAR_LAYOUT.
+   scaleDockV19 bottom moved to DVL_PRICE_SCALE_CONTROLS.
+   #volumePaneWrap/.panes hide rules moved to DVL_HOTBAR_LAYOUT. */
 </style>
 
 <style id="v88-chart-glue-hotbar-fit">
@@ -1123,20 +976,18 @@ button, .btn, .mini-btn, .gear, .scale-btn{
   --dvl-blue:#8ca0b8;
 }
 html,body{
-  background:radial-gradient(circle at top,rgba(37,59,93,.20),transparent 52%),var(--dvl-bg)!important;
+  /* background moved to DVL_THEME_TOKENS */
   color:var(--dvl-text)!important;
   font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif!important;
 }
-.platform,.chartWrap,.panes,.loader,.err{
-  background:radial-gradient(circle at 50% 0%,rgba(21,34,55,.18),transparent 44%),var(--dvl-bg)!important;
-}
+/* .platform/.chartWrap etc background moved to DVL_THEME_TOKENS */
 .topbar{
-  background:linear-gradient(180deg,rgba(10,15,23,.98),rgba(7,10,16,.98))!important;
+  /* background moved to DVL_THEME_TOKENS */
   border-bottom:1px solid rgba(255,255,255,.055)!important;
   box-shadow:0 10px 30px rgba(0,0,0,.28)!important;
 }
 .sidebar,.bottom,.toolDeck.toolDeckOutOfChart,.toolbar,.input-modal,.input-modal-head{
-  background:rgba(7,11,17,.94)!important;
+  /* background moved to DVL_THEME_TOKENS */
   border-color:rgba(255,255,255,.065)!important;
   backdrop-filter:blur(12px)!important;
 }
@@ -1146,7 +997,7 @@ html,body{
 .side-brand{
   padding:14px 12px 13px!important;
   border-bottom:1px solid rgba(255,255,255,.055)!important;
-  background:linear-gradient(180deg,rgba(255,255,255,.018),transparent)!important;
+  /* background moved to DVL_THEME_TOKENS */
 }
 .dvl-logo-wrap{
   display:flex!important;
@@ -1198,7 +1049,7 @@ html,body{
 }
 .ind-card{
   border-radius:10px!important;
-  background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.005))!important;
+  /* background moved to DVL_THEME_TOKENS */
 }
 .ind-head{padding:9px 9px!important}.row.on .name{color:#e8edf6!important}.name{font-size:11px!important}
 .switch{background:#151c28!important;border:1px solid rgba(255,255,255,.065)!important}.switch:after{background:#4a5568!important}.row.on .switch{background:rgba(0,230,118,.12)!important;border-color:rgba(0,230,118,.32)!important}.row.on .switch:after{background:var(--dvl-green)!important;box-shadow:0 0 12px rgba(0,230,118,.30)!important}
@@ -1248,16 +1099,16 @@ html,body{
   --dvl-text:#f5f7fa;--dvl-soft:#94a3b8;--dvl-dim:#64748b;
   --dvl-green:#00e676;--dvl-red:#ff3d57;--dvl-cyan:#22d3ee;--dvl-yellow:#eab308;
 }
-html,body{background:#05070b!important;color:var(--dvl-text)!important;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif!important;}
-body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;background:radial-gradient(circle at 50% -8%,rgba(60,80,110,.16),transparent 42%),radial-gradient(circle at 100% 25%,rgba(15,23,42,.35),transparent 45%),#05070b!important;}
-.platform,.chartPanel,.chartWrap,.panes{background:#05070b!important;}
-.topbar{height:58px!important;min-height:58px!important;padding:7px 14px!important;background:linear-gradient(180deg,rgba(8,12,19,.98),rgba(5,7,11,.96))!important;border-bottom:1px solid var(--dvl-border)!important;box-shadow:0 10px 30px rgba(0,0,0,.22)!important;gap:12px!important;}
+html,body{/* bg → DVL_THEME_TOKENS */color:var(--dvl-text)!important;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif!important;}
+/* body::before gradient removed — background handled by DVL_THEME_TOKENS */
+/* .platform/.chartWrap etc background moved to DVL_THEME_TOKENS */
+.topbar{height:58px!important;min-height:58px!important;padding:7px 14px!important;/* bg → DVL_THEME_TOKENS */border-bottom:1px solid var(--dvl-border)!important;box-shadow:0 10px 30px rgba(0,0,0,.22)!important;gap:12px!important;}
 .topbar-brand-dvl{display:flex;align-items:center;gap:8px;color:#f8fafc;font-weight:800;letter-spacing:3px;font-size:13px;line-height:1;white-space:nowrap;opacity:.96;cursor:pointer;}
 .topbar-brand-dvl .top-eye{width:58px;height:28px;flex:0 0 auto;filter:drop-shadow(0 0 12px rgba(255,255,255,.04));}
 .header-menu{order:2!important}.top-asset{order:3!important}.price{order:4!important;margin-left:auto!important}.livePill,.topbar .pill{display:none!important}
 .asset-main{font-size:20px!important;font-weight:800!important;letter-spacing:-.4px!important;color:#f8fafc!important}.asset-sub{font-size:10px!important;letter-spacing:2px!important;color:#7d8aa0!important}.topbar .pnow{font-size:30px!important;font-weight:850!important;letter-spacing:-1.3px!important;color:#f8fafc!important;text-shadow:none!important}.topbar .chg{font-size:13px!important;font-weight:700!important}
-.sidebar,.bottom,.toolDeck.toolDeckOutOfChart,.toolbar,.input-modal,.input-modal-head{background:rgba(7,11,17,.94)!important;border-color:var(--dvl-border)!important;backdrop-filter:blur(14px)!important;}
-.sidebar{box-shadow:18px 0 50px rgba(0,0,0,.22)!important}.side-brand{background:linear-gradient(180deg,rgba(255,255,255,.025),transparent)!important;border-bottom:1px solid var(--dvl-border)!important}.dvl-logo-wrap,.side-logo{background:none!important;-webkit-text-fill-color:initial!important;color:#f8fafc!important;letter-spacing:3px!important}.dvl-eye{color:#f8fafc!important}.side-tag{color:#6f7c8f!important;letter-spacing:2.2px!important}
+.sidebar,.bottom,.toolDeck.toolDeckOutOfChart,.toolbar,.input-modal,.input-modal-head{/* bg → DVL_THEME_TOKENS */border-color:var(--dvl-border)!important;backdrop-filter:blur(14px)!important;}
+.sidebar{box-shadow:18px 0 50px rgba(0,0,0,.22)!important}.side-brand{/* bg → DVL_THEME_TOKENS */border-bottom:1px solid var(--dvl-border)!important}.dvl-logo-wrap,.side-logo{background:none!important;-webkit-text-fill-color:initial!important;color:#f8fafc!important;letter-spacing:3px!important}.dvl-eye{color:#f8fafc!important}.side-tag{color:#6f7c8f!important;letter-spacing:2.2px!important}
 .section,.ind-card,.theme-panel,.customItem,.labInput,.labCode,.labError,.input,.num,.select,.tool-select,.mini-btn,.btn,.gear,.input-modal-x{border-color:var(--dvl-border)!important;box-shadow:none!important}.ind-card,.theme-panel,.labInput,.labCode,.input,.num,.select,.tool-select,.gear,.input-modal-x{background:rgba(8,13,20,.82)!important;color:#dce5f2!important}.ind-card{border-radius:11px!important;background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.006))!important}.title,.k,.name,.bottom,.sub,.status,.pill,.barLabel{color:#7b8799!important}.row.on .name,.asset-main,.pnow,.bottom span b,.v{color:#f8fafc!important}
 .btn,.mini-btn,.tool-select{width:auto!important;border-radius:10px!important;padding:7px 12px!important;background:rgba(7,11,17,.76)!important;color:#cbd5e1!important;border-color:var(--dvl-border2)!important}.btn:hover,.mini-btn:hover,.tool-select:hover,.gear:hover{border-color:rgba(255,255,255,.25)!important;color:#fff!important}.tab.active,.tf.active,.mini-btn.on,.hot-ind.on,.gear.open,.input-modal-x:hover{color:#fff!important;border-color:rgba(255,255,255,.32)!important;background:rgba(255,255,255,.08)!important;box-shadow:none!important}.labActions .btn,.settings-actions .btn{width:auto!important;min-width:unset!important;flex:0 0 auto!important}.labActions{justify-content:flex-start!important;gap:8px!important}
 .switch{background:#151c28!important;border:1px solid rgba(255,255,255,.065)!important}.switch:after{background:#4a5568!important}.row.on .switch{background:rgba(0,230,118,.12)!important;border-color:rgba(0,230,118,.32)!important}.row.on .switch:after{background:var(--dvl-green)!important;box-shadow:0 0 12px rgba(0,230,118,.28)!important}.dot{background:var(--dvl-green)!important;box-shadow:0 0 10px rgba(0,230,118,.35)!important}.up,.chg.up{color:var(--dvl-green)!important}.dn,.chg.dn{color:var(--dvl-red)!important}
@@ -1358,6 +1209,113 @@ html,body{background:var(--dvl-ui-bg)!important;}
 }
 @media(min-width:901px){.dvl-version-badge{font-size:11px;}}
 @media(max-width:900px){.dvl-version-badge{font-size:9px;}}
+</style>
+
+<style id="DVL_HOTBAR_LAYOUT">
+/* ── Canonical hotbar — single source of truth ────────────────────────────────
+   Consolidates: v24 (flow layout), v83 (ordering), v86 (compact sizing), v87 (final sizes)
+   v24/v83/v86/v87 original blocks have been NEUTRALIZED above.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* chartPanel is a column flex: toolDeck → chartWrap → (panes hidden) */
+.chartPanel{
+  display:flex!important;
+  flex-direction:column!important;
+  min-width:0!important;
+  min-height:0!important;
+}
+.toolDeck{
+  position:relative!important;
+  top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;
+  width:100%!important;max-width:100%!important;
+  flex:0 0 auto!important;
+  z-index:30!important;
+  display:flex!important;gap:6px!important;align-items:center!important;
+  overflow-x:auto!important;overflow-y:hidden!important;white-space:nowrap!important;
+  height:38px!important;min-height:38px!important;
+  padding:1px 4px 2px 4px!important;
+  background:var(--dvl-ui-bg)!important;
+  border-bottom:1px solid var(--dvl-border)!important;
+  box-sizing:border-box!important;scrollbar-width:none!important;pointer-events:auto!important;
+}
+.toolDeck::-webkit-scrollbar{display:none!important;}
+.toolDeck .toolbar,.toolDeck .cleanNav{
+  flex:0 0 auto!important;width:auto!important;max-width:none!important;
+  height:34px!important;min-height:34px!important;
+  padding:2px 4px!important;gap:5px!important;
+  border-radius:7px!important;
+}
+.toolDeck .mini-btn,.toolDeck .tool-select{
+  height:30px!important;min-height:30px!important;
+  width:auto!important;min-width:0!important;
+  padding:4px 8px!important;border-radius:6px!important;
+  line-height:1!important;font-size:11px!important;pointer-events:auto!important;
+}
+.toolDeck .tool-select{max-width:150px!important;}
+.candleBar .tool-select,#chartStyle{min-width:118px!important;max-width:138px!important;}
+#tfSelect{width:66px!important;}
+.icon-wrap{display:flex!important;align-items:center!important;gap:0!important;}
+.icon-wrap .chart-icon{width:18px!important;height:18px!important;margin-left:10px!important;margin-right:10px!important;flex:0 0 auto!important;}
+
+/* chartWrap: fills remaining space; canvas uses stacking context */
+.chartPanel>.chartWrap{
+  flex:1 1 auto!important;min-height:0!important;position:relative!important;
+  overflow:hidden!important;isolation:isolate!important;order:1!important;
+}
+.chartWrap>canvas#chart{position:absolute!important;inset:0!important;z-index:0!important;}
+.chartWrap .hud,.chartWrap .cross,.chartWrap .tip,.chartWrap .loader,.chartWrap .err{z-index:8!important;}
+
+/* Volume pane: hidden (replaced by canvas oscillator panels) */
+#volumePaneWrap,.panes{display:none!important;height:0!important;min-height:0!important;flex-basis:0!important;overflow:hidden!important;}
+
+/* toolDeckOutOfChart variant (desktop sidebar layout) */
+.toolDeckOutOfChart{flex:0 0 auto!important;order:0!important;}
+
+@media(max-width:760px){
+  .toolDeck{height:38px!important;min-height:38px!important;padding:3px 6px!important;gap:5px!important;}
+  .toolDeck .toolbar,.toolDeck .cleanNav{height:34px!important;min-height:34px!important;padding:2px 4px!important;}
+  .toolDeck .mini-btn,.toolDeck .tool-select{height:30px!important;min-height:30px!important;font-size:10.5px!important;}
+  #volumePaneWrap,.panes{display:none!important;height:0!important;min-height:0!important;flex-basis:0!important;}
+}
+</style>
+
+<style id="DVL_PRICE_SCALE_CONTROLS">
+/* ── Canonical scaleDockV19 — single source of truth ─────────────────────────
+   Consolidates: v19 (base), v20 (sizes), v24 (smaller buttons), v86 (z-index context), v87 (bottom)
+   Those blocks have been NEUTRALIZED above.
+   NOTE: draw() overrides .bottom dynamically via (PB+12)px to lift above oscillators.
+   ──────────────────────────────────────────────────────────────────────────── */
+.scaleDockV19{
+  position:absolute;
+  right:4px;
+  bottom:22px; /* JS draw() sets this dynamically via (PB+12)px */
+  z-index:999;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  pointer-events:auto;
+}
+.scaleDockV19 .scale-btn{
+  width:24px!important;height:24px!important;min-width:24px!important;
+  padding:0!important;border-radius:6px!important;font-size:10px!important;
+  opacity:.84!important;display:flex!important;align-items:center!important;
+  justify-content:center!important;
+  background:rgba(9,17,31,.94)!important;
+  border:1px solid #22344f!important;
+  color:#90a3bf!important;
+  box-shadow:0 4px 12px rgba(0,0,0,.28);
+}
+.scaleDockV19 .scale-btn svg{width:12px!important;height:12px!important;}
+.scaleDockV19 .scale-btn:active,.scaleDockV19 .scale-btn:hover{
+  opacity:1!important;transform:scale(.94);
+  color:#00d4ff!important;border-color:rgba(0,212,255,.53)!important;
+}
+/* Inside .chartWrap the z-index stacking is isolated — keep scale buttons above canvas overlays */
+.chartWrap .scaleDockV19{z-index:22!important;}
+@media(max-width:760px){
+  .scaleDockV19{right:4px;bottom:22px;}
+  .scaleDockV19 .scale-btn{width:22px!important;height:22px!important;min-width:22px!important;}
+}
 </style>
 
 <style id="v106-candle-iconic-dropdown">
@@ -1554,7 +1512,7 @@ html,body{background:var(--dvl-ui-bg)!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.001";
+window.DVL_APP_VERSION = "Beta 0.002";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -1999,7 +1957,7 @@ html.pre-ui .switch::after{transition:none!important}
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span id="dvlVersionBadge" class="dvl-version-badge">Beta 0.001</span>
+        <span id="dvlVersionBadge" class="dvl-version-badge">Beta 0.002</span>
       </div>
 
       <div class="tb-right-btns">
