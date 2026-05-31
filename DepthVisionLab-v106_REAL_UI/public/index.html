@@ -4891,8 +4891,8 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
   ctx.strokeStyle='rgba(30,60,90,0.22)';ctx.lineWidth=0.5;ctx.setLineDash([]);
   ctx.beginPath();ctx.moveTo(xL,yHi);ctx.lineTo(xR,yHi);ctx.stroke();
   ctx.beginPath();ctx.moveTo(xL,yLo);ctx.lineTo(xR,yLo);ctx.stroke();
-  // Zero line — same as Flow
-  ctx.strokeStyle='rgba(0,140,190,0.28)';ctx.lineWidth=0.75;ctx.setLineDash([4,6]);
+  // Zero line
+  ctx.strokeStyle='rgba(0,155,205,0.42)';ctx.lineWidth=1.0;ctx.setLineDash([4,6]);
   ctx.beginPath();ctx.moveTo(xL,pMid);ctx.lineTo(xR,pMid);ctx.stroke();ctx.setLineDash([]);
   // ── Header title — same font/color/position as DVL Flow ─────────────────
   const _clarTitleStr='TREND CLARITY'+(_clarIsMtf?' · '+_clarTFSel.toUpperCase():'');
@@ -4907,20 +4907,24 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
   // Header separator — same as Flow
   ctx.strokeStyle='rgba(0,90,140,0.22)';ctx.lineWidth=0.7;ctx.setLineDash([]);
   ctx.beginPath();ctx.moveTo(0,plotTop);ctx.lineTo(W,plotTop);ctx.stroke();
-  // ── Right scale — same font/color/gutter as Flow ─────────────────────────
-  const yS100=valY(100),ySminus100=valY(-100);
+  // ── Right scale — 5 useful levels with tick marks ──────────────────────────
   ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.fillStyle='rgba(60,100,140,0.70)';
-  ctx.fillText('100',xR+5,Math.max(plotTop+5,yS100));
-  ctx.fillText('0',xR+5,pMid);
-  ctx.fillText('-100',xR+5,Math.min(pBot-5,ySminus100));
-  // ── Left labels — same low-opacity ghost style as Flow ───────────────────
+  for(const sv of [100,50,0,-50,-100]){
+    const sy=valY(sv);if(sy<plotTop+3||sy>pBot-3)continue;
+    const isZ=sv===0;
+    ctx.fillStyle=isZ?'rgba(0,155,205,0.72)':'rgba(60,100,140,0.48)';
+    ctx.fillText(sv>0?'+'+sv:String(sv),xR+5,sy);
+    ctx.strokeStyle=isZ?'rgba(0,140,190,0.35)':'rgba(60,100,140,0.22)';
+    ctx.lineWidth=0.7;ctx.setLineDash([]);
+    ctx.beginPath();ctx.moveTo(xR,sy);ctx.lineTo(xR+3,sy);ctx.stroke();
+  }
+  // ── Left labels — ultra-faint ghost hints, no dead column ─────────────────
   if(clarH-hdrH>=60){
     const plH=plotBot-plotTop;
     ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.fillStyle='rgba(0,200,200,0.30)';ctx.fillText('STRONG',xL+6,plotTop+plH*0.18);
-    ctx.fillStyle='rgba(80,110,150,0.24)';ctx.fillText('NEUTRAL',xL+6,pMid);
-    ctx.fillStyle='rgba(255,80,80,0.28)';ctx.fillText('WEAK',xL+6,plotTop+plH*0.82);
+    ctx.fillStyle='rgba(0,200,200,0.10)';ctx.fillText('STRONG',xL+4,plotTop+plH*0.18);
+    ctx.fillStyle='rgba(80,110,150,0.08)';ctx.fillText('NEUTRAL',xL+4,pMid);
+    ctx.fillStyle='rgba(255,80,80,0.10)';ctx.fillText('WEAK',xL+4,plotTop+plH*0.82);
   }
   // ── Collect + smooth values ───────────────────────────────────────────────
   const cw=CW(W);
@@ -4972,6 +4976,18 @@ function drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,clarH){
     ctx.shadowBlur=0;ctx.fillStyle='#eaffff';
     ctx.beginPath();ctx.arc(last.px,valY(last.v),1.35,0,Math.PI*2);ctx.fill();
     ctx.restore();
+    // ── Current value right-edge marker ───────────────────────────────────────
+    if(vals.length>0){
+      const cvL=vals[vals.length-1].v,cvLY=valY(cvL);
+      if(cvLY>=plotTop&&cvLY<=pBot){
+        const cvCol=cvL>=0?'rgba(0,215,235,0.92)':'rgba(255,72,92,0.92)';
+        ctx.strokeStyle=cvCol;ctx.lineWidth=1.5;ctx.setLineDash([]);
+        ctx.beginPath();ctx.moveTo(xR-4,cvLY);ctx.lineTo(xR+5,cvLY);ctx.stroke();
+        ctx.font='700 7.5px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
+        ctx.fillStyle=cvCol;
+        ctx.fillText((cvL>=0?'+':'')+Math.round(cvL),xR+7,cvLY);
+      }
+    }
     // ── Header right: state tag (same system as Flow's showTag) ─────────────
     const lv=last.v;let tag,tc;
     if(lv>30){tag='CLARITY STRONG';tc='rgba(0,210,230,0.88)';}
@@ -12095,27 +12111,31 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH,wpah){wpah=wpah||0;
   ctx.beginPath();ctx.moveTo(xL,yF50hi);ctx.lineTo(xR,yF50hi);ctx.stroke();
   ctx.beginPath();ctx.moveTo(xL,yF50lo);ctx.lineTo(xR,yF50lo);ctx.stroke();
   // Zero line
-  ctx.strokeStyle='rgba(0,140,190,0.28)';ctx.lineWidth=0.75;ctx.setLineDash([4,6]);
+  ctx.strokeStyle='rgba(0,155,205,0.42)';ctx.lineWidth=1.0;ctx.setLineDash([4,6]);
   ctx.beginPath();ctx.moveTo(xL,pMid);ctx.lineTo(xR,pMid);ctx.stroke();ctx.setLineDash([]);
   // Header title + separator (same layout as Trend Clarity panel)
   ctx.font='700 '+Math.round(10*_csf)+'px monospace';ctx.fillStyle='rgba(150,170,205,0.88)';ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillText('DVL FLOW',xL+8,pTop+hdrH/2);
   ctx.strokeStyle='rgba(0,90,140,0.22)';ctx.lineWidth=0.7;ctx.setLineDash([]);
   ctx.beginPath();ctx.moveTo(0,plotTop);ctx.lineTo(W,plotTop);ctx.stroke();
-  // Right scale — in PR zone, Y aligned with actual valToY positions
-  const yF100=valToY(100),yFm100=valToY(-100);
+  // Right scale — 5 useful levels with tick marks
   ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.fillStyle='rgba(60,100,140,0.70)';
-  ctx.fillText('100',xR+5,Math.max(plotTop+5,yF100));
-  ctx.fillText('0',xR+5,pMid);
-  ctx.fillText('-100',xR+5,Math.min(pBot-5,yFm100));
-  // Left labels
+  for(const sv of [100,50,0,-50,-100]){
+    const sy=valToY(sv);if(sy<plotTop+3||sy>pBot-3)continue;
+    const isZ=sv===0;
+    ctx.fillStyle=isZ?'rgba(0,155,205,0.72)':'rgba(60,100,140,0.48)';
+    ctx.fillText(sv>0?'+'+sv:String(sv),xR+5,sy);
+    ctx.strokeStyle=isZ?'rgba(0,140,190,0.35)':'rgba(60,100,140,0.22)';
+    ctx.lineWidth=0.7;ctx.setLineDash([]);
+    ctx.beginPath();ctx.moveTo(xR,sy);ctx.lineTo(xR+3,sy);ctx.stroke();
+  }
+  // Left labels — ultra-faint ghost hints, no dead column
   if(fah-hdrH>=60){
     const plH=plotBot-plotTop;
     ctx.font='700 7px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.fillStyle='rgba(0,200,160,0.30)';ctx.fillText('BULLISH',xL+6,plotTop+plH*0.18);
-    ctx.fillStyle='rgba(80,110,150,0.24)';ctx.fillText('NEUTRAL',xL+6,pMid);
-    ctx.fillStyle='rgba(255,100,55,0.30)';ctx.fillText('BEARISH',xL+6,plotTop+plH*0.82);
+    ctx.fillStyle='rgba(0,200,160,0.10)';ctx.fillText('BULLISH',xL+4,plotTop+plH*0.18);
+    ctx.fillStyle='rgba(80,110,150,0.08)';ctx.fillText('NEUTRAL',xL+4,pMid);
+    ctx.fillStyle='rgba(255,100,55,0.10)';ctx.fillText('BEARISH',xL+4,plotTop+plH*0.82);
   }
   // Histogram — use integer V.a/V.b indices
   const iStart=Math.max(0,V.a),iEnd=Math.min(N-1,V.b);
@@ -12169,6 +12189,18 @@ function drawFlowAccelPanel(ctx,W,H,V,sc,x,fah,clarH,wpah){wpah=wpah||0;
     ctx.shadowBlur=0;ctx.fillStyle='rgba(255,255,255,0.80)';
     ctx.beginPath();ctx.arc(last.cx,last.cy,1,0,Math.PI*2);ctx.fill();
     ctx.restore();
+    // ── Current value right-edge marker ─────────────────────────────────────
+    {
+      const cvL=last.v,cvLY=valToY(cvL);
+      if(cvLY>=plotTop&&cvLY<=pBot){
+        const cvCol=cvL>=0?'rgba(0,215,175,0.92)':'rgba(255,105,58,0.92)';
+        ctx.strokeStyle=cvCol;ctx.lineWidth=1.5;ctx.setLineDash([]);
+        ctx.beginPath();ctx.moveTo(xR-4,cvLY);ctx.lineTo(xR+5,cvLY);ctx.stroke();
+        ctx.font='700 7.5px monospace';ctx.textAlign='left';ctx.textBaseline='middle';
+        ctx.fillStyle=cvCol;
+        ctx.fillText((cvL>=0?'+':'')+Math.round(cvL),xR+7,cvLY);
+      }
+    }
     if(showTag){
       const lv=last.v;let tag,tc;
       if(lv>30){tag='FLOW BULLISH';tc='rgba(0,210,170,0.88)';}
