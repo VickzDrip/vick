@@ -41,7 +41,19 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.065
+  - Fix: favorites UX — long-press any tool card to open popup with Favoritar/Remover option.
+  - Popup (#rpFavPopup) positions itself near the pressed card, dismisses on outside touch.
+  - ★ filled gold when favorited, ☆ empty when not; star visibility improved (14px, better contrast).
+  - attachLongPress() now called in open(), renderQA(), and init so all cards (static + QA) are covered.
+
 Beta 0.064
+  - Full refactor of FERRAMENTAS right panel: tabs (Trading | Drawing | Utility | Theme).
+  - QUICK ACTIONS section powered by localStorage favorites (dvl_rp_favs_v1), default long/short/ruler.
+  - Star (★/☆) system on every card; bottom bar with Gerenciar favoritos + Redefinir buttons.
+  - Premium card grid with SVG icons, consistent rp-item/.rp-btn/.rp-star structure.
+
+Beta 0.063
   - Fix: oscillator gear icons (DVL FLOW, TREND CLARITY) now reliably open settings on mobile tap.
   - Added transparent DOM overlay buttons (#dvlOscGearOverlay_flow, #dvlOscGearOverlay_clarity) positioned
     absolutely over the canvas-drawn gears, updated after each draw cycle via window.draw wrapping.
@@ -358,7 +370,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.064";
+  const LOCAL_VERSION = "Beta 0.065";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2049,7 +2061,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.064";
+window.DVL_APP_VERSION = "Beta 0.065";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2466,7 +2478,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M5 19L19 5"/><polyline points="12 5 19 5 19 12"/></svg>
             <span>Long</span>
           </button>
-          <button class="rp-star" data-rpkey="long" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="long" aria-label="Favoritar">&#9734;</button>
         </div>
 
         <div class="rp-item">
@@ -2474,7 +2486,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M5 5L19 19"/><polyline points="12 19 19 19 19 12"/></svg>
             <span>Short</span>
           </button>
-          <button class="rp-star" data-rpkey="short" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="short" aria-label="Favoritar">&#9734;</button>
         </div>
 
         <div class="rp-item">
@@ -2482,7 +2494,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><rect x="2" y="7" width="20" height="10" rx="1"/><line x1="6" y1="7" x2="6" y2="11"/><line x1="10" y1="7" x2="10" y2="13"/><line x1="14" y1="7" x2="14" y2="11"/><line x1="18" y1="7" x2="18" y2="13"/></svg>
             <span>R&#233;gua</span>
           </button>
-          <button class="rp-star" data-rpkey="ruler" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="ruler" aria-label="Favoritar">&#9734;</button>
         </div>
 
       </div>
@@ -2500,7 +2512,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><line x1="4" y1="20" x2="20" y2="4"/></svg>
             <span>Linha</span>
           </button>
-          <button class="rp-star" data-rpkey="drawLine" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="drawLine" aria-label="Favoritar">&#9734;</button>
         </div>
 
         <div class="rp-item">
@@ -2508,7 +2520,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><rect x="3" y="5" width="18" height="14" rx="1"/></svg>
             <span>Ret&#226;ngulo</span>
           </button>
-          <button class="rp-star" data-rpkey="drawRect" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="drawRect" aria-label="Favoritar">&#9734;</button>
         </div>
 
         <div class="rp-item">
@@ -2516,7 +2528,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M4 6h16M12 6v12M9 18h6"/></svg>
             <span>Texto</span>
           </button>
-          <button class="rp-star" data-rpkey="drawText" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="drawText" aria-label="Favoritar">&#9734;</button>
         </div>
 
         <div class="rp-item">
@@ -2524,7 +2536,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg>
             <span>Seta</span>
           </button>
-          <button class="rp-star" data-rpkey="drawArrow" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="drawArrow" aria-label="Favoritar">&#9734;</button>
         </div>
 
       </div>
@@ -2542,7 +2554,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><rect x="3" y="8" width="18" height="8" rx="1"/><line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="2 2"/></svg>
             <span>FVG</span>
           </button>
-          <button class="rp-star" data-rpkey="fvg" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="fvg" aria-label="Favoritar">&#9734;</button>
         </div>
 
         <div class="rp-item">
@@ -2550,7 +2562,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><rect x="3" y="6" width="18" height="12" rx="1"/><line x1="8" y1="6" x2="8" y2="18"/></svg>
             <span>Orderblock</span>
           </button>
-          <button class="rp-star" data-rpkey="ob" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="ob" aria-label="Favoritar">&#9734;</button>
         </div>
 
         <div class="rp-item">
@@ -2558,7 +2570,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><line x1="5" y1="20" x2="5" y2="4"/><rect x="5" y="4" width="9" height="2" rx=".5"/><rect x="5" y="8" width="14" height="2" rx=".5"/><rect x="5" y="12" width="7" height="2" rx=".5"/><rect x="5" y="16" width="11" height="2" rx=".5"/></svg>
             <span>Vol. Profile</span>
           </button>
-          <button class="rp-star" data-rpkey="volProfile" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="volProfile" aria-label="Favoritar">&#9734;</button>
         </div>
 
       </div>
@@ -2576,7 +2588,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><polygon points="5,3 19,12 5,21"/></svg>
             <span>Replay</span>
           </button>
-          <button class="rp-star" data-rpkey="replay" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="replay" aria-label="Favoritar">&#9734;</button>
         </div>
 
         <div class="rp-item">
@@ -2584,7 +2596,7 @@ html.pre-ui .switch::after{transition:none!important}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
             <span>Snapshot</span>
           </button>
-          <button class="rp-star" data-rpkey="snapshot" aria-label="Favoritar">&#9733;</button>
+          <button class="rp-star" data-rpkey="snapshot" aria-label="Favoritar">&#9734;</button>
         </div>
 
         <div class="rp-item">
@@ -2635,7 +2647,7 @@ html.pre-ui .switch::after{transition:none!important}
     <div class="rp-bottom-bar">
       <div class="rp-tip-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="13" height="13"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span>Toque em &#9733; num item para adicion&#225;-lo ao Quick Actions</span>
+        <span>Segure um item para favoritar &mdash; aparece no Quick Actions</span>
       </div>
       <div class="rp-bottom-actions">
         <button class="rp-bottom-act-btn" id="rpManageFavs">Gerenciar favoritos</button>
@@ -2647,6 +2659,18 @@ html.pre-ui .switch::after{transition:none!important}
 
 </div>
 <!-- ── End Right Tools Panel ─────────────────────────────────────────── -->
+
+<!-- ── Fav popup (long-press context) ── -->
+<div id="rpFavPopup" class="rp-fav-popup" style="display:none" role="dialog" aria-modal="false">
+  <div class="rp-fav-popup-inner">
+    <span class="rp-fav-popup-name" id="rpFavPopupName"></span>
+    <button class="rp-fav-popup-btn" id="rpFavPopupBtn" type="button">
+      <span id="rpFavPopupStar">&#9734;</span>
+      <span id="rpFavPopupLabel">Favoritar</span>
+    </button>
+    <span class="rp-fav-popup-hint">Toque fora para fechar</span>
+  </div>
+</div>
 
 <style id="tb-premium">
 /* Row layout override */
@@ -2807,11 +2831,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.064</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.065</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.064</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.065</span>
       </div>
 
       <div class="tb-right-btns">
@@ -8625,9 +8649,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.064'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.065'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.064';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.065';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8666,7 +8690,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.064';
+  const VERSION='Beta 0.065';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8845,7 +8869,7 @@ window._dvlClarEyeHit = null;
     return false;
   }
   ready(()=>{const wrap=E('chartWrap');if(!wrap)return;['pointerdown','mousedown','touchstart'].forEach(ev=>wrap.addEventListener(ev,function(e){
-    // Let DOM overlay gear buttons handle their own touches (Beta 0.064)
+    // Let DOM overlay gear buttons handle their own touches (Beta 0.065)
     if(e.target&&e.target.id&&String(e.target.id).indexOf('dvlOscGearOverlay_')===0)return;
     const p=e.touches&&e.touches[0]?e.touches[0]:e;
     if(hitGear(p)){e.preventDefault();e.stopImmediatePropagation();}
@@ -8971,7 +8995,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.064';
+  const VERSION='Beta 0.065';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -10235,18 +10259,66 @@ input[type=color]::-moz-color-swatch{border:none!important;border-radius:2px!imp
 /* star */
 .rp-star{
   position:absolute!important;
-  top:4px!important;right:5px!important;
+  top:2px!important;right:3px!important;
   background:none!important;border:none!important;outline:none!important;
-  padding:3px 2px!important;margin:0!important;
-  font-size:10px;line-height:1;
-  color:rgba(180,195,215,.2);
+  padding:4px!important;margin:0!important;
+  font-size:14px;line-height:1;
+  color:rgba(180,195,215,.28);
   cursor:pointer;
   z-index:2;
-  transition:color .14s,transform .1s;
+  min-width:24px;min-height:24px;
+  display:flex!important;align-items:center;justify-content:center;
+  transition:color .14s,transform .12s;
   -webkit-tap-highlight-color:transparent;
 }
-.rp-star:hover{color:#f59e0b;transform:scale(1.2);}
+.rp-star:hover{color:rgba(245,158,11,.65);transform:scale(1.18);}
 .rp-star.rp-starred{color:#f59e0b;}
+
+/* ── Fav popup (long-press context menu) ── */
+.rp-fav-popup{
+  position:fixed;z-index:300;pointer-events:auto;
+  animation:rpFavPop .15s cubic-bezier(.22,1,.36,1);
+}
+@keyframes rpFavPop{from{opacity:0;transform:scale(.82) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.rp-fav-popup-inner{
+  background:rgba(8,14,26,.97);
+  border:1px solid rgba(0,212,255,.2);
+  border-radius:13px;
+  padding:9px 12px 11px;
+  display:flex;flex-direction:column;gap:8px;
+  box-shadow:0 12px 40px rgba(0,0,0,.65),0 0 0 1px rgba(0,212,255,.06);
+  min-width:148px;
+}
+.rp-fav-popup-name{
+  font-size:9px;font-weight:700;letter-spacing:.12em;
+  color:rgba(160,185,210,.5);text-transform:uppercase;
+  font-family:Inter,system-ui,-apple-system,sans-serif;
+}
+.rp-fav-popup-btn{
+  background:rgba(245,158,11,.1)!important;
+  border:1px solid rgba(245,158,11,.3)!important;
+  border-radius:8px!important;
+  color:#f59e0b!important;
+  font-size:12.5px!important;font-weight:600!important;
+  padding:9px 12px!important;
+  cursor:pointer;
+  display:flex!important;align-items:center;gap:9px!important;
+  font-family:Inter,system-ui,-apple-system,sans-serif!important;
+  -webkit-tap-highlight-color:transparent;
+  width:100%;
+}
+.rp-fav-popup-btn:hover{background:rgba(245,158,11,.18)!important;border-color:rgba(245,158,11,.45)!important;}
+.rp-fav-popup-btn.is-remove{
+  background:rgba(255,100,100,.07)!important;
+  border-color:rgba(255,120,120,.22)!important;
+  color:rgba(255,145,145,.88)!important;
+}
+.rp-fav-popup-btn.is-remove:hover{background:rgba(255,100,100,.13)!important;}
+.rp-fav-popup-hint{
+  font-size:9px;color:rgba(130,155,185,.38);text-align:center;
+  font-family:Inter,system-ui,-apple-system,sans-serif;
+  letter-spacing:.02em;
+}
 
 /* QUICK ACTIONS section */
 .rp-sec-qa{
@@ -10930,6 +11002,7 @@ window._dvlTemplate={open:open,close:close};
     grid.querySelectorAll('.rp-star[data-rpkey]').forEach(function(s){
       s.addEventListener('click',function(e){e.stopPropagation();toggleFav(s.dataset.rpkey);});
     });
+    if(typeof attachLongPress==='function')attachLongPress();
   }
 
   function toggleFav(key){
@@ -10945,9 +11018,114 @@ window._dvlTemplate={open:open,close:close};
       var k=s.dataset.rpkey;
       var on=favs.indexOf(k)>=0;
       s.classList.toggle('rp-starred',on);
+      s.textContent=on?'★':'☆';
       s.title=on?'Remover favorito':'Favoritar';
     });
   }
+
+  // ── Long-press popup ──────────────────────────────────────────────
+  var _lpTimer=null, _lpKey=null, _popupOpen=false;
+
+  function showFavPopup(key,el){
+    var popup=document.getElementById('rpFavPopup');
+    if(!popup)return;
+    var m=_ITEMS[key];
+    var isFav=getFavs().indexOf(key)>=0;
+    var nameEl=document.getElementById('rpFavPopupName');
+    var btn=document.getElementById('rpFavPopupBtn');
+    var starEl=document.getElementById('rpFavPopupStar');
+    var labelEl=document.getElementById('rpFavPopupLabel');
+    if(nameEl)nameEl.textContent=m?m.label:key;
+    if(starEl)starEl.textContent=isFav?'★':'☆';
+    if(labelEl)labelEl.textContent=isFav?'Remover favorito':'Favoritar';
+    if(btn)btn.classList.toggle('is-remove',isFav);
+    _lpKey=key;_popupOpen=true;
+    popup.style.display='block';
+    // Position after paint so offsetHeight is known
+    requestAnimationFrame(function(){
+      var rect=el.getBoundingClientRect();
+      var pw=popup.offsetWidth||148, ph=popup.offsetHeight||80;
+      var x=Math.max(6,Math.min(window.innerWidth-pw-6,rect.left));
+      var y=rect.top-ph-10;
+      if(y<8)y=rect.bottom+8;
+      popup.style.left=x+'px';
+      popup.style.top=y+'px';
+    });
+  }
+
+  function hideFavPopup(){
+    var popup=document.getElementById('rpFavPopup');
+    if(popup)popup.style.display='none';
+    _popupOpen=false;_lpKey=null;
+  }
+
+  function attachLongPress(){
+    // Main section cards
+    document.querySelectorAll('#rightPanel .rp-item').forEach(function(item){
+      var star=item.querySelector('.rp-star[data-rpkey]');
+      if(!star||item._lpAttached)return;
+      item._lpAttached=true;
+      var key=star.dataset.rpkey;
+      var btn=item.querySelector('.rp-btn');
+      if(!btn)return;
+      var sx,sy;
+      btn.addEventListener('touchstart',function(e){
+        if(e.touches.length!==1)return;
+        sx=e.touches[0].clientX;sy=e.touches[0].clientY;
+        _lpTimer=setTimeout(function(){_lpTimer=null;showFavPopup(key,item);},420);
+      },{passive:true});
+      btn.addEventListener('touchmove',function(e){
+        if(!_lpTimer)return;
+        if(Math.abs(e.touches[0].clientX-sx)>9||Math.abs(e.touches[0].clientY-sy)>9){clearTimeout(_lpTimer);_lpTimer=null;}
+      },{passive:true});
+      function cancelLP(){clearTimeout(_lpTimer);_lpTimer=null;}
+      btn.addEventListener('touchend',cancelLP,{passive:true});
+      btn.addEventListener('touchcancel',cancelLP,{passive:true});
+    });
+    // QA cards (re-attached after each renderQA)
+    document.querySelectorAll('#rpQAGrid .rp-qa-card').forEach(function(card){
+      if(card._lpAttached)return;
+      card._lpAttached=true;
+      var key=card.dataset.qakey;
+      if(!key)return;
+      var sx,sy;
+      card.addEventListener('touchstart',function(e){
+        if(e.touches.length!==1)return;
+        sx=e.touches[0].clientX;sy=e.touches[0].clientY;
+        _lpTimer=setTimeout(function(){_lpTimer=null;showFavPopup(key,card);},420);
+      },{passive:true});
+      card.addEventListener('touchmove',function(e){
+        if(!_lpTimer)return;
+        if(Math.abs(e.touches[0].clientX-sx)>9||Math.abs(e.touches[0].clientY-sy)>9){clearTimeout(_lpTimer);_lpTimer=null;}
+      },{passive:true});
+      function cancelLP(){clearTimeout(_lpTimer);_lpTimer=null;}
+      card.addEventListener('touchend',cancelLP,{passive:true});
+      card.addEventListener('touchcancel',cancelLP,{passive:true});
+    });
+  }
+
+  // Popup button action
+  (function(){
+    var btn=document.getElementById('rpFavPopupBtn');
+    if(btn)btn.addEventListener('click',function(e){
+      e.stopPropagation();
+      if(_lpKey)toggleFav(_lpKey);
+      hideFavPopup();
+    });
+  })();
+
+  // Dismiss popup on outside touch
+  document.addEventListener('touchstart',function(e){
+    if(!_popupOpen)return;
+    var popup=document.getElementById('rpFavPopup');
+    if(popup&&!popup.contains(e.target))hideFavPopup();
+  },{passive:true});
+  document.addEventListener('click',function(e){
+    if(!_popupOpen)return;
+    var popup=document.getElementById('rpFavPopup');
+    if(popup&&!popup.contains(e.target))hideFavPopup();
+  });
+  // ─────────────────────────────────────────────────────────────────
 
   var panel=document.getElementById('rightPanel');
   var scrim=document.getElementById('rpScrim');
@@ -10957,7 +11135,7 @@ window._dvlTemplate={open:open,close:close};
     if(!panel)return;
     panel.classList.add('open');scrim&&scrim.classList.add('open');
     panel.setAttribute('aria-hidden','false');gearBtn&&gearBtn.classList.add('active');
-    renderQA();syncStars();
+    renderQA();syncStars();attachLongPress();
   }
   function close(){
     if(!panel)return;
@@ -11061,7 +11239,7 @@ window._dvlTemplate={open:open,close:close};
 
   document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
   setInterval(syncRpBtns,500);
-  renderQA();syncStars();
+  renderQA();syncStars();attachLongPress();
 })();
 </script>
 
@@ -15505,11 +15683,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.064';
+  window.DVL_APP_VERSION='Beta 0.065';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.064';
+    if(b)b.textContent='Beta 0.065';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -15619,7 +15797,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.064';
+  const VERSION = 'Beta 0.065';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -15629,13 +15807,13 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.064 — DOM overlay buttons for canvas-drawn oscillator gear icons.
+/* Beta 0.065 — DOM overlay buttons for canvas-drawn oscillator gear icons.
    Canvas hit-detection (hitGear) can miss on mobile due to touch coordinate
    precision. These transparent buttons sit exactly over the drawn gears and
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.064';
+  var VERSION='Beta 0.065';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
