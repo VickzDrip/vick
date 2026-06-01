@@ -41,6 +41,15 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.053
+  - Restyled FERRAMENTAS panel buttons to match native platform button language.
+  - Buttons now use DVL tokens: var(--dvl-control-bg) bg, var(--dvl-border) border, 7px radius.
+  - Changed layout from column (icon-top) to horizontal row (icon-left) — matches mini-btn/tf-pill style.
+  - Compact sizing: padding 5px 7px, font-size 9.5px, icon 12px (CSS-controlled via width/height on svg).
+  - Hover/active states use same DVL token palette as rest of platform.
+  - Long/Short use var(--dvl-green)/var(--dvl-red) tokens; Sair uses red-tinted border.
+  - Panel narrowed to min(240px,74vw); body gap 6px; grid gap 3px.
+
 Beta 0.052
   - Redesigned FERRAMENTAS right panel: per-section 2-column grid layout (TRADING, DESENHO, UTILIDADES, TEMA, SAIR).
   - New compact glass button style: rgba(255,255,255,.03) bg, rgba(255,255,255,.07) border, border-radius:12px, column icon+label layout.
@@ -270,7 +279,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.052";
+  const LOCAL_VERSION = "Beta 0.053";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -1838,7 +1847,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.052";
+window.DVL_APP_VERSION = "Beta 0.053";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2486,11 +2495,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.052</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.053</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.052</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.053</span>
       </div>
 
       <div class="tb-right-btns">
@@ -8142,9 +8151,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.052'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.053'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.052';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.053';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8183,7 +8192,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.052';
+  const VERSION='Beta 0.053';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8485,7 +8494,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.052';
+  const VERSION='Beta 0.053';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9600,120 +9609,114 @@ input[type=color]::-moz-color-swatch{border:none!important;border-radius:2px!imp
 }
 .rp-scrim.open{opacity:1;pointer-events:auto;}
 
-/* ── Right Panel ── */
+/* ── Right Panel container ── */
 .right-panel{
   position:fixed;
   top:0;right:0;bottom:0;
-  width:min(260px,78vw);
-  background:rgba(6,9,15,.97)!important;
-  border-left:1px solid rgba(255,255,255,.06);
-  backdrop-filter:blur(18px)!important;
-  -webkit-backdrop-filter:blur(18px)!important;
+  width:min(240px,74vw);
+  background:var(--dvl-panel-bg)!important;
+  border-left:1px solid var(--dvl-border)!important;
+  backdrop-filter:blur(16px)!important;
+  -webkit-backdrop-filter:blur(16px)!important;
   z-index:100;
   display:flex;flex-direction:column;
   transform:translateX(100%);
   transition:transform .26s cubic-bezier(.4,0,.2,1);
-  box-shadow:-20px 0 60px rgba(0,0,0,.4)!important;
+  box-shadow:-14px 0 42px rgba(0,0,0,.38)!important;
 }
 .right-panel.open{transform:translateX(0);}
 
 /* header */
 .rp-hdr{
   display:flex;align-items:center;justify-content:space-between;
-  padding:13px 12px 12px;
-  border-bottom:1px solid rgba(255,255,255,.06);
+  padding:10px 10px 9px;
+  border-bottom:1px solid var(--dvl-border)!important;
   flex-shrink:0;
 }
 .rp-hdr-title{
-  font-size:8px;letter-spacing:3.5px;color:#00d4ff;font-weight:700;opacity:.9;
+  font-size:7.5px;letter-spacing:3px;color:var(--dvl-cyan);font-weight:700;opacity:.85;
   font-family:'Courier New',monospace;
 }
 .rp-hdr-x{
-  width:26px;height:26px;border-radius:7px;
-  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
-  color:rgba(150,170,210,.7);cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  font-size:15px;line-height:1;padding:0;
-  transition:all .15s;
+  width:22px;height:22px;border-radius:6px!important;padding:0!important;
+  display:flex!important;align-items:center;justify-content:center;
+  font-size:14px;line-height:1;
 }
-.rp-hdr-x:hover{border-color:rgba(255,61,87,.4);color:#ff3d57;background:rgba(255,61,87,.06);}
 
-/* body */
+/* scrollable body */
 .rp-body{
   flex:1;overflow-y:auto;
-  padding:12px 10px 16px;
+  padding:8px 8px 12px;
   scrollbar-width:thin;
-  display:flex;flex-direction:column;gap:4px;
+  display:flex;flex-direction:column;gap:6px;
 }
 .rp-body::-webkit-scrollbar{width:2px;}
-.rp-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:4px;}
+.rp-body::-webkit-scrollbar-thumb{background:var(--dvl-border-strong);border-radius:4px;}
 
-/* section */
-.rp-sec{display:flex;flex-direction:column;gap:5px;}
+/* section block */
+.rp-sec{display:flex;flex-direction:column;gap:3px;}
 .rp-sl{
-  font-size:8px;letter-spacing:2.5px;color:rgba(100,126,168,.65);
+  font-size:7px;letter-spacing:2px;color:var(--dvl-dim);
   font-weight:600;text-transform:uppercase;
   font-family:'Courier New',monospace;
-  padding:0 2px 2px;
+  padding:0 2px 1px;opacity:.8;
 }
-.rp-div{height:1px;background:rgba(255,255,255,.05);margin:4px 0;}
+.rp-div{height:1px;background:var(--dvl-border);margin:0;}
 
-/* 2-col grid */
-.rp-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+/* 2-column grid */
+.rp-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;}
 
-/* base button — compact glass */
+/* ── base button — compact horizontal, native platform style ── */
 .rp-btn{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:5px;padding:10px 6px 9px;
-  background:rgba(255,255,255,.03);
-  border:1px solid rgba(255,255,255,.07);
-  border-radius:12px;
-  color:rgba(140,165,210,.8);
-  font-size:10px;font-family:'Courier New',monospace;
-  cursor:pointer;text-align:center;width:100%;
-  transition:background .15s,border-color .15s,color .15s;
-  line-height:1.2;
+  display:flex!important;flex-direction:row!important;
+  align-items:center!important;justify-content:flex-start!important;
+  gap:5px!important;padding:5px 7px!important;
+  background:var(--dvl-control-bg)!important;
+  border:1px solid var(--dvl-border)!important;
+  border-radius:7px!important;
+  color:var(--dvl-muted)!important;
+  font-size:9.5px!important;font-family:'Courier New',monospace!important;
+  cursor:pointer;text-align:left;width:100%;
+  transition:background .12s,border-color .12s,color .12s;
+  line-height:1!important;white-space:nowrap;
 }
 .rp-btn:hover{
-  background:rgba(0,212,255,.07);
-  border-color:rgba(0,212,255,.22);
-  color:#c8d8f0;
+  background:var(--dvl-control-hover)!important;
+  border-color:var(--dvl-border-strong)!important;
+  color:var(--dvl-text)!important;
 }
-.rp-btn svg{flex-shrink:0;opacity:.6;transition:opacity .15s;}
-.rp-btn:hover svg{opacity:.95;}
+.rp-btn svg{flex-shrink:0;opacity:.45;transition:opacity .12s;width:12px!important;height:12px!important;}
+.rp-btn:hover svg{opacity:.8;}
 .rp-btn.active{
-  background:rgba(0,212,255,.1)!important;
-  border-color:rgba(0,212,255,.38)!important;
-  color:#00d4ff!important;
+  background:var(--dvl-accent-soft)!important;
+  border-color:var(--dvl-border-active)!important;
+  color:var(--dvl-cyan)!important;
 }
 .rp-btn.active svg{opacity:1!important;}
 
 /* disabled */
-.rp-dis{opacity:.25!important;pointer-events:none!important;cursor:default!important;}
+.rp-dis{opacity:.28!important;pointer-events:none!important;cursor:default!important;}
 
 /* long */
-.rp-long-btn{color:#00e676!important;border-color:rgba(0,230,118,.1)!important;}
-.rp-long-btn:hover{background:rgba(0,230,118,.08)!important;border-color:rgba(0,230,118,.28)!important;}
-.rp-long-btn.active{background:rgba(0,230,118,.12)!important;border-color:rgba(0,230,118,.45)!important;}
+.rp-long-btn{color:var(--dvl-green)!important;}
+.rp-long-btn:hover{background:rgba(0,230,118,.06)!important;border-color:rgba(0,230,118,.22)!important;}
+.rp-long-btn.active{background:rgba(0,230,118,.1)!important;border-color:rgba(0,230,118,.38)!important;}
 
 /* short */
-.rp-short-btn{color:#ff4d6a!important;border-color:rgba(255,61,87,.1)!important;}
-.rp-short-btn:hover{background:rgba(255,61,87,.08)!important;border-color:rgba(255,61,87,.28)!important;}
-.rp-short-btn.active{background:rgba(255,61,87,.12)!important;border-color:rgba(255,61,87,.45)!important;}
+.rp-short-btn{color:var(--dvl-red)!important;}
+.rp-short-btn:hover{background:rgba(255,61,87,.06)!important;border-color:rgba(255,61,87,.22)!important;}
+.rp-short-btn.active{background:rgba(255,61,87,.1)!important;border-color:rgba(255,61,87,.38)!important;}
 
-/* exit — full-width row layout */
+/* exit — centered, full width */
 .rp-exit-btn{
-  flex-direction:row!important;gap:8px!important;
-  padding:11px 12px!important;justify-content:center!important;
-  width:100%!important;border-radius:12px!important;
-  color:#ff6b7a!important;
-  border-color:rgba(255,61,87,.22)!important;
-  background:rgba(255,61,87,.04)!important;
+  justify-content:center!important;
+  color:var(--dvl-red)!important;
+  border-color:rgba(255,61,87,.2)!important;
 }
 .rp-exit-btn:hover{
-  background:rgba(255,61,87,.1)!important;
-  border-color:rgba(255,61,87,.48)!important;
-  color:#ff3d57!important;
+  background:rgba(255,61,87,.07)!important;
+  border-color:rgba(255,61,87,.4)!important;
+  color:#ff4d6a!important;
 }
 </style>
 <style>
@@ -14743,11 +14746,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.052';
+  window.DVL_APP_VERSION='Beta 0.053';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.052';
+    if(b)b.textContent='Beta 0.053';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -14771,7 +14774,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.052';
+  const VERSION = 'Beta 0.053';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
