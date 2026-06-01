@@ -41,6 +41,16 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.050
+  - Native oscillator panel integration: oscillator wheel zoom routed in main wrap handler.
+  - Added oscPanelAtY(), oscScaleHit(), oscEnsureScale(), oscSaveScale() helper functions.
+  - Oscillator right-scale drag zooms oscillator range (cursor ns-resize, same as price scale).
+  - Oscillator scale drag pans oscillator center relative to panel height.
+  - Double-click on any oscillator area or its right scale resets that oscillator only.
+  - Mousemove cursor shows ns-resize over oscillator right scale area.
+  - Neutralized DVL_BETA_0043_SEPARATED_OSC_SCROLL: window-level wheel capture removed.
+  - dblclick oscillator reset moved from window capture into native wrap dblclick handler.
+
 Beta 0.049
   - Updated global UI palette to premium black navy (less saturated blue).
   - New tokens: --dvl-panel-bg #070b12, --dvl-card-bg #090f18, --dvl-control-bg #0b111c.
@@ -242,7 +252,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.049";
+  const LOCAL_VERSION = "Beta 0.050";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -1810,7 +1820,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.049";
+window.DVL_APP_VERSION = "Beta 0.050";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2444,11 +2454,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.049</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.050</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.049</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.050</span>
       </div>
 
       <div class="tb-right-btns">
@@ -5902,16 +5912,22 @@ function drawDeltaPane(){
 function bestBid(){return S.depth.bids[0]?.p||S.candles.at(-1)?.c||0}function bestAsk(){return S.depth.asks[0]?.p||S.candles.at(-1)?.c||0}function updateBookStats(){const b=bestBid(),a=bestAsk();el('bestBid').textContent=priceFmt(b);el('bestAsk').textContent=priceFmt(a);el('spread').textContent=priceFmt(a-b);el('bookN').textContent=(S.depth.bids.length+S.depth.asks.length)}function updateTradeN(){el('tradeN').textContent=S.trades.length}
 function updateUI(V,sc){const last=S.candles.at(-1);el('pNow').textContent=priceFmt(last.c);const disp=S._crossIdx!=null?(S.candles[S._crossIdx]||last):last;el('oO').textContent=priceFmt(disp.o);el('oH').textContent=priceFmt(disp.h);el('oL').textContent=priceFmt(disp.l);el('oC').textContent=priceFmt(disp.c);el('oV').textContent=fmtN(disp.v);el('oD').textContent=(disp.delta>=0?'+':'')+fmtN(disp.delta);el('oD').className='v '+(disp.delta>=0?'up':'dn');el('bSym').textContent=S.sym;el('bTf').textContent=S.tf;el('bBars').textContent=S.candles.length;el('bTime').textContent=new Date().toLocaleTimeString('pt-PT');updateBookStats();updateTradeN();el('hud').innerHTML='zoom: <b>'+V.n+' velas</b><br>preço: <b>'+priceFmt(sc.lo)+' - '+priceFmt(sc.hi)+'</b><br>modo: <b>'+(S.view.auto?'preço atual':'pan livre')+'</b><br>futuro: <b>'+Math.max(0,Math.round(S.view.end-S.candles.length))+' barras</b><br>escala Y: <b>'+((S.yScale.zoom||1).toFixed(2))+'x</b>'}
 function priceScaleHit(x,y,W,H){const right=W-RP();return x>=right&&x<=Math.min(W,right+PR)&&y>=PT&&y<=H-PB}
+// ── Beta 0.050 — Native oscillator panel helpers ───────────────────────────
+function oscPanelHeights(){const clarH=(window.S&&S.inds&&S.inds.hvnClarity&&S.candles&&S.candles.length)?_hvnClarityH:0;const flowH=(window.S&&S.inds&&S.inds.flowAccel&&S.candles&&S.candles.length)?_flowAccelH:0;return{clarH,flowH};}
+function oscScaleHit(x,y,W,H){const right=W-RP();if(x<right||x>Math.min(W,right+PR))return null;const{clarH,flowH}=oscPanelHeights();if(clarH>0){const ct=H-10-clarH,cb=H-10;if(y>=ct&&y<=cb)return 'trendClarity';}if(flowH>0){const clarOff=clarH>0?clarH+PANEL_GAP:0;const fb=H-10-clarOff,ft=fb-flowH;if(y>=ft&&y<=fb)return 'flow';}return null;}
+function oscPanelAtY(y,H){const{clarH,flowH}=oscPanelHeights();if(clarH>0){const ct=H-10-clarH,cb=H-10;if(y>=ct&&y<=cb)return 'trendClarity';}if(flowH>0){const clarOff=clarH>0?clarH+PANEL_GAP:0;const fb=H-10-clarOff,ft=fb-flowH;if(y>=ft&&y<=fb)return 'flow';}return null;}
+function oscEnsureScale(kind){if(!S.oscScale)S.oscScale={flow:{center:0,range:200},trendClarity:{center:0,range:200}};if(!S.oscScale[kind])S.oscScale[kind]={center:0,range:200};const o=S.oscScale[kind];o.center=Number.isFinite(+o.center)?+o.center:0;o.range=Math.max(Number.isFinite(+o.range)?+o.range:200,1e-9);return o;}
+function oscSaveScale(kind){try{const o=S.oscScale&&S.oscScale[kind];if(o)localStorage.setItem('dvl_osc_scale_'+kind,JSON.stringify({center:o.center,range:o.range}));}catch(_){}}
 function zoom(f,center){const max=futureMax();if(!S.candles.length)return;const span=Math.max(.000001,S.view.end-S.view.start),minSpan=.02;const ns=clamp(span*f,minSpan,Math.max(max,span*12));const rel=clamp(center??.72,0,1);const anchor=S.view.start+span*rel;let start=anchor-ns*rel;start=clamp(start,-Math.max(1000,ns),Math.max(0,max-ns));S.view.start=start;S.view.end=start+ns;S.view.auto=false;draw()}
 function fitLive(){const span=S.view.end-S.view.start||180;S.view.end=S.candles.length+Math.min(90,Math.max(28,span*.25));S.view.start=Math.max(0,S.view.end-span);S.view.auto=true;_dvlResetAutoYScale();draw()}function fitAll(){S.view.start=0;S.view.end=S.candles.length;S.view.auto=false;draw()}function fitClose(){const n=24;S.view.end=S.candles.length+3;S.view.start=Math.max(0,S.view.end-n);S.view.auto=false;draw()}
 const chart=el('chart'),wrap=el('chartWrap');
-wrap.addEventListener('wheel',e=>{if(e.target?.closest?.('#dvlDrawSettingsPanel,.input-modal,#dvlTextPopup,#dvlDrawCtxBar'))return;e.preventDefault();const r=wrap.getBoundingClientRect();if(e.ctrlKey||priceScaleHit(e.clientX-r.left,e.clientY-r.top,r.width,r.height)){_dvlZoomManualY(e.deltaY);drawSoon();return;}const rel=clamp((e.clientX-r.left-PL)/CW(r.width),0,1);const factor=Math.exp(e.deltaY*0.00072);zoom(factor,rel)},{passive:false});
+wrap.addEventListener('wheel',e=>{if(e.target?.closest?.('#dvlDrawSettingsPanel,.input-modal,#dvlTextPopup,#dvlDrawCtxBar'))return;e.preventDefault();const r=wrap.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;if(e.ctrlKey||priceScaleHit(x,y,r.width,r.height)){_dvlZoomManualY(e.deltaY);drawSoon();return;}const kind=oscPanelAtY(y,r.height);if(kind){const o=oscEnsureScale(kind);o.range=Math.max(1e-9,Math.min(1e15,o.range*Math.exp(e.deltaY*0.0028)));oscSaveScale(kind);drawSoon();return;}const rel=clamp((x-PL)/CW(r.width),0,1);const factor=Math.exp(e.deltaY*0.00072);zoom(factor,rel)},{passive:false});
 el('volumePaneWrap')?.addEventListener('wheel',e=>{e.preventDefault();const factor=Math.exp(e.deltaY*0.0012);S.yVolScale={zoom:clamp((S.yVolScale?.zoom||1)*factor,0.05,20)};drawSoon();},{passive:false});
 wrap.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button===0)try{wrap.setPointerCapture(e.pointerId)}catch(_){}});
 wrap.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'){const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(window._dvlFlowEyeHit){const _b=window._dvlFlowEyeHit;if(x>=_b.x1&&x<=_b.x2&&y>=_b.y1&&y<=_b.y2){window._dvlFlowTitleHidden=!window._dvlFlowTitleHidden;try{localStorage.setItem('dvl_flowTitleHidden',window._dvlFlowTitleHidden?'1':'');}catch(_){}draw();return;}}if(window._dvlClarEyeHit){const _b=window._dvlClarEyeHit;if(x>=_b.x1&&x<=_b.x2&&y>=_b.y1&&y<=_b.y2){window._dvlClarTitleHidden=!window._dvlClarTitleHidden;try{localStorage.setItem('dvl_clarTitleHidden',window._dvlClarTitleHidden?'1':'');}catch(_){}draw();return;}}}},{capture:true});
-wrap.addEventListener('mousedown',e=>{if(e.target?.closest?.('#dvlDrawSettingsPanel,.input-modal,#dvlTextPopup,#dvlDrawCtxBar'))return;if(S.drawingToolActive||S.selectedDrawing)return;const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;S.mouse.startX=e.clientX;S.mouse.startY=e.clientY;S.mouse.axis=null;if(window._dvlFlowEyeHit){const _b=window._dvlFlowEyeHit;if(x>=_b.x1&&x<=_b.x2&&y>=_b.y1&&y<=_b.y2){window._dvlFlowTitleHidden=!window._dvlFlowTitleHidden;try{localStorage.setItem('dvl_flowTitleHidden',window._dvlFlowTitleHidden?'1':'');}catch(_){}draw();return;}}if(window._dvlClarEyeHit){const _b=window._dvlClarEyeHit;if(x>=_b.x1&&x<=_b.x2&&y>=_b.y1&&y<=_b.y2){window._dvlClarTitleHidden=!window._dvlClarTitleHidden;try{localStorage.setItem('dvl_clarTitleHidden',window._dvlClarTitleHidden?'1':'');}catch(_){}draw();return;}}if(window._dvlAutoResetBtn){const _b=window._dvlAutoResetBtn;if(x>=_b.x&&x<=_b.x+_b.w&&y>=_b.y&&y<=_b.y+_b.h){S.yScale.zoom=1;S.yScale.offset=0;draw();return;}}const V=visible(),sc=scale(V.cs,r.height);if((S.tool==='long'||S.tool==='short')&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){if(!S._posDraft){S._posDraft={type:S.tool};draw();}else{addPosition(S._posDraft.type,x,y,r.width,r.height,sc);S._posDraft=null;}return}if(bookResizeHit(x,y)){S.book.resize=true;wrap.style.cursor='ew-resize';draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}S.dragPos={...hit,lastX:e.clientX,lastY:e.clientY};wrap.style.cursor='move';return}if(priceScaleHit(x,y,r.width,r.height)){S.yScale.drag=true;S.yScale.lastY=e.clientY;wrap.style.cursor='ns-resize';draw();return}if(S.tool==='ruler'||S._rulerNew||S._posDraft)return;S.mouse.down=true;S.mouse.lastX=e.clientX;S.mouse.lastY=e.clientY});
-window.addEventListener('mouseup',()=>{S.mouse.down=false;S.dragPos=null;if(S.yScale.drag){S.yScale.drag=false;wrap.style.cursor='ns-resize';draw();return}if(S.book.resize){S.book.resize=false;wrap.style.cursor='ew-resize';draw()}else{wrap.style.cursor='crosshair'}});
-window.addEventListener('mousemove',e=>{if(e.target?.closest?.('#dvlDrawSettingsPanel,.input-modal,#dvlTextPopup,#dvlDrawCtxBar'))return;if(S.drawingToolActive||S.selectedDrawing)return;const r=wrap.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;if(S.yScale.drag){const dy=e.clientY-S.yScale.lastY;_dvlZoomManualY(dy);S.yScale.lastY=e.clientY;drawSoon();return}if(S.book.resize){resizeBookFromX(x,r.width);return}const overScale=priceScaleHit(x,y,r.width,r.height);wrap.style.cursor=bookResizeHit(x,y)?'ew-resize':overScale?'ns-resize':S.mouse.down?'grabbing':'crosshair';if(S.dragPos){dragPosition(e,r);return}if(S.mouse.down){if(!S.mouse.axis){const _adx=Math.abs(e.clientX-S.mouse.startX),_ady=Math.abs(e.clientY-S.mouse.startY);if(_adx>5||_ady>5)S.mouse.axis=_ady>_adx*1.2?'v':'h';}if(S.mouse.axis==='v'){const dy=e.clientY-S.mouse.lastY;if(dy){_dvlPanManualY(dy,r.height-PT-PB);}S.mouse.lastY=e.clientY;drawSoon();return;}const span=S.view.end-S.view.start,dx=e.clientX-S.mouse.lastX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;S.mouse.lastX=e.clientX;S.view.auto=false;_panDx+=dx;const cc=el('chart');if(cc)cc.style.transform=`translateX(${_panDx}px)`;drawSoon();return}el('tip').style.display='none';if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-10){S._cross={cx:x,cy:y};drawSoon();}else if(x<PL||x>r.width-RP()||y<PT||y>r.height-10){S._cross=null;S._crossIdx=null;}});
+wrap.addEventListener('mousedown',e=>{if(e.target?.closest?.('#dvlDrawSettingsPanel,.input-modal,#dvlTextPopup,#dvlDrawCtxBar'))return;if(S.drawingToolActive||S.selectedDrawing)return;const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;S.mouse.startX=e.clientX;S.mouse.startY=e.clientY;S.mouse.axis=null;if(window._dvlFlowEyeHit){const _b=window._dvlFlowEyeHit;if(x>=_b.x1&&x<=_b.x2&&y>=_b.y1&&y<=_b.y2){window._dvlFlowTitleHidden=!window._dvlFlowTitleHidden;try{localStorage.setItem('dvl_flowTitleHidden',window._dvlFlowTitleHidden?'1':'');}catch(_){}draw();return;}}if(window._dvlClarEyeHit){const _b=window._dvlClarEyeHit;if(x>=_b.x1&&x<=_b.x2&&y>=_b.y1&&y<=_b.y2){window._dvlClarTitleHidden=!window._dvlClarTitleHidden;try{localStorage.setItem('dvl_clarTitleHidden',window._dvlClarTitleHidden?'1':'');}catch(_){}draw();return;}}if(window._dvlAutoResetBtn){const _b=window._dvlAutoResetBtn;if(x>=_b.x&&x<=_b.x+_b.w&&y>=_b.y&&y<=_b.y+_b.h){S.yScale.zoom=1;S.yScale.offset=0;draw();return;}}const V=visible(),sc=scale(V.cs,r.height);if((S.tool==='long'||S.tool==='short')&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){if(!S._posDraft){S._posDraft={type:S.tool};draw();}else{addPosition(S._posDraft.type,x,y,r.width,r.height,sc);S._posDraft=null;}return}if(bookResizeHit(x,y)){S.book.resize=true;wrap.style.cursor='ew-resize';draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}S.dragPos={...hit,lastX:e.clientX,lastY:e.clientY};wrap.style.cursor='move';return}const _okind=oscScaleHit(x,y,r.width,r.height);if(_okind){S.oscDrag={kind:_okind,lastY:e.clientY};wrap.style.cursor='ns-resize';return;}if(priceScaleHit(x,y,r.width,r.height)){S.yScale.drag=true;S.yScale.lastY=e.clientY;wrap.style.cursor='ns-resize';draw();return}if(S.tool==='ruler'||S._rulerNew||S._posDraft)return;S.mouse.down=true;S.mouse.lastX=e.clientX;S.mouse.lastY=e.clientY});
+window.addEventListener('mouseup',()=>{S.mouse.down=false;S.dragPos=null;if(S.oscDrag){S.oscDrag=null;wrap.style.cursor='crosshair';return;}if(S.yScale.drag){S.yScale.drag=false;wrap.style.cursor='ns-resize';draw();return}if(S.book.resize){S.book.resize=false;wrap.style.cursor='ew-resize';draw()}else{wrap.style.cursor='crosshair'}});
+window.addEventListener('mousemove',e=>{if(e.target?.closest?.('#dvlDrawSettingsPanel,.input-modal,#dvlTextPopup,#dvlDrawCtxBar'))return;if(S.drawingToolActive||S.selectedDrawing)return;const r=wrap.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;if(S.yScale.drag){const dy=e.clientY-S.yScale.lastY;_dvlZoomManualY(dy);S.yScale.lastY=e.clientY;drawSoon();return}if(S.oscDrag){const dy=e.clientY-S.oscDrag.lastY;const o=oscEnsureScale(S.oscDrag.kind);const ph=S.oscDrag.kind==='flow'?(_flowAccelH||120):(_hvnClarityH||166);o.center-=dy*(o.range/ph);S.oscDrag.lastY=e.clientY;oscSaveScale(S.oscDrag.kind);drawSoon();return;}if(S.book.resize){resizeBookFromX(x,r.width);return}const overScale=priceScaleHit(x,y,r.width,r.height)||!!oscScaleHit(x,y,r.width,r.height);wrap.style.cursor=bookResizeHit(x,y)?'ew-resize':overScale?'ns-resize':S.mouse.down?'grabbing':'crosshair';if(S.dragPos){dragPosition(e,r);return}if(S.mouse.down){if(!S.mouse.axis){const _adx=Math.abs(e.clientX-S.mouse.startX),_ady=Math.abs(e.clientY-S.mouse.startY);if(_adx>5||_ady>5)S.mouse.axis=_ady>_adx*1.2?'v':'h';}if(S.mouse.axis==='v'){const dy=e.clientY-S.mouse.lastY;if(dy){_dvlPanManualY(dy,r.height-PT-PB);}S.mouse.lastY=e.clientY;drawSoon();return;}const span=S.view.end-S.view.start,dx=e.clientX-S.mouse.lastX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;S.mouse.lastX=e.clientX;S.view.auto=false;_panDx+=dx;const cc=el('chart');if(cc)cc.style.transform=`translateX(${_panDx}px)`;drawSoon();return}el('tip').style.display='none';if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-10){S._cross={cx:x,cy:y};drawSoon();}else if(x<PL||x>r.width-RP()||y<PT||y>r.height-10){S._cross=null;S._crossIdx=null;}});
 wrap.addEventListener('mouseleave',()=>{S.mouse.down=false;S.book.resize=false;S.yScale.drag=false;wrap.style.cursor='default';el('tip').style.display='none';S._cross=null;S._crossIdx=null;draw()});
 
 function showTip(x,y,r){const V=visible();if(x<PL||x>r.width-RP())return el('tip').style.display='none';const idx=clamp(Math.floor(S.view.start+(x-PL)/CW(r.width)*V.span),0,S.candles.length-1),c=S.candles[idx],d=new Date(c.t);el('tip').innerHTML='<div class="tt">'+d.toLocaleString('pt-PT')+'</div><div>O '+priceFmt(c.o)+' H <span class="up">'+priceFmt(c.h)+'</span></div><div>L <span class="dn">'+priceFmt(c.l)+'</span> C '+priceFmt(c.c)+'</div><div>Vol '+fmtN(c.v)+' · Delta <span class="'+(c.delta>=0?'up':'dn')+'">'+(c.delta>=0?'+':'')+fmtN(c.delta)+'</span></div><div>Buy '+fmtN(c.buy)+' · Sell '+fmtN(c.sell)+'</div>';el('tip').style.display='block';el('tip').style.left=Math.min(x+14,r.width-200)+'px';el('tip').style.top=Math.max(10,y-20)+'px'}
@@ -6082,7 +6098,7 @@ wrap.addEventListener('touchend',e=>{if(touchState._lpt){clearTimeout(touchState
 wrap.addEventListener('click',e=>{if(!S._cross)return;if(touchState._justActivated){touchState._justActivated=false;return;}if(S.tool==='ruler'||S._rulerNew)return;if(S._posDraft)return;const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){S._cross=null;S._crossIdx=null;drawSoon();}},{passive:true});
 
 let lastTapTime=0;
-wrap.addEventListener('dblclick',e=>{const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(bookHit(x,y))return;if(priceScaleHit(x,y,r.width,r.height)){_dvlResetAutoYScale();draw();return}const rel=clamp((x-PL)/CW(r.width),0,1);zoom(.78,rel)});
+wrap.addEventListener('dblclick',e=>{const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(bookHit(x,y))return;const _dkind=oscPanelAtY(y,r.height)||oscScaleHit(x,y,r.width,r.height);if(_dkind){const o=oscEnsureScale(_dkind);o.center=0;o.range=200;oscSaveScale(_dkind);draw();return;}if(priceScaleHit(x,y,r.width,r.height)){_dvlResetAutoYScale();draw();return}const rel=clamp((x-PL)/CW(r.width),0,1);zoom(.78,rel)});
 wrap.addEventListener('touchend',e=>{const now=Date.now();if(touchState.mode==='pan'&&now-lastTapTime<280){const r=wrap.getBoundingClientRect();const t=e.changedTouches&&e.changedTouches[0];if(t){const x=t.clientX-r.left,y=t.clientY-r.top;if(!bookHit(x,y)){const rel=clamp((x-PL)/CW(r.width),0,1);zoom(.78,rel)}}}lastTapTime=now;},{passive:true});
 
 
@@ -8094,9 +8110,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.049'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.050'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.049';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.050';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8134,7 +8150,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.049';
+  const VERSION='Beta 0.050';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8436,7 +8452,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.049';
+  const VERSION='Beta 0.050';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -14713,11 +14729,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.049';
+  window.DVL_APP_VERSION='Beta 0.050';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.049';
+    if(b)b.textContent='Beta 0.050';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -14737,99 +14753,15 @@ body:before{display:none!important;background:none!important;}
 
 
 <script id="DVL_BETA_0043_SEPARATED_OSC_SCROLL">
+/* NEUTRALIZED in Beta 0.050 — oscillator wheel zoom, dblclick reset, and scale drag
+   are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
+   wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  'use strict';
-  const VERSION = 'Beta 0.049';
+  const VERSION = 'Beta 0.050';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
-  function byId(id){ return document.getElementById(id); }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', syncVersion); else syncVersion();
-
-  function getOscPanelKind(y, H){
-    try{
-      const hasFlow = !!(window.S && S.inds && S.inds.flowAccel && S.candles && S.candles.length);
-      const hasClar = !!(window.S && S.inds && S.inds.hvnClarity && S.candles && S.candles.length);
-      const flowH = hasFlow ? (typeof _flowAccelH === 'number' ? _flowAccelH : 120) : 0;
-      const clarH = hasClar ? (typeof _hvnClarityH === 'number' ? _hvnClarityH : 166) : 0;
-      const gap = (typeof PANEL_GAP === 'number') ? PANEL_GAP : 0;
-      const bottomPad = 10;
-      if(clarH > 0){
-        const top = H - bottomPad - clarH;
-        const bot = H - bottomPad;
-        if(y >= top && y <= bot) return 'trendClarity';
-      }
-      if(flowH > 0){
-        const clarOffset = clarH > 0 ? clarH + gap : 0;
-        const bot = H - bottomPad - clarOffset;
-        const top = bot - flowH;
-        if(y >= top && y <= bot) return 'flow';
-      }
-    }catch(_){ }
-    return null;
-  }
-
-  function ensureScale(kind){
-    if(!window.S) return null;
-    if(!S.oscScale) S.oscScale = { flow:{center:0,range:200}, trendClarity:{center:0,range:200} };
-    if(!S.oscScale[kind]) S.oscScale[kind] = { center:0, range:200 };
-    const o = S.oscScale[kind];
-    o.center = Number.isFinite(+o.center) ? +o.center : 0;
-    o.range = Math.max(Number.isFinite(+o.range) ? +o.range : 200, 1e-9);
-    return o;
-  }
-
-  function saveScale(kind){
-    try{
-      const o = ensureScale(kind);
-      if(o) localStorage.setItem('dvl_osc_scale_' + kind, JSON.stringify({ center:o.center, range:o.range }));
-    }catch(_){ }
-  }
-
-  function redraw(){
-    try{ if(typeof drawSoon === 'function') drawSoon(); else if(typeof draw === 'function') draw(); }catch(_){ }
-  }
-
-  function zoomOscillator(kind, deltaY, clientY, rect){
-    const o = ensureScale(kind);
-    if(!o) return;
-    // Wheel down = flatter/compressed. Wheel up = expanded. Only this oscillator changes.
-    const factor = Math.exp((+deltaY || 0) * 0.0028);
-    o.range = Math.max(1e-9, Math.min(1e15, o.range * factor));
-    saveScale(kind);
-    redraw();
-  }
-
-  function wheelCapture(e){
-    const wrap = byId('chartWrap');
-    if(!wrap || !wrap.contains(e.target)) return;
-    const rect = wrap.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const kind = getOscPanelKind(y, rect.height);
-    if(!kind) return; // main chart keeps its own scroll/zoom behavior.
-
-    e.preventDefault();
-    e.stopPropagation();
-    if(e.stopImmediatePropagation) e.stopImmediatePropagation();
-    zoomOscillator(kind, e.deltaY, e.clientY, rect);
-  }
-
-  // Capture on window so chart wheel handlers never receive oscillator wheel events.
-  window.addEventListener('wheel', wheelCapture, { capture:true, passive:false });
-
-  // Double click / double tap on oscillator resets only that oscillator, not the price chart.
-  window.addEventListener('dblclick', function(e){
-    const wrap = byId('chartWrap');
-    if(!wrap || !wrap.contains(e.target)) return;
-    const rect = wrap.getBoundingClientRect();
-    const kind = getOscPanelKind(e.clientY - rect.top, rect.height);
-    if(!kind) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if(e.stopImmediatePropagation) e.stopImmediatePropagation();
-    const o = ensureScale(kind);
-    if(o){ o.center = 0; o.range = 200; saveScale(kind); redraw(); }
-  }, { capture:true, passive:false });
 })();
 </script>
