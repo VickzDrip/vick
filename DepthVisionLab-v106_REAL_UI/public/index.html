@@ -41,6 +41,18 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.056
+  - Mobile config panels unified as right-side drawer (not full-screen modal).
+  - Drawer: width min(285px,72vw), top-to-bottom, 18px left-radius, slide-in animation.
+  - Layout: compact 2-column grid (label|control) instead of 1-column stacked.
+  - Number inputs: 58×28px; color inputs: 34×24px; selects: 28px height — all compact.
+  - Font: Inter/system-ui for labels (replaces monospace); 11px labels, clean weights.
+  - Added APLICAR footer button (cyan, full-width) to all mobile config drawers.
+  - APLICAR: closes drawer + triggers drawSoon() redraw.
+  - Scrim remains full-screen; tapping chart area closes drawer.
+  - @keyframes dvl-drawer-in: 105%→0 slide animation on .show class.
+  - .input-modal-foot hidden on desktop, shown on mobile.
+
 Beta 0.055
   - Premium FERRAMENTAS panel redesign: Inter font, gradient card backgrounds, refined spacing.
   - Button: Inter/system-ui font, 13px/500w, rgba(230,238,248,.82), no letter-spacing on labels.
@@ -299,7 +311,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.055";
+  const LOCAL_VERSION = "Beta 0.056";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -453,17 +465,140 @@ Beta 0.001
 /* V31 indicator settings panels */
 .ind-card{border:1px solid #1e2a40;border-radius:6px;background:rgba(6,8,15,.55);margin:7px 0;overflow:hidden}.ind-head{display:flex;align-items:center;gap:8px;padding:8px 8px}.ind-head .row{flex:1;padding:0}.gear{width:30px;height:26px;display:flex;align-items:center;justify-content:center;border:1px solid #1e2a40;border-radius:4px;color:#6a7fa0;background:rgba(8,12,24,.75);cursor:pointer;font-size:14px}.gear:hover,.gear.open{border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,.08)}.ind-settings{display:none;border-top:1px solid #101b2d;padding:8px;background:rgba(2,5,12,.45)}.ind-card.open .ind-settings{display:block}.ind-settings .kv{align-items:center;gap:8px}.ind-settings .k{font-size:10px}.settings-actions{display:flex;gap:6px;margin-top:8px}.settings-actions .btn{flex:1}.tiny-select{min-width:112px}.colorbox{width:70px;height:28px;background:#06080f;border:1px solid #1e2a40;border-radius:3px;padding:2px}.hint{font-size:8.5px;color:#6a7fa0;line-height:1.35;margin-top:6px;opacity:.85}
 .input-modal-scrim{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:12000;display:none}.input-modal-scrim.show{display:block}.input-modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(420px,calc(100vw - 28px));max-height:min(78vh,680px);z-index:12001;display:none;border:1px solid #1e2a40;border-radius:14px;background:rgba(5,9,20,.98);box-shadow:0 18px 60px rgba(0,0,0,.55);overflow:hidden}.input-modal.show{display:block}.input-modal-head{height:46px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 12px;border-bottom:1px solid #101b2d;background:rgba(8,12,24,.96)}.input-modal-title{font-size:13px;font-weight:800;letter-spacing:.08em;color:#dbe7ff;text-transform:uppercase}.input-modal-x{width:32px;height:32px;border:1px solid #263754;border-radius:9px;background:rgba(8,12,24,.85);color:#9db0d0;font-size:18px;line-height:1;cursor:pointer}.input-modal-x:hover{border-color:#00d4ff;color:#00d4ff}.input-modal-body{padding:12px;max-height:calc(min(78vh,680px) - 47px);overflow:auto}.input-modal-body .ind-settings{display:block!important;border-top:0;padding:0;background:transparent}.input-modal-body .kv{display:grid;grid-template-columns:1fr minmax(120px,180px);gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(30,42,64,.45)}.input-modal-body .kv:last-child{border-bottom:0}.input-modal-body label.row{display:grid;grid-template-columns:1fr minmax(120px,180px);gap:10px;align-items:center;padding:8px 0;margin:0;border-bottom:1px solid rgba(30,42,64,.45)}.input-modal-body label.row span,.input-modal-body .k{font-size:11px;color:#8fa2c4;line-height:1.25}.input-modal-body input,.input-modal-body select{width:100%;min-width:0}.input-modal-body .hint{margin-top:10px;font-size:10px}.ind-card.modal-source .gear{border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,.08)}
+/* ── DVL Mobile Config Drawer — right-side panel ── */
+@keyframes dvl-drawer-in{from{transform:translateX(105%)}to{transform:translateX(0)}}
+.input-modal-foot{display:none}
 @media(max-width:900px){
-.input-modal{left:12px!important;right:12px!important;top:86px!important;bottom:22px!important;transform:none!important;width:auto!important;max-width:none!important;max-height:none!important;border-radius:16px;overflow:hidden!important}
-.input-modal-head{height:50px;padding:0 14px;gap:10px}
-.input-modal-title{font-size:12px;letter-spacing:.045em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:calc(100% - 48px)}
-.input-modal-x{width:36px;height:36px;flex:0 0 auto;border-radius:12px;font-size:20px}
-.input-modal-body{height:calc(100% - 51px)!important;max-height:none!important;padding:14px!important;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain;box-sizing:border-box}
-.input-modal-body .ind-settings{display:block!important;width:100%!important;max-width:100%!important;box-sizing:border-box;overflow:visible!important}
-.input-modal-body .kv,.input-modal-body label.row{display:grid!important;grid-template-columns:1fr!important;gap:7px!important;align-items:stretch!important;padding:12px 0!important;margin:0!important;width:100%!important;box-sizing:border-box;border-bottom:1px solid rgba(30,42,64,.5)!important}
-.input-modal-body label.row span,.input-modal-body .k{display:block!important;width:100%!important;max-width:100%!important;font-size:12px!important;line-height:1.25!important;white-space:normal!important;word-break:normal!important;overflow-wrap:normal!important;letter-spacing:0!important;color:#9fb0d0!important}
-.input-modal-body input,.input-modal-body select{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;height:42px!important;font-size:14px!important;line-height:1.2!important;box-sizing:border-box!important;border-radius:10px!important;padding-left:12px!important;padding-right:34px!important}
-.input-modal-body .hint{font-size:11px!important;line-height:1.35!important;margin-top:12px!important;white-space:normal!important;overflow-wrap:normal!important}
+
+/* ── panel container: right-side drawer ── */
+.input-modal{
+  left:auto!important;right:0!important;top:0!important;bottom:0!important;
+  transform:translateX(105%)!important;
+  width:min(285px,72vw)!important;max-width:none!important;max-height:none!important;
+  border-radius:18px 0 0 18px!important;
+  background:rgba(5,9,18,.99)!important;
+  border:1px solid rgba(125,180,255,.1)!important;border-right:none!important;
+  box-shadow:-20px 0 60px rgba(0,0,0,.65)!important;
+  overflow:hidden!important;
+  display:flex!important;flex-direction:column!important;
+  opacity:0!important;pointer-events:none!important;
+  transition:none!important;
+}
+.input-modal.show{
+  opacity:1!important;pointer-events:auto!important;
+  animation:dvl-drawer-in .25s cubic-bezier(.4,0,.2,1) both!important;
+}
+
+/* ── header ── */
+.input-modal-head{
+  height:44px!important;padding:0 11px!important;gap:8px!important;
+  border-bottom:1px solid rgba(255,255,255,.07)!important;
+  background:rgba(4,8,16,.98)!important;
+  flex-shrink:0!important;
+}
+.input-modal-title{
+  font-size:10.5px!important;letter-spacing:.1em!important;font-weight:700!important;
+  color:rgba(200,220,248,.9)!important;text-transform:uppercase!important;
+  white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
+  min-width:0!important;
+  font-family:Inter,system-ui,-apple-system,sans-serif!important;
+}
+.input-modal-x{
+  width:28px!important;height:28px!important;flex:0 0 auto!important;
+  border-radius:7px!important;font-size:16px!important;
+}
+
+/* ── scrollable body ── */
+.input-modal-body{
+  flex:1!important;min-height:0!important;
+  padding:10px 11px 4px!important;
+  max-height:none!important;height:auto!important;
+  overflow-y:auto!important;overflow-x:hidden!important;
+  overscroll-behavior:contain;box-sizing:border-box!important;
+}
+.input-modal-body .ind-settings{
+  display:block!important;width:100%!important;
+  box-sizing:border-box;overflow:visible!important;
+}
+
+/* ── rows: compact 2-col (label | control) ── */
+.input-modal-body .kv,.input-modal-body label.row{
+  display:grid!important;
+  grid-template-columns:1fr auto!important;
+  gap:6px!important;align-items:center!important;
+  padding:6px 0!important;margin:0!important;
+  width:100%!important;box-sizing:border-box;
+  border-bottom:1px solid rgba(30,42,64,.45)!important;
+}
+.input-modal-body .kv:last-child,.input-modal-body label.row:last-child{
+  border-bottom:0!important;
+}
+.input-modal-body label.row span,.input-modal-body .k{
+  font-size:11px!important;line-height:1.3!important;
+  color:rgba(160,185,220,.88)!important;
+  white-space:normal!important;letter-spacing:0!important;
+  font-family:Inter,system-ui,-apple-system,sans-serif!important;
+  font-weight:400!important;
+}
+
+/* ── number inputs: compact ── */
+.input-modal-body input[type="number"],.input-modal-body .num{
+  display:inline-block!important;
+  width:58px!important;min-width:0!important;max-width:58px!important;
+  height:28px!important;font-size:12px!important;
+  padding:2px 6px!important;line-height:1!important;
+  box-sizing:border-box!important;
+  border-radius:7px!important;text-align:center!important;
+}
+/* ── color inputs: small swatch ── */
+.input-modal-body input[type="color"]{
+  width:34px!important;height:24px!important;
+  min-width:0!important;max-width:34px!important;
+  border-radius:5px!important;padding:1px 2px!important;
+  box-sizing:border-box!important;cursor:pointer;
+}
+/* ── selects: compact ── */
+.input-modal-body select{
+  display:inline-block!important;
+  width:auto!important;min-width:72px!important;max-width:110px!important;
+  height:28px!important;font-size:11px!important;
+  padding:2px 4px!important;line-height:1!important;
+  box-sizing:border-box!important;border-radius:7px!important;
+}
+/* ── checkboxes ── */
+.input-modal-body input[type="checkbox"]{
+  width:15px!important;height:15px!important;
+  margin:0!important;cursor:pointer;flex-shrink:0!important;
+}
+/* ── hints ── */
+.input-modal-body .hint{
+  font-size:9.5px!important;line-height:1.35!important;
+  margin-top:8px!important;margin-bottom:4px!important;
+  white-space:normal!important;color:rgba(100,130,170,.7)!important;
+}
+
+/* ── footer: APLICAR button ── */
+.input-modal-foot{
+  display:block!important;
+  flex-shrink:0;padding:8px 11px 10px;
+  border-top:1px solid rgba(255,255,255,.07);
+  background:rgba(4,8,16,.98);
+}
+.input-modal-apply{
+  width:100%!important;height:36px!important;
+  background:linear-gradient(135deg,rgba(0,195,220,.16),rgba(0,155,190,.1))!important;
+  border:1px solid rgba(0,214,232,.38)!important;
+  border-radius:9px!important;
+  color:#00d6e8!important;
+  font-size:11.5px!important;font-weight:700!important;letter-spacing:.14em!important;
+  font-family:Inter,system-ui,-apple-system,sans-serif!important;
+  cursor:pointer;text-transform:uppercase;
+  transition:background .15s,border-color .15s;
+}
+.input-modal-apply:active{
+  background:linear-gradient(135deg,rgba(0,195,220,.28),rgba(0,155,190,.2))!important;
+  border-color:rgba(0,214,232,.65)!important;
+}
 }
 @media(max-width:900px){.gear{width:36px;height:32px;font-size:16px}.ind-head{padding:10px 9px}.ind-settings .kv{padding:6px 0}.colorbox{height:34px}.tiny-select{min-width:128px}}
 
@@ -1867,7 +2002,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.055";
+window.DVL_APP_VERSION = "Beta 0.056";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2515,11 +2650,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.055</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.056</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.055</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.056</span>
       </div>
 
       <div class="tb-right-btns">
@@ -3073,6 +3208,9 @@ html.pre-ui .switch::after{transition:none!important}
           <button class="input-modal-x" id="inputModalClose" type="button" aria-label="Fechar">×</button>
         </div>
         <div class="input-modal-body" id="inputModalBody"></div>
+        <div class="input-modal-foot" id="inputModalFoot">
+          <button class="input-modal-apply" id="inputModalApply" type="button">APLICAR</button>
+        </div>
       </div>
       <div class="section" style="display:none!important">
         <div class="title">ÚLTIMA VELA</div>
@@ -6054,6 +6192,8 @@ function openInputModal(key,gear){
 document.querySelectorAll('.gear[data-settings]').forEach(g=>g.onclick=(ev)=>{ev.stopPropagation();openInputModal(g.dataset.settings,g);});
 if(inputModalClose)inputModalClose.onclick=closeInputModal;
 if(inputModalScrim)inputModalScrim.onclick=closeInputModal;
+var inputModalApply=el('inputModalApply');
+if(inputModalApply)inputModalApply.onclick=function(){closeInputModal();if(typeof drawSoon==='function')drawSoon();};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeInputModal();if(S._posDraft){S._posDraft=null;S.tool=null;syncToolBtns();drawSoon();}}});
 // ── Mini DVL logo: smart refresh ──
 (function(){
@@ -8171,9 +8311,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.055'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.056'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.055';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.056';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8212,7 +8352,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.055';
+  const VERSION='Beta 0.056';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8514,7 +8654,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.055';
+  const VERSION='Beta 0.056';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -14788,11 +14928,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.055';
+  window.DVL_APP_VERSION='Beta 0.056';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.055';
+    if(b)b.textContent='Beta 0.056';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -14816,7 +14956,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.055';
+  const VERSION = 'Beta 0.056';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
