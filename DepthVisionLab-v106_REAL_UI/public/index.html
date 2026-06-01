@@ -15320,14 +15320,18 @@ body:before{display:none!important;background:none!important;}
     if(!wrap)return;
     KEYS.forEach(function(key){
       var id='dvlOscGearOverlay_'+key;
+      // Remove any old <button> element left from a previous broken deploy
+      var old=document.getElementById(id);
+      if(old&&old.tagName==='BUTTON')old.remove();
       if(document.getElementById(id))return;
-      var btn=document.createElement('button');
+      // Use div (not button) — avoids all browser default button styling/background on mobile
+      var btn=document.createElement('div');
       btn.id=id;
+      btn.setAttribute('role','button');
       btn.setAttribute('aria-label',key==='flow'?'DVL Flow Settings':'Trend Clarity Settings');
-      btn.setAttribute('type','button');
       btn.style.cssText=[
         'position:absolute',
-        'background:transparent',
+        'background:none',
         'border:none',
         'outline:none',
         'padding:0',
@@ -15341,7 +15345,8 @@ body:before{display:none!important;background:none!important;}
         'display:none',
         '-webkit-tap-highlight-color:transparent',
         'user-select:none',
-        '-webkit-user-select:none'
+        '-webkit-user-select:none',
+        'box-sizing:border-box'
       ].join(';');
       var sk=SETTINGS[key];
       btn.addEventListener('touchstart',function(e){
