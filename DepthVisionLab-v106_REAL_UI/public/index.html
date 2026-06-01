@@ -41,12 +41,17 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.060
+  - Fix: 0.059 regression — oscillator gear completely stopped working.
+  - Revert hitGear() to receive Touch/event object directly (safer, matches existing pattern).
+  - Fix: stopImmediatePropagation() now called on real TouchEvent in outer handler (not on Touch object).
+  - Fix: __dvl045Premium hit box enlarged to ±22px (was ±11px) — this is the wrapper that actually runs.
+  - Note: __dvl044 hit box change in 0.059 had no effect since __dvl045Premium overwrites it every draw.
+
 Beta 0.059
   - Fix: oscillator canvas gear icons required hold to open settings (single tap now works).
-  - Root cause 1: hitGear() received Touch object (e.touches[0]), not the TouchEvent — stopImmediatePropagation() was called on Touch (no-op), so 450ms long-press timer still fired.
-  - Root cause 2: hit box was 26×26px (±13px) — too small for reliable finger tap.
-  - Fix: hitGear() now takes (x,y) coords; outer handler calls e.stopImmediatePropagation() on the real event.
-  - Fix: hit box enlarged to 44×44px (±22px — Apple recommended tap target).
+  - Fix: hitGear() now takes (x,y) coords; outer handler calls e.stopImmediatePropagation() on real event.
+  - Fix: __dvl044 hit box enlarged to 44×44px (±22px).
 
 Beta 0.058
   - Gear settings button opens with single tap on mobile (no hold required).
@@ -331,7 +336,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.059";
+  const LOCAL_VERSION = "Beta 0.060";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2022,7 +2027,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.059";
+window.DVL_APP_VERSION = "Beta 0.060";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2670,11 +2675,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.059</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.060</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.059</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.060</span>
       </div>
 
       <div class="tb-right-btns">
@@ -8335,9 +8340,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.059'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.060'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.059';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.060';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8376,7 +8381,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.059';
+  const VERSION='Beta 0.060';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8537,11 +8542,13 @@ window._dvlClarEyeHit = null;
   setTimeout(installOscGearWrap,500);
 
   // Capture click/touch on oscillator gears before pan/cross handlers.
-  function hitGear(x,y){
+  function hitGear(ev){
     try{
       if(!window._dvlOscGearHit)return false;
+      const w=E('chartWrap');if(!w)return false;
+      const r=w.getBoundingClientRect(),x=ev.clientX-r.left,y=ev.clientY-r.top;
       for(const k of ['flow','clarity']){
-        const b=window._dvlOscGearHit[k]; if(!b)continue;
+        const b=window._dvlOscGearHit[k];if(!b)continue;
         if(x>=b.x1&&x<=b.x2&&y>=b.y1&&y<=b.y2){
           const gear=document.querySelector('.gear[data-settings="'+b.settings+'"]');
           if(typeof window.openInputModal==='function')window.openInputModal(b.settings,gear||null);
@@ -8552,10 +8559,9 @@ window._dvlClarEyeHit = null;
     }catch(_){ }
     return false;
   }
-  ready(()=>{const wrap=E('chartWrap'); if(!wrap)return; ['pointerdown','mousedown','touchstart'].forEach(evName=>wrap.addEventListener(evName,function(e){
+  ready(()=>{const wrap=E('chartWrap');if(!wrap)return;['pointerdown','mousedown','touchstart'].forEach(ev=>wrap.addEventListener(ev,function(e){
     const p=e.touches&&e.touches[0]?e.touches[0]:e;
-    const r=wrap.getBoundingClientRect();
-    if(hitGear(p.clientX-r.left,p.clientY-r.top)){e.preventDefault();e.stopImmediatePropagation();}
+    if(hitGear(p)){e.preventDefault();e.stopImmediatePropagation();}
   },{capture:true,passive:false}));});
 
   // Normal volume overlay: volume bars + MA only. CVD removed.
@@ -8678,7 +8684,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.059';
+  const VERSION='Beta 0.060';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -8733,7 +8739,7 @@ input[type="color"]{border-radius:7px!important;}
       let gx=hidden?eyeX+22:eyeX+17+titleW+13;
       gx=Math.min(gx,L.scaleLeft-98);gx=Math.max(gx,eyeX+28);
       drawSmallGear(ctx,gx,eyeY,'rgba(110,127,152,.82)');
-      window._dvlOscGearHit[key]={x1:gx-11,y1:eyeY-11,x2:gx+11,y2:eyeY+11,settings:isFlow?'flowAccel':'hvnClarity'};
+      window._dvlOscGearHit[key]={x1:gx-22,y1:eyeY-22,x2:gx+22,y2:eyeY+22,settings:isFlow?'flowAccel':'hvnClarity'};
 
       // right status badge text, cleaner and aligned
       ctx.font='800 '+Math.round(9*(window._csf||1))+'px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
@@ -14952,11 +14958,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.059';
+  window.DVL_APP_VERSION='Beta 0.060';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.059';
+    if(b)b.textContent='Beta 0.060';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -14980,7 +14986,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.059';
+  const VERSION = 'Beta 0.060';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
