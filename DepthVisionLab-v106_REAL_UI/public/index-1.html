@@ -41,6 +41,12 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.058
+  - Gear settings button opens with single tap on mobile (no hold required).
+  - Added touchstart handler on .gear[data-settings] with preventDefault to bypass 300ms iOS click delay.
+  - Opening settings drawer on mobile now auto-closes the sidebar (clean single-panel view).
+  - openInputModal: null-guarded gear.closest() to prevent crash when gear arg is null.
+
 Beta 0.057
   - Fix: mobile config drawer failed to open (panel stayed off-screen at translateX(105%)).
   - Root cause: transform:translateX(105%)!important on .input-modal blocked CSS animation.
@@ -318,7 +324,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.057";
+  const LOCAL_VERSION = "Beta 0.058";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2009,7 +2015,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.057";
+window.DVL_APP_VERSION = "Beta 0.058";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2657,11 +2663,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.057</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.058</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.057</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.058</span>
       </div>
 
       <div class="tb-right-btns">
@@ -6180,10 +6186,11 @@ function closeInputModal(){
 }
 function openInputModal(key,gear){
   const settings=el('settings-'+key);
-  const card=gear.closest('.ind-card');
+  const card=gear?gear.closest('.ind-card'):null;
   if(!settings||!inputModal||!inputModalBody)return;
   if(inputModalState.settings===settings){closeInputModal();return;}
   closeInputModal();
+  if(isMobile()&&typeof closeMobilePanel==='function')closeMobilePanel();
   const title=(card&&card.querySelector('.name')?card.querySelector('.name').textContent:'Inputs');
   const ph=document.createComment('settings-'+key+'-placeholder');
   settings.parentNode.insertBefore(ph,settings);
@@ -6196,7 +6203,10 @@ function openInputModal(key,gear){
   if(inputModalScrim)inputModalScrim.classList.add('show');
   inputModalState={settings:settings,placeholder:ph,card:card,gear:gear};
 }
-document.querySelectorAll('.gear[data-settings]').forEach(g=>g.onclick=(ev)=>{ev.stopPropagation();openInputModal(g.dataset.settings,g);});
+document.querySelectorAll('.gear[data-settings]').forEach(g=>{
+  g.addEventListener('touchstart',function(ev){ev.stopPropagation();ev.preventDefault();openInputModal(g.dataset.settings,g);},{passive:false});
+  g.onclick=function(ev){ev.stopPropagation();openInputModal(g.dataset.settings,g);};
+});
 if(inputModalClose)inputModalClose.onclick=closeInputModal;
 if(inputModalScrim)inputModalScrim.onclick=closeInputModal;
 var inputModalApply=el('inputModalApply');
@@ -8318,9 +8328,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.057'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.058'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.057';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.058';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8359,7 +8369,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.057';
+  const VERSION='Beta 0.058';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8661,7 +8671,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.057';
+  const VERSION='Beta 0.058';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -14935,11 +14945,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.057';
+  window.DVL_APP_VERSION='Beta 0.058';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.057';
+    if(b)b.textContent='Beta 0.058';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -14963,7 +14973,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.057';
+  const VERSION = 'Beta 0.058';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
