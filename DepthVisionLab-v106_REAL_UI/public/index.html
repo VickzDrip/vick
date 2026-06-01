@@ -41,6 +41,14 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.052
+  - Redesigned FERRAMENTAS right panel: per-section 2-column grid layout (TRADING, DESENHO, UTILIDADES, TEMA, SAIR).
+  - New compact glass button style: rgba(255,255,255,.03) bg, rgba(255,255,255,.07) border, border-radius:12px, column icon+label layout.
+  - Long=green border/text, Short=red border/text, Sair=full-width red row button.
+  - Escuro button pre-selected with .active class (cyan border+bg); JS .active toggle preserved.
+  - Removed old .rp-cols/.rp-col 2-big-column layout; replaced with .rp-sec/.rp-grid per section.
+  - Panel width narrowed to min(260px,78vw) for better mobile fit.
+
 Beta 0.051
   - Fixed mobile: getPanelAtY now uses _hvnClarityH/_flowAccelH (module-level) instead of draw()-local _clarH/_fah that were inaccessible, so oscillator panels are properly detected.
   - Fixed mobile: touchstart detects oscScaleHit → oscScale mode (drag = zoom oscillator range).
@@ -262,7 +270,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.051";
+  const LOCAL_VERSION = "Beta 0.052";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -1830,7 +1838,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.051";
+window.DVL_APP_VERSION = "Beta 0.052";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2208,98 +2216,112 @@ html.pre-ui .switch::after{transition:none!important}
 <div class="rp-scrim" id="rpScrim"></div>
 <div class="right-panel" id="rightPanel" aria-hidden="true">
 
-  <div class="section" style="border-bottom:1px solid #1e2a40;display:flex;align-items:center;justify-content:space-between;padding:10px 9px;">
-    <span class="title" style="margin:0;opacity:1;letter-spacing:3px;font-size:9px;color:#00d4ff;">FERRAMENTAS</span>
-    <button class="gear" id="rpClose" aria-label="Fechar" style="font-size:16px;width:26px;height:26px;">×</button>
+  <div class="rp-hdr">
+    <span class="rp-hdr-title">FERRAMENTAS</span>
+    <button class="rp-hdr-x" id="rpClose" aria-label="Fechar">×</button>
   </div>
 
   <div class="rp-body">
-    <div class="rp-cols">
 
-      <!-- coluna esquerda: TRADING + DESENHO -->
-      <div class="rp-col">
-
-        <div class="rp-lbl">TRADING</div>
+    <div class="rp-sec">
+      <div class="rp-sl">TRADING</div>
+      <div class="rp-grid">
         <button class="rp-btn" id="rpRuler">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><rect x="2" y="7" width="20" height="10" rx="1"/><line x1="6" y1="7" x2="6" y2="11"/><line x1="10" y1="7" x2="10" y2="13"/><line x1="14" y1="7" x2="14" y2="11"/><line x1="18" y1="7" x2="18" y2="13"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="2" y="7" width="20" height="10" rx="1"/><line x1="6" y1="7" x2="6" y2="11"/><line x1="10" y1="7" x2="10" y2="13"/><line x1="14" y1="7" x2="14" y2="11"/><line x1="18" y1="7" x2="18" y2="13"/></svg>
           <span>Régua</span>
         </button>
         <button class="rp-btn rp-long-btn" id="rpBtnLong">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M5 19L19 5"/><polyline points="12 5 19 5 19 12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M5 19L19 5"/><polyline points="12 5 19 5 19 12"/></svg>
           <span>Long</span>
         </button>
         <button class="rp-btn rp-short-btn" id="rpBtnShort">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M5 5L19 19"/><polyline points="12 19 19 19 19 12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M5 5L19 19"/><polyline points="12 19 19 19 19 12"/></svg>
           <span>Short</span>
         </button>
-<button class="rp-btn" id="rpFvg">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><rect x="3" y="8" width="18" height="8" rx="1"/><line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="2 2"/></svg>
+        <button class="rp-btn" id="rpFvg">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="3" y="8" width="18" height="8" rx="1"/><line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="2 2"/></svg>
           <span>FVG</span>
         </button>
         <button class="rp-btn" id="rpOb">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><rect x="3" y="6" width="18" height="12" rx="1"/><line x1="8" y1="6" x2="8" y2="18"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="3" y="6" width="18" height="12" rx="1"/><line x1="8" y1="6" x2="8" y2="18"/></svg>
           <span>Orderblock</span>
         </button>
-        
+      </div>
+    </div>
 
-        <div class="rp-lbl" style="margin-top:10px;">DESENHO</div>
+    <div class="rp-div"></div>
+
+    <div class="rp-sec">
+      <div class="rp-sl">DESENHO</div>
+      <div class="rp-grid">
         <button class="rp-btn" id="rpDrawLine" title="Trend Line">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><line x1="4" y1="20" x2="20" y2="4"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><line x1="4" y1="20" x2="20" y2="4"/></svg>
           <span>Linha</span>
         </button>
         <button class="rp-btn" id="rpDrawRect" title="Rectangle">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><rect x="3" y="5" width="18" height="14" rx="1"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="3" y="5" width="18" height="14" rx="1"/></svg>
           <span>Retângulo</span>
         </button>
         <button class="rp-btn" id="rpDrawText" title="Text">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M4 6h16M12 6v12M9 18h6"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M4 6h16M12 6v12M9 18h6"/></svg>
           <span>Texto</span>
         </button>
         <button class="rp-btn" id="rpDrawArrow" title="Arrow">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg>
           <span>Seta</span>
         </button>
-
       </div>
+    </div>
 
-      <!-- coluna direita: UTILIDADES + FAVORITOS + CONFIGURAÇÕES + TEMA -->
-      <div class="rp-col">
+    <div class="rp-div"></div>
 
-        <div class="rp-lbl">UTILIDADES</div>
+    <div class="rp-sec">
+      <div class="rp-sl">UTILIDADES</div>
+      <div class="rp-grid">
         <button class="rp-btn" id="rpReplay" title="Replay Mode">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><polygon points="5,3 19,12 5,21"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><polygon points="5,3 19,12 5,21"/></svg>
           <span>Replay</span>
         </button>
         <button class="rp-btn" id="rpSnapshot">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
           <span>Snapshot</span>
         </button>
         <button class="rp-btn rp-dis">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
           <span>Alertas</span>
         </button>
         <button class="rp-btn rp-dis">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span>Sessões</span>
         </button>
+      </div>
+    </div>
 
-        <div class="rp-lbl" style="margin-top:10px;">TEMA</div>
-        <button class="rp-btn" id="rpThemeDark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    <div class="rp-div"></div>
+
+    <div class="rp-sec">
+      <div class="rp-sl">TEMA</div>
+      <div class="rp-grid">
+        <button class="rp-btn active" id="rpThemeDark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           <span>Escuro</span>
         </button>
         <button class="rp-btn" id="rpThemeLight">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           <span>Claro</span>
         </button>
-        <button class="rp-btn rp-exit-btn" id="rpSair" onclick="if(confirm('Sair?'))location.href='about:blank'">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          <span>Sair</span>
-        </button>
-
       </div>
-
     </div>
+
+    <div class="rp-div"></div>
+
+    <div class="rp-sec">
+      <button class="rp-btn rp-exit-btn" id="rpSair" onclick="if(confirm('Sair?'))location.href='about:blank'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span>Sair</span>
+      </button>
+    </div>
+
   </div><!-- end rp-body -->
 
 </div>
@@ -2464,11 +2486,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.051</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.052</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.051</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.052</span>
       </div>
 
       <div class="tb-right-btns">
@@ -8120,9 +8142,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.051'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.052'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.051';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.052';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8161,7 +8183,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.051';
+  const VERSION='Beta 0.052';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8463,7 +8485,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.051';
+  const VERSION='Beta 0.052';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9582,136 +9604,117 @@ input[type=color]::-moz-color-swatch{border:none!important;border-radius:2px!imp
 .right-panel{
   position:fixed;
   top:0;right:0;bottom:0;
-  width:min(280px,82vw);
-  background:rgba(7,11,17,.94)!important;
-  border-left:1px solid var(--dvl-border,#1e2a40);
-  backdrop-filter:blur(14px)!important;
-  -webkit-backdrop-filter:blur(14px)!important;
+  width:min(260px,78vw);
+  background:rgba(6,9,15,.97)!important;
+  border-left:1px solid rgba(255,255,255,.06);
+  backdrop-filter:blur(18px)!important;
+  -webkit-backdrop-filter:blur(18px)!important;
   z-index:100;
   display:flex;flex-direction:column;
   transform:translateX(100%);
   transition:transform .26s cubic-bezier(.4,0,.2,1);
-  box-shadow:-18px 0 50px rgba(0,0,0,.22)!important;
+  box-shadow:-20px 0 60px rgba(0,0,0,.4)!important;
 }
 .right-panel.open{transform:translateX(0);}
 
-/* panel header */
-.rp-header{
+/* header */
+.rp-hdr{
   display:flex;align-items:center;justify-content:space-between;
-  padding:14px 12px 12px;
-  border-bottom:1px solid #1e2a40;
+  padding:13px 12px 12px;
+  border-bottom:1px solid rgba(255,255,255,.06);
   flex-shrink:0;
-  background:#03060b;
 }
-.rp-title{
-  font-size:8px;letter-spacing:3px;color:#00d4ff;font-weight:700;opacity:.9;
+.rp-hdr-title{
+  font-size:8px;letter-spacing:3.5px;color:#00d4ff;font-weight:700;opacity:.9;
+  font-family:'Courier New',monospace;
 }
-.rp-close{
-  width:26px;height:26px;border-radius:5px;
-  background:transparent;border:1px solid #1e2a40;
-  color:#6a7fa0;cursor:pointer;display:flex;align-items:center;justify-content:center;
+.rp-hdr-x{
+  width:26px;height:26px;border-radius:7px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+  color:rgba(150,170,210,.7);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;line-height:1;padding:0;
   transition:all .15s;
 }
-.rp-close:hover{border-color:rgba(255,61,87,.4);color:#ff3d57;}
+.rp-hdr-x:hover{border-color:rgba(255,61,87,.4);color:#ff3d57;background:rgba(255,61,87,.06);}
 
-/* panel body — 2-column compact layout */
-.rp-body{flex:1;overflow-y:auto;padding:0;scrollbar-width:thin;}
-.rp-body::-webkit-scrollbar{width:3px;}
-.rp-body::-webkit-scrollbar-thumb{background:#1e2a40;border-radius:4px;}
-.rp-cols{display:flex;min-height:100%;}
-.rp-col{flex:1;padding:8px 5px;display:flex;flex-direction:column;gap:1px;min-width:0;}
-.rp-col:first-child{border-right:1px solid #1e2a40;}
-.rp-lbl{font-size:7px;letter-spacing:2px;color:#6a7fa0;opacity:.65;text-transform:uppercase;padding:5px 4px 3px;font-family:'Courier New',monospace;}
-.rp-btn{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:5px;border:none;background:transparent;color:#8da3c2;font-size:10px;font-family:'Courier New',monospace;cursor:pointer;text-align:left;width:100%;transition:background .12s,color .12s;line-height:1.2;}
-.rp-btn:hover{background:rgba(0,212,255,.08);color:#c8d8f0;}
-.rp-btn:hover svg,.rp-btn.active svg{opacity:1;}
-.rp-btn svg{flex-shrink:0;opacity:.55;}
-.rp-btn.active{background:rgba(0,212,255,.1);color:#00d4ff;}
-.rp-dis{opacity:.3!important;pointer-events:none!important;cursor:default!important;}
-.rp-long-btn{color:#00e676!important;}
-.rp-long-btn:hover{background:rgba(0,230,118,.08)!important;}
-.rp-long-btn.active{background:rgba(0,230,118,.12)!important;}
-.rp-short-btn{color:#ff3d57!important;}
-.rp-short-btn:hover{background:rgba(255,61,87,.08)!important;}
-.rp-short-btn.active{background:rgba(255,61,87,.12)!important;}
-.rp-exit-btn{color:#ff6b7a!important;}
-.rp-exit-btn:hover{background:rgba(255,61,87,.08)!important;color:#ff3d57!important;}
-
-/* sections */
-.rp-section{border-bottom:1px solid #0e1520;padding:6px 0;}
-.rp-section:last-child{border-bottom:none;}
-.rp-sec-title{
-  font-size:8px;letter-spacing:2px;color:#6a7fa0;font-weight:700;
-  padding:8px 12px 4px;text-transform:uppercase;
+/* body */
+.rp-body{
+  flex:1;overflow-y:auto;
+  padding:12px 10px 16px;
+  scrollbar-width:thin;
+  display:flex;flex-direction:column;gap:4px;
 }
+.rp-body::-webkit-scrollbar{width:2px;}
+.rp-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:4px;}
 
-/* items */
-.rp-item{
-  width:100%;display:flex;align-items:center;gap:10px;
-  padding:8px 12px;
-  background:transparent;
-  border:none;border-radius:0;
-  color:#8da3c2;font-size:11px;font-family:'Courier New',monospace;
-  cursor:pointer;text-align:left;
-  transition:background .12s,color .12s;
-  margin:0;
+/* section */
+.rp-sec{display:flex;flex-direction:column;gap:5px;}
+.rp-sl{
+  font-size:8px;letter-spacing:2.5px;color:rgba(100,126,168,.65);
+  font-weight:600;text-transform:uppercase;
+  font-family:'Courier New',monospace;
+  padding:0 2px 2px;
 }
-.rp-item:hover{
-  background:#111827;
+.rp-div{height:1px;background:rgba(255,255,255,.05);margin:4px 0;}
+
+/* 2-col grid */
+.rp-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+
+/* base button — compact glass */
+.rp-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;padding:10px 6px 9px;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:12px;
+  color:rgba(140,165,210,.8);
+  font-size:10px;font-family:'Courier New',monospace;
+  cursor:pointer;text-align:center;width:100%;
+  transition:background .15s,border-color .15s,color .15s;
+  line-height:1.2;
+}
+.rp-btn:hover{
+  background:rgba(0,212,255,.07);
+  border-color:rgba(0,212,255,.22);
   color:#c8d8f0;
 }
-.rp-item.active{
-  background:rgba(0,212,255,.07);
-  color:#00d4ff;
+.rp-btn svg{flex-shrink:0;opacity:.6;transition:opacity .15s;}
+.rp-btn:hover svg{opacity:.95;}
+.rp-btn.active{
+  background:rgba(0,212,255,.1)!important;
+  border-color:rgba(0,212,255,.38)!important;
+  color:#00d4ff!important;
 }
-.rp-item svg{flex-shrink:0;opacity:.55;}
-.rp-item:hover svg,.rp-item.active svg{opacity:.9;}
+.rp-btn.active svg{opacity:1!important;}
 
-.rp-long{color:#00e676!important;}
-.rp-long:hover{background:rgba(0,230,118,.06)!important;color:#00e676!important;}
-.rp-long.active{background:rgba(0,230,118,.1)!important;}
-.rp-long svg{color:#00e676;opacity:.8!important;}
+/* disabled */
+.rp-dis{opacity:.25!important;pointer-events:none!important;cursor:default!important;}
 
-.rp-short{color:#ff3d57!important;}
-.rp-short:hover{background:rgba(255,61,87,.06)!important;color:#ff3d57!important;}
-.rp-short.active{background:rgba(255,61,87,.1)!important;}
-.rp-short svg{color:#ff3d57;opacity:.8!important;}
+/* long */
+.rp-long-btn{color:#00e676!important;border-color:rgba(0,230,118,.1)!important;}
+.rp-long-btn:hover{background:rgba(0,230,118,.08)!important;border-color:rgba(0,230,118,.28)!important;}
+.rp-long-btn.active{background:rgba(0,230,118,.12)!important;border-color:rgba(0,230,118,.45)!important;}
 
-.rp-disabled{opacity:.3!important;cursor:not-allowed!important;}
-.rp-disabled:hover{background:transparent!important;color:#8da3c2!important;}
+/* short */
+.rp-short-btn{color:#ff4d6a!important;border-color:rgba(255,61,87,.1)!important;}
+.rp-short-btn:hover{background:rgba(255,61,87,.08)!important;border-color:rgba(255,61,87,.28)!important;}
+.rp-short-btn.active{background:rgba(255,61,87,.12)!important;border-color:rgba(255,61,87,.45)!important;}
 
-/* theme row */
-.rp-theme-row{display:flex;gap:6px;padding:6px 12px 4px;}
-.rp-theme-btn{
-  flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
-  padding:7px 6px;border-radius:4px;font-size:10px;font-family:'Courier New',monospace;
-  background:transparent;border:1px solid #1e2a40;
-  color:#6a7fa0;cursor:pointer;transition:all .15s;
+/* exit — full-width row layout */
+.rp-exit-btn{
+  flex-direction:row!important;gap:8px!important;
+  padding:11px 12px!important;justify-content:center!important;
+  width:100%!important;border-radius:12px!important;
+  color:#ff6b7a!important;
+  border-color:rgba(255,61,87,.22)!important;
+  background:rgba(255,61,87,.04)!important;
 }
-.rp-theme-btn.active{
-  background:rgba(0,212,255,.07);border-color:rgba(0,212,255,.3);color:#00d4ff;
+.rp-exit-btn:hover{
+  background:rgba(255,61,87,.1)!important;
+  border-color:rgba(255,61,87,.48)!important;
+  color:#ff3d57!important;
 }
-.rp-theme-btn:hover:not(.active){
-  border-color:#2d4060;color:#c8d8f0;
-}
-
-/* footer */
-.rp-footer{
-  display:flex;gap:0;
-  border-top:1px solid #1e2a40;
-  flex-shrink:0;
-}
-.rp-footer-btn{
-  flex:1;display:flex;align-items:center;justify-content:center;gap:7px;
-  padding:12px 8px;font-size:10px;font-family:'Courier New',monospace;
-  background:transparent;border:none;border-right:1px solid #1e2a40;
-  color:#6a7fa0;cursor:pointer;transition:all .15s;
-  letter-spacing:1px;
-}
-.rp-footer-btn:last-child{border-right:none;}
-.rp-footer-btn:hover{background:#111827;color:#c8d8f0;}
-.rp-sair{color:#ff3d57!important;}
-.rp-sair:hover{background:rgba(255,61,87,.06)!important;}
 </style>
 <style>
 /* DVL Drawing Tools */
@@ -14740,11 +14743,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.051';
+  window.DVL_APP_VERSION='Beta 0.052';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.051';
+    if(b)b.textContent='Beta 0.052';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -14768,7 +14771,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.051';
+  const VERSION = 'Beta 0.052';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
