@@ -41,6 +41,12 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.070
+  - Fix: sidebar gear buttons (.gear[data-settings]) now only open settings on
+    intentional tap, not during swipe/scroll. Added touchstart+touchmove+touchend
+    guard with 8px movement threshold; touchstart no longer fires openInputModal
+    immediately.
+
 Beta 0.069
   - Fix: oscillator gear overlay buttons now hide when the panel is disabled.
     updateBtns() checks S.inds[indKey] before showing; stale hit box no longer
@@ -385,7 +391,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.069";
+  const LOCAL_VERSION = "Beta 0.070";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2075,7 +2081,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.069";
+window.DVL_APP_VERSION = "Beta 0.070";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2868,11 +2874,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.069</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.070</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.069</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.070</span>
       </div>
 
       <div class="tb-right-btns">
@@ -6584,7 +6590,20 @@ function openInputModal(key,gear){
   inputModalState={settings:settings,placeholder:ph,card:card,gear:gear};
 }
 document.querySelectorAll('.gear[data-settings]').forEach(g=>{
-  g.addEventListener('touchstart',function(ev){ev.stopPropagation();ev.preventDefault();openInputModal(g.dataset.settings,g);},{passive:false});
+  // Beta 0.070: only open on intentional tap, not during scroll
+  var _gts={x:0,y:0,moved:false};
+  g.addEventListener('touchstart',function(ev){
+    _gts.x=ev.touches[0].clientX;_gts.y=ev.touches[0].clientY;_gts.moved=false;
+    ev.stopPropagation();
+  },{passive:true});
+  g.addEventListener('touchmove',function(ev){
+    if(Math.abs(ev.touches[0].clientX-_gts.x)>8||Math.abs(ev.touches[0].clientY-_gts.y)>8)_gts.moved=true;
+  },{passive:true});
+  g.addEventListener('touchend',function(ev){
+    if(_gts.moved)return;
+    ev.preventDefault();ev.stopPropagation();
+    openInputModal(g.dataset.settings,g);
+  },{passive:false});
   g.onclick=function(ev){ev.stopPropagation();openInputModal(g.dataset.settings,g);};
 });
 if(inputModalClose)inputModalClose.onclick=closeInputModal;
@@ -8708,9 +8727,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.069'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.070'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.069';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.070';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8749,7 +8768,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.069';
+  const VERSION='Beta 0.070';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8928,7 +8947,7 @@ window._dvlClarEyeHit = null;
     return false;
   }
   ready(()=>{const wrap=E('chartWrap');if(!wrap)return;['pointerdown','mousedown','touchstart'].forEach(ev=>wrap.addEventListener(ev,function(e){
-    // Let DOM overlay gear buttons handle their own touches (Beta 0.069)
+    // Let DOM overlay gear buttons handle their own touches (Beta 0.070)
     if(e.target&&e.target.id&&String(e.target.id).indexOf('dvlOscGearOverlay_')===0)return;
     const p=e.touches&&e.touches[0]?e.touches[0]:e;
     if(hitGear(p)){e.preventDefault();e.stopImmediatePropagation();}
@@ -9054,7 +9073,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.069';
+  const VERSION='Beta 0.070';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -15742,11 +15761,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.069';
+  window.DVL_APP_VERSION='Beta 0.070';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.069';
+    if(b)b.textContent='Beta 0.070';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -15856,7 +15875,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.069';
+  const VERSION = 'Beta 0.070';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -15866,13 +15885,13 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.069 — DOM overlay buttons for canvas-drawn oscillator gear icons.
+/* Beta 0.070 — DOM overlay buttons for canvas-drawn oscillator gear icons.
    Canvas hit-detection (hitGear) can miss on mobile due to touch coordinate
    precision. These transparent buttons sit exactly over the drawn gears and
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.069';
+  var VERSION='Beta 0.070';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
@@ -15990,7 +16009,7 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_HVN_SIGNALS">
-/* HVN Signals — Beta 0.069
+/* HVN Signals — Beta 0.070
    Pure chart-overlay indicator: detects LONG/SHORT when a candle wick touches an
    HVN zone then the candle closes back out (rejection). No oscillator, no panel,
    no histogram — only LONG/SHORT labels drawn directly on the main chart canvas.
