@@ -41,6 +41,14 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.057
+  - Fix: mobile config drawer failed to open (panel stayed off-screen at translateX(105%)).
+  - Root cause: transform:translateX(105%)!important on .input-modal blocked CSS animation.
+  - Fix: removed !important from transform and opacity on base .input-modal.
+  - Fix: replaced @keyframes animation approach with CSS transition on .input-modal.
+  - Fix: .input-modal.show now sets transform:translateX(0)!important — drawer slides in correctly.
+  - Transition: transform .26s cubic-bezier(.4,0,.2,1), opacity .18s ease (plays reverse on close).
+
 Beta 0.056
   - Mobile config panels unified as right-side drawer (not full-screen modal).
   - Drawer: width min(285px,72vw), top-to-bottom, 18px left-radius, slide-in animation.
@@ -50,7 +58,6 @@ Beta 0.056
   - Added APLICAR footer button (cyan, full-width) to all mobile config drawers.
   - APLICAR: closes drawer + triggers drawSoon() redraw.
   - Scrim remains full-screen; tapping chart area closes drawer.
-  - @keyframes dvl-drawer-in: 105%→0 slide animation on .show class.
   - .input-modal-foot hidden on desktop, shown on mobile.
 
 Beta 0.055
@@ -311,7 +318,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.056";
+  const LOCAL_VERSION = "Beta 0.057";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -473,7 +480,7 @@ Beta 0.001
 /* ── panel container: right-side drawer ── */
 .input-modal{
   left:auto!important;right:0!important;top:0!important;bottom:0!important;
-  transform:translateX(105%)!important;
+  transform:translateX(105%);
   width:min(285px,72vw)!important;max-width:none!important;max-height:none!important;
   border-radius:18px 0 0 18px!important;
   background:rgba(5,9,18,.99)!important;
@@ -481,12 +488,12 @@ Beta 0.001
   box-shadow:-20px 0 60px rgba(0,0,0,.65)!important;
   overflow:hidden!important;
   display:flex!important;flex-direction:column!important;
-  opacity:0!important;pointer-events:none!important;
-  transition:none!important;
+  opacity:0;pointer-events:none!important;
+  transition:transform .26s cubic-bezier(.4,0,.2,1),opacity .18s ease;
 }
 .input-modal.show{
+  transform:translateX(0)!important;
   opacity:1!important;pointer-events:auto!important;
-  animation:dvl-drawer-in .25s cubic-bezier(.4,0,.2,1) both!important;
 }
 
 /* ── header ── */
@@ -2002,7 +2009,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.056";
+window.DVL_APP_VERSION = "Beta 0.057";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2650,11 +2657,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.056</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.057</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.056</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.057</span>
       </div>
 
       <div class="tb-right-btns">
@@ -8311,9 +8318,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.056'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.057'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.056';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.057';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8352,7 +8359,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.056';
+  const VERSION='Beta 0.057';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8654,7 +8661,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.056';
+  const VERSION='Beta 0.057';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -14928,11 +14935,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.056';
+  window.DVL_APP_VERSION='Beta 0.057';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.056';
+    if(b)b.textContent='Beta 0.057';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -14956,7 +14963,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.056';
+  const VERSION = 'Beta 0.057';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
