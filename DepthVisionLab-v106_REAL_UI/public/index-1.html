@@ -41,14 +41,13 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.069
+  - Fix: oscillator gear overlay buttons now hide when the panel is disabled.
+    updateBtns() checks S.inds[indKey] before showing; stale hit box no longer
+    causes ghost taps opening settings when the panel is off.
+
 Beta 0.068
   - HVN Signals refactor: pure chart-overlay only — no oscillator, no panel, no histogram.
-  - Removed _hvnSignalsH, PB offset, resize handle, oscPanelHeights/ScaleHit/AtY extensions.
-  - Kept: computeHVNSignals + drawHVNSignalsOverlay (LONG/SHORT labels + arrows on chart).
-  - Indicator card settings updated: Show Long/Short, sensitivity, min wick %, cooldown,
-    lateral toggle/max, label size/style/color. — LONG/SHORT signals by wick rejection at HVN zones.
-  - Signal types: resistance rejection (SHORT), support rejection (LONG), lateral zone rejection.
-  - Chart overlay: LONG/SHORT labels with triangle pointer + callout box.
   - Oscillator panel: HVN SIGNALS with signal timeline histogram + PREMIUM badge.
   - Resize handle, oscPanelHeights/ScaleHit/AtY all updated for the new panel slot.
 
@@ -386,7 +385,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.068";
+  const LOCAL_VERSION = "Beta 0.069";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2076,7 +2075,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.068";
+window.DVL_APP_VERSION = "Beta 0.069";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2869,11 +2868,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.068</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.069</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.068</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.069</span>
       </div>
 
       <div class="tb-right-btns">
@@ -8709,9 +8708,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.068'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.069'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.068';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.069';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8750,7 +8749,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.068';
+  const VERSION='Beta 0.069';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8929,7 +8928,7 @@ window._dvlClarEyeHit = null;
     return false;
   }
   ready(()=>{const wrap=E('chartWrap');if(!wrap)return;['pointerdown','mousedown','touchstart'].forEach(ev=>wrap.addEventListener(ev,function(e){
-    // Let DOM overlay gear buttons handle their own touches (Beta 0.068)
+    // Let DOM overlay gear buttons handle their own touches (Beta 0.069)
     if(e.target&&e.target.id&&String(e.target.id).indexOf('dvlOscGearOverlay_')===0)return;
     const p=e.touches&&e.touches[0]?e.touches[0]:e;
     if(hitGear(p)){e.preventDefault();e.stopImmediatePropagation();}
@@ -9055,7 +9054,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.068';
+  const VERSION='Beta 0.069';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -15743,11 +15742,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.068';
+  window.DVL_APP_VERSION='Beta 0.069';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.068';
+    if(b)b.textContent='Beta 0.069';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -15857,7 +15856,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.068';
+  const VERSION = 'Beta 0.069';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -15867,13 +15866,13 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.068 — DOM overlay buttons for canvas-drawn oscillator gear icons.
+/* Beta 0.069 — DOM overlay buttons for canvas-drawn oscillator gear icons.
    Canvas hit-detection (hitGear) can miss on mobile due to touch coordinate
    precision. These transparent buttons sit exactly over the drawn gears and
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.068';
+  var VERSION='Beta 0.069';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
@@ -15940,7 +15939,10 @@ body:before{display:none!important;background:none!important;}
     KEYS.forEach(function(key){
       var btn=document.getElementById('dvlOscGearOverlay_'+key);
       if(!btn)return;
-      if(!hit||!hit[key]){btn.style.display='none';return;}
+      // Hide when the panel is disabled — stale hit box must not show
+      var indKey=SETTINGS[key];
+      var panelActive=!!(window.S&&window.S.inds&&window.S.inds[indKey]);
+      if(!panelActive||!hit||!hit[key]){btn.style.display='none';return;}
       var b=hit[key];
       var cx=(b.x1+b.x2)/2, cy=(b.y1+b.y2)/2;
       var w=Math.max(44,b.x2-b.x1), h=Math.max(44,b.y2-b.y1);
@@ -15988,7 +15990,7 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_HVN_SIGNALS">
-/* HVN Signals — Beta 0.068
+/* HVN Signals — Beta 0.069
    Pure chart-overlay indicator: detects LONG/SHORT when a candle wick touches an
    HVN zone then the candle closes back out (rejection). No oscillator, no panel,
    no histogram — only LONG/SHORT labels drawn directly on the main chart canvas.
