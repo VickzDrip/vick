@@ -41,6 +41,16 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.051
+  - Fixed mobile: getPanelAtY now uses _hvnClarityH/_flowAccelH (module-level) instead of draw()-local _clarH/_fah that were inaccessible, so oscillator panels are properly detected.
+  - Fixed mobile: touchstart detects oscScaleHit → oscScale mode (drag = zoom oscillator range).
+  - Fixed mobile: pan mode stores oscKind; V-drag in oscillator pans oscillator center, not price chart.
+  - Fixed mobile: pinch stores oscKind at midpoint; 2-finger spread in oscillator zooms oscillator range.
+  - Fixed mobile: double-tap in oscillator resets that oscillator (center/range), not chart zoom.
+  - Fixed mobile: drawCrosshair oscillator label uses _hvnClarityH/_flowAccelH for correct panel bounds.
+  - Fixed mobile: neutralized DVL_BETA_0041 DOM crosshair overlay (display:none!important); native canvas crosshair now draws oscillator crosshair labels correctly.
+  - oscKind:null added to touchState initialization.
+
 Beta 0.050
   - Native oscillator panel integration: oscillator wheel zoom routed in main wrap handler.
   - Added oscPanelAtY(), oscScaleHit(), oscEnsureScale(), oscSaveScale() helper functions.
@@ -252,7 +262,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.050";
+  const LOCAL_VERSION = "Beta 0.051";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -1820,7 +1830,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.050";
+window.DVL_APP_VERSION = "Beta 0.051";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2454,11 +2464,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.050</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.051</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.050</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.051</span>
       </div>
 
       <div class="tb-right-btns">
@@ -5311,13 +5321,12 @@ function drawVolumeOverlay(ctx,W,H,V,xFn,bw){
 }
 function getPanelAtY(y,H){
   if(y<=H-PB)return 'mainChart';
-  if(_clarH>0&&y>=H-10-_clarH&&y<=H-10)return 'trendClarity';
-  if(_fah>0){
-    const clarOff=_clarH>0?_clarH+PANEL_GAP:0;
-    const flowBot=H-10-clarOff;
-    const flowTop=flowBot-_fah;
-    if(y>=flowTop&&y<=flowBot)return 'flow';
-  }
+  // Beta 0.051: use module-level vars (_hvnClarityH/_flowAccelH) — _clarH/_fah are draw()-local and inaccessible here
+  const _gpc=(window.S&&S.inds&&S.candles&&S.candles.length);
+  const _phClar=_gpc&&S.inds.hvnClarity?_hvnClarityH:0;
+  const _phFlow=_gpc&&S.inds.flowAccel?_flowAccelH:0;
+  if(_phClar>0&&y>=H-10-_phClar&&y<=H-10)return 'trendClarity';
+  if(_phFlow>0){const clarOff=_phClar>0?_phClar+PANEL_GAP:0;const fb=H-10-clarOff,ft=fb-_phFlow;if(y>=ft&&y<=fb)return 'flow';}
   return 'none';
 }
 function drawCrosshair(ctx,W,H,sc,xFn,V){
@@ -5363,8 +5372,9 @@ function drawCrosshair(ctx,W,H,sc,xFn,V){
     ctx.setLineDash([]);
     if(!S.yScale.hidden){
       const lblW=Math.max(74,Math.min(92,RP()-4)),lblH=18;
-      const panTop=panel==='trendClarity'?(H-10-_clarH):(H-10-(_clarH>0?_clarH+PANEL_GAP:0)-_fah);
-      const panBot=panel==='trendClarity'?(H-10):(H-10-(_clarH>0?_clarH+PANEL_GAP:0));
+      const _oClar=_hvnClarityH,_oFlow=_flowAccelH;
+      const panTop=panel==='trendClarity'?(H-10-_oClar):(H-10-(_oClar>0?_oClar+PANEL_GAP:0)-_oFlow);
+      const panBot=panel==='trendClarity'?(H-10):(H-10-(_oClar>0?_oClar+PANEL_GAP:0));
       const lblX=right+2,lblY=clamp(cy-lblH/2,panTop,panBot-lblH);
       ctx.fillStyle='rgba(12,28,70,0.97)';ctx.fillRect(lblX,lblY,lblW,lblH);
       ctx.strokeStyle='rgba(140,170,240,0.55)';ctx.lineWidth=0.8;ctx.strokeRect(lblX+.5,lblY+.5,lblW-1,lblH-1);
@@ -6082,9 +6092,9 @@ document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelect
 (()=>{let _rhDrag=null;const rh=el('hvnResizeHandle');if(!rh)return;rh.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();rh.setPointerCapture(e.pointerId);_rhDrag={y:e.clientY,h:_hvnClarityH};rh.classList.add('active');});rh.addEventListener('pointermove',e=>{if(!_rhDrag)return;_hvnClarityH=clamp(_rhDrag.h-(e.clientY-_rhDrag.y),72,300);drawSoon();});rh.addEventListener('pointerup',()=>{if(!_rhDrag)return;_rhDrag=null;rh.classList.remove('active');try{localStorage.setItem('dvl_hvnClarityH',Math.round(_hvnClarityH));}catch(_){}});rh.addEventListener('pointercancel',()=>{_rhDrag=null;rh.classList.remove('active');});})();(()=>{let _frhDrag=null;const frh=el('flowResizeHandle');if(!frh)return;frh.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();frh.setPointerCapture(e.pointerId);_frhDrag={y:e.clientY,h:_flowAccelH};frh.classList.add('active');});frh.addEventListener('pointermove',e=>{if(!_frhDrag)return;_flowAccelH=clamp(_frhDrag.h-(e.clientY-_frhDrag.y),60,240);drawSoon();});frh.addEventListener('pointerup',()=>{if(!_frhDrag)return;_frhDrag=null;frh.classList.remove('active');try{localStorage.setItem('dvl_flowH',Math.round(_flowAccelH));}catch(_){}});frh.addEventListener('pointercancel',()=>{_frhDrag=null;frh.classList.remove('active');});})();['volMaLen','heatOpacity','heatDistPct','heatStepNear','heatStepMid','heatStepFar','heatZone1','heatZone2','profileRows','fpMinCov','fpRowThresh','fpImbalRatio','fpStackedMin','btLastCandles','fpWickMinPct','fpMaxScale'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});
 ['hvnLineGlow','hvnHistOpac'].forEach(id=>{const n=el(id);if(n)n.addEventListener('input',drawSoon)});['bigBuyColor','bigSellColor','btAbsColor','volBuyColor','volSellColor'].forEach(id=>{const inp=el(id);if(!inp)return;const sw=el(id+'Swatch');const upd=()=>{if(sw)sw.style.background=inp.value;drawSoon();};inp.addEventListener('input',upd);inp.addEventListener('change',upd);});if(el('volMode'))el('volMode').addEventListener('change',()=>{drawSoon();if(el('volMode').value==='delta')reloadAggTradesForBigBars(true,S.loadSeq,S.sym,S.tf,500);});
 if(el('btLastCandles'))el('btLastCandles').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('bigBars'))el('bigBars').addEventListener('change',()=>reloadAggTradesForBigBars(true));if(el('depthLimit'))el('depthLimit').addEventListener('change',refreshDepth);if(el('bookWidthInput'))el('bookWidthInput').addEventListener('change',()=>{S.book.w=clamp(+el('bookWidthInput').value||154,S.book.minW,S.book.maxW);draw();});
-let touchState={mode:null,axis:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5};
+let touchState={mode:null,axis:null,lastX:0,lastY:0,dist:0,midX:0,midY:0,anchorRel:.5,oscKind:null};
 function touchDist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
-wrap.addEventListener('touchstart',e=>{if(e.target?.closest?.('#dvlDrawSettingsPanel,.input-modal,#dvlTextPopup,#dvlDrawCtxBar'))return;if(S.drawingToolActive||S.selectedDrawing)return;if(!S.candles.length)return;if(S._rulerNew||S._rulerDragSv)return;if(S.tool==='ruler'&&!S._cross)return;const r=wrap.getBoundingClientRect();if(e.touches.length===1){const x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if((S.tool==='long'||S.tool==='short')&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){e.preventDefault();if(!S._posDraft){S._cross={cx:x,cy:y};S._posDraft={type:S.tool};draw();}else{addPosition(S._posDraft.type,x,y,r.width,r.height,sc);S._posDraft=null;}return}if(bookResizeHit(x,y)){e.preventDefault();touchState.mode='bookResize';S.book.resize=true;draw();return}if(priceScaleHit(x,y,r.width,r.height)){e.preventDefault();touchState.mode='priceScale';S.yScale.drag=true;S.yScale.lastY=e.touches[0].clientY;draw();return}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){e.preventDefault();if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}touchState.mode='pos';S.dragPos={...hit,lastX:e.touches[0].clientX,lastY:e.touches[0].clientY};return}touchState._startCX=e.touches[0].clientX;touchState._startCY=e.touches[0].clientY;touchState._startX=x;touchState._startY=y;touchState._moved=false;touchState._justActivated=false;touchState._startTime=Date.now();if(touchState._lpt){clearTimeout(touchState._lpt);touchState._lpt=null;}if(S._cross&&x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-10){touchState.mode='cross';touchState._crossStartX=S._cross.cx;touchState._crossStartY=S._cross.cy;}else{touchState.mode='pan';touchState.axis=null;touchState.lastX=e.touches[0].clientX;touchState.lastY=e.touches[0].clientY;S.view.auto=false;if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-10){
+wrap.addEventListener('touchstart',e=>{if(e.target?.closest?.('#dvlDrawSettingsPanel,.input-modal,#dvlTextPopup,#dvlDrawCtxBar'))return;if(S.drawingToolActive||S.selectedDrawing)return;if(!S.candles.length)return;if(S._rulerNew||S._rulerDragSv)return;if(S.tool==='ruler'&&!S._cross)return;const r=wrap.getBoundingClientRect();if(e.touches.length===1){const x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top;const V=visible(),sc=scale(V.cs,r.height);if((S.tool==='long'||S.tool==='short')&&(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB)){e.preventDefault();if(!S._posDraft){S._cross={cx:x,cy:y};S._posDraft={type:S.tool};draw();}else{addPosition(S._posDraft.type,x,y,r.width,r.height,sc);S._posDraft=null;}return}if(bookResizeHit(x,y)){e.preventDefault();touchState.mode='bookResize';S.book.resize=true;draw();return}if(priceScaleHit(x,y,r.width,r.height)){e.preventDefault();touchState.mode='priceScale';S.yScale.drag=true;S.yScale.lastY=e.touches[0].clientY;draw();return}const _osh=oscScaleHit(x,y,r.width,r.height);if(_osh){e.preventDefault();touchState.mode='oscScale';touchState.oscKind=_osh;touchState.lastY=e.touches[0].clientY;return;}const hit=hitPosition(x,y,r.width,r.height,sc);if(hit){e.preventDefault();if(hit.part==='delete'){S.positions.splice(hit.index,1);draw();return}touchState.mode='pos';S.dragPos={...hit,lastX:e.touches[0].clientX,lastY:e.touches[0].clientY};return}touchState._startCX=e.touches[0].clientX;touchState._startCY=e.touches[0].clientY;touchState._startX=x;touchState._startY=y;touchState._moved=false;touchState._justActivated=false;touchState._startTime=Date.now();if(touchState._lpt){clearTimeout(touchState._lpt);touchState._lpt=null;}if(S._cross&&x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-10){touchState.mode='cross';touchState._crossStartX=S._cross.cx;touchState._crossStartY=S._cross.cy;}else{touchState.mode='pan';touchState.oscKind=oscPanelAtY(y,r.height)||null;touchState.axis=null;touchState.lastX=e.touches[0].clientX;touchState.lastY=e.touches[0].clientY;S.view.auto=false;if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-10){
   touchState._lpt=setTimeout(()=>{
     touchState._lpt=null;
     touchState.mode='cross';
@@ -6092,14 +6102,14 @@ wrap.addEventListener('touchstart',e=>{if(e.target?.closest?.('#dvlDrawSettingsP
     S._cross={cx:touchState._startX,cy:touchState._startY};
     drawSoon();
   },450);
-}}}else if(e.touches.length===2){e.preventDefault();touchState.mode='pinch';touchState.dist=touchDist(e.touches[0],e.touches[1]);touchState.midX=(e.touches[0].clientX+e.touches[1].clientX)/2;touchState.midY=(e.touches[0].clientY+e.touches[1].clientY)/2;touchState.anchorRel=clamp((touchState.midX-r.left-PL)/CW(r.width),0,1);S.view.auto=false}},{passive:false});
-wrap.addEventListener('touchmove',e=>{if(e.target?.closest?.('#dvlDrawSettingsPanel,.input-modal,#dvlTextPopup,#dvlDrawCtxBar'))return;if(S.drawingToolActive||S.selectedDrawing)return;if(!S.candles.length)return;e.preventDefault();const r=wrap.getBoundingClientRect();if(touchState.mode==='bookResize'&&e.touches.length===1){const x=e.touches[0].clientX-r.left;resizeBookFromX(x,r.width);return}if(touchState.mode==='priceScale'&&e.touches.length===1){const dy=e.touches[0].clientY-S.yScale.lastY;_dvlZoomManualY(dy);S.yScale.lastY=e.touches[0].clientY;drawSoon();return}if(touchState.mode==='pos'&&e.touches.length===1){dragPosition({clientX:e.touches[0].clientX,clientY:e.touches[0].clientY},r);return}if(touchState.mode==='cross'&&e.touches.length===1){const _tx=e.touches[0].clientX-r.left,_ty=e.touches[0].clientY-r.top;const ncx=clamp(touchState._crossStartX+(_tx-touchState._startX),PL,r.width-RP());const ncy=clamp(touchState._crossStartY+(_ty-touchState._startY),PT,r.height-10);S._cross={cx:ncx,cy:ncy};touchState._moved=true;drawSoon();}else if(touchState.mode==='pan'&&e.touches.length===1){const _pmx=e.touches[0].clientX,_pmy=e.touches[0].clientY;if(touchState._lpt&&(Math.abs(_pmx-touchState._startCX)>10||Math.abs(_pmy-touchState._startCY)>10)){clearTimeout(touchState._lpt);touchState._lpt=null;}if(!touchState.axis){const _adx=Math.abs(_pmx-touchState._startCX),_ady=Math.abs(_pmy-touchState._startCY);if(_adx>8||_ady>8)touchState.axis=_ady>_adx*1.4?'v':'h';}if(touchState.axis==='v'){const dy=_pmy-touchState.lastY;if(dy){_dvlPanManualY(dy,r.height-PT-PB);}touchState.lastY=_pmy;drawSoon();}else{const span=S.view.end-S.view.start,dx=_pmx-touchState.lastX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;touchState.lastX=_pmx;touchState.lastY=_pmy;_panDx+=dx;const cc=el('chart');if(cc)cc.style.transform=`translateX(${_panDx}px)`;drawSoon();}}else if(touchState.mode==='pinch'&&e.touches.length===2){const nd=touchDist(e.touches[0],e.touches[1]);const midX=(e.touches[0].clientX+e.touches[1].clientX)/2;const midY=(e.touches[0].clientY+e.touches[1].clientY)/2;const raw=touchState.dist/Math.max(1,nd);const factor=clamp(1+(raw-1)*0.72,.88,1.12);zoom(factor,touchState.anchorRel);const span=S.view.end-S.view.start,dx=midX-touchState.midX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;touchState.dist=nd;touchState.midX=midX;touchState.midY=midY;draw()}},{passive:false});
+}}}else if(e.touches.length===2){e.preventDefault();touchState.mode='pinch';touchState.dist=touchDist(e.touches[0],e.touches[1]);touchState.midX=(e.touches[0].clientX+e.touches[1].clientX)/2;touchState.midY=(e.touches[0].clientY+e.touches[1].clientY)/2;touchState.oscKind=oscPanelAtY(touchState.midY-r.top,r.height)||null;touchState.anchorRel=clamp((touchState.midX-r.left-PL)/CW(r.width),0,1);S.view.auto=false}},{passive:false});
+wrap.addEventListener('touchmove',e=>{if(e.target?.closest?.('#dvlDrawSettingsPanel,.input-modal,#dvlTextPopup,#dvlDrawCtxBar'))return;if(S.drawingToolActive||S.selectedDrawing)return;if(!S.candles.length)return;e.preventDefault();const r=wrap.getBoundingClientRect();if(touchState.mode==='bookResize'&&e.touches.length===1){const x=e.touches[0].clientX-r.left;resizeBookFromX(x,r.width);return}if(touchState.mode==='priceScale'&&e.touches.length===1){const dy=e.touches[0].clientY-S.yScale.lastY;_dvlZoomManualY(dy);S.yScale.lastY=e.touches[0].clientY;drawSoon();return}if(touchState.mode==='oscScale'&&e.touches.length===1){const dy=e.touches[0].clientY-touchState.lastY;const o=oscEnsureScale(touchState.oscKind);o.range=Math.max(1e-9,Math.min(1e15,o.range*Math.exp(dy*0.0028)));touchState.lastY=e.touches[0].clientY;oscSaveScale(touchState.oscKind);drawSoon();return;}if(touchState.mode==='pos'&&e.touches.length===1){dragPosition({clientX:e.touches[0].clientX,clientY:e.touches[0].clientY},r);return}if(touchState.mode==='cross'&&e.touches.length===1){const _tx=e.touches[0].clientX-r.left,_ty=e.touches[0].clientY-r.top;const ncx=clamp(touchState._crossStartX+(_tx-touchState._startX),PL,r.width-RP());const ncy=clamp(touchState._crossStartY+(_ty-touchState._startY),PT,r.height-10);S._cross={cx:ncx,cy:ncy};touchState._moved=true;drawSoon();}else if(touchState.mode==='pan'&&e.touches.length===1){const _pmx=e.touches[0].clientX,_pmy=e.touches[0].clientY;if(touchState._lpt&&(Math.abs(_pmx-touchState._startCX)>10||Math.abs(_pmy-touchState._startCY)>10)){clearTimeout(touchState._lpt);touchState._lpt=null;}if(!touchState.axis){const _adx=Math.abs(_pmx-touchState._startCX),_ady=Math.abs(_pmy-touchState._startCY);if(_adx>8||_ady>8)touchState.axis=_ady>_adx*1.4?'v':'h';}if(touchState.axis==='v'){const dy=_pmy-touchState.lastY;if(dy){if(touchState.oscKind){const o=oscEnsureScale(touchState.oscKind);const ph=touchState.oscKind==='flow'?(_flowAccelH||120):(_hvnClarityH||166);o.center-=dy*(o.range/ph);oscSaveScale(touchState.oscKind);}else{_dvlPanManualY(dy,r.height-PT-PB);}}touchState.lastY=_pmy;drawSoon();}else{const span=S.view.end-S.view.start,dx=_pmx-touchState.lastX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;touchState.lastX=_pmx;touchState.lastY=_pmy;_panDx+=dx;const cc=el('chart');if(cc)cc.style.transform=`translateX(${_panDx}px)`;drawSoon();}}else if(touchState.mode==='pinch'&&e.touches.length===2){const nd=touchDist(e.touches[0],e.touches[1]);const midX=(e.touches[0].clientX+e.touches[1].clientX)/2;const midY=(e.touches[0].clientY+e.touches[1].clientY)/2;const raw=touchState.dist/Math.max(1,nd);const factor=clamp(1+(raw-1)*0.72,.88,1.12);if(touchState.oscKind){const o=oscEnsureScale(touchState.oscKind);o.range=Math.max(1e-9,Math.min(1e15,o.range*factor));oscSaveScale(touchState.oscKind);}else{zoom(factor,touchState.anchorRel);}const span=S.view.end-S.view.start,dx=midX-touchState.midX,per=span/CW(r.width),shift=-dx*per;S.view.start=clamp(S.view.start+shift,0,Math.max(0,futureMax()-span));S.view.end=S.view.start+span;touchState.dist=nd;touchState.midX=midX;touchState.midY=midY;draw()}},{passive:false});
 wrap.addEventListener('touchend',e=>{if(touchState._lpt){clearTimeout(touchState._lpt);touchState._lpt=null;}touchState.mode=null;S.dragPos=null;if(S.yScale.drag){S.yScale.drag=false;draw();return;}if(S.book.resize){S.book.resize=false;draw();}},{passive:true});
 wrap.addEventListener('click',e=>{if(!S._cross)return;if(touchState._justActivated){touchState._justActivated=false;return;}if(S.tool==='ruler'||S._rulerNew)return;if(S._posDraft)return;const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(x>=PL&&x<=r.width-RP()&&y>=PT&&y<=r.height-PB){S._cross=null;S._crossIdx=null;drawSoon();}},{passive:true});
 
 let lastTapTime=0;
 wrap.addEventListener('dblclick',e=>{const r=wrap.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(bookHit(x,y))return;const _dkind=oscPanelAtY(y,r.height)||oscScaleHit(x,y,r.width,r.height);if(_dkind){const o=oscEnsureScale(_dkind);o.center=0;o.range=200;oscSaveScale(_dkind);draw();return;}if(priceScaleHit(x,y,r.width,r.height)){_dvlResetAutoYScale();draw();return}const rel=clamp((x-PL)/CW(r.width),0,1);zoom(.78,rel)});
-wrap.addEventListener('touchend',e=>{const now=Date.now();if(touchState.mode==='pan'&&now-lastTapTime<280){const r=wrap.getBoundingClientRect();const t=e.changedTouches&&e.changedTouches[0];if(t){const x=t.clientX-r.left,y=t.clientY-r.top;if(!bookHit(x,y)){const rel=clamp((x-PL)/CW(r.width),0,1);zoom(.78,rel)}}}lastTapTime=now;},{passive:true});
+wrap.addEventListener('touchend',e=>{const now=Date.now();if(touchState.mode==='pan'&&now-lastTapTime<280){const r=wrap.getBoundingClientRect();const t=e.changedTouches&&e.changedTouches[0];if(t){const x=t.clientX-r.left,y=t.clientY-r.top;if(!bookHit(x,y)){const _dtKind=oscPanelAtY(y,r.height);if(_dtKind){const o=oscEnsureScale(_dtKind);o.center=0;o.range=200;oscSaveScale(_dtKind);draw();}else{const rel=clamp((x-PL)/CW(r.width),0,1);zoom(.78,rel)}}}}lastTapTime=now;},{passive:true});
 
 
 /* V56 - tooltip somente no toque segurado + countdown do fechamento da vela */
@@ -8110,9 +8120,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.050'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.051'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.050';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.051';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8125,12 +8135,13 @@ window._dvlClarEyeHit = null;
 
 <!-- DVL Beta 0.049 — oscillator-only cross overlay, native/original cross remains source of truth -->
 <style id="DVL_BETA_0041_OSC_CROSS_OVERLAY_CSS">
+  /* NEUTRALIZED Beta 0.051: native canvas drawCrosshair now handles oscillator panels */
   #dvlOscCrossOverlay{
     position:absolute;
     inset:0;
     z-index:2147483000;
     pointer-events:none;
-    display:none;
+    display:none!important;
     overflow:hidden;
   }
   #dvlOscCrossOverlay .dvl-osc-cross-v,
@@ -8150,7 +8161,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.050';
+  const VERSION='Beta 0.051';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8452,7 +8463,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.050';
+  const VERSION='Beta 0.051';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -14729,11 +14740,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.050';
+  window.DVL_APP_VERSION='Beta 0.051';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.050';
+    if(b)b.textContent='Beta 0.051';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -14757,7 +14768,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.050';
+  const VERSION = 'Beta 0.051';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
