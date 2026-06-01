@@ -41,6 +41,15 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.076
+  - HVN Signals settings: added FILTROS section (Clarity threshold, Flow
+    threshold, Dist. prox. HVN) and GESTÃO section (SL, TP) with the same
+    options as the Strategy Tester Backtest form.
+  - _applyToHVNSignals now syncs both: HVN Signals indicator fields AND
+    all Strategy Tester form fields — optimizer apply finally updates the
+    backtest form so re-running gives consistent results.
+  - _btCache cleared on apply so next run picks up the new config.
+
 Beta 0.075
   - DEMO DATA badge: now dismissible with × click; hides permanently for session.
   - Backtest results: "APLICAR AO HVN SIGNALS" button — sets hvnSigMinWick,
@@ -433,7 +442,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.075";
+  const LOCAL_VERSION = "Beta 0.076";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2123,7 +2132,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.075";
+window.DVL_APP_VERSION = "Beta 0.076";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2932,11 +2941,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.075</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.076</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.075</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.076</span>
       </div>
 
       <div class="tb-right-btns">
@@ -3603,6 +3612,44 @@ html.pre-ui .switch::after{transition:none!important}
             <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">LATERALIZAÇÃO</div>
             <label class="kv" style="cursor:pointer;"><span class="k">Sinal após consolidação</span><input type="checkbox" id="hvnSigAllowLateral" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <div class="kv"><span class="k">Máx. candles na zona</span><input class="num" id="hvnSigLateral" type="number" min="1" max="20" step="1" value="5" style="width:52px"></div>
+            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
+            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">FILTROS</div>
+            <div class="kv"><span class="k">Trend Clarity</span>
+              <select class="select" id="hvnSigClarity" style="width:104px">
+                <option value="off">Desativado</option>
+                <option value="10">LONG &gt; +10</option>
+                <option value="20" selected>LONG &gt; +20</option>
+                <option value="30">LONG &gt; +30</option>
+                <option value="-5">SHORT &lt; -5</option>
+                <option value="-10">SHORT &lt; -10</option>
+                <option value="-20">SHORT &lt; -20</option>
+              </select></div>
+            <div class="kv"><span class="k">DVL Flow</span>
+              <select class="select" id="hvnSigFlow" style="width:104px">
+                <option value="off">Desativado</option>
+                <option value="10">LONG &gt; +10</option>
+                <option value="20" selected>LONG &gt; +20</option>
+                <option value="30">LONG &gt; +30</option>
+                <option value="-5">SHORT &lt; -5</option>
+                <option value="-10">SHORT &lt; -10</option>
+                <option value="-20">SHORT &lt; -20</option>
+              </select></div>
+            <div class="kv"><span class="k">Prox. HVN dist. %</span><input class="num" id="hvnSigNextHVN" type="number" min="0" max="2" step="0.05" value="0.35" style="width:52px"></div>
+            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
+            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">GESTÃO DE RISCO</div>
+            <div class="kv"><span class="k">Stop Loss</span>
+              <select class="select" id="hvnSigSL" style="width:104px">
+                <option value="wick" selected>Atrás do pavio</option>
+                <option value="hvn">Atrás da HVN</option>
+                <option value="atr">ATR</option>
+              </select></div>
+            <div class="kv"><span class="k">Take Profit</span>
+              <select class="select" id="hvnSigTP" style="width:104px">
+                <option value="hvn" selected>Próxima HVN</option>
+                <option value="1r">1R</option>
+                <option value="1.5r">1.5R</option>
+                <option value="2r">2R</option>
+              </select></div>
             <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
             <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">VISUAL</div>
             <div class="kv"><span class="k">Tamanho label</span><select class="select" id="hvnSigLabelSize" style="width:72px"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large</option></select></div>
@@ -6635,7 +6682,7 @@ function openInputModal(key,gear){
   if(!settings||!inputModal||!inputModalBody)return;
   if(inputModalState.settings===settings){closeInputModal();return;}
   closeInputModal();
-  // Beta 0.075: sidebar stays open while modal is shown
+  // Beta 0.076: sidebar stays open while modal is shown
   const title=(card&&card.querySelector('.name')?card.querySelector('.name').textContent:'Inputs');
   const ph=document.createComment('settings-'+key+'-placeholder');
   settings.parentNode.insertBefore(ph,settings);
@@ -6649,7 +6696,7 @@ function openInputModal(key,gear){
   inputModalState={settings:settings,placeholder:ph,card:card,gear:gear};
 }
 document.querySelectorAll('.gear[data-settings]').forEach(g=>{
-  // Beta 0.075: only open on intentional tap, not during scroll
+  // Beta 0.076: only open on intentional tap, not during scroll
   var _gts={x:0,y:0,moved:false};
   g.addEventListener('touchstart',function(ev){
     _gts.x=ev.touches[0].clientX;_gts.y=ev.touches[0].clientY;_gts.moved=false;
@@ -8801,9 +8848,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.075'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.076'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.075';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.076';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8842,7 +8889,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.075';
+  const VERSION='Beta 0.076';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9021,7 +9068,7 @@ window._dvlClarEyeHit = null;
     return false;
   }
   ready(()=>{const wrap=E('chartWrap');if(!wrap)return;['pointerdown','mousedown','touchstart'].forEach(ev=>wrap.addEventListener(ev,function(e){
-    // Let DOM overlay gear buttons handle their own touches (Beta 0.075)
+    // Let DOM overlay gear buttons handle their own touches (Beta 0.076)
     if(e.target&&e.target.id&&String(e.target.id).indexOf('dvlOscGearOverlay_')===0)return;
     const p=e.touches&&e.touches[0]?e.touches[0]:e;
     if(hitGear(p)){e.preventDefault();e.stopImmediatePropagation();}
@@ -9147,7 +9194,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.075';
+  const VERSION='Beta 0.076';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9477,7 +9524,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.075 ── */
+/* ── DVL Strategy Tester — Beta 0.076 ── */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
 #dvlSTScrim.show{display:block}
 #dvlSTPanel{
@@ -9614,7 +9661,7 @@ input[type="color"]{border-radius:7px!important;}
   .dvl-st-body{padding-bottom:22px}
 }
 
-/* Beta 0.075 — reset & apply buttons */
+/* Beta 0.076 — reset & apply buttons */
 .dvl-st-hreset{width:26px;height:26px;background:rgba(255,255,255,.03);border:1px solid #192438;border-radius:7px;color:#6a8099;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s;margin-left:auto}
 .dvl-st-hreset:hover{border-color:rgba(0,212,255,.4);color:#00d4ff}
 .dvl-st-hclose{margin-left:0!important}
@@ -9625,10 +9672,10 @@ input[type="color"]{border-radius:7px!important;}
 </style>
 
 <script id="DVL_STRATEGY_TESTER">
-/* Beta 0.075 — Strategy Tester */
+/* Beta 0.076 — Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.075';
+var V='Beta 0.076';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -9682,7 +9729,7 @@ var OPT_PARAMS=[
   });
 })();
 
-/* ── deterministic backtest engine (Beta 0.075) ─────────────────── */
+/* ── deterministic backtest engine (Beta 0.076) ─────────────────── */
 
 /* Mulberry32 seeded PRNG — same seed → same sequence always */
 function _mkRng(seed){
@@ -10096,24 +10143,57 @@ function _syncLivePrice(){
 }
 
 /* ── apply config to HVN Signals indicator ───────────────────── */
-function _applyToHVNSignals(cfg,label){
-  var applied=[];
+/* canonical sync: cfg object → both HVN Signals fields AND Strategy Tester form */
+function _syncAllFromCfg(cfg){
+  if(!cfg)return;
+  var ws=parseFloat(cfg.wickSens||cfg.w||45);
+  var trend=cfg.trend!==undefined?String(cfg.trend):null;
+  var flow=cfg.flow!==undefined?String(cfg.flow):null;
+  var nextHVN=cfg.nextHVN||cfg.hvn;
+  var sl=cfg.sl;
+  var tp=cfg.tp;
+  var maxCandles=cfg.maxCandles||cfg.cons;
+  var risk=cfg.risk;
+
+  function _setVal(id,val){if(val===null||val===undefined)return;var el=document.getElementById(id);if(el)el.value=val;}
+  function _setSelVal(id,val){if(val===null||val===undefined)return;var el=document.getElementById(id);if(!el)return;var found=false;for(var i=0;i<el.options.length;i++){if(el.options[i].value===String(val)){el.selectedIndex=i;found=true;break;}}if(!found&&el.options.length)el.selectedIndex=0;}
+
+  /* ── HVN Signals indicator fields ── */
+  _setVal('hvnSigMinWick', Math.min(80,Math.max(5,Math.round(ws))));
+  _setVal('hvnSigSens',    Math.max(0,Math.min(50,Math.round(ws*0.4))));
+  if(maxCandles)_setVal('hvnSigLateral', maxCandles);
+  if(trend!==null)_setSelVal('hvnSigClarity', trend);
+  if(flow!==null) _setSelVal('hvnSigFlow',    flow);
+  if(nextHVN)     _setVal('hvnSigNextHVN',    nextHVN);
+  if(sl)          _setSelVal('hvnSigSL',       sl);
+  if(tp)          _setSelVal('hvnSigTP',       tp);
+
+  /* ── Strategy Tester Backtest form fields ── */
+  _setVal('stWickSens',  ws);
+  if(trend!==null)_setSelVal('stFTrend', trend);
+  if(flow!==null) _setSelVal('stFFlow',  flow);
+  if(nextHVN)     _setVal('stNextHVN',   nextHVN);
+  if(sl)          _setSelVal('stSL',     sl);
+  if(tp)          _setSelVal('stTP',     tp);
+  if(maxCandles)  _setVal('stMaxCandles',maxCandles);
+  if(risk)        _setVal('stRisk',      risk);
+
+  /* update S.settings */
   try{
-    /* wick sensitivity → hvnSigMinWick (0-80 range) */
-    var ws=parseFloat(cfg.wickSens||cfg.w||45);
-    var wickEl=document.getElementById('hvnSigMinWick');
-    if(wickEl){wickEl.value=Math.min(80,Math.max(5,Math.round(ws)));applied.push('Pavio mín → '+ws+'%');}
-    /* sens → hvnSigSens (complementary sensitivity 0-50) */
-    var sensEl=document.getElementById('hvnSigSens');
-    if(sensEl){var sens=Math.max(0,Math.min(50,Math.round(ws*0.4)));sensEl.value=sens;applied.push('Sens → '+sens);}
-    /* update S.settings directly */
     if(window.S&&window.S.settings){
-      if(wickEl)window.S.settings.hvnSigMinWick=parseFloat(wickEl.value);
-      if(sensEl)window.S.settings.hvnSigSens=parseFloat(sensEl.value);
+      window.S.settings.hvnSigMinWick=Math.min(80,Math.max(5,Math.round(ws)));
+      window.S.settings.hvnSigSens=Math.max(0,Math.min(50,Math.round(ws*0.4)));
     }
-    if(typeof drawSoon==='function')drawSoon();
-  }catch(e){}
-  return applied;
+  }catch(_){}
+
+  /* clear cache so next backtest run picks up new values */
+  for(var k in _btCache)delete _btCache[k];
+
+  if(typeof drawSoon==='function')drawSoon();
+}
+
+function _applyToHVNSignals(cfg){
+  _syncAllFromCfg(cfg);
 }
 
 /* ── Apply to HVN Signals button (backtest results) ─────────── */
@@ -10175,7 +10255,7 @@ if(_origApplyBest){
   });
 }
 
-window._dvlST={open:open,close:close,version:V};
+window._dvlST={open:open,close:close,version:V,syncCfg:_syncAllFromCfg};
 console.log('[DVL] Strategy Tester '+V+' loaded');
 })();
 </script>
@@ -16715,11 +16795,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.075';
+  window.DVL_APP_VERSION='Beta 0.076';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.075';
+    if(b)b.textContent='Beta 0.076';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -16829,7 +16909,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.075';
+  const VERSION = 'Beta 0.076';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -16839,13 +16919,13 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.075 — DOM overlay buttons for canvas-drawn oscillator gear icons.
+/* Beta 0.076 — DOM overlay buttons for canvas-drawn oscillator gear icons.
    Canvas hit-detection (hitGear) can miss on mobile due to touch coordinate
    precision. These transparent buttons sit exactly over the drawn gears and
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.075';
+  var VERSION='Beta 0.076';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
@@ -16963,7 +17043,7 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_HVN_SIGNALS">
-/* HVN Signals — Beta 0.075
+/* HVN Signals — Beta 0.076
    Pure chart-overlay indicator: detects LONG/SHORT when a candle wick touches an
    HVN zone then the candle closes back out (rejection). No oscillator, no panel,
    no histogram — only LONG/SHORT labels drawn directly on the main chart canvas.
