@@ -41,7 +41,7 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
-Beta 0.061
+Beta 0.062
   - FERRAMENTAS panel width: changed from min(248px,76vw) to min(calc(50vw-4px),340px).
   - Panel now fills ~50% of screen, balanced 50/50 with the left side (tiny 8px gap between panels).
   - Botão Sair: width:auto (not full-width), centrado na seção, padding 9px 28px — compacto e elegante.
@@ -58,7 +58,14 @@ Beta 0.060
 Beta 0.059
   - Fix: oscillator canvas gear icons required hold to open settings (single tap now works).
   - Fix: hitGear() now takes (x,y) coords; outer handler calls e.stopImmediatePropagation() on real event.
-  - Fix: __dvl044 hit box enlarged to 44×44px (±22px).
+  - Fix: __dvl044 hit box enlarged to 44x44px (+/-22px).
+- Beta 0.062:
+  - INDICADORES sidebar redesigned as "Painel de cards inteligentes" (smart cards panel).
+  - Each indicator card: colored icon, name, NATIVO/ATIVO badges, toggle switch, gear, star (favorite).
+  - Added search bar (filter by name), tabs (Todos/Nativos/Favoritos), category headers (Prioritarios/Volume & Liquidez/Confluencia & Sinais/Clareza & HVN).
+  - Favorites persisted in localStorage (dvl_ind_favs).
+  - ATIVO badge reflects live switch state via CSS :has(.row.on).
+  - All JS hooks preserved: data-ind, data-card, data-settings, id=settings-*, .switch, .ind-card.
 
 Beta 0.058
   - Gear settings button opens with single tap on mobile (no hold required).
@@ -343,7 +350,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.061";
+  const LOCAL_VERSION = "Beta 0.062";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2034,7 +2041,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.061";
+window.DVL_APP_VERSION = "Beta 0.062";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2682,11 +2689,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.061</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.062</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.061</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.062</span>
       </div>
 
       <div class="tb-right-btns">
@@ -2888,13 +2895,40 @@ html.pre-ui .switch::after{transition:none!important}
         </div>
       </div>
 
-      <div class="section">
+      <div class="section dvl-ind-panel">
         <div class="title">INDICADORES</div>
 
-        <div class="ind-card" data-card="heatmap">
-          <div class="ind-head">
-            <div class="row" data-ind="heatmap"><span class="name">Liquidity Heatmap</span><span class="switch"></span></div>
-            <button class="gear" data-settings="heatmap" title="Inputs Liquidity Heatmap">⚙</button>
+        <div class="dvl-ind-search-wrap">
+          <svg class="dvl-search-ico" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6.5" cy="6.5" r="4"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
+          <input type="text" id="dvlIndSearch" class="dvl-ind-search" placeholder="Buscar indicador..." autocomplete="off">
+          <button class="dvl-search-x" id="dvlIndSearchX" type="button" aria-label="Limpar">&#215;</button>
+        </div>
+
+        <div class="dvl-ind-tabs" role="tablist">
+          <button class="dvl-tab active" data-tab="todos" role="tab" type="button">Todos</button>
+          <button class="dvl-tab" data-tab="nativos" role="tab" type="button">Nativos</button>
+          <button class="dvl-tab" data-tab="favoritos" role="tab" type="button">Favoritos</button>
+        </div>
+
+        <div class="dvl-ind-empty" id="dvlIndEmpty">Nenhum indicador encontrado.</div>
+
+        <div class="dvl-cat-hdr" data-dvl-cat="prioritarios">Prioritários</div>
+
+        <div class="ind-card dvl-icd" data-card="heatmap" data-dvl-cat="prioritarios">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(255,87,87,.12);--ic-cl:#ff5757"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 14c-2.5 0-4.5-2-4.5-4.5 0-2 1.2-3.5 2.5-5-.3 1.2.5 2 .8 2.5.5-1.5 1.2-3.5.7-5C10 3.5 12.5 6 12.5 9 12.5 12 10.5 14 8 14z"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">Liquidity Heatmap</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="heatmap"><span class="switch"></span></div>
+              <button class="gear" data-settings="heatmap" title="Configurar Liquidity Heatmap">&#9881;</button>
+              <button class="dvl-star" data-star="heatmap" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
           </div>
           <div class="ind-settings" id="settings-heatmap">
             <div class="kv"><span class="k">Brilho</span><input class="num" id="heatOpacity" type="number" min="0.10" max="1" step="0.05" value="0.92"></div>
@@ -2909,10 +2943,21 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
-        <div class="ind-card" data-card="profile">
-          <div class="ind-head">
-            <div class="row" data-ind="profile"><span class="name">Volume Profile</span><span class="switch"></span></div>
-            <button class="gear" data-settings="profile" title="Inputs Profile">⚙</button>
+        <div class="ind-card dvl-icd" data-card="profile" data-dvl-cat="prioritarios">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(155,89,255,.12);--ic-cl:#9b59ff"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><rect x="2" y="9" width="3" height="5" rx="1"/><rect x="6.5" y="5" width="3" height="9" rx="1"/><rect x="11" y="7" width="3" height="7" rx="1"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">Volume Profile</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="profile"><span class="switch"></span></div>
+              <button class="gear" data-settings="profile" title="Configurar Volume Profile">&#9881;</button>
+              <button class="dvl-star" data-star="profile" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
           </div>
           <div class="ind-settings" id="settings-profile">
             <div class="kv"><span class="k">Rows</span><input class="num" id="profileRows" type="number" min="16" max="120" step="4" value="56"></div>
@@ -2921,31 +2966,21 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
-        <div class="ind-card" data-card="footprint" style="display:none">
-          <div class="ind-head">
-            <div class="row" style="pointer-events:none;"><span class="name" style="opacity:.75;">Footprint Candle</span></div>
-            <button class="gear" data-settings="footprint" title="Inputs Footprint">⚙</button>
-          </div>
-          <div class="ind-settings" id="settings-footprint">
-            <div class="kv"><span class="k">Detalhe visual</span><select class="select tiny-select" id="fpDetail"><option value="auto" selected>Auto</option><option value="minimal">Minimal</option><option value="balanced">Balanced</option><option value="full">Full</option></select></div>
-            <div class="kv"><span class="k">Exibir</span><select class="select tiny-select" id="fpMode"><option value="all" selected>Todos candles</option><option value="last">Últimas 90 velas</option></select></div>
-            <div class="kv"><span class="k">Cobertura real mín.</span><input class="num" id="fpMinCov" type="number" min="0" max="1" step="0.05" value="0.15"></div>
-            <div class="kv"><span class="k">Filtro rows (%)</span><input class="num" id="fpRowThresh" type="number" min="0" max="50" step="1" value="8"></div>
-            <div class="kv"><span class="k">Ratio imbalance</span><input class="num" id="fpImbalRatio" type="number" min="1.2" max="10" step="0.1" value="2.5"></div>
-            <label class="kv" style="cursor:pointer;"><span class="k">Stacked imbalance</span><input type="checkbox" id="fpShowStacked" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <div class="kv"><span class="k">Stacked mín. rows</span><input class="num" id="fpStackedMin" type="number" min="2" max="8" step="1" value="2"></div>
-            <label class="kv" style="cursor:pointer;"><span class="k">Big trade só real FP</span><input type="checkbox" id="fpRequireReal" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <label class="kv" style="cursor:pointer;"><span class="k">Wick absorption</span><input type="checkbox" id="fpWickAbs" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <div class="kv"><span class="k">Wick mín. (%)</span><input class="num" id="fpWickMinPct" type="number" min="10" max="60" step="5" value="30"></div>
-            <div class="kv"><span class="k">Max FP scale</span><input class="num" id="fpMaxScale" type="number" min="1" max="10" step="0.5" value="3"></div>
-            <div class="hint">Auto: zoom determina detalhe. Cobertura ≥35% = real. Sintético aparece desbotado (~).</div>
-          </div>
-        </div>
-
-        <div class="ind-card" data-card="fvgVolume">
-          <div class="ind-head">
-            <div class="row" data-ind="fvgVolume"><span class="name">FVG Volume Zones</span><span class="switch"></span></div>
-            <button class="gear" data-settings="fvgVolume" title="Inputs FVG">⚙</button>
+        <div class="ind-card dvl-icd" data-card="fvgVolume" data-dvl-cat="prioritarios">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(245,158,11,.12);--ic-cl:#f59e0b"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><rect x="2" y="2" width="12" height="4" rx="1.5"/><rect x="2" y="10" width="12" height="4" rx="1.5"/><rect x="4" y="7.5" width="2" height="1" rx=".5"/><rect x="7" y="7.5" width="2" height="1" rx=".5"/><rect x="10" y="7.5" width="2" height="1" rx=".5"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">FVG Volume Zones</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="fvgVolume"><span class="switch"></span></div>
+              <button class="gear" data-settings="fvgVolume" title="Configurar FVG Volume Zones">&#9881;</button>
+              <button class="dvl-star" data-star="fvgVolume" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
           </div>
           <div class="ind-settings" id="settings-fvgVolume">
             <div class="kv"><span class="k">Últimas velas</span><input class="num" id="fvgBars" type="number" min="20" max="520" step="10" value="180"></div>
@@ -2995,10 +3030,23 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
-        <div class="ind-card" data-card="sessionProfile">
-          <div class="ind-head">
-            <div class="row" data-ind="sessionProfile"><span class="name">Session Volume Profile</span><span class="switch"></span></div>
-            <button class="gear" data-settings="sessionProfile" title="Inputs Session Profile">⚙</button>
+        <div class="dvl-cat-hdr" data-dvl-cat="volume">Volume &amp; Liquidez</div>
+
+        <div class="ind-card dvl-icd" data-card="sessionProfile" data-dvl-cat="volume">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(0,212,255,.12);--ic-cl:#00d4ff"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="5.5"/><polyline points="8,4.5 8,8 10.5,9.5"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">Session Volume Profile</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="sessionProfile"><span class="switch"></span></div>
+              <button class="gear" data-settings="sessionProfile" title="Configurar Session Volume Profile">&#9881;</button>
+              <button class="dvl-star" data-star="sessionProfile" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
           </div>
           <div class="ind-settings" id="settings-sessionProfile">
             <div class="kv"><span class="k">Ancoragem</span><select class="select tiny-select" id="svpAnchor"><option value="15m">15 min</option><option value="30m">30 min</option><option value="1h">1 hora</option><option value="2h">2 horas</option><option value="4h">4 horas</option><option value="6h">6 horas</option><option value="12h">12 horas</option><option value="1d" selected>Diário (1D)</option></select></div>
@@ -3020,10 +3068,21 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
-        <div class="ind-card" data-card="stdVolume">
-          <div class="ind-head">
-            <div class="row" data-ind="stdVolume"><span class="name">Volume Padrão MA</span><span class="switch"></span></div>
-            <button class="gear" data-settings="stdVolume" title="Inputs Volume">⚙</button>
+        <div class="ind-card dvl-icd" data-card="stdVolume" data-dvl-cat="volume">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(0,230,118,.12);--ic-cl:#00e676"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><rect x="2" y="8" width="3" height="6" rx="1"/><rect x="6.5" y="4" width="3" height="10" rx="1"/><rect x="11" y="6" width="3" height="8" rx="1"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">Volume Padrão MA</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="stdVolume"><span class="switch"></span></div>
+              <button class="gear" data-settings="stdVolume" title="Configurar Volume Padrão MA">&#9881;</button>
+              <button class="dvl-star" data-star="stdVolume" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
           </div>
           <div class="ind-settings" id="settings-stdVolume">
             <div class="kv"><span class="k">Modo</span><select class="select" id="volMode"><option value="normal" selected>Volume normal</option><option value="delta">Delta buy/sell</option></select></div>
@@ -3035,10 +3094,21 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
-        <div class="ind-card" data-card="volZones">
-          <div class="ind-head">
-            <div class="row" data-ind="volZones"><span class="name">High Volume Zones</span><span class="switch"></span></div>
-            <button class="gear" data-settings="volZones" title="Inputs Volume Zones">⚙</button>
+        <div class="ind-card dvl-icd" data-card="volZones" data-dvl-cat="volume">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(240,178,41,.12);--ic-cl:#f0b229"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><rect x="1" y="3" width="14" height="2.5" rx="1.25" opacity=".6"/><rect x="1" y="6.75" width="14" height="2.5" rx="1.25"/><rect x="1" y="10.5" width="14" height="2.5" rx="1.25" opacity=".6"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">High Volume Zones</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="volZones"><span class="switch"></span></div>
+              <button class="gear" data-settings="volZones" title="Configurar High Volume Zones">&#9881;</button>
+              <button class="dvl-star" data-star="volZones" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
           </div>
           <div class="ind-settings" id="settings-volZones">
             <div class="kv"><span class="k">TF análise</span><select class="select" id="vzTf" style="width:72px"><option value="">Atual</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="2h">2h</option><option value="4h">4h</option><option value="6h">6h</option><option value="12h">12h</option><option value="1d">1d</option><option value="3d">3d</option><option value="1w">1w</option></select></div>
@@ -3052,66 +3122,99 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
-        <div class="ind-card" data-card="hvnPro">
-          <div class="ind-head">
-            <div class="row" data-ind="hvnPro"><span class="name">DVL HVN PRO</span><span class="switch"></span></div>
-            <button class="gear" data-settings="hvnPro" title="DVL HVN PRO settings">⚙</button>
-          </div>
-          <div class="ind-settings" id="settings-hvnPro">
-            <div class="kv"><span class="k">Analysis TF</span><select class="select" id="vhpTf" style="width:72px"><option value="">Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="2h">2h</option><option value="4h">4h</option><option value="6h">6h</option><option value="12h">12h</option><option value="1d">1d</option><option value="3d">3d</option><option value="1w">1w</option></select></div>
-            <div class="kv"><span class="k">Top Zones</span><input class="num" id="vhpTopN" type="number" min="1" max="20" step="1" value="6" style="width:56px"></div>
-            <div class="kv"><span class="k">Lookback</span><input class="num" id="vhpLookback" type="number" min="50" max="2000" step="50" value="300" style="width:56px"></div>
-            <div class="kv"><span class="k">Bucket %</span><input class="num" id="vhpBucket" type="number" min="0.01" max="5" step="0.01" value="0.1" style="width:56px"></div>
-            <div class="kv"><span class="k">Min touches</span><input class="num" id="vhpMinTouch" type="number" min="1" max="200" step="1" value="2" style="width:56px"></div>
-            <div class="kv"><span class="k">Extend bars</span><input class="num" id="vhpExtend" type="number" min="0" max="500" step="1" value="20" style="width:56px"></div>
-            <div class="kv"><span class="k">Merge</span><select class="select" id="vhpMergeSens" style="width:82px"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option></select></div>
-            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin:5px 0 3px;">ADVANCED</div>
-            <div class="kv"><span class="k">Max zone ATR×</span><input class="num" id="vhpMaxAtr" type="number" min="0.3" max="5" step="0.1" value="1.2" style="width:56px"></div>
-            <div class="kv"><span class="k">Density %</span><input class="num" id="vhpDensity" type="number" min="10" max="70" step="5" value="40" style="width:56px"></div>
-            <div class="kv"><span class="k">Valley sep %</span><input class="num" id="vhpValley" type="number" min="10" max="65" step="5" value="35" style="width:56px"></div>
-            <label class="kv" style="cursor:pointer;"><span class="k">Volume profile</span><input type="checkbox" id="vhpShowProfile" style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin:5px 0 3px;">MEMORY</div>
-            <div class="kv"><span class="k">Memory candles</span><input class="num" id="vhpMemory" type="number" min="100" max="5000" step="100" value="1000" style="width:56px"></div>
-            <div class="kv"><span class="k">Min bars confirm</span><input class="num" id="vhpMinBars" type="number" min="1" max="100" step="1" value="8" style="width:56px"></div>
-            <label class="kv" style="cursor:pointer;"><span class="k">Show historical</span><input type="checkbox" id="vhpShowHistorical" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
-            <div class="hint">DVL HVN PRO — experimental. Confirmed/Historical/Developing zones with memory decay. Default OFF.</div>
-          </div>
-        </div>
+        <div class="dvl-cat-hdr" data-dvl-cat="confluencia">Confluência &amp; Sinais</div>
 
-        <div class="ind-card" data-card="hvnClarity">
-          <div class="ind-head">
-            <div class="row" data-ind="hvnClarity"><span class="name">HVN Clarity Engine</span><span class="switch"></span></div>
-            <button class="gear" data-settings="hvnClarity" title="Inputs HVN Clarity Engine">⚙</button>
-          </div>
-          <div class="ind-settings" id="settings-hvnClarity">
-            <label class="kv"><span class="k">Line glow</span><input type="number" class="num" id="hvnLineGlow" value="1.0" min="0" max="2" step="0.1" style="width:56px"></label>
-            <label class="kv"><span class="k">Hist opacity</span><input type="number" class="num" id="hvnHistOpac" value="1.15" min="0.1" max="2.2" step="0.1" style="width:56px"></label>
-            <div class="kv"><span class="k">Coluna bullish</span><input type="color" id="hvnBullColor" value="#00d2ff"></div>
-            <div class="kv"><span class="k">Coluna bearish</span><input type="color" id="hvnBearColor" value="#ff465f"></div>
-            <label class="kv" style="cursor:pointer;"><span class="k">Show Osc Line</span><input type="checkbox" id="hvnShowOscLine" style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
-            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
-            <div style="font-size:9px;color:#00d4ff;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">TIMEFRAME MTF</div>
-            <div class="kv"><span class="k">Calculation TF</span>
-              <select class="select" id="hvnClarityTF" style="width:64px">
-                <option value="current" selected>Current</option>
-                <option value="1m">1m</option>
-                <option value="3m">3m</option>
-                <option value="5m">5m</option>
-                <option value="15m">15m</option>
-                <option value="30m">30m</option>
-                <option value="1h">1h</option>
-                <option value="4h">4h</option>
-                <option value="1d">1D</option>
-              </select>
+        <div class="ind-card dvl-icd" data-card="dvlConf" data-dvl-cat="confluencia">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(124,58,237,.12);--ic-cl:#7c3aed"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 8Q3.5 4.5 6 8 Q8.5 11.5 11 8 Q13 5.5 14.5 8"/><circle cx="8" cy="8.5" r="1.5" fill="currentColor"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">DVL Confluence Signals</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
             </div>
-            <div class="hint">Drag the splitter to resize the Trend Clarity oscillator.</div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="dvlConf"><span class="switch"></span></div>
+              <button class="gear" data-settings="dvlConf" title="Configurar DVL Confluence Signals">&#9881;</button>
+              <button class="dvl-star" data-star="dvlConf" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
+          </div>
+          <div class="ind-settings" id="settings-dvlConf">
+            <div class="hint">Signals are generated only after price enters an HVN zone and then closes outside it with Flow and Trend Clarity aligned.</div>
+            <div class="kv"><span class="k">Zone Source</span><select class="select tiny-select" id="confZoneSource"><option value="HVN">HVN Zones</option><option value="BOTH" selected>HVN + DVL PRO</option><option value="DVL_HVN_PRO">DVL HVN PRO</option></select></div>
+            <div class="kv"><span class="k">Trend Clarity TF</span><select class="select tiny-select" id="confClarTf"><option value="current" selected>Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1D</option></select></div>
+            <div class="kv"><span class="k">DVL Flow TF</span><select class="select tiny-select" id="confFlowTf"><option value="current" selected>Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1D</option></select></div>
+            <div class="kv"><span class="k">Flow Strength Min</span><input class="num" id="confFlowStrMin" type="number" min="5" max="80" step="5" value="20" style="width:56px"></div>
+            <div class="kv"><span class="k">Clarity Strength Min</span><input class="num" id="confClarStrMin" type="number" min="5" max="80" step="5" value="25" style="width:56px"></div>
+            <div class="hint" style="font-size:8px;margin:1px 0 5px;">Minimum oscillator strength. BUY requires positive, SELL requires negative values.</div>
+            <div class="kv"><span class="k">Zone Timeout Bars</span><input class="num" id="confMaxBarsAfterExit" type="number" min="0" max="30" step="1" value="10" style="width:56px"></div>
+            <div class="kv"><span class="k">Signal Cooldown Bars</span><input class="num" id="confCooldown" type="number" min="0" max="50" step="1" value="3" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Exit Dist Zone %</span><input class="num" id="confMaxExitDistZonePct" type="number" min="0" max="400" step="5" value="75" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Exit Dist ATR</span><input class="num" id="confMaxExitATR" type="number" min="0" max="5" step="0.1" value="0.8" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Exit Candle ATR</span><input class="num" id="confMaxExitCandleATR" type="number" min="0" max="5" step="0.1" value="1.5" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Candle Zone×</span><input class="num" id="confMaxExitCandleZoneMult" type="number" min="0" max="10" step="0.1" value="2" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Room ATR</span><input class="num" id="confMinRoomATR" type="number" min="0" max="5" step="0.1" value="0.8" style="width:56px"></div>
+            <div class="kv"><span class="k">Min Room Zone×</span><input class="num" id="confMinRoomZoneMult" type="number" min="0" max="5" step="0.1" value="1" style="width:56px"></div>
+            <div class="hint" style="font-size:8px;margin:1px 0 5px;">0 desativa o filtro. Exit buffer é automático (8% da zona ou 3% do ATR, o maior).</div>
+            <div class="kv"><span class="k">Max Visible</span><input class="num" id="confMaxVisible" type="number" min="5" max="100" step="5" value="30" style="width:56px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show Buy Signals</span><input type="checkbox" id="confShowBuy" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show Sell Signals</span><input type="checkbox" id="confShowSell" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Require Re-entry</span><input type="checkbox" id="confRequireReentry" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Debug (console)</span><input type="checkbox" id="confDebug" style="width:14px;height:14px;accent-color:#ffa500;cursor:pointer;flex-shrink:0;"></label>
           </div>
         </div>
 
-        <div class="ind-card" data-card="flowAccel">
-          <div class="ind-head">
-            <div class="row" data-ind="flowAccel"><span class="name">DVL Flow Acceleration</span><span class="switch"></span></div>
-            <button class="gear" data-settings="flowAccel" title="Inputs DVL Flow Acceleration">⚙</button>
+        <div class="ind-card dvl-icd" data-card="fvgConf" data-dvl-cat="confluencia">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(251,146,60,.12);--ic-cl:#fb923c"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2.5"/><circle cx="8" cy="8" r="1" fill="currentColor"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">DVL FVG Confluence</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="fvgConf"><span class="switch"></span></div>
+              <button class="gear" data-settings="fvgConf" title="Configurar DVL FVG Confluence">&#9881;</button>
+              <button class="dvl-star" data-star="fvgConf" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
+          </div>
+          <div class="ind-settings" id="settings-fvgConf">
+            <div class="hint">BUY/SELL when price mitigates an FVG with Flow + Trend Clarity confirmation. Requires FVG Volume Zones enabled.</div>
+            <div class="kv"><span class="k">Trend Clarity TF</span><select class="select tiny-select" id="fvgConfClarTf"><option value="current" selected>Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1D</option></select></div>
+            <div class="kv"><span class="k">DVL Flow TF</span><select class="select tiny-select" id="fvgConfFlowTf"><option value="current" selected>Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1D</option></select></div>
+            <div class="kv"><span class="k">Mitigation Mode</span><select class="select tiny-select" id="fvgConfMitMode"><option value="touch">Touch</option><option value="midpoint" selected>Midpoint</option><option value="full">Full Fill</option></select></div>
+            <div class="kv"><span class="k">Flow Strength Min</span><input class="num" id="fvgConfFlowMin" type="number" min="5" max="80" step="5" value="20" style="width:56px"></div>
+            <div class="kv"><span class="k">Clarity Strength Min</span><input class="num" id="fvgConfClarMin" type="number" min="5" max="80" step="5" value="25" style="width:56px"></div>
+            <div class="kv"><span class="k">Max FVG Age Bars</span><input class="num" id="fvgConfMaxAge" type="number" min="0" max="500" step="10" value="300" style="width:56px"></div>
+            <div class="kv"><span class="k">Signal Cooldown Bars</span><input class="num" id="fvgConfCooldown" type="number" min="0" max="50" step="1" value="8" style="width:56px"></div>
+            <div class="kv"><span class="k">Max Visible</span><input class="num" id="fvgConfMaxVisible" type="number" min="5" max="100" step="5" value="30" style="width:56px"></div>
+            <div class="hint" style="font-size:8px;margin:1px 0 5px;">0 = filter disabled. BUY from bullish FVG, SELL from bearish FVG.</div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show Buy Signals</span><input type="checkbox" id="fvgConfShowBuy" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show Sell Signals</span><input type="checkbox" id="fvgConfShowSell" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Require Candle Reaction</span><input type="checkbox" id="fvgConfRequireReact" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Require Re-entry</span><input type="checkbox" id="fvgConfRequireReentry" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Debug (console)</span><input type="checkbox" id="fvgConfDebug" style="width:14px;height:14px;accent-color:#ffa500;cursor:pointer;flex-shrink:0;"></label>
+          </div>
+        </div>
+
+        <div class="ind-card dvl-icd" data-card="flowAccel" data-dvl-cat="confluencia">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(74,222,128,.12);--ic-cl:#4ade80"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><polygon points="9,1.5 4,9 9,9 7,14.5 12,7 7,7"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">DVL Flow Acceleration</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="flowAccel"><span class="switch"></span></div>
+              <button class="gear" data-settings="flowAccel" title="Configurar DVL Flow Acceleration">&#9881;</button>
+              <button class="dvl-star" data-star="flowAccel" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
           </div>
           <div class="ind-settings" id="settings-flowAccel">
             <div style="font-size:9px;color:#00d4ff;font-weight:700;letter-spacing:.08em;margin-bottom:6px;opacity:.8;">OSCILADOR</div>
@@ -3165,64 +3268,121 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
         </div>
 
-        <div class="ind-card" data-card="dvlConf">
-          <div class="ind-head">
-            <div class="row" data-ind="dvlConf"><span class="name">DVL Confluence Signals</span><span class="switch"></span></div>
-            <button class="gear" data-settings="dvlConf" title="Inputs Confluence">⚙</button>
+        <div class="dvl-cat-hdr" data-dvl-cat="clareza">Clareza &amp; HVN</div>
+
+        <div class="ind-card dvl-icd" data-card="hvnClarity" data-dvl-cat="clareza">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(34,211,238,.12);--ic-cl:#22d3ee"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M1.5 8C2.5 5 5 3 8 3s5.5 2 6.5 5c-1 3-3.5 5-6.5 5S2.5 11 1.5 8z" opacity=".85"/><circle cx="8" cy="8" r="2"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">HVN Clarity Engine</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="hvnClarity"><span class="switch"></span></div>
+              <button class="gear" data-settings="hvnClarity" title="Configurar HVN Clarity Engine">&#9881;</button>
+              <button class="dvl-star" data-star="hvnClarity" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
           </div>
-          <div class="ind-settings" id="settings-dvlConf">
-            <div class="hint">Signals are generated only after price enters an HVN zone and then closes outside it with Flow and Trend Clarity aligned.</div>
-            <div class="kv"><span class="k">Zone Source</span><select class="select tiny-select" id="confZoneSource"><option value="HVN">HVN Zones</option><option value="BOTH" selected>HVN + DVL PRO</option><option value="DVL_HVN_PRO">DVL HVN PRO</option></select></div>
-            <div class="kv"><span class="k">Trend Clarity TF</span><select class="select tiny-select" id="confClarTf"><option value="current" selected>Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1D</option></select></div>
-            <div class="kv"><span class="k">DVL Flow TF</span><select class="select tiny-select" id="confFlowTf"><option value="current" selected>Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1D</option></select></div>
-            <div class="kv"><span class="k">Flow Strength Min</span><input class="num" id="confFlowStrMin" type="number" min="5" max="80" step="5" value="20" style="width:56px"></div>
-            <div class="kv"><span class="k">Clarity Strength Min</span><input class="num" id="confClarStrMin" type="number" min="5" max="80" step="5" value="25" style="width:56px"></div>
-            <div class="hint" style="font-size:8px;margin:1px 0 5px;">Minimum oscillator strength. BUY requires positive, SELL requires negative values.</div>
-            <div class="kv"><span class="k">Zone Timeout Bars</span><input class="num" id="confMaxBarsAfterExit" type="number" min="0" max="30" step="1" value="10" style="width:56px"></div>
-            <div class="kv"><span class="k">Signal Cooldown Bars</span><input class="num" id="confCooldown" type="number" min="0" max="50" step="1" value="3" style="width:56px"></div>
-            <div class="kv"><span class="k">Max Exit Dist Zone %</span><input class="num" id="confMaxExitDistZonePct" type="number" min="0" max="400" step="5" value="75" style="width:56px"></div>
-            <div class="kv"><span class="k">Max Exit Dist ATR</span><input class="num" id="confMaxExitATR" type="number" min="0" max="5" step="0.1" value="0.8" style="width:56px"></div>
-            <div class="kv"><span class="k">Max Exit Candle ATR</span><input class="num" id="confMaxExitCandleATR" type="number" min="0" max="5" step="0.1" value="1.5" style="width:56px"></div>
-            <div class="kv"><span class="k">Max Candle Zone×</span><input class="num" id="confMaxExitCandleZoneMult" type="number" min="0" max="10" step="0.1" value="2" style="width:56px"></div>
-            <div class="kv"><span class="k">Min Room ATR</span><input class="num" id="confMinRoomATR" type="number" min="0" max="5" step="0.1" value="0.8" style="width:56px"></div>
-            <div class="kv"><span class="k">Min Room Zone×</span><input class="num" id="confMinRoomZoneMult" type="number" min="0" max="5" step="0.1" value="1" style="width:56px"></div>
-            <div class="hint" style="font-size:8px;margin:1px 0 5px;">0 desativa o filtro. Exit buffer é automático (8% da zona ou 3% do ATR, o maior).</div>
-            <div class="kv"><span class="k">Max Visible</span><input class="num" id="confMaxVisible" type="number" min="5" max="100" step="5" value="30" style="width:56px"></div>
-            <label class="kv" style="cursor:pointer;"><span class="k">Show Buy Signals</span><input type="checkbox" id="confShowBuy" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
-            <label class="kv" style="cursor:pointer;"><span class="k">Show Sell Signals</span><input type="checkbox" id="confShowSell" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
-            <label class="kv" style="cursor:pointer;"><span class="k">Require Re-entry</span><input type="checkbox" id="confRequireReentry" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
-            <label class="kv" style="cursor:pointer;"><span class="k">Debug (console)</span><input type="checkbox" id="confDebug" style="width:14px;height:14px;accent-color:#ffa500;cursor:pointer;flex-shrink:0;"></label>
+          <div class="ind-settings" id="settings-hvnClarity">
+            <label class="kv"><span class="k">Line glow</span><input type="number" class="num" id="hvnLineGlow" value="1.0" min="0" max="2" step="0.1" style="width:56px"></label>
+            <label class="kv"><span class="k">Hist opacity</span><input type="number" class="num" id="hvnHistOpac" value="1.15" min="0.1" max="2.2" step="0.1" style="width:56px"></label>
+            <div class="kv"><span class="k">Coluna bullish</span><input type="color" id="hvnBullColor" value="#00d2ff"></div>
+            <div class="kv"><span class="k">Coluna bearish</span><input type="color" id="hvnBearColor" value="#ff465f"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show Osc Line</span><input type="checkbox" id="hvnShowOscLine" style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
+            <div style="font-size:9px;color:#00d4ff;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">TIMEFRAME MTF</div>
+            <div class="kv"><span class="k">Calculation TF</span>
+              <select class="select" id="hvnClarityTF" style="width:64px">
+                <option value="current" selected>Current</option>
+                <option value="1m">1m</option>
+                <option value="3m">3m</option>
+                <option value="5m">5m</option>
+                <option value="15m">15m</option>
+                <option value="30m">30m</option>
+                <option value="1h">1h</option>
+                <option value="4h">4h</option>
+                <option value="1d">1D</option>
+              </select>
+            </div>
+            <div class="hint">Drag the splitter to resize the Trend Clarity oscillator.</div>
           </div>
         </div>
 
-        <div class="ind-card" data-card="fvgConf">
-          <div class="ind-head">
-            <div class="row" data-ind="fvgConf"><span class="name">DVL FVG Confluence</span><span class="switch"></span></div>
-            <button class="gear" data-settings="fvgConf" title="Inputs FVG Confluence">⚙</button>
+        <div class="ind-card dvl-icd" data-card="hvnPro" data-dvl-cat="clareza">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(168,85,247,.12);--ic-cl:#a855f7"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><polygon points="8,1.5 14.5,8 8,14.5 1.5,8"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">DVL HVN PRO</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="hvnPro"><span class="switch"></span></div>
+              <button class="gear" data-settings="hvnPro" title="Configurar DVL HVN PRO">&#9881;</button>
+              <button class="dvl-star" data-star="hvnPro" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
           </div>
-          <div class="ind-settings" id="settings-fvgConf">
-            <div class="hint">BUY/SELL when price mitigates an FVG with Flow + Trend Clarity confirmation. Requires FVG Volume Zones enabled.</div>
-            <div class="kv"><span class="k">Trend Clarity TF</span><select class="select tiny-select" id="fvgConfClarTf"><option value="current" selected>Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1D</option></select></div>
-            <div class="kv"><span class="k">DVL Flow TF</span><select class="select tiny-select" id="fvgConfFlowTf"><option value="current" selected>Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1D</option></select></div>
-            <div class="kv"><span class="k">Mitigation Mode</span><select class="select tiny-select" id="fvgConfMitMode"><option value="touch">Touch</option><option value="midpoint" selected>Midpoint</option><option value="full">Full Fill</option></select></div>
-            <div class="kv"><span class="k">Flow Strength Min</span><input class="num" id="fvgConfFlowMin" type="number" min="5" max="80" step="5" value="20" style="width:56px"></div>
-            <div class="kv"><span class="k">Clarity Strength Min</span><input class="num" id="fvgConfClarMin" type="number" min="5" max="80" step="5" value="25" style="width:56px"></div>
-            <div class="kv"><span class="k">Max FVG Age Bars</span><input class="num" id="fvgConfMaxAge" type="number" min="0" max="500" step="10" value="300" style="width:56px"></div>
-            <div class="kv"><span class="k">Signal Cooldown Bars</span><input class="num" id="fvgConfCooldown" type="number" min="0" max="50" step="1" value="8" style="width:56px"></div>
-            <div class="kv"><span class="k">Max Visible</span><input class="num" id="fvgConfMaxVisible" type="number" min="5" max="100" step="5" value="30" style="width:56px"></div>
-            <div class="hint" style="font-size:8px;margin:1px 0 5px;">0 = filter disabled. BUY from bullish FVG, SELL from bearish FVG.</div>
-            <label class="kv" style="cursor:pointer;"><span class="k">Show Buy Signals</span><input type="checkbox" id="fvgConfShowBuy" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
-            <label class="kv" style="cursor:pointer;"><span class="k">Show Sell Signals</span><input type="checkbox" id="fvgConfShowSell" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
-            <label class="kv" style="cursor:pointer;"><span class="k">Require Candle Reaction</span><input type="checkbox" id="fvgConfRequireReact" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
-            <label class="kv" style="cursor:pointer;"><span class="k">Require Re-entry</span><input type="checkbox" id="fvgConfRequireReentry" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
-            <label class="kv" style="cursor:pointer;"><span class="k">Debug (console)</span><input type="checkbox" id="fvgConfDebug" style="width:14px;height:14px;accent-color:#ffa500;cursor:pointer;flex-shrink:0;"></label>
+          <div class="ind-settings" id="settings-hvnPro">
+            <div class="kv"><span class="k">Analysis TF</span><select class="select" id="vhpTf" style="width:72px"><option value="">Current</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="2h">2h</option><option value="4h">4h</option><option value="6h">6h</option><option value="12h">12h</option><option value="1d">1d</option><option value="3d">3d</option><option value="1w">1w</option></select></div>
+            <div class="kv"><span class="k">Top Zones</span><input class="num" id="vhpTopN" type="number" min="1" max="20" step="1" value="6" style="width:56px"></div>
+            <div class="kv"><span class="k">Lookback</span><input class="num" id="vhpLookback" type="number" min="50" max="2000" step="50" value="300" style="width:56px"></div>
+            <div class="kv"><span class="k">Bucket %</span><input class="num" id="vhpBucket" type="number" min="0.01" max="5" step="0.01" value="0.1" style="width:56px"></div>
+            <div class="kv"><span class="k">Min touches</span><input class="num" id="vhpMinTouch" type="number" min="1" max="200" step="1" value="2" style="width:56px"></div>
+            <div class="kv"><span class="k">Extend bars</span><input class="num" id="vhpExtend" type="number" min="0" max="500" step="1" value="20" style="width:56px"></div>
+            <div class="kv"><span class="k">Merge</span><select class="select" id="vhpMergeSens" style="width:82px"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option></select></div>
+            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin:5px 0 3px;">ADVANCED</div>
+            <div class="kv"><span class="k">Max zone ATR×</span><input class="num" id="vhpMaxAtr" type="number" min="0.3" max="5" step="0.1" value="1.2" style="width:56px"></div>
+            <div class="kv"><span class="k">Density %</span><input class="num" id="vhpDensity" type="number" min="10" max="70" step="5" value="40" style="width:56px"></div>
+            <div class="kv"><span class="k">Valley sep %</span><input class="num" id="vhpValley" type="number" min="10" max="65" step="5" value="35" style="width:56px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Volume profile</span><input type="checkbox" id="vhpShowProfile" style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin:5px 0 3px;">MEMORY</div>
+            <div class="kv"><span class="k">Memory candles</span><input class="num" id="vhpMemory" type="number" min="100" max="5000" step="100" value="1000" style="width:56px"></div>
+            <div class="kv"><span class="k">Min bars confirm</span><input class="num" id="vhpMinBars" type="number" min="1" max="100" step="1" value="8" style="width:56px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Show historical</span><input type="checkbox" id="vhpShowHistorical" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="hint">DVL HVN PRO — experimental. Confirmed/Historical/Developing zones with memory decay. Default OFF.</div>
           </div>
         </div>
 
-        <div class="ind-card" data-card="book" style="display:none!important">
-          <div class="ind-head">
-            <div class="row" data-ind="book"><span class="name">Orderbook Ladder</span><span class="switch"></span></div>
-            <button class="gear" data-settings="book" title="Inputs Orderbook">⚙</button>
+        <div class="ind-card dvl-icd" data-card="footprint" data-dvl-cat="" style="display:none">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">Footprint Candle</div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" style="pointer-events:none;"><span class="switch"></span></div>
+              <button class="gear" data-settings="footprint" title="Inputs Footprint">&#9881;</button>
+            </div>
+          </div>
+          <div class="ind-settings" id="settings-footprint">
+            <div class="kv"><span class="k">Detalhe visual</span><select class="select tiny-select" id="fpDetail"><option value="auto" selected>Auto</option><option value="minimal">Minimal</option><option value="balanced">Balanced</option><option value="full">Full</option></select></div>
+            <div class="kv"><span class="k">Exibir</span><select class="select tiny-select" id="fpMode"><option value="all" selected>Todos candles</option><option value="last">Últimas 90 velas</option></select></div>
+            <div class="kv"><span class="k">Cobertura real mín.</span><input class="num" id="fpMinCov" type="number" min="0" max="1" step="0.05" value="0.15"></div>
+            <div class="kv"><span class="k">Filtro rows (%)</span><input class="num" id="fpRowThresh" type="number" min="0" max="50" step="1" value="8"></div>
+            <div class="kv"><span class="k">Ratio imbalance</span><input class="num" id="fpImbalRatio" type="number" min="1.2" max="10" step="0.1" value="2.5"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Stacked imbalance</span><input type="checkbox" id="fpShowStacked" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Stacked mín. rows</span><input class="num" id="fpStackedMin" type="number" min="2" max="8" step="1" value="2"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Big trade só real FP</span><input type="checkbox" id="fpRequireReal" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Wick absorption</span><input type="checkbox" id="fpWickAbs" checked style="width:14px;height:14px;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Wick mín. (%)</span><input class="num" id="fpWickMinPct" type="number" min="10" max="60" step="5" value="30"></div>
+            <div class="kv"><span class="k">Max FP scale</span><input class="num" id="fpMaxScale" type="number" min="1" max="10" step="0.5" value="3"></div>
+            <div class="hint">Auto: zoom determina detalhe. Cobertura ≥35% = real. Sintético aparece desbotado (~).</div>
+          </div>
+        </div>
+
+        <div class="ind-card dvl-icd" data-card="book" data-dvl-cat="" style="display:none!important">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">Orderbook Ladder</div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="book"><span class="switch"></span></div>
+              <button class="gear" data-settings="book" title="Inputs Orderbook">&#9881;</button>
+            </div>
           </div>
           <div class="ind-settings" id="settings-book">
             <div class="kv"><span class="k">Largura</span><input class="num" id="bookWidthInput" type="number" min="92" max="320" step="4" value="154"></div>
@@ -8347,9 +8507,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.061'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.062'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.061';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.062';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8388,7 +8548,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.061';
+  const VERSION='Beta 0.062';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -8691,7 +8851,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.061';
+  const VERSION='Beta 0.062';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9938,6 +10098,40 @@ input[type=color]::-moz-color-swatch{border:none!important;border-radius:2px!imp
   color:#ff6b85!important;
   box-shadow:0 0 12px rgba(255,77,109,.07)!important;
 }
+/* ── DVL Smart Indicators Panel (Beta 0.062) ─────────────────────────── */
+.dvl-ind-panel .title{display:none!important}
+.dvl-ind-search-wrap{display:flex;align-items:center;gap:7px;padding:6px 9px;background:rgba(0,212,255,.03);border:1px solid rgba(125,180,255,.07);border-radius:8px;margin:0 0 9px}
+.dvl-ind-search{flex:1;background:transparent;border:none;outline:none;color:#c8d8f0;font-size:11px;font-family:inherit;line-height:1}
+.dvl-ind-search::placeholder{color:#2e4060}
+.dvl-search-ico{flex-shrink:0;opacity:.35;color:#7090b0}
+.dvl-search-x{background:none;border:none;cursor:pointer;color:#4a6080;font-size:14px;line-height:1;padding:0 1px;display:none;flex-shrink:0}
+.dvl-search-x.show{display:block}
+.dvl-ind-tabs{display:flex;gap:3px;margin:0 0 10px;border-bottom:1px solid rgba(125,180,255,.06);padding-bottom:7px}
+.dvl-tab{flex:1;background:transparent;border:none;cursor:pointer;color:#3a5068;font-size:9.5px;font-weight:700;letter-spacing:.05em;padding:5px 3px;border-radius:5px 5px 0 0;transition:background .14s,color .14s,border-color .14s;font-family:monospace;border-bottom:2px solid transparent}
+.dvl-tab:hover{color:#6a90b0;background:rgba(0,212,255,.04)}
+.dvl-tab.active{color:#00d4ff;border-bottom-color:#00d4ff;background:rgba(0,212,255,.06)}
+.dvl-cat-hdr{font-size:8.5px;font-weight:700;letter-spacing:.1em;color:#2e4262;margin:8px 0 4px 2px;display:flex;align-items:center;gap:7px;text-transform:uppercase}
+.dvl-cat-hdr::after{content:'';flex:1;height:1px;background:rgba(125,180,255,.05)}
+.dvl-icd{display:flex;flex-direction:column;border:1px solid rgba(125,180,255,.07);border-radius:8px;background:rgba(0,212,255,.018);margin-bottom:4px;overflow:hidden;transition:border-color .14s}
+.dvl-icd:hover{border-color:rgba(125,180,255,.13)}
+.dvl-icd-head{display:flex;align-items:center;gap:7px;padding:6px 8px;min-height:40px}
+.dvl-icd-icon{flex-shrink:0;width:28px;height:28px;border-radius:7px;background:var(--ic-bg,rgba(0,212,255,.1));display:flex;align-items:center;justify-content:center;color:var(--ic-cl,#00d4ff)}
+.dvl-icd-info{flex:1;min-width:0}
+.dvl-icd-name{font-size:10.5px;font-weight:600;color:#a8c0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;margin-bottom:3px}
+.dvl-icd-meta{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.dvl-bdg{font-size:7.5px;font-weight:700;letter-spacing:.05em;padding:1px 5px;border-radius:3px;line-height:1.5;text-transform:uppercase}
+.dvl-bdg-nat{background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.12);color:rgba(0,212,255,.55)}
+.dvl-bdg-on{background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.18);color:rgba(0,230,118,.7);display:none}
+.dvl-icd:has(.row.on) .dvl-bdg-on{display:inline-flex}
+.dvl-icd-ctrl{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.dvl-icd-ctrl .row{display:flex;align-items:center;padding:0;margin:0;border:none;background:none;width:auto}
+.dvl-star{background:none;border:1px solid transparent;cursor:pointer;color:#243244;padding:4px;border-radius:5px;line-height:0;font-size:0;transition:color .14s,border-color .14s;flex-shrink:0}
+.dvl-star:hover{color:#f59e0b;border-color:rgba(245,158,11,.2)}
+.dvl-star.active{color:#f59e0b}
+.dvl-icd .ind-settings{border-top:1px solid rgba(125,180,255,.05)}
+.dvl-ind-empty{font-size:10px;color:#3a5070;text-align:center;padding:20px 12px;display:none}
+.dvl-ind-empty.show{display:block}
+@media(max-width:900px){.dvl-icd-head{padding:8px 10px;min-height:46px}.dvl-icd-icon{width:32px;height:32px}.dvl-icd-name{font-size:12px}.dvl-bdg{font-size:8px;padding:2px 6px}.dvl-star{padding:6px}.dvl-tab{font-size:10px;padding:6px 3px}.dvl-ind-search{font-size:12px}.dvl-search-x{font-size:16px}}
 </style>
 <style>
 /* DVL Drawing Tools */
@@ -14966,11 +15160,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.061';
+  window.DVL_APP_VERSION='Beta 0.062';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.061';
+    if(b)b.textContent='Beta 0.062';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -14989,12 +15183,98 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 
+<script id="dvl-smart-ind-panel-062">
+/* DVL Smart Indicators Panel — Beta 0.062 */
+(function(){
+  var FAV_KEY='dvl_ind_favs';
+  function getFavs(){try{return JSON.parse(localStorage.getItem(FAV_KEY)||'[]');}catch(e){return[];}}
+  function setFavs(f){try{localStorage.setItem(FAV_KEY,JSON.stringify(f));}catch(e){}}
+  var HIDDEN=['footprint','book'];
+  var currentTab='todos';
+
+  function applyFilter(){
+    var favs=getFavs();
+    var si=document.getElementById('dvlIndSearch');
+    var q=si?si.value.toLowerCase().trim():'';
+    var anyVisible=false;
+    document.querySelectorAll('.dvl-icd').forEach(function(c){
+      var key=c.dataset.card;
+      if(HIDDEN.indexOf(key)>=0)return;
+      var show=true;
+      if(currentTab==='favoritos') show=favs.indexOf(key)>=0;
+      if(show&&q){
+        var nm=(c.querySelector('.dvl-icd-name')||{textContent:''}).textContent.toLowerCase();
+        show=nm.indexOf(q)>=0;
+      }
+      c.style.display=show?'':'none';
+      if(show)anyVisible=true;
+    });
+    document.querySelectorAll('.dvl-cat-hdr').forEach(function(h){
+      var cat=h.dataset.dvlCat;
+      if(!cat){h.style.display='none';return;}
+      var vis=Array.from(document.querySelectorAll('.dvl-icd[data-dvl-cat="'+cat+'"]'))
+        .some(function(c){return c.style.display!=='none';});
+      h.style.display=vis?'':'none';
+    });
+    var empty=document.getElementById('dvlIndEmpty');
+    if(empty)empty.classList.toggle('show',!anyVisible);
+  }
+
+  function initStars(){
+    var favs=getFavs();
+    favs.forEach(function(k){
+      var btn=document.querySelector('.dvl-star[data-star="'+k+'"]');
+      if(btn)btn.classList.add('active');
+    });
+    document.querySelectorAll('.dvl-star').forEach(function(btn){
+      btn.addEventListener('click',function(ev){
+        ev.stopPropagation();
+        var k=this.dataset.star;
+        var f=getFavs();
+        var i=f.indexOf(k);
+        if(i>=0){f.splice(i,1);this.classList.remove('active');}
+        else{f.push(k);this.classList.add('active');}
+        setFavs(f);
+        applyFilter();
+      });
+    });
+  }
+
+  function ready(fn){
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn);
+    else fn();
+  }
+
+  ready(function(){
+    document.querySelectorAll('.dvl-tab').forEach(function(tab){
+      tab.addEventListener('click',function(){
+        document.querySelectorAll('.dvl-tab').forEach(function(t){t.classList.remove('active');});
+        tab.classList.add('active');
+        currentTab=tab.dataset.tab;
+        applyFilter();
+      });
+    });
+    var si=document.getElementById('dvlIndSearch');
+    var sx=document.getElementById('dvlIndSearchX');
+    if(si)si.addEventListener('input',function(){
+      if(sx)sx.classList.toggle('show',si.value.length>0);
+      applyFilter();
+    });
+    if(sx)sx.addEventListener('click',function(){
+      if(si)si.value='';
+      sx.classList.remove('show');
+      applyFilter();
+    });
+    initStars();
+  });
+})();
+</script>
 <script id="DVL_BETA_0043_SEPARATED_OSC_SCROLL">
 /* NEUTRALIZED in Beta 0.050 — oscillator wheel zoom, dblclick reset, and scale drag
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.061';
+  const VERSION = 'Beta 0.062';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
