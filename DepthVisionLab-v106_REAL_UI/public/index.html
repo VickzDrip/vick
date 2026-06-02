@@ -41,6 +41,14 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.087
+  - Optimizer: OPT_COMBOS expandido de 20 para 50 combos cobrindo os
+    três modos de sinal (wick, dive, engulf) com variações de pavio,
+    filtros, spike de volume e SL/TP.
+  - OPT_PARAMS atualizado com linha "Padrão do Sinal".
+  - _cfgLabel exibe o modo (DIVE / ENGULF) quando não é wick.
+  - _runOptimizer passa mode e diveMin ao _cachedBacktest por combo.
+
 Beta 0.086
   - Strategy Tester: Padrão do Sinal (stMode) e Mín. candles no mergulho
     (stDiveMin) adicionados à seção REGRAS DE ENTRADA.
@@ -521,7 +529,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.086";
+  const LOCAL_VERSION = "Beta 0.087";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2211,7 +2219,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.086";
+window.DVL_APP_VERSION = "Beta 0.087";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -3020,11 +3028,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.086</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.087</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.086</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.087</span>
       </div>
 
       <div class="tb-right-btns">
@@ -6791,7 +6799,7 @@ function openInputModal(key,gear){
   if(!settings||!inputModal||!inputModalBody)return;
   if(inputModalState.settings===settings){closeInputModal();return;}
   closeInputModal();
-  // Beta 0.086: sidebar stays open while modal is shown
+  // Beta 0.087: sidebar stays open while modal is shown
   const title=(card&&card.querySelector('.name')?card.querySelector('.name').textContent:'Inputs');
   const ph=document.createComment('settings-'+key+'-placeholder');
   settings.parentNode.insertBefore(ph,settings);
@@ -6805,7 +6813,7 @@ function openInputModal(key,gear){
   inputModalState={settings:settings,placeholder:ph,card:card,gear:gear};
 }
 document.querySelectorAll('.gear[data-settings]').forEach(g=>{
-  // Beta 0.086: only open on intentional tap, not during scroll
+  // Beta 0.087: only open on intentional tap, not during scroll
   var _gts={x:0,y:0,moved:false};
   g.addEventListener('touchstart',function(ev){
     _gts.x=ev.touches[0].clientX;_gts.y=ev.touches[0].clientY;_gts.moved=false;
@@ -8957,9 +8965,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.086'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.087'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.086';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.087';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8998,7 +9006,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.086';
+  const VERSION='Beta 0.087';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9177,7 +9185,7 @@ window._dvlClarEyeHit = null;
     return false;
   }
   ready(()=>{const wrap=E('chartWrap');if(!wrap)return;['pointerdown','mousedown','touchstart'].forEach(ev=>wrap.addEventListener(ev,function(e){
-    // Let DOM overlay gear buttons handle their own touches (Beta 0.086)
+    // Let DOM overlay gear buttons handle their own touches (Beta 0.087)
     if(e.target&&e.target.id&&String(e.target.id).indexOf('dvlOscGearOverlay_')===0)return;
     const p=e.touches&&e.touches[0]?e.touches[0]:e;
     if(hitGear(p)){e.preventDefault();e.stopImmediatePropagation();}
@@ -9303,7 +9311,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.086';
+  const VERSION='Beta 0.087';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9651,7 +9659,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.086 ── */
+/* ── DVL Strategy Tester — Beta 0.087 ── */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
 #dvlSTScrim.show{display:block}
 #dvlSTPanel{
@@ -9791,7 +9799,7 @@ input[type="color"]{border-radius:7px!important;}
   .dvl-st-body{padding-bottom:22px}
 }
 
-/* Beta 0.086 — reset & apply buttons */
+/* Beta 0.087 — reset & apply buttons */
 .dvl-st-hreset{width:26px;height:26px;background:rgba(255,255,255,.03);border:1px solid #192438;border-radius:7px;color:#6a8099;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s;margin-left:auto}
 .dvl-st-hreset:hover{border-color:rgba(0,212,255,.4);color:#00d4ff}
 .dvl-st-hclose{margin-left:0!important}
@@ -9802,10 +9810,10 @@ input[type="color"]{border-radius:7px!important;}
 </style>
 
 <script id="DVL_STRATEGY_TESTER">
-/* Beta 0.086 — Strategy Tester */
+/* Beta 0.087 — Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.086';
+var V='Beta 0.087';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -9861,6 +9869,7 @@ var OPT_PARAMS=[
   {n:'DVL Flow',v:'Off · LONG > +10 · > +20 · > +30 · SHORT < -5 · < -10 · < -20'},
   {n:'Dist. próxima HVN',v:'Sem filtro · 0.25% · 0.35% · 0.50%'},
   {n:'Volume spike',v:'Desativado · ×1.5 · ×2.0'},
+  {n:'Padrão do Sinal',v:'Wick Rejection · Dive & Recover · Engolfing · Todos'},
   {n:'Stop Loss',v:'Pavio · HVN · ATR'},
   {n:'Take Profit',v:'Próx. HVN · 1R · 1.5R · 2R'},
   {n:'TF das Zonas HVN',v:'Config. no indicador (MTF)'},
@@ -9876,7 +9885,7 @@ var OPT_PARAMS=[
   });
 })();
 
-/* ── deterministic backtest engine (Beta 0.086) ─────────────────── */
+/* ── deterministic backtest engine (Beta 0.087) ─────────────────── */
 
 /* Mulberry32 seeded PRNG — same seed → same sequence always */
 function _mkRng(seed){
@@ -10205,33 +10214,59 @@ if(btBtn){
 var _bestCfgs=[];
 /* trend/flow: numeric threshold (positive=LONG filter, negative=SHORT filter, null=off) */
 var OPT_COMBOS=[
-  /* LONG — sem spike */
-  {w:45,close:'outside',cons:5,trend:30,flow:30,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'off'},
-  {w:45,close:'outside',cons:5,trend:20,flow:20,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'off'},
-  {w:50,close:'outside',cons:3,trend:30,flow:20,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'off'},
-  {w:40,close:'outside',cons:5,trend:20,flow:null,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'off'},
-  /* SHORT — sem spike */
-  {w:45,close:'outside',cons:5,trend:-10,flow:-10,hvn:0.35,sl:'wick',tp:'1r',volSpike:'off'},
-  {w:45,close:'outside',cons:5,trend:-5,flow:-5,hvn:0.35,sl:'wick',tp:'1r',volSpike:'off'},
-  {w:50,close:'outside',cons:3,trend:-10,flow:-5,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'off'},
-  /* LONG + spike ×1.5 */
-  {w:45,close:'outside',cons:5,trend:30,flow:30,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'1.5'},
-  {w:45,close:'outside',cons:5,trend:20,flow:20,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'1.5'},
-  {w:50,close:'outside',cons:3,trend:30,flow:20,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'1.5'},
-  {w:40,close:'outside',cons:5,trend:20,flow:null,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'1.5'},
-  /* SHORT + spike ×1.5 */
-  {w:45,close:'outside',cons:5,trend:-10,flow:-10,hvn:0.35,sl:'wick',tp:'1r',volSpike:'1.5'},
-  {w:45,close:'outside',cons:5,trend:-5,flow:-5,hvn:0.35,sl:'wick',tp:'1r',volSpike:'1.5'},
-  /* LONG + spike ×2.0 — alta convicção */
-  {w:45,close:'outside',cons:5,trend:30,flow:30,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'2.0'},
-  {w:50,close:'outside',cons:3,trend:30,flow:20,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'2.0'},
-  /* SHORT + spike ×2.0 */
-  {w:45,close:'outside',cons:5,trend:-10,flow:-10,hvn:0.35,sl:'wick',tp:'1r',volSpike:'2.0'},
-  {w:50,close:'outside',cons:3,trend:-10,flow:-5,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'2.0'},
-  /* Mixed */
-  {w:40,close:'mid',cons:8,trend:10,flow:10,hvn:0.5,sl:'wick',tp:'2r',volSpike:'off'},
-  {w:40,close:'mid',cons:8,trend:10,flow:10,hvn:0.5,sl:'wick',tp:'2r',volSpike:'1.5'},
-  {w:60,close:'strong',cons:3,trend:30,flow:null,hvn:0.25,sl:'wick',tp:'1.5r',volSpike:'1.5'},
+  /* ── WICK REJECTION — LONG ─────────────────────────────────── */
+  {w:45,close:'outside',cons:5,trend:30,flow:30,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'off',mode:'wick',diveMin:2},
+  {w:45,close:'outside',cons:5,trend:20,flow:20,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'off',mode:'wick',diveMin:2},
+  {w:50,close:'outside',cons:3,trend:30,flow:20,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'off',mode:'wick',diveMin:2},
+  {w:40,close:'outside',cons:5,trend:20,flow:null,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'off',mode:'wick',diveMin:2},
+  {w:55,close:'outside',cons:3,trend:30,flow:30,hvn:0.25,sl:'atr',tp:'2r',volSpike:'off',mode:'wick',diveMin:2},
+  {w:45,close:'outside',cons:5,trend:30,flow:30,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'1.5',mode:'wick',diveMin:2},
+  {w:50,close:'outside',cons:3,trend:30,flow:20,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'1.5',mode:'wick',diveMin:2},
+  {w:45,close:'outside',cons:5,trend:20,flow:20,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'2.0',mode:'wick',diveMin:2},
+  {w:50,close:'outside',cons:3,trend:30,flow:20,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'2.0',mode:'wick',diveMin:2},
+  /* ── WICK REJECTION — SHORT ────────────────────────────────── */
+  {w:45,close:'outside',cons:5,trend:-10,flow:-10,hvn:0.35,sl:'wick',tp:'1r',volSpike:'off',mode:'wick',diveMin:2},
+  {w:45,close:'outside',cons:5,trend:-5,flow:-5,hvn:0.35,sl:'wick',tp:'1r',volSpike:'off',mode:'wick',diveMin:2},
+  {w:50,close:'outside',cons:3,trend:-10,flow:-5,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'off',mode:'wick',diveMin:2},
+  {w:45,close:'outside',cons:5,trend:-10,flow:-10,hvn:0.35,sl:'wick',tp:'1r',volSpike:'1.5',mode:'wick',diveMin:2},
+  {w:50,close:'outside',cons:3,trend:-10,flow:-5,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'2.0',mode:'wick',diveMin:2},
+  /* ── WICK — MIXED / RELAXED ────────────────────────────────── */
+  {w:40,close:'mid',cons:8,trend:10,flow:10,hvn:0.5,sl:'wick',tp:'2r',volSpike:'off',mode:'wick',diveMin:2},
+  {w:40,close:'mid',cons:8,trend:10,flow:10,hvn:0.5,sl:'wick',tp:'2r',volSpike:'1.5',mode:'wick',diveMin:2},
+  {w:60,close:'strong',cons:3,trend:30,flow:null,hvn:0.25,sl:'wick',tp:'1.5r',volSpike:'1.5',mode:'wick',diveMin:2},
+  /* ── DIVE & RECOVER — LONG ──────────────────────────────────── */
+  {w:35,close:'outside',cons:3,trend:20,flow:20,hvn:0.35,sl:'wick',tp:'1.5r',volSpike:'off',mode:'dive',diveMin:2},
+  {w:35,close:'outside',cons:3,trend:30,flow:20,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'off',mode:'dive',diveMin:2},
+  {w:40,close:'outside',cons:5,trend:20,flow:20,hvn:0.35,sl:'hvn',tp:'1.5r',volSpike:'off',mode:'dive',diveMin:3},
+  {w:35,close:'outside',cons:3,trend:20,flow:20,hvn:0.35,sl:'wick',tp:'1.5r',volSpike:'1.5',mode:'dive',diveMin:2},
+  {w:40,close:'outside',cons:5,trend:30,flow:20,hvn:0.25,sl:'hvn',tp:'2r',volSpike:'1.5',mode:'dive',diveMin:2},
+  {w:35,close:'outside',cons:3,trend:30,flow:30,hvn:0.25,sl:'wick',tp:'1.5r',volSpike:'2.0',mode:'dive',diveMin:2},
+  {w:40,close:'mid',cons:5,trend:10,flow:10,hvn:0.5,sl:'wick',tp:'1.5r',volSpike:'off',mode:'dive',diveMin:2},
+  /* ── DIVE & RECOVER — SHORT ─────────────────────────────────── */
+  {w:35,close:'outside',cons:3,trend:-10,flow:-10,hvn:0.35,sl:'wick',tp:'1r',volSpike:'off',mode:'dive',diveMin:2},
+  {w:35,close:'outside',cons:3,trend:-10,flow:-5,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'off',mode:'dive',diveMin:2},
+  {w:40,close:'outside',cons:5,trend:-5,flow:null,hvn:0.35,sl:'wick',tp:'1r',volSpike:'off',mode:'dive',diveMin:3},
+  {w:35,close:'outside',cons:3,trend:-10,flow:-10,hvn:0.35,sl:'wick',tp:'1r',volSpike:'1.5',mode:'dive',diveMin:2},
+  {w:40,close:'outside',cons:5,trend:-10,flow:-5,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'2.0',mode:'dive',diveMin:2},
+  /* ── ENGOLFING — LONG ──────────────────────────────────────── */
+  {w:30,close:'outside',cons:3,trend:20,flow:20,hvn:0.35,sl:'wick',tp:'1.5r',volSpike:'off',mode:'engulf',diveMin:1},
+  {w:30,close:'outside',cons:3,trend:30,flow:30,hvn:0.25,sl:'hvn',tp:'2r',volSpike:'off',mode:'engulf',diveMin:1},
+  {w:35,close:'outside',cons:3,trend:20,flow:null,hvn:0.35,sl:'wick',tp:'1r',volSpike:'off',mode:'engulf',diveMin:1},
+  {w:30,close:'outside',cons:3,trend:20,flow:20,hvn:0.35,sl:'wick',tp:'1.5r',volSpike:'1.5',mode:'engulf',diveMin:1},
+  {w:30,close:'outside',cons:3,trend:30,flow:20,hvn:0.25,sl:'hvn',tp:'2r',volSpike:'2.0',mode:'engulf',diveMin:1},
+  /* ── ENGOLFING — SHORT ─────────────────────────────────────── */
+  {w:30,close:'outside',cons:3,trend:-10,flow:-10,hvn:0.35,sl:'wick',tp:'1r',volSpike:'off',mode:'engulf',diveMin:1},
+  {w:30,close:'outside',cons:3,trend:-10,flow:-5,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'off',mode:'engulf',diveMin:1},
+  {w:35,close:'outside',cons:3,trend:-5,flow:null,hvn:0.35,sl:'wick',tp:'1r',volSpike:'off',mode:'engulf',diveMin:1},
+  {w:30,close:'outside',cons:3,trend:-10,flow:-10,hvn:0.35,sl:'wick',tp:'1r',volSpike:'1.5',mode:'engulf',diveMin:1},
+  {w:30,close:'outside',cons:3,trend:-10,flow:-5,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'2.0',mode:'engulf',diveMin:1},
+  /* ── TODOS OS PADRÕES — alta convicção ─────────────────── */
+  {w:45,close:'outside',cons:5,trend:30,flow:30,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'2.0',mode:'all',diveMin:2},
+  {w:50,close:'outside',cons:3,trend:30,flow:20,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'1.5',mode:'all',diveMin:2},
+  {w:40,close:'outside',cons:5,trend:20,flow:20,hvn:0.35,sl:'wick',tp:'1.5r',volSpike:'off',mode:'all',diveMin:2},
+  {w:35,close:'outside',cons:3,trend:20,flow:20,hvn:0.35,sl:'wick',tp:'hvn',volSpike:'1.5',mode:'all',diveMin:2},
+  {w:45,close:'outside',cons:5,trend:-10,flow:-10,hvn:0.35,sl:'wick',tp:'1r',volSpike:'2.0',mode:'all',diveMin:2},
+  {w:50,close:'outside',cons:3,trend:-10,flow:-5,hvn:0.25,sl:'hvn',tp:'1.5r',volSpike:'1.5',mode:'all',diveMin:2},
 ];
 var CLOSE_LABELS={outside:'Fech. fora da zona',mid:'Fech. além do meio',strong:'Corpo forte'};
 
@@ -10239,7 +10274,9 @@ function _tLabel(v){if(v===null||v===undefined)return '';return v>0?'Clarity > +
 function _fLabel(v){if(v===null||v===undefined)return '';return v>0?'Flow > +'+v:'Flow < '+v;}
 
 function _cfgLabel(c){
+  var modeTag={wick:'',dive:'DIVE',engulf:'ENGULF',all:'ALL'};
   var p=['Pavio > '+c.w+'%',CLOSE_LABELS[c.close]||c.close];
+  if(modeTag[c.mode])p.unshift('['+modeTag[c.mode]+']');
   var tl=_tLabel(c.trend),fl=_fLabel(c.flow);
   if(tl)p.push(tl);if(fl)p.push(fl);
   if(c.volSpike&&c.volSpike!=='off')p.push('Vol ×'+c.volSpike);
@@ -10269,7 +10306,7 @@ function _runOptimizer(){
     var c=OPT_COMBOS[done];
     if(bar)bar.style.width=(done/total*100)+'%';
     if(status)status.textContent='Testando combinação '+(done+1)+' de '+total+'...';
-    var r=_cachedBacktest({wickSens:c.w,trend:c.trend,flow:c.flow,nextHVN:c.hvn,sl:c.sl,tp:c.tp,risk:1.0,close:c.close,cons:c.cons,volSpike:c.volSpike||'off'});
+    var r=_cachedBacktest({wickSens:c.w,trend:c.trend,flow:c.flow,nextHVN:c.hvn,sl:c.sl,tp:c.tp,risk:1.0,close:c.close,cons:c.cons,volSpike:c.volSpike||'off',mode:c.mode||'wick',diveMin:c.diveMin||2});
     results.push({c:c,trades:r.trades,wr:r.wr,pf:r.pf,ret:r.ret,dd:r.dd});
     done++;
     setTimeout(step,110);
@@ -17026,11 +17063,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.086';
+  window.DVL_APP_VERSION='Beta 0.087';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.086';
+    if(b)b.textContent='Beta 0.087';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -17140,7 +17177,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.086';
+  const VERSION = 'Beta 0.087';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -17150,13 +17187,13 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.086 — DOM overlay buttons for canvas-drawn oscillator gear icons.
+/* Beta 0.087 — DOM overlay buttons for canvas-drawn oscillator gear icons.
    Canvas hit-detection (hitGear) can miss on mobile due to touch coordinate
    precision. These transparent buttons sit exactly over the drawn gears and
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.086';
+  var VERSION='Beta 0.087';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
@@ -17274,7 +17311,7 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_HVN_SIGNALS">
-/* HVN Signals — Beta 0.086
+/* HVN Signals — Beta 0.087
    Pure chart-overlay indicator: detects LONG/SHORT when a candle wick touches an
    HVN zone then the candle closes back out (rejection). No oscillator, no panel,
    no histogram — only LONG/SHORT labels drawn directly on the main chart canvas.
