@@ -41,6 +41,15 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.085
+  - HVN Signals: 3 modos de deteção — Wick Rejection (existente),
+    Dive & Recover (mergulho na zona + fechamento de volta), Engolfing
+    na Zona (candle de engolfo após candle dentro da zona), e Todos.
+  - Selector "Padrão" adicionado ao painel de configurações.
+  - "Mín. candles no mergulho" configura quantos candles dentro da zona
+    são exigidos antes de disparar um Recover.
+  - Sinais RECOVER e ENGULF têm labels e cores distintas no gráfico.
+
 Beta 0.084
   - Optimizer: fix crítico — _applyRankResult estava no escopo do IIFE,
     inacessível pelo onclick inline; migrado para data-ri + addEventListener.
@@ -504,7 +513,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.084";
+  const LOCAL_VERSION = "Beta 0.085";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2194,7 +2203,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.084";
+window.DVL_APP_VERSION = "Beta 0.085";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -3003,11 +3012,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.084</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.085</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.084</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.085</span>
       </div>
 
       <div class="tb-right-btns">
@@ -3674,6 +3683,16 @@ html.pre-ui .switch::after{transition:none!important}
             <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">LATERALIZAÇÃO</div>
             <label class="kv" style="cursor:pointer;"><span class="k">Sinal após consolidação</span><input type="checkbox" id="hvnSigAllowLateral" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <div class="kv"><span class="k">Máx. candles na zona</span><input class="num" id="hvnSigLateral" type="number" min="1" max="20" step="1" value="5" style="width:52px"></div>
+            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
+            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">PADRÃO DO SINAL</div>
+            <div class="kv"><span class="k">Modo de deteção</span>
+              <select class="select" id="hvnSigMode" style="width:104px">
+                <option value="wick" selected>Wick Rejection</option>
+                <option value="dive">Dive &amp; Recover</option>
+                <option value="engulf">Engolfing</option>
+                <option value="all">Todos os padrões</option>
+              </select></div>
+            <div class="kv" id="hvnSigDiveRow"><span class="k">Mín. candles no mergulho</span><input class="num" id="hvnSigDiveMin" type="number" min="1" max="10" value="2" style="width:52px"></div>
             <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
             <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">FILTROS</div>
             <div class="kv"><span class="k">Trend Clarity</span>
@@ -6764,7 +6783,7 @@ function openInputModal(key,gear){
   if(!settings||!inputModal||!inputModalBody)return;
   if(inputModalState.settings===settings){closeInputModal();return;}
   closeInputModal();
-  // Beta 0.084: sidebar stays open while modal is shown
+  // Beta 0.085: sidebar stays open while modal is shown
   const title=(card&&card.querySelector('.name')?card.querySelector('.name').textContent:'Inputs');
   const ph=document.createComment('settings-'+key+'-placeholder');
   settings.parentNode.insertBefore(ph,settings);
@@ -6778,7 +6797,7 @@ function openInputModal(key,gear){
   inputModalState={settings:settings,placeholder:ph,card:card,gear:gear};
 }
 document.querySelectorAll('.gear[data-settings]').forEach(g=>{
-  // Beta 0.084: only open on intentional tap, not during scroll
+  // Beta 0.085: only open on intentional tap, not during scroll
   var _gts={x:0,y:0,moved:false};
   g.addEventListener('touchstart',function(ev){
     _gts.x=ev.touches[0].clientX;_gts.y=ev.touches[0].clientY;_gts.moved=false;
@@ -8930,9 +8949,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.084'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.085'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.084';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.085';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8971,7 +8990,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.084';
+  const VERSION='Beta 0.085';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9150,7 +9169,7 @@ window._dvlClarEyeHit = null;
     return false;
   }
   ready(()=>{const wrap=E('chartWrap');if(!wrap)return;['pointerdown','mousedown','touchstart'].forEach(ev=>wrap.addEventListener(ev,function(e){
-    // Let DOM overlay gear buttons handle their own touches (Beta 0.084)
+    // Let DOM overlay gear buttons handle their own touches (Beta 0.085)
     if(e.target&&e.target.id&&String(e.target.id).indexOf('dvlOscGearOverlay_')===0)return;
     const p=e.touches&&e.touches[0]?e.touches[0]:e;
     if(hitGear(p)){e.preventDefault();e.stopImmediatePropagation();}
@@ -9276,7 +9295,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.084';
+  const VERSION='Beta 0.085';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9613,7 +9632,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.084 ── */
+/* ── DVL Strategy Tester — Beta 0.085 ── */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
 #dvlSTScrim.show{display:block}
 #dvlSTPanel{
@@ -9753,7 +9772,7 @@ input[type="color"]{border-radius:7px!important;}
   .dvl-st-body{padding-bottom:22px}
 }
 
-/* Beta 0.084 — reset & apply buttons */
+/* Beta 0.085 — reset & apply buttons */
 .dvl-st-hreset{width:26px;height:26px;background:rgba(255,255,255,.03);border:1px solid #192438;border-radius:7px;color:#6a8099;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s;margin-left:auto}
 .dvl-st-hreset:hover{border-color:rgba(0,212,255,.4);color:#00d4ff}
 .dvl-st-hclose{margin-left:0!important}
@@ -9764,10 +9783,10 @@ input[type="color"]{border-radius:7px!important;}
 </style>
 
 <script id="DVL_STRATEGY_TESTER">
-/* Beta 0.084 — Strategy Tester */
+/* Beta 0.085 — Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.084';
+var V='Beta 0.085';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -9838,7 +9857,7 @@ var OPT_PARAMS=[
   });
 })();
 
-/* ── deterministic backtest engine (Beta 0.084) ─────────────────── */
+/* ── deterministic backtest engine (Beta 0.085) ─────────────────── */
 
 /* Mulberry32 seeded PRNG — same seed → same sequence always */
 function _mkRng(seed){
@@ -16976,11 +16995,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.084';
+  window.DVL_APP_VERSION='Beta 0.085';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.084';
+    if(b)b.textContent='Beta 0.085';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -17090,7 +17109,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.084';
+  const VERSION = 'Beta 0.085';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -17100,13 +17119,13 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.084 — DOM overlay buttons for canvas-drawn oscillator gear icons.
+/* Beta 0.085 — DOM overlay buttons for canvas-drawn oscillator gear icons.
    Canvas hit-detection (hitGear) can miss on mobile due to touch coordinate
    precision. These transparent buttons sit exactly over the drawn gears and
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.084';
+  var VERSION='Beta 0.085';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
@@ -17224,7 +17243,7 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_HVN_SIGNALS">
-/* HVN Signals — Beta 0.084
+/* HVN Signals — Beta 0.085
    Pure chart-overlay indicator: detects LONG/SHORT when a candle wick touches an
    HVN zone then the candle closes back out (rejection). No oscillator, no panel,
    no histogram — only LONG/SHORT labels drawn directly on the main chart canvas.
@@ -17257,6 +17276,8 @@ body:before{display:none!important;background:none!important;}
       tp        : g('hvnSigTP')?.value||'hvn',
       tf        : g('hvnSigTF')?.value||'5m',
       volSpike  : g('hvnSigVolSpike')?.value||'off',
+      mode      : g('hvnSigMode')?.value||'wick',
+      diveMin   : Math.max(1,parseInt(g('hvnSigDiveMin')?.value)||2),
     };
   }
 
@@ -17314,6 +17335,10 @@ body:before{display:none!important;background:none!important;}
       }
     }
 
+    var doWick=(cfg.mode==='wick'||cfg.mode==='all');
+    var doDive=(cfg.mode==='dive'||cfg.mode==='all');
+    var doEngulf=(cfg.mode==='engulf'||cfg.mode==='all');
+
     for(var zi=0;zi<zones.length;zi++){
       var z=zones[zi];
       var zSize=z.hi-z.lo;
@@ -17342,34 +17367,73 @@ body:before{display:none!important;background:none!important;}
         var latOK=(cfg.allowLat||lateralCount===0);
         var volOK=(cfg.volSpike==='off'||!cfg.volSpike||_volAvg[i]<=0||(c.v||0)>=parseFloat(cfg.volSpike)*_volAvg[i]);
 
-        // ── SHORT: upper wick enters zone, close back below ──────────────────
-        if(cfg.showShort&&c.h>=z.lo&&c.c<z.lo+tol&&bodyLo<z.lo){
-          var upperWick=c.h-Math.max(c.o,c.c);
-          var wickPct=upperWick/candleRange;
-          if(wickPct>=cfg.minWickPct&&coolOK&&latOK&&volOK){
-            var isLat=(lateralCount>=1);
-            if(!signals[i]||Math.abs(signals[i]._strength||0)<Math.abs(wickPct)){
-              signals[i]={type:'short',kind:isLat?'lateral':'rejection',
-                          zone:z,wickPct:wickPct,_strength:wickPct};
+        // ── WICK REJECTION ────────────────────────────────────────────────────
+        if(doWick){
+          if(cfg.showShort&&c.h>=z.lo&&c.c<z.lo+tol&&bodyLo<z.lo){
+            var upperWick=c.h-Math.max(c.o,c.c);
+            var wickPct=upperWick/candleRange;
+            if(wickPct>=cfg.minWickPct&&coolOK&&latOK&&volOK){
+              var isLat=(lateralCount>=1);
+              if(!signals[i]||Math.abs(signals[i]._strength||0)<Math.abs(wickPct)){
+                signals[i]={type:'short',kind:isLat?'lateral':'rejection',
+                            zone:z,wickPct:wickPct,_strength:wickPct};
+              }
+              lastSignalIdx=i;
             }
-            lastSignalIdx=i;
-          }
-        }
-        // ── LONG: lower wick enters zone, close back above ───────────────────
-        else if(cfg.showLong&&c.l<=z.hi&&c.c>z.hi-tol&&bodyHi>z.hi){
-          var lowerWick=Math.min(c.o,c.c)-c.l;
-          var wickPct=lowerWick/candleRange;
-          if(wickPct>=cfg.minWickPct&&coolOK&&latOK&&volOK){
-            var isLat=(lateralCount>=1);
-            if(!signals[i]||Math.abs(signals[i]._strength||0)<Math.abs(wickPct)){
-              signals[i]={type:'long',kind:isLat?'lateral':'rejection',
-                          zone:z,wickPct:wickPct,_strength:wickPct};
+          } else if(cfg.showLong&&c.l<=z.hi&&c.c>z.hi-tol&&bodyHi>z.hi){
+            var lowerWick=Math.min(c.o,c.c)-c.l;
+            var wickPct=lowerWick/candleRange;
+            if(wickPct>=cfg.minWickPct&&coolOK&&latOK&&volOK){
+              var isLat=(lateralCount>=1);
+              if(!signals[i]||Math.abs(signals[i]._strength||0)<Math.abs(wickPct)){
+                signals[i]={type:'long',kind:isLat?'lateral':'rejection',
+                            zone:z,wickPct:wickPct,_strength:wickPct};
+              }
+              lastSignalIdx=i;
             }
-            lastSignalIdx=i;
           }
         }
 
-        // Reset lateral count any time body is clearly outside the zone
+        // ── DIVE & RECOVER: N candles inside zone, then close back outside ────
+        if(doDive&&lateralCount>=cfg.diveMin&&coolOK&&volOK){
+          if(cfg.showLong&&bodyLo>=z.hi&&c.c>c.o){ // exits zone upward, bullish body
+            var _ds=(c.c-c.o)/(c.h-c.l||1);
+            if(!signals[i]||signals[i]._strength<_ds){
+              signals[i]={type:'long',subtype:'recover',zone:z,_strength:_ds};
+              lastSignalIdx=i;
+            }
+          }
+          if(cfg.showShort&&bodyHi<=z.lo&&c.c<c.o){ // exits zone downward, bearish body
+            var _ds=(c.o-c.c)/(c.h-c.l||1);
+            if(!signals[i]||signals[i]._strength<_ds){
+              signals[i]={type:'short',subtype:'recover',zone:z,_strength:_ds};
+              lastSignalIdx=i;
+            }
+          }
+        }
+
+        // ── ENGOLFING NA ZONA: prev body in zone, curr engolfs prev ───────
+        if(doEngulf&&i>0&&coolOK&&volOK){
+          var _pv=cs[i-1];
+          var _pvLo=Math.min(_pv.o,_pv.c),_pvHi=Math.max(_pv.o,_pv.c);
+          if(_pvHi>=z.lo&&_pvLo<=z.hi){ // previous candle was in zone
+            if(cfg.showLong&&c.c>c.o&&_pv.c<_pv.o&&c.o<=_pv.c&&c.c>=_pv.o){ // bull engulf
+              var _ds=(c.c-c.o)/(_pvHi-_pvLo||1);
+              if(!signals[i]||signals[i]._strength<_ds){
+                signals[i]={type:'long',subtype:'engulf',zone:z,_strength:_ds};
+                lastSignalIdx=i;
+              }
+            }
+            if(cfg.showShort&&c.c<c.o&&_pv.c>_pv.o&&c.o>=_pv.c&&c.c<=_pv.o){ // bear engulf
+              var _ds=(c.o-c.c)/(_pvHi-_pvLo||1);
+              if(!signals[i]||signals[i]._strength<_ds){
+                signals[i]={type:'short',subtype:'engulf',zone:z,_strength:_ds};
+                lastSignalIdx=i;
+              }
+            }
+          }
+        }
+
         lateralCount=0;
       }
     }
@@ -17392,11 +17456,28 @@ body:before{display:none!important;background:none!important;}
   function _drawSignal(ctx,sig,c,cx,sc,W,H,cfg,PB){
     var PT=8;
     var isLong=(sig.type==='long');
-    var bc=isLong?cfg.longColor:cfg.shortColor;
-    var glowC=isLong?'rgba(0,200,190,.4)':'rgba(255,50,80,.4)';
-    var fillC=isLong?'rgba(0,50,46,.58)':'rgba(76,10,22,.58)';
-    var textC=isLong?'rgba(0,255,230,.97)':'rgba(255,100,118,.97)';
-    var label=isLong?'LONG':'SHORT';
+    var _sub=sig.subtype||'wick';
+    /* color palette per subtype */
+    var bc,glowC,fillC,textC,label;
+    if(_sub==='recover'){
+      bc=isLong?'#00e5a0':'#ff8c42';
+      glowC=isLong?'rgba(0,229,160,.38)':'rgba(255,140,66,.38)';
+      fillC=isLong?'rgba(0,60,40,.60)':'rgba(80,30,0,.60)';
+      textC=isLong?'rgba(0,240,168,.97)':'rgba(255,152,80,.97)';
+      label=isLong?'↑ RECOVER':'↓ RECOVER';
+    } else if(_sub==='engulf'){
+      bc=isLong?'#60c0ff':'#d966ff';
+      glowC=isLong?'rgba(96,192,255,.38)':'rgba(217,102,255,.38)';
+      fillC=isLong?'rgba(10,40,80,.60)':'rgba(50,0,80,.60)';
+      textC=isLong?'rgba(130,210,255,.97)':'rgba(230,140,255,.97)';
+      label=isLong?'↑ ENGULF':'↓ ENGULF';
+    } else {
+      bc=isLong?cfg.longColor:cfg.shortColor;
+      glowC=isLong?'rgba(0,200,190,.4)':'rgba(255,50,80,.4)';
+      fillC=isLong?'rgba(0,50,46,.58)':'rgba(76,10,22,.58)';
+      textC=isLong?'rgba(0,255,230,.97)':'rgba(255,100,118,.97)';
+      label=isLong?'LONG':'SHORT';
+    }
     var csf=window.innerWidth>900?1.35:1.0;
     var fs=Math.round(cfg.labelFs*csf);
     var showLabel=(cfg.labelStyle==='label'||cfg.labelStyle==='both');
@@ -17552,7 +17633,7 @@ body:before{display:none!important;background:none!important;}
   ['hvnSigShowLong','hvnSigShowShort','hvnSigSens','hvnSigMinWick','hvnSigCooldown',
    'hvnSigAllowLateral','hvnSigLateral','hvnSigLabelSize','hvnSigLabelStyle',
    'hvnSigLongColor','hvnSigShortColor','hvnSigClarity','hvnSigFlow',
-   'hvnSigNextHVN','hvnSigSL','hvnSigTP','hvnSigTF','hvnSigVolSpike'].forEach(function(id){
+   'hvnSigNextHVN','hvnSigSL','hvnSigTP','hvnSigTF','hvnSigVolSpike','hvnSigMode','hvnSigDiveMin'].forEach(function(id){
     var el=document.getElementById(id);
     if(el)el.addEventListener('input',function(){if(typeof drawSoon==='function')drawSoon();});
     if(el)el.addEventListener('change',function(){
