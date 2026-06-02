@@ -41,7 +41,7 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
-Beta 0.094
+Beta 0.095
   - Optimizer: OPT_COMBOS expandido para 100 combos cobrindo wick (27),
     dive (25), engulf (23) e all (25) com variações de pavio, filtros,
     spike, SL/TP e profundidade de mergulho.
@@ -534,7 +534,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.094";
+  const LOCAL_VERSION = "Beta 0.095";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2224,7 +2224,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.094";
+window.DVL_APP_VERSION = "Beta 0.095";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -3033,11 +3033,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.094</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.095</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.094</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.095</span>
       </div>
 
       <div class="tb-right-btns">
@@ -6805,7 +6805,7 @@ function openInputModal(key,gear){
   if(!settings||!inputModal||!inputModalBody)return;
   if(inputModalState.settings===settings){closeInputModal();return;}
   closeInputModal();
-  // Beta 0.094: sidebar stays open while modal is shown
+  // Beta 0.095: sidebar stays open while modal is shown
   const title=(card&&card.querySelector('.name')?card.querySelector('.name').textContent:'Inputs');
   const ph=document.createComment('settings-'+key+'-placeholder');
   settings.parentNode.insertBefore(ph,settings);
@@ -6819,7 +6819,7 @@ function openInputModal(key,gear){
   inputModalState={settings:settings,placeholder:ph,card:card,gear:gear};
 }
 document.querySelectorAll('.gear[data-settings]').forEach(g=>{
-  // Beta 0.094: only open on intentional tap, not during scroll
+  // Beta 0.095: only open on intentional tap, not during scroll
   var _gts={x:0,y:0,moved:false};
   g.addEventListener('touchstart',function(ev){
     _gts.x=ev.touches[0].clientX;_gts.y=ev.touches[0].clientY;_gts.moved=false;
@@ -8971,9 +8971,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.094'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.095'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.094';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.095';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -9012,7 +9012,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.094';
+  const VERSION='Beta 0.095';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9191,7 +9191,7 @@ window._dvlClarEyeHit = null;
     return false;
   }
   ready(()=>{const wrap=E('chartWrap');if(!wrap)return;['pointerdown','mousedown','touchstart'].forEach(ev=>wrap.addEventListener(ev,function(e){
-    // Let DOM overlay gear buttons handle their own touches (Beta 0.094)
+    // Let DOM overlay gear buttons handle their own touches (Beta 0.095)
     if(e.target&&e.target.id&&String(e.target.id).indexOf('dvlOscGearOverlay_')===0)return;
     const p=e.touches&&e.touches[0]?e.touches[0]:e;
     if(hitGear(p)){e.preventDefault();e.stopImmediatePropagation();}
@@ -9317,7 +9317,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.094';
+  const VERSION='Beta 0.095';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9648,6 +9648,23 @@ input[type="color"]{border-radius:7px!important;}
 
     <!-- ── OPTIMIZER ──────────────────────────────────────────── -->
     <div class="dvl-st-tc" id="dvlSTTabOptimizer">
+      <div class="dvl-st-sl">CONFIGURAÇÃO</div>
+      <div class="dvl-st-row2">
+        <div class="dvl-st-field"><span class="dvl-st-lbl">Período</span>
+          <select class="dvl-st-sel" id="stOptPeriod">
+            <option value="7">7 dias</option>
+            <option value="30" selected>30 dias</option>
+            <option value="90">90 dias</option>
+            <option value="180">180 dias</option>
+            <option value="365">1 ano</option>
+            <option value="730">2 anos</option>
+          </select></div>
+        <div class="dvl-st-field"><span class="dvl-st-lbl">Par</span>
+          <select class="dvl-st-sel" id="stOptPair">
+            <option>BTC/USDT</option>
+            <option>ETH/USDT</option>
+          </select></div>
+      </div>
       <div class="dvl-st-sl">PARÂMETROS TESTADOS</div>
       <div id="dvlSTOptParams"></div>
       <button class="dvl-st-run" id="dvlSTRunOpt">
@@ -9716,7 +9733,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.094 ── */
+/* ── DVL Strategy Tester — Beta 0.095 ── */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
 #dvlSTScrim.show{display:block}
 #dvlSTPanel{
@@ -9859,7 +9876,7 @@ input[type="color"]{border-radius:7px!important;}
   .dvl-st-body{padding-bottom:22px}
 }
 
-/* Beta 0.094 — reset & apply buttons */
+/* Beta 0.095 — reset & apply buttons */
 .dvl-st-hreset{width:26px;height:26px;background:rgba(255,255,255,.03);border:1px solid #192438;border-radius:7px;color:#6a8099;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s;margin-left:auto}
 .dvl-st-hreset:hover{border-color:rgba(0,212,255,.4);color:#00d4ff}
 .dvl-st-hclose{margin-left:0!important}
@@ -9870,10 +9887,10 @@ input[type="color"]{border-radius:7px!important;}
 </style>
 
 <script id="DVL_STRATEGY_TESTER">
-/* Beta 0.094 — Strategy Tester */
+/* Beta 0.095 — Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.094';
+var V='Beta 0.095';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -9949,6 +9966,11 @@ var FVG_OPT_PARAMS=[
 function _stRenderOptParams(params){
   var c=document.getElementById('dvlSTOptParams');if(!c)return;
   c.innerHTML='';
+  var _pd=document.getElementById('stOptPeriod');
+  var _pdTxt=_pd?_pd.options[_pd.selectedIndex].text:'30 dias';
+  var _pRow=document.createElement('div');_pRow.className='dvl-st-oparam';
+  _pRow.innerHTML='<span class="dvl-st-opn">Período</span><span class="dvl-st-opv">'+_pdTxt+'</span>';
+  c.appendChild(_pRow);
   params.forEach(function(p){
     var d=document.createElement('div');d.className='dvl-st-oparam';
     d.innerHTML='<span class="dvl-st-opn">'+p.n+'</span><span class="dvl-st-opv">'+p.v+'</span>';
@@ -9985,8 +10007,15 @@ function _stSwitchInd(v){
     c.appendChild(d);
   });
 })();
+document.addEventListener('change',function(ev){
+  if(ev.target&&ev.target.id==='stOptPeriod'){
+    var ind=document.getElementById('stInd');
+    var isFvg=ind&&ind.value==='fvgConf';
+    _stRenderOptParams(isFvg?FVG_OPT_PARAMS:OPT_PARAMS);
+  }
+});
 
-/* ── deterministic backtest engine (Beta 0.094) ─────────────────── */
+/* ── deterministic backtest engine (Beta 0.095) ─────────────────── */
 
 /* Mulberry32 seeded PRNG — same seed → same sequence always */
 function _mkRng(seed){
@@ -10613,6 +10642,7 @@ function _runOptimizer(){
   for(var _k in _btCache)delete _btCache[_k];
   var _isFvgOpt=(_g('stInd')||{value:'hvnSignals'}).value==='fvgConf';
   var _COMBOS=_isFvgOpt?FVG_OPT_COMBOS:OPT_COMBOS;
+  var _optPeriod=String(parseInt((_g('stOptPeriod')||{value:'30'}).value)||30);
   var results=[],total=_COMBOS.length,done=0;
   function step(){
     if(done>=total){
@@ -10628,8 +10658,8 @@ function _runOptimizer(){
     if(bar)bar.style.width=(done/total*100)+'%';
     if(status)status.textContent='Testando combinação '+(done+1)+' de '+total+'...';
     var r=_isFvgOpt?
-      _cachedBacktest({signalType:'fvgConf',trend:c.trend,flow:c.flow,volSpike:c.volSpike||'off',sl:c.sl,tp:c.tp,risk:1.0,fvgMinAtr:c.minAtr,fvgMit:c.mitMode,fvgReact:c.react,fvgReentry:c.reentry,fvgMaxAge:c.maxAge,period:'30'}):
-      _cachedBacktest({wickSens:c.w,trend:c.trend,flow:c.flow,nextHVN:c.hvn,sl:c.sl,tp:c.tp,risk:1.0,close:c.close,cons:c.cons,volSpike:c.volSpike||'off',mode:c.mode||'wick',diveMin:c.diveMin||2});
+      _cachedBacktest({signalType:'fvgConf',trend:c.trend,flow:c.flow,volSpike:c.volSpike||'off',sl:c.sl,tp:c.tp,risk:1.0,fvgMinAtr:c.minAtr,fvgMit:c.mitMode,fvgReact:c.react,fvgReentry:c.reentry,fvgMaxAge:c.maxAge,period:_optPeriod}):
+      _cachedBacktest({wickSens:c.w,trend:c.trend,flow:c.flow,nextHVN:c.hvn,sl:c.sl,tp:c.tp,risk:1.0,close:c.close,cons:c.cons,volSpike:c.volSpike||'off',mode:c.mode||'wick',diveMin:c.diveMin||2,period:_optPeriod});
     results.push({c:c,trades:r.trades,wr:r.wr,pf:r.pf,ret:r.ret,dd:r.dd});
     done++;
     setTimeout(step,110);
@@ -17471,11 +17501,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.094';
+  window.DVL_APP_VERSION='Beta 0.095';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.094';
+    if(b)b.textContent='Beta 0.095';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -17585,7 +17615,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.094';
+  const VERSION = 'Beta 0.095';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -17595,13 +17625,13 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.094 — DOM overlay buttons for canvas-drawn oscillator gear icons.
+/* Beta 0.095 — DOM overlay buttons for canvas-drawn oscillator gear icons.
    Canvas hit-detection (hitGear) can miss on mobile due to touch coordinate
    precision. These transparent buttons sit exactly over the drawn gears and
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.094';
+  var VERSION='Beta 0.095';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
@@ -17719,7 +17749,7 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_HVN_SIGNALS">
-/* HVN Signals — Beta 0.094
+/* HVN Signals — Beta 0.095
    Pure chart-overlay indicator: detects LONG/SHORT when a candle wick touches an
    HVN zone then the candle closes back out (rejection). No oscillator, no panel,
    no histogram — only LONG/SHORT labels drawn directly on the main chart canvas.
