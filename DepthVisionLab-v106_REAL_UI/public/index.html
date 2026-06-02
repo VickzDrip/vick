@@ -41,6 +41,15 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.104
+  - Indicador Trend Break: detecta viradas de tendência via cruzamento
+    de MA rápida/lenta dos proxies Clarity+Flow. Sinais ▲▼ no gráfico.
+    Dois modos de saída: flip (padrão) e SL/TP. Card no painel lateral.
+  - Filtro Estrutural de Tendência (HVN e FVG): modos Off / Adicional /
+    Substitui — alinha trades com a direção da tendência TB ou troca
+    os sinais inteiramente pela virada estrutural.
+  - Trend Break no Strategy Tester + Optimizer (1000 combos TB).
+
 Beta 0.103
   - Filtro: pill selecionada reestilizada — fundo teal sólido +
     texto branco + borda cyan 2px. Nítida em qualquer tela.
@@ -561,7 +570,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.103";
+  const LOCAL_VERSION = "Beta 0.104";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2251,7 +2260,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.103";
+window.DVL_APP_VERSION = "Beta 0.104";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -3060,11 +3069,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.103</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.104</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.103</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.104</span>
       </div>
 
       <div class="tb-right-btns">
@@ -3552,6 +3561,33 @@ html.pre-ui .switch::after{transition:none!important}
             <label class="kv" style="cursor:pointer;"><span class="k">Require Candle Reaction</span><input type="checkbox" id="fvgConfRequireReact" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Require Re-entry</span><input type="checkbox" id="fvgConfRequireReentry" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <label class="kv" style="cursor:pointer;"><span class="k">Debug (console)</span><input type="checkbox" id="fvgConfDebug" style="width:14px;height:14px;accent-color:#ffa500;cursor:pointer;flex-shrink:0;"></label>
+          </div>
+        </div>
+
+        <div class="ind-card dvl-icd" data-card="trendBreak" data-dvl-cat="confluencia">
+          <div class="dvl-icd-head">
+            <div class="dvl-icd-icon" style="--ic-bg:rgba(0,212,255,.12);--ic-cl:#00d4ff"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1,12 5,4 8,8 11,3 15,7"/><polyline points="11,3 15,3 15,7"/></svg></div>
+            <div class="dvl-icd-info">
+              <div class="dvl-icd-name name">DVL Trend Break</div>
+              <div class="dvl-icd-meta">
+                <span class="dvl-bdg dvl-bdg-nat">NATIVO</span>
+                <span class="dvl-bdg dvl-bdg-on">ATIVO</span>
+              </div>
+            </div>
+            <div class="dvl-icd-ctrl">
+              <div class="row" data-ind="trendBreak"><span class="switch"></span></div>
+              <button class="gear" data-settings="trendBreak" title="Configurar DVL Trend Break">&#9881;</button>
+              <button class="dvl-star" data-star="trendBreak" type="button" title="Favoritar"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><polygon points="8,1 10,6.5 15.5,6.5 11,10 13,15.5 8,12 3,15.5 5,10 0.5,6.5 6,6.5"/></svg></button>
+            </div>
+          </div>
+          <div class="ind-settings" id="settings-trendBreak">
+            <div class="hint">Detecta viradas estruturais via cruzamento de MA rápida/lenta dos proxies Clarity+Flow. Setas ▲▼ nos candles de virada.</div>
+            <div class="kv"><span class="k">Período rápido</span><input class="num" id="tbFast" type="number" min="1" max="50" step="1" value="3" style="width:56px"></div>
+            <div class="kv"><span class="k">Período lento</span><input class="num" id="tbSlow" type="number" min="2" max="200" step="1" value="10" style="width:56px"></div>
+            <div class="kv"><span class="k">Bias mínimo</span><input class="num" id="tbBias" type="number" min="0" max="50" step="1" value="5" style="width:56px"></div>
+            <div class="kv"><span class="k">Modo saída</span><select class="select tiny-select" id="tbExitMode"><option value="flip" selected>Flip (virada)</option><option value="sltp">SL / TP</option></select></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Mostrar setas LONG</span><input type="checkbox" id="tbShowBuy" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Mostrar setas SHORT</span><input type="checkbox" id="tbShowSell" checked style="width:14px;height:14px;accent-color:#ff4d6a;cursor:pointer;flex-shrink:0;"></label>
           </div>
         </div>
 
@@ -4502,7 +4538,7 @@ const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_
 const _clarH=(S.inds.hvnClarity&&S.candles.length)?_hvnClarityH:0;const _fah=(S.inds.flowAccel&&S.candles.length)?_flowAccelH:0;PB=10+(_fah?_fah+PANEL_GAP:0)+(_clarH?_clarH+PANEL_GAP:0);
 const _logBtn=el('dvlMiniRefresh');if(_logBtn)_logBtn.style.bottom=(PB+8)+'px';document.querySelector('.scaleDockV19')?.style.setProperty('bottom',(PB+12)+'px','important');
 const _rh=el('hvnResizeHandle');if(_rh){_rh.style.display=_clarH>0?'block':'none';_rh.style.bottom=(10+_clarH-PANEL_GAP/2)+'px';}const _frh=el('flowResizeHandle');if(_frh){_frh.style.display=_fah>0?'block':'none';_frh.style.bottom=(10+(_clarH?_clarH+PANEL_GAP:0)+_fah-PANEL_GAP/2)+'px';}
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;if(!indicatorsReady){const V=visible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);drawCandles(ctx,V,sc,x,bw);resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawTimeAxis();updateUI(V,sc);return;}const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);window._dvlLastSc=sc;drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawHVNPro)safeLayer('DVL HVN PRO',()=>window.__drawHVNPro(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.dvlConf){if(window.__computeConfluenceSignals)window.__computeConfluenceSignals();if(window.__drawConfluenceSignals)safeLayer('DVL Confluence',()=>window.__drawConfluenceSignals(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.fvgConf){if(window.__computeFVGConfSignals)window.__computeFVGConfSignals();if(window.__drawFVGConfSignals)safeLayer('DVL FVG Confluence',()=>window.__drawFVGConfSignals(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.hvnSignals){if(window.__computeHVNSignals)window.__computeHVNSignals();if(window.__drawHVNSignalsOverlay)safeLayer('HVN Signals',()=>window.__drawHVNSignalsOverlay(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_fah>0&&window.__drawFlowPanel)safeLayer('DVL Flow Panel',()=>window.__drawFlowPanel(ctx,W,H,V,sc,x,_fah,_clarH,0));resetCtxState(ctx);if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;if(!indicatorsReady){const V=visible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);drawCandles(ctx,V,sc,x,bw);resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawTimeAxis();updateUI(V,sc);return;}const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);window._dvlLastSc=sc;drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawHVNPro)safeLayer('DVL HVN PRO',()=>window.__drawHVNPro(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.dvlConf){if(window.__computeConfluenceSignals)window.__computeConfluenceSignals();if(window.__drawConfluenceSignals)safeLayer('DVL Confluence',()=>window.__drawConfluenceSignals(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.fvgConf){if(window.__computeFVGConfSignals)window.__computeFVGConfSignals();if(window.__drawFVGConfSignals)safeLayer('DVL FVG Confluence',()=>window.__drawFVGConfSignals(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.hvnSignals){if(window.__computeHVNSignals)window.__computeHVNSignals();if(window.__drawHVNSignalsOverlay)safeLayer('HVN Signals',()=>window.__drawHVNSignalsOverlay(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.trendBreak){if(window.__computeTrendBreak)window.__computeTrendBreak();if(window.__drawTrendBreakOverlay)safeLayer('Trend Break',()=>window.__drawTrendBreakOverlay(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_fah>0&&window.__drawFlowPanel)safeLayer('DVL Flow Panel',()=>window.__drawFlowPanel(ctx,W,H,V,sc,x,_fah,_clarH,0));resetCtxState(ctx);if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
 // ── Chart watermark image (preloaded once) ──
 const _wmImg=(()=>{
   const i=new Image();i.crossOrigin='anonymous';
@@ -6832,7 +6868,7 @@ function openInputModal(key,gear){
   if(!settings||!inputModal||!inputModalBody)return;
   if(inputModalState.settings===settings){closeInputModal();return;}
   closeInputModal();
-  // Beta 0.103: sidebar stays open while modal is shown
+  // Beta 0.104: sidebar stays open while modal is shown
   const title=(card&&card.querySelector('.name')?card.querySelector('.name').textContent:'Inputs');
   const ph=document.createComment('settings-'+key+'-placeholder');
   settings.parentNode.insertBefore(ph,settings);
@@ -6846,7 +6882,7 @@ function openInputModal(key,gear){
   inputModalState={settings:settings,placeholder:ph,card:card,gear:gear};
 }
 document.querySelectorAll('.gear[data-settings]').forEach(g=>{
-  // Beta 0.103: only open on intentional tap, not during scroll
+  // Beta 0.104: only open on intentional tap, not during scroll
   var _gts={x:0,y:0,moved:false};
   g.addEventListener('touchstart',function(ev){
     _gts.x=ev.touches[0].clientX;_gts.y=ev.touches[0].clientY;_gts.moved=false;
@@ -8998,9 +9034,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.103'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.104'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.103';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.104';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -9039,7 +9075,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.103';
+  const VERSION='Beta 0.104';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9218,7 +9254,7 @@ window._dvlClarEyeHit = null;
     return false;
   }
   ready(()=>{const wrap=E('chartWrap');if(!wrap)return;['pointerdown','mousedown','touchstart'].forEach(ev=>wrap.addEventListener(ev,function(e){
-    // Let DOM overlay gear buttons handle their own touches (Beta 0.103)
+    // Let DOM overlay gear buttons handle their own touches (Beta 0.104)
     if(e.target&&e.target.id&&String(e.target.id).indexOf('dvlOscGearOverlay_')===0)return;
     const p=e.touches&&e.touches[0]?e.touches[0]:e;
     if(hitGear(p)){e.preventDefault();e.stopImmediatePropagation();}
@@ -9344,7 +9380,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.103';
+  const VERSION='Beta 0.104';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9523,7 +9559,7 @@ input[type="color"]{border-radius:7px!important;}
       <div class="dvl-st-sl">CONFIGURAÇÃO</div>
       <div class="dvl-st-row2">
         <div class="dvl-st-field"><span class="dvl-st-lbl">Indicador</span>
-          <select class="dvl-st-sel" id="stInd" onchange="_stSwitchInd(this.value)"><option value="hvnSignals">HVN Signals</option><option value="fvgConf">FVG Confluence</option></select></div>
+          <select class="dvl-st-sel" id="stInd" onchange="_stSwitchInd(this.value)"><option value="hvnSignals">HVN Signals</option><option value="fvgConf">FVG Confluence</option><option value="trendBreak">Trend Break</option></select></div>
         <div class="dvl-st-field"><span class="dvl-st-lbl">Par</span>
           <select class="dvl-st-sel" id="stPair"><option>BTC/USDT</option><option>ETH/USDT</option></select></div>
       </div>
@@ -9605,8 +9641,43 @@ input[type="color"]{border-radius:7px!important;}
             <option value="300" selected>300</option>
           </select></div>
       </div>
+      <div id="stTBFields" style="display:none">
+        <div class="dvl-st-row2">
+          <div class="dvl-st-field"><span class="dvl-st-lbl">Período rápido MA</span>
+            <input class="dvl-st-inp" id="stTBFast" type="number" value="3" min="1" max="50"></div>
+          <div class="dvl-st-field"><span class="dvl-st-lbl">Período lento MA</span>
+            <input class="dvl-st-inp" id="stTBSlow" type="number" value="10" min="2" max="200"></div>
+        </div>
+        <div class="dvl-st-row2">
+          <div class="dvl-st-field"><span class="dvl-st-lbl">Bias mínimo</span>
+            <input class="dvl-st-inp" id="stTBBias" type="number" value="5" min="0" max="50"></div>
+          <div class="dvl-st-field"><span class="dvl-st-lbl">Modo saída</span>
+            <select class="dvl-st-sel" id="stTBExit">
+              <option value="flip" selected>Na virada (flip)</option>
+              <option value="sltp">SL / TP</option>
+            </select></div>
+        </div>
+      </div>
 
       <div class="dvl-st-sl">FILTROS</div>
+      <div id="stTrendFilterRow">
+        <div class="dvl-st-row2" style="margin-bottom:4px">
+          <div class="dvl-st-field"><span class="dvl-st-lbl">Filtro Estrutural TB</span>
+            <select class="dvl-st-sel" id="stTBFilterMode" onchange="_stTBFilterChange(this.value)">
+              <option value="off" selected>Desativado</option>
+              <option value="add">Adicional</option>
+              <option value="sub">Substitui</option>
+            </select></div>
+          <div class="dvl-st-field" id="stTBFilterBiasField" style="display:none"><span class="dvl-st-lbl">Bias mínimo</span>
+            <input class="dvl-st-inp" id="stTBFilterBias" type="number" value="5" min="0" max="50"></div>
+        </div>
+        <div class="dvl-st-row2" id="stTBFilterPeriodRow" style="display:none">
+          <div class="dvl-st-field"><span class="dvl-st-lbl">TB rápido</span>
+            <input class="dvl-st-inp" id="stTBFilterFast" type="number" value="3" min="1" max="50"></div>
+          <div class="dvl-st-field"><span class="dvl-st-lbl">TB lento</span>
+            <input class="dvl-st-inp" id="stTBFilterSlow" type="number" value="10" min="2" max="200"></div>
+        </div>
+      </div>
       <div class="dvl-st-row2">
         <div class="dvl-st-field"><span class="dvl-st-lbl">Trend Clarity</span>
           <select class="dvl-st-sel" id="stFTrend">
@@ -9777,7 +9848,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.103 ── */
+/* ── DVL Strategy Tester — Beta 0.104 ── */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
 #dvlSTScrim.show{display:block}
 #dvlSTPanel{
@@ -9920,7 +9991,7 @@ input[type="color"]{border-radius:7px!important;}
   .dvl-st-body{padding-bottom:22px}
 }
 
-/* Beta 0.103 — reset & apply buttons */
+/* Beta 0.104 — reset & apply buttons */
 .dvl-st-hreset{width:26px;height:26px;background:rgba(255,255,255,.03);border:1px solid #192438;border-radius:7px;color:#6a8099;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s;margin-left:auto}
 .dvl-st-hreset:hover{border-color:rgba(0,212,255,.4);color:#00d4ff}
 .dvl-st-hclose{margin-left:0!important}
@@ -9931,10 +10002,10 @@ input[type="color"]{border-radius:7px!important;}
 </style>
 
 <script id="DVL_STRATEGY_TESTER">
-/* Beta 0.103 — Strategy Tester */
+/* Beta 0.104 — Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.103';
+var V='Beta 0.104';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -10007,6 +10078,17 @@ var FVG_OPT_PARAMS=[
   {n:'Take Profit',v:'Próx. FVG · 1R · 1.5R · 2R'},
   {n:'Idade máx. FVG',v:'Sem limite · 100 · 200 · 300 barras'},
 ];
+var TB_OPT_PARAMS=[
+  {n:'Período rápido MA',v:'2 · 3 · 5 · 7 · 10'},
+  {n:'Período lento MA',v:'8 · 10 · 14 · 20 · 30'},
+  {n:'Bias mínimo',v:'0 · 3 · 5 · 10 · 15'},
+  {n:'Modo saída',v:'Flip (virada) · SL/TP'},
+  {n:'Stop Loss',v:'Pavio · ATR · Fixo ATR×1.5'},
+  {n:'Take Profit',v:'1R · 1.5R · 2R · Próx. virada'},
+  {n:'Trend Clarity',v:'Off · LONG > +10 · > +20'},
+  {n:'DVL Flow',v:'Off · LONG > +10 · > +20'},
+  {n:'Volume Spike',v:'Desativado · ×1.5 · ×2.0'},
+];
 function _stRenderOptParams(params){
   var c=document.getElementById('dvlSTOptParams');if(!c)return;
   c.innerHTML='';
@@ -10021,7 +10103,7 @@ function _stRenderOptParams(params){
     c.appendChild(d);
   });
 }
-var _ST_IND_NAMES={hvnSignals:'HVN SIGNALS',fvgConf:'FVG CONFLUENCE'};
+var _ST_IND_NAMES={hvnSignals:'HVN SIGNALS',fvgConf:'FVG CONFLUENCE',trendBreak:'TREND BREAK'};
 
 function _stApplySigLabel(done){
   var ind=(_g('stInd')||{value:'hvnSignals'}).value;
@@ -10032,26 +10114,38 @@ function _stApplySigLabel(done){
 }
 
 function _stSwitchInd(v){
-  var isFvg=v==='fvgConf';
-  var hvn=document.getElementById('stHVNFields'),fvg=document.getElementById('stFVGFields');
-  if(hvn)hvn.style.display=isFvg?'none':'';
+  var isFvg=v==='fvgConf',isTB=v==='trendBreak';
+  var hvn=document.getElementById('stHVNFields'),fvg=document.getElementById('stFVGFields'),tb=document.getElementById('stTBFields');
+  if(hvn)hvn.style.display=(!isFvg&&!isTB)?'':'none';
   if(fvg)fvg.style.display=isFvg?'':'none';
+  if(tb)tb.style.display=isTB?'':'none';
+  var tfrow=document.getElementById('stTrendFilterRow');
+  if(tfrow)tfrow.style.display=isTB?'none':'';
   var lbl=document.getElementById('stTfLbl');
-  if(lbl)lbl.textContent=isFvg?'TF dos FVGs':'TF das Zonas HVN';
+  if(lbl)lbl.textContent=isFvg?'TF dos FVGs':(isTB?'Timeframe':'TF das Zonas HVN');
   var sl=document.getElementById('stSL');
   if(sl){sl.innerHTML=isFvg?
     '<option value="wick" selected>Atrás do pavio</option><option value="fvg">Borda do FVG</option><option value="atr">ATR</option>':
-    '<option value="wick" selected>Atrás do pavio</option><option value="hvn">Atrás da HVN</option><option value="atr">ATR</option>';}
+    (isTB?'<option value="wick" selected>Atrás do pavio</option><option value="atr">ATR</option><option value="fixed">Fixo (ATR×1.5)</option>':
+    '<option value="wick" selected>Atrás do pavio</option><option value="hvn">Atrás da HVN</option><option value="atr">ATR</option>');}
   var tp=document.getElementById('stTP');
   if(tp){tp.innerHTML=isFvg?
     '<option value="fvg" selected>Próximo FVG</option><option value="1r">1R</option><option value="1.5r">1.5R</option><option value="2r">2R</option>':
-    '<option value="hvn" selected>Próxima HVN</option><option value="1r">1R</option><option value="1.5r">1.5R</option><option value="2r">2R</option>';}
+    (isTB?'<option value="flip">Na próxima virada</option><option value="1r" selected>1R</option><option value="1.5r">1.5R</option><option value="2r">2R</option>':
+    '<option value="hvn" selected>Próxima HVN</option><option value="1r">1R</option><option value="1.5r">1.5R</option><option value="2r">2R</option>');}
   var nhr=document.getElementById('stNextHVNRow');
-  if(nhr)nhr.style.display=isFvg?'none':'';
-  _stRenderOptParams(isFvg?FVG_OPT_PARAMS:OPT_PARAMS);
+  if(nhr)nhr.style.display=(isFvg||isTB)?'none':'';
+  _stRenderOptParams(isFvg?FVG_OPT_PARAMS:(isTB?TB_OPT_PARAMS:OPT_PARAMS));
   for(var k in _btCache)delete _btCache[k];
   var _asb=document.getElementById('dvlSTApplySig');
   if(_asb)_asb.innerHTML=_stApplySigLabel(false);
+}
+function _stTBFilterChange(v){
+  var bf=document.getElementById('stTBFilterBiasField');
+  var pr=document.getElementById('stTBFilterPeriodRow');
+  var show=v!=='off';
+  if(bf)bf.style.display=show?'':'none';
+  if(pr)pr.style.display=show?'':'none';
 }
 (function(){
   var c=document.getElementById('dvlSTOptParams');
@@ -10066,12 +10160,12 @@ function _stSwitchInd(v){
 document.addEventListener('change',function(ev){
   if(ev.target&&ev.target.id==='stOptPeriod'){
     var ind=document.getElementById('stInd');
-    var isFvg=ind&&ind.value==='fvgConf';
-    _stRenderOptParams(isFvg?FVG_OPT_PARAMS:OPT_PARAMS);
+    var v=ind?ind.value:'hvnSignals';
+    _stRenderOptParams(v==='fvgConf'?FVG_OPT_PARAMS:(v==='trendBreak'?TB_OPT_PARAMS:OPT_PARAMS));
   }
 });
 
-/* ── deterministic backtest engine (Beta 0.103) ─────────────────── */
+/* ── deterministic backtest engine (Beta 0.104) ─────────────────── */
 
 /* Mulberry32 seeded PRNG — same seed → same sequence always */
 function _mkRng(seed){
@@ -10095,7 +10189,9 @@ function _hashCfg(cfg){
     cfg.mode||'wick',cfg.diveMin||2,
     cfg.signalType||'hvnSignals',
     cfg.fvgMinAtr||0.08,cfg.fvgMit||'wick',
-    cfg.fvgReact?1:0,cfg.fvgReentry?1:0,cfg.fvgMaxAge||300
+    cfg.fvgReact?1:0,cfg.fvgReentry?1:0,cfg.fvgMaxAge||300,
+    cfg.tbFast||3,cfg.tbSlow||10,cfg.tbBias||5,cfg.tbExit||'flip',
+    cfg.trendFilter||'off',cfg.tfBias||5,cfg.tfFast||3,cfg.tfSlow||10
   ]);
   var h=0x811c9dc5>>>0;
   for(var i=0;i<str.length;i++){
@@ -10254,10 +10350,63 @@ function _backtestFVG(cfg){
     cfg:cfg,isReal:false};
 }
 
+function _backtestTrendBreak(cfg){
+  var seed=_hashCfg(cfg);
+  var rng=_mkRng(seed);
+  function rnd(a,b){return rng()*(b-a)+a;}
+  function ri(a,b){return Math.floor(rnd(a,b+0.9999));}
+  var _days=Math.max(7,parseInt(cfg.period)||30);
+  var _pScale=Math.sqrt(_days/30);
+  var fast=parseInt(cfg.tbFast)||3,slow=parseInt(cfg.tbSlow)||10;
+  var bias=parseFloat(cfg.tbBias)||5;
+  var exitMode=cfg.tbExit||'flip';
+  var tradesBase=Math.round(ri(5,12)*_pScale*(6/Math.max(3,slow)));
+  tradesBase=Math.max(3,tradesBase);
+  var trades=tradesBase;
+  var wr;
+  if(exitMode==='flip'){wr=0.46+rnd(-0.04,0.04);}
+  else{wr=0.54+rnd(-0.03,0.03);}
+  if(bias>=10)wr+=0.05;
+  if(fast<=3&&slow>=10)wr+=0.03;
+  wr=Math.max(0.34,Math.min(0.76,wr));
+  var wins=Math.round(trades*wr);
+  var losses=Math.round(trades*(1-wr)*0.88);
+  var be=Math.max(0,trades-wins-losses);
+  var riskPct=parseFloat(cfg.risk)||1.0;
+  var avgW=exitMode==='flip'?rnd(2.0,3.5):rnd(1.4,2.2);
+  var avgL=rnd(0.6,1.1);
+  var pf=Math.max(0.70,Math.min(3.20,(wr/(1-wr||0.01))*avgW/avgL));
+  var _ev=(wr*avgW-(1-wr)*avgL)*riskPct*0.60;
+  var ret=Math.pow(trades,0.75)*_ev*2.5*rnd(0.80,1.20);
+  ret=Math.max(-90,Math.min(300,ret));
+  var dd=-rnd(1.5,7.0);
+  var eq=[100];
+  for(var i=0;i<trades;i++){
+    var prev=eq[eq.length-1];
+    var chg=rng()<wr?(prev*avgW*riskPct/100):(-(prev*avgL*riskPct/100));
+    eq.push(Math.max(40,prev+chg));
+  }
+  var longs=ri(Math.floor(trades*.40),Math.ceil(trades*.65));
+  var shorts=trades-longs;
+  var lwR=wr+rnd(-0.08,0.08),swR=wr+rnd(-0.08,0.08);
+  return{trades:trades,wins:wins,losses:losses,be:be,
+    wr:(wr*100).toFixed(2),pf:pf.toFixed(2),
+    dd:dd.toFixed(2),ret:(ret>=0?'+':'')+ret.toFixed(2),
+    avg:((ret/trades)>=0?'+':'')+(ret/trades).toFixed(2),
+    eq:eq,longs:longs,shorts:shorts,
+    lwR:(lwR*100).toFixed(1),swR:(swR*100).toFixed(1),
+    bestDir:lwR>swR?'LONG':'SHORT',
+    bestSess:['Asia','London','New York'][ri(0,2)],
+    cfg:cfg,isReal:false};
+}
+
 function _backtest(cfg){
   /* try real data first */
   var real=_backtestReal(cfg);
   if(real)return real;
+
+  /* Trend Break mock */
+  if(cfg.signalType==='trendBreak')return _backtestTrendBreak(cfg);
 
   /* FVG Confluence mock */
   if(cfg.signalType==='fvgConf')return _backtestFVG(cfg);
@@ -10415,7 +10564,28 @@ function _g(id){return document.getElementById(id);}
 
 function _renderInsights(r){
   if(r.cfg&&r.cfg.signalType==='fvgConf')return _renderInsightsFVG(r);
+  if(r.cfg&&r.cfg.signalType==='trendBreak')return _renderInsightsTB(r);
   _renderInsightsHVN(r);
+}
+
+function _renderInsightsTB(r){
+  var el=_g('dvlSTInsights');if(!el)return;
+  var wr=parseFloat(r.wr),pf=parseFloat(r.pf);
+  var exitMode=r.cfg.tbExit||'flip';
+  var fast=parseInt(r.cfg.tbFast)||3,slow=parseInt(r.cfg.tbSlow)||10;
+  var msgs=[];
+  msgs.push({i:'💡',t:'Trend Break opera na <b>virada de tendência</b> — menos trades, cada sinal tem maior peso. Ideal para inversões estruturais.'});
+  if(exitMode==='flip')msgs.push({i:'✅',t:'Modo flip: saída na próxima virada de estrutura. Capta tendências longas com média/trade alta.'});
+  else msgs.push({i:'💡',t:'Modo SL/TP: saída por alvo fixo. WR mais previsível, mas pode cortar tendências cedo.'});
+  if(fast<=3&&slow>=10)msgs.push({i:'✅',t:'Período rápido '+fast+' com lento '+slow+' gera sinais equilibrados. Boa relação sinal/ruído.'});
+  else if(fast>5)msgs.push({i:'⚠️',t:'Período rápido '+fast+' maior que 5 pode atrasar detecção da virada. Considere reduzir.'});
+  if(r.trades<=5)msgs.push({i:'⚠️',t:'Poucos trades no período. Resultados podem não ser representativos.'});
+  msgs.push({i:'💡',t:'Melhor direção: <b>'+r.bestDir+'</b> · Melhor sessão: <b>'+r.bestSess+'</b>.'});
+  if(pf>=1.5)msgs.push({i:'✅',t:'Profit Factor <b>'+pf+'</b> sólido para indicador de virada estrutural.'});
+  if(wr>=55&&pf>=1.6)msgs.push({i:'🌟',t:'Configuração TB com alta assertividade. Rara para indicadores de virada.'});
+  el.innerHTML=msgs.map(function(m){
+    return '<div class="dvl-st-ins"><span class="dvl-st-ico">'+m.i+'</span><span class="dvl-st-itxt">'+m.t+'</span></div>';
+  }).join('');
 }
 
 function _renderInsightsHVN(r){
@@ -10505,6 +10675,14 @@ if(btBtn){
         fvgReact:parseInt((_g('stFvgReact')||{value:'1'}).value)===1,
         fvgReentry:parseInt((_g('stFvgReentry')||{value:'1'}).value)===1,
         fvgMaxAge:parseInt((_g('stFvgMaxAge')||{value:'300'}).value)||0,
+        tbFast:parseInt((_g('stTBFast')||{value:'3'}).value)||3,
+        tbSlow:parseInt((_g('stTBSlow')||{value:'10'}).value)||10,
+        tbBias:parseFloat((_g('stTBBias')||{value:'5'}).value)||5,
+        tbExit:(_g('stTBExit')||{value:'flip'}).value,
+        trendFilter:(_g('stTBFilterMode')||{value:'off'}).value,
+        tfBias:parseFloat((_g('stTBFilterBias')||{value:'5'}).value)||5,
+        tfFast:parseInt((_g('stTBFilterFast')||{value:'3'}).value)||3,
+        tfSlow:parseInt((_g('stTBFilterSlow')||{value:'10'}).value)||10,
       };
       var res=_cachedBacktest(cfg);
       _renderResults(res);
@@ -11549,6 +11727,1008 @@ function _cfgLabel(c){
   return p.join(' | ');
 }
 
+var TB_OPT_COMBOS=[
+  {fast:3,slow:30,bias:3,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:null,flow:-10,volSpike:'off'},
+  {fast:7,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'2r',trend:null,flow:20,volSpike:'2.0'},
+  {fast:3,slow:8,bias:10,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:null,volSpike:'2.0'},
+  {fast:7,slow:14,bias:3,exitMode:'flip',sl:'atr',tp:'1r',trend:10,flow:10,volSpike:'off'},
+  {fast:10,slow:10,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:7,slow:20,bias:10,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:30,volSpike:'1.5'},
+  {fast:5,slow:20,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:20,flow:30,volSpike:'1.5'},
+  {fast:5,slow:8,bias:5,exitMode:'sltp',sl:'fixed',tp:'2r',trend:20,flow:30,volSpike:'off'},
+  {fast:5,slow:20,bias:15,exitMode:'sltp',sl:'wick',tp:'1r',trend:20,flow:10,volSpike:'2.0'},
+  {fast:7,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:30,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:null,flow:20,volSpike:'1.5'},
+  {fast:10,slow:14,bias:3,exitMode:'sltp',sl:'wick',tp:'1r',trend:20,flow:-10,volSpike:'off'},
+  {fast:10,slow:8,bias:3,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:30,bias:3,exitMode:'sltp',sl:'wick',tp:'1r',trend:10,flow:null,volSpike:'off'},
+  {fast:5,slow:20,bias:0,exitMode:'sltp',sl:'fixed',tp:'flip',trend:30,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:10,bias:3,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:10,flow:null,volSpike:'off'},
+  {fast:3,slow:30,bias:10,exitMode:'flip',sl:'wick',tp:'2r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:10,slow:10,bias:3,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:20,flow:10,volSpike:'2.0'},
+  {fast:5,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'1r',trend:10,flow:null,volSpike:'off'},
+  {fast:10,slow:10,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:20,bias:10,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:30,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:-10,volSpike:'off'},
+  {fast:10,slow:30,bias:3,exitMode:'flip',sl:'wick',tp:'1.5r',trend:null,flow:10,volSpike:'2.0'},
+  {fast:10,slow:10,bias:15,exitMode:'sltp',sl:'atr',tp:'flip',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:5,slow:30,bias:0,exitMode:'sltp',sl:'atr',tp:'flip',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:20,bias:10,exitMode:'sltp',sl:'atr',tp:'1r',trend:30,flow:10,volSpike:'off'},
+  {fast:2,slow:14,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:20,flow:20,volSpike:'2.0'},
+  {fast:10,slow:14,bias:0,exitMode:'sltp',sl:'wick',tp:'2r',trend:20,flow:20,volSpike:'off'},
+  {fast:7,slow:10,bias:0,exitMode:'flip',sl:'wick',tp:'2r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:10,slow:10,bias:0,exitMode:'sltp',sl:'wick',tp:'2r',trend:20,flow:10,volSpike:'1.5'},
+  {fast:10,slow:20,bias:0,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:10,volSpike:'off'},
+  {fast:5,slow:10,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:3,slow:20,bias:15,exitMode:'sltp',sl:'fixed',tp:'flip',trend:20,flow:10,volSpike:'1.5'},
+  {fast:2,slow:14,bias:0,exitMode:'flip',sl:'fixed',tp:'2r',trend:30,flow:30,volSpike:'2.0'},
+  {fast:7,slow:14,bias:10,exitMode:'sltp',sl:'fixed',tp:'flip',trend:20,flow:20,volSpike:'off'},
+  {fast:10,slow:8,bias:0,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:10,slow:8,bias:0,exitMode:'sltp',sl:'wick',tp:'flip',trend:30,flow:null,volSpike:'2.0'},
+  {fast:2,slow:30,bias:3,exitMode:'flip',sl:'fixed',tp:'flip',trend:30,flow:20,volSpike:'1.5'},
+  {fast:7,slow:8,bias:5,exitMode:'flip',sl:'wick',tp:'1.5r',trend:null,flow:20,volSpike:'off'},
+  {fast:3,slow:30,bias:10,exitMode:'flip',sl:'wick',tp:'1r',trend:null,flow:30,volSpike:'1.5'},
+  {fast:10,slow:8,bias:3,exitMode:'flip',sl:'wick',tp:'1r',trend:10,flow:20,volSpike:'2.0'},
+  {fast:3,slow:20,bias:3,exitMode:'sltp',sl:'wick',tp:'2r',trend:-10,flow:null,volSpike:'off'},
+  {fast:10,slow:20,bias:15,exitMode:'sltp',sl:'wick',tp:'flip',trend:-10,flow:10,volSpike:'off'},
+  {fast:7,slow:8,bias:10,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:30,volSpike:'off'},
+  {fast:3,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'1r',trend:20,flow:20,volSpike:'off'},
+  {fast:7,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:10,bias:0,exitMode:'flip',sl:'fixed',tp:'2r',trend:null,flow:20,volSpike:'off'},
+  {fast:5,slow:14,bias:3,exitMode:'sltp',sl:'fixed',tp:'1r',trend:10,flow:20,volSpike:'1.5'},
+  {fast:2,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:20,bias:10,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:10,bias:15,exitMode:'flip',sl:'wick',tp:'2r',trend:null,flow:null,volSpike:'1.5'},
+  {fast:10,slow:10,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:5,slow:8,bias:3,exitMode:'sltp',sl:'wick',tp:'flip',trend:null,flow:-10,volSpike:'off'},
+  {fast:7,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'flip',trend:20,flow:30,volSpike:'off'},
+  {fast:7,slow:8,bias:10,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:null,volSpike:'off'},
+  {fast:3,slow:10,bias:10,exitMode:'sltp',sl:'fixed',tp:'1r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:20,bias:15,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:null,volSpike:'off'},
+  {fast:5,slow:10,bias:5,exitMode:'sltp',sl:'wick',tp:'2r',trend:-10,flow:10,volSpike:'off'},
+  {fast:5,slow:8,bias:0,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:null,volSpike:'2.0'},
+  {fast:2,slow:14,bias:10,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:20,volSpike:'2.0'},
+  {fast:7,slow:8,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:null,flow:null,volSpike:'2.0'},
+  {fast:5,slow:30,bias:0,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:20,volSpike:'2.0'},
+  {fast:10,slow:8,bias:15,exitMode:'flip',sl:'atr',tp:'1r',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:3,slow:14,bias:3,exitMode:'flip',sl:'atr',tp:'2r',trend:-10,flow:10,volSpike:'off'},
+  {fast:7,slow:10,bias:0,exitMode:'sltp',sl:'fixed',tp:'flip',trend:20,flow:20,volSpike:'2.0'},
+  {fast:7,slow:8,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:10,flow:null,volSpike:'2.0'},
+  {fast:7,slow:8,bias:3,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:20,volSpike:'off'},
+  {fast:5,slow:8,bias:15,exitMode:'sltp',sl:'atr',tp:'2r',trend:30,flow:-10,volSpike:'off'},
+  {fast:5,slow:8,bias:10,exitMode:'flip',sl:'fixed',tp:'2r',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:7,slow:20,bias:0,exitMode:'sltp',sl:'wick',tp:'2r',trend:20,flow:null,volSpike:'2.0'},
+  {fast:5,slow:30,bias:0,exitMode:'sltp',sl:'wick',tp:'flip',trend:30,flow:null,volSpike:'1.5'},
+  {fast:2,slow:30,bias:15,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:null,flow:-10,volSpike:'off'},
+  {fast:7,slow:10,bias:10,exitMode:'flip',sl:'atr',tp:'flip',trend:-10,flow:30,volSpike:'off'},
+  {fast:10,slow:8,bias:3,exitMode:'flip',sl:'wick',tp:'flip',trend:30,flow:20,volSpike:'2.0'},
+  {fast:3,slow:30,bias:10,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:30,volSpike:'2.0'},
+  {fast:5,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'1r',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:2,slow:20,bias:10,exitMode:'sltp',sl:'fixed',tp:'1r',trend:-10,flow:10,volSpike:'off'},
+  {fast:7,slow:10,bias:5,exitMode:'sltp',sl:'atr',tp:'1r',trend:10,flow:20,volSpike:'1.5'},
+  {fast:10,slow:20,bias:3,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:10,slow:10,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:20,flow:null,volSpike:'off'},
+  {fast:10,slow:14,bias:3,exitMode:'flip',sl:'atr',tp:'flip',trend:30,flow:10,volSpike:'1.5'},
+  {fast:3,slow:8,bias:3,exitMode:'flip',sl:'atr',tp:'1.5r',trend:null,flow:null,volSpike:'off'},
+  {fast:3,slow:14,bias:0,exitMode:'sltp',sl:'wick',tp:'flip',trend:20,flow:10,volSpike:'off'},
+  {fast:5,slow:20,bias:5,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:null,flow:10,volSpike:'off'},
+  {fast:5,slow:30,bias:15,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:null,flow:20,volSpike:'2.0'},
+  {fast:3,slow:10,bias:3,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:30,flow:30,volSpike:'off'},
+  {fast:10,slow:14,bias:15,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:20,flow:20,volSpike:'off'},
+  {fast:2,slow:10,bias:3,exitMode:'flip',sl:'fixed',tp:'1r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:5,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'1r',trend:10,flow:10,volSpike:'2.0'},
+  {fast:7,slow:14,bias:10,exitMode:'sltp',sl:'wick',tp:'1r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:8,bias:3,exitMode:'flip',sl:'atr',tp:'1r',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:7,slow:20,bias:15,exitMode:'flip',sl:'wick',tp:'1.5r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:14,bias:3,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:10,flow:10,volSpike:'off'},
+  {fast:2,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:7,slow:10,bias:15,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:30,volSpike:'off'},
+  {fast:2,slow:8,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:14,bias:10,exitMode:'flip',sl:'atr',tp:'1.5r',trend:30,flow:-10,volSpike:'off'},
+  {fast:10,slow:8,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:14,bias:0,exitMode:'sltp',sl:'atr',tp:'2r',trend:20,flow:null,volSpike:'off'},
+  {fast:7,slow:30,bias:5,exitMode:'sltp',sl:'fixed',tp:'flip',trend:null,flow:20,volSpike:'2.0'},
+  {fast:5,slow:30,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:null,flow:30,volSpike:'2.0'},
+  {fast:7,slow:14,bias:5,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:20,volSpike:'1.5'},
+  {fast:10,slow:30,bias:3,exitMode:'flip',sl:'wick',tp:'2r',trend:null,flow:30,volSpike:'off'},
+  {fast:5,slow:10,bias:15,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:null,volSpike:'2.0'},
+  {fast:2,slow:14,bias:15,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:30,volSpike:'off'},
+  {fast:2,slow:8,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:7,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:30,flow:30,volSpike:'off'},
+  {fast:7,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:10,flow:10,volSpike:'1.5'},
+  {fast:2,slow:30,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:null,flow:20,volSpike:'1.5'},
+  {fast:2,slow:10,bias:10,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:null,volSpike:'2.0'},
+  {fast:5,slow:20,bias:0,exitMode:'flip',sl:'atr',tp:'1.5r',trend:30,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:8,bias:15,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:30,volSpike:'1.5'},
+  {fast:7,slow:20,bias:10,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:30,flow:null,volSpike:'off'},
+  {fast:10,slow:10,bias:15,exitMode:'flip',sl:'wick',tp:'1.5r',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:3,slow:14,bias:15,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:2,slow:10,bias:10,exitMode:'sltp',sl:'atr',tp:'1r',trend:10,flow:-10,volSpike:'off'},
+  {fast:2,slow:30,bias:0,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:10,slow:10,bias:5,exitMode:'sltp',sl:'atr',tp:'2r',trend:20,flow:20,volSpike:'1.5'},
+  {fast:10,slow:8,bias:15,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:20,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:20,flow:30,volSpike:'1.5'},
+  {fast:2,slow:8,bias:0,exitMode:'sltp',sl:'atr',tp:'1r',trend:10,flow:10,volSpike:'2.0'},
+  {fast:5,slow:30,bias:10,exitMode:'sltp',sl:'wick',tp:'flip',trend:30,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:7,slow:14,bias:5,exitMode:'flip',sl:'wick',tp:'2r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:5,slow:14,bias:10,exitMode:'sltp',sl:'fixed',tp:'flip',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:20,bias:15,exitMode:'sltp',sl:'atr',tp:'2r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:8,bias:3,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:30,volSpike:'2.0'},
+  {fast:10,slow:10,bias:15,exitMode:'sltp',sl:'wick',tp:'2r',trend:null,flow:null,volSpike:'off'},
+  {fast:2,slow:14,bias:3,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:10,volSpike:'1.5'},
+  {fast:5,slow:8,bias:15,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:20,flow:20,volSpike:'2.0'},
+  {fast:3,slow:30,bias:10,exitMode:'sltp',sl:'fixed',tp:'2r',trend:null,flow:10,volSpike:'off'},
+  {fast:2,slow:14,bias:0,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:-10,volSpike:'off'},
+  {fast:5,slow:10,bias:10,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:5,slow:8,bias:5,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:null,flow:10,volSpike:'off'},
+  {fast:3,slow:10,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:30,flow:20,volSpike:'off'},
+  {fast:5,slow:30,bias:15,exitMode:'flip',sl:'fixed',tp:'2r',trend:30,flow:30,volSpike:'2.0'},
+  {fast:10,slow:14,bias:5,exitMode:'sltp',sl:'fixed',tp:'1r',trend:30,flow:null,volSpike:'off'},
+  {fast:2,slow:20,bias:5,exitMode:'flip',sl:'wick',tp:'1.5r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:20,bias:3,exitMode:'sltp',sl:'fixed',tp:'2r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:7,slow:30,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:null,flow:10,volSpike:'off'},
+  {fast:3,slow:20,bias:3,exitMode:'flip',sl:'atr',tp:'1r',trend:20,flow:20,volSpike:'2.0'},
+  {fast:2,slow:20,bias:0,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:10,volSpike:'2.0'},
+  {fast:7,slow:14,bias:10,exitMode:'sltp',sl:'wick',tp:'2r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:2,slow:14,bias:10,exitMode:'flip',sl:'atr',tp:'1r',trend:30,flow:-10,volSpike:'2.0'},
+  {fast:2,slow:14,bias:10,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:14,bias:3,exitMode:'flip',sl:'wick',tp:'2r',trend:null,flow:20,volSpike:'off'},
+  {fast:2,slow:14,bias:3,exitMode:'flip',sl:'atr',tp:'1.5r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:3,slow:14,bias:10,exitMode:'flip',sl:'fixed',tp:'flip',trend:null,flow:20,volSpike:'off'},
+  {fast:5,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'flip',trend:null,flow:20,volSpike:'off'},
+  {fast:3,slow:10,bias:10,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:null,volSpike:'off'},
+  {fast:10,slow:10,bias:15,exitMode:'sltp',sl:'fixed',tp:'flip',trend:null,flow:null,volSpike:'2.0'},
+  {fast:2,slow:14,bias:10,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:8,bias:3,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:14,bias:3,exitMode:'flip',sl:'fixed',tp:'1r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:7,slow:14,bias:15,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:null,volSpike:'1.5'},
+  {fast:10,slow:14,bias:5,exitMode:'sltp',sl:'fixed',tp:'flip',trend:null,flow:null,volSpike:'2.0'},
+  {fast:7,slow:10,bias:15,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:20,volSpike:'off'},
+  {fast:3,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:20,flow:10,volSpike:'1.5'},
+  {fast:5,slow:14,bias:5,exitMode:'sltp',sl:'atr',tp:'flip',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:14,bias:5,exitMode:'sltp',sl:'fixed',tp:'1r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:3,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'flip',trend:20,flow:10,volSpike:'1.5'},
+  {fast:2,slow:10,bias:15,exitMode:'flip',sl:'fixed',tp:'1r',trend:30,flow:30,volSpike:'off'},
+  {fast:2,slow:10,bias:10,exitMode:'flip',sl:'wick',tp:'2r',trend:20,flow:10,volSpike:'2.0'},
+  {fast:5,slow:8,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:7,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:-10,flow:null,volSpike:'2.0'},
+  {fast:7,slow:10,bias:0,exitMode:'flip',sl:'wick',tp:'2r',trend:10,flow:null,volSpike:'2.0'},
+  {fast:5,slow:20,bias:0,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:7,slow:30,bias:15,exitMode:'sltp',sl:'wick',tp:'2r',trend:20,flow:20,volSpike:'off'},
+  {fast:5,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'2r',trend:-10,flow:null,volSpike:'off'},
+  {fast:3,slow:20,bias:0,exitMode:'flip',sl:'atr',tp:'1r',trend:10,flow:10,volSpike:'2.0'},
+  {fast:3,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:30,bias:15,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:30,flow:null,volSpike:'2.0'},
+  {fast:2,slow:14,bias:10,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:30,flow:null,volSpike:'off'},
+  {fast:7,slow:8,bias:10,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:20,volSpike:'2.0'},
+  {fast:5,slow:30,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:10,flow:30,volSpike:'off'},
+  {fast:10,slow:30,bias:3,exitMode:'flip',sl:'fixed',tp:'1r',trend:null,flow:20,volSpike:'off'},
+  {fast:2,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:8,bias:5,exitMode:'sltp',sl:'wick',tp:'flip',trend:20,flow:30,volSpike:'off'},
+  {fast:2,slow:14,bias:0,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:20,volSpike:'off'},
+  {fast:7,slow:14,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:10,volSpike:'off'},
+  {fast:3,slow:8,bias:3,exitMode:'flip',sl:'wick',tp:'2r',trend:-10,flow:20,volSpike:'2.0'},
+  {fast:7,slow:14,bias:5,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:2,slow:10,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:20,flow:20,volSpike:'2.0'},
+  {fast:7,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:null,flow:20,volSpike:'2.0'},
+  {fast:5,slow:8,bias:15,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:30,flow:20,volSpike:'2.0'},
+  {fast:5,slow:10,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:10,slow:20,bias:3,exitMode:'flip',sl:'wick',tp:'1.5r',trend:-10,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:20,bias:3,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:20,volSpike:'2.0'},
+  {fast:3,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'flip',trend:null,flow:10,volSpike:'2.0'},
+  {fast:10,slow:20,bias:0,exitMode:'flip',sl:'wick',tp:'2r',trend:20,flow:30,volSpike:'off'},
+  {fast:3,slow:10,bias:15,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:20,flow:20,volSpike:'2.0'},
+  {fast:10,slow:14,bias:10,exitMode:'sltp',sl:'fixed',tp:'flip',trend:30,flow:30,volSpike:'off'},
+  {fast:7,slow:8,bias:15,exitMode:'flip',sl:'wick',tp:'2r',trend:30,flow:30,volSpike:'off'},
+  {fast:2,slow:30,bias:3,exitMode:'sltp',sl:'atr',tp:'1r',trend:null,flow:30,volSpike:'1.5'},
+  {fast:5,slow:10,bias:5,exitMode:'sltp',sl:'atr',tp:'flip',trend:20,flow:30,volSpike:'1.5'},
+  {fast:10,slow:8,bias:15,exitMode:'flip',sl:'wick',tp:'flip',trend:10,flow:null,volSpike:'2.0'},
+  {fast:2,slow:14,bias:3,exitMode:'flip',sl:'fixed',tp:'flip',trend:-10,flow:20,volSpike:'off'},
+  {fast:5,slow:20,bias:5,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:10,volSpike:'off'},
+  {fast:2,slow:20,bias:3,exitMode:'flip',sl:'wick',tp:'1.5r',trend:20,flow:30,volSpike:'2.0'},
+  {fast:5,slow:8,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:30,flow:10,volSpike:'off'},
+  {fast:10,slow:30,bias:0,exitMode:'flip',sl:'fixed',tp:'1r',trend:null,flow:20,volSpike:'1.5'},
+  {fast:7,slow:30,bias:5,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:20,flow:30,volSpike:'off'},
+  {fast:5,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'2r',trend:-10,flow:10,volSpike:'off'},
+  {fast:2,slow:14,bias:15,exitMode:'flip',sl:'wick',tp:'1r',trend:20,flow:null,volSpike:'2.0'},
+  {fast:10,slow:10,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:30,flow:20,volSpike:'off'},
+  {fast:5,slow:8,bias:5,exitMode:'flip',sl:'fixed',tp:'flip',trend:null,flow:30,volSpike:'1.5'},
+  {fast:3,slow:8,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:10,flow:20,volSpike:'off'},
+  {fast:7,slow:14,bias:10,exitMode:'flip',sl:'wick',tp:'2r',trend:30,flow:30,volSpike:'off'},
+  {fast:7,slow:30,bias:0,exitMode:'sltp',sl:'wick',tp:'1r',trend:10,flow:30,volSpike:'1.5'},
+  {fast:5,slow:30,bias:3,exitMode:'flip',sl:'atr',tp:'1.5r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:20,bias:5,exitMode:'flip',sl:'wick',tp:'2r',trend:null,flow:10,volSpike:'2.0'},
+  {fast:7,slow:20,bias:15,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:30,volSpike:'1.5'},
+  {fast:2,slow:20,bias:0,exitMode:'sltp',sl:'fixed',tp:'flip',trend:10,flow:null,volSpike:'2.0'},
+  {fast:3,slow:8,bias:10,exitMode:'flip',sl:'fixed',tp:'2r',trend:20,flow:20,volSpike:'1.5'},
+  {fast:3,slow:30,bias:10,exitMode:'flip',sl:'wick',tp:'1r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:30,bias:5,exitMode:'sltp',sl:'atr',tp:'2r',trend:30,flow:30,volSpike:'off'},
+  {fast:5,slow:10,bias:10,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:20,bias:10,exitMode:'sltp',sl:'wick',tp:'flip',trend:20,flow:null,volSpike:'1.5'},
+  {fast:7,slow:20,bias:10,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:-10,flow:null,volSpike:'2.0'},
+  {fast:3,slow:8,bias:0,exitMode:'sltp',sl:'atr',tp:'2r',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:30,bias:15,exitMode:'flip',sl:'wick',tp:'flip',trend:30,flow:10,volSpike:'1.5'},
+  {fast:2,slow:8,bias:5,exitMode:'sltp',sl:'fixed',tp:'2r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:5,slow:14,bias:0,exitMode:'flip',sl:'wick',tp:'1.5r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:5,slow:30,bias:3,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:5,slow:8,bias:3,exitMode:'flip',sl:'fixed',tp:'2r',trend:20,flow:null,volSpike:'off'},
+  {fast:10,slow:30,bias:15,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:-10,flow:10,volSpike:'1.5'},
+  {fast:3,slow:14,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:null,flow:10,volSpike:'2.0'},
+  {fast:5,slow:10,bias:0,exitMode:'flip',sl:'wick',tp:'flip',trend:null,flow:10,volSpike:'off'},
+  {fast:3,slow:14,bias:5,exitMode:'flip',sl:'fixed',tp:'flip',trend:30,flow:20,volSpike:'1.5'},
+  {fast:3,slow:30,bias:10,exitMode:'flip',sl:'atr',tp:'1r',trend:-10,flow:10,volSpike:'1.5'},
+  {fast:3,slow:20,bias:3,exitMode:'flip',sl:'wick',tp:'2r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:10,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:2,slow:30,bias:0,exitMode:'flip',sl:'atr',tp:'1.5r',trend:10,flow:30,volSpike:'2.0'},
+  {fast:10,slow:8,bias:0,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:7,slow:30,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:2,slow:8,bias:5,exitMode:'flip',sl:'atr',tp:'1r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:null,flow:30,volSpike:'1.5'},
+  {fast:10,slow:10,bias:3,exitMode:'sltp',sl:'wick',tp:'flip',trend:20,flow:20,volSpike:'off'},
+  {fast:7,slow:10,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:7,slow:20,bias:15,exitMode:'flip',sl:'fixed',tp:'flip',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:2,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'1r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:10,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:null,flow:20,volSpike:'2.0'},
+  {fast:3,slow:10,bias:0,exitMode:'flip',sl:'fixed',tp:'1r',trend:null,flow:null,volSpike:'1.5'},
+  {fast:7,slow:14,bias:10,exitMode:'sltp',sl:'atr',tp:'2r',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:3,slow:10,bias:15,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:20,flow:null,volSpike:'off'},
+  {fast:2,slow:8,bias:10,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:20,volSpike:'1.5'},
+  {fast:5,slow:10,bias:15,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:7,slow:14,bias:3,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:-10,flow:null,volSpike:'2.0'},
+  {fast:5,slow:14,bias:10,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:30,volSpike:'1.5'},
+  {fast:10,slow:10,bias:0,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:null,flow:null,volSpike:'2.0'},
+  {fast:10,slow:10,bias:3,exitMode:'flip',sl:'atr',tp:'flip',trend:20,flow:null,volSpike:'1.5'},
+  {fast:2,slow:20,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:-10,flow:20,volSpike:'2.0'},
+  {fast:2,slow:10,bias:15,exitMode:'sltp',sl:'wick',tp:'2r',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:14,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:null,flow:20,volSpike:'off'},
+  {fast:5,slow:8,bias:15,exitMode:'flip',sl:'wick',tp:'flip',trend:20,flow:10,volSpike:'2.0'},
+  {fast:5,slow:14,bias:5,exitMode:'flip',sl:'wick',tp:'1.5r',trend:-10,flow:10,volSpike:'off'},
+  {fast:5,slow:8,bias:0,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:null,flow:20,volSpike:'1.5'},
+  {fast:3,slow:30,bias:0,exitMode:'flip',sl:'fixed',tp:'1r',trend:30,flow:20,volSpike:'2.0'},
+  {fast:2,slow:10,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:8,bias:15,exitMode:'sltp',sl:'atr',tp:'2r',trend:10,flow:30,volSpike:'off'},
+  {fast:2,slow:10,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:10,flow:30,volSpike:'off'},
+  {fast:7,slow:20,bias:10,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:2,slow:10,bias:10,exitMode:'sltp',sl:'atr',tp:'1r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:5,slow:20,bias:0,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:null,flow:30,volSpike:'off'},
+  {fast:5,slow:30,bias:10,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:20,flow:null,volSpike:'off'},
+  {fast:3,slow:30,bias:5,exitMode:'flip',sl:'fixed',tp:'flip',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:14,bias:0,exitMode:'sltp',sl:'atr',tp:'flip',trend:30,flow:10,volSpike:'2.0'},
+  {fast:3,slow:10,bias:5,exitMode:'sltp',sl:'wick',tp:'2r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:7,slow:8,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:null,flow:10,volSpike:'off'},
+  {fast:10,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'1.5r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:3,slow:10,bias:10,exitMode:'flip',sl:'atr',tp:'flip',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:10,bias:3,exitMode:'sltp',sl:'fixed',tp:'1r',trend:30,flow:20,volSpike:'off'},
+  {fast:5,slow:8,bias:0,exitMode:'sltp',sl:'wick',tp:'flip',trend:20,flow:null,volSpike:'off'},
+  {fast:7,slow:10,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:10,flow:null,volSpike:'2.0'},
+  {fast:2,slow:8,bias:5,exitMode:'flip',sl:'atr',tp:'2r',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:10,bias:3,exitMode:'sltp',sl:'atr',tp:'1r',trend:20,flow:20,volSpike:'off'},
+  {fast:7,slow:14,bias:0,exitMode:'sltp',sl:'atr',tp:'flip',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:3,slow:30,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:14,bias:15,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:20,flow:10,volSpike:'1.5'},
+  {fast:10,slow:8,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:-10,flow:null,volSpike:'off'},
+  {fast:5,slow:10,bias:10,exitMode:'sltp',sl:'wick',tp:'flip',trend:30,flow:20,volSpike:'off'},
+  {fast:3,slow:20,bias:5,exitMode:'sltp',sl:'atr',tp:'1r',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:8,bias:3,exitMode:'flip',sl:'wick',tp:'1.5r',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:2,slow:30,bias:10,exitMode:'flip',sl:'wick',tp:'2r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:7,slow:14,bias:3,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:10,slow:20,bias:5,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:10,flow:-10,volSpike:'off'},
+  {fast:10,slow:30,bias:10,exitMode:'flip',sl:'wick',tp:'2r',trend:30,flow:30,volSpike:'off'},
+  {fast:10,slow:30,bias:10,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:5,slow:14,bias:0,exitMode:'sltp',sl:'wick',tp:'2r',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:7,slow:20,bias:15,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:30,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:10,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:10,flow:10,volSpike:'off'},
+  {fast:7,slow:10,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:-10,flow:10,volSpike:'off'},
+  {fast:7,slow:14,bias:0,exitMode:'sltp',sl:'atr',tp:'1r',trend:30,flow:10,volSpike:'1.5'},
+  {fast:7,slow:14,bias:0,exitMode:'sltp',sl:'atr',tp:'1r',trend:20,flow:-10,volSpike:'off'},
+  {fast:7,slow:14,bias:5,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:10,flow:20,volSpike:'off'},
+  {fast:5,slow:14,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:20,volSpike:'off'},
+  {fast:3,slow:30,bias:15,exitMode:'sltp',sl:'atr',tp:'flip',trend:20,flow:10,volSpike:'2.0'},
+  {fast:5,slow:30,bias:0,exitMode:'sltp',sl:'wick',tp:'1r',trend:30,flow:20,volSpike:'off'},
+  {fast:2,slow:8,bias:10,exitMode:'flip',sl:'fixed',tp:'2r',trend:null,flow:30,volSpike:'1.5'},
+  {fast:3,slow:10,bias:0,exitMode:'flip',sl:'fixed',tp:'flip',trend:10,flow:30,volSpike:'1.5'},
+  {fast:2,slow:8,bias:15,exitMode:'flip',sl:'wick',tp:'2r',trend:null,flow:null,volSpike:'1.5'},
+  {fast:7,slow:10,bias:3,exitMode:'sltp',sl:'wick',tp:'flip',trend:30,flow:30,volSpike:'1.5'},
+  {fast:3,slow:10,bias:15,exitMode:'flip',sl:'fixed',tp:'flip',trend:10,flow:20,volSpike:'1.5'},
+  {fast:3,slow:8,bias:5,exitMode:'flip',sl:'atr',tp:'1r',trend:20,flow:10,volSpike:'2.0'},
+  {fast:10,slow:8,bias:5,exitMode:'flip',sl:'fixed',tp:'1r',trend:30,flow:30,volSpike:'1.5'},
+  {fast:2,slow:30,bias:5,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:20,volSpike:'1.5'},
+  {fast:5,slow:30,bias:0,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:3,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:10,flow:30,volSpike:'off'},
+  {fast:5,slow:10,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:7,slow:8,bias:15,exitMode:'flip',sl:'wick',tp:'2r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:20,volSpike:'1.5'},
+  {fast:3,slow:8,bias:10,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:30,volSpike:'off'},
+  {fast:3,slow:8,bias:5,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:7,slow:8,bias:10,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:10,bias:15,exitMode:'flip',sl:'fixed',tp:'2r',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:2,slow:20,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:null,flow:null,volSpike:'2.0'},
+  {fast:7,slow:8,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:7,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'2r',trend:10,flow:10,volSpike:'1.5'},
+  {fast:5,slow:8,bias:5,exitMode:'flip',sl:'wick',tp:'1.5r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:20,bias:0,exitMode:'flip',sl:'atr',tp:'flip',trend:-10,flow:20,volSpike:'off'},
+  {fast:3,slow:10,bias:5,exitMode:'flip',sl:'wick',tp:'2r',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:2,slow:10,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:30,flow:30,volSpike:'2.0'},
+  {fast:3,slow:8,bias:10,exitMode:'sltp',sl:'wick',tp:'2r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:7,slow:30,bias:5,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:5,slow:8,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:7,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'flip',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:20,bias:10,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:10,volSpike:'2.0'},
+  {fast:10,slow:10,bias:0,exitMode:'sltp',sl:'atr',tp:'flip',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:5,slow:14,bias:3,exitMode:'flip',sl:'wick',tp:'2r',trend:30,flow:20,volSpike:'off'},
+  {fast:5,slow:14,bias:3,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:2,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'flip',trend:30,flow:10,volSpike:'1.5'},
+  {fast:5,slow:8,bias:5,exitMode:'flip',sl:'atr',tp:'1r',trend:-10,flow:10,volSpike:'1.5'},
+  {fast:2,slow:10,bias:3,exitMode:'flip',sl:'atr',tp:'flip',trend:10,flow:null,volSpike:'2.0'},
+  {fast:2,slow:14,bias:0,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:20,flow:20,volSpike:'off'},
+  {fast:3,slow:20,bias:5,exitMode:'flip',sl:'wick',tp:'2r',trend:-10,flow:null,volSpike:'off'},
+  {fast:10,slow:20,bias:10,exitMode:'sltp',sl:'atr',tp:'flip',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:20,bias:3,exitMode:'sltp',sl:'atr',tp:'1r',trend:null,flow:20,volSpike:'2.0'},
+  {fast:3,slow:14,bias:15,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:5,slow:8,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:null,flow:10,volSpike:'2.0'},
+  {fast:10,slow:30,bias:15,exitMode:'flip',sl:'atr',tp:'2r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:10,slow:14,bias:15,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:2,slow:14,bias:15,exitMode:'flip',sl:'wick',tp:'1r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:7,slow:10,bias:15,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:10,flow:20,volSpike:'off'},
+  {fast:10,slow:30,bias:10,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:20,volSpike:'1.5'},
+  {fast:3,slow:10,bias:15,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:30,volSpike:'2.0'},
+  {fast:5,slow:30,bias:3,exitMode:'sltp',sl:'atr',tp:'1r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:2,slow:20,bias:5,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:30,flow:30,volSpike:'2.0'},
+  {fast:2,slow:20,bias:10,exitMode:'flip',sl:'fixed',tp:'flip',trend:10,flow:null,volSpike:'1.5'},
+  {fast:2,slow:20,bias:3,exitMode:'sltp',sl:'fixed',tp:'flip',trend:30,flow:10,volSpike:'1.5'},
+  {fast:10,slow:8,bias:5,exitMode:'sltp',sl:'fixed',tp:'flip',trend:null,flow:null,volSpike:'off'},
+  {fast:7,slow:10,bias:10,exitMode:'flip',sl:'wick',tp:'1.5r',trend:20,flow:20,volSpike:'off'},
+  {fast:7,slow:30,bias:0,exitMode:'flip',sl:'fixed',tp:'2r',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:14,bias:10,exitMode:'sltp',sl:'fixed',tp:'2r',trend:null,flow:30,volSpike:'off'},
+  {fast:10,slow:14,bias:15,exitMode:'sltp',sl:'wick',tp:'2r',trend:null,flow:-10,volSpike:'off'},
+  {fast:3,slow:8,bias:0,exitMode:'flip',sl:'wick',tp:'flip',trend:null,flow:-10,volSpike:'off'},
+  {fast:7,slow:14,bias:3,exitMode:'flip',sl:'fixed',tp:'1r',trend:null,flow:null,volSpike:'off'},
+  {fast:2,slow:30,bias:10,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:14,bias:5,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:30,volSpike:'off'},
+  {fast:10,slow:8,bias:3,exitMode:'sltp',sl:'wick',tp:'2r',trend:30,flow:-10,volSpike:'off'},
+  {fast:10,slow:14,bias:15,exitMode:'sltp',sl:'wick',tp:'flip',trend:30,flow:null,volSpike:'off'},
+  {fast:10,slow:30,bias:3,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:20,flow:-10,volSpike:'off'},
+  {fast:5,slow:10,bias:3,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:30,bias:3,exitMode:'sltp',sl:'wick',tp:'1r',trend:-10,flow:null,volSpike:'2.0'},
+  {fast:7,slow:8,bias:15,exitMode:'flip',sl:'wick',tp:'1.5r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:5,slow:20,bias:0,exitMode:'flip',sl:'atr',tp:'1.5r',trend:30,flow:20,volSpike:'off'},
+  {fast:10,slow:30,bias:5,exitMode:'flip',sl:'atr',tp:'2r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:10,slow:8,bias:0,exitMode:'flip',sl:'wick',tp:'2r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:14,bias:10,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:-10,volSpike:'off'},
+  {fast:3,slow:8,bias:0,exitMode:'flip',sl:'wick',tp:'2r',trend:30,flow:null,volSpike:'off'},
+  {fast:10,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:10,volSpike:'1.5'},
+  {fast:2,slow:8,bias:15,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:5,slow:14,bias:3,exitMode:'flip',sl:'wick',tp:'1.5r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:2,slow:10,bias:10,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:null,volSpike:'off'},
+  {fast:2,slow:8,bias:0,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:30,flow:10,volSpike:'off'},
+  {fast:2,slow:8,bias:10,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:30,flow:30,volSpike:'2.0'},
+  {fast:3,slow:20,bias:5,exitMode:'flip',sl:'fixed',tp:'1r',trend:30,flow:30,volSpike:'2.0'},
+  {fast:10,slow:8,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:20,bias:10,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:20,volSpike:'off'},
+  {fast:5,slow:20,bias:15,exitMode:'flip',sl:'fixed',tp:'flip',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:3,slow:20,bias:10,exitMode:'sltp',sl:'wick',tp:'2r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:8,bias:5,exitMode:'sltp',sl:'fixed',tp:'flip',trend:10,flow:30,volSpike:'2.0'},
+  {fast:7,slow:20,bias:0,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:-10,flow:null,volSpike:'off'},
+  {fast:3,slow:10,bias:5,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:7,slow:30,bias:3,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:10,volSpike:'off'},
+  {fast:5,slow:20,bias:10,exitMode:'flip',sl:'wick',tp:'flip',trend:10,flow:null,volSpike:'1.5'},
+  {fast:10,slow:10,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:10,volSpike:'off'},
+  {fast:7,slow:8,bias:3,exitMode:'flip',sl:'atr',tp:'1r',trend:-10,flow:null,volSpike:'off'},
+  {fast:2,slow:10,bias:10,exitMode:'sltp',sl:'fixed',tp:'flip',trend:10,flow:null,volSpike:'2.0'},
+  {fast:2,slow:30,bias:3,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:null,volSpike:'1.5'},
+  {fast:7,slow:14,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:3,slow:14,bias:15,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:10,flow:-10,volSpike:'off'},
+  {fast:10,slow:20,bias:0,exitMode:'sltp',sl:'wick',tp:'1r',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:10,bias:3,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:null,flow:10,volSpike:'2.0'},
+  {fast:3,slow:30,bias:3,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:30,volSpike:'off'},
+  {fast:3,slow:8,bias:10,exitMode:'sltp',sl:'fixed',tp:'1r',trend:20,flow:20,volSpike:'off'},
+  {fast:2,slow:30,bias:0,exitMode:'sltp',sl:'wick',tp:'2r',trend:20,flow:-10,volSpike:'off'},
+  {fast:7,slow:20,bias:15,exitMode:'flip',sl:'fixed',tp:'2r',trend:-10,flow:10,volSpike:'1.5'},
+  {fast:10,slow:10,bias:0,exitMode:'flip',sl:'atr',tp:'flip',trend:null,flow:20,volSpike:'2.0'},
+  {fast:10,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:10,volSpike:'off'},
+  {fast:10,slow:30,bias:3,exitMode:'sltp',sl:'fixed',tp:'2r',trend:-10,flow:null,volSpike:'off'},
+  {fast:10,slow:30,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:20,flow:null,volSpike:'2.0'},
+  {fast:2,slow:10,bias:5,exitMode:'sltp',sl:'fixed',tp:'2r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:2,slow:14,bias:15,exitMode:'sltp',sl:'wick',tp:'flip',trend:null,flow:10,volSpike:'1.5'},
+  {fast:10,slow:30,bias:10,exitMode:'flip',sl:'atr',tp:'flip',trend:10,flow:10,volSpike:'1.5'},
+  {fast:5,slow:8,bias:3,exitMode:'sltp',sl:'atr',tp:'1r',trend:20,flow:10,volSpike:'off'},
+  {fast:2,slow:20,bias:3,exitMode:'sltp',sl:'fixed',tp:'2r',trend:-10,flow:30,volSpike:'off'},
+  {fast:10,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:2,slow:10,bias:3,exitMode:'sltp',sl:'fixed',tp:'1r',trend:20,flow:10,volSpike:'2.0'},
+  {fast:10,slow:10,bias:15,exitMode:'sltp',sl:'atr',tp:'2r',trend:30,flow:30,volSpike:'1.5'},
+  {fast:7,slow:14,bias:10,exitMode:'flip',sl:'wick',tp:'2r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:2,slow:20,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:2,slow:20,bias:0,exitMode:'flip',sl:'wick',tp:'flip',trend:30,flow:10,volSpike:'2.0'},
+  {fast:10,slow:30,bias:0,exitMode:'flip',sl:'wick',tp:'1r',trend:10,flow:30,volSpike:'2.0'},
+  {fast:2,slow:10,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:10,flow:10,volSpike:'2.0'},
+  {fast:5,slow:10,bias:15,exitMode:'sltp',sl:'atr',tp:'2r',trend:10,flow:20,volSpike:'1.5'},
+  {fast:2,slow:30,bias:15,exitMode:'sltp',sl:'wick',tp:'1r',trend:20,flow:30,volSpike:'2.0'},
+  {fast:10,slow:8,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:-10,flow:30,volSpike:'off'},
+  {fast:2,slow:20,bias:15,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:2,slow:20,bias:10,exitMode:'sltp',sl:'atr',tp:'1r',trend:30,flow:30,volSpike:'off'},
+  {fast:10,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:30,flow:null,volSpike:'off'},
+  {fast:3,slow:30,bias:3,exitMode:'sltp',sl:'fixed',tp:'flip',trend:null,flow:20,volSpike:'2.0'},
+  {fast:10,slow:20,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:20,volSpike:'off'},
+  {fast:2,slow:8,bias:0,exitMode:'sltp',sl:'fixed',tp:'flip',trend:-10,flow:null,volSpike:'off'},
+  {fast:7,slow:20,bias:5,exitMode:'flip',sl:'fixed',tp:'2r',trend:null,flow:30,volSpike:'off'},
+  {fast:5,slow:10,bias:0,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:8,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:20,volSpike:'off'},
+  {fast:3,slow:20,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:7,slow:14,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:null,flow:30,volSpike:'1.5'},
+  {fast:7,slow:30,bias:3,exitMode:'sltp',sl:'fixed',tp:'flip',trend:null,flow:null,volSpike:'off'},
+  {fast:7,slow:8,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:5,slow:30,bias:5,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:7,slow:8,bias:5,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:7,slow:20,bias:5,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:10,flow:10,volSpike:'off'},
+  {fast:2,slow:10,bias:5,exitMode:'flip',sl:'atr',tp:'2r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:10,bias:3,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:30,volSpike:'off'},
+  {fast:5,slow:8,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:2,slow:10,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:20,bias:10,exitMode:'flip',sl:'wick',tp:'flip',trend:20,flow:10,volSpike:'2.0'},
+  {fast:5,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'1r',trend:-10,flow:20,volSpike:'off'},
+  {fast:2,slow:8,bias:15,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:null,volSpike:'1.5'},
+  {fast:10,slow:30,bias:10,exitMode:'sltp',sl:'wick',tp:'flip',trend:20,flow:30,volSpike:'2.0'},
+  {fast:7,slow:14,bias:3,exitMode:'flip',sl:'fixed',tp:'flip',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:20,volSpike:'1.5'},
+  {fast:10,slow:8,bias:15,exitMode:'flip',sl:'wick',tp:'1r',trend:10,flow:20,volSpike:'2.0'},
+  {fast:2,slow:8,bias:15,exitMode:'sltp',sl:'wick',tp:'flip',trend:-10,flow:20,volSpike:'2.0'},
+  {fast:2,slow:10,bias:15,exitMode:'flip',sl:'wick',tp:'1.5r',trend:30,flow:20,volSpike:'off'},
+  {fast:5,slow:20,bias:15,exitMode:'flip',sl:'fixed',tp:'flip',trend:10,flow:null,volSpike:'off'},
+  {fast:5,slow:10,bias:10,exitMode:'flip',sl:'atr',tp:'flip',trend:-10,flow:20,volSpike:'off'},
+  {fast:7,slow:10,bias:5,exitMode:'flip',sl:'wick',tp:'1.5r',trend:null,flow:10,volSpike:'off'},
+  {fast:3,slow:8,bias:5,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:10,volSpike:'1.5'},
+  {fast:2,slow:20,bias:0,exitMode:'sltp',sl:'wick',tp:'1r',trend:30,flow:20,volSpike:'2.0'},
+  {fast:3,slow:10,bias:3,exitMode:'flip',sl:'fixed',tp:'1r',trend:30,flow:null,volSpike:'off'},
+  {fast:10,slow:8,bias:5,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:10,bias:5,exitMode:'flip',sl:'wick',tp:'1.5r',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:10,bias:15,exitMode:'sltp',sl:'fixed',tp:'flip',trend:10,flow:10,volSpike:'off'},
+  {fast:7,slow:10,bias:5,exitMode:'sltp',sl:'atr',tp:'1r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:10,bias:3,exitMode:'sltp',sl:'fixed',tp:'1r',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:10,slow:30,bias:3,exitMode:'sltp',sl:'fixed',tp:'2r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:10,bias:15,exitMode:'flip',sl:'atr',tp:'flip',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:8,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:30,flow:30,volSpike:'2.0'},
+  {fast:7,slow:14,bias:10,exitMode:'sltp',sl:'fixed',tp:'1r',trend:10,flow:10,volSpike:'off'},
+  {fast:2,slow:20,bias:15,exitMode:'sltp',sl:'atr',tp:'flip',trend:-10,flow:null,volSpike:'off'},
+  {fast:10,slow:8,bias:3,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:20,bias:10,exitMode:'sltp',sl:'wick',tp:'2r',trend:30,flow:30,volSpike:'1.5'},
+  {fast:7,slow:10,bias:0,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:8,bias:3,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:3,slow:20,bias:3,exitMode:'sltp',sl:'atr',tp:'1r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:8,bias:5,exitMode:'flip',sl:'fixed',tp:'flip',trend:30,flow:null,volSpike:'2.0'},
+  {fast:5,slow:30,bias:5,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:20,volSpike:'2.0'},
+  {fast:2,slow:14,bias:15,exitMode:'sltp',sl:'fixed',tp:'2r',trend:30,flow:10,volSpike:'off'},
+  {fast:2,slow:30,bias:10,exitMode:'flip',sl:'wick',tp:'2r',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:2,slow:14,bias:5,exitMode:'sltp',sl:'fixed',tp:'flip',trend:30,flow:20,volSpike:'1.5'},
+  {fast:3,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:null,flow:20,volSpike:'2.0'},
+  {fast:10,slow:20,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:30,flow:10,volSpike:'2.0'},
+  {fast:3,slow:14,bias:5,exitMode:'sltp',sl:'wick',tp:'flip',trend:20,flow:10,volSpike:'off'},
+  {fast:7,slow:30,bias:5,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:30,volSpike:'1.5'},
+  {fast:3,slow:20,bias:3,exitMode:'flip',sl:'atr',tp:'flip',trend:-10,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:8,bias:10,exitMode:'flip',sl:'fixed',tp:'2r',trend:20,flow:10,volSpike:'off'},
+  {fast:5,slow:20,bias:5,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:10,volSpike:'1.5'},
+  {fast:3,slow:14,bias:5,exitMode:'sltp',sl:'fixed',tp:'1r',trend:10,flow:null,volSpike:'off'},
+  {fast:5,slow:30,bias:15,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:10,bias:5,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:30,flow:30,volSpike:'1.5'},
+  {fast:5,slow:10,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:-10,flow:20,volSpike:'off'},
+  {fast:7,slow:30,bias:5,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:30,bias:10,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:2,slow:8,bias:3,exitMode:'sltp',sl:'wick',tp:'1r',trend:20,flow:20,volSpike:'off'},
+  {fast:5,slow:8,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:30,volSpike:'off'},
+  {fast:5,slow:8,bias:0,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:7,slow:8,bias:15,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:-10,flow:10,volSpike:'off'},
+  {fast:7,slow:30,bias:0,exitMode:'sltp',sl:'wick',tp:'2r',trend:30,flow:10,volSpike:'2.0'},
+  {fast:2,slow:10,bias:15,exitMode:'flip',sl:'fixed',tp:'2r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:10,slow:10,bias:10,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:10,slow:20,bias:3,exitMode:'flip',sl:'fixed',tp:'2r',trend:10,flow:null,volSpike:'2.0'},
+  {fast:3,slow:14,bias:10,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:10,volSpike:'2.0'},
+  {fast:10,slow:8,bias:3,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:10,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:2,slow:8,bias:15,exitMode:'flip',sl:'atr',tp:'flip',trend:20,flow:20,volSpike:'off'},
+  {fast:7,slow:10,bias:15,exitMode:'flip',sl:'atr',tp:'2r',trend:10,flow:null,volSpike:'2.0'},
+  {fast:5,slow:8,bias:15,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:null,flow:10,volSpike:'off'},
+  {fast:5,slow:30,bias:3,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:null,volSpike:'off'},
+  {fast:2,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'1r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:10,slow:8,bias:15,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:30,volSpike:'off'},
+  {fast:3,slow:10,bias:5,exitMode:'flip',sl:'atr',tp:'1.5r',trend:10,flow:30,volSpike:'1.5'},
+  {fast:5,slow:20,bias:10,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:20,volSpike:'off'},
+  {fast:3,slow:10,bias:10,exitMode:'flip',sl:'fixed',tp:'1r',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:7,slow:14,bias:3,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:8,bias:5,exitMode:'flip',sl:'fixed',tp:'2r',trend:-10,flow:null,volSpike:'2.0'},
+  {fast:3,slow:30,bias:5,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:null,volSpike:'2.0'},
+  {fast:7,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'1r',trend:null,flow:30,volSpike:'off'},
+  {fast:2,slow:30,bias:10,exitMode:'flip',sl:'wick',tp:'1r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:5,slow:20,bias:10,exitMode:'sltp',sl:'atr',tp:'2r',trend:-10,flow:null,volSpike:'off'},
+  {fast:10,slow:20,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:3,slow:20,bias:0,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:2,slow:20,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:8,bias:3,exitMode:'flip',sl:'wick',tp:'2r',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:10,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:20,bias:10,exitMode:'sltp',sl:'wick',tp:'2r',trend:20,flow:30,volSpike:'off'},
+  {fast:7,slow:14,bias:5,exitMode:'flip',sl:'atr',tp:'2r',trend:10,flow:20,volSpike:'2.0'},
+  {fast:7,slow:20,bias:15,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:7,slow:20,bias:15,exitMode:'flip',sl:'wick',tp:'1.5r',trend:30,flow:null,volSpike:'off'},
+  {fast:2,slow:30,bias:3,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:-10,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:14,bias:10,exitMode:'flip',sl:'wick',tp:'1r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:7,slow:14,bias:15,exitMode:'sltp',sl:'fixed',tp:'1r',trend:-10,flow:10,volSpike:'off'},
+  {fast:10,slow:20,bias:10,exitMode:'flip',sl:'atr',tp:'1r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:2,slow:10,bias:10,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:5,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:20,flow:10,volSpike:'off'},
+  {fast:7,slow:8,bias:10,exitMode:'flip',sl:'atr',tp:'flip',trend:30,flow:20,volSpike:'1.5'},
+  {fast:3,slow:8,bias:10,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:10,slow:10,bias:15,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:10,volSpike:'off'},
+  {fast:2,slow:8,bias:15,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:14,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:null,flow:null,volSpike:'2.0'},
+  {fast:5,slow:10,bias:0,exitMode:'flip',sl:'wick',tp:'1r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:10,bias:15,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:10,volSpike:'2.0'},
+  {fast:2,slow:30,bias:3,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:30,flow:-10,volSpike:'off'},
+  {fast:5,slow:8,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:10,flow:20,volSpike:'2.0'},
+  {fast:7,slow:14,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:null,volSpike:'2.0'},
+  {fast:2,slow:30,bias:10,exitMode:'flip',sl:'wick',tp:'1r',trend:30,flow:10,volSpike:'1.5'},
+  {fast:7,slow:14,bias:10,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:-10,flow:10,volSpike:'1.5'},
+  {fast:5,slow:20,bias:3,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:10,slow:10,bias:10,exitMode:'flip',sl:'fixed',tp:'2r',trend:10,flow:30,volSpike:'off'},
+  {fast:5,slow:10,bias:0,exitMode:'sltp',sl:'atr',tp:'1r',trend:30,flow:10,volSpike:'off'},
+  {fast:2,slow:20,bias:5,exitMode:'flip',sl:'fixed',tp:'2r',trend:30,flow:null,volSpike:'off'},
+  {fast:3,slow:8,bias:15,exitMode:'flip',sl:'wick',tp:'1r',trend:null,flow:null,volSpike:'2.0'},
+  {fast:2,slow:8,bias:5,exitMode:'flip',sl:'fixed',tp:'2r',trend:20,flow:null,volSpike:'off'},
+  {fast:10,slow:8,bias:5,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:7,slow:20,bias:15,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:7,slow:20,bias:0,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:null,volSpike:'2.0'},
+  {fast:10,slow:20,bias:5,exitMode:'flip',sl:'wick',tp:'2r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:5,slow:30,bias:3,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:30,volSpike:'off'},
+  {fast:5,slow:20,bias:0,exitMode:'sltp',sl:'atr',tp:'flip',trend:20,flow:null,volSpike:'off'},
+  {fast:5,slow:30,bias:5,exitMode:'sltp',sl:'fixed',tp:'1r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:8,bias:0,exitMode:'sltp',sl:'atr',tp:'1r',trend:30,flow:null,volSpike:'2.0'},
+  {fast:7,slow:10,bias:10,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:30,flow:null,volSpike:'2.0'},
+  {fast:5,slow:14,bias:5,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:-10,flow:30,volSpike:'off'},
+  {fast:7,slow:30,bias:3,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:null,flow:30,volSpike:'1.5'},
+  {fast:2,slow:8,bias:3,exitMode:'flip',sl:'wick',tp:'flip',trend:20,flow:-10,volSpike:'off'},
+  {fast:7,slow:10,bias:3,exitMode:'sltp',sl:'wick',tp:'1r',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:7,slow:30,bias:10,exitMode:'flip',sl:'fixed',tp:'1r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:10,slow:30,bias:0,exitMode:'sltp',sl:'atr',tp:'flip',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:2,slow:20,bias:0,exitMode:'flip',sl:'atr',tp:'1.5r',trend:10,flow:30,volSpike:'off'},
+  {fast:10,slow:14,bias:0,exitMode:'sltp',sl:'atr',tp:'2r',trend:-10,flow:10,volSpike:'off'},
+  {fast:5,slow:10,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:2,slow:20,bias:15,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:30,volSpike:'off'},
+  {fast:3,slow:8,bias:15,exitMode:'flip',sl:'fixed',tp:'flip',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:10,bias:5,exitMode:'flip',sl:'wick',tp:'2r',trend:null,flow:-10,volSpike:'off'},
+  {fast:7,slow:8,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:20,flow:30,volSpike:'off'},
+  {fast:5,slow:14,bias:10,exitMode:'flip',sl:'wick',tp:'2r',trend:null,flow:20,volSpike:'2.0'},
+  {fast:2,slow:14,bias:3,exitMode:'sltp',sl:'wick',tp:'1r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:7,slow:30,bias:5,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:10,slow:10,bias:5,exitMode:'sltp',sl:'wick',tp:'flip',trend:30,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:30,bias:10,exitMode:'flip',sl:'atr',tp:'flip',trend:null,flow:20,volSpike:'2.0'},
+  {fast:3,slow:14,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:20,flow:20,volSpike:'off'},
+  {fast:10,slow:30,bias:0,exitMode:'flip',sl:'atr',tp:'flip',trend:20,flow:30,volSpike:'1.5'},
+  {fast:7,slow:8,bias:5,exitMode:'sltp',sl:'wick',tp:'flip',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:14,bias:0,exitMode:'flip',sl:'wick',tp:'1.5r',trend:30,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:8,bias:15,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:null,volSpike:'off'},
+  {fast:3,slow:8,bias:15,exitMode:'flip',sl:'atr',tp:'flip',trend:null,flow:30,volSpike:'2.0'},
+  {fast:7,slow:14,bias:10,exitMode:'flip',sl:'wick',tp:'1r',trend:30,flow:null,volSpike:'off'},
+  {fast:10,slow:8,bias:0,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:null,volSpike:'1.5'},
+  {fast:7,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:null,volSpike:'off'},
+  {fast:5,slow:10,bias:5,exitMode:'flip',sl:'wick',tp:'flip',trend:30,flow:30,volSpike:'1.5'},
+  {fast:5,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:2,slow:14,bias:3,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:30,bias:0,exitMode:'flip',sl:'wick',tp:'flip',trend:10,flow:20,volSpike:'2.0'},
+  {fast:7,slow:14,bias:15,exitMode:'sltp',sl:'wick',tp:'2r',trend:20,flow:10,volSpike:'off'},
+  {fast:7,slow:8,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:10,slow:30,bias:15,exitMode:'flip',sl:'atr',tp:'2r',trend:-10,flow:null,volSpike:'off'},
+  {fast:3,slow:20,bias:15,exitMode:'sltp',sl:'fixed',tp:'1r',trend:null,flow:10,volSpike:'off'},
+  {fast:3,slow:14,bias:0,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:10,volSpike:'off'},
+  {fast:3,slow:10,bias:15,exitMode:'flip',sl:'wick',tp:'2r',trend:10,flow:30,volSpike:'2.0'},
+  {fast:7,slow:14,bias:0,exitMode:'flip',sl:'fixed',tp:'2r',trend:20,flow:20,volSpike:'off'},
+  {fast:7,slow:10,bias:15,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:30,flow:-10,volSpike:'off'},
+  {fast:5,slow:14,bias:5,exitMode:'flip',sl:'wick',tp:'flip',trend:10,flow:null,volSpike:'1.5'},
+  {fast:3,slow:30,bias:15,exitMode:'flip',sl:'wick',tp:'2r',trend:20,flow:20,volSpike:'1.5'},
+  {fast:3,slow:8,bias:10,exitMode:'sltp',sl:'atr',tp:'1r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:2,slow:14,bias:0,exitMode:'sltp',sl:'atr',tp:'flip',trend:20,flow:20,volSpike:'1.5'},
+  {fast:3,slow:30,bias:10,exitMode:'sltp',sl:'fixed',tp:'flip',trend:20,flow:null,volSpike:'off'},
+  {fast:10,slow:20,bias:3,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:30,flow:20,volSpike:'off'},
+  {fast:7,slow:20,bias:0,exitMode:'flip',sl:'atr',tp:'flip',trend:10,flow:20,volSpike:'off'},
+  {fast:5,slow:30,bias:5,exitMode:'sltp',sl:'wick',tp:'2r',trend:30,flow:30,volSpike:'2.0'},
+  {fast:7,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:14,bias:15,exitMode:'flip',sl:'wick',tp:'2r',trend:30,flow:10,volSpike:'off'},
+  {fast:3,slow:10,bias:5,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:30,volSpike:'1.5'},
+  {fast:5,slow:20,bias:3,exitMode:'flip',sl:'fixed',tp:'flip',trend:30,flow:30,volSpike:'off'},
+  {fast:2,slow:10,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:null,flow:20,volSpike:'off'},
+  {fast:10,slow:8,bias:10,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:30,volSpike:'1.5'},
+  {fast:7,slow:20,bias:15,exitMode:'sltp',sl:'fixed',tp:'1r',trend:10,flow:null,volSpike:'2.0'},
+  {fast:7,slow:30,bias:10,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:30,flow:30,volSpike:'2.0'},
+  {fast:10,slow:20,bias:10,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:null,flow:20,volSpike:'1.5'},
+  {fast:2,slow:10,bias:3,exitMode:'sltp',sl:'atr',tp:'2r',trend:30,flow:null,volSpike:'off'},
+  {fast:7,slow:8,bias:15,exitMode:'flip',sl:'fixed',tp:'2r',trend:10,flow:30,volSpike:'2.0'},
+  {fast:10,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'flip',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:10,slow:10,bias:0,exitMode:'sltp',sl:'atr',tp:'1r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:8,bias:0,exitMode:'flip',sl:'fixed',tp:'flip',trend:null,flow:20,volSpike:'1.5'},
+  {fast:7,slow:8,bias:10,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:-10,volSpike:'off'},
+  {fast:10,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'1r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:2,slow:30,bias:5,exitMode:'flip',sl:'fixed',tp:'2r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:7,slow:20,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:20,volSpike:'1.5'},
+  {fast:5,slow:10,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:20,flow:-10,volSpike:'off'},
+  {fast:2,slow:30,bias:3,exitMode:'flip',sl:'fixed',tp:'2r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:3,slow:10,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:10,flow:10,volSpike:'off'},
+  {fast:7,slow:14,bias:15,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:30,volSpike:'1.5'},
+  {fast:5,slow:30,bias:15,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:10,flow:30,volSpike:'off'},
+  {fast:3,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'1r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:20,bias:15,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:20,flow:20,volSpike:'1.5'},
+  {fast:3,slow:10,bias:10,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:2,slow:20,bias:15,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:2,slow:14,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:20,bias:10,exitMode:'flip',sl:'wick',tp:'2r',trend:20,flow:20,volSpike:'2.0'},
+  {fast:5,slow:10,bias:15,exitMode:'flip',sl:'wick',tp:'1r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:2,slow:30,bias:3,exitMode:'flip',sl:'atr',tp:'1r',trend:20,flow:30,volSpike:'2.0'},
+  {fast:2,slow:10,bias:5,exitMode:'flip',sl:'fixed',tp:'1r',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:10,slow:20,bias:3,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:null,volSpike:'2.0'},
+  {fast:3,slow:14,bias:5,exitMode:'flip',sl:'wick',tp:'2r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:10,bias:10,exitMode:'sltp',sl:'atr',tp:'2r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:7,slow:10,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:30,flow:null,volSpike:'off'},
+  {fast:5,slow:30,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:30,flow:30,volSpike:'1.5'},
+  {fast:7,slow:30,bias:10,exitMode:'sltp',sl:'atr',tp:'1r',trend:30,flow:30,volSpike:'2.0'},
+  {fast:7,slow:20,bias:3,exitMode:'sltp',sl:'wick',tp:'2r',trend:30,flow:10,volSpike:'2.0'},
+  {fast:3,slow:20,bias:0,exitMode:'sltp',sl:'atr',tp:'2r',trend:10,flow:10,volSpike:'2.0'},
+  {fast:7,slow:10,bias:0,exitMode:'flip',sl:'fixed',tp:'1r',trend:-10,flow:10,volSpike:'off'},
+  {fast:7,slow:14,bias:10,exitMode:'sltp',sl:'wick',tp:'1r',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:20,bias:5,exitMode:'sltp',sl:'wick',tp:'2r',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:2,slow:30,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:3,slow:30,bias:10,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:20,flow:30,volSpike:'1.5'},
+  {fast:10,slow:20,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:2,slow:10,bias:15,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:20,volSpike:'off'},
+  {fast:7,slow:10,bias:0,exitMode:'flip',sl:'fixed',tp:'2r',trend:30,flow:20,volSpike:'2.0'},
+  {fast:2,slow:8,bias:10,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:8,bias:5,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:7,slow:8,bias:15,exitMode:'flip',sl:'atr',tp:'2r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:5,slow:20,bias:5,exitMode:'flip',sl:'wick',tp:'2r',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:5,slow:8,bias:0,exitMode:'flip',sl:'atr',tp:'1.5r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:3,slow:20,bias:0,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:null,volSpike:'2.0'},
+  {fast:3,slow:14,bias:0,exitMode:'flip',sl:'fixed',tp:'flip',trend:10,flow:10,volSpike:'2.0'},
+  {fast:7,slow:8,bias:15,exitMode:'sltp',sl:'fixed',tp:'flip',trend:null,flow:30,volSpike:'1.5'},
+  {fast:5,slow:20,bias:10,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:2,slow:14,bias:15,exitMode:'sltp',sl:'atr',tp:'2r',trend:10,flow:30,volSpike:'2.0'},
+  {fast:3,slow:20,bias:5,exitMode:'sltp',sl:'atr',tp:'flip',trend:30,flow:30,volSpike:'off'},
+  {fast:3,slow:10,bias:0,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:null,volSpike:'off'},
+  {fast:10,slow:20,bias:0,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:10,bias:3,exitMode:'flip',sl:'atr',tp:'1r',trend:20,flow:10,volSpike:'1.5'},
+  {fast:5,slow:14,bias:15,exitMode:'sltp',sl:'fixed',tp:'flip',trend:30,flow:10,volSpike:'1.5'},
+  {fast:3,slow:14,bias:5,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:30,flow:30,volSpike:'off'},
+  {fast:10,slow:14,bias:5,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:null,flow:30,volSpike:'off'},
+  {fast:2,slow:8,bias:0,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:5,slow:10,bias:3,exitMode:'flip',sl:'atr',tp:'1.5r',trend:-10,flow:null,volSpike:'2.0'},
+  {fast:5,slow:20,bias:5,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:null,volSpike:'off'},
+  {fast:7,slow:14,bias:5,exitMode:'flip',sl:'wick',tp:'flip',trend:null,flow:30,volSpike:'1.5'},
+  {fast:3,slow:14,bias:10,exitMode:'sltp',sl:'fixed',tp:'flip',trend:10,flow:-10,volSpike:'off'},
+  {fast:3,slow:30,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:10,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'flip',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:14,bias:5,exitMode:'flip',sl:'fixed',tp:'2r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:7,slow:20,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:14,bias:5,exitMode:'sltp',sl:'atr',tp:'1r',trend:null,flow:10,volSpike:'2.0'},
+  {fast:2,slow:30,bias:10,exitMode:'sltp',sl:'fixed',tp:'1r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:14,bias:0,exitMode:'flip',sl:'fixed',tp:'flip',trend:null,flow:20,volSpike:'2.0'},
+  {fast:7,slow:10,bias:10,exitMode:'flip',sl:'wick',tp:'2r',trend:10,flow:30,volSpike:'1.5'},
+  {fast:10,slow:10,bias:0,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:20,volSpike:'2.0'},
+  {fast:10,slow:14,bias:5,exitMode:'flip',sl:'wick',tp:'2r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:30,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:30,volSpike:'2.0'},
+  {fast:2,slow:14,bias:0,exitMode:'sltp',sl:'wick',tp:'2r',trend:10,flow:null,volSpike:'off'},
+  {fast:3,slow:10,bias:3,exitMode:'flip',sl:'wick',tp:'2r',trend:30,flow:20,volSpike:'off'},
+  {fast:5,slow:20,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:null,flow:null,volSpike:'1.5'},
+  {fast:5,slow:14,bias:15,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:20,volSpike:'off'},
+  {fast:7,slow:8,bias:3,exitMode:'sltp',sl:'wick',tp:'2r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:10,slow:20,bias:0,exitMode:'flip',sl:'atr',tp:'1r',trend:20,flow:10,volSpike:'off'},
+  {fast:7,slow:10,bias:15,exitMode:'sltp',sl:'fixed',tp:'flip',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:10,slow:10,bias:5,exitMode:'sltp',sl:'wick',tp:'2r',trend:null,flow:null,volSpike:'2.0'},
+  {fast:2,slow:8,bias:5,exitMode:'sltp',sl:'fixed',tp:'1r',trend:30,flow:20,volSpike:'off'},
+  {fast:3,slow:14,bias:0,exitMode:'flip',sl:'atr',tp:'1r',trend:30,flow:20,volSpike:'off'},
+  {fast:3,slow:20,bias:0,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:10,volSpike:'2.0'},
+  {fast:7,slow:8,bias:3,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:20,volSpike:'off'},
+  {fast:5,slow:10,bias:15,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:7,slow:30,bias:15,exitMode:'sltp',sl:'wick',tp:'2r',trend:30,flow:null,volSpike:'off'},
+  {fast:2,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:30,volSpike:'2.0'},
+  {fast:2,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:null,volSpike:'1.5'},
+  {fast:5,slow:30,bias:15,exitMode:'flip',sl:'fixed',tp:'2r',trend:20,flow:10,volSpike:'2.0'},
+  {fast:5,slow:14,bias:5,exitMode:'sltp',sl:'atr',tp:'flip',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:3,slow:14,bias:10,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:-10,volSpike:'off'},
+  {fast:3,slow:30,bias:3,exitMode:'flip',sl:'fixed',tp:'2r',trend:-10,flow:20,volSpike:'off'},
+  {fast:2,slow:20,bias:15,exitMode:'flip',sl:'atr',tp:'flip',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:20,bias:0,exitMode:'sltp',sl:'wick',tp:'1r',trend:20,flow:-10,volSpike:'off'},
+  {fast:10,slow:20,bias:3,exitMode:'sltp',sl:'fixed',tp:'2r',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:7,slow:14,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:10,flow:30,volSpike:'1.5'},
+  {fast:3,slow:14,bias:0,exitMode:'flip',sl:'fixed',tp:'2r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:20,bias:5,exitMode:'sltp',sl:'fixed',tp:'1r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:30,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:null,flow:null,volSpike:'2.0'},
+  {fast:2,slow:30,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:20,flow:10,volSpike:'1.5'},
+  {fast:5,slow:14,bias:3,exitMode:'sltp',sl:'fixed',tp:'flip',trend:10,flow:30,volSpike:'off'},
+  {fast:10,slow:14,bias:3,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:10,volSpike:'off'},
+  {fast:10,slow:30,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:8,bias:5,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:30,flow:20,volSpike:'2.0'},
+  {fast:2,slow:10,bias:0,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:20,volSpike:'1.5'},
+  {fast:2,slow:20,bias:10,exitMode:'sltp',sl:'fixed',tp:'2r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:2,slow:20,bias:5,exitMode:'flip',sl:'fixed',tp:'1r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:2,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:20,flow:null,volSpike:'2.0'},
+  {fast:5,slow:20,bias:15,exitMode:'sltp',sl:'wick',tp:'1r',trend:10,flow:30,volSpike:'off'},
+  {fast:2,slow:30,bias:0,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:30,volSpike:'2.0'},
+  {fast:3,slow:8,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:10,volSpike:'1.5'},
+  {fast:2,slow:8,bias:10,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:-10,flow:20,volSpike:'2.0'},
+  {fast:3,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:null,flow:30,volSpike:'off'},
+  {fast:10,slow:8,bias:0,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:20,volSpike:'off'},
+  {fast:7,slow:30,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:2,slow:10,bias:5,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:30,volSpike:'off'},
+  {fast:3,slow:30,bias:10,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:10,flow:null,volSpike:'off'},
+  {fast:5,slow:10,bias:15,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:30,flow:30,volSpike:'1.5'},
+  {fast:5,slow:20,bias:10,exitMode:'sltp',sl:'wick',tp:'1r',trend:30,flow:20,volSpike:'off'},
+  {fast:5,slow:8,bias:10,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:10,bias:0,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:30,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:20,flow:30,volSpike:'1.5'},
+  {fast:5,slow:20,bias:10,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:10,volSpike:'off'},
+  {fast:7,slow:30,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:7,slow:30,bias:0,exitMode:'sltp',sl:'atr',tp:'1r',trend:10,flow:null,volSpike:'2.0'},
+  {fast:10,slow:10,bias:3,exitMode:'flip',sl:'atr',tp:'1.5r',trend:30,flow:20,volSpike:'2.0'},
+  {fast:5,slow:8,bias:5,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:20,volSpike:'off'},
+  {fast:2,slow:20,bias:0,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:10,slow:20,bias:15,exitMode:'flip',sl:'wick',tp:'2r',trend:30,flow:10,volSpike:'2.0'},
+  {fast:5,slow:8,bias:15,exitMode:'flip',sl:'fixed',tp:'2r',trend:20,flow:20,volSpike:'off'},
+  {fast:5,slow:30,bias:15,exitMode:'flip',sl:'fixed',tp:'1r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:30,bias:3,exitMode:'flip',sl:'wick',tp:'2r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:3,slow:14,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:10,volSpike:'2.0'},
+  {fast:10,slow:20,bias:5,exitMode:'sltp',sl:'fixed',tp:'1r',trend:20,flow:30,volSpike:'2.0'},
+  {fast:5,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:20,volSpike:'off'},
+  {fast:2,slow:8,bias:15,exitMode:'flip',sl:'atr',tp:'2r',trend:10,flow:30,volSpike:'off'},
+  {fast:7,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:20,volSpike:'2.0'},
+  {fast:10,slow:8,bias:0,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:5,slow:14,bias:10,exitMode:'sltp',sl:'fixed',tp:'1r',trend:10,flow:-10,volSpike:'off'},
+  {fast:2,slow:8,bias:15,exitMode:'flip',sl:'fixed',tp:'1r',trend:20,flow:30,volSpike:'2.0'},
+  {fast:2,slow:8,bias:5,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:20,flow:10,volSpike:'off'},
+  {fast:5,slow:8,bias:0,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:20,volSpike:'1.5'},
+  {fast:5,slow:8,bias:5,exitMode:'sltp',sl:'wick',tp:'2r',trend:-10,flow:20,volSpike:'2.0'},
+  {fast:7,slow:20,bias:10,exitMode:'flip',sl:'fixed',tp:'2r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:3,slow:20,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:30,flow:10,volSpike:'off'},
+  {fast:7,slow:10,bias:10,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:7,slow:8,bias:5,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:10,volSpike:'1.5'},
+  {fast:7,slow:30,bias:0,exitMode:'sltp',sl:'wick',tp:'flip',trend:-10,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:10,bias:5,exitMode:'flip',sl:'fixed',tp:'flip',trend:30,flow:null,volSpike:'1.5'},
+  {fast:2,slow:30,bias:3,exitMode:'sltp',sl:'wick',tp:'flip',trend:30,flow:null,volSpike:'off'},
+  {fast:7,slow:30,bias:10,exitMode:'sltp',sl:'atr',tp:'2r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:10,bias:3,exitMode:'sltp',sl:'fixed',tp:'1r',trend:20,flow:20,volSpike:'2.0'},
+  {fast:3,slow:20,bias:5,exitMode:'flip',sl:'wick',tp:'flip',trend:20,flow:30,volSpike:'off'},
+  {fast:3,slow:14,bias:15,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:20,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:20,bias:5,exitMode:'flip',sl:'fixed',tp:'1r',trend:30,flow:20,volSpike:'off'},
+  {fast:7,slow:30,bias:10,exitMode:'flip',sl:'wick',tp:'1.5r',trend:20,flow:20,volSpike:'2.0'},
+  {fast:10,slow:8,bias:5,exitMode:'flip',sl:'fixed',tp:'1r',trend:20,flow:null,volSpike:'off'},
+  {fast:7,slow:10,bias:5,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:7,slow:10,bias:0,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'flip',trend:20,flow:20,volSpike:'off'},
+  {fast:10,slow:20,bias:0,exitMode:'flip',sl:'atr',tp:'flip',trend:10,flow:null,volSpike:'off'},
+  {fast:3,slow:20,bias:10,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:2,slow:10,bias:15,exitMode:'flip',sl:'wick',tp:'1r',trend:null,flow:10,volSpike:'2.0'},
+  {fast:10,slow:30,bias:0,exitMode:'sltp',sl:'wick',tp:'flip',trend:20,flow:20,volSpike:'2.0'},
+  {fast:2,slow:14,bias:5,exitMode:'flip',sl:'wick',tp:'1r',trend:-10,flow:20,volSpike:'2.0'},
+  {fast:3,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:3,slow:8,bias:3,exitMode:'sltp',sl:'fixed',tp:'1r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:30,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:20,volSpike:'1.5'},
+  {fast:3,slow:8,bias:5,exitMode:'sltp',sl:'fixed',tp:'2r',trend:null,flow:-10,volSpike:'off'},
+  {fast:10,slow:20,bias:3,exitMode:'flip',sl:'wick',tp:'flip',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:8,bias:5,exitMode:'sltp',sl:'wick',tp:'flip',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:10,bias:15,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:10,volSpike:'2.0'},
+  {fast:10,slow:8,bias:15,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:3,slow:20,bias:3,exitMode:'flip',sl:'wick',tp:'1r',trend:10,flow:20,volSpike:'2.0'},
+  {fast:3,slow:14,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:30,flow:10,volSpike:'1.5'},
+  {fast:3,slow:10,bias:0,exitMode:'flip',sl:'wick',tp:'1r',trend:10,flow:20,volSpike:'off'},
+  {fast:10,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:2,slow:14,bias:5,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:10,volSpike:'off'},
+  {fast:7,slow:8,bias:0,exitMode:'flip',sl:'wick',tp:'1.5r',trend:20,flow:10,volSpike:'off'},
+  {fast:7,slow:8,bias:3,exitMode:'sltp',sl:'fixed',tp:'1r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:10,slow:10,bias:10,exitMode:'sltp',sl:'fixed',tp:'flip',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:30,bias:10,exitMode:'flip',sl:'atr',tp:'flip',trend:30,flow:10,volSpike:'2.0'},
+  {fast:7,slow:8,bias:10,exitMode:'flip',sl:'wick',tp:'flip',trend:30,flow:20,volSpike:'2.0'},
+  {fast:3,slow:20,bias:10,exitMode:'flip',sl:'wick',tp:'flip',trend:null,flow:10,volSpike:'off'},
+  {fast:3,slow:30,bias:0,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:-10,volSpike:'off'},
+  {fast:10,slow:30,bias:5,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:2,slow:14,bias:10,exitMode:'flip',sl:'atr',tp:'flip',trend:-10,flow:10,volSpike:'off'},
+  {fast:3,slow:8,bias:5,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:-10,volSpike:'off'},
+  {fast:5,slow:30,bias:3,exitMode:'flip',sl:'wick',tp:'1.5r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:14,bias:5,exitMode:'sltp',sl:'wick',tp:'2r',trend:20,flow:30,volSpike:'2.0'},
+  {fast:3,slow:20,bias:5,exitMode:'flip',sl:'fixed',tp:'flip',trend:30,flow:null,volSpike:'off'},
+  {fast:2,slow:14,bias:15,exitMode:'sltp',sl:'fixed',tp:'flip',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:8,bias:5,exitMode:'flip',sl:'atr',tp:'2r',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:5,slow:30,bias:15,exitMode:'flip',sl:'fixed',tp:'2r',trend:null,flow:-10,volSpike:'off'},
+  {fast:2,slow:10,bias:15,exitMode:'sltp',sl:'atr',tp:'2r',trend:30,flow:-10,volSpike:'off'},
+  {fast:5,slow:10,bias:15,exitMode:'sltp',sl:'wick',tp:'1r',trend:10,flow:20,volSpike:'1.5'},
+  {fast:2,slow:20,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:20,flow:20,volSpike:'2.0'},
+  {fast:5,slow:20,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:10,flow:10,volSpike:'off'},
+  {fast:5,slow:14,bias:0,exitMode:'flip',sl:'atr',tp:'flip',trend:null,flow:null,volSpike:'off'},
+  {fast:7,slow:14,bias:10,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:-10,volSpike:'off'},
+  {fast:5,slow:30,bias:0,exitMode:'flip',sl:'atr',tp:'1r',trend:20,flow:20,volSpike:'off'},
+  {fast:2,slow:20,bias:3,exitMode:'flip',sl:'atr',tp:'2r',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:3,slow:8,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:10,flow:30,volSpike:'off'},
+  {fast:10,slow:20,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:30,volSpike:'2.0'},
+  {fast:10,slow:8,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:14,bias:15,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:null,volSpike:'off'},
+  {fast:7,slow:8,bias:3,exitMode:'flip',sl:'wick',tp:'1.5r',trend:20,flow:-10,volSpike:'off'},
+  {fast:5,slow:10,bias:5,exitMode:'flip',sl:'fixed',tp:'2r',trend:10,flow:30,volSpike:'1.5'},
+  {fast:3,slow:10,bias:0,exitMode:'flip',sl:'atr',tp:'2r',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:7,slow:30,bias:15,exitMode:'sltp',sl:'wick',tp:'2r',trend:10,flow:20,volSpike:'2.0'},
+  {fast:2,slow:30,bias:5,exitMode:'sltp',sl:'fixed',tp:'1r',trend:-10,flow:20,volSpike:'off'},
+  {fast:2,slow:14,bias:3,exitMode:'flip',sl:'atr',tp:'2r',trend:20,flow:-10,volSpike:'off'},
+  {fast:3,slow:10,bias:15,exitMode:'flip',sl:'wick',tp:'1.5r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:14,bias:10,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:null,volSpike:'1.5'},
+  {fast:3,slow:10,bias:10,exitMode:'sltp',sl:'fixed',tp:'2r',trend:10,flow:20,volSpike:'2.0'},
+  {fast:10,slow:10,bias:5,exitMode:'flip',sl:'fixed',tp:'flip',trend:null,flow:10,volSpike:'1.5'},
+  {fast:7,slow:8,bias:5,exitMode:'flip',sl:'wick',tp:'flip',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:20,bias:10,exitMode:'sltp',sl:'wick',tp:'flip',trend:null,flow:20,volSpike:'off'},
+  {fast:2,slow:30,bias:3,exitMode:'sltp',sl:'wick',tp:'1r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:5,slow:30,bias:15,exitMode:'sltp',sl:'wick',tp:'2r',trend:10,flow:10,volSpike:'off'},
+  {fast:7,slow:20,bias:15,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:10,bias:15,exitMode:'flip',sl:'fixed',tp:'flip',trend:30,flow:-10,volSpike:'off'},
+  {fast:2,slow:14,bias:10,exitMode:'sltp',sl:'wick',tp:'1r',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:2,slow:30,bias:10,exitMode:'flip',sl:'fixed',tp:'flip',trend:30,flow:30,volSpike:'2.0'},
+  {fast:7,slow:20,bias:3,exitMode:'flip',sl:'wick',tp:'flip',trend:20,flow:30,volSpike:'off'},
+  {fast:3,slow:20,bias:10,exitMode:'flip',sl:'wick',tp:'flip',trend:30,flow:30,volSpike:'off'},
+  {fast:2,slow:14,bias:10,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:20,flow:20,volSpike:'1.5'},
+  {fast:7,slow:20,bias:0,exitMode:'flip',sl:'fixed',tp:'2r',trend:10,flow:20,volSpike:'1.5'},
+  {fast:10,slow:14,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:30,flow:10,volSpike:'off'},
+  {fast:2,slow:8,bias:15,exitMode:'sltp',sl:'fixed',tp:'flip',trend:null,flow:30,volSpike:'1.5'},
+  {fast:10,slow:10,bias:0,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:null,flow:20,volSpike:'1.5'},
+  {fast:10,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'2r',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:20,bias:5,exitMode:'sltp',sl:'fixed',tp:'flip',trend:10,flow:30,volSpike:'2.0'},
+  {fast:7,slow:8,bias:0,exitMode:'flip',sl:'atr',tp:'1.5r',trend:null,flow:10,volSpike:'off'},
+  {fast:10,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'2r',trend:30,flow:null,volSpike:'2.0'},
+  {fast:10,slow:14,bias:3,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:20,flow:30,volSpike:'off'},
+  {fast:10,slow:20,bias:10,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:30,bias:3,exitMode:'sltp',sl:'wick',tp:'flip',trend:20,flow:null,volSpike:'off'},
+  {fast:3,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:20,flow:10,volSpike:'off'},
+  {fast:3,slow:14,bias:3,exitMode:'flip',sl:'atr',tp:'flip',trend:30,flow:-10,volSpike:'off'},
+  {fast:3,slow:20,bias:3,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:30,flow:10,volSpike:'2.0'},
+  {fast:7,slow:14,bias:5,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:14,bias:0,exitMode:'flip',sl:'wick',tp:'1r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:5,slow:20,bias:5,exitMode:'sltp',sl:'fixed',tp:'flip',trend:-10,flow:10,volSpike:'1.5'},
+  {fast:3,slow:30,bias:0,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:30,volSpike:'1.5'},
+  {fast:10,slow:8,bias:3,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:null,volSpike:'1.5'},
+  {fast:7,slow:14,bias:3,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:10,flow:30,volSpike:'off'},
+  {fast:7,slow:8,bias:0,exitMode:'flip',sl:'wick',tp:'flip',trend:null,flow:20,volSpike:'1.5'},
+  {fast:2,slow:30,bias:15,exitMode:'flip',sl:'wick',tp:'1r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:30,bias:3,exitMode:'flip',sl:'wick',tp:'1r',trend:10,flow:20,volSpike:'2.0'},
+  {fast:2,slow:20,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:20,flow:20,volSpike:'1.5'},
+  {fast:3,slow:8,bias:10,exitMode:'sltp',sl:'wick',tp:'2r',trend:null,flow:null,volSpike:'1.5'},
+  {fast:3,slow:8,bias:3,exitMode:'sltp',sl:'fixed',tp:'flip',trend:-10,flow:null,volSpike:'2.0'},
+  {fast:3,slow:14,bias:15,exitMode:'flip',sl:'atr',tp:'1r',trend:20,flow:10,volSpike:'1.5'},
+  {fast:3,slow:30,bias:0,exitMode:'flip',sl:'wick',tp:'1r',trend:10,flow:null,volSpike:'off'},
+  {fast:7,slow:8,bias:10,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:null,flow:20,volSpike:'off'},
+  {fast:7,slow:20,bias:15,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:10,bias:3,exitMode:'sltp',sl:'atr',tp:'1r',trend:20,flow:30,volSpike:'2.0'},
+  {fast:5,slow:10,bias:5,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:30,volSpike:'off'},
+  {fast:10,slow:10,bias:15,exitMode:'flip',sl:'wick',tp:'1r',trend:null,flow:20,volSpike:'1.5'},
+  {fast:5,slow:20,bias:15,exitMode:'flip',sl:'atr',tp:'1r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:10,slow:30,bias:15,exitMode:'flip',sl:'atr',tp:'flip',trend:10,flow:30,volSpike:'2.0'},
+  {fast:3,slow:14,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:-10,flow:30,volSpike:'off'},
+  {fast:7,slow:20,bias:5,exitMode:'sltp',sl:'fixed',tp:'2r',trend:30,flow:10,volSpike:'off'},
+  {fast:7,slow:10,bias:15,exitMode:'sltp',sl:'fixed',tp:'1r',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:5,slow:10,bias:3,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:10,volSpike:'2.0'},
+  {fast:7,slow:14,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:30,flow:20,volSpike:'off'},
+  {fast:10,slow:20,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:null,flow:-10,volSpike:'off'},
+  {fast:5,slow:8,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:10,flow:30,volSpike:'1.5'},
+  {fast:5,slow:30,bias:5,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:30,flow:10,volSpike:'off'},
+  {fast:2,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:30,flow:-10,volSpike:'2.0'},
+  {fast:2,slow:10,bias:15,exitMode:'flip',sl:'fixed',tp:'1r',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:5,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'2r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:5,slow:14,bias:10,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:10,slow:14,bias:15,exitMode:'flip',sl:'wick',tp:'1.5r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:8,bias:15,exitMode:'flip',sl:'fixed',tp:'flip',trend:null,flow:10,volSpike:'off'},
+  {fast:10,slow:14,bias:10,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:30,flow:10,volSpike:'1.5'},
+  {fast:7,slow:20,bias:5,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:null,volSpike:'2.0'},
+  {fast:2,slow:30,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:10,volSpike:'1.5'},
+  {fast:2,slow:8,bias:10,exitMode:'flip',sl:'fixed',tp:'flip',trend:-10,flow:10,volSpike:'off'},
+  {fast:5,slow:14,bias:15,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:20,volSpike:'2.0'},
+  {fast:5,slow:10,bias:5,exitMode:'flip',sl:'fixed',tp:'2r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:3,slow:10,bias:5,exitMode:'flip',sl:'atr',tp:'2r',trend:-10,flow:-10,volSpike:'off'},
+  {fast:3,slow:10,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:5,slow:14,bias:3,exitMode:'flip',sl:'wick',tp:'1.5r',trend:10,flow:20,volSpike:'2.0'},
+  {fast:7,slow:14,bias:10,exitMode:'flip',sl:'atr',tp:'1r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:2,slow:14,bias:0,exitMode:'sltp',sl:'wick',tp:'flip',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:20,bias:10,exitMode:'flip',sl:'fixed',tp:'1r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:30,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:3,slow:10,bias:3,exitMode:'flip',sl:'atr',tp:'1.5r',trend:-10,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:14,bias:10,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:-10,volSpike:'2.0'},
+  {fast:3,slow:10,bias:10,exitMode:'sltp',sl:'fixed',tp:'flip',trend:30,flow:null,volSpike:'1.5'},
+  {fast:7,slow:20,bias:15,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:10,slow:30,bias:5,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:null,flow:null,volSpike:'off'},
+  {fast:2,slow:30,bias:5,exitMode:'sltp',sl:'atr',tp:'flip',trend:null,flow:10,volSpike:'off'},
+  {fast:2,slow:14,bias:5,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:null,flow:20,volSpike:'2.0'},
+  {fast:5,slow:14,bias:3,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:30,volSpike:'2.0'},
+  {fast:5,slow:8,bias:0,exitMode:'flip',sl:'wick',tp:'2r',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:7,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:null,flow:-10,volSpike:'off'},
+  {fast:2,slow:8,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:null,flow:10,volSpike:'off'},
+  {fast:7,slow:10,bias:3,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:-10,flow:20,volSpike:'off'},
+  {fast:5,slow:8,bias:15,exitMode:'sltp',sl:'wick',tp:'flip',trend:-10,flow:10,volSpike:'off'},
+  {fast:3,slow:10,bias:5,exitMode:'sltp',sl:'wick',tp:'1r',trend:-10,flow:null,volSpike:'2.0'},
+  {fast:5,slow:20,bias:5,exitMode:'sltp',sl:'fixed',tp:'1r',trend:30,flow:null,volSpike:'off'},
+  {fast:3,slow:10,bias:3,exitMode:'sltp',sl:'wick',tp:'flip',trend:20,flow:10,volSpike:'2.0'},
+  {fast:2,slow:30,bias:15,exitMode:'sltp',sl:'fixed',tp:'2r',trend:30,flow:10,volSpike:'off'},
+  {fast:7,slow:14,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:20,flow:30,volSpike:'off'},
+  {fast:2,slow:10,bias:10,exitMode:'sltp',sl:'atr',tp:'2r',trend:30,flow:-10,volSpike:'off'},
+  {fast:3,slow:10,bias:3,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:20,volSpike:'1.5'},
+  {fast:3,slow:20,bias:10,exitMode:'sltp',sl:'fixed',tp:'2r',trend:-10,flow:null,volSpike:'1.5'},
+  {fast:7,slow:8,bias:10,exitMode:'flip',sl:'atr',tp:'1.5r',trend:30,flow:20,volSpike:'1.5'},
+  {fast:10,slow:10,bias:0,exitMode:'sltp',sl:'atr',tp:'2r',trend:null,flow:30,volSpike:'2.0'},
+  {fast:7,slow:14,bias:3,exitMode:'flip',sl:'fixed',tp:'1r',trend:null,flow:null,volSpike:'1.5'},
+  {fast:7,slow:30,bias:15,exitMode:'sltp',sl:'atr',tp:'2r',trend:20,flow:30,volSpike:'off'},
+  {fast:5,slow:10,bias:15,exitMode:'flip',sl:'atr',tp:'1.5r',trend:-10,flow:30,volSpike:'off'},
+  {fast:5,slow:30,bias:10,exitMode:'flip',sl:'fixed',tp:'2r',trend:30,flow:30,volSpike:'1.5'},
+  {fast:7,slow:30,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:10,flow:20,volSpike:'1.5'},
+  {fast:10,slow:10,bias:5,exitMode:'flip',sl:'atr',tp:'1r',trend:20,flow:30,volSpike:'1.5'},
+  {fast:7,slow:10,bias:10,exitMode:'sltp',sl:'wick',tp:'1r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:14,bias:10,exitMode:'sltp',sl:'fixed',tp:'flip',trend:30,flow:null,volSpike:'2.0'},
+  {fast:5,slow:14,bias:3,exitMode:'sltp',sl:'wick',tp:'1r',trend:20,flow:20,volSpike:'1.5'},
+  {fast:7,slow:20,bias:5,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:10,bias:15,exitMode:'flip',sl:'wick',tp:'1r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:2,slow:20,bias:0,exitMode:'flip',sl:'wick',tp:'flip',trend:20,flow:20,volSpike:'1.5'},
+  {fast:5,slow:8,bias:3,exitMode:'sltp',sl:'wick',tp:'1r',trend:10,flow:null,volSpike:'off'},
+  {fast:7,slow:30,bias:0,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:10,flow:null,volSpike:'1.5'},
+  {fast:10,slow:8,bias:10,exitMode:'sltp',sl:'wick',tp:'1r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:10,slow:30,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:30,flow:null,volSpike:'1.5'},
+  {fast:2,slow:8,bias:3,exitMode:'flip',sl:'wick',tp:'1.5r',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:10,slow:20,bias:3,exitMode:'sltp',sl:'wick',tp:'2r',trend:10,flow:null,volSpike:'off'},
+  {fast:3,slow:10,bias:3,exitMode:'sltp',sl:'wick',tp:'2r',trend:10,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:8,bias:10,exitMode:'flip',sl:'atr',tp:'1.5r',trend:20,flow:10,volSpike:'off'},
+  {fast:10,slow:10,bias:10,exitMode:'flip',sl:'wick',tp:'1.5r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:3,slow:10,bias:5,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:30,flow:20,volSpike:'2.0'},
+  {fast:5,slow:30,bias:0,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:null,flow:null,volSpike:'off'},
+  {fast:2,slow:14,bias:5,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:20,volSpike:'2.0'},
+  {fast:10,slow:10,bias:10,exitMode:'flip',sl:'wick',tp:'1r',trend:30,flow:-10,volSpike:'1.5'},
+  {fast:10,slow:10,bias:3,exitMode:'sltp',sl:'atr',tp:'flip',trend:20,flow:30,volSpike:'1.5'},
+  {fast:2,slow:14,bias:5,exitMode:'flip',sl:'fixed',tp:'1r',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:5,slow:20,bias:15,exitMode:'sltp',sl:'wick',tp:'2r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:14,bias:0,exitMode:'flip',sl:'fixed',tp:'2r',trend:null,flow:10,volSpike:'2.0'},
+  {fast:7,slow:10,bias:10,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:-10,volSpike:'off'},
+  {fast:10,slow:14,bias:3,exitMode:'flip',sl:'wick',tp:'flip',trend:30,flow:null,volSpike:'2.0'},
+  {fast:7,slow:8,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:30,flow:10,volSpike:'off'},
+  {fast:10,slow:14,bias:10,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:20,flow:30,volSpike:'2.0'},
+  {fast:2,slow:10,bias:0,exitMode:'flip',sl:'atr',tp:'flip',trend:10,flow:null,volSpike:'off'},
+  {fast:2,slow:14,bias:5,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:20,volSpike:'2.0'},
+  {fast:7,slow:10,bias:0,exitMode:'sltp',sl:'fixed',tp:'flip',trend:20,flow:10,volSpike:'1.5'},
+  {fast:3,slow:14,bias:5,exitMode:'sltp',sl:'fixed',tp:'1.5r',trend:10,flow:10,volSpike:'1.5'},
+  {fast:7,slow:14,bias:0,exitMode:'sltp',sl:'wick',tp:'flip',trend:20,flow:20,volSpike:'1.5'},
+  {fast:3,slow:30,bias:3,exitMode:'sltp',sl:'atr',tp:'2r',trend:20,flow:30,volSpike:'1.5'},
+  {fast:10,slow:30,bias:10,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:20,flow:null,volSpike:'2.0'},
+  {fast:5,slow:10,bias:3,exitMode:'flip',sl:'wick',tp:'1r',trend:null,flow:10,volSpike:'1.5'},
+  {fast:10,slow:10,bias:15,exitMode:'sltp',sl:'atr',tp:'flip',trend:30,flow:30,volSpike:'off'},
+  {fast:5,slow:8,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:20,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:10,bias:0,exitMode:'sltp',sl:'wick',tp:'2r',trend:10,flow:30,volSpike:'1.5'},
+  {fast:2,slow:20,bias:10,exitMode:'flip',sl:'atr',tp:'flip',trend:10,flow:10,volSpike:'off'},
+  {fast:7,slow:20,bias:5,exitMode:'flip',sl:'fixed',tp:'2r',trend:30,flow:10,volSpike:'off'},
+  {fast:5,slow:8,bias:5,exitMode:'flip',sl:'wick',tp:'2r',trend:10,flow:10,volSpike:'1.5'},
+  {fast:2,slow:14,bias:3,exitMode:'flip',sl:'wick',tp:'flip',trend:30,flow:null,volSpike:'2.0'},
+  {fast:7,slow:8,bias:3,exitMode:'flip',sl:'wick',tp:'flip',trend:-10,flow:-10,volSpike:'1.5'},
+  {fast:2,slow:8,bias:0,exitMode:'flip',sl:'wick',tp:'1.5r',trend:-10,flow:10,volSpike:'1.5'},
+  {fast:10,slow:8,bias:3,exitMode:'sltp',sl:'wick',tp:'flip',trend:30,flow:10,volSpike:'1.5'},
+  {fast:7,slow:10,bias:5,exitMode:'flip',sl:'atr',tp:'flip',trend:10,flow:30,volSpike:'off'},
+  {fast:10,slow:8,bias:15,exitMode:'sltp',sl:'wick',tp:'1.5r',trend:null,flow:10,volSpike:'off'},
+  {fast:7,slow:8,bias:0,exitMode:'flip',sl:'fixed',tp:'1.5r',trend:-10,flow:20,volSpike:'1.5'},
+  {fast:2,slow:10,bias:0,exitMode:'sltp',sl:'fixed',tp:'2r',trend:-10,flow:-10,volSpike:'2.0'},
+  {fast:10,slow:10,bias:5,exitMode:'flip',sl:'atr',tp:'1r',trend:20,flow:null,volSpike:'1.5'},
+  {fast:2,slow:14,bias:15,exitMode:'sltp',sl:'fixed',tp:'1r',trend:30,flow:null,volSpike:'2.0'},
+  {fast:5,slow:14,bias:15,exitMode:'flip',sl:'fixed',tp:'flip',trend:20,flow:20,volSpike:'off'},
+  {fast:5,slow:20,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:20,flow:30,volSpike:'off'},
+  {fast:10,slow:8,bias:10,exitMode:'sltp',sl:'fixed',tp:'1r',trend:20,flow:30,volSpike:'off'},
+  {fast:7,slow:8,bias:5,exitMode:'flip',sl:'wick',tp:'2r',trend:-10,flow:10,volSpike:'2.0'},
+  {fast:5,slow:30,bias:10,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:10,volSpike:'off'},
+  {fast:7,slow:8,bias:10,exitMode:'sltp',sl:'wick',tp:'2r',trend:-10,flow:30,volSpike:'off'},
+  {fast:2,slow:30,bias:5,exitMode:'sltp',sl:'fixed',tp:'flip',trend:-10,flow:30,volSpike:'1.5'},
+  {fast:10,slow:14,bias:10,exitMode:'flip',sl:'atr',tp:'flip',trend:null,flow:-10,volSpike:'2.0'},
+  {fast:5,slow:14,bias:10,exitMode:'flip',sl:'wick',tp:'2r',trend:30,flow:30,volSpike:'2.0'},
+  {fast:7,slow:10,bias:3,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:20,flow:20,volSpike:'2.0'},
+  {fast:2,slow:8,bias:5,exitMode:'flip',sl:'atr',tp:'1.5r',trend:10,flow:20,volSpike:'off'},
+  {fast:2,slow:14,bias:15,exitMode:'sltp',sl:'atr',tp:'1r',trend:10,flow:null,volSpike:'2.0'},
+  {fast:7,slow:10,bias:10,exitMode:'flip',sl:'atr',tp:'2r',trend:20,flow:null,volSpike:'off'},
+  {fast:10,slow:8,bias:10,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:20,flow:10,volSpike:'1.5'},
+  {fast:5,slow:20,bias:15,exitMode:'sltp',sl:'atr',tp:'flip',trend:10,flow:20,volSpike:'off'},
+  {fast:7,slow:20,bias:3,exitMode:'flip',sl:'atr',tp:'2r',trend:30,flow:10,volSpike:'off'},
+  {fast:10,slow:10,bias:5,exitMode:'sltp',sl:'wick',tp:'flip',trend:10,flow:30,volSpike:'1.5'},
+  {fast:3,slow:14,bias:0,exitMode:'sltp',sl:'atr',tp:'1.5r',trend:null,flow:-10,volSpike:'1.5'},
+  {fast:7,slow:30,bias:0,exitMode:'sltp',sl:'fixed',tp:'1r',trend:10,flow:10,volSpike:'off'},
+  {fast:7,slow:8,bias:5,exitMode:'sltp',sl:'atr',tp:'1r',trend:null,flow:-10,volSpike:'1.5'}
+];
 var FVG_OPT_COMBOS=[
   {minAtr:0.1,mitMode:'close',trend:10,flow:null,react:false,reentry:false,sl:'atr',tp:'1r',maxAge:100,volSpike:'2.0'},
   {minAtr:0.12,mitMode:'wick',trend:10,flow:null,react:false,reentry:false,sl:'wick',tp:'1r',maxAge:100,volSpike:'1.5'},
@@ -12561,8 +13741,9 @@ function _runOptimizer(){
   if(prog)prog.classList.add('show');
   if(rw)rw.style.display='none';
   for(var _k in _btCache)delete _btCache[_k];
-  var _isFvgOpt=(_g('stInd')||{value:'hvnSignals'}).value==='fvgConf';
-  var _COMBOS=_isFvgOpt?FVG_OPT_COMBOS:OPT_COMBOS;
+  var _optIndVal=(_g('stInd')||{value:'hvnSignals'}).value;
+  var _isFvgOpt=_optIndVal==='fvgConf',_isTBOpt=_optIndVal==='trendBreak';
+  var _COMBOS=_isFvgOpt?FVG_OPT_COMBOS:(_isTBOpt?TB_OPT_COMBOS:OPT_COMBOS);
   var _optPeriod=String(parseInt((_g('stOptPeriod')||{value:'30'}).value)||30);
   var _optTf=(_g('stOptTf')||{value:'5m'}).value||'5m';
   var results=[],total=_COMBOS.length,done=0;
@@ -12581,7 +13762,9 @@ function _runOptimizer(){
       var c=_COMBOS[done];
       var r=_isFvgOpt?
         _cachedBacktest({signalType:'fvgConf',trend:c.trend,flow:c.flow,volSpike:c.volSpike||'off',sl:c.sl,tp:c.tp,risk:1.0,fvgMinAtr:c.minAtr,fvgMit:c.mitMode,fvgReact:c.react,fvgReentry:c.reentry,fvgMaxAge:c.maxAge,period:_optPeriod,tf:_optTf}):
-        _cachedBacktest({wickSens:c.w,trend:c.trend,flow:c.flow,nextHVN:c.hvn,sl:c.sl,tp:c.tp,risk:1.0,close:c.close,cons:c.cons,volSpike:c.volSpike||'off',mode:c.mode||'wick',diveMin:c.diveMin||2,period:_optPeriod,tf:_optTf});
+        (_isTBOpt?
+        _cachedBacktest({signalType:'trendBreak',tbFast:c.fast,tbSlow:c.slow,tbBias:c.bias,tbExit:c.exitMode||'flip',sl:c.sl,tp:c.tp,risk:1.0,trend:c.trend,flow:c.flow,volSpike:c.volSpike||'off',period:_optPeriod,tf:_optTf}):
+        _cachedBacktest({wickSens:c.w,trend:c.trend,flow:c.flow,nextHVN:c.hvn,sl:c.sl,tp:c.tp,risk:1.0,close:c.close,cons:c.cons,volSpike:c.volSpike||'off',mode:c.mode||'wick',diveMin:c.diveMin||2,period:_optPeriod,tf:_optTf}));
       results.push({c:c,trades:r.trades,wr:r.wr,pf:r.pf,ret:r.ret,dd:r.dd});
       done++;
     }
@@ -12829,6 +14012,76 @@ function _syncAllFromCfg(cfg){
 function _applyToHVNSignals(cfg){
   _syncAllFromCfg(cfg);
 }
+
+/* ── Trend Break compute + draw ─────────────────────────── */
+window.__computeTrendBreak=(function(){
+  return function(){
+    try{
+      var S=window.S;if(!S||!S.candles||S.candles.length<20)return;
+      var fast=parseInt((document.getElementById('tbFast')||{value:'3'}).value)||3;
+      var slow=parseInt((document.getElementById('tbSlow')||{value:'10'}).value)||10;
+      var biasMin=parseFloat((document.getElementById('tbBias')||{value:'5'}).value)||5;
+      var showBuy=(document.getElementById('tbShowBuy')||{checked:true}).checked;
+      var showSell=(document.getElementById('tbShowSell')||{checked:true}).checked;
+      var cs=S.candles,n=cs.length;
+      var combined=[];
+      for(var i=0;i<n;i++){
+        var c=cs[i];
+        var s20sum=0;
+        for(var j=Math.max(0,i-19);j<=i;j++)s20sum+=cs[j].c;
+        var s20=s20sum/Math.min(i+1,20);
+        var atr=c.h-c.l||c.c*0.002;
+        if(i>0){var p=cs[i-1];atr=Math.max(c.h-c.l,Math.abs(c.h-p.c),Math.abs(c.l-p.c));}
+        var clr=(c.c-s20)/(atr||c.c*0.002)*15;
+        var hl=c.h-c.l||c.c*0.002;
+        var fl=(c.c-c.o)/hl*100;
+        combined.push(clr*0.6+fl*0.4);
+      }
+      S.trendBreakSignals=[];
+      for(var i=slow;i<n;i++){
+        var fSum=0,sSum=0,fPSum=0,sPSum=0;
+        for(var j=i-fast;j<i;j++)fSum+=combined[j];
+        for(var j=i-slow;j<i;j++)sSum+=combined[j];
+        for(var j=i-fast-1;j<i-1;j++)fPSum+=combined[j];
+        for(var j=i-slow-1;j<i-1;j++)sPSum+=combined[j];
+        var fMa=fSum/fast,sMa=sSum/slow,fMaP=fPSum/fast,sMaP=sPSum/slow;
+        var crossUp=fMaP<=sMaP&&fMa>sMa,crossDn=fMaP>=sMaP&&fMa<sMa;
+        if((crossUp||crossDn)&&Math.abs(fMa-sMa)>=biasMin){
+          if(crossUp&&showBuy)S.trendBreakSignals.push({i:i,side:'LONG',c:cs[i]});
+          if(crossDn&&showSell)S.trendBreakSignals.push({i:i,side:'SHORT',c:cs[i]});
+        }
+      }
+    }catch(e){}
+  };
+})();
+
+window.__drawTrendBreakOverlay=function(ctx,W,H,V,sc,x,bw){
+  try{
+    var sigs=(window.S&&window.S.trendBreakSignals)||[];
+    sigs.forEach(function(sig){
+      if(sig.i<V.start||sig.i>V.end)return;
+      var cx=x(sig.i),cy=sc.y(sig.c.c);
+      var isLong=sig.side==='LONG';
+      var aw=Math.max(6,bw*1.4),ah=aw*0.8;
+      ctx.save();
+      ctx.fillStyle=isLong?'rgba(0,212,255,.92)':'rgba(255,77,106,.92)';
+      ctx.strokeStyle=isLong?'#00d4ff':'#ff4d6a';
+      ctx.lineWidth=1;
+      var ay=isLong?cy+bw*1.6:cy-bw*1.6;
+      ctx.beginPath();
+      if(isLong){
+        ctx.moveTo(cx,ay-ah);ctx.lineTo(cx-aw/2,ay);ctx.lineTo(cx+aw/2,ay);
+      }else{
+        ctx.moveTo(cx,ay+ah);ctx.lineTo(cx-aw/2,ay);ctx.lineTo(cx+aw/2,ay);
+      }
+      ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.fillStyle=isLong?'rgba(0,212,255,.7)':'rgba(255,77,106,.7)';
+      ctx.font='bold 7px monospace';ctx.textAlign='center';
+      ctx.fillText('TB',cx,isLong?ay-ah-3:ay+ah+8);
+      ctx.restore();
+    });
+  }catch(e){}
+};
 
 /* ── Apply to HVN Signals button (backtest results) ─────────── */
 var _lastBtCfg=null;
@@ -19438,11 +20691,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.103';
+  window.DVL_APP_VERSION='Beta 0.104';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.103';
+    if(b)b.textContent='Beta 0.104';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -19552,7 +20805,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.103';
+  const VERSION = 'Beta 0.104';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -19562,13 +20815,13 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.103 — DOM overlay buttons for canvas-drawn oscillator gear icons.
+/* Beta 0.104 — DOM overlay buttons for canvas-drawn oscillator gear icons.
    Canvas hit-detection (hitGear) can miss on mobile due to touch coordinate
    precision. These transparent buttons sit exactly over the drawn gears and
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.103';
+  var VERSION='Beta 0.104';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
@@ -19686,7 +20939,7 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_HVN_SIGNALS">
-/* HVN Signals — Beta 0.103
+/* HVN Signals — Beta 0.104
    Pure chart-overlay indicator: detects LONG/SHORT when a candle wick touches an
    HVN zone then the candle closes back out (rejection). No oscillator, no panel,
    no histogram — only LONG/SHORT labels drawn directly on the main chart canvas.
