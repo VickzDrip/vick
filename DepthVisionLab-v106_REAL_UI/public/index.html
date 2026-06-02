@@ -41,8 +41,19 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.078
+  - hvnSigTF / stTf now control which TIMEFRAME's HVN zones are used for
+    signal detection (MTF — e.g. trade 5m chart with zones from 4h/1h).
+  - computeHVNSignals() fetches MTF candles via existing __mtfCandleCache
+    infrastructure when hvnSigTF != current chart TF, then computes zones
+    via window.__dvlComputeHVNFromCS (newly exposed from vol zones script).
+  - _syncAllFromCfg no longer changes the chart's own timeframe — it only
+    updates hvnSigTF and stTf selects (zone TF, not chart TF).
+  - stTf label in Strategy Tester updated to "TF das Zonas HVN".
+  - Hint added below hvnSigTF explaining the MTF behavior.
+
 Beta 0.077
-  - TF selector (hvnSigTF) added to HVN Signals settings; _syncAllFromCfg
+  - TF selector (hvnSigTF) added to HVN Signals settings; _syncAllFromCfg; _syncAllFromCfg
     propagates tf to hvnSigTF, stTf, and the main chart tfSelect
     (dispatches change event → triggers bootDebounced).
   - SL/TP dotted lines on chart: each HVN Signal draws subtle dashed
@@ -452,7 +463,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.077";
+  const LOCAL_VERSION = "Beta 0.078";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2142,7 +2153,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.077";
+window.DVL_APP_VERSION = "Beta 0.078";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2951,11 +2962,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.077</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.078</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.077</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.078</span>
       </div>
 
       <div class="tb-right-btns">
@@ -3662,7 +3673,7 @@ html.pre-ui .switch::after{transition:none!important}
               </select></div>
             <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
             <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">TIMEFRAME</div>
-            <div class="kv"><span class="k">TF do HVN Signals</span>
+            <div class="kv"><span class="k">TF das Zonas HVN</span>
               <select class="select" id="hvnSigTF" style="width:80px">
                 <option value="5m" selected>5m</option>
                 <option value="15m">15m</option>
@@ -3670,6 +3681,7 @@ html.pre-ui .switch::after{transition:none!important}
                 <option value="4h">4h</option>
                 <option value="1d">1D</option>
               </select></div>
+            <div class="hint" style="margin-top:3px">MTF: use zonas calculadas de outro TF para detectar sinais no gráfico atual.</div>
             <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
             <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">VISUAL</div>
             <div class="kv"><span class="k">Tamanho label</span><select class="select" id="hvnSigLabelSize" style="width:72px"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large</option></select></div>
@@ -6702,7 +6714,7 @@ function openInputModal(key,gear){
   if(!settings||!inputModal||!inputModalBody)return;
   if(inputModalState.settings===settings){closeInputModal();return;}
   closeInputModal();
-  // Beta 0.077: sidebar stays open while modal is shown
+  // Beta 0.078: sidebar stays open while modal is shown
   const title=(card&&card.querySelector('.name')?card.querySelector('.name').textContent:'Inputs');
   const ph=document.createComment('settings-'+key+'-placeholder');
   settings.parentNode.insertBefore(ph,settings);
@@ -6716,7 +6728,7 @@ function openInputModal(key,gear){
   inputModalState={settings:settings,placeholder:ph,card:card,gear:gear};
 }
 document.querySelectorAll('.gear[data-settings]').forEach(g=>{
-  // Beta 0.077: only open on intentional tap, not during scroll
+  // Beta 0.078: only open on intentional tap, not during scroll
   var _gts={x:0,y:0,moved:false};
   g.addEventListener('touchstart',function(ev){
     _gts.x=ev.touches[0].clientX;_gts.y=ev.touches[0].clientY;_gts.moved=false;
@@ -8868,9 +8880,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.077'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.078'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.077';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.078';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -8909,7 +8921,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.077';
+  const VERSION='Beta 0.078';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9088,7 +9100,7 @@ window._dvlClarEyeHit = null;
     return false;
   }
   ready(()=>{const wrap=E('chartWrap');if(!wrap)return;['pointerdown','mousedown','touchstart'].forEach(ev=>wrap.addEventListener(ev,function(e){
-    // Let DOM overlay gear buttons handle their own touches (Beta 0.077)
+    // Let DOM overlay gear buttons handle their own touches (Beta 0.078)
     if(e.target&&e.target.id&&String(e.target.id).indexOf('dvlOscGearOverlay_')===0)return;
     const p=e.touches&&e.touches[0]?e.touches[0]:e;
     if(hitGear(p)){e.preventDefault();e.stopImmediatePropagation();}
@@ -9214,7 +9226,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.077';
+  const VERSION='Beta 0.078';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9398,7 +9410,7 @@ input[type="color"]{border-radius:7px!important;}
           <select class="dvl-st-sel" id="stPair"><option>BTC/USDT</option><option>ETH/USDT</option></select></div>
       </div>
       <div class="dvl-st-row2">
-        <div class="dvl-st-field"><span class="dvl-st-lbl">Timeframe</span>
+        <div class="dvl-st-field"><span class="dvl-st-lbl">TF das Zonas HVN</span>
           <select class="dvl-st-sel" id="stTf"><option value="5m">5m</option><option value="15m">15m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1D</option></select></div>
         <div class="dvl-st-field"><span class="dvl-st-lbl">Período</span>
           <select class="dvl-st-sel" id="stPeriod"><option value="7">7 dias</option><option value="30" selected>30 dias</option><option value="90">90 dias</option><option value="180">180 dias</option></select></div>
@@ -9544,7 +9556,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.077 ── */
+/* ── DVL Strategy Tester — Beta 0.078 ── */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
 #dvlSTScrim.show{display:block}
 #dvlSTPanel{
@@ -9681,7 +9693,7 @@ input[type="color"]{border-radius:7px!important;}
   .dvl-st-body{padding-bottom:22px}
 }
 
-/* Beta 0.077 — reset & apply buttons */
+/* Beta 0.078 — reset & apply buttons */
 .dvl-st-hreset{width:26px;height:26px;background:rgba(255,255,255,.03);border:1px solid #192438;border-radius:7px;color:#6a8099;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s;margin-left:auto}
 .dvl-st-hreset:hover{border-color:rgba(0,212,255,.4);color:#00d4ff}
 .dvl-st-hclose{margin-left:0!important}
@@ -9692,10 +9704,10 @@ input[type="color"]{border-radius:7px!important;}
 </style>
 
 <script id="DVL_STRATEGY_TESTER">
-/* Beta 0.077 — Strategy Tester */
+/* Beta 0.078 — Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.077';
+var V='Beta 0.078';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -9749,7 +9761,7 @@ var OPT_PARAMS=[
   });
 })();
 
-/* ── deterministic backtest engine (Beta 0.077) ─────────────────── */
+/* ── deterministic backtest engine (Beta 0.078) ─────────────────── */
 
 /* Mulberry32 seeded PRNG — same seed → same sequence always */
 function _mkRng(seed){
@@ -10199,10 +10211,8 @@ function _syncAllFromCfg(cfg){
   if(tp)          _setSelVal('stTP',     tp);
   if(maxCandles)  _setVal('stMaxCandles',maxCandles);
   if(risk)        _setVal('stRisk',      risk);
-  if(tf){_setSelVal('hvnSigTF',tf);_setSelVal('stTf',tf);
-    var _chartTF=document.getElementById('tfSelect');
-    if(_chartTF&&_chartTF.value!==tf){_chartTF.value=tf;_chartTF.dispatchEvent(new Event('change'));}
-  }
+  /* tf = zone TF for HVN Signals; does NOT change the chart's own timeframe */
+  if(tf){_setSelVal('hvnSigTF',tf);_setSelVal('stTf',tf);}
 
   /* update S.settings */
   try{
@@ -13178,6 +13188,11 @@ window._dvlTemplate={open:open,close:close};
 
   window.__drawVolZones=drawVolZones;
   window.__hvnZones=()=>_vzCache?.hvn;
+  /* expose zone computation for MTF HVN Signals */
+  window.__dvlComputeHVNFromCS=function(cs){
+    var s=getSettings();
+    var r=computeHVN(cs,s.bucketPct,s.topN,s.minTouch,s.mergeGap);
+    return r?r.hvn||[]:[]; };
 
   // ── Event wiring ──
   const VZ_INPUTS=new Set(['vzBucket','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','vzTf']);
@@ -16821,11 +16836,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.077';
+  window.DVL_APP_VERSION='Beta 0.078';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.077';
+    if(b)b.textContent='Beta 0.078';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -16935,7 +16950,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.077';
+  const VERSION = 'Beta 0.078';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -16945,13 +16960,13 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.077 — DOM overlay buttons for canvas-drawn oscillator gear icons.
+/* Beta 0.078 — DOM overlay buttons for canvas-drawn oscillator gear icons.
    Canvas hit-detection (hitGear) can miss on mobile due to touch coordinate
    precision. These transparent buttons sit exactly over the drawn gears and
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.077';
+  var VERSION='Beta 0.078';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
@@ -17069,7 +17084,7 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_HVN_SIGNALS">
-/* HVN Signals — Beta 0.077
+/* HVN Signals — Beta 0.078
    Pure chart-overlay indicator: detects LONG/SHORT when a candle wick touches an
    HVN zone then the candle closes back out (rejection). No oscillator, no panel,
    no histogram — only LONG/SHORT labels drawn directly on the main chart canvas.
@@ -17105,14 +17120,44 @@ body:before{display:none!important;background:none!important;}
   }
 
   /* ── Signal computation ───────────────────────────────────────────────────── */
+  var _hvnMTFZoneCache={};
+
+  function _getZonesForTF(cfg){
+    var chartTf=(window.S&&window.S.tf)||'5m';
+    var hvnTf=cfg.tf||chartTf;
+    if(hvnTf===chartTf) return window.__hvnZones?.()||[];
+    var sym=(window.S&&window.S.sym)||'BTCUSDT';
+    var mtfKey=sym+'|'+hvnTf;
+    var mtfEntry=window.__mtfCandleCache&&window.__mtfCandleCache.get(mtfKey);
+    if(mtfEntry&&mtfEntry.candles&&mtfEntry.candles.length>10){
+      var ck=mtfKey+'|'+mtfEntry.candles.length+'|'+mtfEntry.ts;
+      if(!_hvnMTFZoneCache[mtfKey]||_hvnMTFZoneCache[mtfKey].k!==ck){
+        var zz=window.__dvlComputeHVNFromCS?window.__dvlComputeHVNFromCS(mtfEntry.candles):[];
+        _hvnMTFZoneCache[mtfKey]={zones:zz,k:ck};
+      }
+      return _hvnMTFZoneCache[mtfKey].zones;
+    }
+    /* async fetch — first call loads data, returns current zones as fallback */
+    if(typeof fetchKlinesForTF==='function'&&!window.__hvnMTFFetching){
+      window.__hvnMTFFetching=true;
+      fetchKlinesForTF(sym,hvnTf,500).then(function(cs){
+        if(!window.__mtfCandleCache)window.__mtfCandleCache=new Map();
+        window.__mtfCandleCache.set(mtfKey,{candles:cs,ts:Date.now(),sym:sym,tf:hvnTf});
+        window.__hvnMTFFetching=false;
+        if(typeof drawSoon==='function')drawSoon();
+      }).catch(function(){window.__hvnMTFFetching=false;});
+    }
+    return window.__hvnZones?.()||[];
+  }
+
   function computeHVNSignals(){
     if(!window.S||!S.inds||!S.inds.hvnSignals){if(window.S)S.hvnSignals=[];return;}
     var cs=S.candles;
     if(!cs||cs.length<4){S.hvnSignals=[];return;}
-    var zones=window.__hvnZones?.()||[];
+    var cfg=_cfg();
+    var zones=_getZonesForTF(cfg);
     if(!zones.length){S.hvnSignals=[];return;}
 
-    var cfg=_cfg();
     var n=cs.length;
     // signals[i] = null | { type:'long'|'short', kind:'rejection'|'lateral', zone, wickPct }
     var signals=new Array(n).fill(null);
@@ -17357,6 +17402,11 @@ body:before{display:none!important;background:none!important;}
    'hvnSigNextHVN','hvnSigSL','hvnSigTP','hvnSigTF'].forEach(function(id){
     var el=document.getElementById(id);
     if(el)el.addEventListener('input',function(){if(typeof drawSoon==='function')drawSoon();});
+    if(el)el.addEventListener('change',function(){
+      /* when zone TF changes, reset MTF fetch flag so new fetch runs */
+      if(id==='hvnSigTF')window.__hvnMTFFetching=false;
+      if(typeof drawSoon==='function')drawSoon();
+    });
   });
 
 })();
