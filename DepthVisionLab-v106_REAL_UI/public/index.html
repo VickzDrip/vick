@@ -41,6 +41,10 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.119
+  - Backtest real: LONGS/SHORTS e Melhor Direção/Sessão agora calculados
+  - _syncAllFromCfg: trendFilter → stTBFilterMode sincronizado
+  - Aplicar combo: copia período e par do Optimizer para o Backtest
 Beta 0.118
   - Corrigir divergência Backtest vs Optimizer:
     · Backtest agora usa stTf (form) não S.tf (gráfico)
@@ -9634,7 +9638,7 @@ input[type="color"]{border-radius:7px!important;}
 })();
 </script>
 
-<!-- DVL_STRATEGY_TESTER v0.118 -->
+<!-- DVL_STRATEGY_TESTER v0.119 -->
 <div id="dvlSTScrim" onclick="window._dvlST&&window._dvlST.close()"></div>
 <div id="dvlSTPanel" role="dialog" aria-modal="true" aria-label="Strategy Tester">
   <div class="dvl-st-handle"></div>
@@ -10114,7 +10118,7 @@ input[type="color"]{border-radius:7px!important;}
 /* Beta 0.116 — Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.118';
+var V='Beta 0.119';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -10529,7 +10533,8 @@ function _backtestReal(cfg,_preCandles,_preZones){
       if(outcome==='win'){rMult=Math.abs(exitPrice-entry)/slDist;}
       else if(outcome==='loss'){rMult=-1;}
       else{var _tmo=isLong?(exitPrice-entry):(entry-exitPrice);rMult=_tmo/slDist;}
-      trades.push({outcome:outcome,pnl:rMult*riskPct});
+      var _tsH=new Date((sig.timestamp>9999999999?sig.timestamp:sig.timestamp*1000)).getUTCHours();
+      trades.push({outcome:outcome,pnl:rMult*riskPct,side:isLong?'LONG':'SHORT',tsH:_tsH});
       var prev=eq[eq.length-1];eq.push(Math.max(10,prev+rMult*riskPct));
     });
     if(!trades.length)return null;
@@ -10544,13 +10549,42 @@ function _backtestReal(cfg,_preCandles,_preZones){
     var _pk=eq[0],_mDD=0;
     for(var _ei=1;_ei<eq.length;_ei++){if(eq[_ei]>_pk)_pk=eq[_ei];var _d=(_pk-eq[_ei])/_pk*100;if(_d>_mDD)_mDD=_d;}
     var dd=-_mDD;
+    /* compute long/short breakdown and best direction/session */
+    var _btLongs=0,_btShorts=0,_btLongW=0,_btShortW=0;
+    var _sessW={asia:0,london:0,ny:0},_sessT={asia:0,london:0,ny:0};
+    trades.forEach(function(t){
+      var isW=t.outcome==='win';
+      if(t.side==='LONG'){_btLongs++;if(isW)_btLongW++;}
+      else{_btShorts++;if(isW)_btShortW++;}
+      var h=t.tsH||0;
+      if(h>=0&&h<8){_sessT.asia++;if(isW)_sessW.asia++;}
+      if(h>=8&&h<16){_sessT.london++;if(isW)_sessW.london++;}
+      if(h>=13&&h<22){_sessT.ny++;if(isW)_sessW.ny++;}
+    });
+    var _btBestDir=_btLongs>0&&_btShorts>0?
+      ((_btLongW/_btLongs)>=(_btShortW/_btShorts)?'LONG':'SHORT'):
+      (_btLongs>0?'LONG':_btShorts>0?'SHORT':'—');
+    var _btSessWR={asia:_sessT.asia>0?_sessW.asia/_sessT.asia:0,
+      london:_sessT.london>0?_sessW.london/_sessT.london:0,
+      ny:_sessT.ny>0?_sessW.ny/_sessT.ny:0};
+    var _btBestSess='—';
+    if(_sessT.asia>0||_sessT.london>0||_sessT.ny>0){
+      var _bsArr=Object.keys(_btSessWR).filter(function(k){return _sessT[k]>0;});
+      _bsArr.sort(function(a,b){return _btSessWR[b]-_btSessWR[a];});
+      var _bsMap={asia:'Ásia',london:'Londres',ny:'Nova York'};
+      _btBestSess=_bsMap[_bsArr[0]]||'—';
+    }
     return{
       trades:trades.length,wins:wins,losses:losses,be:be,
       wr:(wr*100).toFixed(2),pf:pf.toFixed(2),
       dd:dd.toFixed(2),ret:(totalPnl>=0?'+':'')+totalPnl.toFixed(2),
       avg:((totalPnl/trades.length)>=0?'+':'')+(totalPnl/trades.length).toFixed(2),
-      eq:eq,longs:0,shorts:0,lwR:'—',swR:'—',
-      bestDir:'—',bestSess:'—',cfg:cfg,isReal:true,
+      eq:eq,
+      longs:_btLongs,shorts:_btShorts,
+      lwR:_btLongs>0?(_btLongW/_btLongs*100).toFixed(1):'—',
+      swR:_btShorts>0?(_btShortW/_btShorts*100).toFixed(1):'—',
+      bestDir:_btBestDir,bestSess:_btBestSess,
+      cfg:cfg,isReal:true,
       dataSource:_preCandles?'extended':'chart',candleCount:candles.length
     };
   }catch(e){return null;}
@@ -15785,6 +15819,11 @@ if(optBtn)optBtn.addEventListener('click',_runOptimizer);
 function _applyRankResult(i){
   if(!_bestCfgs[i])return;
   var combo=_bestCfgs[i].c||_bestCfgs[i].cfg||_bestCfgs[i];
+  /* copy optimizer period + pair to backtest form so they match exactly */
+  var _optP=_g('stOptPeriod'),_optPair=_g('stOptPair');
+  var _btP=_g('stPeriod'),_btPair=_g('stPair');
+  if(_optP&&_btP)_btP.value=_optP.value;
+  if(_optPair&&_btPair)_btPair.value=_optPair.value;
   _syncAllFromCfg(combo,true);  /* only load into backtest form, not indicator */
   /* switch to backtest tab */
   document.querySelectorAll('.dvl-st-tab').forEach(function(x){x.classList.remove('active');});
@@ -15948,6 +15987,9 @@ function _syncAllFromCfg(cfg,skipIndicator){
   var _minAtr=cfg.minAtrHvn||0;
   if(!skipIndicator)_setSelVal('hvnSigMinAtr',_minAtr>0?parseFloat(_minAtr).toFixed(2):'0');
   _setSelVal('stHvnMinAtr',_minAtr>0?parseFloat(_minAtr).toFixed(2):'0');
+  /* trendFilter → stTBFilterMode (add/sub/off) */
+  if(cfg.trendFilter!==undefined&&cfg.trendFilter!==null)
+    _setSelVal('stTBFilterMode',cfg.trendFilter);
 
   /* update S.settings */
   if(!skipIndicator){
