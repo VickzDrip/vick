@@ -41,6 +41,9 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.123
+  - _syncAllFromCfg: sincroniza checkboxes stRuleWick/stRuleClose/stRuleCons
+    ao aplicar combo (Fechamento fora da zona agora marcado corretamente)
 Beta 0.122
   - Fix _syncAllFromCfg: trend/flow null e mapeamento numérico → bothN
     (stFTrend/stFFlow agora sincronizam corretamente ao aplicar combo)
@@ -669,7 +672,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.122";
+  const LOCAL_VERSION = "Beta 0.123";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2359,7 +2362,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.122";
+window.DVL_APP_VERSION = "Beta 0.123";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -3168,11 +3171,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.122</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.123</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.122</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.123</span>
       </div>
 
       <div class="tb-right-btns">
@@ -9146,9 +9149,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.122'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.123'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.122';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.123';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -9187,7 +9190,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.122';
+  const VERSION='Beta 0.123';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9492,7 +9495,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.122';
+  const VERSION='Beta 0.123';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9647,7 +9650,7 @@ input[type="color"]{border-radius:7px!important;}
 })();
 </script>
 
-<!-- DVL_STRATEGY_TESTER v0.122 -->
+<!-- DVL_STRATEGY_TESTER v0.123 -->
 <div id="dvlSTScrim" onclick="window._dvlST&&window._dvlST.close()"></div>
 <div id="dvlSTPanel" role="dialog" aria-modal="true" aria-label="Strategy Tester">
   <div class="dvl-st-handle"></div>
@@ -10127,7 +10130,7 @@ input[type="color"]{border-radius:7px!important;}
 /* Beta 0.116 — Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.122';
+var V='Beta 0.123';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -16006,6 +16009,19 @@ function _syncAllFromCfg(cfg,skipIndicator){
   /* trendFilter → stTBFilterMode (add/sub/off) */
   if(cfg.trendFilter!==undefined&&cfg.trendFilter!==null)
     _setSelVal('stTBFilterMode',cfg.trendFilter);
+
+  /* sync checkboxes */
+  (function(){
+    var _ckW=document.getElementById('stRuleWick');
+    var _ckC=document.getElementById('stRuleClose');
+    var _ckCons=document.getElementById('stRuleCons');
+    /* all HVN combos use wick rejection */
+    if(_ckW)_ckW.checked=true;
+    /* close field: outside/mid/strong → fechamento fora da zona */
+    if(_ckC)_ckC.checked=!!(cfg.close&&cfg.close!=='off');
+    /* consolidação: cons > 3 candles = permite lateralização */
+    if(_ckCons)_ckCons.checked=(parseInt(cfg.cons)||0)>3;
+  })();
 
   /* update S.settings */
   if(!skipIndicator){
@@ -22705,11 +22721,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.122';
+  window.DVL_APP_VERSION='Beta 0.123';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.122';
+    if(b)b.textContent='Beta 0.123';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -22819,7 +22835,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.122';
+  const VERSION = 'Beta 0.123';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -22835,7 +22851,7 @@ body:before{display:none!important;background:none!important;}
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.122';
+  var VERSION='Beta 0.123';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
