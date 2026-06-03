@@ -41,6 +41,13 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.125
+  - Histórico real completo: sem limite de 10k candles, paginação até o período completo
+  - Validação de TF: 15s/30s mostram UNSUPPORTED TF (Binance não oferece nativo)
+  - Lookahead bias: zonas HVN calculadas apenas do warmup (40%) do histórico
+  - open(): _stSwitchInd chamado ao abrir painel (campos corretos por indicador)
+  - Live Stats: Último Sinal marcado como (hoje) ou (histórico)
+  - Optimizer: catch de unsupportedTF mostra mensagem específica
 Beta 0.124
   - FVG e TrendBreak: backtest real e optimizer desbloqueados
     · _backtestRealFVG: imbalances 3-candles, mitMode, react, reentry, maxAge
@@ -70,7 +77,7 @@ Beta 0.118
     · Optimizer salva candles+zones em DVLBacktestData após carregar
 Beta 0.117
   - Strategy Tester: histórico real paginado da Binance
-    · _dvlFetchBTCandles: busca paginada até 10.000 candles com cache
+    · _dvlFetchBTCandles: busca paginada completa (sem limite), TF validation, progress cb
     · window.DVLBacktestData: cache de histórico separado do gráfico
     · _dvlGenHVNSigs: gerador puro de sinais HVN (sem dep. do DOM/chart)
     · _backtestReal aceita candles/zonas pré-calculados (para optimizer)
@@ -676,7 +683,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.124";
+  const LOCAL_VERSION = "Beta 0.125";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2366,7 +2373,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.124";
+window.DVL_APP_VERSION = "Beta 0.125";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -3175,11 +3182,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.124</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.125</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.124</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.125</span>
       </div>
 
       <div class="tb-right-btns">
@@ -9153,9 +9160,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.124'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.125'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.124';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.125';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -9194,7 +9201,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.124';
+  const VERSION='Beta 0.125';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9499,7 +9506,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.124';
+  const VERSION='Beta 0.125';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9654,7 +9661,7 @@ input[type="color"]{border-radius:7px!important;}
 })();
 </script>
 
-<!-- DVL_STRATEGY_TESTER v0.124 -->
+<!-- DVL_STRATEGY_TESTER v0.125 -->
 <div id="dvlSTScrim" onclick="window._dvlST&&window._dvlST.close()"></div>
 <div id="dvlSTPanel" role="dialog" aria-modal="true" aria-label="Strategy Tester">
   <div class="dvl-st-handle"></div>
@@ -10134,7 +10141,7 @@ input[type="color"]{border-radius:7px!important;}
 /* Beta 0.116 — Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.124';
+var V='Beta 0.125';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -10145,6 +10152,7 @@ function open(){
   if(scrim)scrim.classList.add('show');
   if(rpBtn)rpBtn.classList.add('active');
   try{var s=document.getElementById('stTf');if(s&&window.S&&window.S.tf)s.value=window.S.tf;}catch(_){}
+  try{var _i=document.getElementById('stInd');if(_i&&typeof _stSwitchInd==='function')_stSwitchInd(_i.value);}catch(_){}
   try{
     /* default date range: today - 1 year → today */
     var _td=new Date(),_ty=new Date(_td);
@@ -10349,30 +10357,63 @@ var _btCache={};
 var _dvlBTCache=new Map();
 window.DVLBacktestData={candles:[],zones:[],symbol:"",timeframe:"",periodDays:0,from:0,to:0,source:"none"};
 
-async function _dvlFetchBTCandles(sym,tf,periodDays,dateFrom,dateTo){
+/* TF → Binance native interval name (null = not natively available) */
+var _TF_BINANCE={'1s':'1s','1m':'1m','2m':null,'3m':'3m','5m':'5m','15m':'15m','30m':'30m',
+  '1h':'1h','2h':'2h','4h':'4h','6h':'6h','8h':'8h','12h':'12h',
+  '1d':'1d','1D':'1d','3d':'3d','1w':'1w','1W':'1w','1M':'1M',
+  '15s':null,'30s':null};
+/* TF → milliseconds per candle (crypto 24/7) */
+var _TF_MS={'1s':1000,'1m':60000,'3m':180000,'5m':300000,'15m':900000,'30m':1800000,
+  '1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'8h':28800000,'12h':43200000,
+  '1d':86400000,'1D':86400000,'3d':259200000,'1w':604800000,'1W':604800000,'1M':2592000000};
+async function _dvlFetchBTCandles(sym,tf,periodDays,dateFrom,dateTo,onProgress){
+  /* validate: 15s/30s are synthetic, not natively on Binance */
+  if(Object.prototype.hasOwnProperty.call(_TF_BINANCE,tf)&&_TF_BINANCE[tf]===null){
+    var _e=new Error('TF não suportado: '+tf);
+    _e.unsupportedTF=true;_e.tf=tf;
+    window.DVLBacktestData={candles:[],zones:[],symbol:sym,timeframe:tf,
+      periodDays:periodDays||30,from:0,to:0,source:'unsupported_tf',
+      historyStatus:'UNSUPPORTED_TF',expectedCandles:0,loadedCandles:0};
+    throw _e;
+  }
+  var normTf=(_TF_BINANCE[tf])||tf;
   var now=Date.now();
   /* round toMs to nearest closed hour for stable cache key */
   var _rawTo=dateTo?new Date(dateTo).getTime()+86400000:now;
   var toMs=dateTo?_rawTo:Math.floor(_rawTo/3600000)*3600000;
   var fromMs=dateFrom?new Date(dateFrom).getTime():toMs-(Math.max(1,periodDays||30)*86400000);
-  var ckey=sym+'|'+tf+'|'+fromMs+'|'+toMs;
-  if(_dvlBTCache.has(ckey))return _dvlBTCache.get(ckey);
-  var candles=[],cursor=fromMs,maxC=10000;
-  while(cursor<toMs&&candles.length<maxC){
-    var url='https://api.binance.com/api/v3/klines?symbol='+sym+'&interval='+tf+
+  var ckey=sym+'|'+normTf+'|'+fromMs+'|'+toMs;
+  if(_dvlBTCache.has(ckey)){
+    var _c=_dvlBTCache.get(ckey);
+    window.DVLBacktestData={candles:_c,zones:[],symbol:sym,timeframe:tf,
+      periodDays:periodDays||30,from:fromMs,to:toMs,source:'fetched',
+      historyStatus:_c._hs||'REAL_HISTORY',
+      expectedCandles:_c._exp||_c.length,loadedCandles:_c.length};
+    return _c;
+  }
+  /* expected candle count — crypto is 24/7 */
+  var tfCandleMs=_TF_MS[tf]||300000;
+  var expectedCandles=Math.max(1,Math.round((toMs-fromMs)/tfCandleMs));
+  var candles=[],cursor=fromMs;
+  while(cursor<toMs){
+    var url='https://api.binance.com/api/v3/klines?symbol='+sym+'&interval='+normTf+
       '&startTime='+cursor+'&endTime='+toMs+'&limit=1000';
     var r=await fetch(url);
     if(!r.ok)throw new Error('Klines '+r.status);
     var batch=await r.json();
     if(!Array.isArray(batch)||!batch.length)break;
     batch.forEach(function(x){candles.push({t:+x[0],o:+x[1],h:+x[2],l:+x[3],c:+x[4],v:+x[5],delta:0,buy:0,sell:0,fp:new Map()});});
+    if(onProgress)onProgress(candles.length,expectedCandles);
     var lastT=+batch[batch.length-1][0];
     if(batch.length<1000)break;
     cursor=lastT+1;
   }
+  var historyStatus=candles.length>=expectedCandles*0.9?'REAL_HISTORY':'LIMITED_HISTORY';
+  candles._hs=historyStatus;candles._exp=expectedCandles;
   _dvlBTCache.set(ckey,candles);
   window.DVLBacktestData={candles:candles,zones:[],symbol:sym,timeframe:tf,
-    periodDays:periodDays||30,from:fromMs,to:toMs,source:'fetched'};
+    periodDays:periodDays||30,from:fromMs,to:toMs,source:'fetched',
+    historyStatus:historyStatus,expectedCandles:expectedCandles,loadedCandles:candles.length};
   return candles;
 }
 
@@ -10490,8 +10531,12 @@ function _backtestReal(cfg,_preCandles,_preZones){
     if(candles.length<50)return null;
     var zones=_preZones;
     if(!zones){
-      zones=window.__dvlComputeHVNFromCS?window.__dvlComputeHVNFromCS(candles):
+      /* lookahead-safe: compute zones only from warmup (40% or min 500 candles) */
+      var _wuEnd=Math.min(candles.length,Math.max(500,Math.floor(candles.length*0.4)));
+      var _wuC=_wuEnd<candles.length?candles.slice(0,_wuEnd):candles;
+      zones=window.__dvlComputeHVNFromCS?window.__dvlComputeHVNFromCS(_wuC):
         (window.__hvnZones?window.__hvnZones():[]);
+      if(window.DVLBacktestData)window.DVLBacktestData.lookaheadSafe=true;
     }
     if(!zones||!zones.length)return null;
     /* generate signals internally from candles+zones — no dependency on plotted signals */
@@ -11289,7 +11334,7 @@ if(btBtn){
       var sym=(window.S&&window.S.sym)||'BTCUSDT';
       /* use stTf (form field) so backtest matches optimizer TF when combo is applied */
       var tf=(_g('stTf')||{value:'5m'}).value||(window.S&&window.S.tf)||'5m';
-      var candles,zones=null,dataSource='chart';
+      var candles,zones=null,dataSource='chart',_fetchErrTF=null;
       /* reuse DVLBacktestData if optimizer already loaded matching candles+zones */
       var _btd=window.DVLBacktestData;
       if(_btd&&_btd.source==='fetched'&&_btd.symbol===sym&&_btd.timeframe===tf&&
@@ -11299,11 +11344,15 @@ if(btBtn){
         dataSource='fetched';
       }else{
         try{
-          candles=await _dvlFetchBTCandles(sym,tf,_stDays,cfg.dateFrom,cfg.dateTo);
+          var _pgCb=function(loaded,expected){
+            var _dn=_g('dvlSTDetNote');
+            if(_dn)_dn.textContent='Buscando histórico: '+loaded+' / ~'+expected+' candles...';
+          };
+          candles=await _dvlFetchBTCandles(sym,tf,_stDays,cfg.dateFrom,cfg.dateTo,_pgCb);
           dataSource='fetched';
         }catch(e){
-          candles=(window.S&&window.S.candles)||[];
-          dataSource='chart';
+          if(e&&e.unsupportedTF){_fetchErrTF=e.tf;}
+          else{candles=(window.S&&window.S.candles)||[];dataSource='chart';}
         }
       }
       var db=_g('dvlSTDataBadge'),dn=_g('dvlSTDetNote'),res0=_g('dvlSTResults');
@@ -11312,6 +11361,12 @@ if(btBtn){
         if(db){db.style.display='inline-flex';db.textContent=txt;
           db.style.background=bg;db.style.color=clr;db.style.borderColor=bd;}
         if(dn){dn.style.display='';dn.textContent=msg;dn.style.color=msgClr;}
+      }
+      if(_fetchErrTF){
+        _setBadge('UNSUPPORTED TF','#ffb400','rgba(255,180,0,.1)','rgba(255,180,0,.28)',
+          'TF "'+_fetchErrTF+'" não suportado: use 1m, 5m, 15m, 30m, 1h, 4h, 1d ou 1w.',
+          'rgba(255,180,0,.7)');
+        return;
       }
       if(!candles||candles.length<50){
         _setBadge('NO HISTORY','#ff4d6a','rgba(255,77,106,.08)','rgba(255,77,106,.25)',
@@ -11335,13 +11390,15 @@ if(btBtn){
         }
       }
       var res=_backtestReal(cfg,candles,zones);
-      var _cLen=candles.length,_isLim=_cLen<300;
+      var _cLen=candles.length;
+      var _btd2=window.DVLBacktestData;
+      var _expC=(_btd2&&_btd2.expectedCandles>0)?_btd2.expectedCandles:0;
+      var _isLim=_expC>0?(_cLen<_expC*0.9):(_cLen<300);
       if(!res||!res.trades){
         var _noTxt=_isLim?'LIMITED HISTORY':'SEM TRADES';
-        _setBadge(_noTxt,'#ffb400','rgba(255,180,0,.1)','rgba(255,180,0,.28)',
-          _isLim?'Histórico curto ('+_cLen+' candles). Resultado pode ser pouco representativo.':
-            'Nenhum trade encontrado no período. Ajuste o período ou os filtros.',
-          'rgba(255,180,0,.7)');
+        var _limMsg=_isLim?('Histórico parcial: '+_cLen+(_expC>0?' / ~'+_expC:'')+' candles. Aumente o período.'):
+          'Nenhum trade encontrado no período. Ajuste os filtros.';
+        _setBadge(_noTxt,'#ffb400','rgba(255,180,0,.1)','rgba(255,180,0,.28)',_limMsg,'rgba(255,180,0,.7)');
         return;
       }
       _renderResults(res);
@@ -11349,8 +11406,10 @@ if(btBtn){
       var _bc=_isLim?'#ffb400':(dataSource==='fetched'?'#00c864':'#00b4ff');
       var _bb=_isLim?'rgba(255,180,0,.1)':(dataSource==='fetched'?'rgba(0,200,100,.08)':'rgba(0,180,255,.08)');
       var _bbd=_isLim?'rgba(255,180,0,.28)':(dataSource==='fetched'?'rgba(0,200,100,.25)':'rgba(0,180,255,.25)');
-      var _info=(dataSource==='fetched'?'Backtest real: '+_cLen+' candles históricos. ':
-        'Backtest: '+_cLen+' candles do gráfico. ')+'Sinais gerados internamente: '+res.trades+' trades.';
+      var _histNote=_expC>0?(' '+_cLen+'/~'+_expC+' candles'+(_isLim?' ⚠':'')+'.'):'';
+      var _laNote=(_btd2&&_btd2.lookaheadSafe)?' Zonas: sem lookahead.':'';
+      var _info=(dataSource==='fetched'?'Backtest real'+_histNote+_laNote:
+        'Backtest: '+_cLen+' candles do gráfico.')+' Trades: '+res.trades+'.';
       _setBadge(_bt,_bc,_bb,_bbd,_info,_bc==='#00c864'?'rgba(0,200,100,.8)':_bc==='#00b4ff'?'rgba(0,180,255,.8)':'rgba(255,180,0,.7)');
       _updateSigStatus();
       var _r=_g('dvlSTResults');if(_r){setTimeout(function(){_r.scrollIntoView({behavior:'smooth',block:'nearest'});},100);}
@@ -16015,7 +16074,8 @@ function _runOptimizer(){
     if(window.DVLBacktestData)window.DVLBacktestData.zones=zones;
     if(status)status.textContent='Histórico: '+candles.length+' candles. Gerando sinais...';
     _doOpt(candles,zones);
-  }).catch(function(){
+  }).catch(function(e){
+    if(e&&e.unsupportedTF)return _optFail('TF "'+e.tf+'" não suportado: use 1m, 5m, 15m, 30m, 1h, 4h, 1d ou 1w.');
     var candles=(window.S&&window.S.candles)||[];
     if(!candles.length)return _optFail('Sem histórico disponível. Verifique a conexão.');
     if(_isTBOpt){if(status)status.textContent='Candles do gráfico ('+candles.length+'). TrendBreak...';_doOptTB(candles);return;}
@@ -16198,20 +16258,21 @@ function _syncLiveStats(){
       if(_pfEl)_pfEl.textContent='—';
     }else{
       var _ls=_sigs[_sigs.length-1];
+      /* compute today window first — needed to label signal as hoje/histórico */
+      var _rt2=window.S&&window.S.candles&&window.S.candles.length?
+        window.S.candles[window.S.candles.length-1].t:0;
+      var _tSc2=_rt2>9999999999?1:1000;
+      var _24h=_rt2-86400*(_tSc2===1?1000:1);
+      var _isToday=_ls.timestamp>=_24h;
       if(_dEl){_dEl.textContent=_ls.side;
         _dEl.className='dvl-st-lsig-dir '+(_ls.side==='LONG'?'long':'short');}
       if(_tEl)_tEl.textContent=(_ls.rejectionType||'HVN Signal')+' · HVN Signals';
-      if(_sEl)_sEl.textContent='';
+      if(_sEl)_sEl.textContent=_isToday?'':'(histórico)';
       if(_tfEl)_tfEl.textContent=(window.S&&window.S.tf)||'?';
       if(_znEl){
         var _z=_ls.hvnZone,_zp=_z?(_z.price||(_z.lo+_z.hi)/2):_ls.entryPrice;
         _znEl.textContent=_zp>999?_zp.toFixed(0):_zp.toFixed(2);
       }
-      /* today: signals in last 24h */
-      var _rt2=window.S&&window.S.candles&&window.S.candles.length?
-        window.S.candles[window.S.candles.length-1].t:0;
-      var _tSc2=_rt2>9999999999?1:1000;
-      var _24h=_rt2-86400*(_tSc2===1?1000:1);
       var _tSigs=_sigs.filter(function(s){return s.timestamp>=_24h;});
       if(_sgEl)_sgEl.textContent=String(_tSigs.length);
       if(_wrEl)_wrEl.textContent='—';
@@ -23018,11 +23079,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.124';
+  window.DVL_APP_VERSION='Beta 0.125';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.124';
+    if(b)b.textContent='Beta 0.125';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -23132,7 +23193,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.124';
+  const VERSION = 'Beta 0.125';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -23148,7 +23209,7 @@ body:before{display:none!important;background:none!important;}
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.124';
+  var VERSION='Beta 0.125';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
