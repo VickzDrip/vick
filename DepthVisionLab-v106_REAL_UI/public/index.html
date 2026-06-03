@@ -41,6 +41,10 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.124
+  - FVG e TrendBreak: backtest real e optimizer desbloqueados
+    · _backtestRealFVG: imbalances 3-candles, mitMode, react, reentry, maxAge
+    · _backtestRealTB: crossover EMA rápida/lenta, bias, flip/sltp exit
 Beta 0.123
   - _syncAllFromCfg: sincroniza checkboxes stRuleWick/stRuleClose/stRuleCons
     ao aplicar combo (Fechamento fora da zona agora marcado corretamente)
@@ -672,7 +676,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.123";
+  const LOCAL_VERSION = "Beta 0.124";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2362,7 +2366,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.123";
+window.DVL_APP_VERSION = "Beta 0.124";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -3171,11 +3175,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.123</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.124</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.123</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.124</span>
       </div>
 
       <div class="tb-right-btns">
@@ -9149,9 +9153,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.123'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.124'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.123';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.124';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -9190,7 +9194,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.123';
+  const VERSION='Beta 0.124';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9495,7 +9499,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.123';
+  const VERSION='Beta 0.124';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9650,7 +9654,7 @@ input[type="color"]{border-radius:7px!important;}
 })();
 </script>
 
-<!-- DVL_STRATEGY_TESTER v0.123 -->
+<!-- DVL_STRATEGY_TESTER v0.124 -->
 <div id="dvlSTScrim" onclick="window._dvlST&&window._dvlST.close()"></div>
 <div id="dvlSTPanel" role="dialog" aria-modal="true" aria-label="Strategy Tester">
   <div class="dvl-st-handle"></div>
@@ -10130,7 +10134,7 @@ input[type="color"]{border-radius:7px!important;}
 /* Beta 0.116 — Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.123';
+var V='Beta 0.124';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -10479,6 +10483,8 @@ function _dvlGenHVNSigs(candles,zones,cfg){
 
 /* real backtest: generates signals internally from candles+zones (Beta 0.117) */
 function _backtestReal(cfg,_preCandles,_preZones){
+  if(cfg.signalType==='fvgConf')return _backtestRealFVG(cfg,_preCandles);
+  if(cfg.signalType==='trendBreak')return _backtestRealTB(cfg,_preCandles);
   try{
     var candles=_preCandles||(window.S&&window.S.candles)||[];
     if(candles.length<50)return null;
@@ -10599,6 +10605,251 @@ function _backtestReal(cfg,_preCandles,_preZones){
       cfg:cfg,isReal:true,
       dataSource:_preCandles?'extended':'chart',candleCount:candles.length
     };
+  }catch(e){return null;}
+}
+
+
+/* ── shared stats builder for FVG + TB real backtests (Beta 0.124) ── */
+function _btMakeResult(trades,eq,cfg,_preCandles,candles){
+  var wins=trades.filter(function(t){return t.outcome==='win';}).length;
+  var losses=trades.filter(function(t){return t.outcome==='loss';}).length;
+  var be=trades.filter(function(t){return t.outcome==='timeout';}).length;
+  var totalPnl=trades.reduce(function(a,t){return a+t.pnl;},0);
+  var grossW=trades.filter(function(t){return t.pnl>0;}).reduce(function(a,t){return a+t.pnl;},0);
+  var grossL=Math.abs(trades.filter(function(t){return t.pnl<0;}).reduce(function(a,t){return a+t.pnl;},0));
+  var wr=wins/trades.length;
+  var pf=grossL>0?grossW/grossL:grossW>0?9.99:0;
+  var _pk=eq[0],_mDD=0;
+  for(var _ei=1;_ei<eq.length;_ei++){if(eq[_ei]>_pk)_pk=eq[_ei];var _d=(_pk-eq[_ei])/_pk*100;if(_d>_mDD)_mDD=_d;}
+  var dd=-_mDD;
+  var _btLongs=0,_btShorts=0,_btLongW=0,_btShortW=0;
+  var _sessW={asia:0,london:0,ny:0},_sessT={asia:0,london:0,ny:0};
+  trades.forEach(function(t){
+    var isW=t.outcome==='win';
+    if(t.side==='LONG'){_btLongs++;if(isW)_btLongW++;}else{_btShorts++;if(isW)_btShortW++;}
+    var h=t.tsH||0;
+    if(h>=0&&h<8){_sessT.asia++;if(isW)_sessW.asia++;}
+    if(h>=8&&h<16){_sessT.london++;if(isW)_sessW.london++;}
+    if(h>=13&&h<22){_sessT.ny++;if(isW)_sessW.ny++;}
+  });
+  var _btBestDir=_btLongs>0&&_btShorts>0?
+    ((_btLongW/_btLongs)>=(_btShortW/_btShorts)?'LONG':'SHORT'):
+    (_btLongs>0?'LONG':_btShorts>0?'SHORT':'—');
+  var _btSessWR={asia:_sessT.asia>0?_sessW.asia/_sessT.asia:0,
+    london:_sessT.london>0?_sessW.london/_sessT.london:0,
+    ny:_sessT.ny>0?_sessW.ny/_sessT.ny:0};
+  var _btBestSess='—';
+  if(_sessT.asia>0||_sessT.london>0||_sessT.ny>0){
+    var _bsArr=Object.keys(_btSessWR).filter(function(k){return _sessT[k]>0;});
+    _bsArr.sort(function(a,b){return _btSessWR[b]-_btSessWR[a];});
+    var _bsMap={asia:'Ásia',london:'Londres',ny:'Nova York'};
+    _btBestSess=_bsMap[_bsArr[0]]||'—';
+  }
+  return{trades:trades.length,wins:wins,losses:losses,be:be,
+    wr:(wr*100).toFixed(2),pf:pf.toFixed(2),
+    dd:dd.toFixed(2),ret:(totalPnl>=0?'+':'')+totalPnl.toFixed(2),
+    avg:((totalPnl/trades.length)>=0?'+':'')+(totalPnl/trades.length).toFixed(2),
+    eq:eq,longs:_btLongs,shorts:_btShorts,
+    lwR:_btLongs>0?(_btLongW/_btLongs*100).toFixed(1):'—',
+    swR:_btShorts>0?(_btShortW/_btShorts*100).toFixed(1):'—',
+    bestDir:_btBestDir,bestSess:_btBestSess,
+    cfg:cfg,isReal:true,
+    dataSource:_preCandles?'extended':'chart',candleCount:candles.length};
+}
+
+/* ── FVG real backtest: 3-candle imbalance zones from pure OHLCV (Beta 0.124) ── */
+function _backtestRealFVG(cfg,_preCandles){
+  try{
+    var candles=_preCandles||(window.S&&window.S.candles)||[];
+    if(candles.length<50)return null;
+    var minAtrMult=parseFloat(cfg.fvgMinAtr)||0.05;
+    var mitMode=cfg.fvgMit||'wick';
+    var requireReact=!!cfg.fvgReact;
+    var allowReentry=!!cfg.fvgReentry;
+    var maxAge=parseInt(cfg.fvgMaxAge)||0;
+    var slMode=cfg.sl||'fvg';
+    var tpMode=cfg.tp||'fvg';
+    var riskPct=parseFloat(cfg.risk)||1.0;
+    var maxCdls=60;
+    /* period filter */
+    var _refT=candles[candles.length-1].t||0;
+    var _tScale=_refT>9999999999?1:1000;
+    var _ftFrom=0,_ftTo=Infinity;
+    if(cfg.dateFrom&&cfg.dateTo){
+      _ftFrom=new Date(cfg.dateFrom).getTime()/(_tScale===1?1:1000);
+      _ftTo=(new Date(cfg.dateTo).getTime()+86400000)/(_tScale===1?1:1000);
+    }else if(cfg.period){
+      var _pdSec=Math.max(1,parseInt(cfg.period)||30)*86400;
+      _ftTo=_refT;_ftFrom=_refT-(_tScale===1?_pdSec*1000:_pdSec);
+    }
+    /* ATR-14 helper */
+    var _atrCache={};
+    function _atr14(i){
+      if(_atrCache[i])return _atrCache[i];
+      var s=Math.max(1,i-14),sum=0,cnt=0;
+      for(var k=s;k<=i;k++){
+        var tr=Math.max(candles[k].h-candles[k].l,
+          k>0?Math.abs(candles[k].h-candles[k-1].c):0,
+          k>0?Math.abs(candles[k].l-candles[k-1].c):0);
+        sum+=tr;cnt++;
+      }
+      return(_atrCache[i]=cnt>0?sum/cnt:candles[i].c*0.005);
+    }
+    /* detect FVG zones: 3-candle imbalance (visible after candle i+1 closes) */
+    var fvgs=[];
+    for(var i=1;i<candles.length-1;i++){
+      var atrI=_atr14(i);
+      if(candles[i+1].l>candles[i-1].h){
+        var gap=candles[i+1].l-candles[i-1].h;
+        if(gap>=atrI*minAtrMult)
+          fvgs.push({side:'LONG',lo:candles[i-1].h,hi:candles[i+1].l,born:i+1,filled:false});
+      }
+      if(candles[i+1].h<candles[i-1].l){
+        var gap=candles[i-1].l-candles[i+1].h;
+        if(gap>=atrI*minAtrMult)
+          fvgs.push({side:'SHORT',lo:candles[i+1].h,hi:candles[i-1].l,born:i+1,filled:false});
+      }
+    }
+    if(!fvgs.length)return null;
+    var trades=[],eq=[100],fi0=0;
+    for(var ci=2;ci<candles.length;ci++){
+      var c=candles[ci];
+      if(_ftFrom>0&&(c.t<_ftFrom||c.t>_ftTo))continue;
+      var taken=false;
+      for(var fi=fi0;fi<fvgs.length&&!taken;fi++){
+        var fvg=fvgs[fi];
+        if(ci<=fvg.born)continue;
+        if(maxAge>0&&(ci-fvg.born)>maxAge){fvg.filled=true;continue;}
+        if(fvg.filled&&!allowReentry)continue;
+        var isL=fvg.side==='LONG';
+        var hit=mitMode==='wick'?
+          (isL?(c.l<=fvg.hi&&c.l>=fvg.lo*0.999):(c.h>=fvg.lo&&c.h<=fvg.hi*1.001)):
+          (isL?(c.c<=fvg.hi&&c.c>=fvg.lo):(c.c>=fvg.lo&&c.c<=fvg.hi));
+        if(!hit)continue;
+        if(requireReact&&ci+1<candles.length){
+          var nxt=candles[ci+1];
+          if(isL&&nxt.c<nxt.o)continue;
+          if(!isL&&nxt.c>nxt.o)continue;
+        }
+        var entry=isL?fvg.hi:fvg.lo;
+        var atrC=_atr14(ci);
+        var sl=slMode==='wick'?(isL?c.l:c.h):slMode==='fvg'?(isL?fvg.lo:fvg.hi):(isL?entry-atrC:entry+atrC);
+        var slDist=Math.abs(entry-sl)||entry*0.002;
+        var tp=tpMode==='1r'?(isL?entry+slDist:entry-slDist):
+          tpMode==='1.5r'?(isL?entry+slDist*1.5:entry-slDist*1.5):
+          tpMode==='2r'?(isL?entry+slDist*2:entry-slDist*2):
+          (isL?entry+slDist*2:entry-slDist*2);
+        var outcome='timeout',exitPrice=entry;
+        var startK=requireReact?ci+2:ci+1;
+        for(var k=startK;k<Math.min(ci+maxCdls,candles.length);k++){
+          var ck=candles[k];
+          if(isL){if(ck.l<=sl){outcome='loss';exitPrice=sl;break;}if(ck.h>=tp){outcome='win';exitPrice=tp;break;}}
+          else{if(ck.h>=sl){outcome='loss';exitPrice=sl;break;}if(ck.l<=tp){outcome='win';exitPrice=tp;break;}}
+        }
+        var rMult=outcome==='win'?Math.abs(exitPrice-entry)/slDist:outcome==='loss'?-1:
+          (isL?(exitPrice-entry):(entry-exitPrice))/slDist;
+        var tsH=new Date(c.t>9999999999?c.t:c.t*1000).getUTCHours();
+        trades.push({outcome:outcome,pnl:rMult*riskPct,side:isL?'LONG':'SHORT',tsH:tsH});
+        var prev=eq[eq.length-1];eq.push(Math.max(10,prev+rMult*riskPct));
+        fvg.filled=true;taken=true;
+      }
+      while(fi0<fvgs.length&&fvgs[fi0].filled&&(!allowReentry))fi0++;
+    }
+    if(!trades.length)return null;
+    return _btMakeResult(trades,eq,cfg,_preCandles,candles);
+  }catch(e){return null;}
+}
+
+/* ── TrendBreak real backtest: EMA crossover on close prices (Beta 0.124) ── */
+function _backtestRealTB(cfg,_preCandles){
+  try{
+    var candles=_preCandles||(window.S&&window.S.candles)||[];
+    if(candles.length<50)return null;
+    var fast=Math.max(2,parseInt(cfg.tbFast)||3);
+    var slow=Math.max(fast+1,parseInt(cfg.tbSlow)||10);
+    var biasMin=Math.max(0,parseFloat(cfg.tbBias)||0);
+    var exitMode=cfg.tbExit||'flip';
+    var slMode=cfg.sl||'wick';
+    var tpMode=cfg.tp||'2r';
+    var riskPct=parseFloat(cfg.risk)||1.0;
+    /* period filter */
+    var _refT=candles[candles.length-1].t||0;
+    var _tScale=_refT>9999999999?1:1000;
+    var _ftFrom=0,_ftTo=Infinity;
+    if(cfg.dateFrom&&cfg.dateTo){
+      _ftFrom=new Date(cfg.dateFrom).getTime()/(_tScale===1?1:1000);
+      _ftTo=(new Date(cfg.dateTo).getTime()+86400000)/(_tScale===1?1:1000);
+    }else if(cfg.period){
+      var _pdSec=Math.max(1,parseInt(cfg.period)||30)*86400;
+      _ftTo=_refT;_ftFrom=_refT-(_tScale===1?_pdSec*1000:_pdSec);
+    }
+    /* EMA of closes */
+    function _ema(period){
+      var k=2/(period+1),r=[candles[0].c];
+      for(var i=1;i<candles.length;i++)r.push(candles[i].c*k+r[i-1]*(1-k));
+      return r;
+    }
+    var fEma=_ema(fast),sEma=_ema(slow);
+    /* ATR-14 */
+    function _atr14(i){
+      var s=Math.max(1,i-14),sum=0,cnt=0;
+      for(var k=s;k<=i;k++){
+        var tr=Math.max(candles[k].h-candles[k].l,
+          k>0?Math.abs(candles[k].h-candles[k-1].c):0,
+          k>0?Math.abs(candles[k].l-candles[k-1].c):0);
+        sum+=tr;cnt++;
+      }
+      return cnt>0?sum/cnt:candles[i].c*0.005;
+    }
+    /* detect crossovers */
+    var signals=[];
+    for(var i=slow+1;i<candles.length;i++){
+      if(_ftFrom>0&&(candles[i].t<_ftFrom||candles[i].t>_ftTo))continue;
+      var pf=fEma[i-1],ps=sEma[i-1],cf=fEma[i],cs=sEma[i];
+      var biasAmt=Math.abs(cf-cs)/cs*100;
+      if(biasAmt<biasMin)continue;
+      if(pf<=ps&&cf>cs)signals.push({idx:i,side:'LONG',c:candles[i]});
+      else if(pf>=ps&&cf<cs)signals.push({idx:i,side:'SHORT',c:candles[i]});
+    }
+    if(!signals.length)return null;
+    var trades=[],eq=[100];
+    for(var si=0;si<signals.length;si++){
+      var sig=signals[si];
+      var isL=sig.side==='LONG';
+      var entry=sig.c.c;
+      var atrV=_atr14(sig.idx);
+      var sl=slMode==='wick'?(isL?sig.c.l:sig.c.h):slMode==='atr'?(isL?entry-atrV:entry+atrV):(isL?entry-atrV*0.5:entry+atrV*0.5);
+      var slDist=Math.abs(entry-sl)||entry*0.002;
+      var tp=null;
+      if(tpMode==='1r')tp=isL?entry+slDist:entry-slDist;
+      else if(tpMode==='1.5r')tp=isL?entry+slDist*1.5:entry-slDist*1.5;
+      else if(tpMode==='2r')tp=isL?entry+slDist*2:entry-slDist*2;
+      else if(tpMode==='flip')tp=null;
+      else tp=isL?entry+slDist*2:entry-slDist*2;
+      var flipEnd=candles.length-1;
+      if(exitMode==='flip'&&si+1<signals.length)flipEnd=signals[si+1].idx;
+      var endK=Math.min(flipEnd,sig.idx+200);
+      var outcome='timeout',exitPrice=entry;
+      for(var k=sig.idx+1;k<=endK&&k<candles.length;k++){
+        var ck=candles[k];
+        if(isL){
+          if(ck.l<=sl){outcome='loss';exitPrice=sl;break;}
+          if(tp&&ck.h>=tp){outcome='win';exitPrice=tp;break;}
+          if(exitMode==='flip'&&k===endK){exitPrice=ck.c;outcome=exitPrice>entry?'win':'loss';break;}
+        }else{
+          if(ck.h>=sl){outcome='loss';exitPrice=sl;break;}
+          if(tp&&ck.l<=tp){outcome='win';exitPrice=tp;break;}
+          if(exitMode==='flip'&&k===endK){exitPrice=ck.c;outcome=exitPrice<entry?'win':'loss';break;}
+        }
+      }
+      var rMult=outcome==='win'?Math.abs(exitPrice-entry)/slDist:outcome==='loss'?-1:
+        (isL?(exitPrice-entry):(entry-exitPrice))/slDist;
+      var tsH=new Date(sig.c.t>9999999999?sig.c.t:sig.c.t*1000).getUTCHours();
+      trades.push({outcome:outcome,pnl:rMult*riskPct,side:sig.side,tsH:tsH});
+      var prev=eq[eq.length-1];eq.push(Math.max(10,prev+rMult*riskPct));
+    }
+    if(!trades.length)return null;
+    return _btMakeResult(trades,eq,cfg,_preCandles,candles);
   }catch(e){return null;}
 }
 
@@ -11068,17 +11319,20 @@ if(btBtn){
           'rgba(255,77,106,.8)');
         return;
       }
-      if(!zones||!zones.length){
-        zones=window.__dvlComputeHVNFromCS?window.__dvlComputeHVNFromCS(candles):
-          (window.__hvnZones?window.__hvnZones():[]);
-        /* cache zones back for next backtest run */
-        if(window.DVLBacktestData&&window.DVLBacktestData.candles===candles)window.DVLBacktestData.zones=zones;
-      }
-      if(!zones||!zones.length){
-        _setBadge('NO HISTORY','#ff4d6a','rgba(255,77,106,.08)','rgba(255,77,106,.25)',
-          'Sem zonas HVN calculadas. Ative o Vol Zones e recarregue o gráfico.',
-          'rgba(255,77,106,.8)');
-        return;
+      var _needsZones=cfg.signalType==='hvnSignals'||!cfg.signalType;
+      if(_needsZones){
+        if(!zones||!zones.length){
+          zones=window.__dvlComputeHVNFromCS?window.__dvlComputeHVNFromCS(candles):
+            (window.__hvnZones?window.__hvnZones():[]);
+          /* cache zones back for next backtest run */
+          if(window.DVLBacktestData&&window.DVLBacktestData.candles===candles)window.DVLBacktestData.zones=zones;
+        }
+        if(!zones||!zones.length){
+          _setBadge('NO HISTORY','#ff4d6a','rgba(255,77,106,.08)','rgba(255,77,106,.25)',
+            'Sem zonas HVN calculadas. Ative o Vol Zones e recarregue o gráfico.',
+            'rgba(255,77,106,.8)');
+          return;
+        }
       }
       var res=_backtestReal(cfg,candles,zones);
       var _cLen=candles.length,_isLim=_cLen<300;
@@ -15661,14 +15915,10 @@ function _runOptimizer(){
   if(!runBtn)return;
   var _optIndVal=(_g('stInd')||{value:'hvnSignals'}).value;
   var _isFvgOpt=_optIndVal==='fvgConf',_isTBOpt=_optIndVal==='trendBreak';
-  if(_isFvgOpt||_isTBOpt){
-    if(status){status.style.color='#ff4d6a';
-      status.textContent='Backtest real disponível apenas para HVN Signals. FVG e TrendBreak em desenvolvimento.';}
-    return;
-  }
   var _optPeriod=parseInt((_g('stOptPeriod')||{value:'30'}).value)||30;
   var _optTf=(_g('stOptTf')||{value:'5m'}).value||'5m';
   var sym=(window.S&&window.S.sym)||'BTCUSDT';
+  var _optCandles=[];
   runBtn.disabled=true;
   runBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/></svg> OTIMIZANDO...';
   if(prog)prog.classList.add('show');
@@ -15706,6 +15956,48 @@ function _runOptimizer(){
     }
     step();
   }
+  function _doOptGeneric(combos,buildCfg){
+    var results=[],total=combos.length,done=0;
+    function step(){
+      if(done>=total){
+        _allOptResults=results;_reRankResults();
+        runBtn.disabled=false;
+        runBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="12" height="12"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> AUTO OPTIMIZE';
+        if(prog)prog.classList.remove('show');
+        if(status)status.textContent=results.length>0?
+          'Concluído: '+results.length+' combinações com trades reais.':
+          'Nenhuma combinação gerou trades. Verifique o período e parâmetros.';
+        return;
+      }
+      var batch=Math.min(15,total-done);
+      for(var _b=0;_b<batch;_b++){
+        var comboCfg=buildCfg(combos[done]);
+        var r=_backtestReal(comboCfg,_optCandles);
+        if(r&&r.trades>0)results.push({c:combos[done],trades:r.trades,wr:r.wr,pf:r.pf,ret:r.ret,dd:r.dd});
+        done++;
+      }
+      if(bar)bar.style.width=(done/total*100)+'%';
+      if(status)status.textContent='Testando combinação '+done+' de '+total+'...';
+      setTimeout(step,4);
+    }
+    step();
+  }
+  function _doOptFVG(candles){
+    _optCandles=candles;
+    _doOptGeneric(FVG_OPT_COMBOS,function(c){
+      return{fvgMinAtr:c.minAtr||0.05,fvgMit:c.mitMode||'wick',
+        fvgReact:!!c.react,fvgReentry:c.reentry!==false,fvgMaxAge:c.maxAge||0,
+        sl:c.sl||'fvg',tp:c.tp||'fvg',risk:1.0,period:String(_optPeriod),signalType:'fvgConf'};
+    });
+  }
+  function _doOptTB(candles){
+    _optCandles=candles;
+    _doOptGeneric(TB_OPT_COMBOS,function(c){
+      return{tbFast:c.fast||3,tbSlow:c.slow||10,tbBias:c.bias||0,
+        tbExit:c.exitMode||'flip',sl:c.sl||'wick',tp:c.tp||'2r',
+        risk:1.0,period:String(_optPeriod),signalType:'trendBreak'};
+    });
+  }
   function _optFail(msg){
     if(status){status.style.color='#ff4d6a';status.textContent=msg;}
     runBtn.disabled=false;
@@ -15713,9 +16005,11 @@ function _runOptimizer(){
     if(prog)prog.classList.remove('show');
   }
   _dvlFetchBTCandles(sym,_optTf,_optPeriod,'','').then(function(candles){
+    if(!candles||candles.length<50)return _optFail('Histórico insuficiente ('+((candles&&candles.length)||0)+' candles). Aumente o período.');
+    if(_isTBOpt){if(status)status.textContent='Histórico: '+candles.length+' candles. Testando TrendBreak...';_doOptTB(candles);return;}
+    if(_isFvgOpt){if(status)status.textContent='Histórico: '+candles.length+' candles. Testando FVG...';_doOptFVG(candles);return;}
     var zones=window.__dvlComputeHVNFromCS?window.__dvlComputeHVNFromCS(candles):
       (window.__hvnZones?window.__hvnZones():[]);
-    if(!candles||candles.length<50)return _optFail('Histórico insuficiente ('+((candles&&candles.length)||0)+' candles). Aumente o período.');
     if(!zones||!zones.length)return _optFail('Sem zonas HVN calculadas. Ative o Vol Zones e recarregue.');
     /* save zones so backtest can reuse same data set */
     if(window.DVLBacktestData)window.DVLBacktestData.zones=zones;
@@ -15723,6 +16017,9 @@ function _runOptimizer(){
     _doOpt(candles,zones);
   }).catch(function(){
     var candles=(window.S&&window.S.candles)||[];
+    if(!candles.length)return _optFail('Sem histórico disponível. Verifique a conexão.');
+    if(_isTBOpt){if(status)status.textContent='Candles do gráfico ('+candles.length+'). TrendBreak...';_doOptTB(candles);return;}
+    if(_isFvgOpt){if(status)status.textContent='Candles do gráfico ('+candles.length+'). FVG...';_doOptFVG(candles);return;}
     var zones=window.__dvlComputeHVNFromCS?window.__dvlComputeHVNFromCS(candles):
       (window.__hvnZones?window.__hvnZones():[]);
     if(!candles.length||!zones.length)return _optFail('Sem histórico disponível. Verifique a conexão.');
@@ -22721,11 +23018,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.123';
+  window.DVL_APP_VERSION='Beta 0.124';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.123';
+    if(b)b.textContent='Beta 0.124';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -22835,7 +23132,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.123';
+  const VERSION = 'Beta 0.124';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -22851,7 +23148,7 @@ body:before{display:none!important;background:none!important;}
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.123';
+  var VERSION='Beta 0.124';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
