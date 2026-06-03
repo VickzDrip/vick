@@ -41,6 +41,13 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
+Beta 0.118
+  - Corrigir divergência Backtest vs Optimizer:
+    · Backtest agora usa stTf (form) não S.tf (gráfico)
+    · Cache key arredondado para hora fechada (cache estável)
+    · DVLBacktestData armazena candles + zones
+    · Backtest reutiliza dados do Optimizer se sym/tf/período batem
+    · Optimizer salva candles+zones em DVLBacktestData após carregar
 Beta 0.117
   - Strategy Tester: histórico real paginado da Binance
     · _dvlFetchBTCandles: busca paginada até 10.000 candles com cache
@@ -9627,7 +9634,7 @@ input[type="color"]{border-radius:7px!important;}
 })();
 </script>
 
-<!-- DVL_STRATEGY_TESTER v0.117 -->
+<!-- DVL_STRATEGY_TESTER v0.118 -->
 <div id="dvlSTScrim" onclick="window._dvlST&&window._dvlST.close()"></div>
 <div id="dvlSTPanel" role="dialog" aria-modal="true" aria-label="Strategy Tester">
   <div class="dvl-st-handle"></div>
@@ -10107,7 +10114,7 @@ input[type="color"]{border-radius:7px!important;}
 /* Beta 0.116 — Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.117';
+var V='Beta 0.118';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -10320,11 +10327,13 @@ var _btCache={};
 
 /* ── historical candle cache + backtest data store ── */
 var _dvlBTCache=new Map();
-window.DVLBacktestData={candles:[],symbol:"",timeframe:"",from:0,to:0,source:"none"};
+window.DVLBacktestData={candles:[],zones:[],symbol:"",timeframe:"",periodDays:0,from:0,to:0,source:"none"};
 
 async function _dvlFetchBTCandles(sym,tf,periodDays,dateFrom,dateTo){
   var now=Date.now();
-  var toMs=dateTo?new Date(dateTo).getTime()+86400000:now;
+  /* round toMs to nearest closed hour for stable cache key */
+  var _rawTo=dateTo?new Date(dateTo).getTime()+86400000:now;
+  var toMs=dateTo?_rawTo:Math.floor(_rawTo/3600000)*3600000;
   var fromMs=dateFrom?new Date(dateFrom).getTime():toMs-(Math.max(1,periodDays||30)*86400000);
   var ckey=sym+'|'+tf+'|'+fromMs+'|'+toMs;
   if(_dvlBTCache.has(ckey))return _dvlBTCache.get(ckey);
@@ -10342,7 +10351,8 @@ async function _dvlFetchBTCandles(sym,tf,periodDays,dateFrom,dateTo){
     cursor=lastT+1;
   }
   _dvlBTCache.set(ckey,candles);
-  window.DVLBacktestData={candles:candles,symbol:sym,timeframe:tf,from:fromMs,to:toMs,source:'fetched'};
+  window.DVLBacktestData={candles:candles,zones:[],symbol:sym,timeframe:tf,
+    periodDays:periodDays||30,from:fromMs,to:toMs,source:'fetched'};
   return candles;
 }
 
@@ -10980,14 +10990,24 @@ if(btBtn){
         tfSlow:parseInt((_g('stTBFilterSlow')||{value:'10'}).value)||10,
       };
       var sym=(window.S&&window.S.sym)||'BTCUSDT';
-      var tf=(window.S&&window.S.tf)||'5m';
-      var candles,dataSource='chart';
-      try{
-        candles=await _dvlFetchBTCandles(sym,tf,_stDays,cfg.dateFrom,cfg.dateTo);
+      /* use stTf (form field) so backtest matches optimizer TF when combo is applied */
+      var tf=(_g('stTf')||{value:'5m'}).value||(window.S&&window.S.tf)||'5m';
+      var candles,zones=null,dataSource='chart';
+      /* reuse DVLBacktestData if optimizer already loaded matching candles+zones */
+      var _btd=window.DVLBacktestData;
+      if(_btd&&_btd.source==='fetched'&&_btd.symbol===sym&&_btd.timeframe===tf&&
+         Math.abs((_btd.periodDays||0)-_stDays)<=1&&_btd.candles.length>50){
+        candles=_btd.candles;
+        zones=_btd.zones&&_btd.zones.length?_btd.zones:null;
         dataSource='fetched';
-      }catch(e){
-        candles=(window.S&&window.S.candles)||[];
-        dataSource='chart';
+      }else{
+        try{
+          candles=await _dvlFetchBTCandles(sym,tf,_stDays,cfg.dateFrom,cfg.dateTo);
+          dataSource='fetched';
+        }catch(e){
+          candles=(window.S&&window.S.candles)||[];
+          dataSource='chart';
+        }
       }
       var db=_g('dvlSTDataBadge'),dn=_g('dvlSTDetNote'),res0=_g('dvlSTResults');
       function _setBadge(txt,clr,bg,bd,msg,msgClr){
@@ -11002,8 +11022,12 @@ if(btBtn){
           'rgba(255,77,106,.8)');
         return;
       }
-      var zones=window.__dvlComputeHVNFromCS?window.__dvlComputeHVNFromCS(candles):
-        (window.__hvnZones?window.__hvnZones():[]);
+      if(!zones||!zones.length){
+        zones=window.__dvlComputeHVNFromCS?window.__dvlComputeHVNFromCS(candles):
+          (window.__hvnZones?window.__hvnZones():[]);
+        /* cache zones back for next backtest run */
+        if(window.DVLBacktestData&&window.DVLBacktestData.candles===candles)window.DVLBacktestData.zones=zones;
+      }
       if(!zones||!zones.length){
         _setBadge('NO HISTORY','#ff4d6a','rgba(255,77,106,.08)','rgba(255,77,106,.25)',
           'Sem zonas HVN calculadas. Ative o Vol Zones e recarregue o gráfico.',
@@ -15647,6 +15671,8 @@ function _runOptimizer(){
       (window.__hvnZones?window.__hvnZones():[]);
     if(!candles||candles.length<50)return _optFail('Histórico insuficiente ('+((candles&&candles.length)||0)+' candles). Aumente o período.');
     if(!zones||!zones.length)return _optFail('Sem zonas HVN calculadas. Ative o Vol Zones e recarregue.');
+    /* save zones so backtest can reuse same data set */
+    if(window.DVLBacktestData)window.DVLBacktestData.zones=zones;
     if(status)status.textContent='Histórico: '+candles.length+' candles. Gerando sinais...';
     _doOpt(candles,zones);
   }).catch(function(){
