@@ -41,7 +41,7 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
-Beta 0.135
+Beta 0.136
   - Comentários internos Beta 0.116/0.117 atualizados
   - DEMO DATA removido: badge oculto inicialmente, nota neutra
   - Badge LOOKAHEAD SAFE / LOOKAHEAD RISK no resultado
@@ -692,7 +692,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.135";
+  const LOCAL_VERSION = "Beta 0.136";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2382,7 +2382,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.135";
+window.DVL_APP_VERSION = "Beta 0.136";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -3191,11 +3191,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.135</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.136</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.135</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.136</span>
       </div>
 
       <div class="tb-right-btns">
@@ -4406,6 +4406,87 @@ async function fetchKlinesForTF(symbol,tf,lim){
   const seen=new Set();all=all.filter(x=>{const k=+x[0];if(seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>+a[0]-+b[0]);
   return aggregateSecondKlines(all,tf).slice(-lim)
 }
+/* ── DVL Progressive History — Beta 0.136 ── */
+function _dvlInitLim(tf){
+  if(tf==='1s')return 1500;
+  if(tf==='15s'||tf==='30s')return 1500;
+  if(tf==='1m'||tf==='3m')return 2000;
+  if(tf==='5m')return 2500;
+  if(tf==='15m'||tf==='30m')return 3000;
+  if(tf==='1h'||tf==='4h')return 3000;
+  return 2000;
+}
+function _dvlBatchLim(tf){
+  if(tf==='1s'||tf==='15s'||tf==='30s')return 1000;
+  if(tf==='1m'||tf==='3m'||tf==='5m')return 1500;
+  if(tf==='15m'||tf==='30m')return 2000;
+  if(tf==='1h'||tf==='4h')return 3000;
+  return 1000;
+}
+function _dvlMaxCandles(){return window.innerWidth<768?20000:80000;}
+var _dvlHistLoading=false,_dvlHistExhausted=false,_dvlHistStatusTimer=null;
+function _dvlShowHistStatus(msg,dismissMs){
+  var s=document.getElementById('dvlHistStatus');
+  if(!s)return;
+  s.textContent=msg;s.style.opacity='1';
+  clearTimeout(_dvlHistStatusTimer);
+  if(dismissMs)_dvlHistStatusTimer=setTimeout(function(){s.style.opacity='0';},dismissMs);
+}
+async function _dvlLoadOlderCandles(){
+  if(_dvlHistLoading||_dvlHistExhausted)return;
+  if(!window.S||!S.candles||S.candles.length<2)return;
+  var tf=S.tf;
+  /* Synthetic sub-minute TFs use aggregation — endTime not supported */
+  if(tf==='1s'||tf==='15s'||tf==='30s'){
+    _dvlHistExhausted=true;
+    _dvlShowHistStatus('Histórico ilimitado indisponível para '+tf,2500);
+    return;
+  }
+  if(S.candles.length>=_dvlMaxCandles()){
+    _dvlHistExhausted=true;
+    _dvlShowHistStatus('Limite de memória — '+S.candles.length.toLocaleString()+' candles',3000);
+    return;
+  }
+  _dvlHistLoading=true;
+  var sym=S.sym,seq=S.loadSeq,endTime=S.candles[0].t-1,lim=_dvlBatchLim(tf);
+  _dvlShowHistStatus('Carregando histórico…');
+  try{
+    var url=API+'/api/v3/klines?symbol='+sym+'&interval='+tf+'&limit='+lim+'&endTime='+endTime;
+    var resp=await fetch(url);
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    var arr=await resp.json();
+    if(seq!==S.loadSeq||sym!==S.sym||tf!==S.tf)return; /* stale */
+    if(!arr||!arr.length){
+      _dvlHistExhausted=true;
+      _dvlShowHistStatus('Histórico completo — '+S.candles.length.toLocaleString()+' candles',3500);
+      return;
+    }
+    var cutoff=S.candles[0].t;
+    var newC=arr.map(klineToCandle).filter(function(c){return c.t<cutoff;});
+    newC.sort(function(a,b){return a.t-b.t;});
+    if(!newC.length){
+      _dvlHistExhausted=true;
+      _dvlShowHistStatus('Histórico completo',2500);
+      return;
+    }
+    var n=newC.length;
+    /* Prepend + shift viewport anchor — zero visual jump */
+    S.candles=newC.concat(S.candles);
+    S.view.start+=n;
+    S.view.end+=n;
+    _dvlShowHistStatus(S.candles.length.toLocaleString()+' candles — arraste para carregar mais',2000);
+    if(typeof drawSoon==='function')drawSoon();
+  }catch(e){
+    if(seq===S.loadSeq)_dvlShowHistStatus('Erro ao buscar histórico',2000);
+  }finally{
+    _dvlHistLoading=false;
+  }
+}
+/* Poll 300 ms — trigger when viewport reaches near left edge of loaded data */
+setInterval(function(){
+  if(!window.S||!S.candles||!S.candles.length||!S.view)return;
+  if(S.view.start<80&&!_dvlHistLoading&&!_dvlHistExhausted)_dvlLoadOlderCandles();
+},300);
 async function boot(){
   const seq=++S.loadSeq;
   const sym=S.sym;
@@ -4422,8 +4503,9 @@ async function boot(){
     window.__bigTradesLastGood=[];
     S.aggLoading=false;
     S.aggSeq=seq;
+    _dvlHistLoading=false;_dvlHistExhausted=false;(function(){var _hs=document.getElementById('dvlHistStatus');if(_hs)_hs.style.opacity='0';})();
 
-    const lim=520;
+    const lim=_dvlInitLim(tf);
     const depthLimit=el('depthLimit')?.value||500;
 
     const [k,d,hr]=await Promise.all([
@@ -4572,7 +4654,7 @@ function onKline(k,seq=S.loadSeq,tf=S.tf){
     S.candles[S.candles.length-1]=c;
   }else if(!last||c.t>last.t){
     S.candles.push(c);
-    if(S.candles.length>620)S.candles.shift();
+    var _lMax=_dvlMaxCandles();if(S.candles.length>_lMax){S.candles.shift();if(!S.view.auto){S.view.start=Math.max(0,S.view.start-1);S.view.end=Math.max(1,S.view.end-1);}}
     if(S.view.auto){
       const sp=S.view.end-S.view.start||180;
       S.view.end=S.candles.length+Math.min(80,Math.max(24,sp*.22));
@@ -9351,9 +9433,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.135'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.136'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.135';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.136';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -9392,7 +9474,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.135';
+  const VERSION='Beta 0.136';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9697,7 +9779,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.135';
+  const VERSION='Beta 0.136';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -10179,7 +10261,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.135 ── */
+/* ── DVL Strategy Tester — Beta 0.136 ── */
 /* 0.131: período HVN separado (busca candles extras antes do backtest); +3/5 anos nos seletores */
 /* 0.127: optimizer per-param ON/OFF toggles — lock any param to current form value to reduce combo space */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
@@ -10343,7 +10425,7 @@ input[type="color"]{border-radius:7px!important;}
 /* DVL Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.135';
+var V='Beta 0.136';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -16868,6 +16950,7 @@ console.log('[DVL] Strategy Tester '+V+' loaded');
 </script>
 <!-- /DVL_STRATEGY_TESTER -->
 
+<div id="dvlHistStatus" style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:rgba(5,10,18,0.90);border:1px solid rgba(0,212,255,0.20);color:rgba(0,212,255,0.80);font-size:10px;font-family:monospace;padding:5px 14px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity 0.35s;z-index:9999;letter-spacing:.05em;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.55)"></div>
 </body>
 </html>
 
@@ -23416,11 +23499,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.135';
+  window.DVL_APP_VERSION='Beta 0.136';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.135';
+    if(b)b.textContent='Beta 0.136';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -23530,7 +23613,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.135';
+  const VERSION = 'Beta 0.136';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -23546,7 +23629,7 @@ body:before{display:none!important;background:none!important;}
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.135';
+  var VERSION='Beta 0.136';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
@@ -24112,7 +24195,7 @@ body:before{display:none!important;background:none!important;}
 })();
 </script>
 
-<!-- ── DVL Spike Zones Engine (Beta 0.135) ── -->
+<!-- ── DVL Spike Zones Engine (Beta 0.136) ── -->
 <script id="DVL_SPIKE_ZONES">
 (function DVL_SPIKE_ZONES(){
   'use strict';
