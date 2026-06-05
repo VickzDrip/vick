@@ -41,7 +41,7 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
-Beta 0.155
+Beta 0.156
   - Comentários internos Beta 0.116/0.117 atualizados
   - DEMO DATA removido: badge oculto inicialmente, nota neutra
   - Badge LOOKAHEAD SAFE / LOOKAHEAD RISK no resultado
@@ -692,7 +692,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.155";
+  const LOCAL_VERSION = "Beta 0.156";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2382,7 +2382,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.155";
+window.DVL_APP_VERSION = "Beta 0.156";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -3191,11 +3191,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.155</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.156</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.155</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.156</span>
       </div>
 
       <div class="tb-right-btns">
@@ -3574,7 +3574,7 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
           <div class="ind-settings" id="settings-stdVolume">
             <div class="kv"><span class="k">Modo</span><select class="select" id="volMode"><option value="normal" selected>Volume normal</option><option value="delta">Delta buy/sell</option></select></div>
-            <div class="kv"><span class="k">Média</span><input class="num" id="volMaLen" type="number" min="1" max="100" step="1" value="20"></div>
+            <div class="kv"><span class="k">Média</span><input class="num" id="volMaLen" type="number" min="1" max="500" step="1" value="20"></div>
             <div class="kv"><span class="k">Linha</span><span style="font-size:10px;color:#6f86a8">Média de volume</span></div>
             <div class="kv"><span class="k">Cor compra</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="volBuyColorSwatch" style="width:100%;height:100%;background:#26a69a;pointer-events:none"></div><input id="volBuyColor" type="color" value="#26a69a" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
             <div class="kv"><span class="k">Cor venda</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="volSellColorSwatch" style="width:100%;height:100%;background:#ef5350;pointer-events:none"></div><input id="volSellColor" type="color" value="#ef5350" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
@@ -4012,6 +4012,11 @@ html.pre-ui .switch::after{transition:none!important}
             <div style="font-size:9px;color:#00d4ff;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">DVL FLOW STACK</div>
             <label class="kv" style="cursor:pointer;"><span class="k">Flow Stack Panel</span><input type="checkbox" id="ptShowPanel" checked style="width:14px;height:14px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;"></label>
             <div class="kv"><span class="k">Panel Hist. Op.</span><input class="num" id="ptHistOp" type="number" min="0.1" max="1.5" step="0.1" value="0.9" style="width:52px"></div>
+            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
+            <div style="font-size:9px;color:#5a7090;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">MÉD. MÓVEIS (0=off)</div>
+            <div class="kv"><span class="k">Delta MA</span><input class="num" id="ptDeltaMA" type="number" min="0" max="200" step="1" value="0" style="width:52px"></div>
+            <div class="kv"><span class="k">Pressure MA</span><input class="num" id="ptPressureMA" type="number" min="0" max="200" step="1" value="0" style="width:52px"></div>
+            <div class="kv"><span class="k">Pulse MA</span><input class="num" id="ptPulseMA" type="number" min="0" max="200" step="1" value="0" style="width:52px"></div>
             <div class="hint">Bias · Cloud · ABSORPTION · EXHAUSTION · FLOW FLIP</div>
           </div>
         </div>
@@ -4458,7 +4463,7 @@ async function fetchKlinesForTF(symbol,tf,lim){
   const seen=new Set();all=all.filter(x=>{const k=+x[0];if(seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>+a[0]-+b[0]);
   return aggregateSecondKlines(all,tf).slice(-lim)
 }
-/* ── DVL Progressive History — Beta 0.155 ── */
+/* ── DVL Progressive History — Beta 0.156 ── */
 function _dvlInitLim(tf){
   if(tf==='1s')return 1500;
   if(tf==='15s'||tf==='30s')return 1500;
@@ -7157,7 +7162,7 @@ function drawDeltaPane(){
 
   // Volume MA line
   const maLen=Math.max(1,+(el('volMaLen')?.value||20)),vols=S.candles.map(x=>x.v);
-  const ma=vols.map((_,i)=>i<maLen-1?null:vols.slice(i-maLen+1,i+1).reduce((a,b)=>a+b,0)/maLen);
+  const ma=[];{let _ms=0;for(let _mi=0;_mi<vols.length;_mi++){_ms+=vols[_mi];if(_mi>=maLen)_ms-=vols[_mi-maLen];ma[_mi]=_ms/Math.min(_mi+1,maLen);}}
   ctx.strokeStyle='#f0b429';ctx.lineWidth=1.4;ctx.setLineDash([]);ctx.beginPath();let started=false;
   for(let j=0;j<V.n;j++){
     const idx=V.a+j,v=ma[idx];if(v==null)continue;
@@ -9485,9 +9490,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.155'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.156'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.155';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.156';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -9526,7 +9531,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.155';
+  const VERSION='Beta 0.156';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9725,7 +9730,7 @@ window._dvlClarEyeHit = null;
     ctx.globalAlpha=1;
     const maLen=Math.max(1,+(E('volMaLen')?.value||20));
     const vols=S.candles.map(c=>c.v||0);
-    const ma=vols.map((_,i)=>i<maLen-1?null:vols.slice(i-maLen+1,i+1).reduce((a,b)=>a+b,0)/maLen);
+    const ma=[];{let _ms=0;for(let _mi=0;_mi<vols.length;_mi++){_ms+=vols[_mi];if(_mi>=maLen)_ms-=vols[_mi-maLen];ma[_mi]=_ms/Math.min(_mi+1,maLen);}}
     ctx.strokeStyle='#f0b429';ctx.lineWidth=1.4;ctx.setLineDash([]);ctx.beginPath();let on=false;
     for(let j=0;j<V.n;j++){const idx=V.a+j,v=ma[idx]; if(v==null)continue; const xx=xFn(idx), yy=base-Math.min(areaH,areaH*v/maxVol); if(!on){ctx.moveTo(xx,yy);on=true}else ctx.lineTo(xx,yy);}
     if(on)ctx.stroke();
@@ -9831,7 +9836,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.155';
+  const VERSION='Beta 0.156';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -9938,7 +9943,7 @@ input[type="color"]{border-radius:7px!important;}
       V.cs.forEach((bar,j)=>{const i=V.a+j,xx=xFn(i); if(xx<PL-bw||xx>right+bw)return; const h=Math.max(1,areaH*(bar.v||0)/maxVol); ctx.fillStyle=(bar.c>=bar.o)?rgba(buyCol,.44):rgba(sellCol,.38); ctx.fillRect(xx-bw/2,base-h,bw,h);});
       const maLen=Math.max(1,+(E('volMaLen')?.value||20));
       const vols=S.candles.map(c=>c.v||0),ma=[];let run=0;
-      for(let i=0;i<vols.length;i++){run+=vols[i];if(i>=maLen)run-=vols[i-maLen];ma[i]=i>=maLen-1?run/maLen:null;}
+      for(let i=0;i<vols.length;i++){run+=vols[i];if(i>=maLen)run-=vols[i-maLen];ma[i]=run/Math.min(i+1,maLen);}
       ctx.strokeStyle='rgba(202,166,74,.82)';ctx.lineWidth=1.05;ctx.setLineDash([]);ctx.beginPath();let on=false;
       for(let j=0;j<V.n;j++){const idx=V.a+j,v=ma[idx];if(v==null)continue;const xx=xFn(idx),yy=base-Math.min(areaH,areaH*v/maxVol);if(!on){ctx.moveTo(xx,yy);on=true}else ctx.lineTo(xx,yy);} if(on)ctx.stroke();
       window.__ETX_SKIP_COLORMAP=false;ctx.restore();
@@ -10313,7 +10318,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.155 ── */
+/* ── DVL Strategy Tester — Beta 0.156 ── */
 /* 0.131: período HVN separado (busca candles extras antes do backtest); +3/5 anos nos seletores */
 /* 0.127: optimizer per-param ON/OFF toggles — lock any param to current form value to reduce combo space */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
@@ -10477,7 +10482,7 @@ input[type="color"]{border-radius:7px!important;}
 /* DVL Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.155';
+var V='Beta 0.156';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -19926,6 +19931,10 @@ window._dvlTemplate={open:open,close:close};
   });
 
   setTimeout(function(){if(typeof drawSoon==='function')drawSoon();},0);
+  var _ptMaIds=new Set(['ptDeltaMA','ptPressureMA','ptPulseMA']);
+  function _ptMaRd(){_cfgCache=null;if(typeof drawSoon==='function')drawSoon();}
+  document.addEventListener('input',function(ev){if(_ptMaIds.has(ev.target&&ev.target.id))_ptMaRd();});
+  document.addEventListener('change',function(ev){if(_ptMaIds.has(ev.target&&ev.target.id))_ptMaRd();});
 })();
 </script>
 
@@ -23551,11 +23560,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.155';
+  window.DVL_APP_VERSION='Beta 0.156';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.155';
+    if(b)b.textContent='Beta 0.156';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -23665,7 +23674,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.155';
+  const VERSION = 'Beta 0.156';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -23681,7 +23690,7 @@ body:before{display:none!important;background:none!important;}
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.155';
+  var VERSION='Beta 0.156';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
@@ -24247,7 +24256,7 @@ body:before{display:none!important;background:none!important;}
 })();
 </script>
 
-<!-- ── DVL Spike Zones Engine (Beta 0.155) ── -->
+<!-- ── DVL Spike Zones Engine (Beta 0.156) ── -->
 <script id="DVL_SPIKE_ZONES">
 (function DVL_SPIKE_ZONES(){
   'use strict';
@@ -24921,7 +24930,10 @@ body:before{display:none!important;background:none!important;}
       smooth:     clp(nv('ptSmooth',5)|0,1,20),
       absVol:     clp(nv('ptAbsVol',2.0),1.0,5),
       absRange:   clp(nv('ptAbsRange',0.4),0.05,0.9),
-      histOp:     clp(nv('ptHistOp',0.9),0.05,1.5)
+      histOp:     clp(nv('ptHistOp',0.9),0.05,1.5),
+      deltaMA:    Math.max(0,(nv('ptDeltaMA',0)|0)),
+      pressureMA: Math.max(0,(nv('ptPressureMA',0)|0)),
+      pulseMA:    Math.max(0,(nv('ptPulseMA',0)|0))
     };
   }
 
@@ -25097,7 +25109,7 @@ body:before{display:none!important;background:none!important;}
 
   /* ── CLOUD (before candles) — directional bias-aware 3-layer filled band ── */
   function drawCloud(ctx,W,H,AllV,sc,x,bw){
-    if(!window.S||!S.inds.pressureTrail||!S.candles.length)return;
+    if(!window.S||!S.inds.pressureTrail||!S.candles.length){window._dvlPTGearHit=null;window._dvlPTEyeHit=null;return;}
     var cfg=_getCfg();if(!cfg.showCloud)return;
     var cs=S.candles,n=cs.length;
     if(!_cache){var ck=_ck(cs,cfg);if(_cKey!==ck){_cache=_compute(cs,cfg);_cKey=ck;}}
@@ -25338,7 +25350,7 @@ body:before{display:none!important;background:none!important;}
   function drawFlowStack(ctx,W,H,V,sc,x,ptH,baseOff){
     if(!window.S||!S.inds.pressureTrail||!S.candles.length)return;
     var cfg=_getCfg();
-    if(!ptH||ptH<=0||!cfg.showPanel)return;
+    if(!ptH||ptH<=0||!cfg.showPanel){window._dvlPTGearHit=null;window._dvlPTEyeHit=null;return;}
     var cs=S.candles;if(!cs||cs.length<2)return;
 
     var ck=_ck(cs,cfg);
@@ -25434,6 +25446,36 @@ body:before{display:none!important;background:none!important;}
           }
         }
       }
+
+      /* ── MA overlay lines (Delta/Pressure/Pulse) ── */
+      var _maPs=[cfg.deltaMA,cfg.pressureMA,cfg.pulseMA];
+      for(var _si2=0;_si2<subs.length;_si2++){
+        var _maP=_maPs[_si2]|0;if(_maP<2)continue;
+        var _sp=subs[_si2];
+        var _yt=L.plotTop+_si2*(subH+gap),_yb=_yt+subH,_ym=(_yt+_yb)/2;
+        /* collect values with warmup before visible window */
+        var _ws=Math.max(0,V.a-_maP+1),_we=Math.min(n,V.b);
+        var _vals=[],_ms2=0;
+        for(var _j=_ws;_j<_we;_j++)_vals.push(_sp.getVal(_j));
+        /* running sum MA */
+        var _maArr=[],_rs=0;
+        for(var _k=0;_k<_vals.length;_k++){_rs+=_vals[_k];if(_k>=_maP)_rs-=_vals[_k-_maP];_maArr[_k]=_rs/Math.min(_k+1,_maP);}
+        var _off=V.a-_ws;
+        ctx.beginPath();
+        ctx.strokeStyle='rgba('+_sp.posR+','+_sp.posG+','+_sp.posB+',0.90)';
+        ctx.lineWidth=1.4;ctx.setLineDash([]);
+        var _mv=false;
+        for(var _i=V.a;_i<V.b;_i++){
+          if(_i<0||_i>=n)continue;
+          var _mv2=_maArr[_off+(_i-V.a)];if(_mv2===undefined)continue;
+          var _mn=_sp.max>0?_mv2/_sp.max:0;
+          _mn=(_mn-centerOff/100)*zoomF;_mn=Math.max(-1,Math.min(1,_mn));
+          var _xx=x(_i),_yy=_sp.uni?_yb-Math.max(0,Math.abs(_mn))*(_yb-_yt-2)*0.9:_ym-_mn*(_yb-_yt-2)*0.44;
+          if(!_mv){ctx.moveTo(_xx,_yy);_mv=true;}else ctx.lineTo(_xx,_yy);
+        }
+        if(_mv)ctx.stroke();
+      }
+
       ctx.restore();
 
       /* right-scale: current value for each sub-panel */
