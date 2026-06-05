@@ -41,7 +41,7 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
-Beta 0.158
+Beta 0.159
   - Comentários internos Beta 0.116/0.117 atualizados
   - DEMO DATA removido: badge oculto inicialmente, nota neutra
   - Badge LOOKAHEAD SAFE / LOOKAHEAD RISK no resultado
@@ -692,7 +692,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.158";
+  const LOCAL_VERSION = "Beta 0.159";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2382,7 +2382,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.158";
+window.DVL_APP_VERSION = "Beta 0.159";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -3191,11 +3191,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.158</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.159</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.158</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.159</span>
       </div>
 
       <div class="tb-right-btns">
@@ -3607,7 +3607,31 @@ html.pre-ui .switch::after{transition:none!important}
             <div class="kv"><span class="k">Mesclar faixas</span><input class="num" id="vzMerge" type="number" min="0" max="20" step="1" value="0"></div>
             <div class="kv"><span class="k">Extensão (barras)</span><input class="num" id="vzExtend" type="number" min="0" max="500" step="1" value="20"></div>
             <div class="kv"><span class="k">Cor</span><label style="position:relative;width:28px;height:28px;display:inline-flex;flex-shrink:0;cursor:pointer;border-radius:4px;border:1px solid #1e2a40;overflow:hidden"><div id="vzColorSwatch" style="width:100%;height:100%;background:#f59e0b;pointer-events:none"></div><input id="vzColor" type="color" value="#f59e0b" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"></label></div>
-            <div class="hint">Zonas HVN — acumula volume de todos os candles por faixa de preço. Mostra onde o mercado mais negociou historicamente. Opacidade proporcional ao volume acumulado.</div>
+            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
+            <div style="font-size:9px;color:#f0b429;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">WEIGHTED HVN</div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Enable Weighted</span><input type="checkbox" id="vzWeightOn" checked style="width:14px;height:14px;accent-color:#f0b429;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Vol Weight MA</span><input class="num" id="vzWeightMA" type="number" min="5" max="500" step="1" value="50" style="width:52px"></div>
+            <div class="kv"><span class="k">Weight Strength</span><input class="num" id="vzWeightStr" type="number" min="0.1" max="3" step="0.1" value="1.0" style="width:52px"></div>
+            <div class="kv"><span class="k">Max Candle Wt.</span><input class="num" id="vzMaxWeight" type="number" min="1" max="10" step="0.5" value="4.0" style="width:52px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">ATR Compression</span><input type="checkbox" id="vzAtrComp" checked style="width:14px;height:14px;accent-color:#f0b429;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Compres. Boost</span><input class="num" id="vzCompBoost" type="number" min="1" max="3" step="0.05" value="1.25" style="width:52px"></div>
+            <div class="kv"><span class="k">Wide Penalty</span><input class="num" id="vzWidePen" type="number" min="0.1" max="1" step="0.05" value="0.75" style="width:52px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Recency Weight</span><input type="checkbox" id="vzRecency" checked style="width:14px;height:14px;accent-color:#f0b429;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Recency Strength</span><input class="num" id="vzRecStr" type="number" min="0" max="2" step="0.05" value="0.35" style="width:52px"></div>
+            <div class="kv"><span class="k">Strength Mode</span><select class="select" id="vzStrMode" style="width:80px"><option value="weighted" selected>Weighted</option><option value="raw">Raw Vol</option><option value="hybrid">Hybrid</option></select></div>
+            <div style="border-top:1px solid #101b2d;margin:6px 0 4px;"></div>
+            <div style="font-size:9px;color:#f0b429;font-weight:700;letter-spacing:.08em;margin-bottom:4px;">CANDLE HIGHLIGHT</div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Highlight Candles</span><input type="checkbox" id="vzHlOn" checked style="width:14px;height:14px;accent-color:#f0b429;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Mode</span><select class="select" id="vzHlMode" style="width:80px"><option value="source" selected>Source</option><option value="weighted">Weighted</option><option value="strong">Strong Zone</option></select></div>
+            <div class="kv"><span class="k">Threshold</span><input class="num" id="vzHlThresh" type="number" min="0.5" max="10" step="0.1" value="1.5" style="width:52px"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Level Color</span><input type="checkbox" id="vzHlLvlColor" checked style="width:14px;height:14px;accent-color:#f0b429;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Bull color</span><input type="color" id="vzHlBull" value="#22d3ee" style="width:36px;height:20px;border:none;background:none;cursor:pointer;padding:0"></div>
+            <div class="kv"><span class="k">Bear color</span><input type="color" id="vzHlBear" value="#f87171" style="width:36px;height:20px;border:none;background:none;cursor:pointer;padding:0"></div>
+            <div class="kv"><span class="k">Neutral color</span><input type="color" id="vzHlNeutral" value="#94a3b8" style="width:36px;height:20px;border:none;background:none;cursor:pointer;padding:0"></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Border Highlight</span><input type="checkbox" id="vzHlBorder" checked style="width:14px;height:14px;accent-color:#f0b429;cursor:pointer;flex-shrink:0;"></label>
+            <label class="kv" style="cursor:pointer;"><span class="k">Wick Highlight</span><input type="checkbox" id="vzHlWick" checked style="width:14px;height:14px;accent-color:#f0b429;cursor:pointer;flex-shrink:0;"></label>
+            <div class="kv"><span class="k">Highlight Opacity</span><input class="num" id="vzHlOp" type="number" min="0.05" max="1" step="0.05" value="0.35" style="width:52px"></div>
+            <div class="hint">Weighted HVN — candles com volume anormal têm mais peso. Highlight mostra quais candles originaram cada zona.</div>
           </div>
         </div>
 
@@ -4418,7 +4442,7 @@ async function fetchKlinesForTF(symbol,tf,lim){
   const seen=new Set();all=all.filter(x=>{const k=+x[0];if(seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>+a[0]-+b[0]);
   return aggregateSecondKlines(all,tf).slice(-lim)
 }
-/* ── DVL Progressive History — Beta 0.158 ── */
+/* ── DVL Progressive History — Beta 0.159 ── */
 function _dvlInitLim(tf){
   if(tf==='1s')return 1500;
   if(tf==='15s'||tf==='30s')return 1500;
@@ -4949,7 +4973,7 @@ const _chartCanvas=el('chart');if(_chartCanvas)_chartCanvas.style.transform='';_
 const _clarH=(S.inds.hvnClarity&&S.candles.length)?_hvnClarityH:0;const _fah=(S.inds.flowAccel&&S.candles.length)?_flowAccelH:0;PB=10+(_fah?_fah+PANEL_GAP:0)+(_clarH?_clarH+PANEL_GAP:0);if(!_fah&&window._dvlOscGearHit)window._dvlOscGearHit['flow']=null;if(!_clarH&&window._dvlOscGearHit)window._dvlOscGearHit['clarity']=null;
 const _logBtn=el('dvlMiniRefresh');if(_logBtn)_logBtn.style.bottom=(PB+8)+'px';document.querySelector('.scaleDockV19')?.style.setProperty('bottom',(PB+12)+'px','important');
 const _rh=el('hvnResizeHandle');if(_rh){_rh.style.display=_clarH>0?'block':'none';_rh.style.bottom=(10+_clarH-PANEL_GAP/2)+'px';}const _frh=el('flowResizeHandle');if(_frh){_frh.style.display=_fah>0?'block':'none';_frh.style.bottom=(10+(_clarH?_clarH+PANEL_GAP:0)+_fah-PANEL_GAP/2)+'px';}
-const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;if(!indicatorsReady){const V=visible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);drawCandles(ctx,V,sc,x,bw);resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawTimeAxis();updateUI(V,sc);return;}const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);window._dvlLastSc=sc;drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSpikeZones)safeLayer('Spike Zones',()=>window.__drawSpikeZones(ctx,W,H,AllV,sc,x,bw));resetCtxState(ctx);if(window.__drawHVNPro)safeLayer('DVL HVN PRO',()=>window.__drawHVNPro(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.dvlConf){if(window.__computeConfluenceSignals)window.__computeConfluenceSignals();if(window.__drawConfluenceSignals)safeLayer('DVL Confluence',()=>window.__drawConfluenceSignals(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.fvgConf){if(window.__computeFVGConfSignals)window.__computeFVGConfSignals();if(window.__drawFVGConfSignals)safeLayer('DVL FVG Confluence',()=>window.__drawFVGConfSignals(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.hvnSignals){if(window.__computeHVNSignals)window.__computeHVNSignals();if(window.__drawHVNSignalsOverlay)safeLayer('HVN Signals',()=>window.__drawHVNSignalsOverlay(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.trendBreak){if(window.__computeTrendBreak)window.__computeTrendBreak();if(window.__drawTrendBreakOverlay)safeLayer('Trend Break',()=>window.__drawTrendBreakOverlay(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_fah>0&&window.__drawFlowPanel)safeLayer('DVL Flow Panel',()=>window.__drawFlowPanel(ctx,W,H,V,sc,x,_fah,_clarH,0));resetCtxState(ctx);if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
+const wrap=el('chartWrap'),c=el('chart'),ctx=setupCanvas(c,wrap),W=wrap.clientWidth,H=wrap.clientHeight,rp=RP(),cw=CW(W);ctx.clearRect(0,0,W,H);if(!S.candles.length)return;if(!indicatorsReady){const V=visible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);drawGrid(ctx,W,H,sc);resetCtxState(ctx);drawCandles(ctx,V,sc,x,bw);resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawTimeAxis();updateUI(V,sc);return;}const V=visible(),AllV=indicatorVisible(),sc=scale(V.cs,H),x=i=>PL+(i-S.view.start+.5)*cw/V.span,bw=Math.max(1.2,cw/V.span*.66);window._dvlLastSc=sc;drawGrid(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.heatmap)safeLayer('Liquidity Heatmap',()=>drawLiquidityEngine(ctx,W,H,sc,x));resetCtxState(ctx);if(S.inds.profile)safeLayer('Profile',()=>drawProfile(ctx,W,H,V,sc));resetCtxState(ctx);if(window.__drawFVGVolumeZones)safeLayer('FVG',()=>window.__drawFVGVolumeZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawVolZones)safeLayer('High Volume Zones',()=>window.__drawVolZones(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSpikeZones)safeLayer('Spike Zones',()=>window.__drawSpikeZones(ctx,W,H,AllV,sc,x,bw));resetCtxState(ctx);if(window.__drawHVNPro)safeLayer('DVL HVN PRO',()=>window.__drawHVNPro(ctx,W,H,AllV,sc,x));resetCtxState(ctx);if(window.__drawSessionProfile)safeLayer('Session Profile',()=>window.__drawSessionProfile(ctx,W,H,V,sc,x));resetCtxState(ctx);if(S.chartStyle==='renko')drawRenko(ctx,V,sc,x,bw);else{drawCandles(ctx,V,sc,x,bw);if(S.chartStyle==='footprint')drawFootprint(ctx,V,sc,x,bw)}resetCtxState(ctx);if(S.inds.volZones&&window.__drawHVNCandleHL)safeLayer('HVN Candle HL',()=>window.__drawHVNCandleHL(ctx,W,H,V,sc,x,bw));resetCtxState(ctx);if(S.inds.stdVolume)safeLayer('Volume Overlay',()=>drawVolumeOverlay(ctx,W,H,V,x,bw));resetCtxState(ctx);drawCustom(ctx,AllV,sc,x);resetCtxState(ctx);drawPositions(ctx,W,H,V,sc,x);resetCtxState(ctx);if(S.inds.book)drawBook(ctx,W,H,sc);resetCtxState(ctx);if(S.inds.dvlConf){if(window.__computeConfluenceSignals)window.__computeConfluenceSignals();if(window.__drawConfluenceSignals)safeLayer('DVL Confluence',()=>window.__drawConfluenceSignals(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.fvgConf){if(window.__computeFVGConfSignals)window.__computeFVGConfSignals();if(window.__drawFVGConfSignals)safeLayer('DVL FVG Confluence',()=>window.__drawFVGConfSignals(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.hvnSignals){if(window.__computeHVNSignals)window.__computeHVNSignals();if(window.__drawHVNSignalsOverlay)safeLayer('HVN Signals',()=>window.__drawHVNSignalsOverlay(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);if(S.inds.trendBreak){if(window.__computeTrendBreak)window.__computeTrendBreak();if(window.__drawTrendBreakOverlay)safeLayer('Trend Break',()=>window.__drawTrendBreakOverlay(ctx,W,H,V,sc,x,bw));}resetCtxState(ctx);drawLastPrice(ctx,W,sc);drawDeltaPane();if(_fah>0&&window.__drawFlowPanel)safeLayer('DVL Flow Panel',()=>window.__drawFlowPanel(ctx,W,H,V,sc,x,_fah,_clarH,0));resetCtxState(ctx);if(_clarH>0)drawTrendClarityOnCanvas(ctx,V,sc,x,W,H,_clarH);drawTimeAxis();updateUI(V,sc);drawCrosshair(ctx,W,H,sc,x,V);}
 // ── Chart watermark image (preloaded once) ──
 const _wmImg=(()=>{
   const i=new Image();i.crossOrigin='anonymous';
@@ -9446,9 +9470,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.158'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.159'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.158';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.159';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -9487,7 +9511,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.158';
+  const VERSION='Beta 0.159';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9792,7 +9816,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.158';
+  const VERSION='Beta 0.159';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -10274,7 +10298,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.158 ── */
+/* ── DVL Strategy Tester — Beta 0.159 ── */
 /* 0.131: período HVN separado (busca candles extras antes do backtest); +3/5 anos nos seletores */
 /* 0.127: optimizer per-param ON/OFF toggles — lock any param to current form value to reduce combo space */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
@@ -10438,7 +10462,7 @@ input[type="color"]{border-radius:7px!important;}
 /* DVL Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.158';
+var V='Beta 0.159';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -19665,27 +19689,25 @@ window._dvlTemplate={open:open,close:close};
 })();
 </script>
 
-<!-- ── High Volume Zones (HVN) ── -->
+<!-- ── High Volume Zones (HVN) — Weighted ── -->
 <script>
 (function(){
-  function E(id){return document.getElementById(id)}
-  function nFmt(v){
-    v=Number(v)||0;const a=Math.abs(v);const s=v<0?'-':'';
-    if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';
-    if(a>=1e6)return s+(a/1e6).toFixed(1)+'M';
-    if(a>=1e3)return s+(a/1e3).toFixed(0)+'K';
-    return s+Math.round(a);
-  }
+  'use strict';
+  function E(id){return document.getElementById(id);}
+  function nFmt(v){v=Number(v)||0;var a=Math.abs(v),s=v<0?'-':'';if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';if(a>=1e6)return s+(a/1e6).toFixed(1)+'M';if(a>=1e3)return s+(a/1e3).toFixed(0)+'K';return s+Math.round(a);}
   function priceFmt(v){return v>=1000?v.toLocaleString('en-US',{maximumFractionDigits:0}):v.toFixed(2);}
-  function numVal(id,def){const n=E(id);if(!n)return def;const v=parseFloat(n.value);return Number.isFinite(v)?v:def;}
+  function numVal(id,def){var n=E(id);if(!n)return def;var v=parseFloat(n.value);return Number.isFinite(v)?v:def;}
+  function boolVal(id,def){var n=E(id);return n?n.checked:def;}
+  function strVal(id,def){var n=E(id);return n?n.value:def;}
+  function hexToRgb(hex){try{hex=String(hex||'').replace('#','');if(hex.length===3)hex=hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];return{r:parseInt(hex.slice(0,2),16),g:parseInt(hex.slice(2,4),16),b:parseInt(hex.slice(4,6),16)};}catch(_){return{r:240,g:180,b:41};}}
 
   function getSettings(cs){
     var bktPct=Math.max(0.01,numVal('vzBucket',0.1));
     var bktAtr=Math.max(0,numVal('vzBucketAtr',0));
     if(bktAtr>0&&cs&&cs.length>=14){
-      var _atrs=calcATR(cs,14);var _lastAtr=_atrs.filter(function(v){return v!=null;}).at(-1)||0;
-      var _lastP=cs.at(-1).c||0;
-      if(_lastAtr>0&&_lastP>0)bktPct=Math.max(0.01,_lastAtr*bktAtr/_lastP*100);
+      var _atrs=calcATR(cs,14);var _la=_atrs.filter(function(v){return v!=null;}).at(-1)||0;
+      var _lp=cs.at(-1).c||0;
+      if(_la>0&&_lp>0)bktPct=Math.max(0.01,_la*bktAtr/_lp*100);
     }
     return{
       bucketPct:bktPct,
@@ -19693,157 +19715,299 @@ window._dvlTemplate={open:open,close:close};
       minTouch:Math.max(1,Math.round(numVal('vzMinTouch',2))),
       mergeGap:Math.max(0,Math.round(numVal('vzMerge',0))),
       extend:Math.max(0,Math.round(numVal('vzExtend',20))),
-      color:E('vzColor')?.value||'#f59e0b',
-      bucketAtr:bktAtr
+      color:strVal('vzColor','#f59e0b'),
+      bucketAtr:bktAtr,
+      /* weighted HVN */
+      weightOn:boolVal('vzWeightOn',true),
+      weightMA:Math.max(5,Math.round(numVal('vzWeightMA',50))),
+      weightStr:Math.max(0.1,Math.min(3,numVal('vzWeightStr',1.0))),
+      maxWeight:Math.max(1,Math.min(10,numVal('vzMaxWeight',4.0))),
+      atrComp:boolVal('vzAtrComp',true),
+      compBoost:Math.max(1,Math.min(3,numVal('vzCompBoost',1.25))),
+      widePen:Math.max(0.1,Math.min(1,numVal('vzWidePen',0.75))),
+      recencyOn:boolVal('vzRecency',true),
+      recStr:Math.max(0,Math.min(2,numVal('vzRecStr',0.35))),
+      strMode:strVal('vzStrMode','weighted'),
+      /* candle highlight */
+      hlOn:boolVal('vzHlOn',true),
+      hlMode:strVal('vzHlMode','source'),
+      hlThresh:Math.max(0.5,numVal('vzHlThresh',1.5)),
+      hlLvlColor:boolVal('vzHlLvlColor',true),
+      hlBull:strVal('vzHlBull','#22d3ee'),
+      hlBear:strVal('vzHlBear','#f87171'),
+      hlNeutral:strVal('vzHlNeutral','#94a3b8'),
+      hlBorder:boolVal('vzHlBorder',true),
+      hlWick:boolVal('vzHlWick',true),
+      hlOp:Math.max(0.05,Math.min(1,numVal('vzHlOp',0.35)))
     };
   }
 
-  function hexToRgb(hex){
-    const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-    return{r,g,b};
-  }
-
-  let _vzCache=null, _vzCacheKey='';
-
-  // ── Multi-TF candle fetch ──
-  let _vzExtCandles=null, _vzExtKey='', _vzExtFetching=false;
-
+  /* ── Multi-TF candle fetch ── */
+  var _vzExtCandles=null,_vzExtKey='',_vzExtFetching=false;
   function getVZCandles(){
-    const sel=E('vzTf');
-    const vzTf=sel?sel.value:'';
-    if(!vzTf||vzTf===S.tf) return S.candles;
-    const wantKey=`${S.sym}|${vzTf}`;
-    if(_vzExtKey===wantKey&&_vzExtCandles) return _vzExtCandles;
+    var sel=E('vzTf');var vzTf=sel?sel.value:'';
+    if(!vzTf||vzTf===S.tf)return S.candles;
+    var wantKey=S.sym+'|'+vzTf;
+    if(_vzExtKey===wantKey&&_vzExtCandles)return _vzExtCandles;
     if(!_vzExtFetching||_vzExtKey!==wantKey){
-      _vzExtFetching=true; _vzExtKey=wantKey; _vzExtCandles=null;
-      fetch(`${API}/api/v3/klines?symbol=${S.sym}&interval=${vzTf}&limit=1000`)
-        .then(r=>r.ok?r.json():Promise.reject(r.status))
-        .then(d=>{
-          if(_vzExtKey!==wantKey) return;
-          _vzExtCandles=d.map(klineToCandle);
-          _vzExtFetching=false; _vzCacheKey='';
-          if(typeof drawSoon==='function') drawSoon();
-        })
-        .catch(e=>{_vzExtFetching=false;console.warn('HVN TF fetch:',e);});
+      _vzExtFetching=true;_vzExtKey=wantKey;_vzExtCandles=null;
+      fetch(API+'/api/v3/klines?symbol='+S.sym+'&interval='+vzTf+'&limit=1000')
+        .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+        .then(function(d){if(_vzExtKey!==wantKey)return;_vzExtCandles=d.map(klineToCandle);_vzExtFetching=false;_vzCacheKey='';if(typeof drawSoon==='function')drawSoon();})
+        .catch(function(e){_vzExtFetching=false;console.warn('HVN TF fetch:',e);});
     }
     return S.candles;
   }
 
-  // ── HVN bucket computation ──
-  function computeHVN(cs,bucketPct,topN,minTouch,mergeGap){
-    if(cs.length<2) return[];
-    const lastPrice=cs[cs.length-1].c;
-    const bucketSize=lastPrice*bucketPct/100;
-    if(bucketSize<=0) return[];
-    let priceMin=Infinity,priceMax=-Infinity;
-    for(const c of cs){if(c.l<priceMin)priceMin=c.l;if(c.h>priceMax)priceMax=c.h;}
-    const nBuckets=Math.min(8000,Math.ceil((priceMax-priceMin)/bucketSize)+1);
-    const vols=new Float64Array(nBuckets);
-    const buyV=new Float64Array(nBuckets);
-    const sellV=new Float64Array(nBuckets);
-    const tchs=new Uint32Array(nBuckets);
-    for(const c of cs){
-      const dv=c.v*c.c;
-      const range=c.h-c.l;
-      const bf=range>0?(c.c-c.l)/range:0.5;
-      const sf=1-bf;
-      const loIdx=Math.max(0,Math.floor((c.l-priceMin)/bucketSize));
-      const hiIdx=Math.min(nBuckets-1,Math.floor((c.h-priceMin)/bucketSize));
+  /* ── Volume MA (running sum O(n)) ── */
+  function computeVolMA(cs,period){
+    var N=cs.length,out=new Float64Array(N),sum=0;
+    for(var i=0;i<N;i++){sum+=cs[i].v||0;if(i>=period)sum-=cs[i-period].v||0;out[i]=sum/Math.min(i+1,period);}
+    return out;
+  }
+
+  /* ── Per-candle weight ── */
+  function getCandleWeight(c,i,volMA,atrArr,s){
+    var w=1;
+    if(s.weightOn){
+      var ma=Math.max(1e-9,volMA[i]||1);
+      var ratio=Math.max(1,(c.v||0)/ma);
+      w*=Math.min(Math.pow(ratio,s.weightStr),s.maxWeight);
+    }
+    if(s.atrComp&&atrArr){
+      var atr=atrArr[i]||0;
+      if(atr>0){var rr=(c.h-c.l)/atr;if(rr<0.8)w*=s.compBoost;else if(rr>2.0)w*=s.widePen;}
+    }
+    if(s.recencyOn){
+      var t=i/Math.max(1,volMA.length-1);
+      w*=(1+s.recStr*t);
+    }
+    return w;
+  }
+
+  /* ── HVN bucket computation (weighted) ── */
+  var _vzCache=null,_vzCacheKey='';
+
+  function computeHVN(cs,s){
+    if(cs.length<2)return null;
+    var lastPrice=cs[cs.length-1].c;
+    var bucketSize=lastPrice*s.bucketPct/100;
+    if(bucketSize<=0)return null;
+
+    /* pre-compute weight arrays */
+    var volMA=computeVolMA(cs,s.weightMA);
+    var atrArr=null;
+    try{if(s.atrComp)atrArr=calcATR(cs,14);}catch(_){}
+
+    var priceMin=Infinity,priceMax=-Infinity;
+    for(var ci=0;ci<cs.length;ci++){if(cs[ci].l<priceMin)priceMin=cs[ci].l;if(cs[ci].h>priceMax)priceMax=cs[ci].h;}
+    var nBuckets=Math.min(8000,Math.ceil((priceMax-priceMin)/bucketSize)+1);
+
+    var vols=new Float64Array(nBuckets);
+    var wvols=new Float64Array(nBuckets);   /* weighted volume */
+    var buyV=new Float64Array(nBuckets);
+    var sellV=new Float64Array(nBuckets);
+    var tchs=new Uint32Array(nBuckets);
+    var maxW=new Float32Array(nBuckets);
+    var spikes=new Uint16Array(nBuckets);   /* candles w/ weight >= hlThresh */
+
+    /* store per-candle weights for highlight system */
+    var candleWeights=new Float32Array(cs.length);
+
+    for(var ci=0;ci<cs.length;ci++){
+      var c=cs[ci];
+      var w=getCandleWeight(c,ci,volMA,atrArr,s);
+      candleWeights[ci]=w;
+      var baseDV=c.v*c.c;
+      var dv=baseDV*w;
+      var rawDV=baseDV;
+      var range=c.h-c.l;
+      var bf=range>0?(c.c-c.l)/range:0.5;
+      var sf=1-bf;
+      var loIdx=Math.max(0,Math.floor((c.l-priceMin)/bucketSize));
+      var hiIdx=Math.min(nBuckets-1,Math.floor((c.h-priceMin)/bucketSize));
+      var isSpike=w>=s.hlThresh?1:0;
       if(loIdx===hiIdx){
-        vols[loIdx]+=dv;buyV[loIdx]+=dv*bf;sellV[loIdx]+=dv*sf;tchs[loIdx]++;
+        vols[loIdx]+=rawDV;wvols[loIdx]+=dv;
+        buyV[loIdx]+=dv*bf;sellV[loIdx]+=dv*sf;
+        tchs[loIdx]++;
+        if(w>maxW[loIdx])maxW[loIdx]=w;
+        if(isSpike)spikes[loIdx]++;
       }else{
-        const inv=range>0?1/range:1/(hiIdx-loIdx+1);
-        for(let b=loIdx;b<=hiIdx;b++){
-          const bLo=priceMin+b*bucketSize,bHi=bLo+bucketSize;
-          const frac=(Math.min(c.h,bHi)-Math.max(c.l,bLo))*(range>0?inv:1);
-          const bdv=dv*frac;
-          vols[b]+=bdv;buyV[b]+=bdv*bf;sellV[b]+=bdv*sf;tchs[b]++;
+        var inv=range>0?1/range:1/(hiIdx-loIdx+1);
+        for(var b=loIdx;b<=hiIdx;b++){
+          var bLo=priceMin+b*bucketSize,bHi=bLo+bucketSize;
+          var frac=(Math.min(c.h,bHi)-Math.max(c.l,bLo))*(range>0?inv:1);
+          vols[b]+=rawDV*frac;wvols[b]+=dv*frac;
+          buyV[b]+=dv*frac*bf;sellV[b]+=dv*frac*sf;
+          tchs[b]++;
+          if(w>maxW[b])maxW[b]=w;
+          if(isSpike)spikes[b]++;
         }
       }
     }
-    const buckets=[];
-    for(let i=0;i<nBuckets;i++)
-      if(tchs[i]>=minTouch&&vols[i]>0) buckets.push({i,vol:vols[i],bv:buyV[i],sv:sellV[i],touches:tchs[i]});
-    if(!buckets.length) return[];
-    const byVol=[...buckets].sort((a,b)=>b.vol-a.vol);
-    const minSep=Math.max(1,Math.floor(nBuckets/(topN*1.5)));
-    const selIdx=[];
-    for(const b of byVol){
-      if(selIdx.every(i=>Math.abs(b.i-i)>=minSep)) selIdx.push(b.i);
-      if(selIdx.length>=topN*2) break;
+
+    /* pick buckets */
+    var buckets=[];
+    for(var i=0;i<nBuckets;i++){
+      if(tchs[i]>=s.minTouch&&vols[i]>0){
+        buckets.push({i:i,vol:vols[i],wvol:wvols[i],bv:buyV[i],sv:sellV[i],touches:tchs[i],mw:maxW[i],sp:spikes[i]});
+      }
     }
-    if(!selIdx.length) return[];
-    const topSet=new Set(selIdx);
-    const top=buckets.filter(b=>topSet.has(b.i)).sort((a,b)=>a.i-b.i);
-    if(!top.length) return[];
-    const zones=[];
-    let lastI=top[0].i;
-    let zn={lo:priceMin+top[0].i*bucketSize,hi:priceMin+(top[0].i+1)*bucketSize,
-            totalVol:top[0].vol,totalBuyVol:top[0].bv,totalSellVol:top[0].sv,totalTouches:top[0].touches};
-    for(let k=1;k<top.length;k++){
-      const b=top[k];
-      if(b.i-lastI<=mergeGap+1){
+    if(!buckets.length)return null;
+
+    /* sort and select by weighted vol (or raw if weight off) */
+    var sortKey=s.weightOn?'wvol':'vol';
+    var byVol=buckets.slice().sort(function(a,b){return b[sortKey]-a[sortKey];});
+    var minSep=Math.max(1,Math.floor(nBuckets/(s.topN*1.5)));
+    var selIdx=[];
+    for(var k=0;k<byVol.length;k++){
+      var bk=byVol[k];
+      var ok=true;
+      for(var m=0;m<selIdx.length;m++){if(Math.abs(bk.i-selIdx[m])<minSep){ok=false;break;}}
+      if(ok)selIdx.push(bk.i);
+      if(selIdx.length>=s.topN*2)break;
+    }
+    if(!selIdx.length)return null;
+
+    var topSet=new Set(selIdx);
+    var top=buckets.filter(function(b){return topSet.has(b.i);}).sort(function(a,b){return a.i-b.i;});
+    if(!top.length)return null;
+
+    /* merge adjacent */
+    var zones=[];
+    var zn={
+      lo:priceMin+top[0].i*bucketSize,hi:priceMin+(top[0].i+1)*bucketSize,
+      totalVol:top[0].vol,weightedVol:top[0].wvol,
+      totalBuyVol:top[0].bv,totalSellVol:top[0].sv,
+      totalTouches:top[0].touches,
+      maxWeight:top[0].mw,spikeCandlesCount:top[0].sp
+    };
+    var lastI=top[0].i;
+    for(var k=1;k<top.length;k++){
+      var b=top[k];
+      if(b.i-lastI<=s.mergeGap+1){
         zn.hi=priceMin+(b.i+1)*bucketSize;
-        zn.totalVol+=b.vol;zn.totalBuyVol+=b.bv;zn.totalSellVol+=b.sv;zn.totalTouches+=b.touches;
+        zn.totalVol+=b.vol;zn.weightedVol+=b.wvol;
+        zn.totalBuyVol+=b.bv;zn.totalSellVol+=b.sv;
+        zn.totalTouches+=b.touches;
+        if(b.mw>zn.maxWeight)zn.maxWeight=b.mw;
+        zn.spikeCandlesCount+=b.sp;
       }else{
         zones.push(zn);
         zn={lo:priceMin+b.i*bucketSize,hi:priceMin+(b.i+1)*bucketSize,
-            totalVol:b.vol,totalBuyVol:b.bv,totalSellVol:b.sv,totalTouches:b.touches};
+            totalVol:b.vol,weightedVol:b.wvol,
+            totalBuyVol:b.bv,totalSellVol:b.sv,
+            totalTouches:b.touches,maxWeight:b.mw,spikeCandlesCount:b.sp};
       }
       lastI=b.i;
     }
     zones.push(zn);
-    zones.sort((a,b)=>a.totalVol-b.totalVol);
-    return{hvn:zones.slice(-topN),rawBuckets:{priceMin,bucketSize,nBuckets,bvArr:buyV,svArr:sellV,tchs}};
+
+    /* sort by weighted vol for slicing top N */
+    zones.sort(function(a,b){return a.weightedVol-b.weightedVol;});
+    zones=zones.slice(-s.topN);
+
+    /* enrich zones */
+    var maxRawVol=0,maxWVol=0;
+    for(var zi=0;zi<zones.length;zi++){
+      if(zones[zi].totalVol>maxRawVol)maxRawVol=zones[zi].totalVol;
+      if(zones[zi].weightedVol>maxWVol)maxWVol=zones[zi].weightedVol;
+    }
+    for(var zi=0;zi<zones.length;zi++){
+      var z=zones[zi];
+      var relVol=maxWVol>0?z.weightedVol/maxWVol:1;
+      var relRaw=maxRawVol>0?z.totalVol/maxRawVol:1;
+      var relHybrid=maxWVol>0&&maxRawVol>0?(z.weightedVol/maxWVol+z.totalVol/maxRawVol)/2:relVol;
+      z.rawVol=z.totalVol;
+      z.avgWeight=z.totalVol>0?z.weightedVol/z.totalVol:1;
+      z.relVol=relVol;z.relRaw=relRaw;z.relHybrid=relHybrid;
+      /* level 1-5 for highlight colors */
+      z._level=relVol>=0.8?5:relVol>=0.6?4:relVol>=0.4?3:relVol>=0.2?2:1;
+      /* HVN Signals compat */
+      z.strengthScore=Math.round(relVol*100);
+      z.isWeightedHVN=true;
+      z.weightedVolFinal=z.weightedVol;
+    }
+
+    return{hvn:zones,candleWeights:candleWeights,rawBuckets:{priceMin:priceMin,bucketSize:bucketSize,nBuckets:nBuckets}};
   }
 
-  // ── Draw ──
+  /* ── Build per-candle highlight data ── */
+  function buildCandleHL(cs,zones,candleWeights,s){
+    var N=cs.length;
+    var hl=new Array(N);
+    for(var i=0;i<N;i++){
+      var c=cs[i];var w=candleWeights[i];
+      var bestZi=-1;var bestLevel=0;var bestRel=0;
+      for(var zi=0;zi<zones.length;zi++){
+        var z=zones[zi];
+        if(c.h>=z.lo&&c.l<=z.hi&&z.relVol>bestRel){
+          bestZi=zi;bestLevel=z._level;bestRel=z.relVol;
+        }
+      }
+      if(bestZi<0){hl[i]=null;continue;}
+      var isSource=w>=s.hlThresh;
+      var isWeighted=w>=s.hlThresh;
+      var isStrong=bestLevel>=4;
+      var show=false;
+      if(s.hlMode==='source'&&isSource)show=true;
+      else if(s.hlMode==='weighted'&&isWeighted)show=true;
+      else if(s.hlMode==='strong'&&isStrong)show=true;
+      hl[i]=show?{w:w,level:bestLevel,zi:bestZi}:null;
+    }
+    return hl;
+  }
+
+  /* ── Cache ── */
+  var _vzCacheKey='',_vzCache=null,_vzHL=null;
+
+  /* ── Draw zones ── */
   function drawVolZones(ctx,W,H,V,sc,x){
-    if(!window.S||!S.inds.volZones||!S.candles.length) return;
-    const vzTfSel=E('vzTf');const vzTf=vzTfSel?vzTfSel.value:'';
-    const cs=getVZCandles();
-    const{bucketPct,topN,minTouch,mergeGap,extend,color}=getSettings(cs);
-    const lastIdx=cs.length-1;
+    if(!window.S||!S.inds.volZones||!S.candles.length)return;
+    var vzTfSel=E('vzTf');var vzTf=vzTfSel?vzTfSel.value:'';
+    var cs=getVZCandles();
+    var s=getSettings(cs);
+    var key=[cs.length,(cs[0]||{}).t||0,S.sym,vzTf||S.tf,
+             s.bucketPct,s.topN,s.minTouch,s.mergeGap,
+             s.weightOn?1:0,s.weightMA,s.weightStr,s.maxWeight,
+             s.atrComp?1:0,s.compBoost,s.widePen,
+             s.recencyOn?1:0,s.recStr,s.strMode].join('|');
+    if(key!==_vzCacheKey){
+      _vzCache=computeHVN(cs,s);
+      _vzCacheKey=key;
+      _vzHL=_vzCache&&s.hlOn?buildCandleHL(cs,_vzCache.hvn,_vzCache.candleWeights,s):null;
+    }
+    if(!_vzCache||!_vzCache.hvn||!_vzCache.hvn.length)return;
+    var zones=_vzCache.hvn;
 
-    const key=`${cs.length}|${cs[0]?.t||0}|${S.sym}|${vzTf||S.tf}|${bucketPct}|${topN}|${minTouch}|${mergeGap}`;
-    if(key!==_vzCacheKey){_vzCache=computeHVN(cs,bucketPct,topN,minTouch,mergeGap);_vzCacheKey=key;}
-    const cache=_vzCache;
-    if(!cache?.hvn?.length) return;
-    const{hvn:zones}=cache;
-
-    const rgb=hexToRgb(color);
-    const vspan=S.view.end-S.view.start;
-    const cw=CW(W);
-    const bw=cw/vspan;
-    const xRight=Math.min(W-RP(),x(lastIdx)+extend*bw);
-    const xLeft=0;
-    const maxVol=zones[zones.length-1].totalVol;
+    var rgb=hexToRgb(s.color);
+    var vspan=S.view.end-S.view.start;
+    var cw=CW(W);var bw=cw/vspan;
+    var xRight=Math.min(W-RP(),x(cs.length-1)+s.extend*bw);
+    var xLeft=0;
 
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
 
-    for(let zi=0;zi<zones.length;zi++){
-      const{hi,lo,totalVol,totalTouches}=zones[zi];
-      const rel=maxVol>0?totalVol/maxVol:1;
-      const mid=(hi+lo)/2;
-      const y1=sc.y(hi),y2=sc.y(lo),ym=sc.y(mid);
-      const boxH=Math.max(1,y2-y1);
+    for(var zi=0;zi<zones.length;zi++){
+      var z=zones[zi];
+      var rel=s.strMode==='raw'?z.relRaw:s.strMode==='hybrid'?z.relHybrid:z.relVol;
+      var mid=(z.hi+z.lo)/2;
+      var y1=sc.y(z.hi),y2=sc.y(z.lo),ym=sc.y(mid);
+      var boxH=Math.max(1,y2-y1);
+      if(xRight<=xLeft||y2<PT||y1>H-PB)continue;
 
-      if(xRight<=xLeft||y2<PT||y1>H-PB) continue;
-
-      ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.03+0.10*rel).toFixed(3)})`;
+      ctx.fillStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+(0.03+0.10*rel).toFixed(3)+')';
       ctx.fillRect(xLeft,y1,xRight-xLeft,boxH);
 
-      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.25+0.45*rel).toFixed(3)})`;
-      ctx.lineWidth=rel>0.7?1.5:1;
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.moveTo(xLeft,y1);ctx.lineTo(xRight,y1);
-      ctx.moveTo(xLeft,y2);ctx.lineTo(xRight,y2);
-      ctx.stroke();
+      ctx.strokeStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+(0.25+0.45*rel).toFixed(3)+')';
+      ctx.lineWidth=rel>0.7?1.5:1;ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(xLeft,y1);ctx.lineTo(xRight,y1);
+      ctx.moveTo(xLeft,y2);ctx.lineTo(xRight,y2);ctx.stroke();
 
       if(boxH>12){
-        ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.15+0.28*rel).toFixed(3)})`;
+        ctx.strokeStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+(0.15+0.28*rel).toFixed(3)+')';
         ctx.lineWidth=1;ctx.setLineDash([3,5]);
         ctx.beginPath();ctx.moveTo(xLeft,ym);ctx.lineTo(xRight,ym);ctx.stroke();
         ctx.setLineDash([]);
@@ -19851,9 +20015,10 @@ window._dvlTemplate={open:open,close:close};
 
       if(boxH>8){
         ctx.textBaseline='middle';
-        ctx.font=`${rel>0.5?'bold ':''}9px monospace`;
-        ctx.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},${(0.55+0.30*rel).toFixed(3)})`;
-        ctx.fillText(`HVN ${priceFmt(mid)} | $${nFmt(totalVol)} | ${totalTouches}t`,xLeft+6,ym);
+        ctx.font=(rel>0.5?'bold ':'')+'9px monospace';
+        ctx.fillStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+(0.55+0.30*rel).toFixed(3)+')';
+        var wLabel=s.weightOn&&z.avgWeight>1.05?' W '+z.avgWeight.toFixed(1)+'x':'';
+        ctx.fillText('HVN '+priceFmt(mid)+' | $'+nFmt(s.strMode==='raw'?z.rawVol:z.weightedVol)+' | '+z.totalTouches+'t'+wLabel,xLeft+6,ym);
       }
     }
 
@@ -19861,36 +20026,95 @@ window._dvlTemplate={open:open,close:close};
     ctx.restore();
   }
 
+  /* level colors (5 tiers, gold/amber palette) */
+  var _LVL_COL=[null,
+    {r:120,g:90,b:30},   /* L1 dim  */
+    {r:180,g:130,b:40},  /* L2 warm */
+    {r:230,g:175,b:45},  /* L3 amber*/
+    {r:255,g:200,b:40},  /* L4 gold */
+    {r:255,g:235,b:80}   /* L5 bright*/
+  ];
+
+  /* ── Draw candle highlights (called AFTER drawCandles) ── */
+  function drawHVNCandleHL(ctx,W,H,V,sc,x,bw){
+    if(!window.S||!S.inds.volZones||!S.candles.length)return;
+    var s=getSettings(S.candles);
+    if(!s.hlOn||!_vzHL)return;
+    var cs=getVZCandles();
+    var hw=bw*0.5;
+    ctx.save();
+    window.__ETX_SKIP_COLORMAP=true;
+    for(var i=V.a;i<V.b;i++){
+      if(i<0||i>=cs.length)continue;
+      var hlInfo=_vzHL[i];if(!hlInfo)continue;
+      var c=cs[i];
+      var hlRgb;
+      if(s.hlLvlColor){
+        hlRgb=_LVL_COL[hlInfo.level]||_LVL_COL[3];
+      }else{
+        var isDoji=Math.abs(c.c-c.o)<(c.h-c.l)*0.1;
+        hlRgb=hexToRgb(isDoji?s.hlNeutral:(c.c>=c.o?s.hlBull:s.hlBear));
+      }
+      var op=s.hlOp;
+      var xx=x(i);
+      var yH=sc.y(Math.max(c.o,c.c));
+      var yL=sc.y(Math.min(c.o,c.c));
+      var bodyH=Math.max(1,yL-yH);
+      /* body overlay */
+      ctx.fillStyle='rgba('+hlRgb.r+','+hlRgb.g+','+hlRgb.b+','+op+')';
+      ctx.fillRect(xx-hw,yH,bw,bodyH);
+      /* border */
+      if(s.hlBorder){
+        ctx.strokeStyle='rgba('+hlRgb.r+','+hlRgb.g+','+hlRgb.b+','+Math.min(1,op*2.2).toFixed(3)+')';
+        ctx.lineWidth=1;ctx.setLineDash([]);
+        ctx.strokeRect(xx-hw,yH,bw,bodyH);
+      }
+      /* wick */
+      if(s.hlWick){
+        ctx.strokeStyle='rgba('+hlRgb.r+','+hlRgb.g+','+hlRgb.b+','+Math.min(1,op*1.8).toFixed(3)+')';
+        ctx.lineWidth=1;ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(xx,sc.y(c.h));ctx.lineTo(xx,yH);
+        ctx.moveTo(xx,yL);ctx.lineTo(xx,sc.y(c.l));
+        ctx.stroke();
+      }
+    }
+    window.__ETX_SKIP_COLORMAP=false;
+    ctx.restore();
+  }
+
   window.__drawVolZones=drawVolZones;
-  window.__hvnZones=()=>_vzCache?.hvn;
-  /* expose zone computation for MTF HVN Signals */
+  window.__drawHVNCandleHL=drawHVNCandleHL;
+  window.__hvnZones=function(){return _vzCache?_vzCache.hvn:null;};
   window.__dvlComputeHVNFromCS=function(cs){
     var s=getSettings(cs);
-    var r=computeHVN(cs,s.bucketPct,s.topN,s.minTouch,s.mergeGap);
+    var r=computeHVN(cs,s);
     return r?r.hvn||[]:[]; };
 
-  // ── Event wiring ──
-  const VZ_INPUTS=new Set(['vzBucket','vzBucketAtr','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','vzTf']);
-
-  function vzRedraw(){if(typeof drawSoon==='function')drawSoon();}
-
+  /* ── Event wiring ── */
+  var VZ_INPUTS=new Set([
+    'vzBucket','vzBucketAtr','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','vzTf',
+    'vzWeightOn','vzWeightMA','vzWeightStr','vzMaxWeight',
+    'vzAtrComp','vzCompBoost','vzWidePen',
+    'vzRecency','vzRecStr','vzStrMode',
+    'vzHlOn','vzHlMode','vzHlThresh','vzHlLvlColor',
+    'vzHlBull','vzHlBear','vzHlNeutral',
+    'vzHlBorder','vzHlWick','vzHlOp'
+  ]);
+  function vzRedraw(){_vzCacheKey='';if(typeof drawSoon==='function')drawSoon();}
   document.addEventListener('input',function(ev){
-    if(!VZ_INPUTS.has(ev.target?.id)) return;
-    if(ev.target.id==='vzColor'){const sw=E('vzColorSwatch');if(sw)sw.style.background=ev.target.value;}
+    if(!VZ_INPUTS.has(ev.target&&ev.target.id))return;
+    var id=ev.target.id;
+    if(id==='vzColor'){var sw=E('vzColorSwatch');if(sw)sw.style.background=ev.target.value;}
     vzRedraw();
   });
   document.addEventListener('change',function(ev){
-    const id=ev.target?.id;
-    if(!VZ_INPUTS.has(id)) return;
-    if(id==='vzTf'){_vzExtCandles=null;_vzExtKey='';_vzExtFetching=false;_vzCacheKey='';}
+    var id=ev.target&&ev.target.id;
+    if(!VZ_INPUTS.has(id))return;
+    if(id==='vzTf'){_vzExtCandles=null;_vzExtKey='';_vzExtFetching=false;}
     vzRedraw();
   });
-
   setTimeout(function(){if(typeof drawSoon==='function')drawSoon();},0);
-  var _ptMaIds=new Set(['ptDeltaMA','ptPressureMA','ptPulseMA']);
-  function _ptMaRd(){_cfgCache=null;if(typeof drawSoon==='function')drawSoon();}
-  document.addEventListener('input',function(ev){if(_ptMaIds.has(ev.target&&ev.target.id))_ptMaRd();});
-  document.addEventListener('change',function(ev){if(_ptMaIds.has(ev.target&&ev.target.id))_ptMaRd();});
 })();
 </script>
 
@@ -23517,11 +23741,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.158';
+  window.DVL_APP_VERSION='Beta 0.159';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.158';
+    if(b)b.textContent='Beta 0.159';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -23631,7 +23855,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.158';
+  const VERSION = 'Beta 0.159';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -23647,7 +23871,7 @@ body:before{display:none!important;background:none!important;}
    open the correct settings modal on any tap/click. */
 (function(){
   'use strict';
-  var VERSION='Beta 0.158';
+  var VERSION='Beta 0.159';
   var KEYS=['flow','clarity'];
   var SETTINGS={flow:'flowAccel',clarity:'hvnClarity'};
 
@@ -24213,7 +24437,7 @@ body:before{display:none!important;background:none!important;}
 })();
 </script>
 
-<!-- ── DVL Spike Zones Engine (Beta 0.158) ── -->
+<!-- ── DVL Spike Zones Engine (Beta 0.159) ── -->
 <script id="DVL_SPIKE_ZONES">
 (function DVL_SPIKE_ZONES(){
   'use strict';
