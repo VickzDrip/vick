@@ -41,7 +41,7 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
-Beta 0.165
+Beta 0.166
   - Comentários internos Beta 0.116/0.117 atualizados
   - DEMO DATA removido: badge oculto inicialmente, nota neutra
   - Badge LOOKAHEAD SAFE / LOOKAHEAD RISK no resultado
@@ -692,7 +692,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.165";
+  const LOCAL_VERSION = "Beta 0.166";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2382,7 +2382,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.165";
+window.DVL_APP_VERSION = "Beta 0.166";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -3191,11 +3191,11 @@ html.pre-ui .switch::after{transition:none!important}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.165</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.166</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.165</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.166</span>
       </div>
 
       <div class="tb-right-btns">
@@ -3600,6 +3600,11 @@ html.pre-ui .switch::after{transition:none!important}
           </div>
           <div class="ind-settings" id="settings-volZones">
             <div class="kv"><span class="k">TF análise</span><select class="select" id="vzTf" style="width:72px"><option value="">Atual</option><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="2h">2h</option><option value="4h">4h</option><option value="6h">6h</option><option value="12h">12h</option><option value="1d">1d</option><option value="3d">3d</option><option value="1w">1w</option></select></div>
+            <div class="kv"><span class="k">Modo cálculo</span><select class="select" id="vzCalcMode" style="width:118px"><option value="prop_mtf" selected>Proportional MTF</option><option value="rolling">Rolling Window</option><option value="blocks">Session Blocks</option><option value="global">Global</option></select></div>
+            <div class="kv"><span class="k">Window (candles)</span><select class="select" id="vzWindowSize" style="width:72px"><option value="20">20</option><option value="50" selected>50</option><option value="100">100</option><option value="200">200</option></select></div>
+            <div class="kv"><span class="k">Altura máx. ATR×</span><select class="select" id="vzMaxZoneAtr" style="width:72px"><option value="0">Off</option><option value="0.5">0.5×</option><option value="1.0" selected>1.0×</option><option value="1.5">1.5×</option><option value="2.0">2.0×</option></select></div>
+            <div class="kv"><span class="k">Expiração</span><select class="select" id="vzExpiry" style="width:90px"><option value="0" selected>Off</option><option value="50">50 candles</option><option value="100">100 candles</option><option value="250">250 candles</option><option value="500">500 candles</option></select></div>
+            <label class="kv" style="cursor:pointer;"><span class="k">Prior. recente</span><input type="checkbox" id="vzRecentPri" checked style="width:14px;height:14px;accent-color:#f0b429;cursor:pointer;flex-shrink:0;"></label>
             <div class="kv"><span class="k">Faixa % preço</span><input class="num" id="vzBucket" type="number" min="0.01" max="5" step="0.01" value="0.1" style="width:70px"></div>
             <div class="kv"><span class="k">Tamanho ATR×</span><input class="num" id="vzBucketAtr" type="number" min="0" max="5" step="0.1" value="0" style="width:70px"><span style="font-size:9px;color:#5a7090;margin-left:4px">0=fixo</span></div>
             <div class="kv"><span class="k">Top zonas</span><input class="num" id="vzTopN" type="number" min="1" max="30" step="1" value="12"></div>
@@ -3619,7 +3624,7 @@ html.pre-ui .switch::after{transition:none!important}
             <label class="kv" style="cursor:pointer;"><span class="k">Recency Weight</span><input type="checkbox" id="vzRecency" checked style="width:14px;height:14px;accent-color:#f0b429;cursor:pointer;flex-shrink:0;"></label>
             <div class="kv"><span class="k">Recency Strength</span><input class="num" id="vzRecStr" type="number" min="0" max="2" step="0.05" value="0.35" style="width:52px"></div>
             <div class="kv"><span class="k">Strength Mode</span><select class="select" id="vzStrMode" style="width:80px"><option value="weighted" selected>Weighted</option><option value="raw">Raw Vol</option><option value="hybrid">Hybrid</option></select></div>
-            <div class="hint">Weighted HVN — candles com volume anormal pesam mais no cálculo das zonas. Zonas mais fortes = maior volume ponderado nessa faixa de preço.</div>
+            <div class="hint">Proportional MTF: divide o histórico em janelas — cada bloco gera suas próprias zonas posicionadas no timestamp correto. Rolling = últimos N candles. Altura máx. ATR filtra zonas muito largas.</div>
           </div>
         </div>
 
@@ -4452,7 +4457,7 @@ async function fetchKlinesForTF(symbol,tf,lim){
   const seen=new Set();all=all.filter(x=>{const k=+x[0];if(seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>+a[0]-+b[0]);
   return aggregateSecondKlines(all,tf).slice(-lim)
 }
-/* ── DVL Progressive History — Beta 0.165 ── */
+/* ── DVL Progressive History — Beta 0.166 ── */
 function _dvlInitLim(tf){
   if(tf==='1s')return 1500;
   if(tf==='15s'||tf==='30s')return 1500;
@@ -9480,9 +9485,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.165'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.166'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.165';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.166';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -9521,7 +9526,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.165';
+  const VERSION='Beta 0.166';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9826,7 +9831,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.165';
+  const VERSION='Beta 0.166';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -10308,7 +10313,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.165 ── */
+/* ── DVL Strategy Tester — Beta 0.166 ── */
 /* 0.131: período HVN separado (busca candles extras antes do backtest); +3/5 anos nos seletores */
 /* 0.127: optimizer per-param ON/OFF toggles — lock any param to current form value to reduce combo space */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
@@ -10472,7 +10477,7 @@ input[type="color"]{border-radius:7px!important;}
 /* DVL Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.165';
+var V='Beta 0.166';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -19736,7 +19741,12 @@ window._dvlTemplate={open:open,close:close};
       widePen:Math.max(0.1,Math.min(1,numVal('vzWidePen',0.75))),
       recencyOn:boolVal('vzRecency',true),
       recStr:Math.max(0,Math.min(2,numVal('vzRecStr',0.35))),
-      strMode:strVal('vzStrMode','weighted')
+      strMode:strVal('vzStrMode','weighted'),
+      calcMode:strVal('vzCalcMode','prop_mtf'),
+      windowSize:Math.max(10,parseInt(strVal('vzWindowSize','50'),10)||50),
+      maxZoneAtr:Math.max(0,parseFloat(strVal('vzMaxZoneAtr','1.0'))||0),
+      expiry:Math.max(0,parseInt(strVal('vzExpiry','0'),10)||0),
+      recentPri:boolVal('vzRecentPri',true)
     };
   }
 
@@ -19909,7 +19919,91 @@ window._dvlTemplate={open:open,close:close};
       z.weightedVolFinal=z.weightedVol;
     }
 
+    /* max zone height ATR filter — descarta zonas mais largas que s.maxZoneAtr × ATR */
+    if(s.maxZoneAtr>0&&cs.length>1){
+      var _aS=0,_aN=0;
+      for(var _ai2=1;_ai2<cs.length;_ai2++){
+        var _ca=cs[_ai2],_pc=cs[_ai2-1].c;
+        _aS+=Math.max(_ca.h-_ca.l,Math.abs(_ca.h-_pc),Math.abs(_ca.l-_pc));
+        _aN++;
+      }
+      var _atr2=_aN>0?_aS/_aN:0;
+      if(_atr2>0)zones=zones.filter(function(z){return(z.hi-z.lo)<=s.maxZoneAtr*_atr2;});
+    }
+
     return{hvn:zones};
+  }
+
+  /* ── Timestamp → pixel X (busca binária em S.candles) ── */
+  function _vzXByTs(ts,xFn,bwPix){
+    var cs2=window.S&&window.S.candles;
+    if(!cs2||!cs2.length)return 0;
+    var lo=0,hi=cs2.length-1;
+    while(lo<hi){var m=(lo+hi)>>1;if(cs2[m].t<ts)lo=m+1;else hi=m;}
+    if(lo>0&&Math.abs(cs2[lo-1].t-ts)<Math.abs(cs2[lo].t-ts))lo--;
+    return Math.max(0,xFn(lo)-bwPix*0.5);
+  }
+
+  /* ── Windowed HVN — divide histórico em blocos, cada bloco gera zonas com timestamps ── */
+  function computeHVNWindowed(cs,s){
+    if(cs.length<3)return null;
+    var win=s.windowSize;
+    var allZones=[];
+    var totalWins=Math.ceil(cs.length/win);
+    for(var wi=0;wi<totalWins;wi++){
+      var slS=wi*win,slE=Math.min((wi+1)*win,cs.length);
+      var wcs=cs.slice(slS,slE);
+      if(wcs.length<3)continue;
+      var res=computeHVN(wcs,s);
+      if(!res||!res.hvn||!res.hvn.length)continue;
+      var wAge=totalWins-1-wi;  /* 0=janela mais recente */
+      var startTs=wcs[0].t,endTs=wcs[wcs.length-1].t;
+      var isLast=(wi===totalWins-1);
+      for(var zi=0;zi<res.hvn.length;zi++){
+        var z=res.hvn[zi];
+        z.startTime=startTs;z.endTime=endTs;
+        z.windowAge=wAge;z.isLastWindow=isLast;z.srcTs=startTs;
+        allZones.push(z);
+      }
+    }
+    if(!allZones.length)return null;
+
+    /* expiry: descarta janelas muito antigas (em candles do TF escolhido) */
+    if(s.expiry>0&&cs.length>0){
+      var lastT=cs[cs.length-1].t;
+      var tfMs=cs.length>1?cs[1].t-cs[0].t:60000;
+      allZones=allZones.filter(function(z){
+        return(lastT-z.endTime)/tfMs<=s.expiry;
+      });
+    }
+
+    /* re-normaliza relVol entre janelas para opacidade global consistente */
+    var gMaxWV=0,gMaxRV=0;
+    for(var i=0;i<allZones.length;i++){
+      if(allZones[i].weightedVol>gMaxWV)gMaxWV=allZones[i].weightedVol;
+      var rv=allZones[i].rawVol||allZones[i].totalVol||0;
+      if(rv>gMaxRV)gMaxRV=rv;
+    }
+    for(var i=0;i<allZones.length;i++){
+      var zz=allZones[i];
+      zz.relVol=gMaxWV>0?zz.weightedVol/gMaxWV:1;
+      var rv2=zz.rawVol||zz.totalVol||0;
+      zz.relRaw=gMaxRV>0?rv2/gMaxRV:1;
+      zz.relHybrid=(zz.relVol+zz.relRaw)/2;
+      zz.strengthScore=Math.round(zz.relVol*100);
+    }
+
+    /* ordena: prioridade recente + volume */
+    if(s.recentPri){
+      allZones.sort(function(a,b){
+        if(a.windowAge!==b.windowAge)return a.windowAge-b.windowAge;
+        return b.relVol-a.relVol;
+      });
+    }else{
+      allZones.sort(function(a,b){return b.relVol-a.relVol;});
+    }
+
+    return{hvn:allZones.slice(0,s.topN*3),windowed:true};
   }
 
   /* ── Draw zones ── */
@@ -19918,13 +20012,17 @@ window._dvlTemplate={open:open,close:close};
     var vzTfSel=E('vzTf');var vzTf=vzTfSel?vzTfSel.value:'';
     var cs=getVZCandles();
     var s=getSettings(cs);
+    var useWindowed=s.calcMode==='prop_mtf'||s.calcMode==='blocks';
     var key=[cs.length,(cs[0]||{}).t||0,S.sym,vzTf||S.tf,
              s.bucketPct,s.topN,s.minTouch,s.mergeGap,
              s.weightOn?1:0,s.weightMA,s.weightStr,s.maxWeight,
              s.atrComp?1:0,s.compBoost,s.widePen,
-             s.recencyOn?1:0,s.recStr,s.strMode].join('|');
+             s.recencyOn?1:0,s.recStr,s.strMode,
+             s.calcMode,s.windowSize,s.maxZoneAtr,s.expiry,s.recentPri?1:0].join('|');
     if(key!==_vzCacheKey){
-      _vzCache=computeHVN(cs,s);
+      if(useWindowed){_vzCache=computeHVNWindowed(cs,s);}
+      else if(s.calcMode==='rolling'){var _rwcs=cs.length>s.windowSize?cs.slice(-s.windowSize):cs;_vzCache=computeHVN(_rwcs,s);}
+      else{_vzCache=computeHVN(cs,s);}
       _vzCacheKey=key;
     }
     if(!_vzCache||!_vzCache.hvn||!_vzCache.hvn.length)return;
@@ -19933,8 +20031,7 @@ window._dvlTemplate={open:open,close:close};
     var rgb=hexToRgb(s.color);
     var vspan=S.view.end-S.view.start;
     var cw=CW(W);var bw=cw/vspan;
-    var xLeft=0;
-    var xRight=W-RP();
+    var xR=W-RP();
 
     ctx.save();
     window.__ETX_SKIP_COLORMAP=true;
@@ -19942,21 +20039,39 @@ window._dvlTemplate={open:open,close:close};
     for(var zi=0;zi<zones.length;zi++){
       var z=zones[zi];
       var rel=s.strMode==='raw'?z.relRaw:s.strMode==='hybrid'?z.relHybrid:z.relVol;
+      if(rel==null)rel=0.5;
       var mid=(z.hi+z.lo)/2;
       var y1=sc.y(z.hi),y2=sc.y(z.lo),ym=sc.y(mid);
       var boxH=Math.max(1,y2-y1);
-      if(xRight<=xLeft||y2<PT||y1>H-PB)continue;
 
-      ctx.fillStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+(0.03+0.10*rel).toFixed(3)+')';
+      /* posicionamento X — windowed usa timestamp, global usa 0..xR */
+      var xLeft,xRight;
+      if(useWindowed&&z.startTime!=null){
+        xLeft=_vzXByTs(z.startTime,x,bw);
+        if(z.isLastWindow){
+          xRight=xR;
+        }else{
+          xRight=Math.min(xR,_vzXByTs(z.endTime,x,bw)+bw*(1+s.extend));
+        }
+      }else{
+        xLeft=0;xRight=xR;
+      }
+
+      if(xRight<=xLeft||xLeft>=xR||y2<PT||y1>H-PB)continue;
+
+      /* age-fade: janelas antigas ficam mais transparentes */
+      var ageFade=useWindowed&&(z.windowAge||0)>0?Math.max(0.25,1-(z.windowAge||0)*0.07):1;
+
+      ctx.fillStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+((0.03+0.10*rel)*ageFade).toFixed(3)+')';
       ctx.fillRect(xLeft,y1,xRight-xLeft,boxH);
 
-      ctx.strokeStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+(0.25+0.45*rel).toFixed(3)+')';
+      ctx.strokeStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+((0.25+0.45*rel)*ageFade).toFixed(3)+')';
       ctx.lineWidth=rel>0.7?1.5:1;ctx.setLineDash([]);
       ctx.beginPath();ctx.moveTo(xLeft,y1);ctx.lineTo(xRight,y1);
       ctx.moveTo(xLeft,y2);ctx.lineTo(xRight,y2);ctx.stroke();
 
       if(boxH>12){
-        ctx.strokeStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+(0.15+0.28*rel).toFixed(3)+')';
+        ctx.strokeStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+((0.15+0.28*rel)*ageFade).toFixed(3)+')';
         ctx.lineWidth=1;ctx.setLineDash([3,5]);
         ctx.beginPath();ctx.moveTo(xLeft,ym);ctx.lineTo(xRight,ym);ctx.stroke();
         ctx.setLineDash([]);
@@ -19965,7 +20080,7 @@ window._dvlTemplate={open:open,close:close};
       if(boxH>8){
         ctx.textBaseline='middle';
         ctx.font=(rel>0.5?'bold ':'')+'9px monospace';
-        ctx.fillStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+(0.55+0.30*rel).toFixed(3)+')';
+        ctx.fillStyle='rgba('+rgb.r+','+rgb.g+','+rgb.b+','+((0.55+0.30*rel)*ageFade).toFixed(3)+')';
         var wLabel=s.weightOn&&z.avgWeight>1.05?' W '+z.avgWeight.toFixed(1)+'x':'';
         ctx.fillText('HVN '+priceFmt(mid)+' | $'+nFmt(s.strMode==='raw'?z.rawVol:z.weightedVol)+' | '+z.totalTouches+'t'+wLabel,xLeft+6,ym);
       }
@@ -19987,7 +20102,8 @@ window._dvlTemplate={open:open,close:close};
     'vzBucket','vzBucketAtr','vzTopN','vzMinTouch','vzMerge','vzExtend','vzColor','vzTf',
     'vzWeightOn','vzWeightMA','vzWeightStr','vzMaxWeight',
     'vzAtrComp','vzCompBoost','vzWidePen',
-    'vzRecency','vzRecStr','vzStrMode'
+    'vzRecency','vzRecStr','vzStrMode',
+    'vzCalcMode','vzWindowSize','vzMaxZoneAtr','vzExpiry','vzRecentPri'
   ]);
   function vzRedraw(){_vzCacheKey='';if(typeof drawSoon==='function')drawSoon();}
   document.addEventListener('input',function(ev){
@@ -19999,7 +20115,7 @@ window._dvlTemplate={open:open,close:close};
   document.addEventListener('change',function(ev){
     var id=ev.target&&ev.target.id;
     if(!VZ_INPUTS.has(id))return;
-    if(id==='vzTf'){_vzExtCandles=null;_vzExtKey='';_vzExtFetching=false;}
+    if(id==='vzTf'||id==='vzCalcMode'){_vzExtCandles=null;_vzExtKey='';_vzExtFetching=false;}
     vzRedraw();
   });
   setTimeout(function(){if(typeof drawSoon==='function')drawSoon();},0);
@@ -23629,11 +23745,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.165';
+  window.DVL_APP_VERSION='Beta 0.166';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.165';
+    if(b)b.textContent='Beta 0.166';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -23743,7 +23859,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.165';
+  const VERSION = 'Beta 0.166';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -23753,7 +23869,7 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.165 — Improved DOM overlay buttons for canvas-drawn oscillator gears.
+/* Beta 0.166 — Improved DOM overlay buttons for canvas-drawn oscillator gears.
    - updateBtns() runs SYNCHRONOUSLY after draw (no requestAnimationFrame lag)
    - pointer-events:none set on hide (invisible element cannot capture taps)
    - hookDraw re-checks every 2 s to catch late draw-wrappers from other scripts
@@ -24340,7 +24456,7 @@ body:before{display:none!important;background:none!important;}
 })();
 </script>
 
-<!-- ── DVL Spike Zones Engine (Beta 0.165) ── -->
+<!-- ── DVL Spike Zones Engine (Beta 0.166) ── -->
 <script id="DVL_SPIKE_ZONES">
 (function DVL_SPIKE_ZONES(){
   'use strict';
