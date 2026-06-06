@@ -18070,8 +18070,8 @@ function _renderTrade(){
   h+='<div class="pp-inp-row"><span class="pp-lbl">Take Profit</span><input class="pp-inp" id="ppTP" type="number" step="0.01" placeholder="auto"></div>';
   h+='<div class="pp-inp-row"><span class="pp-lbl">Leverage</span><input class="pp-inp" id="ppLev" type="number" min="1" max="125" step="1" value="'+set.leverage+'"></div>';
   h+='<div class="pp-btns">';
-  h+='<button class="pp-btn buy" id="ppBuyBtn" onclick="DVL_PAPER._submitOrder('buy')">Buy '+lbl+'</button>';
-  h+='<button class="pp-btn sell" id="ppSellBtn" onclick="DVL_PAPER._submitOrder('sell')">Sell '+lbl+'</button>';
+  h+='<button class="pp-btn buy" id="ppBuyBtn" data-side="buy" onclick="DVL_PAPER._submitOrder(this.dataset.side)">Buy '+lbl+'</button>';
+  h+='<button class="pp-btn sell" id="ppSellBtn" data-side="sell" onclick="DVL_PAPER._submitOrder(this.dataset.side)">Sell '+lbl+'</button>';
   if(ST.pendingOrders.filter(function(o){return o.symbol===_sym();}).length){
     h+='<button class="pp-btn cncl full" onclick="DVL_PAPER._cancelAll()">Cancel All Orders</button>';
   }
@@ -18117,8 +18117,8 @@ function _renderPos(){
       h+='<div class="pp-inp-row" style="margin-top:4px;"><span class="pp-lbl">SL</span><input class="pp-inp" id="ppSL_'+pos.id+'" type="number" step="0.01" value="'+(pos.stopLoss||'')+'"></div>';
       h+='<div class="pp-inp-row"><span class="pp-lbl">TP</span><input class="pp-inp" id="ppTP_'+pos.id+'" type="number" step="0.01" value="'+(pos.takeProfit||'')+'"></div>';
       h+='<div class="pp-btns" style="margin-top:4px;">';
-      h+='<button class="pp-btn buy" onclick="DVL_PAPER._updateStopsFromUI(''+pos.id+'')">Save SL/TP</button>';
-      h+='<button class="pp-btn sell" onclick="DVL_PAPER._closePos(''+pos.id+'')">Close</button>';
+      h+='<button class="pp-btn buy" data-pid="'+pos.id+'" onclick="DVL_PAPER._updateStopsFromUI(this.dataset.pid)">Save SL/TP</button>';
+      h+='<button class="pp-btn sell" data-pid="'+pos.id+'" onclick="DVL_PAPER._closePos(this.dataset.pid)">Close</button>';
       h+='</div></div>';
     });
   }
@@ -18131,7 +18131,7 @@ function _renderPos(){
       h+='<div class="pp-ord-row">';
       h+='<span style="color:'+(o.side==='buy'?'#00e676':'#ff3d57')+'">'+o.side.toUpperCase()+' '+o.type+'</span>';
       h+='<span style="color:#c8d8f0">'+_f(o.price,4)+'</span>';
-      h+='<span style="color:#ff3d57;cursor:pointer;padding:0 4px;" onclick="DVL_PAPER.cancelOrder(''+o.id+'')">x</span>';
+      h+='<span style="color:#ff3d57;cursor:pointer;padding:0 4px;" data-oid="'+o.id+'" onclick="DVL_PAPER.cancelOrder(this.dataset.oid)">x</span>';
       h+='</div>';
     });
     h+='</div>';
