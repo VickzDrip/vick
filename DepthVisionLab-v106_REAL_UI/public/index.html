@@ -41,7 +41,7 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
-Beta 0.194
+Beta 0.195
   - Comentários internos Beta 0.116/0.117 atualizados
   - DEMO DATA removido: badge oculto inicialmente, nota neutra
   - Badge LOOKAHEAD SAFE / LOOKAHEAD RISK no resultado
@@ -692,7 +692,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.194";
+  const LOCAL_VERSION = "Beta 0.195";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2382,7 +2382,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.194";
+window.DVL_APP_VERSION = "Beta 0.195";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2594,7 +2594,7 @@ button:active,.btn:active,.mini-btn:active,.gear:active,.dvl-ctx-btn:active,.sca
 </script>
 <style>
 html.pre-ui .tfs .tf,html.pre-ui .sidebar .ind-card{visibility:hidden}
-/* ── Beta 0.194: suprimir TODAS as transitions durante pre-ui ── */
+/* ── Beta 0.195: suprimir TODAS as transitions durante pre-ui ── */
 html.pre-ui *{transition:none!important;animation:none!important;}
 html.pre-ui .switch::after{transition:none!important}
 /* ── inds-syncing: suprimir todas as transitions durante restore do workspace ── */
@@ -3201,11 +3201,11 @@ html.dvl-drawn #chart{opacity:1;transition:opacity .08s ease;}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.194</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.195</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.194</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.195</span>
       </div>
 
       <div class="tb-right-btns">
@@ -3366,6 +3366,46 @@ html.dvl-drawn #chart{opacity:1;transition:opacity .08s ease;}
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- DVL Trade Bar — between TF bar and chart -->
+  <div id="dvlTradeBar">
+    <div class="dtb-action-row">
+      <button class="dtb-btn buy" onclick="window.DVL_PAPER&&DVL_PAPER._submitOrder('buy')">
+        <svg width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5,1 9,5 5,9"/><line x1="1" y1="5" x2="9" y2="5"/></svg>
+        <span id="dtbBuyLbl">Buy Market</span>
+      </button>
+      <button class="dtb-btn sell" onclick="window.DVL_PAPER&&DVL_PAPER._submitOrder('sell')">
+        <svg width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5,9 9,5 5,1"/><line x1="1" y1="5" x2="9" y2="5"/></svg>
+        <span id="dtbSellLbl">Sell Market</span>
+      </button>
+    </div>
+    <div class="dtb-ctrl-row">
+      <div class="dtb-cell">
+        <span class="dtb-lbl">Type</span>
+        <select class="dtb-sel" id="ppOrderType" onchange="window.DVL_PAPER&&DVL_PAPER._onTypeChange(this.value)">
+          <option value="market">Market</option>
+          <option value="limit">Limit</option>
+          <option value="stop">Stop</option>
+        </select>
+      </div>
+      <div class="dtb-cell">
+        <span class="dtb-lbl">Size</span>
+        <input class="dtb-inp" id="ppQty" type="number" min="0" step="0.0001" placeholder="auto">
+      </div>
+      <div class="dtb-cell">
+        <span class="dtb-lbl">Risk %</span>
+        <input class="dtb-inp" id="ppRiskPct" type="number" min="0.1" max="100" step="0.1" value="1" oninput="window.DVL_PAPER&&DVL_PAPER._updateSummaryBar()">
+      </div>
+      <div class="dtb-cell">
+        <span class="dtb-lbl">RR</span>
+        <div class="dtb-rr" id="ppRRDisp">—</div>
+      </div>
+    </div>
+    <div class="dtb-limit-row" id="dtbLimitRow">
+      <span class="dtb-lbl">Price</span>
+      <input class="dtb-inp" id="ppLimitPx" type="number" step="0.01" placeholder="limit price">
     </div>
   </div>
 
@@ -4594,7 +4634,7 @@ async function fetchKlinesForTF(symbol,tf,lim){
   const seen=new Set();all=all.filter(x=>{const k=+x[0];if(seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>+a[0]-+b[0]);
   return aggregateSecondKlines(all,tf).slice(-lim)
 }
-/* ── DVL Progressive History — Beta 0.194 ── */
+/* ── DVL Progressive History — Beta 0.195 ── */
 function _dvlInitLim(tf){
   if(tf==='15s')return 2000;
   if(tf==='30s')return 1500;
@@ -9654,9 +9694,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.194'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.195'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.194';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.195';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -9695,7 +9735,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.194';
+  const VERSION='Beta 0.195';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -10000,7 +10040,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.194';
+  const VERSION='Beta 0.195';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -10481,7 +10521,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.194 ── */
+/* ── DVL Strategy Tester — Beta 0.195 ── */
 /* 0.131: período HVN separado (busca candles extras antes do backtest); +3/5 anos nos seletores */
 /* 0.127: optimizer per-param ON/OFF toggles — lock any param to current form value to reduce combo space */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
@@ -10645,7 +10685,7 @@ input[type="color"]{border-radius:7px!important;}
 /* DVL Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.194';
+var V='Beta 0.195';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -17172,7 +17212,7 @@ console.log('[DVL] Strategy Tester '+V+' loaded');
 
 <div id="dvlHistStatus" style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:rgba(5,10,18,0.90);border:1px solid rgba(0,212,255,0.20);color:rgba(0,212,255,0.80);font-size:10px;font-family:monospace;padding:5px 14px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity 0.35s;z-index:9999;letter-spacing:.05em;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.55)"></div>
 
-<!-- ── DVL Moving Averages — Beta 0.194 ── -->
+<!-- ── DVL Moving Averages — Beta 0.195 ── -->
 <script>
 (function DVL_MA(){
   'use strict';
@@ -17514,7 +17554,7 @@ console.log('[DVL] Strategy Tester '+V+' loaded');
 })();
 </script>
 
-<!-- DVL PAPER TRADING ENGINE — Beta 0.194 -->
+<!-- DVL PAPER TRADING ENGINE — Beta 0.195 -->
 <style id="dvlPaperCSS">
 /* ── Panel shell ── */
 #dvlPaperPanel{position:fixed;right:0;top:50px;width:272px;background:#030609;border-left:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06);z-index:190;display:none;flex-direction:column;max-height:calc(100vh - 50px);font-family:monospace;box-shadow:-6px 0 28px rgba(0,0,0,.8);}
@@ -17610,6 +17650,36 @@ console.log('[DVL] Strategy Tester '+V+' loaded');
 .pp-qbtn.sell{background:rgba(220,30,40,.10);color:#ff3355;border-color:rgba(220,40,50,.45);box-shadow:0 0 10px rgba(220,40,50,.12);}
 .pp-qctl{font-family:monospace;font-size:11px;background:rgba(10,20,40,.7);border:1px solid #1a2636;color:#5a7090;border-radius:3px;padding:4px 7px;cursor:pointer;}
 .pp-qctl:hover{color:#c8d8f0;}
+/* ── DVL Trade Bar ── */
+#dvlTradeBar{display:none;flex-direction:column;gap:5px;padding:6px 8px 5px;background:#020508;border-bottom:1px solid rgba(255,255,255,.06);font-family:monospace;flex-shrink:0;width:100%;box-sizing:border-box;}
+#dvlTradeBar.dtb-on{display:flex;}
+.dtb-action-row{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+.dtb-btn{height:44px;font-family:monospace;font-size:13px;font-weight:800;border-radius:5px;cursor:pointer;border:1.5px solid;letter-spacing:.08em;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:7px;background:none;}
+.dtb-btn:active{transform:scale(.97);}
+.dtb-btn.buy{background:rgba(0,200,80,.08);color:#00ff7a;border-color:rgba(0,210,80,.50);box-shadow:0 0 18px rgba(0,210,80,.15),inset 0 0 12px rgba(0,200,80,.05);}
+.dtb-btn.buy:hover{background:rgba(0,200,80,.15);box-shadow:0 0 26px rgba(0,210,80,.28);}
+.dtb-btn.sell{background:rgba(220,30,40,.08);color:#ff3355;border-color:rgba(220,40,50,.50);box-shadow:0 0 18px rgba(220,40,50,.15),inset 0 0 12px rgba(220,30,40,.05);}
+.dtb-btn.sell:hover{background:rgba(220,30,40,.15);box-shadow:0 0 26px rgba(220,40,50,.28);}
+.dtb-ctrl-row{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:6px;align-items:end;}
+.dtb-cell{display:flex;flex-direction:column;gap:2px;}
+.dtb-lbl{font-size:7px;color:#3a5068;letter-spacing:.08em;text-transform:uppercase;}
+.dtb-sel,.dtb-inp{background:#060c16;border:1px solid rgba(255,255,255,.08);color:#b8cce0;border-radius:4px;padding:5px 6px;font-family:monospace;font-size:9.5px;width:100%;box-sizing:border-box;}
+.dtb-sel:focus,.dtb-inp:focus{outline:none;border-color:rgba(0,212,255,.45);}
+.dtb-rr{font-size:11px;font-weight:700;color:#00d4ff;text-align:center;padding:4px 0 3px;border:1px solid rgba(0,212,255,.20);border-radius:4px;background:#060c16;min-width:40px;font-family:monospace;}
+.dtb-limit-row{display:none;align-items:center;gap:6px;margin-top:2px;}
+.dtb-limit-row .dtb-inp{flex:1;}
+/* ── DVL Summary Strip (fixed bottom) ── */
+#dvlSummaryStrip{display:none;position:fixed;bottom:0;left:0;right:0;z-index:192;background:#010306;border-top:1px solid rgba(255,255,255,.07);padding:4px 10px;font-family:monospace;align-items:center;gap:0;}
+#dvlSummaryStrip.dss-on{display:flex;}
+.dss-item{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;min-width:0;border-right:1px solid rgba(255,255,255,.04);padding:0 4px;}
+.dss-item:last-child{border-right:none;}
+.dss-k{font-size:6.5px;color:#2d4460;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;}
+.dss-v{font-size:8.5px;font-weight:700;color:#6a8faf;font-family:monospace;white-space:nowrap;}
+.dss-v.pos{color:#00cc66;}.dss-v.neg{color:#ff3355;}.dss-v.hi{color:#00d4ff;}
+.dss-inp{background:none;border:none;border-bottom:1px solid rgba(255,255,255,.10);color:#b8cce0;font-family:monospace;font-size:8.5px;font-weight:700;text-align:center;width:75px;padding:1px 2px;outline:none;}
+.dss-inp.sl{color:#ff5566;border-bottom-color:rgba(220,60,80,.35);}
+.dss-inp.tp{color:#00cc66;border-bottom-color:rgba(0,180,80,.35);}
+.dss-inp:focus{border-bottom-color:rgba(0,212,255,.5);}
 </style>
 
 <div id="dvlPaperPanel">
@@ -17644,6 +17714,20 @@ console.log('[DVL] Strategy Tester '+V+' loaded');
   </div>
 </div>
 <div id="dvlPaperNotif"></div>
+<div id="dvlSummaryStrip">
+  <div class="dss-item"><span class="dss-k">Entry</span><span class="dss-v hi" id="dssEntry">—</span></div>
+  <div class="dss-item">
+    <span class="dss-k">SL</span>
+    <input class="dss-inp sl" id="ppSL" type="number" step="0.01" placeholder="—" oninput="window.DVL_PAPER&&DVL_PAPER._updateSummaryBar()">
+  </div>
+  <div class="dss-item">
+    <span class="dss-k">TP</span>
+    <input class="dss-inp tp" id="ppTP" type="number" step="0.01" placeholder="—" oninput="window.DVL_PAPER&&DVL_PAPER._updateSummaryBar()">
+  </div>
+  <div class="dss-item"><span class="dss-k">Risk</span><span class="dss-v" id="dssRisk">—</span></div>
+  <div class="dss-item"><span class="dss-k">Profit</span><span class="dss-v pos" id="dssProfit">—</span></div>
+  <div class="dss-item"><span class="dss-k">RR</span><span class="dss-v hi" id="dssRR">—</span></div>
+</div>
 
 <script>
 window.DVL_PAPER=(function(){
@@ -18149,11 +18233,23 @@ function _render(){
 }
 
 function _renderLive(){
-  if(_tab==='trade'||_tab==='pos'){
+  if(_tab==='pos'){
     var body=document.getElementById('ppBody');if(!body)return;
-    if(_tab==='trade')body.innerHTML=_renderTrade();
-    else body.innerHTML=_renderPos();
+    body.innerHTML=_renderPos();
+  } else if(_tab==='trade'){
+    _updateAcctBar();
   }
+  _updateSummaryBar();
+}
+function _updateAcctBar(){
+  var el=document.getElementById('ppAcctBar');if(!el)return;
+  var upnlTotal=ST.positions.reduce(function(s,p){return s+(p.unrealizedPnl||0);},0);
+  var eq=_equity();
+  var pnlCls=upnlTotal>=0?'acct-pnl-pos':'acct-pnl-neg';
+  el.innerHTML=
+    '<span>Bal <b>'+_f(ST.account.balance)+'</b></span>'+
+    '<span>Eq <b>'+_f(eq)+'</b></span>'+
+    '<span class="'+pnlCls+'"><b>'+_fp(upnlTotal)+'</b></span>';
 }
 
 function _orderTypeLbl(){
@@ -18165,91 +18261,19 @@ function _renderTrade(){
   var acc=ST.account,set=ST.settings;
   var eq=_equity();
   var upnlTotal=ST.positions.reduce(function(s,p){return s+(p.unrealizedPnl||0);},0);
-  var lbl=_orderTypeLbl();
-  var isMarket=set.orderType==='market';
   var h='';
-
-  /* ── account bar ── */
   var pnlCls=upnlTotal>=0?'acct-pnl-pos':'acct-pnl-neg';
-  h+='<div class="pp-acct-bar">';
+  h+='<div class="pp-acct-bar" id="ppAcctBar">';
   h+='<span>Bal <b>'+_f(acc.balance)+'</b></span>';
   h+='<span>Eq <b>'+_f(eq)+'</b></span>';
   h+='<span class="'+pnlCls+'"><b>'+_fp(upnlTotal)+'</b></span>';
   h+='</div>';
-
-  /* ── BUY / SELL buttons ── */
-  h+='<div class="pp-action-row">';
-  h+='<button class="pp-act-btn buy" id="ppBuyBtn" data-side="buy" onclick="DVL_PAPER._submitOrder(this.dataset.side)">';
-  h+='<svg width="10" height="10" viewBox="0 0 10 10"><polyline points="5,1 9,5 5,9" fill="none" stroke="#00ff7a" stroke-width="1.8"/><line x1="1" y1="5" x2="9" y2="5" stroke="#00ff7a" stroke-width="1.8"/></svg>';
-  h+='Buy '+lbl+'</button>';
-  h+='<button class="pp-act-btn sell" id="ppSellBtn" data-side="sell" onclick="DVL_PAPER._submitOrder(this.dataset.side)">';
-  h+='<svg width="10" height="10" viewBox="0 0 10 10"><polyline points="5,9 9,5 5,1" fill="none" stroke="#ff3355" stroke-width="1.8"/><line x1="1" y1="5" x2="9" y2="5" stroke="#ff3355" stroke-width="1.8"/></svg>';
-  h+='Sell '+lbl+'</button>';
-  h+='</div>';
-
-  /* ── compact controls row: OrderType | Risk% | Lev | RR ── */
-  var slV=0,tpV=0,px=_price(_sym())||0;
-  var rr='—';
-  h+='<div class="pp-ctrl-row">';
-  /* order type */
-  h+='<div class="pp-ctrl-cell">';
-  h+='<span class="pp-ctrl-lbl">Type</span>';
-  h+='<select class="pp-ctrl-sel" id="ppOrderType" onchange="DVL_PAPER._onTypeChange(this.value)">';
-  ['market','limit','stop'].forEach(function(t){
-    h+='<option value="'+t+'"'+(set.orderType===t?' selected':'')+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>';
-  });
-  h+='</select></div>';
-  /* risk */
-  h+='<div class="pp-ctrl-cell">';
-  h+='<span class="pp-ctrl-lbl">Risk %</span>';
-  h+='<input class="pp-ctrl-inp" id="ppRiskPct" type="number" min="0.1" max="100" step="0.1" value="'+set.riskPct+'" oninput="DVL_PAPER._updateSummaryBar()">';
-  h+='</div>';
-  /* leverage */
-  h+='<div class="pp-ctrl-cell">';
-  h+='<span class="pp-ctrl-lbl">Lev</span>';
-  h+='<input class="pp-ctrl-inp" id="ppLev" type="number" min="1" max="125" step="1" value="'+set.leverage+'">';
-  h+='</div>';
-  /* RR display */
-  h+='<div class="pp-ctrl-cell">';
-  h+='<span class="pp-ctrl-lbl">RR</span>';
-  h+='<div class="pp-ctrl-rr" id="ppRRDisp">—</div>';
-  h+='</div>';
-  h+='</div>';
-
-  /* ── SL / TP row ── */
-  h+='<div class="pp-sltp-row">';
-  h+='<div class="pp-sltp-cell">';
-  h+='<span class="pp-sltp-lbl sl">Stop Loss</span>';
-  h+='<input class="pp-sltp-inp sl-inp" id="ppSL" type="number" step="0.01" placeholder="auto" oninput="DVL_PAPER._updateSummaryBar()">';
-  h+='</div>';
-  h+='<div class="pp-sltp-cell">';
-  h+='<span class="pp-sltp-lbl tp">Take Profit</span>';
-  h+='<input class="pp-sltp-inp tp-inp" id="ppTP" type="number" step="0.01" placeholder="auto" oninput="DVL_PAPER._updateSummaryBar()">';
-  h+='</div>';
-  h+='</div>';
-
-  /* ── limit/stop price (conditional) ── */
-  if(!isMarket){
-    h+='<div class="pp-limit-row">';
-    h+='<span class="pp-limit-lbl">'+lbl+' Price</span>';
-    h+='<input class="pp-limit-inp" id="ppLimitPx" type="number" step="0.01" placeholder="current price">';
-    h+='</div>';
-  }
-
-  /* ── manual qty ── */
-  h+='<div class="pp-inp-row" style="margin-bottom:4px;">';
-  h+='<span class="pp-lbl">Qty</span>';
-  h+='<input class="pp-inp" id="ppQty" type="number" min="0" step="0.0001" placeholder="auto">';
-  h+='</div>';
-
-  /* ── cancel pending ── */
   if(ST.pendingOrders.filter(function(o){return o.symbol===_sym();}).length){
     h+='<button class="pp-btn cncl full" onclick="DVL_PAPER._cancelAll()" style="width:100%;margin-bottom:4px;">Cancel All Pending</button>';
   }
-
-  /* ── advanced toggle ── */
-  h+='<button class="pp-adv-toggle" onclick="(function(b){var d=document.getElementById(\'ppAdvBody\');if(!d)return;d.classList.toggle(\'open\');b.querySelector(\'span\').textContent=d.classList.contains(\'open\')?\'▲ Advanced\':\'▼ Advanced\';})(this)"><span>▼ Advanced</span></button>';
+  h+='<button class="pp-adv-toggle" onclick="DVL_PAPER._toggleAdv(this)"><span>▼ Advanced</span></button>';
   h+='<div class="pp-adv-body" id="ppAdvBody">';
+  h+='<div class="pp-inp-row"><span class="pp-lbl">Leverage</span><input class="pp-inp" id="ppLev" type="number" min="1" max="125" step="1" value="'+set.leverage+'"></div>';
   h+='<div class="pp-inp-row"><span class="pp-lbl">Fee %</span><input class="pp-inp" id="ppFee" type="number" min="0" max="1" step="0.01" value="'+set.feePct+'"></div>';
   h+='<div class="pp-inp-row"><span class="pp-lbl">Slippage %</span><input class="pp-inp" id="ppSlip" type="number" min="0" max="1" step="0.01" value="'+set.slippagePct+'"></div>';
   h+='<div class="pp-inp-row"><span class="pp-lbl">Intrabar</span>';
@@ -18259,16 +18283,12 @@ function _renderTrade(){
   });
   h+='</select></div>';
   h+='<div class="pp-inp-row"><span class="pp-lbl">Auto SL/TP</span>';
-  h+='<select class="pp-sel" id="ppAutoSLTP"><option value="1"'+(set.autoSLTP?' selected':'')+'>On</option><option value="0"'+(!set.autoSLTP?' selected':'')+'>Off</option></select></div>';
+  h+='<select class="pp-sel" id="ppAutoSLTP"><option value="1"'+(set.autoSLTP?' selected':'')+'>On</option><option value="0"'+(set.autoSLTP?'':' selected')+'>Off</option></select></div>';
   h+='<button class="pp-btn rst" onclick="DVL_PAPER._resetConfirm()" style="width:100%;margin-top:6px;">Reset Account</button>';
   h+='</div>';
-
-  /* ── spacer so summary bar is not covered ── */
   h+='<div style="height:8px;"></div>';
-
   return h;
 }
-
 function _renderPos(){
   var allPos=ST.positions.filter(function(p){return p.status==='open';});
   var allOrd=ST.pendingOrders;
@@ -18401,17 +18421,14 @@ function _quickOrder(side){
 function _onTypeChange(type){
   ST.settings.orderType=type;
   var lbl=type.charAt(0).toUpperCase()+type.slice(1);
-  ['ppBuyBtn','ppSellBtn'].forEach(function(id,i){
-    var el=document.getElementById(id);
-    if(el)el.textContent=(i===0?'Buy ':'Sell ')+lbl;
-  });
-  ['ppQBuy','ppQSell'].forEach(function(id,i){
-    var el=document.getElementById(id);
-    if(el)el.textContent=(i===0?'Buy ':'Sell ')+lbl;
-  });
-  _render();
+  var buyLbl=document.getElementById('dtbBuyLbl');
+  var sellLbl=document.getElementById('dtbSellLbl');
+  if(buyLbl)buyLbl.textContent='Buy '+lbl;
+  if(sellLbl)sellLbl.textContent='Sell '+lbl;
+  var limRow=document.getElementById('dtbLimitRow');
+  if(limRow)limRow.style.display=(type==='market'?'none':'flex');
+  _save();
 }
-
 function _closePos(posId){_doClose(posId,'manual');}
 function _cancelAll(){
   var sym=_sym();
@@ -18440,6 +18457,7 @@ function togglePanel(){
     if(!ST.enabled){ST.enabled=true;_save();}
     var badge=document.getElementById('paperTradingBadge');
     if(badge)badge.style.display='block';
+    _updateQuickVis();
     _render();
   }
 }
@@ -18449,18 +18467,23 @@ function _toggleQuick(){
   _save();_updateQuickVis();
 }
 function _updateQuickVis(){
+  var enabled=ST.enabled;
+  var tb=document.getElementById('dvlTradeBar');
+  var ss=document.getElementById('dvlSummaryStrip');
+  if(tb){
+    if(enabled&&ST.quickVisible)tb.classList.add('dtb-on');
+    else tb.classList.remove('dtb-on');
+  }
+  if(ss){
+    if(enabled&&ST.quickVisible)ss.classList.add('dss-on');
+    else ss.classList.remove('dss-on');
+  }
   var qb=document.getElementById('ppQuickBtns');
-  if(!qb)return;
-  if(ST.quickVisible)qb.classList.add('pp-qvis');
-  else qb.classList.remove('pp-qvis');
-  var eye=document.getElementById('ppQEye');
-  if(eye)eye.style.opacity=ST.quickVisible?'1':'0.4';
+  if(qb)qb.style.display='none';
 }
 
 /* ── panel close on outside click ── */
 function _updateSummaryBar(){
-  var bar=document.getElementById('ppSummaryBar');
-  if(!bar)return;
   var px=_price(_sym())||0;
   var slEl=document.getElementById('ppSL');
   var tpEl=document.getElementById('ppTP');
@@ -18475,9 +18498,21 @@ function _updateSummaryBar(){
     var risk=Math.abs(px-sl),reward=Math.abs(tp-px);
     if(risk>0){rrStr='1:'+(reward/risk).toFixed(1);profitAmt=riskAmt*(reward/risk);}
   }
-  /* update RR display widget too */
   var rrDisp=document.getElementById('ppRRDisp');
   if(rrDisp)rrDisp.textContent=rrStr;
+  var dEntry=document.getElementById('dssEntry');
+  if(dEntry)dEntry.textContent=px?_f(px,2):'—';
+  var dRisk=document.getElementById('dssRisk');
+  if(dRisk)dRisk.textContent=isNaN(riskPct)?'—':riskPct.toFixed(1)+'%';
+  var dProfit=document.getElementById('dssProfit');
+  if(dProfit){
+    dProfit.textContent=!isNaN(profitAmt)?'+'+_f(profitAmt):'—';
+    dProfit.className='dss-v '+(profitAmt>0?'pos':'');
+  }
+  var dRR=document.getElementById('dssRR');
+  if(dRR)dRR.textContent=rrStr;
+  var bar=document.getElementById('ppSummaryBar');
+  if(!bar)return;
   var mkItem=function(k,v,cls){
     return '<div class="psb-item"><span class="psb-k">'+k+'</span><span class="psb-v'+(cls?' '+cls:'')+'">'+v+'</span></div>';
   };
@@ -18517,8 +18552,30 @@ function _initOutsideClick(){
 }
 
 /* ── INIT ── */
+function _toggleAdv(btn){
+  var d=document.getElementById('ppAdvBody');if(!d)return;
+  d.classList.toggle('open');
+  var s=btn.querySelector('span');
+  if(s)s.textContent=d.classList.contains('open')?'▲ Advanced':'▼ Advanced';
+}
+function _initTradeBar(){
+  var set=ST.settings;
+  var ot=document.getElementById('ppOrderType');
+  if(ot)ot.value=set.orderType||'market';
+  var rp=document.getElementById('ppRiskPct');
+  if(rp)rp.value=set.riskPct||1;
+  var type=set.orderType||'market';
+  var lbl=type.charAt(0).toUpperCase()+type.slice(1);
+  var buyLbl=document.getElementById('dtbBuyLbl');
+  var sellLbl=document.getElementById('dtbSellLbl');
+  if(buyLbl)buyLbl.textContent='Buy '+lbl;
+  if(sellLbl)sellLbl.textContent='Sell '+lbl;
+  var limRow=document.getElementById('dtbLimitRow');
+  if(limRow)limRow.style.display=(type==='market'?'none':'flex');
+}
 function init(){
   _load();
+  _initTradeBar();
   _updateQuickVis();
   var cv=document.getElementById('mainCanvas')||document.querySelector('#chartWrap canvas')||document.querySelector('canvas');
   if(cv)_initDrag(cv);
@@ -18528,7 +18585,7 @@ function init(){
     if(badge)badge.style.display='block';
   }
   setInterval(_pollOtherSymbols,3000);
-  console.log('[DVL Paper] v0.192 ready — balance:',ST.account.balance,ST.account.currency);
+  console.log('[DVL Paper] v0.195 ready — balance:',ST.account.balance,ST.account.currency);
 }
 
 /* ── PUBLIC API ── */
@@ -18550,7 +18607,7 @@ return{
   calculateStats:calcStats,
   _submitOrder:_submitOrder,_quickOrder:_quickOrder,_closePos:_closePos,
   _cancelAll:_cancelAll,_resetConfirm:_resetConfirm,
-  _updateStopsFromUI:_updateStopsFromUI,_toggleQuick:_toggleQuick,_onTypeChange:_onTypeChange,_updateSummaryBar:_updateSummaryBar
+  _updateStopsFromUI:_updateStopsFromUI,_toggleQuick:_toggleQuick,_onTypeChange:_onTypeChange,_updateSummaryBar:_updateSummaryBar,_toggleAdv:_toggleAdv,_initTradeBar:_initTradeBar
 };
 })();
 
@@ -25380,11 +25437,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.194';
+  window.DVL_APP_VERSION='Beta 0.195';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.194';
+    if(b)b.textContent='Beta 0.195';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -25494,7 +25551,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.194';
+  const VERSION = 'Beta 0.195';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -25504,7 +25561,7 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.194 — Improved DOM overlay buttons for canvas-drawn oscillator gears.
+/* Beta 0.195 — Improved DOM overlay buttons for canvas-drawn oscillator gears.
    - updateBtns() runs SYNCHRONOUSLY after draw (no requestAnimationFrame lag)
    - pointer-events:none set on hide (invisible element cannot capture taps)
    - hookDraw re-checks every 2 s to catch late draw-wrappers from other scripts
@@ -26091,7 +26148,7 @@ body:before{display:none!important;background:none!important;}
 })();
 </script>
 
-<!-- ── DVL Spike Zones Engine (Beta 0.194) ── -->
+<!-- ── DVL Spike Zones Engine (Beta 0.195) ── -->
 <script id="DVL_SPIKE_ZONES">
 (function DVL_SPIKE_ZONES(){
   'use strict';
