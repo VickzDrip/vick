@@ -41,7 +41,7 @@ If a change requires overriding old code, remove or neutralize the old conflicti
 ████████████████████████████████████████████████████████
   DVL CHANGELOG
 
-Beta 0.192
+Beta 0.193
   - Comentários internos Beta 0.116/0.117 atualizados
   - DEMO DATA removido: badge oculto inicialmente, nota neutra
   - Badge LOOKAHEAD SAFE / LOOKAHEAD RISK no resultado
@@ -692,7 +692,7 @@ Beta 0.001
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.192";
+  const LOCAL_VERSION = "Beta 0.193";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2382,7 +2382,7 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.192";
+window.DVL_APP_VERSION = "Beta 0.193";
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -2594,7 +2594,7 @@ button:active,.btn:active,.mini-btn:active,.gear:active,.dvl-ctx-btn:active,.sca
 </script>
 <style>
 html.pre-ui .tfs .tf,html.pre-ui .sidebar .ind-card{visibility:hidden}
-/* ── Beta 0.192: suprimir TODAS as transitions durante pre-ui ── */
+/* ── Beta 0.193: suprimir TODAS as transitions durante pre-ui ── */
 html.pre-ui *{transition:none!important;animation:none!important;}
 html.pre-ui .switch::after{transition:none!important}
 /* ── inds-syncing: suprimir todas as transitions durante restore do workspace ── */
@@ -2998,6 +2998,7 @@ html.dvl-drawn #chart{opacity:1;transition:opacity .08s ease;}
         <label class="color-row"><span>Candle baixa</span><input type="color" id="colBear" value="#ff3d57"></label>
         <label class="color-row"><span>Pavio alta</span><input type="color" id="colWickBull" value="#00e676"></label>
         <label class="color-row"><span>Pavio baixa</span><input type="color" id="colWickBear" value="#ff3d57"></label>
+        <label class="color-row" style="cursor:pointer;user-select:none;"><span>Show Grid</span><input type="checkbox" id="chkShowGrid" style="width:16px;height:16px;accent-color:#00d4ff;cursor:pointer;flex-shrink:0;" checked></label>
         <button class="btn compact-save" id="saveTheme" type="button">SALVAR</button>
       </div>
     </div>
@@ -3200,11 +3201,11 @@ html.dvl-drawn #chart{opacity:1;transition:opacity .08s ease;}
         </select>
       </div>
 
-      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.192</span>
+      <span id="dvlVersionBadge" class="dvl-version-badge dvl-version-header">Beta 0.193</span>
 
       <div class="tb-logo-center" title="DepthVisionLab" onclick="location.reload()">
         <img id="dvlLogoImgTop" class="dvl-logo-img dvl-logo-top" src="/dvl-logo-wide.png" alt="DepthVisionLab"/>
-        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.192</span>
+        <span class="dvl-version-badge dvl-version-logo-hidden">Beta 0.193</span>
       </div>
 
       <div class="tb-right-btns">
@@ -4593,7 +4594,7 @@ async function fetchKlinesForTF(symbol,tf,lim){
   const seen=new Set();all=all.filter(x=>{const k=+x[0];if(seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>+a[0]-+b[0]);
   return aggregateSecondKlines(all,tf).slice(-lim)
 }
-/* ── DVL Progressive History — Beta 0.192 ── */
+/* ── DVL Progressive History — Beta 0.193 ── */
 function _dvlInitLim(tf){
   if(tf==='15s')return 2000;
   if(tf==='30s')return 1500;
@@ -5156,17 +5157,19 @@ function drawGrid(ctx,W,H,sc){
   for(const n of[1,2,2.5,5,10]){if(n*mag>=rawStep){step=n*mag;break;}}
   ctx.font='9px monospace';ctx.textAlign='left';
   // Sub-grid (half-step, very faint)
+  if(window._dvlShowGrid!==false){
   const subStep=step/2;
   ctx.strokeStyle='#0a1520';ctx.lineWidth=.4;
   for(let p=Math.ceil(sc.lo/subStep)*subStep;p<=sc.hi+subStep;p+=subStep){
     const y=sc.y(p);if(y<PT-1||y>H-PB+1)continue;
     ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(right,y);ctx.stroke();
   }
+  }
   // Main grid lines + labels
   ctx.strokeStyle='#0d1626';ctx.lineWidth=.6;
   for(let p=Math.ceil(sc.lo/step)*step;p<=sc.hi+step;p+=step){
     const y=sc.y(p);if(y<PT-1||y>H-PB+1)continue;
-    ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(right,y);ctx.stroke();
+    if(window._dvlShowGrid!==false){ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(right,y);ctx.stroke();}
     if(!S.yScale.hidden){
       const lbl=p>=1?p.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):p.toFixed(6);
       ctx.fillStyle='#6f86a8';ctx.fillText(lbl,right+7,y+3);
@@ -5179,8 +5182,10 @@ function drawGrid(ctx,W,H,sc){
     ctx.fillStyle='rgba(0,212,255,.35)';ctx.fillRect(right+1,PT,3,H-PT-PB);
   }
   // Vertical grid lines — 14 segments for finer time references
+  if(window._dvlShowGrid!==false){
   ctx.strokeStyle='#0d1626';ctx.lineWidth=.6;
   for(let i=1;i<14;i++){const xx=PL+cw*i/14;ctx.beginPath();ctx.moveTo(xx,PT);ctx.lineTo(xx,H-PB);ctx.stroke();}
+  }
   // AUTO reset pill — appears when vertically panned, dblclick on scale also resets
   if(S.yScale.offset||S.yScale.zoom!==1){
     const _ab={x:right-28,y:PT+5,w:26,h:13};window._dvlAutoResetBtn=_ab;
@@ -8092,6 +8097,10 @@ window.addEventListener('resize',draw);boot();
         const parsed=JSON.parse(saved); window.ETX_THEME=Object.assign(theme(),parsed);
         const ids={colBg:"bg",colGrid:"grid",colBull:"bull",colBear:"bear",colWickBull:"wickBull",colWickBear:"wickBear"};
         Object.entries(ids).forEach(([id,k])=>{const el=$(id); if(el&&parsed[k])el.value=parsed[k]});
+        /* restore showGrid */
+        const chk=$("chkShowGrid");
+        if(chk&&parsed.showGrid===false){chk.checked=false;window._dvlShowGrid=false;}
+        else{window._dvlShowGrid=true;}
       }
     }catch(e){}
     ["colBg","colGrid","colBull","colBear","colWickBull","colWickBear"].forEach(id=>{
@@ -8101,10 +8110,28 @@ window.addEventListener('resize',draw);boot();
       el.addEventListener("input",applyFromInputs);
       el.addEventListener("change",applyFromInputs);
     });
+    /* showGrid live toggle */
+    const chkG=$("chkShowGrid");
+    if(chkG&&!chkG.__dvlBound){
+      chkG.__dvlBound=true;
+      chkG.addEventListener("change",function(){
+        window._dvlShowGrid=chkG.checked;
+        try{if(typeof draw==="function")draw();}catch(e){}
+      });
+    }
     const save=$("saveTheme");
     if(save&&!save.__v20Bound){
       save.__v20Bound=true;
-      save.addEventListener("click",()=>{applyFromInputs();try{localStorage.setItem("dvlThemeV1",JSON.stringify(theme()))}catch(e){}});
+      save.addEventListener("click",()=>{
+        applyFromInputs();
+        const chk=$("chkShowGrid");
+        window._dvlShowGrid=chk?chk.checked:true;
+        try{
+          const t=theme();t.showGrid=window._dvlShowGrid;
+          localStorage.setItem("dvlThemeV1",JSON.stringify(t));
+        }catch(e){}
+        try{if(typeof draw==="function")draw();}catch(e){}
+      });
     }
     applyFromInputs();
   }
@@ -9627,9 +9654,9 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0037_NATIVE_CROSS_STATE_CLEANUP">
 (function(){
-  try{ window.DVL_APP_VERSION='Beta 0.192'; }catch(_){}
+  try{ window.DVL_APP_VERSION='Beta 0.193'; }catch(_){}
   function sync(){
-    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.192';});}catch(_){}
+    try{document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){b.textContent='Beta 0.193';});}catch(_){}
     try{document.querySelectorAll('#dvlCrosshairTopLayer').forEach(function(x){x.remove();});}catch(_){}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();
@@ -9668,7 +9695,7 @@ window._dvlClarEyeHit = null;
 </style>
 <script id="DVL_BETA_0041_OSC_CROSS_OVERLAY_JS">
 (function(){
-  const VERSION='Beta 0.192';
+  const VERSION='Beta 0.193';
   function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); }
   function $(id){ return document.getElementById(id); }
   function num(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
@@ -9973,7 +10000,7 @@ input[type="color"]{border-radius:7px!important;}
 <script id="DVL_BETA_0045_PREMIUM_POLISH_JS">
 (function(){
   'use strict';
-  const VERSION='Beta 0.192';
+  const VERSION='Beta 0.193';
   function ready(fn){ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn); else fn(); }
   function E(id){return document.getElementById(id)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -10454,7 +10481,7 @@ input[type="color"]{border-radius:7px!important;}
 </div><!-- /dvlSTPanel -->
 
 <style id="DVL_STRATEGY_TESTER_CSS">
-/* ── DVL Strategy Tester — Beta 0.192 ── */
+/* ── DVL Strategy Tester — Beta 0.193 ── */
 /* 0.131: período HVN separado (busca candles extras antes do backtest); +3/5 anos nos seletores */
 /* 0.127: optimizer per-param ON/OFF toggles — lock any param to current form value to reduce combo space */
 #dvlSTScrim{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:13000;display:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
@@ -10618,7 +10645,7 @@ input[type="color"]{border-radius:7px!important;}
 /* DVL Strategy Tester */
 (function(){
 'use strict';
-var V='Beta 0.192';
+var V='Beta 0.193';
 var panel=document.getElementById('dvlSTPanel');
 var scrim=document.getElementById('dvlSTScrim');
 var rpBtn=document.getElementById('rpStrategyTester');
@@ -17145,7 +17172,7 @@ console.log('[DVL] Strategy Tester '+V+' loaded');
 
 <div id="dvlHistStatus" style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:rgba(5,10,18,0.90);border:1px solid rgba(0,212,255,0.20);color:rgba(0,212,255,0.80);font-size:10px;font-family:monospace;padding:5px 14px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity 0.35s;z-index:9999;letter-spacing:.05em;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.55)"></div>
 
-<!-- ── DVL Moving Averages — Beta 0.192 ── -->
+<!-- ── DVL Moving Averages — Beta 0.193 ── -->
 <script>
 (function DVL_MA(){
   'use strict';
@@ -17487,7 +17514,7 @@ console.log('[DVL] Strategy Tester '+V+' loaded');
 })();
 </script>
 
-<!-- DVL PAPER TRADING ENGINE — Beta 0.192 -->
+<!-- DVL PAPER TRADING ENGINE — Beta 0.193 -->
 <style id="dvlPaperCSS">
 #dvlPaperPanel{position:fixed;right:0;top:50px;width:272px;background:#020508;border-left:1px solid #1a2636;border-bottom:1px solid #1a2636;z-index:190;display:none;flex-direction:column;max-height:calc(100vh - 50px);font-family:monospace;box-shadow:-4px 0 20px rgba(0,0,0,.7);}
 #dvlPaperPanel.pp-open{display:flex;}
@@ -25203,11 +25230,11 @@ body:before{display:none!important;background:none!important;}
 </style>
 <script id="DVL_BETA_0011_STARTUP_GUARD">
 (function(){
-  window.DVL_APP_VERSION='Beta 0.192';
+  window.DVL_APP_VERSION='Beta 0.193';
   window.__savedTf='5m';
   try{
     var b=document.getElementById('dvlVersionBadge');
-    if(b)b.textContent='Beta 0.192';
+    if(b)b.textContent='Beta 0.193';
     var sel=document.getElementById('tfSelect');
     if(sel)sel.value='5m';
     document.querySelectorAll('.tf,[data-tf]').forEach(function(el){
@@ -25317,7 +25344,7 @@ body:before{display:none!important;background:none!important;}
    are now handled natively by oscPanelAtY / oscScaleHit / oscEnsureScale in the main
    wrap wheel/mousedown/mousemove/dblclick handlers. Window-level capture removed. */
 (function(){
-  const VERSION = 'Beta 0.192';
+  const VERSION = 'Beta 0.193';
   try{ window.DVL_APP_VERSION = VERSION; }catch(_){ }
   function syncVersion(){
     try{ document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge').forEach(function(b){ b.textContent = VERSION; }); }catch(_){ }
@@ -25327,7 +25354,7 @@ body:before{display:none!important;background:none!important;}
 </script>
 
 <script id="DVL_BETA_0063_OSC_GEAR_FIX">
-/* Beta 0.192 — Improved DOM overlay buttons for canvas-drawn oscillator gears.
+/* Beta 0.193 — Improved DOM overlay buttons for canvas-drawn oscillator gears.
    - updateBtns() runs SYNCHRONOUSLY after draw (no requestAnimationFrame lag)
    - pointer-events:none set on hide (invisible element cannot capture taps)
    - hookDraw re-checks every 2 s to catch late draw-wrappers from other scripts
@@ -25914,7 +25941,7 @@ body:before{display:none!important;background:none!important;}
 })();
 </script>
 
-<!-- ── DVL Spike Zones Engine (Beta 0.192) ── -->
+<!-- ── DVL Spike Zones Engine (Beta 0.193) ── -->
 <script id="DVL_SPIKE_ZONES">
 (function DVL_SPIKE_ZONES(){
   'use strict';
