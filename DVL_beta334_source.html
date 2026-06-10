@@ -42268,7 +42268,7 @@ else DVL_BROKER.init();
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true}); else boot();
   [60,180,420,900,1800,3200].forEach(ms=>setTimeout(schedule,ms));
   setInterval(syncShield,180);
-  /* setInterval(forceVersion) removed — badge set once at boot */
+  setInterval(forceVersion,1800);
 })();
 </script>
 
@@ -42800,7 +42800,7 @@ else DVL_BROKER.init();
   function boot(){forceVersion();keepDefaultTraditional();patchFootprintLabel();}
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true}); else boot();
   [80,220,520,1200,2400,4000].forEach(ms=>setTimeout(boot,ms));
-  setInterval(function(){patchFootprintLabel();},1800);
+  setInterval(function(){forceVersion();patchFootprintLabel();},1800);
 })();
 </script>
 
@@ -42875,7 +42875,7 @@ function injectCards(){if(!window.S||!S.inds)return;S.inds.cgOpenInterest=!!S.in
   <div class="ind-settings" id="settings-cgLongShort">
     <div class="dvl325-cg-row"><span class="k">Fonte</span><select class="select" id="cgDataSourceMirror"><option value="same" selected>Usar fonte do OI</option></select></div>
     <div class="dvl325-cg-row"><span class="k">Exchange</span><select class="select" id="cgExchange"><option value="Binance" selected>Binance</option><option value="Bybit">Bybit</option><option value="OKX">OKX</option><option value="Bitget">Bitget</option></select></div>
-    <div class="dvl325-cg-row"><span class="k">Accounts</span><select class="select" id="cgLsMode"><option value="accounts-global" selected>Accounts global</option><option value="accounts-top">Top accounts</option></select></div>
+    <div class="dvl325-cg-row"><span class="k">Accounts</span><select class="select" id="cgLsMode"><option value="global" selected>Global accounts</option><option value="top">Top accounts</option></select></div>
     <div class="dvl325-cg-row"><span class="k">Altura</span><input class="num" id="cgLongShortHeight" type="number" min="72" max="210" value="104"></div>
     <div class="dvl325-cg-note">Ratio acima de 1 = mais contas long. Abaixo de 1 = mais contas short.</div>
   </div>
@@ -42888,7 +42888,7 @@ function updateOverlays(){makeOverlays();['cgOi','cgLs'].forEach(k=>{const hit=w
 function hookDraw(){const old=window.draw;if(typeof old!=='function'||old.__dvl325Cg)return;const wrapped=function(){const r=old.apply(this,arguments);try{syncToggles();updateOverlays();}catch(_){}return r;};wrapped.__dvl325Cg=true;try{window.draw=wrapped;}catch(_){}}
 function forceVersion(){try{window.DVL_APP_VERSION=VER;}catch(_){}qa('#dvlVersionBadge,.dvl-version-badge,.dvl-version-header,.dvl-version-logo-hidden,.beta-badge,.version-badge').forEach(b=>{if(b)b.textContent=VER;});try{window.DVL_CHANGELOG=window.DVL_CHANGELOG||[];const note='Added CoinGlass-style Aggregated Open Interest and Long/Short Ratio account oscillator panels with CoinGlass API support and Binance public fallback.';if(!window.DVL_CHANGELOG.some(x=>x&&x.version===VER&&x.note===note))window.DVL_CHANGELOG.unshift({version:VER,date:new Date().toISOString(),note});}catch(_){}}
 function boot(){forceVersion();if(window.S&&S.inds){if(!('cgOpenInterest'in S.inds))S.inds.cgOpenInterest=false;if(!('cgLongShort'in S.inds))S.inds.cgLongShort=false;if(!S.oscScale)S.oscScale={};S.oscScale.cgOi=S.oscScale.cgOi||{center:0,range:200};S.oscScale.cgLs=S.oscScale.cgLs||{center:0,range:200};}injectCards();makeOverlays();hookDraw();ensureData();syncToggles();try{drawSoon&&drawSoon();}catch(_){}}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();[180,500,1100,2200,4000].forEach(ms=>setTimeout(boot,ms));/* CG_CACHE ensureData interval removed — CG327 handles fetching */
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();[180,500,1100,2200,4000].forEach(ms=>setTimeout(boot,ms));setInterval(function(){forceVersion();ensureData();},30000);
 })();
 </script>
 
@@ -43115,7 +43115,7 @@ function stop(e){try{e.preventDefault();}catch(_){}try{e.stopPropagation();}catc
 function forceVersion(){
   try{window.DVL_APP_VERSION=VER;}catch(_){ }
   qa('#dvlVersionBadge,.dvl-version-badge,.dvl-version-header,.dvl-version-logo-hidden,.beta-badge,.version-badge').forEach(el=>{if(el)el.textContent=VER;});
-  /* body-* walker removed — caused full DOM traversal on every badge update */
+  qa('body *').forEach(el=>{if(!el||el.children.length)return;const t=(el.textContent||'').trim();if(/^Beta\s+0\.\d{3}$/i.test(t))el.textContent=VER;});
   try{window.DVL_CHANGELOG=window.DVL_CHANGELOG||[];[
     'CoinGlass indicator cards standardized to native DVL card structure with premium SVG icons.',
     'CoinGlass oscillator panels now have visible eye/gear controls and top-splitter drag resize like native oscillators.'
@@ -43245,7 +43245,7 @@ function boot(){raf=0;forceVersion();standardizeCards();bindResize();bindHitboxF
 function schedule(){if(raf)return;raf=requestAnimationFrame(boot);} 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 [80,220,600,1400,2600,4200].forEach(ms=>setTimeout(schedule,ms));
-setInterval(function(){standardizeCards();patchDrawControls();updateOscButtons();},1500);
+setInterval(function(){forceVersion();standardizeCards();patchDrawControls();updateOscButtons();},1500);
 })();
 </script>
 
@@ -43388,7 +43388,7 @@ setInterval(function(){standardizeCards();patchDrawControls();updateOscButtons()
   function syncOriginalsFromStorage(){
     const defaults={
       cgDataSource:'auto',cgApiKey:'',cgSharedPeriod:'auto',cgOiUnit:'usd',cgOpenInterestHeight:String(window._cgOpenInterestH||112),
-      cgExchange:'Binance',cgLsMode:'accounts-global',cgLsShowAverage:'on',cgLongShortHeight:String(window._cgLongShortH||104),cgTakerExchanges:'Binance,OKX,Bybit'
+      cgExchange:'Binance',cgLsMode:'taker',cgLsShowAverage:'on',cgLongShortHeight:String(window._cgLongShortH||104),cgTakerExchanges:'Binance,OKX,Bybit'
     };
     CG_IDS.forEach(id=>setOrig(id,getStored(id,defaults[id]||''),false));
   }
@@ -43514,7 +43514,7 @@ setInterval(function(){standardizeCards();patchDrawControls();updateOscButtons()
   function schedule(){if(raf)return;raf=requestAnimationFrame(boot);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
   [80,220,600,1400,3000].forEach(ms=>setTimeout(schedule,ms));
-  /* interval removed — bindGearCapture/bindFitReset superseded by 0.334 */
+  setInterval(function(){forceVersion();bindGearCapture();bindFitReset();},1500);
 })();
 </script>
 
@@ -43640,7 +43640,7 @@ setInterval(function(){standardizeCards();patchDrawControls();updateOscButtons()
   function schedule(){if(raf)return;raf=requestAnimationFrame(boot);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
   [80,220,600,1400,3000].forEach(ms=>setTimeout(schedule,ms));
-  /* interval removed — Beta 0.334 gear supersedes 0.331 */
+  setInterval(function(){forceVersion();bindFastGear();enhanceModal();},1200);
 })();
 </script>
 
@@ -43725,7 +43725,7 @@ setInterval(function(){standardizeCards();patchDrawControls();updateOscButtons()
   function stop(e){try{e.preventDefault();}catch(_){}try{e.stopPropagation();}catch(_){}try{if(e.stopImmediatePropagation)e.stopImmediatePropagation();}catch(_){} }
   function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   function storeKey(id){return 'dvl_cg_setting_'+id;}
-  function defaults(id){return ({cgDataSource:'auto',cgApiKey:'',cgSharedPeriod:'auto',cgOiUnit:'usd',cgOpenInterestHeight:'112',cgExchange:'Binance',cgLsMode:'accounts-global',cgLsShowAverage:'on',cgLongShortHeight:'104',cgTakerExchanges:'Binance,OKX,Bybit'})[id]||'';}
+  function defaults(id){return ({cgDataSource:'auto',cgApiKey:'',cgSharedPeriod:'auto',cgOiUnit:'usd',cgOpenInterestHeight:'112',cgExchange:'Binance',cgLsMode:'taker',cgLsShowAverage:'on',cgLongShortHeight:'104',cgTakerExchanges:'Binance,OKX,Bybit'})[id]||'';}
   function getVal(id){try{const v=localStorage.getItem(storeKey(id));if(v!==null&&v!==undefined&&v!=='')return v;}catch(_){}const el=q('#'+id);return el&&el.value!==undefined&&el.value!==''?el.value:defaults(id);}
   function setVal(id,v,redraw){
     try{localStorage.setItem(storeKey(id),String(v));}catch(_){}
@@ -43825,7 +43825,7 @@ setInterval(function(){standardizeCards();patchDrawControls();updateOscButtons()
   function schedule(){if(raf)return;raf=requestAnimationFrame(boot);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
   [80,220,620,1400,3000].forEach(ms=>setTimeout(schedule,ms));
-  /* interval removed — Beta 0.334 gear supersedes 0.332 */
+  setInterval(function(){forceVersion();bind();},1400);
 })();
 </script>
 </body>
@@ -61135,7 +61135,7 @@ body:before{display:none!important;background:none!important;}
   function schedule(){if(raf)return; raf=requestAnimationFrame(boot);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true}); else boot();
   [60,160,360,800,1500,2500,4000].forEach(ms=>setTimeout(schedule,ms));
-  setInterval(()=>{markLev();},1600);
+  setInterval(()=>{forceVersion();markLev();},1600);
 })();
 </script>
 
@@ -61351,7 +61351,12 @@ body:before{display:none!important;background:none!important;}
   function forceVersion(){
     try{window.DVL_APP_VERSION=VER;}catch(_){ }
     qa('#dvlVersionBadge,.dvl-version-badge,.dvl-version-header,.dvl-version-logo-hidden,.beta-badge,.version-badge').forEach(el=>{if(el)el.textContent=VER;});
-    /* body-* walker removed — caused full DOM traversal on every badge update */
+    /* Some legacy patches write literal Beta text into custom header nodes; update only exact version labels. */
+    qa('body *').forEach(el=>{
+      if(!el || el.children.length) return;
+      const t=(el.textContent||'').trim();
+      if(/^Beta\s+0\.\d{3}$/i.test(t)) el.textContent=VER;
+    });
     try{
       window.DVL_CHANGELOG=window.DVL_CHANGELOG||[];
       const note='CoinGlass oscillator visual polish: compact cards, hidden click-box overlays, shorter panel labels and native DVL layout alignment.';
@@ -61430,7 +61435,7 @@ body:before{display:none!important;background:none!important;}
   function schedule(){if(raf)return;raf=requestAnimationFrame(boot);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
   [100,300,700,1400,2600,4200].forEach(ms=>setTimeout(schedule,ms));
-  setInterval(function(){polishCards();hideOverlayPaint();},1600);
+  setInterval(function(){forceVersion();polishCards();hideOverlayPaint();},1600);
 })();
 </script>
 
@@ -61502,7 +61507,7 @@ function yScale(kind,vals,defC,defR){let min=Math.min(...vals),max=Math.max(...v
 function yy(L,v,ys){return L.plotBottom-(v-ys.lo)/Math.max(1e-12,ys.hi-ys.lo)*(L.plotBottom-L.plotTop);}function scaleLabels(ctx,L,ys,fmt){ctx.save();ctx.fillStyle='#6f86a8';ctx.font='800 8px monospace';ctx.textAlign='left';ctx.textBaseline='middle';for(let k=0;k<=2;k++){const v=ys.hi-(ys.hi-ys.lo)*k/2;const y=yy(L,v,ys);ctx.fillText(fmt(v),L.scaleLeft+6,y);}ctx.restore();}
 function panelOffs(clarH,flowH,lsH){let off=0;const g=GAP();if(clarH)off+=clarH+g;if(flowH)off+=flowH+g;if(lsH)off+=lsH+g;return off;}
 window.__drawCGOpenInterestPanel=function(ctx,W,H,V,sc,x,h,lsH,flowH,clarH){ensure327();const off=panelOffs(clarH,flowH,lsH);const pBot=H-10-off,pTop=pBot-h,L=layout(W,pTop,pBot);const data=CG327.oi.data||[];const vals=[];for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(d)vals.push(d);}const last=vals[vals.length-1],prev=vals.length>1?vals[vals.length-2]:last;const pct=last&&prev?((last.close-prev.close)/Math.max(1e-9,prev.close)*100):0;chrome(ctx,L,'CG AGG OPEN INTEREST',last?fmtMoney(last.close)+' '+(pct>=0?'+':'')+pct.toFixed(2)+'%':(CG327.oi.fetching?'LOADING':'NO DATA'),pct>0?'bull':pct<0?'bear':'neutral','cgOi','cgOpenInterest');ctx.save();ctx.beginPath();ctx.rect(L.plotLeft,L.plotTop,L.plotRight-L.plotLeft,L.plotBottom-L.plotTop);ctx.clip();if(vals.length){const all=[];vals.forEach(v=>{all.push(v.low||v.close,v.high||v.close);});const ys=yScale('cgOi',all,0,200);ctx.strokeStyle='rgba(35,50,72,.72)';ctx.lineWidth=.8;for(let k=0;k<3;k++){const y=L.plotTop+(L.plotBottom-L.plotTop)*k/2;ctx.beginPath();ctx.moveTo(L.plotLeft,y);ctx.lineTo(L.plotRight,y);ctx.stroke();}const bw=Math.max(2,(CW(W)/Math.max(1,V.span))*0.50);for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(!d)continue;const xx=x(i),yo=yy(L,d.open,ys),yc=yy(L,d.close,ys),yh=yy(L,d.high,ys),yl=yy(L,d.low,ys),bull=d.close>=d.open;ctx.strokeStyle=bull?'rgba(0,225,172,.95)':'rgba(255,95,90,.95)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(xx,yh);ctx.lineTo(xx,yl);ctx.stroke();ctx.fillStyle=bull?'rgba(0,215,168,.72)':'rgba(255,95,90,.72)';ctx.fillRect(xx-bw/2,Math.min(yo,yc),bw,Math.max(2,Math.abs(yc-yo)));ctx.strokeRect(xx-bw/2,Math.min(yo,yc),bw,Math.max(2,Math.abs(yc-yo)));}ctx.restore();scaleLabels(ctx,L,ys,fmtMoney);return;}ctx.restore();};
-window.__drawCGLongShortPanel=function(ctx,W,H,V,sc,x,h,flowH,clarH){ensure327();const off=panelOffs(clarH,flowH,0);const pBot=H-10-off,pTop=pBot-h,L=layout(W,pTop,pBot);const data=CG327.ls.data||[];const vals=[];for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(d)vals.push(d);}const last=vals[vals.length-1];const label=(val('cgLsMode','taker')||'taker').includes('account')?'CG L/S ACCOUNTS':'CG TAKER LONG/SHORT';const text=last?('L/S '+last.ratio.toFixed(2)+' · L '+Math.round((last.longPct||.5)*100)+'%'):(CG327.ls.fetching?'LOADING':'NO DATA');chrome(ctx,L,label,text,last?(last.ratio>1.03?'bull':last.ratio<.97?'bear':'neutral'):'neutral','cgLs','cgLongShort');ctx.save();ctx.beginPath();ctx.rect(L.plotLeft,L.plotTop,L.plotRight-L.plotLeft,L.plotBottom-L.plotTop);ctx.clip();if(vals.length){const ratios=vals.map(v=>v.ratio).concat([1]);const ys=yScale('cgLs',ratios,1,1.2);const zero=yy(L,1,ys);/* midline */ctx.strokeStyle='rgba(0,212,255,.30)';ctx.setLineDash([4,6]);ctx.beginPath();ctx.moveTo(L.plotLeft,zero);ctx.lineTo(L.plotRight,zero);ctx.stroke();ctx.setLineDash([]);/* subtle grid */ctx.strokeStyle='rgba(35,50,72,.55)';ctx.lineWidth=.6;for(let k=0;k<3;k++){const y=L.plotTop+(L.plotBottom-L.plotTop)*k/2;ctx.beginPath();ctx.moveTo(L.plotLeft,y);ctx.lineTo(L.plotRight,y);ctx.stroke();}/* single color-changing line: green when ratio>=1, red when <1 */let px=null,py=null;for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(!d)continue;const xx=x(i),yr=yy(L,d.ratio,ys);if(px!==null){ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(xx,yr);const dom=d.ratio>=1;ctx.strokeStyle=dom?'rgba(0,230,155,.98)':'rgba(255,85,75,.98)';ctx.lineWidth=1.8;ctx.shadowColor=dom?'rgba(0,225,150,.32)':'rgba(255,85,75,.30)';ctx.shadowBlur=4;ctx.stroke();ctx.shadowBlur=0;}px=xx;py=yr;}ctx.restore();scaleLabels(ctx,L,ys,v=>v.toFixed(2));return;}ctx.restore();};
+window.__drawCGLongShortPanel=function(ctx,W,H,V,sc,x,h,flowH,clarH){ensure327();const off=panelOffs(clarH,flowH,0);const pBot=H-10-off,pTop=pBot-h,L=layout(W,pTop,pBot);const data=CG327.ls.data||[];const vals=[];for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(d)vals.push(d);}const last=vals[vals.length-1];const label=(val('cgLsMode','taker')||'taker').includes('account')?'CG L/S ACCOUNTS':'CG TAKER LONG/SHORT';const text=last?('L/S '+last.ratio.toFixed(2)+' · L '+Math.round((last.longPct||.5)*100)+'%'):(CG327.ls.fetching?'LOADING':'NO DATA');chrome(ctx,L,label,text,last?(last.ratio>1.03?'bull':last.ratio<.97?'bear':'neutral'):'neutral','cgLs','cgLongShort');ctx.save();ctx.beginPath();ctx.rect(L.plotLeft,L.plotTop,L.plotRight-L.plotLeft,L.plotBottom-L.plotTop);ctx.clip();if(vals.length){const ratios=vals.map(v=>v.ratio).concat([1]);const ys=yScale('cgLs',ratios,1,1.2);const zero=yy(L,1,ys);ctx.strokeStyle='rgba(0,212,255,.35)';ctx.setLineDash([4,6]);ctx.beginPath();ctx.moveTo(L.plotLeft,zero);ctx.lineTo(L.plotRight,zero);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='rgba(35,50,72,.72)';ctx.lineWidth=.8;for(let k=0;k<3;k++){const y=L.plotTop+(L.plotBottom-L.plotTop)*k/2;ctx.beginPath();ctx.moveTo(L.plotLeft,y);ctx.lineTo(L.plotRight,y);ctx.stroke();}const bw=Math.max(1,(CW(W)/Math.max(1,V.span))*0.62);for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(!d)continue;const xx=x(i),yr=yy(L,d.ratio,ys);ctx.fillStyle=d.ratio>=1?'rgba(0,220,170,.58)':'rgba(255,95,90,.58)';ctx.fillRect(xx-bw/2,Math.min(zero,yr),bw,Math.max(1,Math.abs(yr-zero)));}if(val('cgLsShowAverage','on')!=='off'){ctx.beginPath();let st=false;for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(!d)continue;const xx=x(i),yr=yy(L,d.ratio,ys);if(!st){ctx.moveTo(xx,yr);st=true;}else ctx.lineTo(xx,yr);}ctx.strokeStyle='rgba(0,230,245,.98)';ctx.lineWidth=1.8;ctx.shadowColor='rgba(0,230,245,.34)';ctx.shadowBlur=5;if(st)ctx.stroke();ctx.shadowBlur=0;}ctx.restore();scaleLabels(ctx,L,ys,v=>v.toFixed(2));return;}ctx.restore();};
 function customizeCards(){const c1=q('[data-card="cgOpenInterest"]'),c2=q('[data-card="cgLongShort"]');if(c1){const n=q('.name',c1),s=q('.ind-sub',c1);if(n)n.textContent='CG Open Interest';if(s)s.textContent='Aggregated OI candles';}if(c2){const n=q('.name',c2),s=q('.ind-sub',c2);if(n)n.textContent='CG Taker Long/Short';if(s)s.textContent='Taker buy/sell ratio';const sel=q('#cgLsMode');if(sel&&sel.dataset.dvl327Mode!=='1'){sel.dataset.dvl327Mode='1';sel.innerHTML='<option value="taker" selected>Taker buy/sell</option><option value="accounts-global">Accounts global</option><option value="accounts-top">Top accounts</option>';}}
   if(!q('#cgTakerExchanges')&&q('#settings-cgLongShort')){q('#settings-cgLongShort').insertAdjacentHTML('beforeend','<div class="dvl325-cg-row"><span class="k">CG exchanges</span><input class="input" id="cgTakerExchanges" value="Binance,OKX,Bybit" style="width:128px"></div><div class="dvl327-cg-desc">Padrão do painel: Taker buy/sell long-short ratio, igual ao Longs vs Shorts de fluxo/agressão. Accounts fica só como opção.</div>');}
   ['cgTakerExchanges','cgLsMode'].forEach(id=>{const el=q('#'+id);if(el&&!el.dataset.dvl327Bound){el.dataset.dvl327Bound='1';el.addEventListener('change',()=>{CG327.ls.key='';ensure327();try{drawSoon();}catch(_){}});el.addEventListener('input',()=>{CG327.ls.key='';});}});
@@ -61515,7 +61520,7 @@ function bindTouch(){const wrap=q('#chartWrap');if(!wrap||wrap.dataset.dvl327Tou
   wrap.addEventListener('touchend',e=>{if(CG327.touch){e.stopPropagation();if(e.stopImmediatePropagation)e.stopImmediatePropagation();CG327.touch=null;}},{capture:true,passive:false});
 }
 function boot(){forceVersion();assignGlobalHelpers();loadSavedScales();customizeCards();fixSettings();ensure327();bindTouch();try{drawSoon();}catch(_){ }}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();[80,240,700,1500,3200].forEach(ms=>setTimeout(boot,ms));setInterval(()=>{assignGlobalHelpers();ensure327();},30000);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();[80,240,700,1500,3200].forEach(ms=>setTimeout(boot,ms));setInterval(()=>{forceVersion();assignGlobalHelpers();ensure327();},30000);
 })();
 </script>
 
@@ -61737,7 +61742,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
   else boot();
   [100,260,700,1400,2600,4200].forEach(ms=>setTimeout(schedule,ms));
-  /* interval removed — Beta 0.334 modal supersedes 0.329 */
+  setInterval(function(){forceVersion();wrapModal();bindGears();if(activeCgSettings)keepCgSettingsInModal();},1000);
 })();
 </script>
 
@@ -61792,7 +61797,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
   function qa(s,r){return Array.from((r||document).querySelectorAll(s));}
   function stop(e){try{e.preventDefault();}catch(_){}try{e.stopPropagation();}catch(_){}try{e.stopImmediatePropagation&&e.stopImmediatePropagation();}catch(_){} }
   function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-  function defaults(id){return ({cgDataSource:'auto',cgApiKey:'',cgSharedPeriod:'auto',cgOiUnit:'usd',cgOpenInterestHeight:'112',cgExchange:'Binance',cgLsMode:'accounts-global',cgLsShowAverage:'on',cgLongShortHeight:'104',cgTakerExchanges:'Binance,OKX,Bybit'})[id]||'';}
+  function defaults(id){return ({cgDataSource:'auto',cgApiKey:'',cgSharedPeriod:'auto',cgOiUnit:'usd',cgOpenInterestHeight:'112',cgExchange:'Binance',cgLsMode:'taker',cgLsShowAverage:'on',cgLongShortHeight:'104',cgTakerExchanges:'Binance,OKX,Bybit'})[id]||'';}
   function storageKey(id){return 'dvl_cg_setting_'+id;}
   function existing(id){return qa('#'+id).find(el=>!el.dataset.dvl333Ui)||null;}
   function ensureOriginal(id){
@@ -61924,7 +61929,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
   function schedule(){if(raf)return;raf=requestAnimationFrame(boot);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
   [60,180,420,900,1800,3200].forEach(ms=>setTimeout(schedule,ms));
-  /* interval removed — bindCapture has one-time guard */
+  setInterval(function(){forceVersion();bindCapture();},600);
 })();
 </script>
 
@@ -62002,7 +62007,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script id="DVL_BETA_0334_CG_GEAR_HARD_FIX_SCRIPT">
 (function(){
   'use strict';
-  const VER='Beta 0.339';
+  const VER='Beta 0.334';
   const IDS=['cgDataSource','cgApiKey','cgSharedPeriod','cgOiUnit','cgOpenInterestHeight','cgExchange','cgLsMode','cgLsShowAverage','cgLongShortHeight','cgTakerExchanges'];
   const KINDS={cgOi:'cgOpenInterest',cgLs:'cgLongShort'};
   let raf=0,lastAction=0;
@@ -62012,7 +62017,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
   function qa(s,r){return Array.from((r||document).querySelectorAll(s));}
   function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   function stop(e){try{e.preventDefault();}catch(_){}try{e.stopPropagation();}catch(_){}try{e.stopImmediatePropagation&&e.stopImmediatePropagation();}catch(_){} }
-  function defaults(id){return ({cgDataSource:'auto',cgApiKey:'',cgSharedPeriod:'auto',cgOiUnit:'usd',cgOpenInterestHeight:'112',cgExchange:'Binance',cgLsMode:'accounts-global',cgLsShowAverage:'on',cgLongShortHeight:'104',cgTakerExchanges:'Binance,OKX,Bybit'})[id]||'';}
+  function defaults(id){return ({cgDataSource:'auto',cgApiKey:'',cgSharedPeriod:'auto',cgOiUnit:'usd',cgOpenInterestHeight:'112',cgExchange:'Binance',cgLsMode:'taker',cgLsShowAverage:'on',cgLongShortHeight:'104',cgTakerExchanges:'Binance,OKX,Bybit'})[id]||'';}
   function storageKey(id){return 'dvl_cg_setting_'+id;}
   function existing(id){return qa('#'+id).find(el=>!el.dataset.dvl334Ui)||null;}
   function ensureStore(id){let el=existing(id);if(!el){el=document.createElement('input');el.type='hidden';el.id=id;el.dataset.dvl334Store='1';document.body.appendChild(el);}return el;}
@@ -62030,8 +62035,8 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
     try{window.DVL_APP_VERSION=VER;}catch(_){}
     qa('#dvlVersionBadge,.dvl-version-badge,.dvl-version-header,.dvl-version-logo-hidden,.beta-badge,.version-badge').forEach(el=>{if(el)el.textContent=VER;});
     try{window.DVL_CHANGELOG=window.DVL_CHANGELOG||[];[
-      'Beta 0.339: Cleaned duplicate CG patch loops, killed flickering intervals, single-line L/S ratio, accounts-global default.',
-      'Removed all forceVersion() from setIntervals and body-* DOM walker — no more badge flicker or reflow on every tick.'
+      'Hard-fixed CoinGlass settings gear: sidebar and chart gears now open from a dedicated 0.334 handler, independent of legacy modal/canvas handlers.',
+      'CoinGlass chart controls replaced with final DOM eye/gear buttons and old CG hitboxes are neutralized after positioning.'
     ].forEach(note=>{if(!window.DVL_CHANGELOG.some(x=>x&&x.version===VER&&x.note===note))window.DVL_CHANGELOG.unshift({version:VER,date:new Date().toISOString(),note});});}catch(_){}
   }
   function gearSvg(){return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="2.7"/><path d="M10 2.7v2M10 15.3v2M4.8 4.8l1.45 1.45M13.75 13.75l1.45 1.45M2.7 10h2M15.3 10h2M4.8 15.2l1.45-1.45M13.75 6.25l1.45-1.45"/></svg>';}
@@ -62163,6 +62168,6 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
   function schedule(){if(raf)return;raf=requestAnimationFrame(boot);} 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
   [40,100,220,500,1000,1800,3200,5200].forEach(ms=>setTimeout(schedule,ms));
-  /* interval removed — updateChartButtons wired to draw hook, bindSidebarGears has guard */
+  setInterval(function(){forceVersion();bindSidebarGears();updateChartButtons();},350);
 })();
 </script>
