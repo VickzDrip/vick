@@ -824,32 +824,8 @@ Beta 0.312
   }
 
   async function forceReloadToLatest(version){
-    const now = Date.now();
-    const lastVersion = localStorage.getItem("dvl_last_reload_version");
-    const lastTime = +(localStorage.getItem("dvl_last_reload_time") || 0);
-
-    if(lastVersion === version && now - lastTime < 10000) return;
-
-    localStorage.setItem("dvl_pending_force_reload", version);
-    localStorage.setItem("dvl_last_reload_version", version);
-    localStorage.setItem("dvl_last_reload_time", String(now));
-
-    try{ if(bc) bc.postMessage({type:"DVL_FORCE_RELOAD", version}); }catch(_){}
-    try{ localStorage.setItem("dvl_force_reload_signal", version + "|" + now); }catch(_){}
-
-    const banner = document.createElement("div");
-    banner.textContent = "Nova versão detectada. Atualizando...";
-    banner.style.cssText = "position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;background:#070c18;color:#c8d8f0;border:1px solid #1e2a40;border-radius:10px;padding:9px 13px;font:700 12px monospace;box-shadow:0 12px 35px rgba(0,0,0,.45)";
-    try{ document.body.appendChild(banner); }catch(_){}
-
-    await clearRuntimeCaches();
-
-    setTimeout(function(){
-      const url = new URL(location.href);
-      url.searchParams.set("v", versionSlug(version));
-      url.searchParams.set("reload", String(Date.now()));
-      location.replace(url.toString());
-    }, 350);
+    /* auto-reload disabled — server version mismatch is expected during patching */
+    console.warn("[DVL] version check (no reload):", version);
   }
 
   async function checkVersion(reason){
@@ -7125,32 +7101,8 @@ Beta 0.312
   }
 
   async function forceReloadToLatest(version){
-    const now = Date.now();
-    const lastVersion = localStorage.getItem("dvl_last_reload_version");
-    const lastTime = +(localStorage.getItem("dvl_last_reload_time") || 0);
-
-    if(lastVersion === version && now - lastTime < 10000) return;
-
-    localStorage.setItem("dvl_pending_force_reload", version);
-    localStorage.setItem("dvl_last_reload_version", version);
-    localStorage.setItem("dvl_last_reload_time", String(now));
-
-    try{ if(bc) bc.postMessage({type:"DVL_FORCE_RELOAD", version}); }catch(_){}
-    try{ localStorage.setItem("dvl_force_reload_signal", version + "|" + now); }catch(_){}
-
-    const banner = document.createElement("div");
-    banner.textContent = "Nova versão detectada. Atualizando...";
-    banner.style.cssText = "position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;background:#070c18;color:#c8d8f0;border:1px solid #1e2a40;border-radius:10px;padding:9px 13px;font:700 12px monospace;box-shadow:0 12px 35px rgba(0,0,0,.45)";
-    try{ document.body.appendChild(banner); }catch(_){}
-
-    await clearRuntimeCaches();
-
-    setTimeout(function(){
-      const url = new URL(location.href);
-      url.searchParams.set("v", versionSlug(version));
-      url.searchParams.set("reload", String(Date.now()));
-      location.replace(url.toString());
-    }, 350);
+    /* auto-reload disabled — server version mismatch is expected during patching */
+    console.warn("[DVL] version check (no reload):", version);
   }
 
   async function checkVersion(reason){
@@ -62002,7 +61954,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script id="DVL_BETA_0334_CG_GEAR_HARD_FIX_SCRIPT">
 (function(){
   'use strict';
-  const VER='Beta 0.339';
+  const VER='Beta 0.340';
   const IDS=['cgDataSource','cgApiKey','cgSharedPeriod','cgOiUnit','cgOpenInterestHeight','cgExchange','cgLsMode','cgLsShowAverage','cgLongShortHeight','cgTakerExchanges'];
   const KINDS={cgOi:'cgOpenInterest',cgLs:'cgLongShort'};
   let raf=0,lastAction=0;
@@ -62030,7 +61982,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
     try{window.DVL_APP_VERSION=VER;}catch(_){}
     qa('#dvlVersionBadge,.dvl-version-badge,.dvl-version-header,.dvl-version-logo-hidden,.beta-badge,.version-badge').forEach(el=>{if(el)el.textContent=VER;});
     try{window.DVL_CHANGELOG=window.DVL_CHANGELOG||[];[
-      'Beta 0.339: Cleaned duplicate CG patch loops, killed flickering intervals, single-line L/S ratio, accounts-global default.',
+      'Beta 0.340: Disabled auto-reload loop — forceReloadToLatest stubbed, no more version-mismatch reload.',
       'Removed all forceVersion() from setIntervals and body-* DOM walker — no more badge flicker or reflow on every tick.'
     ].forEach(note=>{if(!window.DVL_CHANGELOG.some(x=>x&&x.version===VER&&x.note===note))window.DVL_CHANGELOG.unshift({version:VER,date:new Date().toISOString(),note});});}catch(_){}
   }
