@@ -795,7 +795,7 @@ Beta 0.312
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.340";
+  const LOCAL_VERSION = "Beta 0.342";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -2461,11 +2461,30 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.341";
-/* clear stale reload signals from previous sessions */
-try{localStorage.removeItem("dvl_force_reload_signal");}catch(_){}
-try{localStorage.removeItem("dvl_last_reload_version");}catch(_){}
-try{localStorage.removeItem("dvl_pending_force_reload");}catch(_){}
+/* guard: second copy of this script (at line ~8745) does nothing */
+if(!window.DVL_APP_VERSION){
+  window.DVL_APP_VERSION = "Beta 0.342";
+  /* lock: prevents ALL legacy setVersion/forceVersion from overwriting */
+  try{Object.defineProperty(window,"DVL_APP_VERSION",{
+    value:"Beta 0.342",writable:false,configurable:false,enumerable:true
+  });}catch(_){}
+  /* clear all stale reload and version signals */
+  ["dvl_force_reload_signal","dvl_last_reload_version","dvl_pending_force_reload",
+   "dvl308_clean_reload","dvl309_clean_reload","dvl310_clean_reload"].forEach(function(k){
+    try{localStorage.removeItem(k);}catch(_){}
+  });
+  /* enforce badge after all legacy setVersion() timeouts */
+  var _dvlVLock=window.DVL_APP_VERSION;
+  function _dvlEnforceBadge(){
+    document.querySelectorAll('#dvlVersionBadge,.dvl-version-badge,.dvl-version-header,.dvl-version-logo-hidden,.version-badge,.beta-badge').forEach(function(el){
+      if(el&&el.textContent!==_dvlVLock)el.textContent=_dvlVLock;
+    });
+  }
+  document.addEventListener('DOMContentLoaded',function(){
+    _dvlEnforceBadge();
+    setTimeout(_dvlEnforceBadge,3000);
+  });
+}
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -7076,7 +7095,7 @@ Beta 0.312
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.340";
+  const LOCAL_VERSION = "Beta 0.342";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -8742,11 +8761,19 @@ body:before{display:none!important;background:none!important;}
 
 <script id="DVL_APP_VERSION">
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
-window.DVL_APP_VERSION = "Beta 0.341";
-/* clear stale reload signals from previous sessions */
-try{localStorage.removeItem("dvl_force_reload_signal");}catch(_){}
-try{localStorage.removeItem("dvl_last_reload_version");}catch(_){}
-try{localStorage.removeItem("dvl_pending_force_reload");}catch(_){}
+/* guard: second copy of this script (at line ~8745) does nothing */
+if(!window.DVL_APP_VERSION){
+  window.DVL_APP_VERSION = "Beta 0.342";
+  /* lock: prevents ALL legacy setVersion/forceVersion from overwriting */
+  try{Object.defineProperty(window,"DVL_APP_VERSION",{
+    value:"Beta 0.342",writable:false,configurable:false,enumerable:true
+  });}catch(_){}
+  /* clear all stale reload and version signals */
+  ["dvl_force_reload_signal","dvl_last_reload_version","dvl_pending_force_reload",
+   "dvl308_clean_reload","dvl309_clean_reload","dvl310_clean_reload"].forEach(function(k){
+    try{localStorage.removeItem(k);}catch(_){}
+  });
+}
 
 function applyDVLVersionBadge(){
   var el = document.getElementById('dvlVersionBadge');
@@ -13982,7 +14009,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeInputModal();i
     const sc=el('mobileScrim');if(sc)sc.classList.add('show');
   }
 })();
-syncIndControls();el('btnLive').onclick=fitAll;el('btnFit').onclick=fitClose;el('btnLong').onclick=()=>{S.tool=S.tool==='long'?null:'long';syncToolBtns()};el('btnShort').onclick=()=>{S.tool=S.tool==='short'?null:'short';syncToolBtns()};el('applyBtn').onclick=()=>{refreshDepth();draw();closeSidebar()};el('retry').onclick=boot;const __brandReload=document.querySelector('.brand')||document.querySelector('.side-logo')||document.querySelector('#topSym');if(__brandReload)__brandReload.onclick=()=>location.reload();el('chartStyle').onchange=e=>{S.chartStyle=e.target.value;draw()};
+syncIndControls();el('btnLive').onclick=fitAll;el('btnFit').onclick=fitClose;el('btnLong').onclick=()=>{S.tool=S.tool==='long'?null:'long';syncToolBtns()};el('btnShort').onclick=()=>{S.tool=S.tool==='short'?null:'short';syncToolBtns()};el('applyBtn').onclick=()=>{refreshDepth();draw();closeSidebar()};el('retry').onclick=boot;const __brandReload=document.querySelector('.brand')||document.querySelector('.side-logo')||document.querySelector('#topSym');if(__brandReload)__brandReload.onclick=null;el('chartStyle').onchange=e=>{S.chartStyle=e.target.value;draw()};
 if(el('tfSelect')){
   el('tfSelect').onchange=e=>{
     const next=e.target.value;
@@ -28699,7 +28726,7 @@ else DVL_BROKER.init();
       if(LOGO_DATA) logoImg.src = LOGO_DATA;
       logoImg.alt = 'DVL';
       logoImg.style.display = 'block';
-      logoWrap.onclick = function(){ location.reload(); };
+      logoWrap.onclick = null;
     }
 
     var badge = document.getElementById('dvlVersionBadge');
@@ -58229,14 +58256,9 @@ body:before{display:none!important;background:none!important;}
   }
 
   function cleanReload(){
-    try{ localStorage.setItem('dvl308_clean_reload','1'); }catch(e){}
-    document.documentElement.classList.add('dvl308-clean-reloading');
-    document.body.classList.add('dvl308-clean-reloading');
+    /* reload disabled in Beta 0.342 — tap logo to refresh is removed */
     const ov = ensureReloadOverlay();
-    ov.classList.add('show');
-    setTimeout(function(){
-      window.location.reload();
-    }, 80);
+    if(ov){ov.classList.add('show');setTimeout(function(){ov.classList.remove('show');},500);}
   }
 
   function finishCleanReload(){
@@ -58531,12 +58553,8 @@ body:before{display:none!important;background:none!important;}
   }
 
   function cleanReload(){
-    if(cleanReloading) return;
-    cleanReloading = true;
-    try{ localStorage.setItem('dvl309_clean_reload','1'); }catch(e){}
-    const ov = ensureReloadOverlay();
-    ov.style.display = 'flex';
-    setTimeout(function(){ window.location.reload(); }, 70);
+    /* reload disabled in Beta 0.342 */
+    cleanReloading = false;
   }
 
   function finishCleanReload(){
@@ -59062,8 +59080,7 @@ body:before{display:none!important;background:none!important;}
         wrap.addEventListener('click', function(e){
           e.preventDefault();
           e.stopPropagation();
-          try{ localStorage.setItem('dvl310_clean_reload','1'); }catch(_e){}
-          window.location.reload();
+          /* reload disabled in Beta 0.342 */
         }, true);
       }
     }
@@ -61927,7 +61944,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script id="DVL_BETA_0334_CG_GEAR_HARD_FIX_SCRIPT">
 (function(){
   'use strict';
-  const VER='Beta 0.341';
+  const VER='Beta 0.342';
   const IDS=['cgDataSource','cgApiKey','cgSharedPeriod','cgOiUnit','cgOpenInterestHeight','cgExchange','cgLsMode','cgLsShowAverage','cgLongShortHeight','cgTakerExchanges'];
   const KINDS={cgOi:'cgOpenInterest',cgLs:'cgLongShort'};
   let raf=0,lastAction=0;
@@ -61955,7 +61972,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
     try{window.DVL_APP_VERSION=VER;}catch(_){}
     qa('#dvlVersionBadge,.dvl-version-badge,.dvl-version-header,.dvl-version-logo-hidden,.beta-badge,.version-badge').forEach(el=>{if(el)el.textContent=VER;});
     try{window.DVL_CHANGELOG=window.DVL_CHANGELOG||[];[
-      'Beta 0.341: Version stability — removed all competing Beta 0.312 badge writers, single source of truth.',
+      'Beta 0.342: Locked DVL_APP_VERSION (Object.defineProperty), removed all cleanReload/location.reload from logo handlers.',
       'Removed all forceVersion() from setIntervals and body-* DOM walker — no more badge flicker or reflow on every tick.'
     ].forEach(note=>{if(!window.DVL_CHANGELOG.some(x=>x&&x.version===VER&&x.note===note))window.DVL_CHANGELOG.unshift({version:VER,date:new Date().toISOString(),note});});}catch(_){}
   }
