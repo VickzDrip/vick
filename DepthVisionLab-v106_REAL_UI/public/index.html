@@ -795,7 +795,7 @@ Beta 0.312
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.342";
+  const LOCAL_VERSION = "Beta 0.343";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -867,16 +867,14 @@ Beta 0.312
     }
   });
 
-  window.addEventListener("pageshow", function(e){ if(e.persisted) checkVersion("pageshow-bfcache"); else checkVersion("pageshow"); });
-  window.addEventListener("focus", function(){ checkVersion("focus"); });
-  window.addEventListener("online", function(){ checkVersion("online"); });
-  document.addEventListener("visibilitychange", function(){ if(document.visibilityState === "visible") checkVersion("visible"); });
+  /* visibility redraw only — no version check, no reload (forceReloadToLatest is a no-op) */
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden){ requestAnimationFrame(function(){ try{if(window.drawSoon)window.drawSoon();}catch(_){} }); }
+  });
   document.addEventListener("DOMContentLoaded", function(){
     localStorage.setItem("dvl_loaded_version", window.DVL_APP_VERSION || LOCAL_VERSION);
-    checkVersion("DOMContentLoaded");
   });
-
-  setInterval(function(){ checkVersion("interval"); }, window.innerWidth > 900 ? 30000 : 45000);
+  /* pageshow/focus/online/interval checkVersion calls removed — polling is pointless since forceReloadToLatest is stubbed */
 })();
 </script>
 <style>
@@ -2463,10 +2461,10 @@ body:before{display:none!important;background:none!important;}
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
 /* guard: second copy of this script (at line ~8745) does nothing */
 if(!window.DVL_APP_VERSION){
-  window.DVL_APP_VERSION = "Beta 0.342";
+  window.DVL_APP_VERSION = "Beta 0.343";
   /* lock: prevents ALL legacy setVersion/forceVersion from overwriting */
   try{Object.defineProperty(window,"DVL_APP_VERSION",{
-    value:"Beta 0.342",writable:false,configurable:false,enumerable:true
+    value:"Beta 0.343",writable:false,configurable:false,enumerable:true
   });}catch(_){}
   /* clear all stale reload and version signals */
   ["dvl_force_reload_signal","dvl_last_reload_version","dvl_pending_force_reload",
@@ -7095,7 +7093,7 @@ Beta 0.312
    If /api/version changes, all open tabs reload with cache busting. */
 (function(){
   const CHANNEL = "dvl_updates";
-  const LOCAL_VERSION = "Beta 0.342";
+  const LOCAL_VERSION = "Beta 0.343";
   let remoteSeen = null;
   let checking = false;
   let bc = null;
@@ -7167,16 +7165,14 @@ Beta 0.312
     }
   });
 
-  window.addEventListener("pageshow", function(e){ if(e.persisted) checkVersion("pageshow-bfcache"); else checkVersion("pageshow"); });
-  window.addEventListener("focus", function(){ checkVersion("focus"); });
-  window.addEventListener("online", function(){ checkVersion("online"); });
-  document.addEventListener("visibilitychange", function(){ if(document.visibilityState === "visible") checkVersion("visible"); });
+  /* visibility redraw only — no version check, no reload (forceReloadToLatest is a no-op) */
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden){ requestAnimationFrame(function(){ try{if(window.drawSoon)window.drawSoon();}catch(_){} }); }
+  });
   document.addEventListener("DOMContentLoaded", function(){
     localStorage.setItem("dvl_loaded_version", window.DVL_APP_VERSION || LOCAL_VERSION);
-    checkVersion("DOMContentLoaded");
   });
-
-  setInterval(function(){ checkVersion("interval"); }, window.innerWidth > 900 ? 30000 : 45000);
+  /* pageshow/focus/online/interval checkVersion calls removed — polling is pointless since forceReloadToLatest is stubbed */
 })();
 </script>
 <style>
@@ -8763,10 +8759,10 @@ body:before{display:none!important;background:none!important;}
 /* ── DVL Version — increment by +0.001 on EVERY change ── */
 /* guard: second copy of this script (at line ~8745) does nothing */
 if(!window.DVL_APP_VERSION){
-  window.DVL_APP_VERSION = "Beta 0.342";
+  window.DVL_APP_VERSION = "Beta 0.343";
   /* lock: prevents ALL legacy setVersion/forceVersion from overwriting */
   try{Object.defineProperty(window,"DVL_APP_VERSION",{
-    value:"Beta 0.342",writable:false,configurable:false,enumerable:true
+    value:"Beta 0.343",writable:false,configurable:false,enumerable:true
   });}catch(_){}
   /* clear all stale reload and version signals */
   ["dvl_force_reload_signal","dvl_last_reload_version","dvl_pending_force_reload",
@@ -42817,8 +42813,8 @@ function layout(W,H,pTop,pBot){return _dvlOscLayout(W,H,pTop,pBot);}function yMa
 window.__drawCGOpenInterestPanel=function(ctx,W,H,V,sc,x,h,lsH,flowH,clarH){ensureData();const data=CG_CACHE.oi.data||[];const off=panelOffsets(clarH,flowH,lsH);const pBot=H-10-off,pTop=pBot-h,L=layout(W,H,pTop,pBot);if(L.plotRight<=L.plotLeft)return;const vals=[];for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(d)vals.push(d);}const last=vals[vals.length-1];const prev=vals.length>1?vals[vals.length-2]:last;const pct=last&&prev?((last.close-prev.close)/prev.close*100):0;const kind=pct>0?'bull':pct<0?'bear':'neutral';cgBase(ctx,L,'CG AGG OI',last?fmtMoney(last.close)+' '+(pct>=0?'+':'')+pct.toFixed(2)+'%':(CG_CACHE.oi.fetching?'LOADING':'NO DATA'),kind,'cgOi','cgOpenInterest');ctx.save();ctx.beginPath();ctx.rect(L.plotLeft,L.plotTop,L.plotRight-L.plotLeft,L.plotBottom-L.plotTop);ctx.clip();if(vals.length){const min=Math.min(...vals.map(v=>v.low||v.close)),max=Math.max(...vals.map(v=>v.high||v.close));const bw=Math.max(2,(CW(W)/Math.max(1,V.span))*0.48);for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(!d)continue;const xx=x(i);const yo=yMap(L,d.open,min,max),yc=yMap(L,d.close,min,max),yh=yMap(L,d.high,min,max),yl=yMap(L,d.low,min,max);const bull=d.close>=d.open;ctx.strokeStyle=bull?'rgba(0,220,170,.82)':'rgba(255,95,80,.82)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(xx,yh);ctx.lineTo(xx,yl);ctx.stroke();ctx.fillStyle=bull?'rgba(0,210,165,.54)':'rgba(255,95,80,.54)';ctx.fillRect(xx-bw/2,Math.min(yo,yc),bw,Math.max(2,Math.abs(yc-yo)));ctx.strokeRect(xx-bw/2,Math.min(yo,yc),bw,Math.max(2,Math.abs(yc-yo)));}ctx.fillStyle='rgba(120,145,180,.78)';ctx.font='700 8px monospace';ctx.textAlign='left';ctx.fillText(CG_CACHE.oi.src||'',L.plotLeft+8,L.plotBottom-5);}ctx.restore();};
 window.__drawCGLongShortPanel=function(ctx,W,H,V,sc,x,h,flowH,clarH){ensureData();const data=CG_CACHE.ls.data||[];const off=(clarH?clarH+(typeof PANEL_GAP!=='undefined'?PANEL_GAP:4):0)+(flowH?flowH+(typeof PANEL_GAP!=='undefined'?PANEL_GAP:4):0);const pBot=H-10-off,pTop=pBot-h,L=layout(W,H,pTop,pBot);if(L.plotRight<=L.plotLeft)return;const vals=[];for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(d)vals.push(d);}const last=vals[vals.length-1];const kind=last?(last.ratio>1.03?'bull':last.ratio<.97?'bear':'neutral'):'neutral';const text=last?('L/S '+last.ratio.toFixed(2)+' · L '+Math.round((last.long||0)*100)+'%'):(CG_CACHE.ls.fetching?'LOADING':'NO DATA');cgBase(ctx,L,'CG L/S ACCOUNTS',text,kind,'cgLs','cgLongShort');ctx.save();ctx.beginPath();ctx.rect(L.plotLeft,L.plotTop,L.plotRight-L.plotLeft,L.plotBottom-L.plotTop);ctx.clip();const min=.45,max=1.85,mid=yMap(L,1,min,max);ctx.strokeStyle='rgba(0,212,255,.32)';ctx.setLineDash([4,6]);ctx.beginPath();ctx.moveTo(L.plotLeft,mid);ctx.lineTo(L.plotRight,mid);ctx.stroke();ctx.setLineDash([]);if(vals.length){const bw=Math.max(1,(CW(W)/Math.max(1,V.span))*0.56);for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(!d)continue;const xx=x(i),yy=yMap(L,d.ratio,min,max);ctx.fillStyle=d.ratio>=1?'rgba(0,215,170,.42)':'rgba(255,95,80,.42)';ctx.fillRect(xx-bw/2,Math.min(mid,yy),bw,Math.max(1,Math.abs(yy-mid)));}ctx.beginPath();let st=false;for(let i=V.a;i<V.b;i++){const d=valueAt(data,S.candles[i]?.t||0);if(!d)continue;const xx=x(i),yy=yMap(L,d.ratio,min,max);if(!st){ctx.moveTo(xx,yy);st=true;}else ctx.lineTo(xx,yy);}ctx.strokeStyle='rgba(0,225,240,.92)';ctx.lineWidth=1.8;ctx.shadowColor='rgba(0,225,240,.28)';ctx.shadowBlur=4;if(st)ctx.stroke();ctx.shadowBlur=0;ctx.fillStyle='rgba(120,145,180,.78)';ctx.font='700 8px monospace';ctx.textAlign='left';ctx.fillText(CG_CACHE.ls.src||'',L.plotLeft+8,L.plotBottom-5);}ctx.restore();};
 function injectCards(){if(!window.S||!S.inds)return;S.inds.cgOpenInterest=!!S.inds.cgOpenInterest;S.inds.cgLongShort=!!S.inds.cgLongShort;if(q('[data-card="cgOpenInterest"]'))return;const anchor=q('[data-card="hvnClarity"]')||q('[data-card="flowAccel"]')||q('.ind-card');if(!anchor)return;const wrap=anchor.parentNode;const html=`
-<div class="ind-card dvl-icd dvl325-cg-card" data-card="cgOpenInterest" data-dvl-cat="clareza">
-  <div class="ind-head"><div class="dvl-icd-ico">OI</div><div class="ind-copy"><div class="name">CG Aggregated Open Interest</div><div class="ind-sub">Open interest candles</div></div><div class="ind-actions"><div class="row" data-ind="cgOpenInterest"><span class="switch"></span></div><button class="gear" data-settings="cgOpenInterest" title="Configurar CG OI">&#9881;</button><button class="dvl-star" data-star="cgOpenInterest" type="button">★</button></div></div>
+<div class="ind-card dvl-icd dvl325-cg-card dvl328-cg-card" data-card="cgOpenInterest" data-dvl-cat="clareza">
+  <div class="dvl-icd-head"><div class="dvl-icd-icon" style="--ic-bg:rgba(34,211,238,.12);--ic-cl:#22d3ee"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13.5V5.8"/><path d="M3 5.8l3.2 2.5L9 4.5l3 5 3-3.2"/><path d="M15 6.3v7.2"/><rect x="2.2" y="11.2" width="2.2" height="3.2" rx=".6" fill="currentColor" opacity=".20"/><rect x="7.9" y="8" width="2.2" height="6.4" rx=".6" fill="currentColor" opacity=".20"/><rect x="13.6" y="9.8" width="2.2" height="4.6" rx=".6" fill="currentColor" opacity=".20"/></svg></div><div class="dvl-icd-info"><div class="dvl-icd-name name">CG Open Interest</div><div class="dvl-icd-meta"><span class="dvl-bdg dvl-bdg-nat">NATIVO</span><span class="dvl-bdg">OI CANDLES</span></div></div><div class="dvl-icd-ctrl"><div class="row" data-ind="cgOpenInterest"><span class="switch"></span></div><button class="gear" data-settings="cgOpenInterest" title="Configurar CG OI">&#9881;</button><button class="dvl-star" data-star="cgOpenInterest" type="button">★</button></div></div>
   <div class="ind-settings" id="settings-cgOpenInterest">
     <div class="dvl325-cg-row"><span class="k">Fonte</span><select class="select" id="cgDataSource"><option value="auto" selected>Auto CG/Binance</option><option value="coinglass">CoinGlass API</option><option value="binance">Binance público</option></select></div>
     <div class="dvl325-cg-row"><span class="k">CG API Key</span><input class="input dvl325-cg-key" id="cgApiKey" type="password" placeholder="opcional"></div>
@@ -42828,8 +42824,8 @@ function injectCards(){if(!window.S||!S.inds)return;S.inds.cgOpenInterest=!!S.in
     <div class="dvl325-cg-note">Com API key: CoinGlass aggregated OI. Sem key: fallback Binance OI do símbolo.</div>
   </div>
 </div>
-<div class="ind-card dvl-icd dvl325-cg-card" data-card="cgLongShort" data-dvl-cat="clareza">
-  <div class="ind-head"><div class="dvl-icd-ico">L/S</div><div class="ind-copy"><div class="name">CG Long/Short Ratio</div><div class="ind-sub">Accounts ratio</div></div><div class="ind-actions"><div class="row" data-ind="cgLongShort"><span class="switch"></span></div><button class="gear" data-settings="cgLongShort" title="Configurar CG Long/Short">&#9881;</button><button class="dvl-star" data-star="cgLongShort" type="button">★</button></div></div>
+<div class="ind-card dvl-icd dvl325-cg-card dvl328-cg-card" data-card="cgLongShort" data-dvl-cat="clareza">
+  <div class="dvl-icd-head"><div class="dvl-icd-icon" style="--ic-bg:rgba(45,212,191,.12);--ic-cl:#2dd4bf"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h8.5"/><path d="M9 2.8L11.5 5 9 7.2"/><path d="M15 13H6.5"/><path d="M9 10.8L6.5 13 9 15.2"/><path d="M4.3 9h9.4" stroke-opacity=".35"/></svg></div><div class="dvl-icd-info"><div class="dvl-icd-name name">CG Taker L/S</div><div class="dvl-icd-meta"><span class="dvl-bdg dvl-bdg-nat">NATIVO</span><span class="dvl-bdg">TAKER RATIO</span></div></div><div class="dvl-icd-ctrl"><div class="row" data-ind="cgLongShort"><span class="switch"></span></div><button class="gear" data-settings="cgLongShort" title="Configurar CG Long/Short">&#9881;</button><button class="dvl-star" data-star="cgLongShort" type="button">★</button></div></div>
   <div class="ind-settings" id="settings-cgLongShort">
     <div class="dvl325-cg-row"><span class="k">Fonte</span><select class="select" id="cgDataSourceMirror"><option value="same" selected>Usar fonte do OI</option></select></div>
     <div class="dvl325-cg-row"><span class="k">Exchange</span><select class="select" id="cgExchange"><option value="Binance" selected>Binance</option><option value="Bybit">Bybit</option><option value="OKX">OKX</option><option value="Bitget">Bitget</option></select></div>
@@ -61944,7 +61940,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script id="DVL_BETA_0334_CG_GEAR_HARD_FIX_SCRIPT">
 (function(){
   'use strict';
-  const VER='Beta 0.342';
+  const VER='Beta 0.343';
   const IDS=['cgDataSource','cgApiKey','cgSharedPeriod','cgOiUnit','cgOpenInterestHeight','cgExchange','cgLsMode','cgLsShowAverage','cgLongShortHeight','cgTakerExchanges'];
   const KINDS={cgOi:'cgOpenInterest',cgLs:'cgLongShort'};
   let raf=0,lastAction=0;
@@ -61972,7 +61968,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
     try{window.DVL_APP_VERSION=VER;}catch(_){}
     qa('#dvlVersionBadge,.dvl-version-badge,.dvl-version-header,.dvl-version-logo-hidden,.beta-badge,.version-badge').forEach(el=>{if(el)el.textContent=VER;});
     try{window.DVL_CHANGELOG=window.DVL_CHANGELOG||[];[
-      'Beta 0.342: Locked DVL_APP_VERSION (Object.defineProperty), removed all cleanReload/location.reload from logo handlers.',
+      'Beta 0.343: Removed checkVersion event listeners (focus/pageshow/online/interval), fixed CG button null race, native CG card HTML.',
       'Removed all forceVersion() from setIntervals and body-* DOM walker — no more badge flicker or reflow on every tick.'
     ].forEach(note=>{if(!window.DVL_CHANGELOG.some(x=>x&&x.version===VER&&x.note===note))window.DVL_CHANGELOG.unshift({version:VER,date:new Date().toISOString(),note});});}catch(_){}
   }
@@ -62048,7 +62044,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
       const saved=window.__dvl334CgBoxes[k]||{};
       const eyeBox=(h&&h.eye)?Object.assign({},h.eye):saved.eye;
       const gearBox=(h&&h.gear)?Object.assign({},h.gear):saved.gear;
-      if(h){ if(h.eye) saved.eye=Object.assign({},h.eye); if(h.gear) saved.gear=Object.assign({},h.gear); window.__dvl334CgBoxes[k]=saved; h.eye=null; h.gear=null; }
+      if(h){ if(h.eye) saved.eye=Object.assign({},h.eye); if(h.gear) saved.gear=Object.assign({},h.gear); window.__dvl334CgBoxes[k]=saved; }
       [['eye',eyeBox],['gear',gearBox]].forEach(([type,box])=>{
         const b=chartBtn('dvl334_'+k+'_'+type,type+(type==='eye'?' on':''));if(!b)return;
         if(!active||!box){b.style.display='none';return;}
