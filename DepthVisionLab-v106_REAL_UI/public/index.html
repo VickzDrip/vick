@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.581</title>
+<title>DVL Binance Live — Beta 0.582</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.581";
+const DVL_APP_VERSION = "Beta 0.582";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Badge de versao corrigido: era texto estatico fixo em BETA 0.577. Agora atualiza automaticamente a partir de DVL_APP_VERSION em todo bump futuro." },
+  { version: DVL_APP_VERSION, note: "Mecanica de zoom do DVL antigo recuperada. (1) View agora continua em float: removida a quantizacao inteira de chartViewCount/chartOffsetCandles que causava stepping/travamento no zoom; o renderer ja posiciona em float, slicing continua inteiro. (2) Pinch portado do DVL legado: fator incremental amortecido (0.72) + clamp +/-12% por passo + pan simultaneo pelo ponto medio dos dedos. Wheel fica suave automaticamente com a view continua." },
+  { version: "Beta 0.581", note: "Badge de versao corrigido: era texto estatico fixo em BETA 0.577. Agora atualiza automaticamente a partir de DVL_APP_VERSION em todo bump futuro." },
   { version: "Beta 0.580", note: "Pinch-assist reescrito: _dvlWP rastreia ponteiros do window handler para nao interferir no tap/crosshair do canvas. stopImmediatePropagation durante pinch impede drag dos osciladores. clearCrossPressTimer no inicio do pinch." },
   { version: "Beta 0.579", note: "Pinch zoom corrigido: segundo dedo agora registrado em qualquer elemento da tela via window capture, nao apenas sobre o canvas do grafico. viewport maximum-scale=1 adicionado para impedir zoom de pagina do browser durante pinch." },
   { version: "Beta 0.578", note: "Real 15s/30s aggTrade candles + real footprint data via /api/footprint. server.js tfToMs com suporte a segundos." }
@@ -14556,10 +14557,10 @@ function maxViewCandles(){
 }
 
 function clampChartViewport(){
-  chartViewCount = clamp(Math.round(chartViewCount), minViewCandles(), maxViewCandles());
+  chartViewCount = clamp(chartViewCount, minViewCandles(), maxViewCandles());
   const maxOffset = Math.max(0, (klines.length || 0) - Math.min(chartViewCount, klines.length || chartViewCount));
-  const maxFuture = Math.max(20, Math.round(chartViewCount * 0.70));
-  chartOffsetCandles = clamp(Math.round(chartOffsetCandles), -maxFuture, maxOffset);
+  const maxFuture = Math.max(20, chartViewCount * 0.70);
+  chartOffsetCandles = clamp(chartOffsetCandles, -maxFuture, maxOffset);
   if(!Number.isFinite(priceViewCenter)) priceViewCenter = null;
   if(!Number.isFinite(priceViewRange)) priceViewRange = null;
 }
@@ -14567,10 +14568,10 @@ function clampChartViewport(){
 function visibleWindow(){
   clampChartViewport();
 
-  const totalSlots = Math.round(chartViewCount);
-  const futureSlots = Math.max(0, -Math.round(chartOffsetCandles));
-  const pastOffset = Math.max(0, Math.round(chartOffsetCandles));
-  const visibleSlots = Math.max(1, totalSlots - futureSlots);
+  const totalSlots = chartViewCount;                       // float: smooth candle width/spacing
+  const futureSlots = Math.max(0, -chartOffsetCandles);    // float: smooth right-edge gap
+  const pastOffset = Math.max(0, Math.round(chartOffsetCandles)); // int: array slice index
+  const visibleSlots = Math.max(1, Math.ceil(totalSlots - futureSlots)); // int: how many candles to slice
 
   const end = Math.max(0, klines.length - pastOffset);
   const start = Math.max(0, end - visibleSlots);
@@ -16718,12 +16719,18 @@ function setupChartInteractions(){
 
 setupChartInteractions();
 
-// DVL 0.580 pinch-assist: catches second finger anywhere on screen.
-// _dvlWP tracks only window-managed pointers so cleanup never interferes
-// with the canvas endPointer() tap/crosshair detection.
-// stopImmediatePropagation() during pinch prevents oscillator drag.
+// DVL 0.582 pinch engine: OLD DVL mechanic ported to the current view model.
+// Incremental + damped factor (0.72) + per-move clamp (±12%) + simultaneous
+// pan by the fingers' midpoint — the "perfect" feel from legacy DVL.
+// This window handler is the sole pinch authority during a gesture because it
+// stopImmediatePropagation()s the canvas + oscillator handlers.
+// _dvlWP tracks only window-managed pointers so cleanup never disturbs the
+// canvas endPointer() tap/crosshair logic.
 (function(){
   var _dvlWP = new Set();
+  var _dvlPinch = null; // {lastDist, lastMidX}
+
+  function _plotW(rect){ return Math.max(1, rect.width - PRICE_SCALE_W); }
 
   function _dvlPinchDown(ev){
     if(chartPointers.size < 1 || chartPointers.has(ev.pointerId)) return;
@@ -16732,35 +16739,57 @@ setupChartInteractions();
     if(chartPointers.size !== 2) return;
     try{ clearCrossPressTimer(); crossMovedBeforeHold = true; }catch(_){}
     var pts = Array.from(chartPointers.values());
-    chartPinchState = {
-      distance: Math.max(1, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y)),
-      viewCount: chartViewCount,
-      range: priceViewRange,
-      centerX: (pts[0].x+pts[1].x)/2
+    _dvlPinch = {
+      lastDist: Math.max(1, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y)),
+      lastMidX: (pts[0].x+pts[1].x)/2
     };
+    chartPinchState = _dvlPinch; // keep truthy for any external checks
     chartDragState = null;
     ev.stopImmediatePropagation();
   }
 
   function _dvlPinchMove(ev){
-    if(!chartPinchState || !chartPointers.has(ev.pointerId)) return;
+    if(!_dvlPinch || !chartPointers.has(ev.pointerId)) return;
     try{ clearCrossPressTimer(); }catch(_){}
     ev.stopImmediatePropagation();
     chartPointers.set(ev.pointerId, {x:ev.clientX, y:ev.clientY});
     var pts = Array.from(chartPointers.values());
     if(pts.length < 2) return;
-    var dist = Math.max(12, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y));
-    var ratio = Math.pow(dist / Math.max(chartPinchState.distance, 12), 1.08);
-    chartViewCount = clamp(chartPinchState.viewCount / ratio, minViewCandles(), maxViewCandles());
+
+    var nd    = Math.max(1, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y));
+    var midX  = (pts[0].x+pts[1].x)/2;
+
+    // OLD DVL incremental damped factor (smooth, jitter-proof)
+    var raw    = _dvlPinch.lastDist / nd;             // >1 = fingers closing = zoom out
+    var factor = clamp(1 + (raw-1)*0.72, 0.88, 1.12); // damp 0.72, clamp ±12% per move
+
+    var rect    = els.canvas.getBoundingClientRect();
+    var plotW   = _plotW(rect);
+    var spacing = plotW / Math.max(chartViewCount, 1);
+    var xRatio  = clamp((midX - rect.left) / plotW, 0, 1);
+
+    // Anchored zoom (keep the candle under the midpoint fixed)
+    var oldCount = chartViewCount;
+    var candleAtPointerFromRight = chartOffsetCandles + (1 - xRatio) * oldCount;
+    chartViewCount = clamp(oldCount * factor, minViewCandles(), maxViewCandles());
+    chartOffsetCandles = candleAtPointerFromRight - (1 - xRatio) * chartViewCount;
+
+    // Simultaneous pan by midpoint movement (legacy DVL behavior)
+    var dxMid = midX - _dvlPinch.lastMidX;
+    chartOffsetCandles += (dxMid / Math.max(spacing, 0.0001)) * CHART_DRAG_SENSITIVITY;
+
     clampChartViewport();
     drawSoon();
+
+    _dvlPinch.lastDist = nd;
+    _dvlPinch.lastMidX = midX;
   }
 
   function _dvlPinchEnd(ev){
     if(!_dvlWP.has(ev.pointerId)) return;
     _dvlWP.delete(ev.pointerId);
     chartPointers.delete(ev.pointerId);
-    if(chartPointers.size < 2) chartPinchState = null;
+    if(chartPointers.size < 2){ chartPinchState = null; _dvlPinch = null; }
     // chartDragState intentionally NOT touched — canvas endPointer() reads it
   }
 
