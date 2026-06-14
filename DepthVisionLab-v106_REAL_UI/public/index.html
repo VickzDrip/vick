@@ -2,8 +2,8 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.577</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>DVL Binance Live — Beta 0.579</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13723,10 +13723,11 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.578";
+const DVL_APP_VERSION = "Beta 0.579";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Chart undo/redo arrows now stay at 50% opacity by default and only light up to 100% when a valid history action exists, keeping the floating look cleaner and more informative." }
+  { version: DVL_APP_VERSION, note: "Pinch zoom corrigido: segundo dedo agora registrado em qualquer elemento da tela via window capture, nao apenas sobre o canvas do grafico. viewport maximum-scale=1 adicionado para impedir zoom de pagina do browser durante pinch." },
+  { version: "Beta 0.578", note: "Real 15s/30s aggTrade candles + real footprint data via /api/footprint. server.js tfToMs com suporte a segundos." }
 ];
 window.DVL_SECTION_SIZES_PX = {
   header: 55,
@@ -16713,6 +16714,48 @@ function setupChartInteractions(){
 }
 
 setupChartInteractions();
+
+// DVL 0.579 pinch-assist: catches second finger anywhere on screen.
+// The canvas-level pinch engine only sees pointers that land directly on the
+// chart canvas (bubble phase). When a finger lands on an oscillator, hotbar,
+// or label, this window capture handler registers it so chartPinchState is
+// created and the existing zoom math can run normally.
+(function(){
+  function _dvlPinchDown(ev){
+    if(chartPointers.size < 1 || chartPointers.has(ev.pointerId)) return;
+    chartPointers.set(ev.pointerId, {x:ev.clientX, y:ev.clientY});
+    if(chartPointers.size !== 2) return;
+    var pts = Array.from(chartPointers.values());
+    chartPinchState = {
+      distance: Math.max(1, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y)),
+      viewCount: chartViewCount,
+      range: priceViewRange,
+      centerX: (pts[0].x+pts[1].x)/2
+    };
+    chartDragState = null;
+  }
+  function _dvlPinchMove(ev){
+    if(!chartPinchState || !chartPointers.has(ev.pointerId)) return;
+    chartPointers.set(ev.pointerId, {x:ev.clientX, y:ev.clientY});
+    var pts = Array.from(chartPointers.values());
+    if(pts.length < 2) return;
+    var dist = Math.max(12, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y));
+    var ratio = Math.pow(dist / Math.max(chartPinchState.distance, 12), 1.08);
+    chartViewCount = clamp(chartPinchState.viewCount / ratio, minViewCandles(), maxViewCandles());
+    clampChartViewport();
+    drawSoon();
+  }
+  function _dvlPinchEnd(ev){
+    if(!chartPointers.has(ev.pointerId)) return;
+    chartPointers.delete(ev.pointerId);
+    if(chartPointers.size < 2) chartPinchState = null;
+    if(chartPointers.size === 0) chartDragState = null;
+  }
+  window.addEventListener("pointerdown",   _dvlPinchDown, {capture:true, passive:false});
+  window.addEventListener("pointermove",   _dvlPinchMove, {capture:true, passive:false});
+  window.addEventListener("pointerup",     _dvlPinchEnd,  {capture:true});
+  window.addEventListener("pointercancel", _dvlPinchEnd,  {capture:true});
+})();
 
 function setupChartMiniControls(){
 
