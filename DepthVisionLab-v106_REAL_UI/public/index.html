@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.591</title>
+<title>DVL Binance Live — Beta 0.592</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.591</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.592</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.591";
+const DVL_APP_VERSION = "Beta 0.592";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "OI e L/S: painel de configuracoes abre ao clicar na linha do indicador (igual aos outros). Pill ON/OFF permanece. MA do OI agora no painel." },
+  { version: DVL_APP_VERSION, note: "L/S: media movel (MA) laranja adicionada sobre a linha do ratio, periodo configuravel no painel. Default 14." },
+  { version: "Beta 0.591", note: "OI e L/S: painel de configuracoes. Pill ON/OFF permanece. MA do OI no painel." },
   { version: "Beta 0.590", note: "OI: MA ciano configuravel via input na linha (substituido por painel)." },
   { version: "Beta 0.589", note: "Revert OI Bybit (unidade ambigua). Spike Zones warmup fix mantido." },
   { version: "Beta 0.588", note: "OI Bybit revertido. Spike Zones: warm=atrLen(14) em vez de max(volLen,atrLen)." },
@@ -26842,6 +26843,7 @@ drag = {
   const DEFAULTS = {
     on:true,
     mode:"global",
+    maLen:14,
     center:null,
     range:null
   };
@@ -27314,6 +27316,32 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
         ctx.fill();
       }
 
+      // MA line
+      const _lsMALen = Math.max(2, Math.round(state.maLen) || 14);
+      if(_lsMALen && CACHE.data.length >= 2){
+        const _ratios = CACHE.data.map(d => d.ratio);
+        const _prefix = new Array(_ratios.length+1).fill(0);
+        for(let i=0;i<_ratios.length;i++) _prefix[i+1]=_prefix[i]+_ratios[i];
+        const _idxMap = new Map(CACHE.data.map((d,i)=>[d.t,i]));
+        ctx.beginPath();
+        ctx.strokeStyle = "#ff9f43";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([]);
+        let _started = false;
+        for(let i=0;i<view.length;i++){
+          const d = valueAt(CACHE.data, Number(view[i].time));
+          if(!d) continue;
+          const idx = _idxMap.get(d.t);
+          if(idx===undefined) continue;
+          const st2 = Math.max(0, idx-_lsMALen+1);
+          const avg = (_prefix[idx+1]-_prefix[st2])/(idx-st2+1);
+          const xx2 = xForIndex(i, m, win);
+          const yy2 = yMap(m, avg, sc);
+          if(!_started){ ctx.moveTo(xx2,yy2); _started=true; } else ctx.lineTo(xx2,yy2);
+        }
+        if(_started) ctx.stroke();
+      }
+
       ctx.fillStyle = "rgba(120,145,180,.78)";
       ctx.font = "760 8px system-ui";
       ctx.textAlign = "left";
@@ -27373,6 +27401,7 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
         <div class="dvl-vt-grid">
           <div class="dvl-vt-field"><label>Indicator</label><label class="dvl-switch"><input id="dvlLSOn" type="checkbox" ${state.on?"checked":""}><i></i><b></b></label></div>
           <div class="dvl-vt-field"><label>Mode</label><select id="dvlLSMode" class="dvl-vt-select"><option value="global" ${state.mode==="global"?"selected":""}>Global</option><option value="top" ${state.mode==="top"?"selected":""}>Top Traders</option></select></div>
+          <div class="dvl-vt-field"><label>MA Length</label><input id="dvlLSMALen" class="dvl-vt-input" type="number" min="2" max="500" step="1" value="${state.maLen||14}"></div>
         </div>
       </div>
     `;
@@ -27380,6 +27409,8 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
     if(onCb) onCb.addEventListener("change", () => { state.on = onCb.checked; save(); if(state.on) ensureData(true); });
     const modeEl = panel.querySelector("#dvlLSMode");
     if(modeEl) modeEl.addEventListener("change", () => { state.mode = modeEl.value; save(); });
+    const maInp = panel.querySelector("#dvlLSMALen");
+    if(maInp) maInp.addEventListener("change", () => { const v=Math.max(2,Math.min(500,Math.round(+maInp.value)||14)); maInp.value=v; state.maLen=v; save(); });
   }
 
   function updateRow(){
