@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.582</title>
+<title>DVL Binance Live — Beta 0.583</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.581</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.583</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.582";
+const DVL_APP_VERSION = "Beta 0.583";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Mecanica de zoom do DVL antigo recuperada. (1) View agora continua em float: removida a quantizacao inteira de chartViewCount/chartOffsetCandles que causava stepping/travamento no zoom; o renderer ja posiciona em float, slicing continua inteiro. (2) Pinch portado do DVL legado: fator incremental amortecido (0.72) + clamp +/-12% por passo + pan simultaneo pelo ponto medio dos dedos. Wheel fica suave automaticamente com a view continua." },
+  { version: DVL_APP_VERSION, note: "Zoom/pinch reescrito do zero: handler unificado em window capture elimina race condition onde 2 dedos simultaneos nao iniciavam pinch. Factor incremental amortecido 0.72 +-12%/move + pan por midpoint = mecanica do DVL legado." },
+  { version: "Beta 0.582", note: "Mecanica de zoom do DVL antigo recuperada: view float, fator incremental amortecido (0.72), clamp +/-12%, pan por midpoint." },
   { version: "Beta 0.581", note: "Badge de versao corrigido: era texto estatico fixo em BETA 0.577. Agora atualiza automaticamente a partir de DVL_APP_VERSION em todo bump futuro." },
   { version: "Beta 0.580", note: "Pinch-assist reescrito: _dvlWP rastreia ponteiros do window handler para nao interferir no tap/crosshair do canvas. stopImmediatePropagation durante pinch impede drag dos osciladores. clearCrossPressTimer no inicio do pinch." },
   { version: "Beta 0.579", note: "Pinch zoom corrigido: segundo dedo agora registrado em qualquer elemento da tela via window capture, nao apenas sobre o canvas do grafico. viewport maximum-scale=1 adicionado para impedir zoom de pagina do browser durante pinch." },
@@ -16505,119 +16506,135 @@ function setupChartInteractions(){
 
   function candleSpacing(){
     const rect = canvas.getBoundingClientRect();
-    return Math.max(1, (rect.width - 55) / Math.max(chartViewCount, 1));
+    return Math.max(1, (rect.width - PRICE_SCALE_W) / Math.max(chartViewCount, 1));
   }
-
-  function isOnPriceScale(clientX){
-    const rect = canvas.getBoundingClientRect();
-    return clientX >= rect.right - 55;
+  function isOnPriceScale(cx){
+    return cx >= canvas.getBoundingClientRect().right - PRICE_SCALE_W;
   }
-
   function chartHeightForPrice(){
     const rect = canvas.getBoundingClientRect();
-    const priceBottomPad = indicatorsOn ? 36 : 24;
-    return Math.max(rect.height - priceBottomPad - 4, 1);
+    return Math.max(rect.height - (indicatorsOn ? 36 : 24) - 4, 1);
   }
 
+  // ── Wheel: time-axis zoom + price-scale zoom ──────────────────────────────
   canvas.addEventListener("wheel", (ev) => {
     ev.preventDefault();
-
     const factor = ev.deltaY < 0 ? 0.88 : 1.16;
-
-    if(isOnPriceScale(ev.clientX)){
-      zoomPriceScaleAt(ev.clientY, factor);
-    } else {
-      zoomChartAt(ev.clientX, factor);
-    }
+    if(isOnPriceScale(ev.clientX)) zoomPriceScaleAt(ev.clientY, factor);
+    else                            zoomChartAt(ev.clientX, factor);
   }, {passive:false});
 
-  canvas.addEventListener("pointerdown", (ev) => {
-    if(window.__dvlPositionDragActive){ev.preventDefault();return;}
-    canvas.setPointerCapture?.(ev.pointerId);
-    chartPointers.set(ev.pointerId, {x: ev.clientX, y: ev.clientY});
+  // ── Unified window-capture pointer handling ───────────────────────────────
+  // chartPointers (outer scope Map) tracks all active chart pointers.
+  // _pinch is the incremental pinch state, null when not pinching.
+  var _pinch = null;
 
-    clearCrossPressTimer();
-    crossMovedBeforeHold = false;
-    crosshair.active = false;
-    crossDragState = null;
+  function _onDown(ev){
+    if(window.__dvlPositionDragActive) return;
 
-    if(chartPointers.size === 2){
-      const pts = Array.from(chartPointers.values());
-      const dx = pts[0].x - pts[1].x;
-      const dy = pts[0].y - pts[1].y;
-      chartPinchState = {
-        distance: Math.hypot(dx, dy),
-        viewCount: chartViewCount,
-        range: priceViewRange,
-        centerX: (pts[0].x + pts[1].x) / 2
+    // First finger: must land on the canvas
+    if(chartPointers.size === 0){
+      if(ev.target !== canvas) return;
+      chartPointers.set(ev.pointerId, {x: ev.clientX, y: ev.clientY});
+
+      clearCrossPressTimer();
+      crossMovedBeforeHold = false;
+      crosshair.active  = false;
+      crossDragState    = null;
+
+      const onScale    = isOnPriceScale(ev.clientX);
+      const insidePrice = pointInsidePriceArea(ev.clientX, ev.clientY);
+
+      if(crosshair.visible && insidePrice && !onScale){
+        crosshair.active = true;
+        crossDragState = {
+          startPointerX: ev.clientX, startPointerY: ev.clientY,
+          startCrossX: crosshair.x, startCrossY: crosshair.y,
+          moved: false, fromVisibleCross: true
+        };
+        chartDragState = null;
+        return;
+      }
+
+      chartDragState = {
+        x: ev.clientX, y: ev.clientY,
+        offset: chartOffsetCandles, priceCenter: priceViewCenter,
+        priceRange: priceViewRange, onScale
       };
-      chartDragState = null;
-      return;
-    }
 
-    const onScale = isOnPriceScale(ev.clientX);
-    const insidePrice = pointInsidePriceArea(ev.clientX, ev.clientY);
-
-    /*
-      Old-DVL cross behavior:
-      - A quick tap creates/shows the cross at the tapped point.
-      - Once visible, dragging anywhere inside the chart moves the cross by delta.
-      - The center never snaps to the finger while moving.
-    */
-    if(crosshair.visible && insidePrice && !onScale){
-      crosshair.active = true;
-      crossDragState = {
-        startPointerX: ev.clientX,
-        startPointerY: ev.clientY,
-        startCrossX: crosshair.x,
-        startCrossY: crosshair.y,
-        moved: false,
-        fromVisibleCross: true
-      };
-      chartDragState = null;
-      return;
-    }
-
-    chartDragState = {
-      x: ev.clientX,
-      y: ev.clientY,
-      offset: chartOffsetCandles,
-      priceCenter: priceViewCenter,
-      priceRange: priceViewRange,
-      onScale
-    };
-
-    if(!chartDragState.onScale && insidePrice){
-      crossPressTimer = setTimeout(() => {
-        if(!crossMovedBeforeHold && chartPointers.has(ev.pointerId)){
-          crosshair.active = true;
-          crossDragState = {
-            startPointerX: ev.clientX,
-            startPointerY: ev.clientY,
-            startCrossX: crosshair.visible ? crosshair.x : ev.clientX - canvas.getBoundingClientRect().left,
-            startCrossY: crosshair.visible ? crosshair.y : ev.clientY - canvas.getBoundingClientRect().top,
-            moved: false,
-            fromVisibleCross: crosshair.visible
-          };
-          chartDragState = null;
-
-          if(!crosshair.visible){
-            setCrosshairFromClient(ev.clientX, ev.clientY);
-            crossDragState.startCrossX = crosshair.x;
-            crossDragState.startCrossY = crosshair.y;
-          } else {
-            drawSoon();
+      if(!onScale && insidePrice){
+        crossPressTimer = setTimeout(() => {
+          if(!crossMovedBeforeHold && chartPointers.has(ev.pointerId)){
+            crosshair.active = true;
+            const rect = canvas.getBoundingClientRect();
+            crossDragState = {
+              startPointerX: ev.clientX, startPointerY: ev.clientY,
+              startCrossX: crosshair.visible ? crosshair.x : ev.clientX - rect.left,
+              startCrossY: crosshair.visible ? crosshair.y : ev.clientY - rect.top,
+              moved: false, fromVisibleCross: crosshair.visible
+            };
+            chartDragState = null;
+            if(!crosshair.visible){
+              setCrosshairFromClient(ev.clientX, ev.clientY);
+              crossDragState.startCrossX = crosshair.x;
+              crossDragState.startCrossY = crosshair.y;
+            } else {
+              drawSoon();
+            }
           }
-        }
-      }, 240);
+        }, 240);
+      }
+      return;
     }
-  });
 
-  canvas.addEventListener("pointermove", (ev) => {
-    if(window.__dvlPositionDragActive){ev.preventDefault();return;}
+    // Additional finger → pinch
+    if(chartPointers.has(ev.pointerId)) return;
+    chartPointers.set(ev.pointerId, {x: ev.clientX, y: ev.clientY});
+    if(chartPointers.size === 2){
+      clearCrossPressTimer();
+      crossMovedBeforeHold = true;
+      const pts = Array.from(chartPointers.values());
+      _pinch = {
+        lastDist: Math.max(1, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y)),
+        lastMidX: (pts[0].x+pts[1].x)/2
+      };
+      chartPinchState = _pinch;
+      chartDragState  = null;
+    }
+    ev.stopImmediatePropagation();
+  }
+
+  function _onMove(ev){
+    if(window.__dvlPositionDragActive) return;
     if(!chartPointers.has(ev.pointerId)) return;
     chartPointers.set(ev.pointerId, {x: ev.clientX, y: ev.clientY});
 
+    // Pinch mode — incremental damped zoom + midpoint pan (legacy DVL feel)
+    if(_pinch && chartPointers.size >= 2){
+      clearCrossPressTimer();
+      ev.stopImmediatePropagation();
+      const pts  = Array.from(chartPointers.values());
+      const nd   = Math.max(1, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y));
+      const midX = (pts[0].x+pts[1].x)/2;
+      const raw    = _pinch.lastDist / nd;
+      const factor = clamp(1 + (raw-1)*0.72, 0.88, 1.12);
+      const rect   = canvas.getBoundingClientRect();
+      const pw     = Math.max(1, rect.width - PRICE_SCALE_W);
+      const xRatio = clamp((midX - rect.left) / pw, 0, 1);
+      const rightAnchor = chartOffsetCandles + (1 - xRatio) * chartViewCount;
+      const oldCount    = chartViewCount;
+      chartViewCount    = clamp(oldCount * factor, minViewCandles(), maxViewCandles());
+      chartOffsetCandles = rightAnchor - (1 - xRatio) * chartViewCount;
+      const spacing = pw / Math.max(chartViewCount, 1);
+      chartOffsetCandles += ((midX - _pinch.lastMidX) / Math.max(spacing, 0.001)) * CHART_DRAG_SENSITIVITY;
+      clampChartViewport();
+      drawSoon();
+      _pinch.lastDist = nd;
+      _pinch.lastMidX = midX;
+      return;
+    }
+
+    // Crosshair drag
     if(crosshair.active && crossDragState){
       const dx = ev.clientX - crossDragState.startPointerX;
       const dy = ev.clientY - crossDragState.startPointerY;
@@ -16626,40 +16643,15 @@ function setupChartInteractions(){
       return;
     }
 
-    if(chartPointers.size === 2 && chartPinchState){
-      clearCrossPressTimer();
-      const pts = Array.from(chartPointers.values());
-      const dx = pts[0].x - pts[1].x;
-      const dy = pts[0].y - pts[1].y;
-      const dist = Math.max(12, Math.hypot(dx, dy));
-      const rawRatio = dist / Math.max(chartPinchState.distance, 12);
-      const ratio = Math.pow(rawRatio, 1.08); // smoother pinch zoom/out sensitivity
-      chartViewCount = clamp(chartPinchState.viewCount / ratio, minViewCandles(), maxViewCandles());
-      clampChartViewport();
-      drawSoon();
-      return;
-    }
-
+    // Chart / price-scale drag
     if(chartDragState){
       const dx = ev.clientX - chartDragState.x;
       const dy = ev.clientY - chartDragState.y;
-      const moved = Math.hypot(dx, dy);
-
-      if(moved > 7){
-        crossMovedBeforeHold = true;
-        clearCrossPressTimer();
-      }
-
+      if(Math.hypot(dx, dy) > 7){ crossMovedBeforeHold = true; clearCrossPressTimer(); }
       if(chartDragState.onScale){
-        /*
-          Right price scale drag:
-          drag up = zoom in
-          drag down = zoom out
-          It must NOT pan the price scale.
-        */
         if(Number.isFinite(chartDragState.priceRange)){
-          const zoomFactor = Math.exp(dy * 0.0075);
-          priceViewRange = clamp(chartDragState.priceRange * zoomFactor, 0.0000001, chartDragState.priceRange * 1000000);
+          const zf = Math.exp(dy * 0.0075);
+          priceViewRange  = clamp(chartDragState.priceRange * zf, 0.0000001, chartDragState.priceRange * 1e6);
           priceViewCenter = chartDragState.priceCenter;
           priceScaleLocked = true;
         }
@@ -16670,134 +16662,65 @@ function setupChartInteractions(){
           priceScaleLocked = true;
         }
       }
-
       clampChartViewport();
       drawSoon();
     }
-  });
+  }
 
-  function endPointer(ev){
-    const insidePrice = pointInsidePriceArea(ev.clientX, ev.clientY);
-    const wasTap = chartDragState &&
-      !chartDragState.onScale &&
-      !crossMovedBeforeHold &&
-      insidePrice;
+  function _onEnd(ev){
+    if(!chartPointers.has(ev.pointerId)) return;
+    chartPointers.delete(ev.pointerId);
 
-    const crossTapToHide = crosshair.visible &&
-      insidePrice &&
-      !dvlDrawingModeActive() &&
-      (
-        (crosshair.active && crossDragState && crossDragState.fromVisibleCross && !crossDragState.moved) ||
-        (wasTap && chartPointers.size === 1)
-      );
+    // Pinch ended — reset and give remaining finger a fresh drag baseline
+    if(_pinch){
+      if(chartPointers.size < 2){
+        _pinch = null;
+        chartPinchState = null;
+        if(chartPointers.size === 1){
+          const rem = chartPointers.values().next().value;
+          chartDragState = {
+            x: rem.x, y: rem.y,
+            offset: chartOffsetCandles,
+            priceCenter: priceViewCenter, priceRange: priceViewRange,
+            onScale: false
+          };
+        } else {
+          chartDragState = null;
+        }
+      }
+      clearCrossPressTimer();
+      crosshair.active = false;
+      crossDragState   = null;
+      return;
+    }
+
+    // Tap detection
+    const insidePrice   = pointInsidePriceArea(ev.clientX, ev.clientY);
+    const wasTap        = chartDragState && !chartDragState.onScale &&
+                          !crossMovedBeforeHold && insidePrice;
+    const crossTapToHide = crosshair.visible && insidePrice && !dvlDrawingModeActive() &&
+      ((crosshair.active && crossDragState && crossDragState.fromVisibleCross && !crossDragState.moved) ||
+       (wasTap && chartPointers.size === 0));
 
     clearCrossPressTimer();
 
     if(crossTapToHide){
       hideCrosshair();
-    } else if(wasTap && !crosshair.active && chartPointers.size === 1 && !crosshair.visible && !dvlDrawingModeActive()){
-      /*
-        Keep old tap-to-create behavior only when the cross is already hidden.
-        This prevents the same tap from hiding and recreating the cross immediately.
-      */
+    } else if(wasTap && !crosshair.active && chartPointers.size === 0 && !crosshair.visible && !dvlDrawingModeActive()){
       setCrosshairFromClient(ev.clientX, ev.clientY);
     }
 
     crosshair.active = false;
-    crossDragState = null;
-    chartPointers.delete(ev.pointerId);
+    crossDragState   = null;
     if(chartPointers.size < 2) chartPinchState = null;
     if(chartPointers.size === 0) chartDragState = null;
   }
 
-  canvas.addEventListener("pointerup", endPointer);
-  canvas.addEventListener("pointercancel", endPointer);
-  canvas.addEventListener("pointerleave", (ev) => {
-    if(chartPointers.has(ev.pointerId)) endPointer(ev);
-  });
+  window.addEventListener("pointerdown",   _onDown, {capture:true, passive:false});
+  window.addEventListener("pointermove",   _onMove, {capture:true, passive:false});
+  window.addEventListener("pointerup",     _onEnd,  {capture:true});
+  window.addEventListener("pointercancel", _onEnd,  {capture:true});
 }
-
-setupChartInteractions();
-
-// DVL 0.582 pinch engine: OLD DVL mechanic ported to the current view model.
-// Incremental + damped factor (0.72) + per-move clamp (±12%) + simultaneous
-// pan by the fingers' midpoint — the "perfect" feel from legacy DVL.
-// This window handler is the sole pinch authority during a gesture because it
-// stopImmediatePropagation()s the canvas + oscillator handlers.
-// _dvlWP tracks only window-managed pointers so cleanup never disturbs the
-// canvas endPointer() tap/crosshair logic.
-(function(){
-  var _dvlWP = new Set();
-  var _dvlPinch = null; // {lastDist, lastMidX}
-
-  function _plotW(rect){ return Math.max(1, rect.width - PRICE_SCALE_W); }
-
-  function _dvlPinchDown(ev){
-    if(chartPointers.size < 1 || chartPointers.has(ev.pointerId)) return;
-    chartPointers.set(ev.pointerId, {x:ev.clientX, y:ev.clientY});
-    _dvlWP.add(ev.pointerId);
-    if(chartPointers.size !== 2) return;
-    try{ clearCrossPressTimer(); crossMovedBeforeHold = true; }catch(_){}
-    var pts = Array.from(chartPointers.values());
-    _dvlPinch = {
-      lastDist: Math.max(1, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y)),
-      lastMidX: (pts[0].x+pts[1].x)/2
-    };
-    chartPinchState = _dvlPinch; // keep truthy for any external checks
-    chartDragState = null;
-    ev.stopImmediatePropagation();
-  }
-
-  function _dvlPinchMove(ev){
-    if(!_dvlPinch || !chartPointers.has(ev.pointerId)) return;
-    try{ clearCrossPressTimer(); }catch(_){}
-    ev.stopImmediatePropagation();
-    chartPointers.set(ev.pointerId, {x:ev.clientX, y:ev.clientY});
-    var pts = Array.from(chartPointers.values());
-    if(pts.length < 2) return;
-
-    var nd    = Math.max(1, Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y));
-    var midX  = (pts[0].x+pts[1].x)/2;
-
-    // OLD DVL incremental damped factor (smooth, jitter-proof)
-    var raw    = _dvlPinch.lastDist / nd;             // >1 = fingers closing = zoom out
-    var factor = clamp(1 + (raw-1)*0.72, 0.88, 1.12); // damp 0.72, clamp ±12% per move
-
-    var rect    = els.canvas.getBoundingClientRect();
-    var plotW   = _plotW(rect);
-    var spacing = plotW / Math.max(chartViewCount, 1);
-    var xRatio  = clamp((midX - rect.left) / plotW, 0, 1);
-
-    // Anchored zoom (keep the candle under the midpoint fixed)
-    var oldCount = chartViewCount;
-    var candleAtPointerFromRight = chartOffsetCandles + (1 - xRatio) * oldCount;
-    chartViewCount = clamp(oldCount * factor, minViewCandles(), maxViewCandles());
-    chartOffsetCandles = candleAtPointerFromRight - (1 - xRatio) * chartViewCount;
-
-    // Simultaneous pan by midpoint movement (legacy DVL behavior)
-    var dxMid = midX - _dvlPinch.lastMidX;
-    chartOffsetCandles += (dxMid / Math.max(spacing, 0.0001)) * CHART_DRAG_SENSITIVITY;
-
-    clampChartViewport();
-    drawSoon();
-
-    _dvlPinch.lastDist = nd;
-    _dvlPinch.lastMidX = midX;
-  }
-
-  function _dvlPinchEnd(ev){
-    if(!_dvlWP.has(ev.pointerId)) return;
-    _dvlWP.delete(ev.pointerId);
-    chartPointers.delete(ev.pointerId);
-    if(chartPointers.size < 2){ chartPinchState = null; _dvlPinch = null; }
-    // chartDragState intentionally NOT touched — canvas endPointer() reads it
-  }
-
-  window.addEventListener("pointerdown",   _dvlPinchDown, {capture:true, passive:false});
-  window.addEventListener("pointermove",   _dvlPinchMove, {capture:true, passive:false});
-  window.addEventListener("pointerup",     _dvlPinchEnd,  {capture:true});
-  window.addEventListener("pointercancel", _dvlPinchEnd,  {capture:true});
-})();
 
 function setupChartMiniControls(){
 
