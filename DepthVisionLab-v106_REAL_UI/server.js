@@ -284,9 +284,9 @@ app.get("/api/klines", async (req,res) => {
 // Returns buy/sell volume per price level per candle — ~100x smaller than
 // raw trades, gives 100% real data coverage for all stored history.
 function tfToMs(tf) {
-  const m = String(tf).match(/^(\d+)([mhd])$/);
+  const m = String(tf).match(/^(\d+)([smhd])$/);
   if (!m) return 300000;
-  const unit = { m: 60000, h: 3600000, d: 86400000 }[m[2]] || 60000;
+  const unit = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[m[2]] || 60000;
   return parseInt(m[1]) * unit;
 }
 app.get("/api/footprint", (req, res) => {
