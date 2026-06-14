@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.590</title>
+<title>DVL Binance Live — Beta 0.591</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.590</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.591</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.590";
+const DVL_APP_VERSION = "Beta 0.591";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "OI: media movel (MA) adicionada — linha ciano sobre as colunas, periodo configuravel via input na linha do indicador. Default 20." },
+  { version: DVL_APP_VERSION, note: "OI e L/S: painel de configuracoes abre ao clicar na linha do indicador (igual aos outros). Pill ON/OFF permanece. MA do OI agora no painel." },
+  { version: "Beta 0.590", note: "OI: MA ciano configuravel via input na linha (substituido por painel)." },
   { version: "Beta 0.589", note: "Revert OI Bybit (unidade ambigua). Spike Zones warmup fix mantido." },
   { version: "Beta 0.588", note: "OI Bybit revertido. Spike Zones: warm=atrLen(14) em vez de max(volLen,atrLen)." },
   { version: "Beta 0.587", note: "Long/Short Ratio agregado Binance + Bybit: merge por timestamp 50/50. Bybit so no modo global." },
@@ -26496,6 +26497,46 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
     ctx.restore();
   }
 
+  let panel = null;
+  function ensurePanel(){
+    if(panel) return panel;
+    panel = document.createElement("div");
+    panel.id = "dvlOIPanel";
+    panel.className = "dvl-vt-panel";
+    panel.innerHTML = `
+      <div class="dvl-vt-head">
+        <div class="dvl-vt-title"><b>DVL Open Interest</b><small>AGG OI candles · real data</small></div>
+        <div class="dvl-vt-head-actions">
+          <button class="dvl-vt-close" id="dvlOIPanelClose" type="button">×</button>
+        </div>
+      </div>
+      <div class="dvl-vt-body" id="dvlOIPanelBody"></div>
+    `;
+    document.body.appendChild(panel);
+    panel.addEventListener("pointerdown", ev => ev.stopPropagation(), true);
+    panel.querySelector("#dvlOIPanelClose").addEventListener("click", closePanel);
+    return panel;
+  }
+  function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderPanel(); }
+  function closePanel(){ if(panel) panel.classList.remove("is-open"); }
+  function renderPanel(){
+    ensurePanel();
+    const body = panel.querySelector("#dvlOIPanelBody");
+    body.innerHTML = `
+      <div class="dvl-vt-section">
+        <div class="dvl-vt-section-title"><span>General</span></div>
+        <div class="dvl-vt-grid">
+          <div class="dvl-vt-field"><label>Indicator</label><label class="dvl-switch"><input id="dvlOIOn" type="checkbox" ${state.on?"checked":""}><i></i><b></b></label></div>
+          <div class="dvl-vt-field"><label>MA Length</label><input id="dvlOIMALenPanel" class="dvl-vt-input" type="number" min="2" max="500" step="1" value="${state.maLen||20}"></div>
+        </div>
+      </div>
+    `;
+    const onCb = panel.querySelector("#dvlOIOn");
+    if(onCb) onCb.addEventListener("change", () => { state.on = onCb.checked; save(); if(state.on) ensureData(true); });
+    const maInp = panel.querySelector("#dvlOIMALenPanel");
+    if(maInp) maInp.addEventListener("change", () => { const v=Math.max(2,Math.min(500,Math.round(+maInp.value)||20)); maInp.value=v; state.maLen=v; save(); });
+  }
+
   function updateRow(){
     const st = document.getElementById("dvlOpenInterestOscState");
     if(st){
@@ -26503,8 +26544,8 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
       st.classList.toggle("is-on", !!state.on);
       st.setAttribute("aria-label", "DVL Open Interest " + (state.on ? "ON" : "OFF"));
     }
-    const inp = document.getElementById("dvlOIMALen");
-    if(inp && +inp.value !== (state.maLen||20)) inp.value = state.maLen||20;
+    const cb = document.getElementById("dvlOIOn");
+    if(cb && cb.checked !== !!state.on) cb.checked = !!state.on;
   }
 
   function insertRow(){
@@ -26519,12 +26560,6 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
       item.innerHTML = `
         <span class="indicatorFxMark">OI</span>
         <span><b>DVL Open Interest</b><small>AGG OI candles · real data</small></span>
-        <label style="display:flex;align-items:center;gap:3px;cursor:default;margin-left:auto;margin-right:6px" onclick="event.stopPropagation()">
-          <span style="color:#7b8fa8;font-size:9px;white-space:nowrap">MA</span>
-          <input id="dvlOIMALen" type="number" min="2" max="500" value="20"
-            style="width:38px;background:#0d1117;border:1px solid #2a3a50;color:#4db8ff;font-size:10px;padding:1px 4px;border-radius:3px;text-align:center;outline:none"
-            onclick="event.stopPropagation()">
-        </label>
         <i class="dvl-vt-state" id="dvlOpenInterestOscState">ON</i>
       `;
 
@@ -26548,23 +26583,18 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
         if(state.on) ensureData(true);
       };
 
-      item.addEventListener("click", ev => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        toggle();
-      });
-
-      const maInp = item.querySelector("#dvlOIMALen");
-      if(maInp){
-        maInp.addEventListener("change", ev => {
-          ev.stopPropagation();
-          const v = Math.max(2, Math.min(500, Math.round(+ev.target.value)||20));
-          ev.target.value = v;
-          state.maLen = v;
-          save();
+      const pill = item.querySelector("#dvlOpenInterestOscState");
+      if(pill){
+        pill.addEventListener("click", ev => {
+          ev.preventDefault(); ev.stopPropagation();
+          toggle();
         });
-        maInp.addEventListener("click", ev => ev.stopPropagation());
       }
+
+      item.addEventListener("click", ev => {
+        ev.stopPropagation();
+        openPanel();
+      });
     }
 
     updateRow();
@@ -27312,6 +27342,46 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
     ctx.restore();
   }
 
+  let panel = null;
+  function ensurePanel(){
+    if(panel) return panel;
+    panel = document.createElement("div");
+    panel.id = "dvlLSPanel";
+    panel.className = "dvl-vt-panel";
+    panel.innerHTML = `
+      <div class="dvl-vt-head">
+        <div class="dvl-vt-title"><b>DVL Long/Short Ratio</b><small>CoinGlass-style · real data</small></div>
+        <div class="dvl-vt-head-actions">
+          <button class="dvl-vt-close" id="dvlLSPanelClose" type="button">×</button>
+        </div>
+      </div>
+      <div class="dvl-vt-body" id="dvlLSPanelBody"></div>
+    `;
+    document.body.appendChild(panel);
+    panel.addEventListener("pointerdown", ev => ev.stopPropagation(), true);
+    panel.querySelector("#dvlLSPanelClose").addEventListener("click", closePanel);
+    return panel;
+  }
+  function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderPanel(); }
+  function closePanel(){ if(panel) panel.classList.remove("is-open"); }
+  function renderPanel(){
+    ensurePanel();
+    const body = panel.querySelector("#dvlLSPanelBody");
+    body.innerHTML = `
+      <div class="dvl-vt-section">
+        <div class="dvl-vt-section-title"><span>General</span></div>
+        <div class="dvl-vt-grid">
+          <div class="dvl-vt-field"><label>Indicator</label><label class="dvl-switch"><input id="dvlLSOn" type="checkbox" ${state.on?"checked":""}><i></i><b></b></label></div>
+          <div class="dvl-vt-field"><label>Mode</label><select id="dvlLSMode" class="dvl-vt-select"><option value="global" ${state.mode==="global"?"selected":""}>Global</option><option value="top" ${state.mode==="top"?"selected":""}>Top Traders</option></select></div>
+        </div>
+      </div>
+    `;
+    const onCb = panel.querySelector("#dvlLSOn");
+    if(onCb) onCb.addEventListener("change", () => { state.on = onCb.checked; save(); if(state.on) ensureData(true); });
+    const modeEl = panel.querySelector("#dvlLSMode");
+    if(modeEl) modeEl.addEventListener("change", () => { state.mode = modeEl.value; save(); });
+  }
+
   function updateRow(){
     const st = document.getElementById("dvlLongShortOscState");
     if(st){
@@ -27319,6 +27389,8 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
       st.classList.toggle("is-on", !!state.on);
       st.setAttribute("aria-label", "DVL Long Short " + (state.on ? "ON" : "OFF"));
     }
+    const cb = document.getElementById("dvlLSOn");
+    if(cb && cb.checked !== !!state.on) cb.checked = !!state.on;
   }
 
   function insertRow(){
@@ -27353,10 +27425,17 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
         if(state.on) ensureData(true);
       };
 
+      const pill = item.querySelector("#dvlLongShortOscState");
+      if(pill){
+        pill.addEventListener("click", ev => {
+          ev.preventDefault(); ev.stopPropagation();
+          toggle();
+        });
+      }
+
       item.addEventListener("click", ev => {
-        ev.preventDefault();
         ev.stopPropagation();
-        toggle();
+        openPanel();
       });
     }
 
