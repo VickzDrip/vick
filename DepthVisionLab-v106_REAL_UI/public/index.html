@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.586</title>
+<title>DVL Binance Live — Beta 0.587</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.586</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.587</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.586";
+const DVL_APP_VERSION = "Beta 0.587";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "OI e Long/Short Ratio: paginacao 3x500=1500 pontos em requests paralelos com endTime escalonado. Historico ~3x maior em todos os timeframes." },
+  { version: DVL_APP_VERSION, note: "Long/Short Ratio agregado Binance + Bybit: merge por timestamp com media 50/50 do longPct. Bybit so no modo global. Fallback automatico para Binance se Bybit falhar." },
+  { version: "Beta 0.586", note: "OI e Long/Short Ratio: paginacao 3x500=1500 pontos em requests paralelos. Historico ~3x maior em todos os timeframes." },
   { version: "Beta 0.585", note: "Fix critico: setupChartInteractions() nunca era chamada (a chamada sumiu na refatoracao do 0.583). Grafico nao respondia a nenhum toque." },
   { version: "Beta 0.584", note: "Fix: ev.target !== canvas rejeitava toque sobre overlays. Substituido por verificacao de bounding rect." },
   { version: "Beta 0.583", note: "Zoom/pinch reescrito do zero: handler unificado em window capture elimina race condition onde 2 dedos simultaneos nao iniciavam pinch. Factor incremental amortecido 0.72 +-12%/move + pan por midpoint = mecanica do DVL legado." },
@@ -14396,6 +14397,10 @@ function periodToMs(p){
   const m={"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"2h":7200000,"4h":14400000,"6h":21600000,"12h":43200000,"1d":86400000};
   return m[p]||300000;
 }
+function periodToBybitPeriod(p){
+  const m={"5m":"5min","15m":"15min","30m":"30min","1h":"1h","2h":"4h","4h":"4h","6h":"4h","12h":"1d","1d":"1d"};
+  return m[p]||"5min";
+}
 
 
 function intervalMs(iv){
@@ -15022,7 +15027,9 @@ async function loadAll(silent=false){
   const period = intervalToPeriod(interval);
   try{
     const _pMs = periodToMs(period), _now = Date.now();
-    const [k, t, oi0, oi1, oi2, ls0, ls1, ls2] = await Promise.all([
+    const _bbP = periodToBybitPeriod(period);
+    const _bbUrl = (n) => "https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=" + encodeURIComponent(symbol) + "&period=" + _bbP + "&limit=200" + (n>0?"&endTime="+(_now-n*200*_pMs):"");
+    const [k, t, oi0, oi1, oi2, ls0, ls1, ls2, bb0, bb1, bb2] = await Promise.all([
       fetchKlinesSmart(symbol, interval, historyLimitForInterval(interval)),
       jget(`${BINANCE}/fapi/v1/ticker/24hr?symbol=${symbol}`),
       jget(`${DATA}/openInterestHist?symbol=${symbol}&period=${period}&limit=500`),
@@ -15030,7 +15037,10 @@ async function loadAll(silent=false){
       jget(`${DATA}/openInterestHist?symbol=${symbol}&period=${period}&limit=500&endTime=${_now-1000*_pMs}`).catch(()=>[]),
       jget(`${DATA}/globalLongShortAccountRatio?symbol=${symbol}&period=${period}&limit=500`),
       jget(`${DATA}/globalLongShortAccountRatio?symbol=${symbol}&period=${period}&limit=500&endTime=${_now-500*_pMs}`).catch(()=>[]),
-      jget(`${DATA}/globalLongShortAccountRatio?symbol=${symbol}&period=${period}&limit=500&endTime=${_now-1000*_pMs}`).catch(()=>[])
+      jget(`${DATA}/globalLongShortAccountRatio?symbol=${symbol}&period=${period}&limit=500&endTime=${_now-1000*_pMs}`).catch(()=>[]),
+      jget(_bbUrl(0)).catch(()=>null),
+      jget(_bbUrl(1)).catch(()=>null),
+      jget(_bbUrl(2)).catch(()=>null)
     ]);
     klines = k.map(x => ({
       time:x[0], open:+x[1], high:+x[2], low:+x[3], close:+x[4], volume:+x[5], quoteVolume:+x[7]
@@ -15039,7 +15049,19 @@ async function loadAll(silent=false){
     assetTickerMap[symbol] = t;
     refreshAssetTickers(true);
     { const _s=new Set(); oiHist=[oi0,oi1,oi2].filter(Array.isArray).flatMap(p=>p).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_s.has(k))return false;_s.add(k);return true;}).map(x=>({time:+x.timestamp,value:+x.sumOpenInterestValue,qty:+x.sumOpenInterest})); }
-    { const _s=new Set(); lsHist=[ls0,ls1,ls2].filter(Array.isArray).flatMap(p=>p).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_s.has(k))return false;_s.add(k);return true;}).map(x=>({time:+x.timestamp,ratio:+x.longShortRatio,long:+x.longAccount,short:+x.shortAccount})); }
+    {
+      const _s=new Set();
+      const _bnLS=[ls0,ls1,ls2].filter(Array.isArray).flatMap(p=>p).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_s.has(k))return false;_s.add(k);return true;});
+      const _s2=new Set();
+      const _bbList=[bb0,bb1,bb2].flatMap(r=>(Array.isArray(r?.result?.list)?r.result.list:[])).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_s2.has(k))return false;_s2.add(k);return true;});
+      const _bbMap=new Map(_bbList.map(x=>[+x.timestamp,x]));
+      lsHist=_bnLS.map(x=>{
+        const bb=_bbMap.get(+x.timestamp);
+        if(!bb) return {time:+x.timestamp,ratio:+x.longShortRatio,long:+x.longAccount,short:+x.shortAccount};
+        const lng=(+x.longAccount+(+bb.buyRatio))/2, sht=1-lng;
+        return {time:+x.timestamp,ratio:lng/Math.max(sht,0.0001),long:lng,short:sht};
+      });
+    }
     derivativesDataReal = oiHist.length > 0;
     updateHeader();
     els.loading.classList.add("hidden");
@@ -26867,9 +26889,23 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
       const _lsPMs = (typeof periodToMs==="function") ? periodToMs(p) : {"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"2h":7200000,"4h":14400000,"6h":21600000,"12h":43200000,"1d":86400000}[p]||300000;
       const _lsNow = Date.now();
       const _lsUrl = (n) => _lsBase + "/" + _lsEndpoint + "?symbol=" + encodeURIComponent(sym()) + "&period=" + encodeURIComponent(p) + "&limit=500" + (n>0?"&endTime="+(_lsNow-n*500*_lsPMs):"");
-      const [_lsR0,_lsR1,_lsR2] = await Promise.all([fetchJson(_lsUrl(0)),fetchJson(_lsUrl(1)).catch(()=>[]),fetchJson(_lsUrl(2)).catch(()=>[])]);
+      const _bbP3 = (typeof periodToBybitPeriod==="function") ? periodToBybitPeriod(p) : "5min";
+      const _bbUrl3 = (n) => "https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=" + encodeURIComponent(sym()) + "&period=" + _bbP3 + "&limit=200" + (n>0?"&endTime="+(_lsNow-n*200*_lsPMs):"");
+      const _useBybit = mode !== "top";
+      const [_lsR0,_lsR1,_lsR2,_bbR0,_bbR1,_bbR2] = await Promise.all([
+        fetchJson(_lsUrl(0)),
+        fetchJson(_lsUrl(1)).catch(()=>[]),
+        fetchJson(_lsUrl(2)).catch(()=>[]),
+        _useBybit?fetchJson(_bbUrl3(0)).catch(()=>null):Promise.resolve(null),
+        _useBybit?fetchJson(_bbUrl3(1)).catch(()=>null):Promise.resolve(null),
+        _useBybit?fetchJson(_bbUrl3(2)).catch(()=>null):Promise.resolve(null)
+      ]);
       const _lsSeen=new Set();
-      const arr = [arrFromResp(_lsR0),arrFromResp(_lsR1),arrFromResp(_lsR2)].filter(Array.isArray).flatMap(a=>a).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_lsSeen.has(k))return false;_lsSeen.add(k);return true;});
+      const _bnArr=[arrFromResp(_lsR0),arrFromResp(_lsR1),arrFromResp(_lsR2)].filter(Array.isArray).flatMap(a=>a).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_lsSeen.has(k))return false;_lsSeen.add(k);return true;});
+      const _bbSeen=new Set();
+      const _bbList3=[_bbR0,_bbR1,_bbR2].flatMap(r=>(Array.isArray(r?.result?.list)?r.result.list:[])).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_bbSeen.has(k))return false;_bbSeen.add(k);return true;});
+      const _bbMap3=new Map(_bbList3.map(x=>[+x.timestamp,x]));
+      const arr=_bnArr.map(x=>{const bb=_bbMap3.get(+x.timestamp);if(!bb)return x;const lng=(+x.longAccount+(+bb.buyRatio))/2,sht=1-lng;return{...x,longAccount:lng,shortAccount:sht,longShortRatio:lng/Math.max(sht,0.0001)};});
       const data = parseLS(arr);
 
       if(!data.length) throw new Error("NO DATA");
