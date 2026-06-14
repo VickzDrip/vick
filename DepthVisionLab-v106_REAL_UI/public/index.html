@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.589</title>
+<title>DVL Binance Live — Beta 0.590</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.589</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.590</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.589";
+const DVL_APP_VERSION = "Beta 0.590";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Revert OI Bybit (unidade openInterest ambigua causou bug nas colunas). OI volta a Binance-only. Spike Zones warmup fix mantido." },
+  { version: DVL_APP_VERSION, note: "OI: media movel (MA) adicionada — linha ciano sobre as colunas, periodo configuravel via input na linha do indicador. Default 20." },
+  { version: "Beta 0.589", note: "Revert OI Bybit (unidade ambigua). Spike Zones warmup fix mantido." },
   { version: "Beta 0.588", note: "OI Bybit revertido. Spike Zones: warm=atrLen(14) em vez de max(volLen,atrLen)." },
   { version: "Beta 0.587", note: "Long/Short Ratio agregado Binance + Bybit: merge por timestamp 50/50. Bybit so no modo global." },
   { version: "Beta 0.586", note: "OI e Long/Short Ratio: paginacao 3x500=1500 pontos em requests paralelos. Historico ~3x maior em todos os timeframes." },
@@ -25993,6 +25994,7 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
     on:true,
     source:"binance",
     unit:"usd",
+    maLen:20,
     viewCount:140,
     offset:-24,
     center:null,
@@ -26440,6 +26442,32 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
         ctx.strokeRect(xx-bw/2, bodyTop, bw, bodyH);
       }
 
+      // MA line
+      const _maLen = Math.max(2, Math.round(state.maLen) || 20);
+      if(_maLen && CACHE.data.length >= 2){
+        const _closes = CACHE.data.map(d=>d.close);
+        const _prefix = new Array(_closes.length+1).fill(0);
+        for(let i=0;i<_closes.length;i++) _prefix[i+1]=_prefix[i]+_closes[i];
+        const _idxMap = new Map(CACHE.data.map((d,i)=>[d.t,i]));
+        ctx.beginPath();
+        ctx.strokeStyle = "#4db8ff";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([]);
+        let _started = false;
+        for(let i=0;i<view.length;i++){
+          const d = valueAt(CACHE.data, Number(view[i].time));
+          if(!d) continue;
+          const idx = _idxMap.get(d.t);
+          if(idx===undefined) continue;
+          const st2 = Math.max(0, idx-_maLen+1);
+          const avg = (_prefix[idx+1]-_prefix[st2])/(idx-st2+1);
+          const xx2 = xForIndex(i, m, win);
+          const yy2 = yMap(m, avg, sc);
+          if(!_started){ ctx.moveTo(xx2,yy2); _started=true; } else ctx.lineTo(xx2,yy2);
+        }
+        if(_started) ctx.stroke();
+      }
+
       ctx.fillStyle = "rgba(120,145,180,.78)";
       ctx.font = "760 8px system-ui";
       ctx.textAlign = "left";
@@ -26475,6 +26503,8 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
       st.classList.toggle("is-on", !!state.on);
       st.setAttribute("aria-label", "DVL Open Interest " + (state.on ? "ON" : "OFF"));
     }
+    const inp = document.getElementById("dvlOIMALen");
+    if(inp && +inp.value !== (state.maLen||20)) inp.value = state.maLen||20;
   }
 
   function insertRow(){
@@ -26489,6 +26519,12 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
       item.innerHTML = `
         <span class="indicatorFxMark">OI</span>
         <span><b>DVL Open Interest</b><small>AGG OI candles · real data</small></span>
+        <label style="display:flex;align-items:center;gap:3px;cursor:default;margin-left:auto;margin-right:6px" onclick="event.stopPropagation()">
+          <span style="color:#7b8fa8;font-size:9px;white-space:nowrap">MA</span>
+          <input id="dvlOIMALen" type="number" min="2" max="500" value="20"
+            style="width:38px;background:#0d1117;border:1px solid #2a3a50;color:#4db8ff;font-size:10px;padding:1px 4px;border-radius:3px;text-align:center;outline:none"
+            onclick="event.stopPropagation()">
+        </label>
         <i class="dvl-vt-state" id="dvlOpenInterestOscState">ON</i>
       `;
 
@@ -26517,6 +26553,18 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
         ev.stopPropagation();
         toggle();
       });
+
+      const maInp = item.querySelector("#dvlOIMALen");
+      if(maInp){
+        maInp.addEventListener("change", ev => {
+          ev.stopPropagation();
+          const v = Math.max(2, Math.min(500, Math.round(+ev.target.value)||20));
+          ev.target.value = v;
+          state.maLen = v;
+          save();
+        });
+        maInp.addEventListener("click", ev => ev.stopPropagation());
+      }
     }
 
     updateRow();
