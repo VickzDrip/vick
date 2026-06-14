@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.584</title>
+<title>DVL Binance Live — Beta 0.585</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.584</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.585</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.584";
+const DVL_APP_VERSION = "Beta 0.585";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Fix: ev.target !== canvas rejeitava toque sobre overlays (dvlLsLayer etc.). Substituido por verificacao de bounding rect — primeiro dedo aceito se cair dentro do canvas, independente do target." },
+  { version: DVL_APP_VERSION, note: "Fix critico: setupChartInteractions() nunca era chamada (a chamada sumiu na refatoracao do 0.583). Grafico nao respondia a nenhum toque." },
+  { version: "Beta 0.584", note: "Fix: ev.target !== canvas rejeitava toque sobre overlays. Substituido por verificacao de bounding rect." },
   { version: "Beta 0.583", note: "Zoom/pinch reescrito do zero: handler unificado em window capture elimina race condition onde 2 dedos simultaneos nao iniciavam pinch. Factor incremental amortecido 0.72 +-12%/move + pan por midpoint = mecanica do DVL legado." },
   { version: "Beta 0.582", note: "Mecanica de zoom do DVL antigo recuperada: view float, fator incremental amortecido (0.72), clamp +/-12%, pan por midpoint." },
   { version: "Beta 0.581", note: "Badge de versao corrigido: era texto estatico fixo em BETA 0.577. Agora atualiza automaticamente a partir de DVL_APP_VERSION em todo bump futuro." },
@@ -16724,6 +16725,8 @@ function setupChartInteractions(){
   window.addEventListener("pointerup",     _onEnd,  {capture:true});
   window.addEventListener("pointercancel", _onEnd,  {capture:true});
 }
+
+setupChartInteractions();
 
 function setupChartMiniControls(){
 
