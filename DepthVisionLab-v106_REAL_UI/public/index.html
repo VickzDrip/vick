@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.598</title>
+<title>DVL Binance Live — Beta 0.599</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.598</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.599</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.598";
+const DVL_APP_VERSION = "Beta 0.599";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Tick Volume: oscilador buy/sell por barras de 1s via coletor local (/api/ticks). Auto-agrega conforme zoom. Verde=buy, Vermelho=sell." },
+  { version: DVL_APP_VERSION, note: "Bugfix: DVLDeltaVolume e DVLTickVolume nao apareciam no painel Indicators — corrigido insertRow() com #indicatorDropdown e classe indicatorItem." },
+  { version: "Beta 0.598", note: "Tick Volume: barras de 1s via coletor local." },
   { version: "Beta 0.597", note: "Bugfix: Delta Volume nao carregava dados." },
   { version: "Beta 0.596", note: "Delta Volume: oscilador buy/sell/delta via klines 1m." },
   { version: "Beta 0.595", note: "Bugfix: OI e L/S nao atualizavam ao trocar de ativo." },
@@ -28006,25 +28007,49 @@ drag = {
     if(maInp) maInp.addEventListener("change", ()=>{ const v=Math.max(0,Math.min(500,Math.round(+maInp.value)||0)); maInp.value=v; state.maLen=v; save(); });
   }
 
-  // ── Indicator row pill ────────────────────────────────────────────────────
-  function ensureRow(){
-    if(item && document.contains(item)) return;
-    const container = document.querySelector(".dvl-indicators-list, #dvlIndicatorsList, .dvl-osc-list");
-    if(!container) return;
-    item = document.createElement("div");
-    item.className = "dvl-indicator-item";
-    item.dataset.dvlDvBound = "1";
-    item.innerHTML = `<span class="dvl-ind-name">Delta Volume</span><i class="dvl-vt-state" id="dvlDvState">${state.on?"ON":"OFF"}</i>`;
-    container.appendChild(item);
-    const pill = item.querySelector("#dvlDvState");
-    item.addEventListener("click", ev=>{
-      if(pill && pill.contains(ev.target)){ state.on=!state.on; save(); pill.textContent=state.on?"ON":"OFF"; }
-      else openPanel();
-    });
+  // ── Indicator row ─────────────────────────────────────────────────────────
+  function updateRow(){
+    const st = document.getElementById("dvlDeltaVolumeState");
+    if(st) st.textContent = state.on ? "ON" : "OFF";
   }
 
+  function insertRow(){
+    const menu = document.getElementById("indicatorDropdown");
+    if(!menu) return;
+    let item = document.getElementById("dvlDeltaVolumeItem");
+    if(!item){
+      item = document.createElement("div");
+      item.id = "dvlDeltaVolumeItem";
+      item.className = "indicatorItem";
+      item.innerHTML = `
+        <span class="indicatorFxMark">DV</span>
+        <span><b>DVL Delta Volume</b><small>1m klines buy/sell delta</small></span>
+        <i class="dvl-vt-state" id="dvlDeltaVolumeState">ON</i>
+      `;
+      const after = document.getElementById("dvlLongShortOscItem") || document.getElementById("dvlOpenInterestOscItem");
+      if(after && after.parentNode) after.parentNode.insertBefore(item, after.nextSibling);
+      else menu.appendChild(item);
+    }
+    if(!item.dataset.dvlDvBound){
+      item.dataset.dvlDvBound = "1";
+      const pill = item.querySelector("#dvlDeltaVolumeState");
+      if(pill) pill.addEventListener("click", ev=>{ ev.preventDefault(); ev.stopPropagation(); state.on=!state.on; save(); updateRow(); });
+      item.addEventListener("click", ev=>{ ev.stopPropagation(); openPanel(); });
+    }
+    updateRow();
+  }
+
+  function boot(){
+    insertRow();
+    updateRow();
+    if(typeof drawSoon === "function") drawSoon();
+  }
+
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+
   window.DVLDeltaVolume = {
-    version:"0.596",
+    version:"0.599",
     on,
     setOn,
     draw,
@@ -28247,15 +28272,56 @@ drag = {
     if(cb) cb.addEventListener("change", ()=>{ state.on=cb.checked; save(); });
   }
 
+  // ── Indicator row ─────────────────────────────────────────────────────────
+  function updateRow(){
+    const st = document.getElementById("dvlTickVolumeState");
+    if(st) st.textContent = state.on ? "ON" : "OFF";
+  }
+
+  function insertRow(){
+    const menu = document.getElementById("indicatorDropdown");
+    if(!menu) return;
+    let item = document.getElementById("dvlTickVolumeItem");
+    if(!item){
+      item = document.createElement("div");
+      item.id = "dvlTickVolumeItem";
+      item.className = "indicatorItem";
+      item.innerHTML = `
+        <span class="indicatorFxMark">TV</span>
+        <span><b>DVL Tick Volume</b><small>1s bars · buy/sell live</small></span>
+        <i class="dvl-vt-state" id="dvlTickVolumeState">ON</i>
+      `;
+      const after = document.getElementById("dvlDeltaVolumeItem") || document.getElementById("dvlLongShortOscItem");
+      if(after && after.parentNode) after.parentNode.insertBefore(item, after.nextSibling);
+      else menu.appendChild(item);
+    }
+    if(!item.dataset.dvlTvBound){
+      item.dataset.dvlTvBound = "1";
+      const pill = item.querySelector("#dvlTickVolumeState");
+      if(pill) pill.addEventListener("click", ev=>{ ev.preventDefault(); ev.stopPropagation(); state.on=!state.on; save(); updateRow(); });
+      item.addEventListener("click", ev=>{ ev.stopPropagation(); openPanel(); });
+    }
+    updateRow();
+  }
+
+  function boot(){
+    insertRow();
+    updateRow();
+    if(typeof drawSoon === "function") drawSoon();
+  }
+
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+
   // ── Live poll: atualiza a cada 3s ────────────────────────────────────────
   setInterval(()=>{
     if(!on()) return;
-    CACHE.lastFetch = 0; // força re-fetch na próxima draw
+    CACHE.lastFetch = 0;
     if(typeof drawSoon === "function") drawSoon();
   }, 3000);
 
   window.DVLTickVolume = {
-    version:"0.598",
+    version:"0.599",
     on,
     setOn,
     draw,
