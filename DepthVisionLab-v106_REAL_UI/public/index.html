@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.596</title>
+<title>DVL Binance Live — Beta 0.597</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.596</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.597</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.596";
+const DVL_APP_VERSION = "Beta 0.597";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Delta Volume: novo oscilador, barras buy/sell/delta via klines 1m Binance Futures, agrupadas por periodo mae. MA opcional." },
+  { version: DVL_APP_VERSION, note: "Bugfix: Delta Volume nao carregava — CACHE.key setado antes do fetch bloqueava retry; sem drawSoon causava tela vazia apos fetch." },
+  { version: "Beta 0.596", note: "Delta Volume: oscilador buy/sell/delta via klines 1m." },
   { version: "Beta 0.595", note: "Bugfix: OI e L/S nao atualizavam ao trocar de ativo." },
   { version: "Beta 0.594", note: "Bugfix: Volume Trace renderPanel body vazio (#dvlMaBody errado)." },
   { version: "Beta 0.593", note: "OI: seletor Coins/USD; pavios reais via sub-periodo." },
@@ -27811,7 +27812,6 @@ drag = {
     if(!force && CACHE.key === key) return;
     if(CACHE.fetching) return;
     CACHE.fetching = true;
-    CACHE.key = key;
     const sym_ = sym();
     const pMs = periodMs(period());
     try{
@@ -27825,14 +27825,15 @@ drag = {
         endTime = Number(rows[0][0]) - 1;
         if(rows.length < LIMIT) break;
       }
-      if(CACHE.key !== key){ CACHE.fetching=false; return; }
       const map = parseKlines(pages, pMs);
       const sorted = Array.from(map.values()).sort((a,b)=>a.t-b.t);
+      CACHE.key = key;
       CACHE.data = sorted;
     }catch(e){
-      if(CACHE.key === key) CACHE.data = [];
+      CACHE.data = [];
     }finally{
       CACHE.fetching = false;
+      if(typeof drawSoon === "function") drawSoon();
     }
   }
 
