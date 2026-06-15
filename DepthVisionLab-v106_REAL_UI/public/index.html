@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.592</title>
+<title>DVL Binance Live — Beta 0.593</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.592</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge">BETA 0.593</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.592";
+const DVL_APP_VERSION = "Beta 0.593";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "L/S: media movel (MA) laranja adicionada sobre a linha do ratio, periodo configuravel no painel. Default 14." },
+  { version: DVL_APP_VERSION, note: "OI: seletor Coins/USD no painel; pavios reais via dados sub-periodo (fmtCoins). L/S MA mantida." },
+  { version: "Beta 0.592", note: "L/S: MA laranja sobre ratio, periodo configuravel." },
   { version: "Beta 0.591", note: "OI e L/S: painel de configuracoes. Pill ON/OFF permanece. MA do OI no painel." },
   { version: "Beta 0.590", note: "OI: MA ciano configuravel via input na linha (substituido por painel)." },
   { version: "Beta 0.589", note: "Revert OI Bybit (unidade ambigua). Spike Zones warmup fix mantido." },
@@ -26082,6 +26083,7 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
   }
 
   function parseOI(arr, isCoinGlass){
+    const useCoins = state.unit === "coins";
     const parsed = arr.map((o, idx) => {
       const t = tsOf(o);
 
@@ -26090,11 +26092,16 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
       let low = nval(o, ["low","l",3]);
       let close = nval(o, ["close","c","value","sumOpenInterestValue",4]);
       let qty = nval(o, ["sumOpenInterest","openInterest","qty","coin",5]);
+      let usd = 0;
 
       if(!isCoinGlass){
-        close = nval(o, ["sumOpenInterestValue","value","close","c"]);
-        qty = nval(o, ["sumOpenInterest","openInterest","qty"]);
-        open = idx && arr[idx-1] ? nval(arr[idx-1], ["sumOpenInterestValue","value","close","c"]) : close;
+        const usdV = nval(o, ["sumOpenInterestValue","value","close","c"]);
+        const coinV = nval(o, ["sumOpenInterest","openInterest","qty"]);
+        const prev = idx && arr[idx-1] ? arr[idx-1] : null;
+        usd = usdV;
+        qty = coinV;
+        close = useCoins ? coinV : usdV;
+        open = prev ? (useCoins ? nval(prev,["sumOpenInterest","openInterest","qty"]) : nval(prev,["sumOpenInterestValue","value","close","c"])) : close;
         high = Math.max(open, close);
         low = Math.min(open, close);
       }
@@ -26103,7 +26110,7 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
       if(!high) high = Math.max(open, close);
       if(!low) low = Math.min(open, close);
 
-      return { t, open, high, low, close, qty };
+      return { t, open, high, low, close, qty, usd };
     }).filter(d => d.t && Number.isFinite(d.close) && d.close > 0)
       .sort((a,b) => a.t - b.t);
 
@@ -26140,6 +26147,34 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
 
       if(!data.length) throw new Error("NO DATA");
 
+      // Sub-period wicks: fetch finer-grained OI to derive real intra-candle high/low
+      const _subPMap={"15m":"5m","30m":"5m","1h":"15m","2h":"30m","4h":"1h","6h":"1h","12h":"4h","1d":"4h"};
+      const _subP=_subPMap[p];
+      if(_subP){
+        try{
+          const _subUrl2=(n)=>_oiBase+"/openInterestHist?symbol="+encodeURIComponent(sym())+"&period="+encodeURIComponent(_subP)+"&limit=500"+(n>0?"&endTime="+(_oiNow-n*500*_oiPMs):"");
+          const [_s0,_s1,_s2]=await Promise.all([fetchJson(_subUrl2(0)).catch(()=>[]),fetchJson(_subUrl2(1)).catch(()=>[]),fetchJson(_subUrl2(2)).catch(()=>[])]);
+          const _subSeen2=new Set();
+          const _subArr=[arrFromResp(_s0),arrFromResp(_s1),arrFromResp(_s2)].filter(Array.isArray).flatMap(a=>a).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_subSeen2.has(k))return false;_subSeen2.add(k);return true;});
+          const _useC=state.unit==="coins";
+          const _subByMain=new Map();
+          for(const x of _subArr){
+            const tSub=+x.timestamp;
+            const mainT=Math.ceil(tSub/_oiPMs)*_oiPMs;
+            if(!_subByMain.has(mainT))_subByMain.set(mainT,[]);
+            _subByMain.get(mainT).push(_useC?+x.sumOpenInterest:+x.sumOpenInterestValue);
+          }
+          for(const d of data){
+            const sv=_subByMain.get(d.t);
+            if(sv&&sv.length>=2){
+              const all=[d.open,d.close,...sv];
+              d.high=Math.max(...all);
+              d.low=Math.min(...all);
+            }
+          }
+        }catch(_){}
+      }
+
       CACHE.key = key;
       CACHE.data = data;
       CACHE.ts = Date.now();
@@ -26147,7 +26182,7 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
       CACHE.err = "";
 
       try{
-        oiHist = data.map(d => ({ time:d.t, value:d.close, qty:d.qty }));
+        oiHist = data.map(d => ({ time:d.t, value:d.usd||d.close, qty:d.qty }));
         derivativesDataReal = true;
       }catch(_){}
     }catch(e){
@@ -26304,8 +26339,16 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
     return "$" + n.toFixed(0);
   }
 
+  function fmtCoins(v){
+    const n=Number(v);
+    if(!Number.isFinite(n))return"--";
+    const a=Math.abs(n);
+    if(a>=1e6)return(n/1e6).toFixed(2)+"M";
+    if(a>=1e3)return(n/1e3).toFixed(1)+"K";
+    return n.toFixed(2);
+  }
   function fmtScale(v){
-    return fmtMoney(v);
+    return state.unit==="coins" ? fmtCoins(v) : fmtMoney(v);
   }
 
   function basePanel(ctx, m, title, right, kind){
@@ -26402,7 +26445,7 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
     const prev = vals.length > 1 ? vals[vals.length-2] : ((CACHE.data || []).length > 1 ? (CACHE.data || []).at(-2) : last);
     const pct = last && prev && prev.close ? ((last.close - prev.close) / prev.close * 100) : 0;
     const kind = pct > 0 ? "bull" : pct < 0 ? "bear" : "neutral";
-    const right = last ? (fmtMoney(last.close) + " " + (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%") : (CACHE.fetching ? "LOADING" : "NO DATA");
+    const right = last ? ((state.unit==="coins"?fmtCoins(last.close)+" BTC":fmtMoney(last.close)) + " " + (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%") : (CACHE.fetching ? "LOADING" : "NO DATA");
 
     ctx.save();
     basePanel(ctx, m, "DVL AGG OI", right, kind);
@@ -26528,12 +26571,15 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
         <div class="dvl-vt-section-title"><span>General</span></div>
         <div class="dvl-vt-grid">
           <div class="dvl-vt-field"><label>Indicator</label><label class="dvl-switch"><input id="dvlOIOn" type="checkbox" ${state.on?"checked":""}><i></i><b></b></label></div>
+          <div class="dvl-vt-field"><label>Measure</label><select id="dvlOIUnit" class="dvl-vt-select"><option value="usd" ${(state.unit||"usd")==="usd"?"selected":""}>USD ($)</option><option value="coins" ${state.unit==="coins"?"selected":""}>Coins (BTC)</option></select></div>
           <div class="dvl-vt-field"><label>MA Length</label><input id="dvlOIMALenPanel" class="dvl-vt-input" type="number" min="2" max="500" step="1" value="${state.maLen||20}"></div>
         </div>
       </div>
     `;
     const onCb = panel.querySelector("#dvlOIOn");
     if(onCb) onCb.addEventListener("change", () => { state.on = onCb.checked; save(); if(state.on) ensureData(true); });
+    const unitEl = panel.querySelector("#dvlOIUnit");
+    if(unitEl) unitEl.addEventListener("change", () => { state.unit=unitEl.value; state.center=null; state.range=null; save(); ensureData(true); });
     const maInp = panel.querySelector("#dvlOIMALenPanel");
     if(maInp) maInp.addEventListener("change", () => { const v=Math.max(2,Math.min(500,Math.round(+maInp.value)||20)); maInp.value=v; state.maLen=v; save(); });
   }
