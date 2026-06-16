@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.603</title>
+<title>DVL Binance Live — Beta 0.604</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.603</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.604</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.603";
+const DVL_APP_VERSION = "Beta 0.604";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: DV/TV period() usava currentPeriod inexistente (1h hardcoded) — corrigido para interval global; painel settings agora abre; escala adicionada." },
+  { version: DVL_APP_VERSION, note: "Bugfix: DV barras alinhadas com velas via xForIndex/totalSlots; escala com estilo OI; panelMetrics com labelGap." },
+  { version: "Beta 0.603", note: "Bugfix: DV/TV period correto; painel settings abre; escala adicionada." },
   { version: "Beta 0.602", note: "Bugfix: toggle DV/TV verde/ON; Teste e Teste 2 removidos do menu." },
   { version: "Beta 0.601", note: "Bugfix: oscillatorWindow chamava funcao inexistente — corrigido para visibleWindow()." },
   { version: "Beta 0.600", note: "Badge BETA = hard refresh no mobile." },
@@ -27849,7 +27850,10 @@ drag = {
   }
 
   function panelMetrics(padL,padR,top,h,w){
-    return { x0:padL, x1:w-padR, y0:top, y1:top+h, w:w-padL-padR, h };
+    const labelGap = (typeof PRICE_LABEL_GAP!=="undefined"?PRICE_LABEL_GAP:2);
+    const labelW   = (typeof PRICE_LABEL_W!=="undefined"?PRICE_LABEL_W:51);
+    const x0=padL, x1=w-padR, y0=top, y1=top+h;
+    return { x0, x1, y0, y1, w:x1-x0, h, labelGap, labelW };
   }
 
   function oscillatorWindow(){
@@ -27859,10 +27863,9 @@ drag = {
   }
 
   function xForIndex(i, m, win){
-    const total = (win.candles||[]).length;
-    if(!total) return m.x0;
-    const cw = m.w / total;
-    return m.x0 + (i + 0.5) * cw;
+    const slots = Math.max(2, win.totalSlots || 2);
+    const slotOffset = Math.max(0, win.totalSlots - win.futureSlots - (win.candles||[]).length);
+    return m.x0 + (slotOffset + i) / (slots - 1) * (m.x1 - m.x0);
   }
 
   function yMap(m, val, sc){
@@ -27909,15 +27912,13 @@ drag = {
     const sc = barScale(visibleData.length ? visibleData : CACHE.data.slice(-160));
     const zero = yMap(m, 0, sc);
 
-    const total = view.length;
-    const cw = total > 0 ? m.w / total : 8;
-    const bw = Math.max(1, cw * 0.72);
+    const bw = Math.max(2, Math.min(11, ((m.x1-m.x0) / Math.max(1, win.totalSlots || view.length || 80)) * 0.72));
 
     // bars
     for(let i=0; i<view.length; i++){
       const d = valueAt(CACHE.data, Number(view[i].time));
       if(!d) continue;
-      const xx = m.x0 + (i + 0.5) * cw;
+      const xx = xForIndex(i, m, win);
       const yy = yMap(m, d.delta, sc);
       const barTop = Math.min(yy, zero);
       const barH = Math.max(1, Math.abs(yy - zero));
@@ -27953,7 +27954,7 @@ drag = {
         if(idx===undefined) continue;
         const st = Math.max(0, idx-maLen+1);
         const avg = (prefix[idx+1]-prefix[st])/(idx-st+1);
-        const xx = m.x0 + (i+0.5)*cw;
+        const xx = xForIndex(i, m, win);
         const yy = yMap(m, avg, sc);
         if(!started){ ctx.moveTo(xx,yy); started=true; } else ctx.lineTo(xx,yy);
       }
@@ -27967,9 +27968,15 @@ drag = {
     ctx.textBaseline = "bottom";
     ctx.fillText("DELTA VOL 1m", m.x0 + 8, m.y1 - 5);
 
-    if(typeof drawDvlScale === "function"){
-      const fmtV = v => { const a=Math.abs(v); return a>=1e6?(v/1e6).toFixed(1)+"M":a>=1e3?(v/1e3).toFixed(1)+"K":Math.round(v).toString(); };
-      drawDvlScale(ctx, {x1:m.x1, y0:m.y0, y1:m.y1, right:w}, sc.min, sc.max, fmtV, null, null);
+    // right-side scale — mesmo estilo do OI/LS
+    const fmtV = v => { const a=Math.abs(v); return a>=1e6?(v/1e6).toFixed(1)+"M":a>=1e3?(v/1e3).toFixed(1)+"K":Math.round(v).toString(); };
+    ctx.font = "9.2px system-ui";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(200,213,230,.72)";
+    for(let i=0; i<=4; i++){
+      const v = sc.max - (sc.max - sc.min) * i / 4;
+      ctx.fillText(fmtV(v), m.x1 + m.labelGap, yMap(m, v, sc));
     }
   }
 
