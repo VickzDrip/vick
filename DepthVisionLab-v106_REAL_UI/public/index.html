@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.610</title>
+<title>DVL Binance Live — Beta 0.611</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.610</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.611</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.610";
+const DVL_APP_VERSION = "Beta 0.611";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Feature: TFs de segundos (1s/5s/10s/15s/30s) no seletor de gráfico." },
+  { version: DVL_APP_VERSION, note: "Bugfix: 1s nativo Binance + resample para 5s/10s/15s/30s — evita travamento do chart via aggTrades." },
+  { version: "Beta 0.610", note: "Feature: TFs de segundos (1s/5s/10s/15s/30s) no seletor." },
   { version: "Beta 0.609", note: "Bugfix: VT liveBars aggMs; fetchTickBars tfMs; _origVTDraw fallback quando events vazio." },
   { version: "Beta 0.608", note: "Feature: WebSocket aggTrade ao vivo (1s bars); TV e VT usam Binance WS sem VPS." },
   { version: "Beta 0.607", note: "Bugfix: VT fallback klines-based; range 2h; anti-spam TTL." },
@@ -13829,7 +13830,7 @@ async function fetchFootprintData(){
     data.forEach(d => { window._dvlFpCache.set(d.t, {b:d.b||0, s:d.s||0, total:(d.b||0)+(d.s||0)}); });
   }catch(e){ console.warn("[DVL] footprint fetch:", e.message); }
 }
-const nativeTimeframes = ["1m","3m","5m","15m","30m","1h","2h","4h","6h","8h","12h","1d","3d","1w"];
+const nativeTimeframes = ["1s","1m","3m","5m","15m","30m","1h","2h","4h","6h","8h","12h","1d","3d","1w"];
 let customTimeframes = (() => {
   try{
     const parsed = JSON.parse(localStorage.getItem("DVL_CUSTOM_TIMEFRAMES") || "[]");
@@ -14405,6 +14406,7 @@ function isNativeTimeframe(iv){
 function baseIntervalForTimeframe(iv){
   if(isNativeTimeframe(iv)) return iv;
   const parsed = parseTimeframe(iv);
+  if(parsed.unit === "s") return "1s";
   if(parsed.unit === "m") return "1m";
   if(parsed.unit === "h") return "1h";
   if(parsed.unit === "d" || parsed.unit === "w") return "1d";
@@ -15034,11 +15036,6 @@ async function fetchKlinesSmart(sym, iv, targetLimit){
   if(isNativeTimeframe(iv)){
     return await fetchKlinesHistory(sym, iv, targetLimit);
   }
-  const _parsed = parseTimeframe(iv);
-  if(_parsed.unit === "s"){
-    return await fetchKlinesFromAggTrades(sym, iv, targetLimit);
-  }
-
   const baseIv = baseIntervalForTimeframe(iv);
   const targetMs = intervalMs(iv);
   const baseMs = intervalMs(baseIv);
@@ -28498,7 +28495,7 @@ drag = {
   setInterval(_wsConnect,8000);
 
   window.DVLTickVolume = {
-    version:"0.610",
+    version:"0.611",
     on,
     setOn,
     draw,
