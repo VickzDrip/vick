@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.602</title>
+<title>DVL Binance Live — Beta 0.603</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.602</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.603</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.602";
+const DVL_APP_VERSION = "Beta 0.603";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: toggle DV/TV agora fica verde/ON corretamente; Teste e Teste 2 removidos do menu Indicators." },
+  { version: DVL_APP_VERSION, note: "Bugfix: DV/TV period() usava currentPeriod inexistente (1h hardcoded) — corrigido para interval global; painel settings agora abre; escala adicionada." },
+  { version: "Beta 0.602", note: "Bugfix: toggle DV/TV verde/ON; Teste e Teste 2 removidos do menu." },
   { version: "Beta 0.601", note: "Bugfix: oscillatorWindow chamava funcao inexistente — corrigido para visibleWindow()." },
   { version: "Beta 0.600", note: "Badge BETA = hard refresh no mobile." },
   { version: "Beta 0.599", note: "Bugfix: DVLDeltaVolume e DVLTickVolume no painel Indicators." },
@@ -27780,7 +27781,7 @@ drag = {
   const CACHE = { key:null, data:[], fetching:false };
 
   function sym(){ try{ return (window.currentSymbol||"BTCUSDT").toUpperCase(); }catch(_){ return "BTCUSDT"; } }
-  function period(){ try{ return window.currentPeriod||"1h"; }catch(_){ return "1h"; } }
+  function period(){ try{ return (typeof interval!=="undefined"?interval:null)||"5m"; }catch(_){ return "5m"; } }
 
   function periodMs(tf){
     const map={ "1m":60000,"3m":180000,"5m":300000,"15m":900000,"30m":1800000,
@@ -27965,6 +27966,11 @@ drag = {
     ctx.textAlign = "left";
     ctx.textBaseline = "bottom";
     ctx.fillText("DELTA VOL 1m", m.x0 + 8, m.y1 - 5);
+
+    if(typeof drawDvlScale === "function"){
+      const fmtV = v => { const a=Math.abs(v); return a>=1e6?(v/1e6).toFixed(1)+"M":a>=1e3?(v/1e3).toFixed(1)+"K":Math.round(v).toString(); };
+      drawDvlScale(ctx, {x1:m.x1, y0:m.y0, y1:m.y1, right:w}, sc.min, sc.max, fmtV, null, null);
+    }
   }
 
   function fitToCurrent(){ ensureData(true); }
@@ -27976,21 +27982,22 @@ drag = {
   function ensurePanel(){
     if(panel && document.contains(panel)) return;
     panel = document.createElement("div");
+    panel.id = "dvlDvPanel";
     panel.className = "dvl-vt-panel";
-    panel.style.cssText = "display:none;position:fixed;z-index:9999;top:60px;right:60px;width:240px;";
     panel.innerHTML = `
-      <div class="dvl-vt-header">
-        <span class="dvl-vt-title">Delta Volume</span>
-        <button class="dvl-vt-close" id="dvlDvClose">✕</button>
+      <div class="dvl-vt-head">
+        <div class="dvl-vt-title"><b>DVL Delta Volume</b><small>1m klines · buy/sell delta</small></div>
+        <div class="dvl-vt-head-actions"><button class="dvl-vt-close" id="dvlDvClose" type="button">×</button></div>
       </div>
       <div class="dvl-vt-body" id="dvlDvBody"></div>
     `;
     document.body.appendChild(panel);
+    panel.addEventListener("pointerdown", ev => ev.stopPropagation(), true);
     panel.querySelector("#dvlDvClose").addEventListener("click", closePanel);
   }
 
-  function openPanel(){ ensurePanel(); renderPanel(); panel.style.display=""; }
-  function closePanel(){ if(panel) panel.style.display="none"; }
+  function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderPanel(); }
+  function closePanel(){ if(panel) panel.classList.remove("is-open"); }
 
   function renderPanel(){
     ensurePanel();
@@ -28084,7 +28091,7 @@ drag = {
   const CACHE = { key:null, bars:[], fetchingKey:null, lastFetch:0, rangeKey:null };
 
   function sym(){ try{ return (window.currentSymbol||"BTCUSDT").toUpperCase(); }catch(_){ return "BTCUSDT"; } }
-  function period(){ try{ return window.currentPeriod||"1h"; }catch(_){ return "1h"; } }
+  function period(){ try{ return (typeof interval!=="undefined"?interval:null)||"5m"; }catch(_){ return "5m"; } }
 
   function cacheKey(){ return sym()+"|"+period(); }
 
@@ -28240,20 +28247,21 @@ drag = {
   function ensurePanel(){
     if(panel && document.contains(panel)) return;
     panel = document.createElement("div");
+    panel.id = "dvlTvPanel";
     panel.className = "dvl-vt-panel";
-    panel.style.cssText = "display:none;position:fixed;z-index:9999;top:60px;right:60px;width:220px;";
     panel.innerHTML = `
-      <div class="dvl-vt-header">
-        <span class="dvl-vt-title">Tick Volume</span>
-        <button class="dvl-vt-close" id="dvlTvClose">✕</button>
+      <div class="dvl-vt-head">
+        <div class="dvl-vt-title"><b>DVL Tick Volume</b><small>1s bars · buy/sell live</small></div>
+        <div class="dvl-vt-head-actions"><button class="dvl-vt-close" id="dvlTvClose" type="button">×</button></div>
       </div>
       <div class="dvl-vt-body" id="dvlTvBody"></div>
     `;
     document.body.appendChild(panel);
-    panel.querySelector("#dvlTvClose").addEventListener("click", ()=>{ panel.style.display="none"; });
+    panel.addEventListener("pointerdown", ev => ev.stopPropagation(), true);
+    panel.querySelector("#dvlTvClose").addEventListener("click", ()=>{ panel.classList.remove("is-open"); });
   }
 
-  function openPanel(){ ensurePanel(); renderPanel(); panel.style.display=""; }
+  function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderPanel(); }
 
   function renderPanel(){
     ensurePanel();
