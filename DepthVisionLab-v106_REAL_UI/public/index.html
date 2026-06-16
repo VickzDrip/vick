@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.616</title>
+<title>DVL Binance Live — Beta 0.617</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.616</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.617</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13727,11 +13727,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.616";
+const DVL_APP_VERSION = "Beta 0.617";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Feature: VP barras com split buy/sell — buy na direita (verde), sell na esquerda (vermelho), POC cor dinamica." },
+  { version: DVL_APP_VERSION, note: "Bugfix: VP body-weighted (sem flatlines) + clamp sell/buyW (sem artefatos visuais)." },
+  { version: "Beta 0.616", note: "Feature: VP split buy/sell por barra + buyVolume nos klines." },
   { version: "Beta 0.615", note: "Bugfix: VP barras ancoradas em x1 (escala de preco)." },
   { version: "Beta 0.614", note: "Feature: Volume Profile (VP) + configuracoes persistentes." },
   { version: "Beta 0.613", note: "Bugfix: auto-scale p5/p95 — candle outlier nao achata chart nem OI." },
@@ -28742,26 +28743,46 @@ drag = {
   function on(){ return !!state.on; }
   function setOn(v){ state.on=!!v; save(); }
 
-  // ── Volume Profile computation ────────────────────────────────────────────
+  // ── Volume Profile computation (body-weighted) ────────────────────────────
   function computeVP(view, priceMin, priceMax, rows){
     const buy  = new Float64Array(rows);
     const sell = new Float64Array(rows);
     const range = priceMax - priceMin;
     if(range <= 0) return { buy, sell };
+
+    function fill(lo, hi, bv, sv){
+      const lo2 = Math.max(lo, priceMin);
+      const hi2 = Math.min(hi, priceMax);
+      if(lo2 >= hi2) return;
+      const loI = Math.max(0,      Math.floor((lo2 - priceMin) / range * rows));
+      const hiI = Math.min(rows-1, Math.floor((hi2 - priceMin) / range * rows));
+      const n = hiI - loI + 1;
+      for(let i = loI; i <= hiI; i++){ buy[i] += bv/n; sell[i] += sv/n; }
+    }
+
     for(const c of view){
       const vol  = Number(c.volume)||0;
       if(!vol) continue;
       const bVol = Math.min(Number(c.buyVolume)||0, vol);
       const sVol = Math.max(0, vol - bVol);
-      const lo = Math.max(Number(c.low),  priceMin);
-      const hi = Math.min(Number(c.high), priceMax);
-      if(lo >= hi) continue;
-      const loI = Math.max(0,      Math.floor((lo - priceMin) / range * rows));
-      const hiI = Math.min(rows-1, Math.floor((hi - priceMin) / range * rows));
-      const n = hiI - loI + 1;
-      for(let i = loI; i <= hiI; i++){
-        buy[i]  += bVol / n;
-        sell[i] += sVol / n;
+      const hi    = Number(c.high),  lo    = Number(c.low);
+      const op    = Number(c.open),  cl    = Number(c.close);
+      const bodyH = Math.max(op, cl), bodyL = Math.min(op, cl);
+      const fullR = hi - lo;
+      const bodyR = bodyH - bodyL;
+
+      if(bodyR > 0 && fullR > 0){
+        // 70% no corpo, 30% nos wicks proporcionalmente
+        const bW = 0.70, wW = 0.30;
+        fill(bodyL, bodyH, bVol*bW, sVol*bW);
+        const upW = hi - bodyH, dnW = bodyL - lo;
+        const totalW = upW + dnW;
+        if(totalW > 0){
+          if(upW > 0) fill(bodyH, hi,   bVol*wW*(upW/totalW), sVol*wW*(upW/totalW));
+          if(dnW > 0) fill(lo,    bodyL, bVol*wW*(dnW/totalW), sVol*wW*(dnW/totalW));
+        }
+      } else {
+        fill(lo, hi, bVol, sVol);
       }
     }
     return { buy, sell };
@@ -28809,18 +28830,24 @@ drag = {
     for(let i = 0; i < rows; i++){
       const total = buyB[i] + sellB[i];
       if(!total) continue;
-      const bw   = (total / maxBucket) * vpW;
-      const buyW = (buyB[i] / total) * bw;
-      const py   = y1 - (i+1) * barH;
-      const bH   = Math.max(0.8, barH);
-      const inVA = i >= vaLo && i <= vaHi;
+      const bw    = (total / maxBucket) * vpW;
+      if(bw < 0.5) continue;
+      const buyW  = Math.max(0, Math.min(bw, (buyB[i] / total) * bw));
+      const sellW = Math.max(0, bw - buyW);
+      const py    = y1 - (i+1) * barH;
+      const bH    = Math.max(0.8, barH);
+      const inVA  = i >= vaLo && i <= vaHi;
       ctx.globalAlpha = inVA ? op : op * 0.55;
       // Sell (esquerda, vermelho)
-      ctx.fillStyle = cSell;
-      ctx.fillRect(x1 - bw, py, bw - buyW, bH);
+      if(sellW > 0){
+        ctx.fillStyle = cSell;
+        ctx.fillRect(x1 - bw, py, sellW, bH);
+      }
       // Buy (direita, verde — mais perto da escala)
-      ctx.fillStyle = cBuy;
-      ctx.fillRect(x1 - buyW, py, buyW, bH);
+      if(buyW > 0){
+        ctx.fillStyle = cBuy;
+        ctx.fillRect(x1 - buyW, py, buyW, bH);
+      }
     }
     ctx.globalAlpha = 1;
 
@@ -28999,7 +29026,7 @@ drag = {
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
-  window.DVLVolumeProfile = { version:"0.616", on, setOn, draw, openPanel,
+  window.DVLVolumeProfile = { version:"0.617", on, setOn, draw, openPanel,
     get state(){ return Object.assign({}, state); }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
