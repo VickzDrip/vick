@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.605</title>
+<title>DVL Binance Live — Beta 0.606</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.605</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.606</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.605";
+const DVL_APP_VERSION = "Beta 0.606";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Refactor: DV agora usa exatamente o mesmo modelo do OI — basePanel, panelMetrics, xForIndex, yMap, drawScaleTag identicos." },
+  { version: DVL_APP_VERSION, note: "Bugfix: TV timestamp (sem *1000); TV OI model (basePanel+panelMetrics); VT 1s usa /api/ticks/bars em vez de aggTrades; VT price fallback ao midpoint do candle pai." },
+  { version: "Beta 0.605", note: "Refactor: DV modelo OI identico — basePanel, panelMetrics, xForIndex, yMap, drawScaleTag." },
   { version: "Beta 0.604", note: "Bugfix: DV alinhamento e escala OI-style." },
   { version: "Beta 0.603", note: "Bugfix: DV/TV period correto; painel settings abre; escala adicionada." },
   { version: "Beta 0.602", note: "Bugfix: toggle DV/TV verde/ON; Teste e Teste 2 removidos do menu." },
@@ -21468,6 +21469,21 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     });
   }
 
+  async function fetchTickBars(symbolName, start, end){
+    const url = "/api/ticks/bars?symbol="+encodeURIComponent(symbolName)+"&from="+start+"&to="+end;
+    const r = await fetch(url);
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const bars = await r.json();
+    if(!Array.isArray(bars)) return [];
+    return bars.map(b => ({
+      time: b.ts,
+      volume: (b.buyVol||0) + (b.sellVol||0),
+      buyVolume: b.buyVol||0,
+      sellVolume: b.sellVol||0,
+      low:0, high:0, close:0
+    }));
+  }
+
   async function loadLowerData(state, cfg){
     const chart = rows();
     if(!chart.length || !cfg || !cfg.win) return;
@@ -21496,7 +21512,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       const parsed = parseTf(tf);
       let data = [];
       if(parsed.unit === "s"){
-        data = await fetchAggTradeCandles(sym(), tf, rangeStart, rangeEnd);
+        data = await fetchTickBars(sym(), rangeStart, rangeEnd);
       }else{
         data = await fetchKlinesLower(sym(), tf, rangeStart, rangeEnd);
       }
@@ -21590,9 +21606,10 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       const parent = chart[parentGi];
       const pLow = Number(parent?.low);
       const pHigh = Number(parent?.high);
-      const low = clamp(Math.min(Number(c.low), Number(c.high)), pLow, pHigh);
-      const high = clamp(Math.max(Number(c.low), Number(c.high)), pLow, pHigh);
-      const priceRaw = (Number(c.close) * 2 + Number(c.high) + Number(c.low)) / 4;
+      const mid = (pLow + pHigh) / 2;
+      const low  = (c.low||0)  ? clamp(Math.min(Number(c.low),Number(c.high)),pLow,pHigh) : mid;
+      const high = (c.high||0) ? clamp(Math.max(Number(c.low),Number(c.high)),pLow,pHigh) : mid;
+      const priceRaw = (c.close||0) ? (Number(c.close)*2+Number(c.high)+Number(c.low))/4 : mid;
       const price = clamp(priceRaw, pLow, pHigh);
 
       events.push({
@@ -28173,7 +28190,12 @@ drag = {
   }
 
   function panelMetrics(padL,padR,top,h,w){
-    return { x0:padL, x1:w-padR, y0:top, y1:top+h, w:w-padL-padR, h };
+    const scaleW  = (typeof PRICE_SCALE_W  !=="undefined" ? PRICE_SCALE_W  : 55);
+    const labelGap= (typeof PRICE_LABEL_GAP!=="undefined" ? PRICE_LABEL_GAP : 2);
+    const labelW  = (typeof PRICE_LABEL_W  !=="undefined" ? PRICE_LABEL_W   : scaleW - 4);
+    const x0=padL, x1=w-padR, y0=top+4, y1=top+h-6;
+    return { padL, padR, top, h, w, scaleW, labelGap, labelW, x0, x1, y0, y1,
+             scaleX0:x1+labelGap, scaleX1:x1+labelGap+labelW };
   }
 
   function oscillatorWindow(){
@@ -28182,92 +28204,114 @@ drag = {
     return { candles:[], totalSlots:count, futureSlots:0, start:0, end:0 };
   }
 
+  function basePanel(ctx, m, title, rightLabel, kind){
+    ctx.save();
+    ctx.fillStyle="#020812"; ctx.fillRect(0, m.top, m.w, m.h);
+    ctx.strokeStyle="rgba(32,48,70,.9)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,m.top); ctx.lineTo(m.w,m.top); ctx.stroke();
+    ctx.strokeStyle="rgba(28,42,60,.55)";
+    for(let i=1;i<=4;i++){
+      const gy=m.top+m.h*i/4;
+      ctx.beginPath(); ctx.moveTo(m.x0,gy); ctx.lineTo(m.x1,gy); ctx.stroke();
+    }
+    ctx.strokeStyle="rgba(32,48,70,.9)";
+    ctx.beginPath(); ctx.moveTo(m.x1,m.top); ctx.lineTo(m.x1,m.top+m.h); ctx.stroke();
+    if(title){
+      ctx.fillStyle="rgba(120,145,180,.78)"; ctx.font="760 8px system-ui";
+      ctx.textAlign="left"; ctx.textBaseline="top";
+      ctx.fillText(title, m.x0+5, m.top+6);
+    }
+    if(rightLabel){
+      const c=kind==="bull"?"#2ed573":kind==="bear"?"#ff4757":"rgba(140,165,200,.7)";
+      ctx.fillStyle=c; ctx.font="9px system-ui";
+      ctx.textAlign="right"; ctx.textBaseline="top";
+      ctx.fillText(rightLabel, m.x1-4, m.top+6);
+    }
+    ctx.restore();
+  }
+
   function draw(ctx, padL, padR, top, h, w){
     if(!on()) return;
 
-    const m       = panelMetrics(padL, padR, top, h, w);
-    const win     = oscillatorWindow();
+    const m   = panelMetrics(padL, padR, top, h, w);
+    const win = oscillatorWindow();
     const candles = win.candles || [];
 
     if(!candles.length){
-      ctx.fillStyle="rgba(120,145,180,.45)"; ctx.font="11px system-ui";
-      ctx.textAlign="center"; ctx.textBaseline="middle";
-      ctx.fillText("Sem candles visíveis", (m.x0+m.x1)/2, m.y0+m.h/2);
+      basePanel(ctx, m, "TICK VOL · BUY/SELL", null, null);
       return;
     }
 
-    // Intervalo de tempo visível
+    // klines.time já é ms — sem * 1000
     const pMs = candles.length > 1
-      ? (Number(candles[1].time) - Number(candles[0].time)) * 1000
+      ? (Number(candles[1].time) - Number(candles[0].time))
       : 60000;
-    const t0 = Number(candles[0].time) * 1000;
-    const t1 = Number(candles[candles.length-1].time) * 1000 + pMs;
+    const t0 = Number(candles[0].time);
+    const t1 = Number(candles[candles.length-1].time) + pMs;
 
-    // Dispara fetch em background se necessário
     ensureData(t0, t1);
 
     const rawBars = CACHE.bars.filter(b => b.ts >= t0 && b.ts <= t1);
 
     if(!rawBars.length){
-      ctx.fillStyle="rgba(120,145,180,.45)"; ctx.font="11px system-ui";
-      ctx.textAlign="center"; ctx.textBaseline="middle";
-      ctx.fillText(CACHE.key ? "Aguardando dados de ticks…" : "Coletor não disponível (/api/ticks)", (m.x0+m.x1)/2, m.y0+m.h/2);
+      const msg = CACHE.key ? "Aguardando ticks…" : "Sem coletor (/api/ticks)";
+      basePanel(ctx, m, "TICK VOL · BUY/SELL", msg, null);
       return;
     }
 
-    // Auto-agregação: mínimo 1.5px por barra
     const rangeMs   = t1 - t0;
-    const minAggSec = Math.ceil(rangeMs / 1000 / (m.w / 1.5));
+    const minAggSec = Math.ceil(rangeMs / 1000 / ((m.x1-m.x0) / 1.5));
     const aggSec    = NICE_AGG.find(v => v >= minAggSec) || 600;
     const aggMs     = aggSec * 1000;
     const bars      = aggregateBars(rawBars, aggMs);
 
-    if(!bars.length) return;
+    if(!bars.length){ basePanel(ctx, m, "TICK VOL · BUY/SELL", null, null); return; }
 
-    // Escala
-    let maxVol = 0;
+    let maxVol=0;
     for(const b of bars){
       if(b.buyVol  > maxVol) maxVol = b.buyVol;
       if(b.sellVol > maxVol) maxVol = b.sellVol;
     }
-    if(!maxVol) maxVol = 1;
+    if(!maxVol) maxVol=1;
 
-    const cx   = m.y0 + m.h / 2;   // linha zero
-    const half = m.h / 2 * 0.92;
-    const barW = Math.max(1, aggMs / rangeMs * m.w);
+    const fmtV = v => { const a=Math.abs(v); return a>=1e6?(a/1e6).toFixed(1)+"M":a>=1e3?(a/1e3).toFixed(1)+"K":Math.round(a).toString(); };
+    const aggLabel = aggSec >= 60 ? (aggSec/60)+"m" : aggSec+"s";
+    const lastBar  = bars[bars.length-1];
+    const netDelta = (lastBar.buyVol||0) - (lastBar.sellVol||0);
+    const kind = netDelta > 0 ? "bull" : netDelta < 0 ? "bear" : null;
+    basePanel(ctx, m, "TICK VOL "+aggLabel, fmtV(netDelta), kind);
 
-    // Barras
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(m.x0, m.y0, m.x1-m.x0, m.y1-m.y0);
+    ctx.clip();
+
+    const midY = (m.y0+m.y1)/2;
+    const half = (m.y1-m.y0)/2*0.90;
+    const barW = Math.max(1, aggMs/rangeMs*(m.x1-m.x0));
+
     for(const b of bars){
-      const x   = m.x0 + (b.ts - t0) / rangeMs * m.w;
-      const bh  = Math.max(1, b.buyVol  / maxVol * half);
-      const sh  = Math.max(1, b.sellVol / maxVol * half);
-
-      // Buy (verde, acima da linha zero)
-      ctx.fillStyle = "rgba(46,213,115,.85)";
-      ctx.fillRect(x, cx - bh, Math.max(1, barW - 1), bh);
-
-      // Sell (vermelho, abaixo da linha zero)
-      ctx.fillStyle = "rgba(255,71,87,.85)";
-      ctx.fillRect(x, cx, Math.max(1, barW - 1), sh);
+      const x  = m.x0 + (b.ts-t0)/rangeMs*(m.x1-m.x0);
+      const bh = Math.max(1, b.buyVol /maxVol*half);
+      const sh = Math.max(1, b.sellVol/maxVol*half);
+      ctx.fillStyle="rgba(46,213,115,.85)";
+      ctx.fillRect(x, midY-bh, Math.max(1,barW-1), bh);
+      ctx.fillStyle="rgba(255,71,87,.85)";
+      ctx.fillRect(x, midY, Math.max(1,barW-1), sh);
     }
 
-    // Linha zero
-    ctx.strokeStyle = "rgba(120,145,180,.4)";
-    ctx.lineWidth   = 1;
-    ctx.setLineDash([3,3]);
-    ctx.beginPath();
-    ctx.moveTo(m.x0, cx);
-    ctx.lineTo(m.x1, cx);
-    ctx.stroke();
+    ctx.strokeStyle="rgba(120,145,180,.35)"; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(m.x0,midY); ctx.lineTo(m.x1,midY); ctx.stroke();
     ctx.setLineDash([]);
 
-    // Label
-    ctx.fillStyle   = "rgba(120,145,180,.78)";
-    ctx.font        = "760 8px system-ui";
-    ctx.textAlign   = "left";
-    ctx.textBaseline= "bottom";
-    const aggLabel  = aggSec >= 60 ? (aggSec/60)+"m" : aggSec+"s";
-    ctx.fillText("TICK VOL "+aggLabel+" · BUY/SELL", m.x0 + 8, m.y1 - 5);
+    ctx.restore();
+
+    ctx.font="9.2px system-ui"; ctx.textAlign="left"; ctx.textBaseline="middle";
+    ctx.fillStyle="rgba(200,213,230,.72)";
+    ctx.fillText(fmtV(maxVol), m.x1+m.labelGap, m.y0+8);
+    ctx.fillText(fmtV(maxVol), m.x1+m.labelGap, m.y1-8);
+    ctx.fillStyle="rgba(140,160,190,.5)";
+    ctx.fillText("0", m.x1+m.labelGap, midY);
   }
 
   function fitToCurrent(){ CACHE.rangeKey = null; CACHE.lastFetch = 0; }
