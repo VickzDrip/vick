@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.607</title>
+<title>DVL Binance Live — Beta 0.608</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.607</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.608</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.607";
+const DVL_APP_VERSION = "Beta 0.608";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: VT lower-TF fallback ao draw klines-based quando sem tick data; range 2h; anti-spam TTL." },
+  { version: DVL_APP_VERSION, note: "Feature: WebSocket aggTrade ao vivo (1s bars) — TV e Volume Trace usam barras Binance em tempo real sem depender do coletor VPS." },
+  { version: "Beta 0.607", note: "Bugfix: VT fallback klines-based; range 2h; anti-spam TTL." },
   { version: "Beta 0.606", note: "Bugfix: TV timestamp; TV OI model; VT 1s usa /api/ticks/bars; VT price fallback." },
   { version: "Beta 0.605", note: "Refactor: DV modelo OI identico — basePanel, panelMetrics, xForIndex, yMap, drawScaleTag." },
   { version: "Beta 0.604", note: "Bugfix: DV alinhamento e escala OI-style." },
@@ -21471,18 +21472,31 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   }
 
   async function fetchTickBars(symbolName, start, end){
-    const url = "/api/ticks/bars?symbol="+encodeURIComponent(symbolName)+"&from="+start+"&to="+end;
-    const r = await fetch(url);
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    const bars = await r.json();
-    if(!Array.isArray(bars)) return [];
-    return bars.map(b => ({
-      time: b.ts,
-      volume: (b.buyVol||0) + (b.sellVol||0),
-      buyVolume: b.buyVol||0,
-      sellVolume: b.sellVol||0,
-      low:0, high:0, close:0
-    }));
+    // 1) Tenta VPS coletor
+    try{
+      const url = "/api/ticks/bars?symbol="+encodeURIComponent(symbolName)+"&from="+start+"&to="+end;
+      const r = await fetch(url);
+      if(r.ok){
+        const bars = await r.json();
+        if(Array.isArray(bars) && bars.length){
+          return bars.map(b=>({
+            time:b.ts, volume:(b.buyVol||0)+(b.sellVol||0),
+            buyVolume:b.buyVol||0, sellVolume:b.sellVol||0,
+            low:0, high:0, close:0
+          }));
+        }
+      }
+    }catch(_){}
+    // 2) Fallback: barras ao vivo via WebSocket do TV
+    const tv=window.DVLTickVolume;
+    if(tv && typeof tv.liveBars==="function"){
+      return tv.liveBars(start,end).map(b=>({
+        time:b.ts, volume:(b.buyVol||0)+(b.sellVol||0),
+        buyVolume:b.buyVol||0, sellVolume:b.sellVol||0,
+        low:0, high:0, close:0
+      }));
+    }
+    return [];
   }
 
   async function loadLowerData(state, cfg){
@@ -28260,7 +28274,8 @@ drag = {
 
     ensureData(t0, t1);
 
-    const rawBars = CACHE.bars.filter(b => b.ts >= t0 && b.ts <= t1);
+    const vpsRaw = CACHE.bars.filter(b => b.ts >= t0 && b.ts <= t1);
+    const rawBars = vpsRaw.length > 0 ? vpsRaw : liveBars(t0, t1);
 
     if(!rawBars.length){
       const msg = CACHE.key ? "Aguardando ticks…" : "Sem coletor (/api/ticks)";
@@ -28417,8 +28432,55 @@ drag = {
     if(typeof drawSoon === "function") drawSoon();
   }, 3000);
 
+  // ── WebSocket aggTrade live aggregator (1s bars) ──────────────────────
+  const WS_MAP = new Map();
+  let _ws = null, _wsSym = null, _wsLastDraw = 0;
+
+  function _wsAgg(ts, qty, isBuy){
+    const k = Math.floor(ts/1000)*1000;
+    let b = WS_MAP.get(k);
+    if(!b){ b={ts:k,buyVol:0,sellVol:0,delta:0,trades:0}; WS_MAP.set(k,b); }
+    if(isBuy){ b.buyVol+=qty; b.delta+=qty; } else { b.sellVol+=qty; b.delta-=qty; }
+    b.trades++;
+  }
+
+  function _wsPrune(){
+    const cut = Date.now()-7_200_000;
+    for(const k of WS_MAP.keys()){ if(k<cut) WS_MAP.delete(k); }
+  }
+
+  function _wsConnect(){
+    const s=(window.currentSymbol||"BTCUSDT").toLowerCase();
+    if(_wsSym===s && _ws && _ws.readyState<2) return;
+    if(_ws){ try{ _ws.close(); }catch(_){} }
+    _wsSym=s; WS_MAP.clear();
+    try{
+      _ws=new WebSocket("wss://fstream.binance.com/ws/"+s+"@aggTrade");
+      _ws.onmessage=ev=>{
+        try{
+          const d=JSON.parse(ev.data);
+          if(d.e!=="aggTrade") return;
+          _wsAgg(Number(d.T),parseFloat(d.q)||0,!d.m);
+          _wsPrune();
+          const now=Date.now();
+          if(now-_wsLastDraw>500){ _wsLastDraw=now; if(typeof drawSoon==="function") drawSoon(); }
+        }catch(_){}
+      };
+      _ws.onerror=()=>{}; _ws.onclose=()=>{ _ws=null; };
+    }catch(_){}
+  }
+
+  function liveBars(t0,t1){
+    const out=[];
+    for(const b of WS_MAP.values()){ if(b.ts>=t0&&b.ts<=t1) out.push(b); }
+    return out.sort((a,b)=>a.ts-b.ts);
+  }
+
+  _wsConnect();
+  setInterval(_wsConnect,8000);
+
   window.DVLTickVolume = {
-    version:"0.599",
+    version:"0.608",
     on,
     setOn,
     draw,
@@ -28426,6 +28488,7 @@ drag = {
     fitToCurrent,
     reset: fitToCurrent,
     openPanel,
+    liveBars,
     get state(){ return Object.assign({}, state); },
     get cache(){ return Object.assign({}, CACHE, { bars:(CACHE.bars||[]).slice() }); }
   };
