@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.615</title>
+<title>DVL Binance Live — Beta 0.616</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.615</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.616</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13727,11 +13727,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.615";
+const DVL_APP_VERSION = "Beta 0.616";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: VP barras ancoradas em x1 (escala de preco), crescendo para a esquerda." },
+  { version: DVL_APP_VERSION, note: "Feature: VP barras com split buy/sell — buy na direita (verde), sell na esquerda (vermelho), POC cor dinamica." },
+  { version: "Beta 0.615", note: "Bugfix: VP barras ancoradas em x1 (escala de preco)." },
   { version: "Beta 0.614", note: "Feature: Volume Profile (VP) + configuracoes persistentes." },
   { version: "Beta 0.613", note: "Bugfix: auto-scale p5/p95 — candle outlier nao achata chart nem OI." },
   { version: "Beta 0.612", note: "Bugfix: OI autoScale p2/p98 — candle outlier no OI nao achata os demais." },
@@ -15103,7 +15104,8 @@ async function loadAll(silent=false){
       jget(_bbUrl(2)).catch(()=>null)
     ]);
     klines = k.map(x => ({
-      time:x[0], open:+x[1], high:+x[2], low:+x[3], close:+x[4], volume:+x[5], quoteVolume:+x[7]
+      time:x[0], open:+x[1], high:+x[2], low:+x[3], close:+x[4],
+      volume:+x[5], quoteVolume:+x[7], buyVolume:+x[9]
     }));
     ticker = t;
     assetTickerMap[symbol] = t;
@@ -28722,9 +28724,9 @@ drag = {
     widthPct: 0.18,
     opacity: 0.46,
     valueAreaPct: 0.70,
-    colorIn:  "#18d7ff",
-    colorOut: "#2a3d55",
-    colorPOC: "#f3c768",
+    colorBuy:  "#13dc8d",
+    colorSell: "#ff4a61",
+    colorPOC:  "#f3c768",
     colorVAH: "#13dc8d",
     colorVAL: "#ff4a61",
     showPOC: true,
@@ -28742,22 +28744,27 @@ drag = {
 
   // ── Volume Profile computation ────────────────────────────────────────────
   function computeVP(view, priceMin, priceMax, rows){
-    const buckets = new Float64Array(rows);
+    const buy  = new Float64Array(rows);
+    const sell = new Float64Array(rows);
     const range = priceMax - priceMin;
-    if(range <= 0) return buckets;
+    if(range <= 0) return { buy, sell };
     for(const c of view){
-      const vol = Number(c.volume)||0;
+      const vol  = Number(c.volume)||0;
       if(!vol) continue;
+      const bVol = Math.min(Number(c.buyVolume)||0, vol);
+      const sVol = Math.max(0, vol - bVol);
       const lo = Math.max(Number(c.low),  priceMin);
       const hi = Math.min(Number(c.high), priceMax);
       if(lo >= hi) continue;
       const loI = Math.max(0,      Math.floor((lo - priceMin) / range * rows));
       const hiI = Math.min(rows-1, Math.floor((hi - priceMin) / range * rows));
       const n = hiI - loI + 1;
-      const vpb = vol / n;
-      for(let i = loI; i <= hiI; i++) buckets[i] += vpb;
+      for(let i = loI; i <= hiI; i++){
+        buy[i]  += bVol / n;
+        sell[i] += sVol / n;
+      }
     }
-    return buckets;
+    return { buy, sell };
   }
 
   // ── Draw ──────────────────────────────────────────────────────────────────
@@ -28769,48 +28776,59 @@ drag = {
     if(priceRange <= 0) return;
 
     const rows = Math.max(20, Math.min(500, Math.round(state.rows)||120));
-    const buckets = computeVP(view, min, max, rows);
+    const { buy: buyB, sell: sellB } = computeVP(view, min, max, rows);
 
     let maxBucket = 0, totalVol = 0, pocIdx = 0;
     for(let i = 0; i < rows; i++){
-      totalVol += buckets[i];
-      if(buckets[i] > maxBucket){ maxBucket = buckets[i]; pocIdx = i; }
+      const t = buyB[i] + sellB[i];
+      totalVol += t;
+      if(t > maxBucket){ maxBucket = t; pocIdx = i; }
     }
     if(!maxBucket) return;
 
-    // Value Area (default 70% do volume total, expandindo do POC)
+    // Value Area (70% do volume total, expandindo do POC)
     const vaTarget = totalVol * Math.max(0.01, Math.min(1, state.valueAreaPct||0.70));
-    let vaVol = buckets[pocIdx];
+    let vaVol = buyB[pocIdx] + sellB[pocIdx];
     let vaLo = pocIdx, vaHi = pocIdx;
     while(vaVol < vaTarget && (vaLo > 0 || vaHi < rows-1)){
-      const nLo = vaLo > 0        ? buckets[vaLo-1] : 0;
-      const nHi = vaHi < rows-1  ? buckets[vaHi+1] : 0;
-      if(nHi >= nLo){ vaHi++; vaVol += buckets[vaHi]; }
-      else           { vaLo--; vaVol += buckets[vaLo]; }
+      const nLo = vaLo > 0       ? buyB[vaLo-1]+sellB[vaLo-1] : 0;
+      const nHi = vaHi < rows-1  ? buyB[vaHi+1]+sellB[vaHi+1] : 0;
+      if(nHi >= nLo){ vaHi++; vaVol += buyB[vaHi]+sellB[vaHi]; }
+      else           { vaLo--; vaVol += buyB[vaLo]+sellB[vaLo]; }
     }
 
     const vpW  = Math.min(150, Math.max(40, (x1-x0) * (state.widthPct||0.18)));
-    const vpX0 = x1 - vpW;
     const barH = (y1 - y0) / rows;
     const op   = Math.max(0.05, Math.min(1, state.opacity||0.46));
+    const cBuy  = state.colorBuy  || "#13dc8d";
+    const cSell = state.colorSell || "#ff4a61";
 
     ctx.save();
 
-    // ── Bars ──────────────────────────────────────────────────────────────
+    // ── Bars: split buy (direita) / sell (esquerda) ───────────────────────
     for(let i = 0; i < rows; i++){
-      if(!buckets[i]) continue;
-      const bw = (buckets[i] / maxBucket) * vpW;
-      const py = y1 - (i+1)*barH;
-      ctx.globalAlpha = op;
-      ctx.fillStyle   = (i >= vaLo && i <= vaHi) ? (state.colorIn||"#18d7ff") : (state.colorOut||"#2a3d55");
-      ctx.fillRect(x1 - bw, py, bw, Math.max(0.8, barH));
+      const total = buyB[i] + sellB[i];
+      if(!total) continue;
+      const bw   = (total / maxBucket) * vpW;
+      const buyW = (buyB[i] / total) * bw;
+      const py   = y1 - (i+1) * barH;
+      const bH   = Math.max(0.8, barH);
+      const inVA = i >= vaLo && i <= vaHi;
+      ctx.globalAlpha = inVA ? op : op * 0.55;
+      // Sell (esquerda, vermelho)
+      ctx.fillStyle = cSell;
+      ctx.fillRect(x1 - bw, py, bw - buyW, bH);
+      // Buy (direita, verde — mais perto da escala)
+      ctx.fillStyle = cBuy;
+      ctx.fillRect(x1 - buyW, py, buyW, bH);
     }
     ctx.globalAlpha = 1;
 
     // ── POC ───────────────────────────────────────────────────────────────
     if(state.showPOC !== false){
       const pocY = y1 - (pocIdx + 0.5) * barH;
-      ctx.strokeStyle = state.colorPOC || "#f3c768";
+      const pocDom = buyB[pocIdx] >= sellB[pocIdx] ? cBuy : cSell;
+      ctx.strokeStyle = state.colorPOC || pocDom;
       ctx.lineWidth   = 1.5;
       ctx.setLineDash([5, 4]);
       ctx.beginPath(); ctx.moveTo(x0, pocY); ctx.lineTo(x1, pocY); ctx.stroke();
@@ -28911,8 +28929,8 @@ drag = {
       <div class="dvl-vt-section">
         <div class="dvl-vt-section-title"><span>Cores das Barras</span></div>
         <div class="dvl-vt-grid">
-          ${cField("dvlVPCIn","Value Area","colorIn")}
-          ${cField("dvlVPCOut","Fora VA","colorOut")}
+          ${cField("dvlVPCBuy","Buy (verde)","colorBuy")}
+          ${cField("dvlVPCSell","Sell (vermelho)","colorSell")}
         </div>
       </div>
       <div class="dvl-vt-section">
@@ -28935,8 +28953,8 @@ drag = {
     b("dvlVPWPct",  el=>{ state.widthPct=Math.max(0.05,Math.min(0.40,(+el.value||18)/100)); });
     b("dvlVPOp",    el=>{ state.opacity=Math.max(0.05,Math.min(1,(+el.value||46)/100)); });
     b("dvlVPVAPct", el=>{ state.valueAreaPct=Math.max(0.10,Math.min(1,(+el.value||70)/100)); });
-    b("dvlVPCIn",   el=>{ state.colorIn=el.value; });
-    b("dvlVPCOut",  el=>{ state.colorOut=el.value; });
+    b("dvlVPCBuy",  el=>{ state.colorBuy=el.value; });
+    b("dvlVPCSell", el=>{ state.colorSell=el.value; });
     b("dvlVPPOC",   el=>{ state.showPOC=el.checked; });
     b("dvlVPCPOC",  el=>{ state.colorPOC=el.value; });
     b("dvlVPVAH",   el=>{ state.showVAH=el.checked; });
@@ -28981,7 +28999,7 @@ drag = {
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
-  window.DVLVolumeProfile = { version:"0.614", on, setOn, draw, openPanel,
+  window.DVLVolumeProfile = { version:"0.616", on, setOn, draw, openPanel,
     get state(){ return Object.assign({}, state); }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
