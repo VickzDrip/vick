@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.611</title>
+<title>DVL Binance Live — Beta 0.612</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.611</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.612</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.611";
+const DVL_APP_VERSION = "Beta 0.612";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: 1s nativo Binance + resample para 5s/10s/15s/30s — evita travamento do chart via aggTrades." },
+  { version: DVL_APP_VERSION, note: "Bugfix: OI autoScale percentil p2/p98 — candle outlier nao mais achata os demais." },
+  { version: "Beta 0.611", note: "Bugfix: 1s nativo Binance + resample para 5s/10s/15s/30s — evita travamento do chart." },
   { version: "Beta 0.610", note: "Feature: TFs de segundos (1s/5s/10s/15s/30s) no seletor." },
   { version: "Beta 0.609", note: "Bugfix: VT liveBars aggMs; fetchTickBars tfMs; _origVTDraw fallback quando events vazio." },
   { version: "Beta 0.608", note: "Feature: WebSocket aggTrade ao vivo (1s bars); TV e VT usam Binance WS sem VPS." },
@@ -26377,12 +26378,20 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
 
   function autoScale(vals){
     if(!vals.length) return {min:0,max:1,center:.5,range:1};
-    let min = Math.min(...vals.map(v => Math.min(v.low || v.close, v.open || v.close, v.close)));
-    let max = Math.max(...vals.map(v => Math.max(v.high || v.close, v.open || v.close, v.close)));
-    const r = (max - min) || Math.max(1, max * .002);
-    min -= r * .16;
-    max += r * .16;
-    return { min, max, center:(min+max)/2, range:max-min };
+    const pts=[];
+    for(const v of vals){
+      pts.push(v.low||v.close, v.open||v.close, v.close, v.high||v.close);
+    }
+    pts.sort((a,b)=>a-b);
+    const n=pts.length;
+    const i02=Math.max(0,Math.floor(n*0.02));
+    const i98=Math.min(n-1,Math.ceil(n*0.98)-1);
+    let min=pts[i02];
+    let max=pts[i98];
+    const r=(max-min)||Math.max(1,max*.002);
+    min-=r*.16;
+    max+=r*.16;
+    return {min,max,center:(min+max)/2,range:max-min};
   }
 
   function currentScale(vals){
@@ -28495,7 +28504,7 @@ drag = {
   setInterval(_wsConnect,8000);
 
   window.DVLTickVolume = {
-    version:"0.611",
+    version:"0.612",
     on,
     setOn,
     draw,
