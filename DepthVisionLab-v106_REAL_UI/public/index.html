@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.601</title>
+<title>DVL Binance Live — Beta 0.602</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.601</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.602</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.601";
+const DVL_APP_VERSION = "Beta 0.602";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: DVLDeltaVolume e DVLTickVolume oscillatorWindow chamava funcao inexistente — corrigido para visibleWindow()." },
+  { version: DVL_APP_VERSION, note: "Bugfix: toggle DV/TV agora fica verde/ON corretamente; Teste e Teste 2 removidos do menu Indicators." },
+  { version: "Beta 0.601", note: "Bugfix: oscillatorWindow chamava funcao inexistente — corrigido para visibleWindow()." },
   { version: "Beta 0.600", note: "Badge BETA = hard refresh no mobile." },
   { version: "Beta 0.599", note: "Bugfix: DVLDeltaVolume e DVLTickVolume no painel Indicators." },
   { version: "Beta 0.598", note: "Tick Volume: barras de 1s via coletor local." },
@@ -25359,7 +25360,6 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
   }
 
   function boot(){
-    insertRow();
     updateRow();
 
     const c = canvas();
@@ -25968,7 +25968,6 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
   }
 
   function boot(){
-    insertRow();
     updateRow();
 
     const c = canvas();
@@ -28006,7 +28005,7 @@ drag = {
       </div>
     `;
     const onCb = panel.querySelector("#dvlDvOn");
-    if(onCb) onCb.addEventListener("change", ()=>{ state.on=onCb.checked; save(); });
+    if(onCb) onCb.addEventListener("change", ()=>{ state.on=onCb.checked; save(); updateRow(); if(typeof drawSoon==="function") drawSoon(); });
     const maInp = panel.querySelector("#dvlDvMALen");
     if(maInp) maInp.addEventListener("change", ()=>{ const v=Math.max(0,Math.min(500,Math.round(+maInp.value)||0)); maInp.value=v; state.maLen=v; save(); });
   }
@@ -28014,7 +28013,7 @@ drag = {
   // ── Indicator row ─────────────────────────────────────────────────────────
   function updateRow(){
     const st = document.getElementById("dvlDeltaVolumeState");
-    if(st) st.textContent = state.on ? "ON" : "OFF";
+    if(st){ st.textContent = state.on ? "ON" : "OFF"; st.classList.toggle("is-on", !!state.on); }
   }
 
   function insertRow(){
@@ -28275,13 +28274,13 @@ drag = {
       </div>
     `;
     const cb = panel.querySelector("#dvlTvOn");
-    if(cb) cb.addEventListener("change", ()=>{ state.on=cb.checked; save(); });
+    if(cb) cb.addEventListener("change", ()=>{ state.on=cb.checked; save(); updateRow(); if(typeof drawSoon==="function") drawSoon(); });
   }
 
   // ── Indicator row ─────────────────────────────────────────────────────────
   function updateRow(){
     const st = document.getElementById("dvlTickVolumeState");
-    if(st) st.textContent = state.on ? "ON" : "OFF";
+    if(st){ st.textContent = state.on ? "ON" : "OFF"; st.classList.toggle("is-on", !!state.on); }
   }
 
   function insertRow(){
