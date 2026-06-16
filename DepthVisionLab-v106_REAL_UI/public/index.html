@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.606</title>
+<title>DVL Binance Live — Beta 0.607</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.606</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.607</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.606";
+const DVL_APP_VERSION = "Beta 0.607";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: TV timestamp (sem *1000); TV OI model (basePanel+panelMetrics); VT 1s usa /api/ticks/bars em vez de aggTrades; VT price fallback ao midpoint do candle pai." },
+  { version: DVL_APP_VERSION, note: "Bugfix: VT lower-TF fallback ao draw klines-based quando sem tick data; range 2h; anti-spam TTL." },
+  { version: "Beta 0.606", note: "Bugfix: TV timestamp; TV OI model; VT 1s usa /api/ticks/bars; VT price fallback." },
   { version: "Beta 0.605", note: "Refactor: DV modelo OI identico — basePanel, panelMetrics, xForIndex, yMap, drawScaleTag." },
   { version: "Beta 0.604", note: "Bugfix: DV alinhamento e escala OI-style." },
   { version: "Beta 0.603", note: "Bugfix: DV/TV period correto; painel settings abre; escala adicionada." },
@@ -21495,13 +21496,18 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
 
     const startIndex = Math.max(0, cfg.win.start - 3);
     const endIndex = Math.min(chart.length - 1, cfg.win.end + 3);
-    const rangeStart = Math.max(0, Number(chart[startIndex]?.time || chart[0].time) - avgPad);
     const rangeEnd = Number(chart[endIndex]?.time || chart.at(-1).time) + currentTfMs;
+    const rawStart = Math.max(0, Number(chart[startIndex]?.time || chart[0].time) - avgPad);
+    // Para "s": limita a 2h — coletor de ticks não mantém histórico maior
+    const rangeStart = (parseTf(tf).unit === "s")
+      ? Math.max(rawStart, rangeEnd - 7_200_000)
+      : rawStart;
 
     const key = sym() + "|" + tf + "|" + Math.floor(rangeStart / 10_000) + "|" + Math.floor(rangeEnd / 10_000);
 
-    const fresh = cache.key === key && (Date.now() - cache.lastFetch) < TTL_MS && cache.data.length;
-    if(fresh || cache.loading) return;
+    // Qualquer fetch recente (com ou sem dados) aguarda o TTL — evita spam
+    const alreadyFetched = cache.key === key && (Date.now() - cache.lastFetch) < TTL_MS;
+    if(alreadyFetched || cache.loading) return;
 
     cache.loading = true;
     cache.key = key;
@@ -21736,6 +21742,9 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     ctx.restore();
   }
 
+  // Guarda o draw klines-based original para usar como fallback
+  const _origVTDraw = typeof window.DVLVolumeTraceDraw === "function" ? window.DVLVolumeTraceDraw : null;
+
   window.DVLVolumeTraceDraw = function(ctx, cfg){
     const state = vtState();
     if(!state || !state.on || !cfg || !cfg.view || !cfg.view.length) return;
@@ -21743,7 +21752,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     loadLowerData(state, cfg);
 
     const data = cache.data || [];
-    if(!data.length) return;
+    if(!data.length){ if(_origVTDraw) _origVTDraw(ctx, cfg); return; }
 
     const events = buildLowerEvents(state, cfg);
     if(!events.length) return;
