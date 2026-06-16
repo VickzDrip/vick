@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.612</title>
+<title>DVL Binance Live — Beta 0.613</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.612</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.613</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13723,11 +13723,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.612";
+const DVL_APP_VERSION = "Beta 0.613";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: OI autoScale percentil p2/p98 — candle outlier nao mais achata os demais." },
+  { version: DVL_APP_VERSION, note: "Bugfix: auto-scale do chart principal p5/p95 — candle outlier nao achata a janela." },
+  { version: "Beta 0.612", note: "Bugfix: OI autoScale p2/p98 — candle outlier no OI nao achata os demais." },
   { version: "Beta 0.611", note: "Bugfix: 1s nativo Binance + resample para 5s/10s/15s/30s — evita travamento do chart." },
   { version: "Beta 0.610", note: "Feature: TFs de segundos (1s/5s/10s/15s/30s) no seletor." },
   { version: "Beta 0.609", note: "Bugfix: VT liveBars aggMs; fetchTickBars tfMs; _origVTDraw fallback quando events vazio." },
@@ -15912,18 +15913,23 @@ function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
 
   const x0 = padL, x1 = w - padR, y0 = top + 4, y1 = priceBottom;
   const highs = drawView.map(d=>d.high), lows = drawView.map(d=>d.low);
-  let candleMin = Math.min(...lows), candleMax = Math.max(...highs);
-
   /*
     Liquidation lines are overlays only.
     They MUST NOT alter min/max, otherwise ON/OFF changes the chart zoom.
     The vertical price scale is independent and can move/zoom infinitely.
+    Auto-scale usa p5/p95 para que um candle outlier nao domine o range.
+    O ctx.clip() em drawPriceSection corta wicks alem dos limites do panel.
   */
-  const candleRange = (candleMax - candleMin) || Math.max(candleMax * .002, 1);
-
   if(!priceScaleLocked || !Number.isFinite(priceViewCenter) || !Number.isFinite(priceViewRange)){
-    priceViewRange = candleRange * 1.16;
-    priceViewCenter = (candleMax + candleMin) / 2;
+    const allPts=[...lows,...highs].sort((a,b)=>a-b);
+    const n=allPts.length;
+    const i05=Math.max(0,Math.floor(n*0.05));
+    const i95=Math.min(n-1,Math.ceil(n*0.95)-1);
+    const candleMin=allPts[i05];
+    const candleMax=allPts[i95];
+    const candleRange=(candleMax-candleMin)||Math.max(candleMax*.002,1);
+    priceViewRange=candleRange*1.16;
+    priceViewCenter=(candleMax+candleMin)/2;
   }
 
   const min = priceViewCenter - priceViewRange / 2;
@@ -28504,7 +28510,7 @@ drag = {
   setInterval(_wsConnect,8000);
 
   window.DVLTickVolume = {
-    version:"0.612",
+    version:"0.613",
     on,
     setOn,
     draw,
