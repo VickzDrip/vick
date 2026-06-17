@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.621</title>
+<title>DVL Binance Live — Beta 0.622</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.621</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.622</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13727,11 +13727,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.621";
+const DVL_APP_VERSION = "Beta 0.622";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: POC/VAH/VAL hysteresis — sem flickering ao arrastar o gráfico." },
+  { version: DVL_APP_VERSION, note: "Feature: Kline WebSocket — candle em formação atualizado em tempo real." },
+  { version: "Beta 0.621", note: "Bugfix: POC/VAH/VAL hysteresis — sem flickering ao arrastar o gráfico." },
   { version: "Beta 0.620", note: "Feature: VP Timeframe selector (1h/4h/1d/…) — prev period + current in formation." },
   { version: "Beta 0.619", note: "Bugfix: VP draw try/finally — escala e osciladores paravam de aparecer." },
   { version: "Beta 0.618", note: "Bugfix: VP triangular close-peaked (sem flatlines) + fix vpX0 (labels POC/VAH/VAL)." },
@@ -15134,6 +15135,7 @@ async function loadAll(silent=false){
     els.loading.classList.add("hidden");
     if(candleMode === "footprint") fetchFootprintData();
     drawSoon();
+    if(typeof _klWsConnect==='function') _klWsConnect();
   }catch(err){
     console.warn(err);
     if(!klines.length){
@@ -16981,6 +16983,48 @@ refreshAssetTickers(true);
 timer = setInterval(()=>loadAll(true), 15000);
 setInterval(()=>refreshAssetTickers(true), 10000);
 setInterval(drawSoon, 1000);
+
+// ── Kline WebSocket: candle em formação em tempo real ───────────────────
+let _klWs = null, _klWsSym = null, _klWsIv = null, _klWsLastDraw = 0;
+
+function _klWsConnect(){
+  const s  = (symbol  || 'BTCUSDT').toUpperCase();
+  const iv = (interval|| '5m');
+  if(!isNativeTimeframe(iv)){
+    if(_klWs){ try{_klWs.close();}catch(_){} _klWs=null; }
+    return;
+  }
+  if(_klWsSym===s && _klWsIv===iv && _klWs && _klWs.readyState<2) return;
+  if(_klWs){ try{ _klWs.close(); }catch(_){} _klWs=null; }
+  _klWsSym=s; _klWsIv=iv;
+  try{
+    _klWs = new WebSocket('wss://fstream.binance.com/ws/'+s.toLowerCase()+'@kline_'+iv);
+    _klWs.onmessage = ev => {
+      try{
+        const msg = JSON.parse(ev.data);
+        if(msg.e !== 'kline') return;
+        const k = msg.k;
+        // Descarta mensagens stale se symbol/interval mudou
+        if(k.s !== (symbol||'BTCUSDT').toUpperCase() || k.i !== (interval||'5m')) return;
+        const t = +k.t;
+        const entry = { time:t, open:+k.o, high:+k.h, low:+k.l, close:+k.c,
+                        volume:+k.v, quoteVolume:+k.q, buyVolume:+k.V };
+        if(klines.length && klines[klines.length-1].time === t){
+          Object.assign(klines[klines.length-1], entry);
+        } else if(!klines.length || t > klines[klines.length-1].time){
+          klines.push(entry);
+        }
+        const now = Date.now();
+        if(now-_klWsLastDraw > 200){ _klWsLastDraw=now; drawSoon(); }
+      }catch(_){}
+    };
+    _klWs.onerror = ()=>{};
+    _klWs.onclose = ()=>{ _klWs=null; };
+  }catch(_){}
+}
+
+_klWsConnect();
+setInterval(_klWsConnect, 5000);
 
 
 /* ─────────────────────────────────────────────────────────────
@@ -29154,7 +29198,7 @@ drag = {
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
-  window.DVLVolumeProfile = { version:"0.621", on, setOn, draw, openPanel,
+  window.DVLVolumeProfile = { version:"0.622", on, setOn, draw, openPanel,
     get state(){ return Object.assign({}, state); }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
