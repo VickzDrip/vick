@@ -13325,7 +13325,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.633</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.634</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13785,11 +13785,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.633";
+const DVL_APP_VERSION = "Beta 0.634";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Fix: candle fluido real — bug ticker stale 15s corrigido + poll REST 2s." },
+  { version: DVL_APP_VERSION, note: "Feature: Paper Trading Bridge — wire Buy/Sell, leverage drag, entry pad, liq toggle via DVLPaperTradingBridge." },
+  { version: "Beta 0.633", note: "Fix: candle fluido real — bug ticker stale 15s corrigido + poll REST 2s." },
   { version: "Beta 0.632", note: "Fix: remove TickVol; candle fluido (WS base TF + 250ms); Buy/Sell demo position." },
   { version: "Beta 0.631", note: "Feature: VP Sessão 2 — POC·2/VAH·2/VAL·2 de timeframe independente, sem barras." },
   { version: "Beta 0.630", note: "Feature: Auto-save — symbol + settings persisted every 30 s, badge salvo HH:MM." },
@@ -30281,6 +30282,498 @@ window.DVLFlowEventBubblesDraw=function(ctx,cfg){try{draw(ctx,cfg);}catch(_){}};
 
   /* first save 5 s after load, then every 30 s */
   setTimeout(function(){ tick(); setInterval(tick, 30000); }, 5000);
+})();
+</script>
+
+<script id="DVL_PAPER_TRADING_BRIDGE_PATCH">
+/*
+  DVL Paper Trading Bridge — patch script only
+  Use this inside the FULL DVL HTML, after the main app script has loaded.
+
+  Important:
+  This is not a standalone app.
+  It depends on the existing DVL DOM/CSS/chart runtime already present in the site.
+
+  It does NOT change layout/position of approved UI.
+  It only repairs/wires Paper Trading controls safely:
+  - Trade drawer open/close
+  - Isolated/Cross
+  - Limit/Market/Stop label sync
+  - Leverage drag
+  - Entry custom keypad
+  - Liquidity/liquidation toggle labels
+  - Buy/Sell event dispatch for integration
+*/
+
+(function(){
+  "use strict";
+
+  function ready(fn){
+    if(document.readyState === "loading"){
+      document.addEventListener("DOMContentLoaded", fn, { once:true });
+    }else{
+      fn();
+    }
+  }
+
+  ready(function(){
+    if(window.DVLPaperTradingBridge && window.DVLPaperTradingBridge.ready){
+      console.warn("[DVL Paper Bridge] already loaded");
+      return;
+    }
+
+    const $ = (id) => document.getElementById(id);
+    const qsa = (sel) => Array.from(document.querySelectorAll(sel));
+
+    const dom = {
+      tradeDrawer: $("tradeDrawer"),
+      tradeNavBtn: $("tradeNavBtn"),
+      closeTradeDrawer: $("closeTradeDrawer"),
+      panelCloseX: $("panelCloseX"),
+
+      isolatedModeBtn: $("isolatedModeBtn"),
+      crossModeBtn: $("crossModeBtn"),
+
+      orderTypeWrap: $("orderTypeWrap"),
+      orderTypeBtn: $("orderTypeBtn"),
+      orderTypeLabel: $("orderTypeLabel"),
+      orderTypeMenu: $("orderTypeMenu"),
+      orderTypeOptions: qsa(".orderTypeOption"),
+
+      buyPriceBtn: $("buyPriceBtn"),
+      sellPriceBtn: $("sellPriceBtn"),
+
+      liqToggleBtn: $("liqToggleBtn"),
+      liqToggleText: $("liqToggleText"),
+      longLiq: $("longLiq"),
+      shortLiq: $("shortLiq"),
+
+      levNotional: $("levNotional"),
+      entryEditCard: $("entryEditCard"),
+      entryValue: $("entryValue"),
+      entrySub: $("entrySub"),
+      levValue: $("levValue"),
+      levDragCard: $("levDragCard"),
+      levSlider: $("levSlider"),
+      levSliderFill: $("levSliderFill"),
+      levKnob: $("levKnob"),
+
+      entryPadOverlay: $("entryPadOverlay"),
+      entryPadDisplay: $("entryPadDisplay"),
+      entryPadClose: $("entryPadClose"),
+      entryPadClear: $("entryPadClear"),
+      entryPadOk: $("entryPadOk"),
+      entryPadKeys: qsa(".numberPadGrid [data-key]")
+    };
+
+    const missingCritical = [
+      "tradeDrawer",
+      "tradeNavBtn",
+      "buyPriceBtn",
+      "sellPriceBtn",
+      "levSlider",
+      "entryEditCard"
+    ].filter(k => !dom[k]);
+
+    if(missingCritical.length){
+      console.warn("[DVL Paper Bridge] Missing DVL DOM:", missingCritical);
+      window.DVLPaperTradingBridge = {
+        ready:false,
+        error:"Missing DOM: " + missingCritical.join(", "),
+        dom
+      };
+      return;
+    }
+
+    const state = {
+      marginMode: "isolated",
+      orderType: "Limit",
+      entryAmount: 100,
+      leverage: 112,
+      entryPadDraft: "100",
+      liquidationLinesOn: true,
+      longLiqPrice: null,
+      shortLiqPrice: null,
+      orders: []
+    };
+
+    const MIN_LEVERAGE = 1;
+    const MAX_LEVERAGE = 125;
+
+    function clamp(v, lo, hi){
+      v = Number(v);
+      if(!Number.isFinite(v)) v = lo;
+      return Math.max(lo, Math.min(hi, v));
+    }
+
+    function fmtPrice(v){
+      const n = Number(v);
+      if(!Number.isFinite(n)) return "--";
+      return n.toLocaleString("en-US", {
+        minimumFractionDigits: n >= 1000 ? 2 : 3,
+        maximumFractionDigits: n >= 1000 ? 2 : 4
+      });
+    }
+
+    function fmtMoney(v){
+      const n = Number(v);
+      if(!Number.isFinite(n)) return "--";
+      return n.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function lastPrice(){
+      try{
+        if(window.ticker && Number(window.ticker.lastPrice) > 0) return Number(window.ticker.lastPrice);
+      }catch(_){}
+
+      try{
+        if(Array.isArray(window.klines) && window.klines.length){
+          const c = Number(window.klines[window.klines.length - 1].close);
+          if(Number.isFinite(c) && c > 0) return c;
+        }
+      }catch(_){}
+
+      return 0;
+    }
+
+    function draw(){
+      try{
+        if(typeof window.drawSoon === "function"){
+          window.drawSoon();
+        }
+      }catch(_){}
+    }
+
+    function toast(msg){
+      try{
+        if(typeof window.showToast === "function"){
+          window.showToast(msg);
+          return;
+        }
+      }catch(_){}
+
+      const el = $("toast");
+      if(el){
+        el.textContent = msg;
+        el.classList.add("show");
+        clearTimeout(toast._t);
+        toast._t = setTimeout(() => el.classList.remove("show"), 1800);
+      }else{
+        console.log("[DVL Paper]", msg);
+      }
+    }
+
+    function bindOnce(el, event, fn, key){
+      if(!el) return;
+      const attr = "dvlPaperBridge" + (key || event);
+      if(el.dataset[attr] === "1") return;
+      el.dataset[attr] = "1";
+      el.addEventListener(event, fn);
+    }
+
+    function setTradeDrawer(open){
+      dom.tradeDrawer.classList.toggle("is-open", !!open);
+      dom.tradeNavBtn.classList.toggle("drawer-open", !!open);
+    }
+
+    function setMarginMode(mode){
+      state.marginMode = mode === "cross" ? "cross" : "isolated";
+      dom.isolatedModeBtn && dom.isolatedModeBtn.classList.toggle("activeMode", state.marginMode === "isolated");
+      dom.crossModeBtn && dom.crossModeBtn.classList.toggle("activeMode", state.marginMode === "cross");
+    }
+
+    function closeOrderTypeMenu(){
+      if(!dom.orderTypeWrap || !dom.orderTypeBtn || !dom.orderTypeMenu) return;
+      dom.orderTypeWrap.classList.remove("is-open");
+      dom.orderTypeBtn.setAttribute("aria-expanded", "false");
+      dom.orderTypeMenu.setAttribute("aria-hidden", "true");
+    }
+
+    function toggleOrderTypeMenu(){
+      if(!dom.orderTypeWrap || !dom.orderTypeBtn || !dom.orderTypeMenu) return;
+      const open = dom.orderTypeWrap.classList.contains("is-open");
+      dom.orderTypeWrap.classList.toggle("is-open", !open);
+      dom.orderTypeBtn.setAttribute("aria-expanded", !open ? "true" : "false");
+      dom.orderTypeMenu.setAttribute("aria-hidden", !open ? "false" : "true");
+    }
+
+    function setOrderType(type){
+      const t = String(type || "Limit");
+      state.orderType = t === "Market" ? "Market" : t === "Stop" ? "Stop" : "Limit";
+
+      if(dom.orderTypeLabel) dom.orderTypeLabel.textContent = state.orderType;
+      if(dom.buyPriceBtn) dom.buyPriceBtn.textContent = state.orderType;
+      if(dom.sellPriceBtn) dom.sellPriceBtn.textContent = state.orderType;
+
+      dom.orderTypeOptions.forEach(btn => {
+        btn.classList.toggle("activeOrderType", btn.dataset.orderType === state.orderType);
+      });
+
+      closeOrderTypeMenu();
+    }
+
+    function leveragePct(){
+      return ((state.leverage - MIN_LEVERAGE) / (MAX_LEVERAGE - MIN_LEVERAGE)) * 100;
+    }
+
+    function liquidationDistancePct(){
+      return clamp(1.50 / Math.max(state.leverage, 1), 0.006, 0.80);
+    }
+
+    function updateLiquidationPrices(){
+      const base = lastPrice();
+      if(base > 0){
+        const dist = liquidationDistancePct();
+        state.longLiqPrice = base * (1 - dist);
+        state.shortLiqPrice = base * (1 + dist);
+      }else{
+        state.longLiqPrice = null;
+        state.shortLiqPrice = null;
+      }
+
+      if(dom.longLiq) dom.longLiq.textContent = "Long Liq " + fmtPrice(state.longLiqPrice);
+      if(dom.shortLiq) dom.shortLiq.textContent = "Short Liq " + fmtPrice(state.shortLiqPrice);
+    }
+
+    function syncTradePanel(){
+      if(dom.entryValue) dom.entryValue.textContent = fmtMoney(state.entryAmount);
+      if(dom.entrySub) dom.entrySub.textContent = "$" + fmtPrice(state.entryAmount);
+
+      const lev = Math.round(state.leverage);
+      const pct = leveragePct();
+
+      if(dom.levValue) dom.levValue.textContent = lev + "x";
+      if(dom.levSlider) dom.levSlider.setAttribute("aria-valuenow", String(lev));
+      if(dom.levSliderFill) dom.levSliderFill.style.width = pct + "%";
+      if(dom.levKnob) dom.levKnob.style.left = pct + "%";
+      if(dom.levNotional) dom.levNotional.textContent = "$" + fmtPrice(state.entryAmount * lev);
+
+      updateLiquidationPrices();
+    }
+
+    function setLeverage(value){
+      state.leverage = clamp(Math.round(value), MIN_LEVERAGE, MAX_LEVERAGE);
+      syncTradePanel();
+      draw();
+    }
+
+    function setLeverageFromPointer(clientX){
+      if(!dom.levSlider) return;
+      const rect = dom.levSlider.getBoundingClientRect();
+      const pct = clamp((clientX - rect.left) / Math.max(rect.width, 1), 0, 1);
+      setLeverage(MIN_LEVERAGE + pct * (MAX_LEVERAGE - MIN_LEVERAGE));
+    }
+
+    function setLiquidationLines(on){
+      state.liquidationLinesOn = !!on;
+      if(dom.liqToggleBtn) dom.liqToggleBtn.classList.toggle("is-on", state.liquidationLinesOn);
+      if(dom.liqToggleText) dom.liqToggleText.textContent = state.liquidationLinesOn ? "ON" : "OFF";
+      draw();
+    }
+
+    function openEntryPad(){
+      state.entryPadDraft = String(state.entryAmount || "");
+      if(dom.entryPadDisplay) dom.entryPadDisplay.textContent = state.entryPadDraft || "0";
+      if(dom.entryPadOverlay){
+        dom.entryPadOverlay.classList.add("is-open");
+        dom.entryPadOverlay.setAttribute("aria-hidden", "false");
+      }
+    }
+
+    function closeEntryPad(){
+      if(dom.entryPadOverlay){
+        dom.entryPadOverlay.classList.remove("is-open");
+        dom.entryPadOverlay.setAttribute("aria-hidden", "true");
+      }
+    }
+
+    function applyEntryPad(){
+      const n = Number(state.entryPadDraft);
+      if(Number.isFinite(n) && n > 0){
+        state.entryAmount = clamp(n, 1, 999999);
+        syncTradePanel();
+        draw();
+      }
+      closeEntryPad();
+    }
+
+    function pressKey(key){
+      if(key === "back"){
+        state.entryPadDraft = state.entryPadDraft.slice(0, -1);
+      }else if(key === "."){
+        if(!state.entryPadDraft.includes(".")){
+          state.entryPadDraft = state.entryPadDraft ? state.entryPadDraft + "." : "0.";
+        }
+      }else if(/^\d$/.test(key)){
+        if(state.entryPadDraft === "0") state.entryPadDraft = key;
+        else if(state.entryPadDraft.length < 12) state.entryPadDraft += key;
+      }
+
+      if(!state.entryPadDraft) state.entryPadDraft = "0";
+      if(dom.entryPadDisplay) dom.entryPadDisplay.textContent = state.entryPadDraft;
+    }
+
+    function createOrder(side){
+      const entry = lastPrice();
+      const lev = Number(state.leverage) || 1;
+      const size = Number(state.entryAmount) || 0;
+      const notional = size * lev;
+      const qty = entry > 0 ? notional / entry : 0;
+
+      const order = {
+        id: "DVL-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
+        mode: "paper",
+        side: side === "sell" ? "sell" : "buy",
+        symbol: window.symbol || null,
+        marginMode: state.marginMode,
+        orderType: state.orderType,
+        entry,
+        size,
+        leverage: lev,
+        notional,
+        qty,
+        status: state.orderType === "Market" ? "open" : "pending",
+        createdAt: Date.now()
+      };
+
+      state.orders.push(order);
+
+      try{
+        window.dispatchEvent(new CustomEvent("dvl:paper-order", { detail: order }));
+      }catch(_){}
+
+      toast((order.side === "buy" ? "Buy" : "Sell") + " " + order.orderType + " criado");
+      return order;
+    }
+
+    bindOnce(dom.tradeNavBtn, "click", () => {
+      setTradeDrawer(!dom.tradeDrawer.classList.contains("is-open"));
+    }, "trade");
+
+    bindOnce(dom.closeTradeDrawer, "click", () => {
+      setTradeDrawer(false);
+    }, "close");
+
+    bindOnce(dom.panelCloseX, "click", () => {
+      setTradeDrawer(false);
+    }, "x");
+
+    bindOnce(dom.isolatedModeBtn, "click", () => {
+      setMarginMode("isolated");
+    }, "iso");
+
+    bindOnce(dom.crossModeBtn, "click", () => {
+      setMarginMode("cross");
+    }, "cross");
+
+    bindOnce(dom.orderTypeBtn, "click", (ev) => {
+      ev.stopPropagation();
+      toggleOrderTypeMenu();
+    }, "order");
+
+    dom.orderTypeOptions.forEach((btn, i) => {
+      bindOnce(btn, "click", (ev) => {
+        ev.stopPropagation();
+        setOrderType(btn.dataset.orderType);
+      }, "orderOption" + i);
+    });
+
+    document.addEventListener("click", (ev) => {
+      if(dom.orderTypeWrap && !dom.orderTypeWrap.contains(ev.target)){
+        closeOrderTypeMenu();
+      }
+    });
+
+    bindOnce(dom.liqToggleBtn, "click", () => {
+      setLiquidationLines(!state.liquidationLinesOn);
+    }, "liq");
+
+    let draggingLev = false;
+
+    function levStart(ev){
+      if(!dom.levSlider) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      draggingLev = true;
+      try{
+        ev.currentTarget.setPointerCapture?.(ev.pointerId);
+      }catch(_){}
+      setLeverageFromPointer(ev.clientX);
+    }
+
+    function levMove(ev){
+      if(!draggingLev) return;
+      ev.preventDefault();
+      setLeverageFromPointer(ev.clientX);
+    }
+
+    function levEnd(){
+      draggingLev = false;
+    }
+
+    bindOnce(dom.levSlider, "pointerdown", levStart, "levSlider");
+    bindOnce(dom.levDragCard, "pointerdown", levStart, "levCard");
+
+    window.addEventListener("pointermove", levMove, { passive:false });
+    window.addEventListener("pointerup", levEnd, { passive:true });
+    window.addEventListener("pointercancel", levEnd, { passive:true });
+
+    bindOnce(dom.entryEditCard, "click", openEntryPad, "entry");
+    bindOnce(dom.entryPadClose, "click", closeEntryPad, "padClose");
+    bindOnce(dom.entryPadOk, "click", applyEntryPad, "padOk");
+
+    bindOnce(dom.entryPadClear, "click", () => {
+      state.entryPadDraft = "0";
+      if(dom.entryPadDisplay){
+        dom.entryPadDisplay.textContent = state.entryPadDraft;
+      }
+    }, "padClear");
+
+    bindOnce(dom.entryPadOverlay, "click", (ev) => {
+      if(ev.target === dom.entryPadOverlay){
+        closeEntryPad();
+      }
+    }, "padOverlay");
+
+    dom.entryPadKeys.forEach((btn, i) => {
+      bindOnce(btn, "click", () => {
+        pressKey(btn.dataset.key);
+      }, "padKey" + i);
+    });
+
+    bindOnce(dom.buyPriceBtn, "click", () => {
+      createOrder("buy");
+    }, "buy");
+
+    bindOnce(dom.sellPriceBtn, "click", () => {
+      createOrder("sell");
+    }, "sell");
+
+    setMarginMode(state.marginMode);
+    setOrderType(state.orderType);
+    setLiquidationLines(state.liquidationLinesOn);
+    syncTradePanel();
+
+    window.DVLPaperTradingBridge = {
+      ready:true,
+      state,
+      dom,
+      setTradeDrawer,
+      setMarginMode,
+      setOrderType,
+      setLeverage,
+      setLiquidationLines,
+      openEntryPad,
+      closeEntryPad,
+      syncTradePanel,
+      createOrder
+    };
+
+    console.log("[DVL Paper Bridge] ready");
+  });
 })();
 </script>
 
