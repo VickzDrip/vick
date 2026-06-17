@@ -42,6 +42,26 @@ html = rep(html,
 
 # 4. Inject bridge script before </body></html>
 bridge_content = BRIDGE.read_text(encoding="utf-8").strip()
+
+# Remove the 3 bindOnce calls that conflict with DVL's own drawer listeners
+# (tradeNavBtn / closeTradeDrawer / panelCloseX are already bound by DVL at line 14942)
+bridge_content = bridge_content.replace(
+    '    bindOnce(dom.tradeNavBtn, "click", () => {\n'
+    '      setTradeDrawer(!dom.tradeDrawer.classList.contains("is-open"));\n'
+    '    }, "trade");\n'
+    '\n'
+    '    bindOnce(dom.closeTradeDrawer, "click", () => {\n'
+    '      setTradeDrawer(false);\n'
+    '    }, "close");\n'
+    '\n'
+    '    bindOnce(dom.panelCloseX, "click", () => {\n'
+    '      setTradeDrawer(false);\n'
+    '    }, "x");\n'
+    '\n'
+    '    bindOnce(dom.isolatedModeBtn',
+    '    // drawer open/close already handled by DVL native listeners — skip to avoid double-toggle\n'
+    '    bindOnce(dom.isolatedModeBtn'
+)
 html = rep(html,
     '\n</body>\n</html>',
     '\n' + bridge_content + '\n\n</body>\n</html>',
