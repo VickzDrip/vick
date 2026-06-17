@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.625</title>
+<title>DVL Binance Live — Beta 0.626</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13298,7 +13298,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.625</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.626</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13648,7 +13648,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
         <div class="demoPill">DEMO</div>
         <div class="liqText long" id="longLiq">Long Liq --</div>
         <div class="liqText short" id="shortLiq">Short Liq --</div>
-        <button class="panelToggle liqToggle is-on" id="liqToggleBtn" type="button" aria-label="Mostrar/ocultar liquidação"><span id="liqToggleText">ON</span> <svg class="chevSvg" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>
+        <button class="panelToggle liqToggle" id="liqToggleBtn" type="button" aria-label="Mostrar/ocultar liquidação"><span id="liqToggleText">OFF</span> <svg class="chevSvg" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>
       </div>
     </div>
   </div>
@@ -13758,11 +13758,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.625";
+const DVL_APP_VERSION = "Beta 0.626";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Feature: DVL Flow Event Bubbles — overlay de eventos compostos de fluxo." },
+  { version: DVL_APP_VERSION, note: "Bugfix: FEB toggle ON/OFF + liquidation lines OFF por padrão." },
+  { version: "Beta 0.625", note: "Feature: DVL Flow Event Bubbles — overlay de eventos compostos de fluxo." },
   { version: "Beta 0.624", note: "Feature: OI live poll 1m — dados reais de OI em 1m via polling real-time." },
   { version: "Beta 0.623", note: "Bugfix: OI oscillator — uma barra por período (sem repetição no 1m)." },
   { version: "Beta 0.622", note: "Feature: Kline WebSocket — candle em formação atualizado em tempo real." },
@@ -13917,7 +13918,7 @@ const MIN_LEVERAGE = 1;
 const MAX_LEVERAGE = 125;
 let marketEntryPrice = null;
 let entryPadDraft = "100";
-let liquidationLinesOn = true;
+let liquidationLinesOn = false;
 let longLiqPrice = null;
 let shortLiqPrice = null;
 let klines = [];
@@ -29316,7 +29317,7 @@ drag = {
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
-  window.DVLVolumeProfile = { version:"0.625", on, setOn, draw, openPanel,
+  window.DVLVolumeProfile = { version:"0.626", on, setOn, draw, openPanel,
     get state(){ return Object.assign({}, state); }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
@@ -29905,7 +29906,7 @@ drag = {
   // ── Menu Item ─────────────────────────────────────────────────────────────
   function updatePill(){
     const p=document.getElementById("dvlFebState");
-    if(p) p.textContent=state.on?"ON":"OFF";
+    if(p) p.classList.toggle("is-on",!!state.on);
   }
 
   function insertRow(){
@@ -29917,7 +29918,7 @@ drag = {
     item.innerHTML=
       '<span class="indicatorFxMark">FEB</span>'
       +'<span><b>DVL Flow Event Bubbles</b><small>composite flow overlay</small></span>'
-      +'<i class="dvl-vt-state" id="dvlFebState">'+(state.on?"ON":"OFF")+'</i>';
+      +'<i class="dvl-vt-state'+(state.on?' is-on':'')+'" id="dvlFebState"></i>';
     const sz=document.getElementById("dvlSpikeZonesItem");
     if(sz&&sz.parentNode) sz.parentNode.insertBefore(item,sz.nextSibling);
     else{ const h=menu.querySelector(".indicatorDropHead"); if(h&&h.nextSibling) menu.insertBefore(item,h.nextSibling); else menu.appendChild(item); }
