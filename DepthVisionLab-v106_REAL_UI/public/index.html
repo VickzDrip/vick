@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.618</title>
+<title>DVL Binance Live — Beta 0.619</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.618</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.619</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13727,11 +13727,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.618";
+const DVL_APP_VERSION = "Beta 0.619";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: VP triangular close-peaked (sem flatlines) + fix labels POC/VAH/VAL." },
+  { version: DVL_APP_VERSION, note: "Bugfix: VP draw try/finally — escala e osciladores paravam de aparecer." },
+  { version: "Beta 0.618", note: "Bugfix: VP triangular close-peaked (sem flatlines) + fix vpX0 (labels POC/VAH/VAL)." },
   { version: "Beta 0.617", note: "Bugfix: VP body-weighted + clamp sell/buyW (sem artefatos visuais)." },
   { version: "Beta 0.616", note: "Feature: VP split buy/sell por barra + buyVolume nos klines." },
   { version: "Beta 0.615", note: "Bugfix: VP barras ancoradas em x1 (escala de preco)." },
@@ -28846,6 +28847,7 @@ drag = {
     const cSell = state.colorSell || "#ff4a61";
 
     ctx.save();
+    try {
 
     // ── Bars: split buy (direita) / sell (esquerda) ───────────────────────
     for(let i = 0; i < rows; i++){
@@ -28930,7 +28932,7 @@ drag = {
       }
     }
 
-    ctx.restore();
+    } finally { ctx.restore(); }
   }
 
   // ── Settings panel ────────────────────────────────────────────────────────
@@ -29047,7 +29049,7 @@ drag = {
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
-  window.DVLVolumeProfile = { version:"0.618", on, setOn, draw, openPanel,
+  window.DVLVolumeProfile = { version:"0.619", on, setOn, draw, openPanel,
     get state(){ return Object.assign({}, state); }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
