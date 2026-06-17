@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.626</title>
+<title>DVL Binance Live — Beta 0.627</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -12125,11 +12125,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
   color:rgba(255,190,60,.9);
   line-height:1.55;
 }
-.dvl-feb-color{
-  padding:2px 4px!important;
-  cursor:pointer;
-  height:32px!important;
-}
+.dvl-feb-status-line.is-info{ color:rgba(100,180,255,.7); }
+.dvl-feb-clr-field{ position:relative; }
+.dvl-feb-clr-swatch{ width:100%; height:32px; border-radius:11px; border:1px solid rgba(94,135,178,.24); cursor:pointer; display:block; }
+.dvl-feb-pal{ position:absolute; top:calc(100% + 4px); left:0; z-index:100000; background:rgba(3,10,20,.97); border:1px solid rgba(24,215,255,.28); border-radius:12px; padding:8px; display:grid; grid-template-columns:repeat(4,1fr); gap:5px; width:150px; }
+.dvl-feb-pal-cell{ width:28px; height:28px; border-radius:7px; border:2px solid transparent; cursor:pointer; }
+.dvl-feb-pal-cell.is-cur{ border-color:rgba(255,255,255,.85); }
 
 .dvl-sz-panel .dvl-vt-head{
   height:33px!important;
@@ -13298,7 +13299,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.626</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.627</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13758,11 +13759,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.626";
+const DVL_APP_VERSION = "Beta 0.627";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: FEB toggle ON/OFF + liquidation lines OFF por padrão." },
+  { version: DVL_APP_VERSION, note: "Bugfix: FEB 7 fixes — palette picker, strict conditions, typeof guards, showOnlyStrong, same-type merge, cache key + vol delta label." },
+  { version: "Beta 0.626", note: "Bugfix: FEB toggle ON/OFF + liquidation lines OFF por padrão." },
   { version: "Beta 0.625", note: "Feature: DVL Flow Event Bubbles — overlay de eventos compostos de fluxo." },
   { version: "Beta 0.624", note: "Feature: OI live poll 1m — dados reais de OI em 1m via polling real-time." },
   { version: "Beta 0.623", note: "Bugfix: OI oscillator — uma barra por período (sem repetição no 1m)." },
@@ -29317,7 +29319,7 @@ drag = {
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
-  window.DVLVolumeProfile = { version:"0.626", on, setOn, draw, openPanel,
+  window.DVLVolumeProfile = { version:"0.627", on, setOn, draw, openPanel,
     get state(){ return Object.assign({}, state); }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
@@ -29330,6 +29332,9 @@ drag = {
   "use strict";
 
   const STORE_KEY = "dvl_flow_event_bubbles_v1";
+  const PALETTE = ["#13dc8d","#00e5cc","#4db8ff","#18a8ff","#7b5fff","#b44fff",
+                   "#ff4a61","#ff8c42","#ffd700","#ffffff","#ff6b35","#c0c0c0",
+                   "#ed4c67","#00d2d3","#54a0ff","#5f27cd"];
   const DEFAULTS = {
     on:false, len:50, atrLen:14, minScore:62,
     minVolZ:1.20, minOIZ:0.80, minDeltaZ:0.80, minMoveATR:0.35,
@@ -29357,6 +29362,13 @@ drag = {
     }catch(_){}
   }
   load();
+
+  // Safe global accessors — never throws if var is not yet declared
+  function gKlines(){ return (typeof klines!=="undefined"&&Array.isArray(klines))?klines:[]; }
+  function gOI(){     return (typeof oiHist!=="undefined"&&Array.isArray(oiHist))?oiHist:[]; }
+  function gLS(){     return (typeof lsHist!=="undefined"&&Array.isArray(lsHist))?lsHist:[]; }
+  function gSym(){    return typeof symbol!=="undefined"?symbol:""; }
+  function gIv(){     return typeof interval!=="undefined"?interval:""; }
 
   // ── Math ──────────────────────────────────────────────────────────────────
   function clamp(v,lo,hi){ return v<lo?lo:v>hi?hi:v; }
@@ -29410,9 +29422,11 @@ drag = {
   let _cache = { key:"", events:[] };
 
   function cacheKey(kls){
-    const sy=typeof symbol!=="undefined"?symbol:"";
-    const iv=typeof interval!=="undefined"?interval:"";
-    return sy+"_"+iv+"_"+kls.length+"_"+state.on+"_"+state.minScore+"_"+state.len;
+    const oi=gOI(), ls=gLS();
+    const oiSig=oi.length?oi[oi.length-1].time:0;
+    const lsSig=ls.length?ls[ls.length-1].time:0;
+    return [gSym(),gIv(),kls.length,oi.length,oiSig,ls.length,lsSig,
+            state.on,state.minScore,state.len,state.showOnlyStrong].join("_");
   }
 
   function computeAll(kls){
@@ -29427,8 +29441,10 @@ drag = {
     const volSMA=smaFast(vols,len);
     const volSTD=stdevFast(vols,volSMA,len);
 
-    // Net delta from buyVolume (= buyVol - sellVol = 2*buyVol - vol)
-    const deltas=kls.map(k=>2*(k.buyVolume||0)-(k.volume||0));
+    // Vol Delta = 2×buyVol − vol (approx. of buyVol − sellVol)
+    // This is NOT "Net Delta Open" from CoinGlass — it is derived from kline data only
+    const deltaAvailData=n>0&&kls[0].buyVolume!==undefined;
+    const deltas=kls.map(k=>deltaAvailData?(2*(k.buyVolume||0)-(k.volume||0)):0);
     const dDelta=deltas.map((d,i)=>i===0?0:d-deltas[i-1]);
     const dDeltaSMA=smaFast(dDelta,len);
     const dDeltaSTD=stdevFast(dDelta,dDeltaSMA,len);
@@ -29437,7 +29453,7 @@ drag = {
     const atrArr=calcATR(kls,atrLen);
 
     // OI — aligned to kline timestamps via binary search on oiHist
-    const oiArr=Array.isArray(oiHist)?oiHist:[];
+    const oiArr=gOI();
     const dOIPct=new Array(n).fill(0);
     const oiHasData=new Array(n).fill(false);
     if(state.useOI && oiArr.length>1){
@@ -29455,7 +29471,7 @@ drag = {
     const dOISTD=stdevFast(dOIPct,dOISMA,len);
 
     // Long/Short Ratio
-    const lsArr=Array.isArray(lsHist)?lsHist:[];
+    const lsArr=gLS();
     const lsRatios=new Array(n).fill(1);
     const lsHasData=new Array(n).fill(false);
     if(state.useLS && lsArr.length){
@@ -29491,7 +29507,7 @@ drag = {
       const dOI=oiAvail?dOIPct[i]:0;
       const oiZ=(oiAvail&&dOISTD[i]>0)?(dOI-dOISMA[i])/dOISTD[i]:0;
 
-      const deltaAvail=state.useDelta&&dDeltaSTD[i]>0;
+      const deltaAvail=state.useDelta&&deltaAvailData&&dDeltaSTD[i]>0;
       const dD=dDelta[i];
       const deltaZ=deltaAvail?(dD-dDeltaSMA[i])/dDeltaSTD[i]:0;
 
@@ -29499,7 +29515,7 @@ drag = {
       const ratio=lsAvail?lsRatios[i]:1;
       const ratioZ=lsAvail?(ratio-lsSMA[i])/lsSTD[i]:0;
 
-      // Weighted score
+      // Weighted score — weights collapse to 0 when data is absent
       let wV=30,wO=oiAvail?25:0,wD=deltaAvail?25:0,wM=15,wL=lsAvail?5:0;
       const wSum=wV+wO+wD+wM+wL||1;
 
@@ -29511,12 +29527,14 @@ drag = {
         normStr(Math.abs(ratioZ),1.0,2.5)*wL
       )/wSum*100;
 
-      if(sc<state.minScore) continue;
+      // showOnlyStrong raises effective threshold to 75
+      const effectiveMin=state.showOnlyStrong?Math.max(state.minScore,75):state.minScore;
+      if(sc<effectiveMin) continue;
 
       const cands=[];
       const mV=state.minVolZ, mO=state.minOIZ, mD=state.minDeltaZ, mM=state.minMoveATR;
 
-      // 1. LONG_FLUSH
+      // 1. LONG_FLUSH — requires OI data
       if(state.showLongFlush && bear && volZ>=mV && oiAvail && dOI<0 && oiZ<=-mO && moveATR>=mM){
         if(state.confirmMode==="live"){
           cands.push({type:"LONG_FLUSH",score:sc,idx:i});
@@ -29532,38 +29550,36 @@ drag = {
         }
       }
 
-      // 2. SHORT_SQUEEZE
-      if(state.showShortSqz && bull && volZ>=mV && oiAvail && dOI<0 && oiZ<=-mO && moveATR>=mM && (dD>0||deltaZ>0)){
+      // 2. SHORT_SQUEEZE — requires OI and Vol Delta data
+      if(state.showShortSqz && bull && volZ>=mV && oiAvail && dOI<0 && oiZ<=-mO && moveATR>=mM && deltaAvail && dD>0 && deltaZ>=mD){
         cands.push({type:"SHORT_SQUEEZE",score:sc,idx:i});
       }
 
-      // 3. BUY_ABSORPTION
-      if(state.showBuyAbs && volZ>=mV && (!deltaAvail||dD<0||deltaZ<-mD) &&
+      // 3. BUY_ABSORPTION — requires Vol Delta data (bearish delta on bullish price action)
+      if(state.showBuyAbs && deltaAvail && volZ>=mV && (dD<0||deltaZ<-mD) &&
          (loWick>=body*0.8||closePos>=0.55) && (!oiAvail||dOI>=0)){
         cands.push({type:"BUY_ABSORPTION",score:sc,idx:i});
       }
 
-      // 4. SELL_ABSORPTION
-      if(state.showSellAbs && volZ>=mV && (!deltaAvail||dD>0||deltaZ>mD) &&
+      // 4. SELL_ABSORPTION — requires Vol Delta data (bullish delta on bearish price action)
+      if(state.showSellAbs && deltaAvail && volZ>=mV && (dD>0||deltaZ>mD) &&
          (upWick>=body*0.8||closePos<=0.45) && (!oiAvail||dOI>=0)){
         cands.push({type:"SELL_ABSORPTION",score:sc,idx:i});
       }
 
-      // 5. BUY_AGGRESSION
-      if(state.showBuyAggr && bull && volZ>=mV &&
-         (!oiAvail||(dOI>0&&oiZ>=mO)) &&
-         (!deltaAvail||(dD>0&&deltaZ>=mD)) && moveATR>=mM){
+      // 5. BUY_AGGRESSION — requires OI and Vol Delta data
+      if(state.showBuyAggr && bull && volZ>=mV && oiAvail && dOI>0 && oiZ>=mO &&
+         deltaAvail && dD>0 && deltaZ>=mD && moveATR>=mM){
         cands.push({type:"BUY_AGGRESSION",score:sc,idx:i});
       }
 
-      // 6. SELL_AGGRESSION
-      if(state.showSellAggr && bear && volZ>=mV &&
-         (!oiAvail||(dOI>0&&oiZ>=mO)) &&
-         (!deltaAvail||(dD<0&&deltaZ<=-mD)) && moveATR>=mM){
+      // 6. SELL_AGGRESSION — requires OI and Vol Delta data
+      if(state.showSellAggr && bear && volZ>=mV && oiAvail && dOI>0 && oiZ>=mO &&
+         deltaAvail && dD<0 && deltaZ<=-mD && moveATR>=mM){
         cands.push({type:"SELL_AGGRESSION",score:sc,idx:i});
       }
 
-      // 7. LONG_TRAP
+      // 7. LONG_TRAP — requires OI data
       if(state.showLongTrap && oiAvail && dOI>0 && oiZ>=mO){
         const rHi=Math.max(...kls.slice(Math.max(0,i-LB),i).map(c=>c.high));
         const lsTrap=!lsAvail||ratio>=state.ratioHigh||ratioZ>=1.2;
@@ -29573,7 +29589,7 @@ drag = {
           cands.push({type:"LONG_TRAP",score:sc*0.85,idx:i});
       }
 
-      // 8. SHORT_TRAP
+      // 8. SHORT_TRAP — requires OI data
       if(state.showShortTrap && oiAvail && dOI>0 && oiZ>=mO){
         const rLo=Math.min(...kls.slice(Math.max(0,i-LB),i).map(c=>c.low));
         const lsTrap=!lsAvail||ratio<=state.ratioLow||ratioZ<=-1.2;
@@ -29613,11 +29629,10 @@ drag = {
     for(let i=0;i<evs.length;i++){
       if(used[i]) continue;
       const e=evs[i], grp=[e]; used[i]=1;
-      const dir=DIR[e.type];
       for(let j=i+1;j<evs.length;j++){
         if(used[j]) continue;
         const e2=evs[j];
-        if(DIR[e2.type]!==dir) continue;
+        if(e2.type !== e.type) continue;
         if(Math.abs(e2.candleIdx-e.candleIdx)>state.mergeBars) continue;
         if(Math.abs(e2.close-e.close)>state.mergeATR*e.atrV) continue;
         grp.push(e2); used[j]=1;
@@ -29654,7 +29669,7 @@ drag = {
   function draw(ctx, cfg){
     if(!state.on) return;
     if(!cfg||!cfg.win||!cfg.view||!cfg.view.length) return;
-    const kls=Array.isArray(klines)?klines:[];
+    const kls=gKlines();
     if(!kls.length) return;
 
     const key=cacheKey(kls);
@@ -29759,18 +29774,50 @@ drag = {
   function fld(lbl,inner){ return `<div class="dvl-vt-field"><label>${lbl}</label>${inner}</div>`; }
   function sw(id,val){ return `<label class="dvl-switch"><input id="${id}" type="checkbox" ${chk(val)}><i></i><b></b></label>`; }
   function numInp(id,val,min,max,step){ return `<input id="${id}" class="dvl-vt-input" type="number" min="${min}" max="${max}" step="${step}" value="${val}">`; }
-  function colInp(id,val){ return `<input id="${id}" class="dvl-vt-input dvl-feb-color" type="color" value="${val}">`; }
+  function clrBtn(id,val){
+    return `<div class="dvl-feb-clr-field"><button id="${id}" class="dvl-feb-clr-swatch" type="button" style="background:${val}" data-clr="${val}" aria-label="Choose color"></button></div>`;
+  }
+
+  function openPalette(btn, stateKey){
+    document.querySelectorAll(".dvl-feb-pal").forEach(p=>p.remove());
+    const pal=document.createElement("div");
+    pal.className="dvl-feb-pal";
+    PALETTE.forEach(clr=>{
+      const cell=document.createElement("button");
+      cell.type="button";
+      cell.className="dvl-feb-pal-cell"+(clr===state[stateKey]?" is-cur":"");
+      cell.style.background=clr;
+      cell.title=clr;
+      cell.addEventListener("click",()=>{
+        state[stateKey]=clr;
+        btn.style.background=clr;
+        btn.dataset.clr=clr;
+        _cache.key="";
+        save();
+        if(typeof drawSoon==="function") drawSoon();
+        pal.remove();
+      });
+      pal.appendChild(cell);
+    });
+    btn.parentNode.appendChild(pal);
+    const onOut=e=>{
+      if(!pal.contains(e.target)&&e.target!==btn){ pal.remove(); document.removeEventListener("pointerdown",onOut,true); }
+    };
+    setTimeout(()=>document.addEventListener("pointerdown",onOut,true),0);
+  }
 
   function dataStatus(){
-    const oiOk=Array.isArray(oiHist)&&oiHist.length>0;
-    const lsOk=Array.isArray(lsHist)&&lsHist.length>0;
-    const klOk=Array.isArray(klines)&&klines.length>0&&klines[0].buyVolume!==undefined;
+    const oiOk=gOI().length>0;
+    const lsOk=gLS().length>0;
+    const kls=gKlines();
+    const klOk=kls.length>0&&kls[0].buyVolume!==undefined;
     const msgs=[];
-    if(!oiOk) msgs.push("OI data unavailable — open interest signals disabled");
-    if(!lsOk) msgs.push("L/S data unavailable — long/short ratio signals disabled");
-    if(!klOk) msgs.push("Net Delta unavailable — delta signals disabled");
+    if(!oiOk) msgs.push({t:"OI data unavailable — open interest signals disabled",info:false});
+    if(!lsOk) msgs.push({t:"L/S data unavailable — long/short ratio signals disabled",info:false});
+    if(!klOk) msgs.push({t:"Vol Delta data unavailable — delta signals disabled",info:false});
+    if(klOk) msgs.push({t:"Vol Delta = 2×buyVol − vol (approx., not Net Delta Open)",info:true});
     if(!msgs.length) return "";
-    return '<div class="dvl-feb-status">'+msgs.map(m=>'<div class="dvl-feb-status-line">'+m+'</div>').join("")+'</div>';
+    return '<div class="dvl-feb-status">'+msgs.map(m=>'<div class="dvl-feb-status-line'+(m.info?" is-info":"")+'">'+(m.t)+'</div>').join("")+'</div>';
   }
 
   function renderPanel(){
@@ -29793,7 +29840,7 @@ drag = {
       <div class="dvl-vt-section-title"><span>Data</span></div>
       <div class="dvl-vt-grid">
         ${fld("Open Interest",sw("febUseOI",state.useOI))}
-        ${fld("Net Delta",sw("febUseDelta",state.useDelta))}
+        ${fld("Vol Delta (approx.)",sw("febUseDelta",state.useDelta))}
         ${fld("Long/Short Ratio",sw("febUseLS",state.useLS))}
       </div>
     </div>
@@ -29840,23 +29887,30 @@ drag = {
     <div class="dvl-vt-section">
       <div class="dvl-vt-section-title"><span>Colors</span></div>
       <div class="dvl-vt-grid">
-        ${fld("Buy Aggr",colInp("febClrBA",state.clrBuyAggr))}
-        ${fld("Sell Aggr",colInp("febClrSA",state.clrSellAggr))}
-        ${fld("Long Flush",colInp("febClrLF",state.clrLongFlush))}
-        ${fld("Short Sqz",colInp("febClrSS",state.clrShortSqz))}
-        ${fld("Long Trap",colInp("febClrLT",state.clrLongTrap))}
-        ${fld("Short Trap",colInp("febClrST",state.clrShortTrap))}
-        ${fld("Buy Abs",colInp("febClrBAbs",state.clrBuyAbs))}
-        ${fld("Sell Abs",colInp("febClrSAbs",state.clrSellAbs))}
+        ${fld("Buy Aggr",clrBtn("febClrBA",state.clrBuyAggr))}
+        ${fld("Sell Aggr",clrBtn("febClrSA",state.clrSellAggr))}
+        ${fld("Long Flush",clrBtn("febClrLF",state.clrLongFlush))}
+        ${fld("Short Sqz",clrBtn("febClrSS",state.clrShortSqz))}
+        ${fld("Long Trap",clrBtn("febClrLT",state.clrLongTrap))}
+        ${fld("Short Trap",clrBtn("febClrST",state.clrShortTrap))}
+        ${fld("Buy Abs",clrBtn("febClrBAbs",state.clrBuyAbs))}
+        ${fld("Sell Abs",clrBtn("febClrSAbs",state.clrSellAbs))}
       </div>
     </div>`;
     bindPanel();
   }
 
+  const COLOR_KEYS={
+    febClrBA:"clrBuyAggr", febClrSA:"clrSellAggr",
+    febClrLF:"clrLongFlush", febClrSS:"clrShortSqz",
+    febClrLT:"clrLongTrap", febClrST:"clrShortTrap",
+    febClrBAbs:"clrBuyAbs", febClrSAbs:"clrSellAbs"
+  };
+
   const RECOMPUTE_KEYS=new Set(["len","atrLen","minScore","minVolZ","minOIZ","minDeltaZ",
     "minMoveATR","useOI","useDelta","useLS","enableMerge","mergeBars","mergeATR","confirmMode",
     "showBuyAggr","showSellAggr","showLongFlush","showShortSqz","showLongTrap",
-    "showShortTrap","showBuyAbs","showSellAbs"]);
+    "showShortTrap","showBuyAbs","showSellAbs","showOnlyStrong"]);
 
   function bindPanel(){
     const MAP={
@@ -29872,11 +29926,7 @@ drag = {
       febMinVolZ:["minVolZ","num"],febMinOIZ:["minOIZ","num"],
       febMinDZ:["minDeltaZ","num"],febMinMoveATR:["minMoveATR","num"],
       febMerge:["enableMerge","check"],febMergeBars:["mergeBars","int"],febMergeATR:["mergeATR","num"],
-      febBubMin:["bubbleMin","num"],febBubMax:["bubbleMax","num"],febOpacity:["bubbleOpacity","num"],
-      febClrBA:["clrBuyAggr","text"],febClrSA:["clrSellAggr","text"],
-      febClrLF:["clrLongFlush","text"],febClrSS:["clrShortSqz","text"],
-      febClrLT:["clrLongTrap","text"],febClrST:["clrShortTrap","text"],
-      febClrBAbs:["clrBuyAbs","text"],febClrSAbs:["clrSellAbs","text"]
+      febBubMin:["bubbleMin","num"],febBubMax:["bubbleMax","num"],febOpacity:["bubbleOpacity","num"]
     };
     Object.keys(MAP).forEach(id=>{
       const el=panel.querySelector("#"+id);
@@ -29892,6 +29942,11 @@ drag = {
       };
       el.addEventListener("change",sync);
       el.addEventListener("input",sync);
+    });
+    Object.keys(COLOR_KEYS).forEach(id=>{
+      const btn=panel.querySelector("#"+id);
+      if(!btn) return;
+      btn.addEventListener("click",()=>openPalette(btn, COLOR_KEYS[id]));
     });
   }
 
