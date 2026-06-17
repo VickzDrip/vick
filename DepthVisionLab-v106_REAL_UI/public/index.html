@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.617</title>
+<title>DVL Binance Live — Beta 0.618</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.617</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.618</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13727,11 +13727,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.617";
+const DVL_APP_VERSION = "Beta 0.618";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: VP body-weighted (sem flatlines) + clamp sell/buyW (sem artefatos visuais)." },
+  { version: DVL_APP_VERSION, note: "Bugfix: VP triangular close-peaked (sem flatlines) + fix labels POC/VAH/VAL." },
+  { version: "Beta 0.617", note: "Bugfix: VP body-weighted + clamp sell/buyW (sem artefatos visuais)." },
   { version: "Beta 0.616", note: "Feature: VP split buy/sell por barra + buyVolume nos klines." },
   { version: "Beta 0.615", note: "Bugfix: VP barras ancoradas em x1 (escala de preco)." },
   { version: "Beta 0.614", note: "Feature: Volume Profile (VP) + configuracoes persistentes." },
@@ -28743,21 +28744,40 @@ drag = {
   function on(){ return !!state.on; }
   function setOn(v){ state.on=!!v; save(); }
 
-  // ── Volume Profile computation (body-weighted) ────────────────────────────
+  // ── Volume Profile computation (triangular close-peaked) ─────────────────
   function computeVP(view, priceMin, priceMax, rows){
     const buy  = new Float64Array(rows);
     const sell = new Float64Array(rows);
     const range = priceMax - priceMin;
     if(range <= 0) return { buy, sell };
 
-    function fill(lo, hi, bv, sv){
+    function fill(lo, hi, bv, sv, peakAt){
       const lo2 = Math.max(lo, priceMin);
       const hi2 = Math.min(hi, priceMax);
       if(lo2 >= hi2) return;
       const loI = Math.max(0,      Math.floor((lo2 - priceMin) / range * rows));
       const hiI = Math.min(rows-1, Math.floor((hi2 - priceMin) / range * rows));
       const n = hiI - loI + 1;
-      for(let i = loI; i <= hiI; i++){ buy[i] += bv/n; sell[i] += sv/n; }
+      if(n === 1){ buy[loI] += bv; sell[loI] += sv; return; }
+      if(peakAt === undefined){
+        for(let i = loI; i <= hiI; i++){ buy[i] += bv/n; sell[i] += sv/n; }
+        return;
+      }
+      // Triangular: peak at close, linear falloff toward body edges
+      const pkI = Math.max(loI, Math.min(hiI,
+        Math.floor((Math.max(lo2, Math.min(hi2, peakAt)) - priceMin) / range * rows)));
+      const w = new Float64Array(n); let wsum = 0;
+      for(let k = 0; k < n; k++){
+        const i = loI + k;
+        const d = i === pkI ? 1
+                : i <  pkI  ? (pkI > loI ? (i - loI) / (pkI - loI) : 0)
+                            : (pkI < hiI ? (hiI - i) / (hiI - pkI) : 0);
+        w[k] = d + 0.12; wsum += w[k];
+      }
+      for(let k = 0; k < n; k++){
+        buy[loI+k]  += bv * w[k] / wsum;
+        sell[loI+k] += sv * w[k] / wsum;
+      }
     }
 
     for(const c of view){
@@ -28772,9 +28792,9 @@ drag = {
       const bodyR = bodyH - bodyL;
 
       if(bodyR > 0 && fullR > 0){
-        // 70% no corpo, 30% nos wicks proporcionalmente
+        // 70% corpo (triangular peaked at close), 30% wicks (uniforme)
         const bW = 0.70, wW = 0.30;
-        fill(bodyL, bodyH, bVol*bW, sVol*bW);
+        fill(bodyL, bodyH, bVol*bW, sVol*bW, cl);
         const upW = hi - bodyH, dnW = bodyL - lo;
         const totalW = upW + dnW;
         if(totalW > 0){
@@ -28819,6 +28839,7 @@ drag = {
     }
 
     const vpW  = Math.min(150, Math.max(40, (x1-x0) * (state.widthPct||0.18)));
+    const vpX0 = x1 - vpW;
     const barH = (y1 - y0) / rows;
     const op   = Math.max(0.05, Math.min(1, state.opacity||0.46));
     const cBuy  = state.colorBuy  || "#13dc8d";
@@ -29026,7 +29047,7 @@ drag = {
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
-  window.DVLVolumeProfile = { version:"0.617", on, setOn, draw, openPanel,
+  window.DVLVolumeProfile = { version:"0.618", on, setOn, draw, openPanel,
     get state(){ return Object.assign({}, state); }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
