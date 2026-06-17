@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.628</title>
+<title>DVL Binance Live — Beta 0.629</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13315,7 +13315,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.628</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.629</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13775,11 +13775,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.628";
+const DVL_APP_VERSION = "Beta 0.629";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Feature: FEB V2 — presets Clean/Normal/Scanner + suspect mini-bubbles + stronger mechanics." },
+  { version: DVL_APP_VERSION, note: "Fix: Volume Profile panel — custom stepper/dropdown/palette, zero native controls." },
+  { version: "Beta 0.628", note: "Feature: FEB V2 — presets Clean/Normal/Scanner + suspect mini-bubbles + stronger mechanics." },
   { version: "Beta 0.627", note: "Bugfix: FEB 7 fixes — palette picker, strict conditions, typeof guards, showOnlyStrong, same-type merge, cache key + vol delta label." },
   { version: "Beta 0.626", note: "Bugfix: FEB toggle ON/OFF + liquidation lines OFF por padrão." },
   { version: "Beta 0.625", note: "Feature: DVL Flow Event Bubbles — overlay de eventos compostos de fluxo." },
@@ -29241,9 +29242,46 @@ drag = {
   function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderPanel(); }
   function closePanel(){ if(panel) panel.classList.remove("is-open"); }
 
-  function cField(id, lbl, key){
-    const val = state[key] || "#18d7ff";
-    return `<div class="dvl-vt-field"><label>${lbl}</label><input id="${id}" class="dvl-vt-color" type="color" value="${val}"></div>`;
+  const VP_PALETTE=["#13dc8d","#00e5cc","#4db8ff","#18a8ff","#7b5fff","#b44fff",
+                    "#ff4a61","#ff8c42","#ffd700","#ffffff","#ff6b35","#c0c0c0",
+                    "#ed4c67","#00d2d3","#54a0ff","#5f27cd"];
+  function openVPPalette(btn,key){
+    document.querySelectorAll(".dvl-feb-pal").forEach(p=>p.remove());
+    const pal=document.createElement("div");pal.className="dvl-feb-pal";
+    VP_PALETTE.forEach(clr=>{
+      const cell=document.createElement("button");
+      cell.type="button";
+      cell.className="dvl-feb-pal-cell"+(clr===state[key]?" is-cur":"");
+      cell.style.background=clr;cell.title=clr;
+      cell.addEventListener("click",()=>{
+        state[key]=clr;btn.style.background=clr;btn.dataset.clr=clr;
+        save();if(typeof drawSoon==="function")drawSoon();pal.remove();
+      });
+      pal.appendChild(cell);
+    });
+    btn.parentNode.appendChild(pal);
+    const onOut=e=>{if(!pal.contains(e.target)&&e.target!==btn){pal.remove();document.removeEventListener("pointerdown",onOut,true);}};
+    setTimeout(()=>document.addEventListener("pointerdown",onOut,true),0);
+  }
+  function cField(id,lbl,key){
+    const val=state[key]||"#18d7ff";
+    return `<div class="dvl-vt-field"><label>${lbl}</label><div class="dvl-feb-clr-field"><button id="${id}" class="dvl-feb-clr-swatch" type="button" style="background:${val}" data-clr="${val}" aria-label="${lbl}"></button></div></div>`;
+  }
+  function vpStepFld(id,val,min,max,step,dec){
+    const dv=dec>0?(+val).toFixed(dec):String(val);
+    return `<div class="dvl-feb-step-wrap">`
+      +`<button class="dvl-feb-step-btn dvl-feb-step-dec" type="button" data-id="${id}" data-step="${step}" data-min="${min}" data-max="${max}" data-dec="${dec}">−</button>`
+      +`<span class="dvl-feb-step-val" id="${id}Val">${dv}</span>`
+      +`<button class="dvl-feb-step-btn dvl-feb-step-inc" type="button" data-id="${id}" data-step="${step}" data-min="${min}" data-max="${max}" data-dec="${dec}">+</button>`
+      +`</div>`;
+  }
+  function vpDropFld(id,opts,cur){
+    const lbl=opts.find(([v])=>v===cur)?.[1]||cur;
+    const items=opts.map(([v,l])=>`<button class="dvl-drop-item${v===cur?" is-cur":""}" type="button" data-val="${v}">${l}</button>`).join("");
+    return `<div class="dvl-drop-wrap" id="${id}Wrap">`
+      +`<button class="dvl-drop-btn" type="button" id="${id}">${lbl}<i class="dvl-drop-arr">▾</i></button>`
+      +`<div class="dvl-drop-list" id="${id}List">${items}</div>`
+      +`</div>`;
   }
 
   function renderPanel(){
@@ -29255,11 +29293,11 @@ drag = {
         <div class="dvl-vt-grid">
           <div class="dvl-vt-field"><label>Ativo</label><label class="dvl-switch"><input id="dvlVPOn" type="checkbox" ${state.on?"checked":""}><i></i><b></b></label></div>
           <div class="dvl-vt-field"><label>Labels</label><label class="dvl-switch"><input id="dvlVPLabels" type="checkbox" ${state.showLabels!==false?"checked":""}><i></i><b></b></label></div>
-          <div class="dvl-vt-field"><label>Rows</label><input id="dvlVPRows" class="dvl-vt-input" type="number" min="20" max="500" step="10" value="${Math.round(state.rows||120)}"></div>
-          <div class="dvl-vt-field"><label>Largura %</label><input id="dvlVPWPct" class="dvl-vt-input" type="number" min="5" max="40" step="1" value="${Math.round((state.widthPct||0.18)*100)}"></div>
-          <div class="dvl-vt-field"><label>Opacidade %</label><input id="dvlVPOp" class="dvl-vt-input" type="number" min="5" max="100" step="5" value="${Math.round((state.opacity||0.46)*100)}"></div>
-          <div class="dvl-vt-field"><label>Value Area %</label><input id="dvlVPVAPct" class="dvl-vt-input" type="number" min="10" max="100" step="5" value="${Math.round((state.valueAreaPct||0.70)*100)}"></div>
-          <div class="dvl-vt-field" style="grid-column:1/-1;flex-direction:column;align-items:flex-start;gap:4px"><label style="white-space:nowrap">Timeframe do VP</label><select id="dvlVPTF" style="width:100%;background:#0f1623;color:#c8d5e6;border:1px solid #253248;border-radius:3px;padding:4px 6px;font-size:11px;cursor:pointer">${VP_TF_OPTS.map(o=>`<option value="${o.v}"${(state.vpTF||'visible')===o.v?' selected':''}>${o.l}</option>`).join('')}</select></div>
+          <div class="dvl-vt-field"><label>Rows</label>${vpStepFld("dvlVPRows",Math.round(state.rows||120),20,500,10,0)}</div>
+          <div class="dvl-vt-field"><label>Largura %</label>${vpStepFld("dvlVPWPct",Math.round((state.widthPct||0.18)*100),5,40,1,0)}</div>
+          <div class="dvl-vt-field"><label>Opacidade %</label>${vpStepFld("dvlVPOp",Math.round((state.opacity||0.46)*100),5,100,5,0)}</div>
+          <div class="dvl-vt-field"><label>Value Area %</label>${vpStepFld("dvlVPVAPct",Math.round((state.valueAreaPct||0.70)*100),10,100,5,0)}</div>
+          <div class="dvl-vt-field" style="grid-column:1/-1;flex-direction:column;align-items:flex-start;gap:4px"><label style="white-space:nowrap">Timeframe do VP</label>${vpDropFld("dvlVPTF",VP_TF_OPTS.map(o=>[o.v,o.l]),(state.vpTF||'visible'))}</div>
         </div>
       </div>
       <div class="dvl-vt-section">
@@ -29282,22 +29320,68 @@ drag = {
       </div>
     `;
 
-    function b(id, fn){ const el=body.querySelector("#"+id); if(el) el.addEventListener("change",()=>{ fn(el); save(); if(typeof drawSoon==="function") drawSoon(); }); }
-    b("dvlVPOn",    el=>{ state.on=el.checked; updateRow(); });
-    b("dvlVPLabels",el=>{ state.showLabels=el.checked; });
-    b("dvlVPRows",  el=>{ state.rows=Math.max(20,Math.min(500,Math.round(+el.value)||120)); });
-    b("dvlVPWPct",  el=>{ state.widthPct=Math.max(0.05,Math.min(0.40,(+el.value||18)/100)); });
-    b("dvlVPOp",    el=>{ state.opacity=Math.max(0.05,Math.min(1,(+el.value||46)/100)); });
-    b("dvlVPVAPct", el=>{ state.valueAreaPct=Math.max(0.10,Math.min(1,(+el.value||70)/100)); });
-    b("dvlVPTF",    el=>{ state.vpTF=el.value; vpKCache=null; vpStableLevels={poc:null,vah:null,val:null,sym:null,tf:null}; });
-    b("dvlVPCBuy",  el=>{ state.colorBuy=el.value; });
-    b("dvlVPCSell", el=>{ state.colorSell=el.value; });
-    b("dvlVPPOC",   el=>{ state.showPOC=el.checked; });
-    b("dvlVPCPOC",  el=>{ state.colorPOC=el.value; });
-    b("dvlVPVAH",   el=>{ state.showVAH=el.checked; });
-    b("dvlVPCVAH",  el=>{ state.colorVAH=el.value; });
-    b("dvlVPVAL",   el=>{ state.showVAL=el.checked; });
-    b("dvlVPCVAL",  el=>{ state.colorVAL=el.value; });
+    // Toggles
+    function bSw(id,fn){const el=body.querySelector("#"+id);if(el)el.addEventListener("change",()=>{fn(el.checked);save();if(typeof drawSoon==="function")drawSoon();});}
+    bSw("dvlVPOn",    v=>{state.on=v;updateRow();});
+    bSw("dvlVPLabels",v=>{state.showLabels=v;});
+    bSw("dvlVPPOC",   v=>{state.showPOC=v;});
+    bSw("dvlVPVAH",   v=>{state.showVAH=v;});
+    bSw("dvlVPVAL",   v=>{state.showVAL=v;});
+    // Steppers
+    const VP_STEP={
+      dvlVPRows: v=>{state.rows=Math.max(20,Math.min(500,v));},
+      dvlVPWPct: v=>{state.widthPct=Math.max(0.05,Math.min(0.40,v/100));},
+      dvlVPOp:   v=>{state.opacity=Math.max(0.05,Math.min(1,v/100));},
+      dvlVPVAPct:v=>{state.valueAreaPct=Math.max(0.10,Math.min(1,v/100));}
+    };
+    body.querySelectorAll(".dvl-feb-step-btn").forEach(btn=>{
+      btn.addEventListener("click",e=>{
+        e.stopPropagation();
+        const id=btn.dataset.id;
+        const step=parseFloat(btn.dataset.step),mn=parseFloat(btn.dataset.min),mx=parseFloat(btn.dataset.max),dc=parseInt(btn.dataset.dec);
+        const isInc=btn.classList.contains("dvl-feb-step-inc");
+        const valEl=body.querySelector("#"+id+"Val");if(!valEl)return;
+        const cur=parseFloat(valEl.textContent)||0;
+        const v=isInc?Math.min(mx,+(cur+step).toFixed(dc)):Math.max(mn,+(cur-step).toFixed(dc));
+        valEl.textContent=dc>0?v.toFixed(dc):String(v);
+        if(VP_STEP[id])VP_STEP[id](v);
+        save();if(typeof drawSoon==="function")drawSoon();
+      });
+    });
+    // Dropdown
+    body.querySelectorAll(".dvl-drop-btn").forEach(btn=>{
+      btn.addEventListener("click",e=>{
+        e.stopPropagation();
+        const list=body.querySelector("#"+btn.id+"List");if(!list)return;
+        const wasOpen=list.classList.contains("is-open");
+        body.querySelectorAll(".dvl-drop-list.is-open").forEach(l=>l.classList.remove("is-open"));
+        if(!wasOpen)list.classList.add("is-open");
+      });
+    });
+    body.querySelectorAll(".dvl-drop-item").forEach(item=>{
+      item.addEventListener("click",e=>{
+        e.stopPropagation();
+        const val=item.dataset.val;
+        const listEl=item.closest(".dvl-drop-list");
+        const btnId=listEl.id.replace("List","");
+        const btn=body.querySelector("#"+btnId);
+        if(btn){const tn=[...btn.childNodes].find(n=>n.nodeType===3);if(tn)tn.textContent=item.textContent;}
+        listEl.querySelectorAll(".dvl-drop-item").forEach(i=>i.classList.toggle("is-cur",i===item));
+        listEl.classList.remove("is-open");
+        if(btnId==="dvlVPTF"){state.vpTF=val;vpKCache=null;vpStableLevels={poc:null,vah:null,val:null,sym:null,tf:null};}
+        save();if(typeof drawSoon==="function")drawSoon();
+      });
+    });
+    // Color palette
+    const VP_CLR={dvlVPCBuy:"colorBuy",dvlVPCSell:"colorSell",dvlVPCPOC:"colorPOC",dvlVPCVAH:"colorVAH",dvlVPCVAL:"colorVAL"};
+    body.querySelectorAll(".dvl-feb-clr-swatch").forEach(btn=>{
+      const key=VP_CLR[btn.id];if(!key)return;
+      btn.addEventListener("click",()=>openVPPalette(btn,key));
+    });
+    // Fechar dropdowns ao clicar fora
+    body.addEventListener("pointerdown",e=>{
+      if(!e.target.closest(".dvl-drop-wrap"))body.querySelectorAll(".dvl-drop-list.is-open").forEach(l=>l.classList.remove("is-open"));
+    });
   }
 
   // ── Indicator row ─────────────────────────────────────────────────────────
@@ -29336,7 +29420,7 @@ drag = {
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
-  window.DVLVolumeProfile = { version:"0.628", on, setOn, draw, openPanel,
+  window.DVLVolumeProfile = { version:"0.629", on, setOn, draw, openPanel,
     get state(){ return Object.assign({}, state); }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
