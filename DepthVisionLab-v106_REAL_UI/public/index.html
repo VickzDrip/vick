@@ -13315,7 +13315,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.629</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.630</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13775,11 +13775,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.629";
+const DVL_APP_VERSION = "Beta 0.630";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Fix: Volume Profile panel — custom stepper/dropdown/palette, zero native controls." },
+  { version: DVL_APP_VERSION, note: "Feature: Auto-save — symbol + settings persisted every 30 s, badge salvo HH:MM." },
+  { version: "Beta 0.629", note: "Fix: Volume Profile panel — custom stepper/dropdown/palette, zero native controls." },
   { version: "Beta 0.628", note: "Feature: FEB V2 — presets Clean/Normal/Scanner + suspect mini-bubbles + stronger mechanics." },
   { version: "Beta 0.627", note: "Bugfix: FEB 7 fixes — palette picker, strict conditions, typeof guards, showOnlyStrong, same-type merge, cache key + vol delta label." },
   { version: "Beta 0.626", note: "Bugfix: FEB toggle ON/OFF + liquidation lines OFF por padrão." },
@@ -13982,7 +13983,7 @@ function saveAppSettings(){
   try{
     localStorage.setItem(DVL_APP_SETTINGS_KEY, JSON.stringify({
       candleBullColor, candleBearColor, candleMode,
-      sessionsOn, sessionActive: Object.assign({}, sessionActive), interval
+      sessionsOn, sessionActive: Object.assign({}, sessionActive), interval, symbol
     }));
   }catch(_){}
 }
@@ -13997,6 +13998,7 @@ function saveAppSettings(){
     if(s.sessionActive && typeof s.sessionActive === "object")
       ["asia","london","newyork","sydney"].forEach(k => { if(typeof s.sessionActive[k]==="boolean") sessionActive[k]=s.sessionActive[k]; });
     if(s.interval && /^[1-9]\d*(s|m|h|d|w)$/.test(s.interval)) interval = s.interval;
+    if(s.symbol && typeof s.symbol==="string" && symbols.includes(s.symbol)){ symbolIndex=symbols.indexOf(s.symbol); symbol=s.symbol; }
   }catch(_){}
 })();
 
@@ -15423,6 +15425,7 @@ function selectSymbol(sym){
   ticker = null;
 
   updateHeader();
+  saveAppSettings();
   loadAll();
 }
 
@@ -30273,6 +30276,65 @@ else setTimeout(insertRow,0);
 window.DVLFlowEventBubbles={on:()=>!!state.on,setOn:v=>{state.on=!!v;save();},
   refresh:()=>{_cache.key="";},get state(){return Object.assign({},state);}};
 window.DVLFlowEventBubblesDraw=function(ctx,cfg){try{draw(ctx,cfg);}catch(_){}};
+})();
+</script>
+
+<script id="DVL_BETA_0630_AUTOSAVE">
+(function(){
+  /* ── inject badge CSS ── */
+  var style = document.createElement("style");
+  style.textContent = [
+    ".dvl-autosave-badge{",
+    "  display:inline-flex;align-items:center;gap:4px;",
+    "  font-size:9px;font-weight:600;letter-spacing:.4px;",
+    "  color:#16d86f;opacity:.55;",
+    "  transition:opacity .3s;",
+    "  cursor:default;user-select:none;",
+    "  margin-left:6px;vertical-align:middle;",
+    "}",
+    ".dvl-autosave-badge.is-active{opacity:1;}",
+    ".dvl-autosave-badge .dvl-as-dot{",
+    "  width:5px;height:5px;border-radius:50%;",
+    "  background:#16d86f;",
+    "  animation:none;",
+    "}",
+    ".dvl-autosave-badge.is-active .dvl-as-dot{",
+    "  animation:dvlAsPulse .8s ease-out forwards;",
+    "}",
+    "@keyframes dvlAsPulse{",
+    "  0%{transform:scale(1);opacity:1;}",
+    "  60%{transform:scale(1.8);opacity:.6;}",
+    "  100%{transform:scale(1);opacity:1;}",
+    "}"
+  ].join("");
+  document.head.appendChild(style);
+
+  /* ── inject badge DOM next to versionBadge ── */
+  var vb = document.getElementById("versionBadge");
+  var badge = document.createElement("span");
+  badge.id = "dvlAutoSaveBadge";
+  badge.className = "dvl-autosave-badge";
+  badge.innerHTML = '<span class="dvl-as-dot"></span><span class="dvl-as-lbl"></span>';
+  if(vb && vb.parentNode) vb.parentNode.insertBefore(badge, vb.nextSibling);
+
+  var lbl = badge.querySelector(".dvl-as-lbl");
+
+  function pad(n){ return n < 10 ? "0"+n : ""+n; }
+  function nowHHMM(){
+    var d = new Date();
+    return pad(d.getHours())+":"+pad(d.getMinutes());
+  }
+
+  function tick(){
+    if(typeof saveAppSettings === "function") saveAppSettings();
+    var t = nowHHMM();
+    if(lbl) lbl.textContent = "salvo "+t;
+    badge.classList.add("is-active");
+    setTimeout(function(){ badge.classList.remove("is-active"); }, 2000);
+  }
+
+  /* first save 5 s after load, then every 30 s */
+  setTimeout(function(){ tick(); setInterval(tick, 30000); }, 5000);
 })();
 </script>
 
