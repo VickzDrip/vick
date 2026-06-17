@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.619</title>
+<title>DVL Binance Live — Beta 0.620</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.619</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.620</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13727,11 +13727,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.619";
+const DVL_APP_VERSION = "Beta 0.620";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: VP draw try/finally — escala e osciladores paravam de aparecer." },
+  { version: DVL_APP_VERSION, note: "Feature: VP Timeframe selector (1h/4h/1d/…) — prev period + current in formation." },
+  { version: "Beta 0.619", note: "Bugfix: VP draw try/finally — escala e osciladores paravam de aparecer." },
   { version: "Beta 0.618", note: "Bugfix: VP triangular close-peaked (sem flatlines) + fix vpX0 (labels POC/VAH/VAL)." },
   { version: "Beta 0.617", note: "Bugfix: VP body-weighted + clamp sell/buyW (sem artefatos visuais)." },
   { version: "Beta 0.616", note: "Feature: VP split buy/sell por barra + buyVolume nos klines." },
@@ -16126,7 +16127,7 @@ function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
 
   if(window.DVLVolumeProfileDraw){
     window.DVLVolumeProfileDraw(ctx, {
-      view, win, x, y, x0, x1, y0, y1, slotOffset, candleW, min, max
+      view, win, x, y, x0, x1, y0, y1, slotOffset, candleW, min, max, symbol
     });
   }
 
@@ -28727,6 +28728,7 @@ drag = {
     widthPct: 0.18,
     opacity: 0.46,
     valueAreaPct: 0.70,
+    vpTF: 'visible',
     colorBuy:  "#13dc8d",
     colorSell: "#ff4a61",
     colorPOC:  "#f3c768",
@@ -28744,6 +28746,72 @@ drag = {
   function save(){ try{ localStorage.setItem(STOR_KEY, JSON.stringify(state)); }catch(_){} }
   function on(){ return !!state.on; }
   function setOn(v){ state.on=!!v; save(); }
+
+  // ── VP Timeframe: opções, bases, cache e fetch ────────────────────────────
+  const VP_TF_OPTS = [
+    {v:'visible',l:'Range Visível'},
+    {v:'1h', l:'1h'},  {v:'2h', l:'2h'},  {v:'4h', l:'4h'},
+    {v:'6h', l:'6h'},  {v:'8h', l:'8h'},  {v:'12h',l:'12h'},
+    {v:'1d', l:'1 Dia'},{v:'3d', l:'3 Dias'},{v:'1w', l:'1 Semana'},
+  ];
+  const VP_BASE_TF = {
+    '1h' :{base:'1m',  ms:3600000   },
+    '2h' :{base:'3m',  ms:7200000   },
+    '4h' :{base:'5m',  ms:14400000  },
+    '6h' :{base:'5m',  ms:21600000  },
+    '8h' :{base:'15m', ms:28800000  },
+    '12h':{base:'15m', ms:43200000  },
+    '1d' :{base:'30m', ms:86400000  },
+    '3d' :{base:'1h',  ms:259200000 },
+    '1w' :{base:'4h',  ms:604800000 },
+  };
+  let vpKCache    = null;
+  let vpKFetching = false;
+
+  async function fetchVPKlines(sym, tf){
+    const cfg = VP_BASE_TF[tf];
+    if(!cfg || !sym) return null;
+    const now  = Date.now();
+    const cur  = Math.floor(now / cfg.ms) * cfg.ms;
+    const from = cur - cfg.ms;
+    const url  = 'https://fapi.binance.com/fapi/v1/klines?symbol='+sym
+               + '&interval='+cfg.base+'&startTime='+from+'&limit=1500';
+    try{
+      const r = await fetch(url);
+      if(!r.ok) return null;
+      const d = await r.json();
+      if(!Array.isArray(d)) return null;
+      return d.map(x=>({
+        time:+x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],
+        volume:+x[5],buyVolume:+x[9]
+      }));
+    }catch(_){ return null; }
+  }
+
+  function resolveVPKlines(defaultView, sym){
+    const tf = state.vpTF || 'visible';
+    if(tf === 'visible' || !sym) return {klines:defaultView, own:false};
+    const cfg  = VP_BASE_TF[tf];
+    const now  = Date.now();
+    const periodStart = cfg ? Math.floor(now / cfg.ms) * cfg.ms : 0;
+    const ok = vpKCache
+      && vpKCache.sym === sym && vpKCache.tf === tf
+      && vpKCache.periodStart === periodStart
+      && Array.isArray(vpKCache.klines) && vpKCache.klines.length
+      && (now - vpKCache.ts) < 60000;
+    if(!ok && !vpKFetching){
+      vpKFetching = true;
+      fetchVPKlines(sym, tf).then(kl=>{
+        vpKCache = {sym, tf, klines:kl||[], ts:Date.now(), periodStart};
+        vpKFetching = false;
+        if(kl && kl.length && typeof drawSoon==='function') drawSoon();
+      }).catch(()=>{ vpKFetching=false; });
+    }
+    if(vpKCache && vpKCache.sym===sym && vpKCache.tf===tf && vpKCache.klines.length){
+      return {klines:vpKCache.klines, own:true};
+    }
+    return {klines:defaultView, own:false};
+  }
 
   // ── Volume Profile computation (triangular close-peaked) ─────────────────
   function computeVP(view, priceMin, priceMax, rows){
@@ -28818,7 +28886,19 @@ drag = {
     if(priceRange <= 0) return;
 
     const rows = Math.max(20, Math.min(500, Math.round(state.rows)||120));
-    const { buy: buyB, sell: sellB } = computeVP(view, min, max, rows);
+    const sym = cfg.symbol || '';
+    const {klines:vpView, own:ownData} = resolveVPKlines(view, sym);
+    let vpMin = min, vpMax = max;
+    if(ownData && vpView.length){
+      for(const c of vpView){
+        if(+c.low  < vpMin) vpMin = +c.low;
+        if(+c.high > vpMax) vpMax = +c.high;
+      }
+      const pad = (vpMax - vpMin) * 0.005;
+      vpMin -= pad; vpMax += pad;
+    }
+    const vpRange = vpMax - vpMin || 1;
+    const { buy: buyB, sell: sellB } = computeVP(vpView, vpMin, vpMax, rows);
 
     let maxBucket = 0, totalVol = 0, pocIdx = 0;
     for(let i = 0; i < rows; i++){
@@ -28841,7 +28921,9 @@ drag = {
 
     const vpW  = Math.min(150, Math.max(40, (x1-x0) * (state.widthPct||0.18)));
     const vpX0 = x1 - vpW;
-    const barH = (y1 - y0) / rows;
+    const chartRange  = max - min;
+    const pricePerRow = vpRange / rows;
+    const rowY = i => y0 + (max - (vpMin + i * pricePerRow)) / chartRange * (y1 - y0);
     const op   = Math.max(0.05, Math.min(1, state.opacity||0.46));
     const cBuy  = state.colorBuy  || "#13dc8d";
     const cSell = state.colorSell || "#ff4a61";
@@ -28857,8 +28939,13 @@ drag = {
       if(bw < 0.5) continue;
       const buyW  = Math.max(0, Math.min(bw, (buyB[i] / total) * bw));
       const sellW = Math.max(0, bw - buyW);
-      const py    = y1 - (i+1) * barH;
-      const bH    = Math.max(0.8, barH);
+      const priceLo = vpMin + i       * pricePerRow;
+      const priceHi = vpMin + (i + 1) * pricePerRow;
+      if(priceHi < min || priceLo > max) continue;
+      const pyTop = y0 + (max - Math.min(priceHi, max)) / chartRange * (y1 - y0);
+      const pyBot = y0 + (max - Math.max(priceLo, min)) / chartRange * (y1 - y0);
+      const py  = pyTop;
+      const bH  = Math.max(0.5, pyBot - pyTop);
       const inVA  = i >= vaLo && i <= vaHi;
       ctx.globalAlpha = inVA ? op : op * 0.55;
       // Sell (esquerda, vermelho)
@@ -28876,7 +28963,7 @@ drag = {
 
     // ── POC ───────────────────────────────────────────────────────────────
     if(state.showPOC !== false){
-      const pocY = y1 - (pocIdx + 0.5) * barH;
+      const pocY = rowY(pocIdx + 0.5);
       const pocDom = buyB[pocIdx] >= sellB[pocIdx] ? cBuy : cSell;
       ctx.strokeStyle = state.colorPOC || pocDom;
       ctx.lineWidth   = 1.5;
@@ -28896,7 +28983,7 @@ drag = {
 
     // ── VAH ───────────────────────────────────────────────────────────────
     if(state.showVAH !== false){
-      const vahY = y1 - (vaHi + 1) * barH;
+      const vahY = rowY(vaHi + 1);
       ctx.strokeStyle = state.colorVAH || "#13dc8d";
       ctx.lineWidth   = 1;
       ctx.setLineDash([3, 5]);
@@ -28915,7 +29002,7 @@ drag = {
 
     // ── VAL ───────────────────────────────────────────────────────────────
     if(state.showVAL !== false){
-      const valY = y1 - vaLo * barH;
+      const valY = rowY(vaLo);
       ctx.strokeStyle = state.colorVAL || "#ff4a61";
       ctx.lineWidth   = 1;
       ctx.setLineDash([3, 5]);
@@ -28974,6 +29061,7 @@ drag = {
           <div class="dvl-vt-field"><label>Largura %</label><input id="dvlVPWPct" class="dvl-vt-input" type="number" min="5" max="40" step="1" value="${Math.round((state.widthPct||0.18)*100)}"></div>
           <div class="dvl-vt-field"><label>Opacidade %</label><input id="dvlVPOp" class="dvl-vt-input" type="number" min="5" max="100" step="5" value="${Math.round((state.opacity||0.46)*100)}"></div>
           <div class="dvl-vt-field"><label>Value Area %</label><input id="dvlVPVAPct" class="dvl-vt-input" type="number" min="10" max="100" step="5" value="${Math.round((state.valueAreaPct||0.70)*100)}"></div>
+          <div class="dvl-vt-field" style="grid-column:1/-1;flex-direction:column;align-items:flex-start;gap:4px"><label style="white-space:nowrap">Timeframe do VP</label><select id="dvlVPTF" style="width:100%;background:#0f1623;color:#c8d5e6;border:1px solid #253248;border-radius:3px;padding:4px 6px;font-size:11px;cursor:pointer">${VP_TF_OPTS.map(o=>`<option value="${o.v}"${(state.vpTF||'visible')===o.v?' selected':''}>${o.l}</option>`).join('')}</select></div>
         </div>
       </div>
       <div class="dvl-vt-section">
@@ -29003,6 +29091,7 @@ drag = {
     b("dvlVPWPct",  el=>{ state.widthPct=Math.max(0.05,Math.min(0.40,(+el.value||18)/100)); });
     b("dvlVPOp",    el=>{ state.opacity=Math.max(0.05,Math.min(1,(+el.value||46)/100)); });
     b("dvlVPVAPct", el=>{ state.valueAreaPct=Math.max(0.10,Math.min(1,(+el.value||70)/100)); });
+    b("dvlVPTF",    el=>{ state.vpTF=el.value; vpKCache=null; });
     b("dvlVPCBuy",  el=>{ state.colorBuy=el.value; });
     b("dvlVPCSell", el=>{ state.colorSell=el.value; });
     b("dvlVPPOC",   el=>{ state.showPOC=el.checked; });
@@ -29049,7 +29138,7 @@ drag = {
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
-  window.DVLVolumeProfile = { version:"0.619", on, setOn, draw, openPanel,
+  window.DVLVolumeProfile = { version:"0.620", on, setOn, draw, openPanel,
     get state(){ return Object.assign({}, state); }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
