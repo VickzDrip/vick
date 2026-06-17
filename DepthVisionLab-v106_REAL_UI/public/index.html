@@ -1921,6 +1921,16 @@ html, body{
 .tradeAction.sell span{
   font-size:9px!important;
 }
+.tradeAction.buy.is-active{
+  background:rgba(19,220,141,.18)!important;
+  border-color:rgba(19,220,141,.5)!important;
+  box-shadow:0 0 12px rgba(19,220,141,.28),inset 0 0 8px rgba(19,220,141,.08)!important;
+}
+.tradeAction.sell.is-active{
+  background:rgba(255,74,97,.18)!important;
+  border-color:rgba(255,74,97,.5)!important;
+  box-shadow:0 0 12px rgba(255,74,97,.28),inset 0 0 8px rgba(255,74,97,.08)!important;
+}
 </style>
 
 
@@ -13315,7 +13325,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.631</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.632</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13657,8 +13667,8 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
           </div>
           <div class="metricSub" id="levNotional">$11,200.00</div>
         </div>
-        <button class="tradeAction buy"><strong>Buy</strong><span id="buyPriceBtn">Limit</span></button>
-        <button class="tradeAction sell"><strong>Sell</strong><span id="sellPriceBtn">Limit</span></button>
+        <button class="tradeAction buy" id="dvlBuyBtn"><strong>Buy</strong><span id="buyPriceBtn">Limit</span></button>
+        <button class="tradeAction sell" id="dvlSellBtn"><strong>Sell</strong><span id="sellPriceBtn">Limit</span></button>
       </div>
 
       <div class="panelRowBottom">
@@ -13775,11 +13785,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.631";
+const DVL_APP_VERSION = "Beta 0.632";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Feature: VP Sessão 2 — POC·2/VAH·2/VAL·2 de timeframe independente, sem barras." },
+  { version: DVL_APP_VERSION, note: "Fix: remove TickVol; candle fluido (WS base TF + 250ms); Buy/Sell demo position." },
+  { version: "Beta 0.631", note: "Feature: VP Sessão 2 — POC·2/VAH·2/VAL·2 de timeframe independente, sem barras." },
   { version: "Beta 0.630", note: "Feature: Auto-save — symbol + settings persisted every 30 s, badge salvo HH:MM." },
   { version: "Beta 0.629", note: "Fix: Volume Profile panel — custom stepper/dropdown/palette, zero native controls." },
   { version: "Beta 0.628", note: "Feature: FEB V2 — presets Clean/Normal/Scanner + suspect mini-bubbles + stronger mechanics." },
@@ -13941,6 +13952,7 @@ const MAX_LEVERAGE = 125;
 let marketEntryPrice = null;
 let entryPadDraft = "100";
 let liquidationLinesOn = false;
+let demoPos = null;
 let longLiqPrice = null;
 let shortLiqPrice = null;
 let klines = [];
@@ -14931,6 +14943,21 @@ if(els.panelCloseX){
   els.panelCloseX.addEventListener('click', ()=>setTradeDrawer(false));
 }
 
+// ── Demo position (Buy / Sell) ─────────────────────────────────────────────
+function _toggleDemoPos(dir){
+  const price = Number(ticker?.lastPrice || klines.at(-1)?.close || 0);
+  if(!price){ showToast('Aguardando preço...'); return; }
+  demoPos = (demoPos && demoPos.dir === dir) ? null : { dir, price };
+  const buyBtn = document.getElementById('dvlBuyBtn');
+  const selBtn = document.getElementById('dvlSellBtn');
+  if(buyBtn) buyBtn.classList.toggle('is-active', !!demoPos && demoPos.dir === 'long');
+  if(selBtn) selBtn.classList.toggle('is-active', !!demoPos && demoPos.dir === 'short');
+  drawSoon();
+}
+document.getElementById('dvlBuyBtn')?.addEventListener('click', ()=>_toggleDemoPos('long'));
+document.getElementById('dvlSellBtn')?.addEventListener('click', ()=>_toggleDemoPos('short'));
+
+
 function setLiquidationLines(on){
   liquidationLinesOn = !!on;
   if(els.liqToggleBtn) els.liqToggleBtn.classList.toggle("is-on", liquidationLinesOn);
@@ -15194,6 +15221,7 @@ async function loadAll(silent=false){
     if(candleMode === "footprint") fetchFootprintData();
     drawSoon();
     if(typeof _klWsConnect==='function') _klWsConnect();
+    if(typeof _nnWsConnect==='function') _nnWsConnect();
   }catch(err){
     console.warn(err);
     if(!klines.length){
@@ -15415,6 +15443,7 @@ function selectSymbol(sym){
 
   symbol = sym;
   symbolIndex = symbols.indexOf(sym);
+  demoPos = null;
   chartOffsetCandles = -24;
   priceViewCenter = null;
   priceViewRange = null;
@@ -16252,6 +16281,8 @@ function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
     });
   }
 
+  drawDemoPosition(ctx, {x0, x1, y0, y1, y, last});
+
   window.__dvlLastCrossCfg = {
     x0,
     x1,
@@ -16401,6 +16432,42 @@ function drawLiquidationLine(ctx, cfg){
   ctx.fillText(priceText, tagX + tagW / 2, yy + 6);
   ctx.restore();
 }
+
+function drawDemoPosition(ctx, {x0, x1, y0, y1, y, last}){
+  if(!demoPos) return;
+  const {dir, price} = demoPos;
+  const ep = Number(price);
+  if(!ep) return;
+  const py = y(ep);
+  if(py < y0 - 10 || py > y1 + 10) return;
+
+  const isLong = dir === 'long';
+  const clr = isLong ? '#13dc8d' : '#ff4a61';
+  const cur = Number(last || 0);
+  const pnlPct = cur && ep ? (cur - ep) / ep * 100 * (isLong ? 1 : -1) : 0;
+  const lev = Math.max(1, Math.round(leverage || 1));
+  const pnlLev = pnlPct * lev;
+  const pLabel = (isLong ? 'LONG' : 'SHORT') + '  ' + fmtPrice(ep)
+    + (pnlPct !== 0 ? '   ' + (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%' : '')
+    + (pnlPct !== 0 && lev > 1 ? '  ' + (pnlLev >= 0 ? '+' : '') + pnlLev.toFixed(1) + '% ×' + lev : '');
+
+  ctx.save();
+  ctx.strokeStyle = clr;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath(); ctx.moveTo(x0, py); ctx.lineTo(x1, py); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = clr;
+  ctx.font = '700 8px system-ui';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.globalAlpha = 0.9;
+  ctx.fillText(pLabel, x0 + 4, py - 2);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
 
 function drawDvlSubpanelBase(ctx, padL, padR, top, h, w, title, subtitle){
   const scaleW = 56;
@@ -17045,7 +17112,7 @@ loadAll();
 refreshAssetTickers(true);
 timer = setInterval(()=>loadAll(true), 15000);
 setInterval(()=>refreshAssetTickers(true), 10000);
-setInterval(drawSoon, 1000);
+setInterval(drawSoon, 250);
 
 // ── Kline WebSocket: candle em formação em tempo real ───────────────────
 let _klWs = null, _klWsSym = null, _klWsIv = null, _klWsLastDraw = 0;
@@ -17077,8 +17144,7 @@ function _klWsConnect(){
         } else if(!klines.length || t > klines[klines.length-1].time){
           klines.push(entry);
         }
-        const now = Date.now();
-        if(now-_klWsLastDraw > 200){ _klWsLastDraw=now; drawSoon(); }
+        drawSoon();
       }catch(_){}
     };
     _klWs.onerror = ()=>{};
@@ -17088,6 +17154,47 @@ function _klWsConnect(){
 
 _klWsConnect();
 setInterval(_klWsConnect, 5000);
+
+// ── Live candle para TFs não-nativos (WS do intervalo base) ─────────────────
+let _nnWs=null, _nnWsSym=null, _nnWsBase=null;
+function _nnWsConnect(){
+  if(isNativeTimeframe(interval)){
+    if(_nnWs){try{_nnWs.close();}catch(_){}_nnWs=null;}
+    return;
+  }
+  const s=(symbol||'BTCUSDT').toUpperCase();
+  const base=baseIntervalForTimeframe(interval);
+  if(_nnWsSym===s&&_nnWsBase===base&&_nnWs&&_nnWs.readyState<2) return;
+  if(_nnWs){try{_nnWs.close();}catch(_){}_nnWs=null;}
+  _nnWsSym=s; _nnWsBase=base;
+  try{
+    _nnWs=new WebSocket('wss://fstream.binance.com/ws/'+s.toLowerCase()+'@kline_'+base);
+    _nnWs.onmessage=ev=>{
+      try{
+        const msg=JSON.parse(ev.data);
+        if(msg.e!=='kline') return;
+        const k=msg.k;
+        const curBase=baseIntervalForTimeframe(interval);
+        if(k.s!==(symbol||'BTCUSDT').toUpperCase()||k.i!==curBase) return;
+        if(!klines.length) return;
+        const tMs=intervalMs(interval);
+        const bucketT=Math.floor(+k.t/tMs)*tMs;
+        const last=klines[klines.length-1];
+        if(last.time===bucketT){
+          const h=+k.h, l=+k.l, c=+k.c;
+          if(h>last.high) last.high=h;
+          if(l<last.low)  last.low=l;
+          last.close=c;
+          drawSoon();
+        }
+      }catch(_){}
+    };
+    _nnWs.onerror=()=>{};
+    _nnWs.onclose=()=>{ _nnWs=null; };
+  }catch(_){}
+}
+_nnWsConnect();
+setInterval(_nnWsConnect, 5000);
 
 
 /* ─────────────────────────────────────────────────────────────
@@ -28404,372 +28511,6 @@ drag = {
   };
 })();
 </script>
-
-<script id="DVL_BETA_0598_TICK_VOL_JS">
-(function(){
-  "use strict";
-
-  const STOR_KEY  = "dvlTickVol_v1";
-  const DEFAULTS  = { on: true };
-  const TICKS_URL = "/api/ticks/bars";
-  const NICE_AGG  = [1,2,5,10,15,30,60,120,300,600];
-
-  let state = Object.assign({}, DEFAULTS);
-  (function(){ try{ Object.assign(state, JSON.parse(localStorage.getItem(STOR_KEY)||"{}")); }catch(_){} })();
-  function save(){ try{ localStorage.setItem(STOR_KEY, JSON.stringify(state)); }catch(_){} }
-
-  function on(){ return !!state.on; }
-  function setOn(v){ state.on=!!v; save(); }
-
-  const CACHE = { key:null, bars:[], fetchingKey:null, lastFetch:0, rangeKey:null };
-
-  function sym(){ try{ return (window.currentSymbol||"BTCUSDT").toUpperCase(); }catch(_){ return "BTCUSDT"; } }
-  function period(){ try{ return (typeof interval!=="undefined"?interval:null)||"5m"; }catch(_){ return "5m"; } }
-
-  function cacheKey(){ return sym()+"|"+period(); }
-
-  async function fetchBars(symbol, from, to){
-    const url = TICKS_URL+"?symbol="+encodeURIComponent(symbol)+"&from="+from+"&to="+to;
-    const r = await fetch(url);
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    return r.json();
-  }
-
-  function rangeKey(t0, t1){ return t0+"|"+t1; }
-
-  async function ensureData(t0, t1){
-    const key = cacheKey();
-    const rk  = rangeKey(t0, t1);
-    const now  = Date.now();
-    if(CACHE.fetchingKey) return;
-    if(key === CACHE.key && rk === CACHE.rangeKey && now - CACHE.lastFetch < 3000) return;
-    CACHE.fetchingKey = key+"|"+rk;
-    try{
-      const bars = await fetchBars(sym(), t0, t1);
-      if(!Array.isArray(bars)) throw new Error("bad response");
-      CACHE.key      = key;
-      CACHE.rangeKey = rk;
-      CACHE.bars     = bars;
-      CACHE.lastFetch= Date.now();
-      if(typeof drawSoon === "function") drawSoon();
-    }catch(_){
-      // silencioso — coletor pode não estar disponível
-    }finally{
-      CACHE.fetchingKey = null;
-    }
-  }
-
-  function aggregateBars(bars, aggMs){
-    if(aggMs <= 1000) return bars;
-    const map = new Map();
-    for(const b of bars){
-      const key = Math.floor(b.ts / aggMs) * aggMs;
-      let a = map.get(key);
-      if(!a){ a={ts:key,buyVol:0,sellVol:0,delta:0,trades:0}; map.set(key,a); }
-      a.buyVol  += b.buyVol;
-      a.sellVol += b.sellVol;
-      a.delta   += b.delta;
-      a.trades  += b.trades;
-    }
-    return Array.from(map.values()).sort((a,b)=>a.ts-b.ts);
-  }
-
-  function panelMetrics(padL,padR,top,h,w){
-    const scaleW  = (typeof PRICE_SCALE_W  !=="undefined" ? PRICE_SCALE_W  : 55);
-    const labelGap= (typeof PRICE_LABEL_GAP!=="undefined" ? PRICE_LABEL_GAP : 2);
-    const labelW  = (typeof PRICE_LABEL_W  !=="undefined" ? PRICE_LABEL_W   : scaleW - 4);
-    const x0=padL, x1=w-padR, y0=top+4, y1=top+h-6;
-    return { padL, padR, top, h, w, scaleW, labelGap, labelW, x0, x1, y0, y1,
-             scaleX0:x1+labelGap, scaleX1:x1+labelGap+labelW };
-  }
-
-  function oscillatorWindow(){
-    try{ if(typeof visibleWindow==="function") return visibleWindow(); }catch(_){}
-    const count = (typeof chartViewCount!=="undefined" ? chartViewCount : 140);
-    return { candles:[], totalSlots:count, futureSlots:0, start:0, end:0 };
-  }
-
-  function basePanel(ctx, m, title, rightLabel, kind){
-    ctx.save();
-    ctx.fillStyle="#020812"; ctx.fillRect(0, m.top, m.w, m.h);
-    ctx.strokeStyle="rgba(32,48,70,.9)"; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(0,m.top); ctx.lineTo(m.w,m.top); ctx.stroke();
-    ctx.strokeStyle="rgba(28,42,60,.55)";
-    for(let i=1;i<=4;i++){
-      const gy=m.top+m.h*i/4;
-      ctx.beginPath(); ctx.moveTo(m.x0,gy); ctx.lineTo(m.x1,gy); ctx.stroke();
-    }
-    ctx.strokeStyle="rgba(32,48,70,.9)";
-    ctx.beginPath(); ctx.moveTo(m.x1,m.top); ctx.lineTo(m.x1,m.top+m.h); ctx.stroke();
-    if(title){
-      ctx.fillStyle="rgba(120,145,180,.78)"; ctx.font="760 8px system-ui";
-      ctx.textAlign="left"; ctx.textBaseline="top";
-      ctx.fillText(title, m.x0+5, m.top+6);
-    }
-    if(rightLabel){
-      const c=kind==="bull"?"#2ed573":kind==="bear"?"#ff4757":"rgba(140,165,200,.7)";
-      ctx.fillStyle=c; ctx.font="9px system-ui";
-      ctx.textAlign="right"; ctx.textBaseline="top";
-      ctx.fillText(rightLabel, m.x1-4, m.top+6);
-    }
-    ctx.restore();
-  }
-
-  function draw(ctx, padL, padR, top, h, w){
-    if(!on()) return;
-
-    const m   = panelMetrics(padL, padR, top, h, w);
-    const win = oscillatorWindow();
-    const candles = win.candles || [];
-
-    if(!candles.length){
-      basePanel(ctx, m, "TICK VOL · BUY/SELL", null, null);
-      return;
-    }
-
-    // klines.time já é ms — sem * 1000
-    const pMs = candles.length > 1
-      ? (Number(candles[1].time) - Number(candles[0].time))
-      : 60000;
-    const t0 = Number(candles[0].time);
-    const t1 = Number(candles[candles.length-1].time) + pMs;
-
-    ensureData(t0, t1);
-
-    const vpsRaw = CACHE.bars.filter(b => b.ts >= t0 && b.ts <= t1);
-    const rawBars = vpsRaw.length > 0 ? vpsRaw : liveBars(t0, t1);
-
-    if(!rawBars.length){
-      const msg = CACHE.key ? "Aguardando ticks…" : "Sem coletor (/api/ticks)";
-      basePanel(ctx, m, "TICK VOL · BUY/SELL", msg, null);
-      return;
-    }
-
-    const rangeMs   = t1 - t0;
-    const minAggSec = Math.ceil(rangeMs / 1000 / ((m.x1-m.x0) / 1.5));
-    const aggSec    = NICE_AGG.find(v => v >= minAggSec) || 600;
-    const aggMs     = aggSec * 1000;
-    const bars      = aggregateBars(rawBars, aggMs);
-
-    if(!bars.length){ basePanel(ctx, m, "TICK VOL · BUY/SELL", null, null); return; }
-
-    let maxVol=0;
-    for(const b of bars){
-      if(b.buyVol  > maxVol) maxVol = b.buyVol;
-      if(b.sellVol > maxVol) maxVol = b.sellVol;
-    }
-    if(!maxVol) maxVol=1;
-
-    const fmtV = v => { const a=Math.abs(v); return a>=1e6?(a/1e6).toFixed(1)+"M":a>=1e3?(a/1e3).toFixed(1)+"K":Math.round(a).toString(); };
-    const aggLabel = aggSec >= 60 ? (aggSec/60)+"m" : aggSec+"s";
-    const lastBar  = bars[bars.length-1];
-    const netDelta = (lastBar.buyVol||0) - (lastBar.sellVol||0);
-    const kind = netDelta > 0 ? "bull" : netDelta < 0 ? "bear" : null;
-    basePanel(ctx, m, "TICK VOL "+aggLabel, fmtV(netDelta), kind);
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(m.x0, m.y0, m.x1-m.x0, m.y1-m.y0);
-    ctx.clip();
-
-    const midY = (m.y0+m.y1)/2;
-    const half = (m.y1-m.y0)/2*0.90;
-    const barW = Math.max(1, aggMs/rangeMs*(m.x1-m.x0));
-
-    for(const b of bars){
-      const x  = m.x0 + (b.ts-t0)/rangeMs*(m.x1-m.x0);
-      const bh = Math.max(1, b.buyVol /maxVol*half);
-      const sh = Math.max(1, b.sellVol/maxVol*half);
-      ctx.fillStyle="rgba(46,213,115,.85)";
-      ctx.fillRect(x, midY-bh, Math.max(1,barW-1), bh);
-      ctx.fillStyle="rgba(255,71,87,.85)";
-      ctx.fillRect(x, midY, Math.max(1,barW-1), sh);
-    }
-
-    ctx.strokeStyle="rgba(120,145,180,.35)"; ctx.lineWidth=1; ctx.setLineDash([3,3]);
-    ctx.beginPath(); ctx.moveTo(m.x0,midY); ctx.lineTo(m.x1,midY); ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.restore();
-
-    ctx.font="9.2px system-ui"; ctx.textAlign="left"; ctx.textBaseline="middle";
-    ctx.fillStyle="rgba(200,213,230,.72)";
-    ctx.fillText(fmtV(maxVol), m.x1+m.labelGap, m.y0+8);
-    ctx.fillText(fmtV(maxVol), m.x1+m.labelGap, m.y1-8);
-    ctx.fillStyle="rgba(140,160,190,.5)";
-    ctx.fillText("0", m.x1+m.labelGap, midY);
-  }
-
-  function fitToCurrent(){ CACHE.rangeKey = null; CACHE.lastFetch = 0; }
-
-  // ── Painel ────────────────────────────────────────────────────────────────
-  let panel = null;
-
-  function ensurePanel(){
-    if(panel && document.contains(panel)) return;
-    panel = document.createElement("div");
-    panel.id = "dvlTvPanel";
-    panel.className = "dvl-vt-panel";
-    panel.innerHTML = `
-      <div class="dvl-vt-head">
-        <div class="dvl-vt-title"><b>DVL Tick Volume</b><small>1s bars · buy/sell live</small></div>
-        <div class="dvl-vt-head-actions"><button class="dvl-vt-close" id="dvlTvClose" type="button">×</button></div>
-      </div>
-      <div class="dvl-vt-body" id="dvlTvBody"></div>
-    `;
-    document.body.appendChild(panel);
-    panel.addEventListener("pointerdown", ev => ev.stopPropagation(), true);
-    panel.querySelector("#dvlTvClose").addEventListener("click", ()=>{ panel.classList.remove("is-open"); });
-  }
-
-  function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderPanel(); }
-
-  function renderPanel(){
-    ensurePanel();
-    panel.querySelector("#dvlTvBody").innerHTML = `
-      <div class="dvl-vt-section">
-        <div class="dvl-vt-section-title"><span>General</span></div>
-        <div class="dvl-vt-grid">
-          <div class="dvl-vt-field"><label>Indicator</label><label class="dvl-switch"><input id="dvlTvOn" type="checkbox" ${state.on?"checked":""}><i></i><b></b></label></div>
-        </div>
-      </div>
-      <div class="dvl-vt-section">
-        <div class="dvl-vt-section-title"><span>Info</span></div>
-        <div style="padding:6px 8px;font-size:10px;color:rgba(120,145,180,.8);line-height:1.5">
-          Barras de 1s via /api/ticks<br>
-          Auto-agrega conforme o zoom<br>
-          Verde = buy · Vermelho = sell
-        </div>
-      </div>
-    `;
-    const cb = panel.querySelector("#dvlTvOn");
-    if(cb) cb.addEventListener("change", ()=>{ state.on=cb.checked; save(); updateRow(); if(typeof drawSoon==="function") drawSoon(); });
-  }
-
-  // ── Indicator row ─────────────────────────────────────────────────────────
-  function updateRow(){
-    const st = document.getElementById("dvlTickVolumeState");
-    if(st){ st.textContent = state.on ? "ON" : "OFF"; st.classList.toggle("is-on", !!state.on); }
-  }
-
-  function insertRow(){
-    const menu = document.getElementById("indicatorDropdown");
-    if(!menu) return;
-    let item = document.getElementById("dvlTickVolumeItem");
-    if(!item){
-      item = document.createElement("div");
-      item.id = "dvlTickVolumeItem";
-      item.className = "indicatorItem";
-      item.innerHTML = `
-        <span class="indicatorFxMark">TV</span>
-        <span><b>DVL Tick Volume</b><small>1s bars · buy/sell live</small></span>
-        <i class="dvl-vt-state" id="dvlTickVolumeState">ON</i>
-      `;
-      const after = document.getElementById("dvlDeltaVolumeItem") || document.getElementById("dvlLongShortOscItem");
-      if(after && after.parentNode) after.parentNode.insertBefore(item, after.nextSibling);
-      else menu.appendChild(item);
-    }
-    if(!item.dataset.dvlTvBound){
-      item.dataset.dvlTvBound = "1";
-      const pill = item.querySelector("#dvlTickVolumeState");
-      if(pill) pill.addEventListener("click", ev=>{ ev.preventDefault(); ev.stopPropagation(); state.on=!state.on; save(); updateRow(); });
-      item.addEventListener("click", ev=>{ ev.stopPropagation(); openPanel(); });
-    }
-    updateRow();
-  }
-
-  function boot(){
-    insertRow();
-    updateRow();
-    if(typeof drawSoon === "function") drawSoon();
-  }
-
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
-  else boot();
-
-  // ── Live poll: atualiza a cada 3s ────────────────────────────────────────
-  setInterval(()=>{
-    if(!on()) return;
-    CACHE.lastFetch = 0;
-    if(typeof drawSoon === "function") drawSoon();
-  }, 3000);
-
-  // ── WebSocket aggTrade live aggregator (1s bars) ──────────────────────
-  const WS_MAP = new Map();
-  let _ws = null, _wsSym = null, _wsLastDraw = 0;
-
-  function _wsAgg(ts, qty, isBuy){
-    const k = Math.floor(ts/1000)*1000;
-    let b = WS_MAP.get(k);
-    if(!b){ b={ts:k,buyVol:0,sellVol:0,delta:0,trades:0}; WS_MAP.set(k,b); }
-    if(isBuy){ b.buyVol+=qty; b.delta+=qty; } else { b.sellVol+=qty; b.delta-=qty; }
-    b.trades++;
-  }
-
-  function _wsPrune(){
-    const cut = Date.now()-7_200_000;
-    for(const k of WS_MAP.keys()){ if(k<cut) WS_MAP.delete(k); }
-  }
-
-  function _wsConnect(){
-    const s=(window.currentSymbol||"BTCUSDT").toLowerCase();
-    if(_wsSym===s && _ws && _ws.readyState<2) return;
-    if(_ws){ try{ _ws.close(); }catch(_){} }
-    _wsSym=s; WS_MAP.clear();
-    try{
-      _ws=new WebSocket("wss://fstream.binance.com/ws/"+s+"@aggTrade");
-      _ws.onmessage=ev=>{
-        try{
-          const d=JSON.parse(ev.data);
-          if(d.e!=="aggTrade") return;
-          _wsAgg(Number(d.T),parseFloat(d.q)||0,!d.m);
-          _wsPrune();
-          const now=Date.now();
-          if(now-_wsLastDraw>500){ _wsLastDraw=now; if(typeof drawSoon==="function") drawSoon(); }
-        }catch(_){}
-      };
-      _ws.onerror=()=>{}; _ws.onclose=()=>{ _ws=null; };
-    }catch(_){}
-  }
-
-  function liveBars(t0,t1,aggMs){
-    aggMs = (aggMs && aggMs > 1000) ? aggMs : 1000;
-    if(aggMs <= 1000){
-      const out=[];
-      for(const b of WS_MAP.values()){ if(b.ts>=t0&&b.ts<=t1) out.push(b); }
-      return out.sort((a,b)=>a.ts-b.ts);
-    }
-    const map=new Map();
-    for(const b of WS_MAP.values()){
-      if(b.ts<t0||b.ts>t1) continue;
-      const k=Math.floor(b.ts/aggMs)*aggMs;
-      let a=map.get(k);
-      if(!a){ a={ts:k,buyVol:0,sellVol:0,delta:0,trades:0}; map.set(k,a); }
-      a.buyVol+=b.buyVol; a.sellVol+=b.sellVol; a.delta+=b.delta; a.trades+=b.trades;
-    }
-    return Array.from(map.values()).sort((a,b)=>a.ts-b.ts);
-  }
-
-  _wsConnect();
-  setInterval(_wsConnect,8000);
-
-  window.DVLTickVolume = {
-    version:"0.614",
-    on,
-    setOn,
-    draw,
-    refresh: fitToCurrent,
-    fitToCurrent,
-    reset: fitToCurrent,
-    openPanel,
-    liveBars,
-    get state(){ return Object.assign({}, state); },
-    get cache(){ return Object.assign({}, CACHE, { bars:(CACHE.bars||[]).slice() }); }
-  };
-})();
-</script>
-
-
 
 
 <script id="DVL_BETA_0575_PROFILE_SAVE_AND_CHART_HISTORY_ACTIONS">
