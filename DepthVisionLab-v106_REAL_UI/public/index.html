@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.623</title>
+<title>DVL Binance Live — Beta 0.624</title>
 <style>
 :root{
   --bg0:#02050b;
@@ -13267,7 +13267,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.623</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.624</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13727,11 +13727,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.623";
+const DVL_APP_VERSION = "Beta 0.624";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Bugfix: OI oscillator — uma barra por período (sem repetição no 1m)." },
+  { version: DVL_APP_VERSION, note: "Feature: OI live poll 1m — dados reais de OI em 1m via polling real-time." },
+  { version: "Beta 0.623", note: "Bugfix: OI oscillator — uma barra por período (sem repetição no 1m)." },
   { version: "Beta 0.622", note: "Feature: Kline WebSocket — candle em formação atualizado em tempo real." },
   { version: "Beta 0.621", note: "Bugfix: POC/VAH/VAL hysteresis — sem flickering ao arrastar o gráfico." },
   { version: "Beta 0.620", note: "Feature: VP Timeframe selector (1h/4h/1d/…) — prev period + current in formation." },
@@ -26176,6 +26177,8 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
 
   const KEY = "dvl_cg_style_open_interest_v1";
   const CACHE = { key:"", data:[], fetching:false, ts:0, src:"", err:"" };
+  let _liveOI  = new Map(); // 1m live OI: t(ms) → {t,openC,highC,lowC,closeC,openU,highU,lowU,closeU}
+  let _liveSym = '';
   const DEFAULTS = {
     on:true,
     source:"binance",
@@ -26474,14 +26477,80 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
   }
 
   function valuesForVisible(view){
-    const data = CACHE.data || [];
-    if(!data.length || !view.length) return [];
+    if(!view.length) return [];
     const out = [];
     for(let i=0; i<view.length; i++){
-      const d = valueAt(data, Number(view[i].time));
+      const d = bestOI(Number(view[i].time));
       if(d) out.push(d);
     }
     return out;
+  }
+
+  // Retorna dado de OI para o instante t: prioriza live 1m, fallback histórico 5m
+  function bestOI(t){
+    const live = _liveOI.get(t);
+    if(live){
+      const useCoins = state.unit === 'coins';
+      return {
+        t:      live.t,
+        open:   useCoins ? live.openC  : (live.openU  || live.openC),
+        high:   useCoins ? live.highC  : (live.highU  || live.highC),
+        low:    useCoins ? live.lowC   : (live.lowU   || live.lowC),
+        close:  useCoins ? live.closeC : (live.closeU || live.closeC),
+        qty:    live.closeC,
+        usd:    live.closeU
+      };
+    }
+    return valueAt(CACHE.data, t);
+  }
+
+  // Série mesclada (histórico 5m + live 1m) para cálculo de MA
+  function mergedSeries(){
+    const hist = CACHE.data || [];
+    const live = Array.from(_liveOI.values())
+      .sort((a,b)=>a.t-b.t)
+      .map(lv=>{
+        const useCoins = state.unit==='coins';
+        return { t:lv.t,
+          open:  useCoins?lv.openC :(lv.openU ||lv.openC),
+          high:  useCoins?lv.highC :(lv.highU ||lv.highC),
+          low:   useCoins?lv.lowC  :(lv.lowU  ||lv.lowC),
+          close: useCoins?lv.closeC:(lv.closeU||lv.closeC) };
+      });
+    if(!live.length) return hist;
+    const cutT = live[0].t;
+    return [...hist.filter(d=>d.t < cutT), ...live];
+  }
+
+  // Poll OI em tempo real → barras de 1m
+  async function _pollLiveOI(){
+    try{
+      const s = sym();
+      const r = await fetch('https://fapi.binance.com/fapi/v1/openInterest?symbol='+s);
+      const d = await r.json();
+      if(!d || !d.openInterest) return;
+      const coinQty = +d.openInterest;
+      if(!coinQty) return;
+      const price = (typeof ticker!=='undefined' && +ticker?.lastPrice)
+                 || (Array.isArray(klines)&&klines.length ? +klines.at(-1).close : 0);
+      const usdVal = price ? coinQty * price : 0;
+      if(s !== _liveSym){ _liveOI.clear(); _liveSym = s; }
+      const t = Math.floor(Date.now()/60000)*60000;
+      const prev = _liveOI.get(t);
+      if(prev){
+        prev.closeC = coinQty; prev.highC = Math.max(prev.highC,coinQty); prev.lowC = Math.min(prev.lowC,coinQty);
+        prev.closeU = usdVal;  prev.highU = Math.max(prev.highU,usdVal);  prev.lowU = Math.min(prev.lowU,usdVal);
+      } else {
+        let prevT = t-60000; let pBar = null;
+        while(!pBar && prevT > t-600000){ pBar=_liveOI.get(prevT); prevT-=60000; }
+        const oC = pBar?pBar.closeC:coinQty, oU = pBar?pBar.closeU:usdVal;
+        _liveOI.set(t,{ t,
+          openC:oC, highC:Math.max(oC,coinQty), lowC:Math.min(oC,coinQty), closeC:coinQty,
+          openU:oU, highU:Math.max(oU,usdVal),  lowU:Math.min(oU,usdVal),  closeU:usdVal });
+        if(_liveOI.size > 300) _liveOI.delete([..._liveOI.keys()][0]);
+      }
+      if(typeof drawSoon==='function') drawSoon();
+    }catch(_){}
   }
 
   function autoScale(vals){
@@ -26649,14 +26718,14 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
     if(vals.length){
       const bw = Math.max(3.5, Math.min(11, ((m.x1-m.x0)/Math.max(1, win.totalSlots || view.length || 80))*0.72));
 
-      // Uma barra por período OI: agrupa candles 1m com mesmo timestamp de OI
+      // Uma barra por período OI: agrupa candles com mesmo timestamp (1m se live, 5m se histórico)
       { let ii = 0;
         while(ii < view.length){
-          const d = valueAt(CACHE.data, Number(view[ii].time));
+          const d = bestOI(Number(view[ii].time));
           if(!d){ ii++; continue; }
           let endII = ii;
           while(endII+1 < view.length){
-            const nd = valueAt(CACHE.data, Number(view[endII+1].time));
+            const nd = bestOI(Number(view[endII+1].time));
             if(!nd || nd.t !== d.t) break;
             endII++;
           }
@@ -26686,20 +26755,21 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
         }
       }
 
-      // MA line
+      // MA line (usa série mesclada: histórico 5m + live 1m)
       const _maLen = Math.max(2, Math.round(state.maLen) || 20);
-      if(_maLen && CACHE.data.length >= 2){
-        const _closes = CACHE.data.map(d=>d.close);
+      const _maSrc = mergedSeries();
+      if(_maLen && _maSrc.length >= 2){
+        const _closes = _maSrc.map(d=>d.close);
         const _prefix = new Array(_closes.length+1).fill(0);
         for(let i=0;i<_closes.length;i++) _prefix[i+1]=_prefix[i]+_closes[i];
-        const _idxMap = new Map(CACHE.data.map((d,i)=>[d.t,i]));
+        const _idxMap = new Map(_maSrc.map((d,i)=>[d.t,i]));
         ctx.beginPath();
         ctx.strokeStyle = "#4db8ff";
         ctx.lineWidth = 1.5;
         ctx.setLineDash([]);
         let _started = false, _lastMAT = null;
         for(let i=0;i<view.length;i++){
-          const d = valueAt(CACHE.data, Number(view[i].time));
+          const d = bestOI(Number(view[i].time));
           if(!d || d.t === _lastMAT) continue;
           _lastMAT = d.t;
           const idx = _idxMap.get(d.t);
@@ -27051,6 +27121,8 @@ drag = {
 
     ensureData(false);
     setInterval(() => { if(state.on) ensureData(false); }, 45000);
+    _pollLiveOI();
+    setInterval(_pollLiveOI, 15000);
 
     if(typeof drawSoon === "function") drawSoon();
   }
@@ -29208,7 +29280,7 @@ drag = {
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
-  window.DVLVolumeProfile = { version:"0.623", on, setOn, draw, openPanel,
+  window.DVLVolumeProfile = { version:"0.624", on, setOn, draw, openPanel,
     get state(){ return Object.assign({}, state); }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
