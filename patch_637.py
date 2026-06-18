@@ -1,37 +1,38 @@
 #!/usr/bin/env python3
 """
 patch_637.py — DVL Beta 0.637
-Fix: Structural interaction motor — prevents chart pan/zoom from interfering
-with any drawing, ruler, or paper-trading drag/edit operation.
+Fix: Paper Trading overlay Y coordinates align with the main price pane when
+oscillators (OI, Long/Short, Delta Volume, etc.) are active.
 
-Root cause: The window-level pointer handler (_onDown / _onMove) only blocked
-chart pan when window.__dvlPositionDragActive was true, which was only set for
-longpos/shortpos drawing drags. All other interactions (trendline/rect/arrow
-body drag, ruler drag, ruler creation, long/short position creation, general
-drawing selection) did NOT set the flag, so the chart would also pan during
-those interactions.
+Root cause:
+  drawPriceSection() draws candles using:
+    y1 = dvlPricePanelBottom(h)  <- oscillator-aware (e.g. 414px of 700px)
+    const y = v => y1 - (v-min)/(max-min)*(y1-y0)
 
-Fix — three layers:
-  A) Object.defineProperty on window.__dvlPositionDragActive — comprehensive
-     getter that returns true when ANY interaction lock is active, including:
-     • existing _realPosActive (longpos/shortpos pointer drag — unchanged)
-     • S.drawingToolActive (any drawing tool in creation mode)
-     • S.tool === 'ruler' (ruler creation mode)
-     • S._rulerDragSv (ruler drag in progress)
-     • __dvlPaperDragging / __dvlLongShortV2Dragging (paper-trading)
-     • chartWrap.style.cursor === 'crosshair' (belt-and-suspenders)
-     • DVLInteractionLock._locks (general lock from B/C below)
+  But scale() -- called by paper trading scaleInfo() -> yPrice() -- uses:
+    y1 = __dvlLegacyPriceArea(H).y1
+       = (indicatorsOn ? H*0.55-36 : H-24)  <- does NOT check dvlLowerPanelOn()
+       = H-24 = 676px when oscillators are ON (indicatorsOn=false)
 
-  B) After DOMContentLoaded (so our handler registers AFTER _onMD/touchstart
-     handlers from the drawing system), we add wrap-level capture handlers that
-     fire AFTER the drawing system's handlers. When _onMD or _onTS calls
-     stopPropagation (→ ev.cancelBubble = true), we set a lock entry.
-     This covers trendline/rect/arrow/text drag on desktop and mobile.
+  Both use the same price range (priceViewCenter/priceViewRange) but different
+  y1 -> massive vertical misalignment between candles and TP/ENTRY/SL lines.
+  Example with H=700: canvas y1=414, scale() y1=676 -> 131px drift at midrange.
 
-  C) Cleanup: locks cleared on mouseup / touchend / pointercancel.
+Fix:
+  Replace window.__dvlLegacyPriceArea with a version that delegates to
+  dvlPricePanelHeight() and dvlMainTimeScaleHeight() -- the same source the
+  canvas uses -- so scale().y(price) and the canvas local y(v) always share
+  identical [y0, y1] bounds regardless of oscillator state.
 
-The approved 0.598 Paper Trading logic is NOT modified.
-Drawing coordinate storage (price/time) is NOT modified.
+  dvlPricePanelHeight() handles all oscillator configurations:
+    - No oscillators -> full chartWrap height
+    - DVLTestOscillator with user-draggable split -> splitHeight()
+    - OI / Long-Short / Delta Volume -> Math.max(250, h * 0.62)
+
+  dvlMainTimeScaleHeight() -> 20px (matches canvas timeH).
+
+The approved 0.598 Paper Trading trade logic is NOT modified.
+No changes to syncBounds, makeLine, makeTag, startPaperDrag, yPrice, scaleInfo.
 """
 import sys, pathlib
 
@@ -54,155 +55,49 @@ html = rep(html,
     "DVL_APP_VERSION")
 html = rep(html,
     '  { version: DVL_APP_VERSION, note: "Fix: Paper Trading panel layout isolation — contain+height lock prevents oscillator layout thrashing; overlay layer relocated outside canvas DOM." },',
-    '  { version: DVL_APP_VERSION, note: "Fix: Interaction motor — DVLInteractionLock blocks chart pan/zoom during any drawing/ruler/paper-trading edit; cancelBubble detection covers trendline drag." },\n'
+    '  { version: DVL_APP_VERSION, note: "Fix: Paper Trading overlay Y coordinates — __dvlLegacyPriceArea now uses dvlPricePanelHeight so TP/ENTRY/SL align with candles when oscillators are active." },\n'
     '  { version: "Beta 0.636", note: "Fix: Paper Trading panel layout isolation — contain+height lock prevents oscillator layout thrashing; overlay layer relocated outside canvas DOM." },',
     "changelog 0.637")
 
-# ── 2. Interaction motor script ───────────────────────────────────────────────
-LOCK_JS = """\
-<script id="DVL_BETA_0637_INTERACTION_LOCK">
+# ── 2. Price-pane alignment fix ───────────────────────────────────────────────
+PRICE_PANE_JS = """\
+<script id="DVL_BETA_0637_PRICE_PANE_FIX">
 /*
-  DVL Beta 0.637 — Central Interaction Motor
+  DVL Beta 0.637 — Paper Trading price-pane Y alignment
 
-  window.__dvlPositionDragActive is the single gate checked by _onDown and
-  _onMove before any chart pan/zoom. We replace it with a comprehensive getter
-  that returns true whenever ANY drawing, ruler, or paper-trading operation is
-  active, so the chart cannot pan/zoom while objects are being edited.
+  __dvlLegacyPriceArea(H) is the source of y0/y1 for scale() and
+  __dvlSyncLegacyState(). The original version used the 'indicatorsOn' boolean
+  and ignored oscillator panels, returning y1 = H-24 (676px on a 700px chart)
+  even when oscillators compressed the price pane to y1 = 414px.
 
-  window.DVLInteractionLock is also exposed for external use.
-
-  The approved 0.598 Paper Trading logic is NOT modified.
+  This replacement always calls dvlPricePanelHeight() and dvlMainTimeScaleHeight()
+  so scale().y(price) uses the same bounds as the canvas drawPriceSection() local
+  y() function at all times.
 */
 (function(){
 "use strict";
 
-/* ─── 1. DVLInteractionLock ──────────────────────────────────────────────── */
-var _locks = {};
-window.DVLInteractionLock = {
-  lock:     function(mode, owner){ _locks[owner || mode] = mode; },
-  unlock:   function(owner){
-    if(owner != null) delete _locks[owner]; else _locks = {};
-  },
-  isActive: function(){
-    for(var k in _locks){ if(Object.prototype.hasOwnProperty.call(_locks,k)) return true; }
-    return false;
-  },
-  getActiveModes: function(){
-    return Object.keys(_locks).map(function(k){ return _locks[k]; });
-  }
+if(window.__dvl0637AreaFixed) return;
+window.__dvl0637AreaFixed = true;
+
+window.__dvlLegacyPriceArea = function(H){
+  var priceH = (typeof dvlPricePanelHeight === 'function')
+    ? dvlPricePanelHeight(H)
+    : H;
+  var timeH = (typeof dvlMainTimeScaleHeight === 'function')
+    ? dvlMainTimeScaleHeight()
+    : 20;
+  var y0 = 4;
+  var y1 = Math.max(y0 + 40, priceH - timeH);
+  return { y0: y0, y1: y1, priceH: priceH, timeH: timeH };
 };
-
-/* ─── 2. Backing variables for the three flag properties ─────────────────── */
-var _realPosActive = !!window.__dvlPositionDragActive;
-var _realPaperDrag = !!window.__dvlPaperDragging;
-var _realLSV2Drag  = !!window.__dvlLongShortV2Dragging;
-
-/* ─── 3. Master lock test ────────────────────────────────────────────────── */
-function _isMasterLocked(){
-  /* A) existing per-feature flags */
-  if(_realPosActive || _realPaperDrag || _realLSV2Drag) return true;
-  /* B) general lock entries (set by drag-detection handlers below) */
-  for(var k in _locks){
-    if(Object.prototype.hasOwnProperty.call(_locks,k)) return true;
-  }
-  /* C) drawing-system state exposed on window.S */
-  var S = window.S;
-  if(S){
-    if(S.drawingToolActive) return true;   /* line/rect/text/arrow + long/short creation */
-    if(S.tool === 'ruler')  return true;   /* ruler creation mode */
-    if(S._rulerDragSv)      return true;   /* ruler drag in progress */
-  }
-  /* D) belt-and-suspenders: crosshair cursor on chartWrap */
-  var wrap = document.getElementById('chartWrap');
-  if(wrap && wrap.style.cursor === 'crosshair') return true;
-  return false;
-}
-
-/* ─── 4. Redefine the three flag properties ──────────────────────────────── */
-function _defProp(prop, getter, setter){
-  try{
-    Object.defineProperty(window, prop, {
-      get: getter, set: setter,
-      configurable: true, enumerable: true
-    });
-  }catch(e){
-    /* If already non-configurable, fall back — existing code still works */
-  }
-}
-
-_defProp('__dvlPositionDragActive', _isMasterLocked, function(v){ _realPosActive = !!v; });
-_defProp('__dvlPaperDragging',      function(){ return _realPaperDrag; },  function(v){ _realPaperDrag  = !!v; });
-_defProp('__dvlLongShortV2Dragging',function(){ return _realLSV2Drag; },   function(v){ _realLSV2Drag  = !!v; });
-
-/* ─── 5. Drawing-drag detection via cancelBubble ──────────────────────────
-   We register wrap-level capture handlers AFTER DOMContentLoaded so they are
-   ordered AFTER the drawing system's _onMD / _onTS handlers (which are
-   registered via ready() → DOMContentLoaded from inline scripts that ran
-   before this patch script).
-
-   When _onMD or _onTS calls stopPropagation(), ev.cancelBubble becomes true.
-   Other handlers at the same element+phase still fire (stopPropagation only
-   halts crossing to a different DOM node, not same-node listeners).
-   We detect cancelBubble=true → drawing system consumed the event → set lock.
-   Lock is cleared on mouseup / touchend / pointercancel.
-─────────────────────────────────────────────────────────────────────────── */
-var CTX_GUARD = '#dvlDrawCtxBar,#dvlDrawSettingsPanel,#dvlDrawDelete,#viewBtnDock,#dvlMiniRefresh';
-
-function _onWrapMouseDown(ev){
-  /* Only lock when drawing system stopped propagation, not for UI controls */
-  if(!ev.cancelBubble) return;
-  var t = ev.target;
-  if(t && t.closest && t.closest(CTX_GUARD)) return;
-  _locks['__mouse'] = 'drawing-mouse-drag';
-}
-
-function _onWinMouseUp(){
-  delete _locks['__mouse'];
-}
-
-function _onWrapTouchStart(ev){
-  /* Same principle for touch — _onTS may have called stopPropagation */
-  if(!ev.cancelBubble) return;
-  var t = ev.target;
-  if(t && t.closest && t.closest(CTX_GUARD)) return;
-  _locks['__touch'] = 'drawing-touch-drag';
-}
-
-function _onWinTouchEnd(){   delete _locks['__touch']; }
-function _onWinTouchCancel(){ delete _locks['__touch']; }
-function _onWinPointerCancel(){
-  delete _locks['__mouse'];
-  delete _locks['__touch'];
-}
-
-function _setupDragDetection(){
-  var wrap = document.getElementById('chartWrap');
-  if(!wrap) return;
-
-  wrap.addEventListener('mousedown',  _onWrapMouseDown, {capture:true});
-  wrap.addEventListener('touchstart', _onWrapTouchStart, {capture:true, passive:false});
-
-  window.addEventListener('mouseup',       _onWinMouseUp,       {capture:true});
-  window.addEventListener('touchend',      _onWinTouchEnd,      {capture:true});
-  window.addEventListener('touchcancel',   _onWinTouchCancel,   {capture:true});
-  window.addEventListener('pointercancel', _onWinPointerCancel, {capture:true});
-}
-
-/* Register after app's DOMContentLoaded callbacks */
-if(document.readyState === 'loading'){
-  document.addEventListener('DOMContentLoaded', _setupDragDetection);
-}else{
-  /* DOMContentLoaded already fired — use setTimeout(0) to still land after
-     any other DOMContentLoaded callbacks that may not have run yet */
-  setTimeout(_setupDragDetection, 0);
-}
 
 })();
 </script>"""
 
 # ── 3. Inject before </body></html> ──────────────────────────────────────────
 TAIL = '\n</body>\n</html>'
-html = rep(html, TAIL, '\n' + LOCK_JS + TAIL, "inject interaction lock")
+html = rep(html, TAIL, '\n' + PRICE_PANE_JS + TAIL, "inject price pane fix")
 
 SRC.write_text(html, encoding="utf-8")
 print(f"[OK] patch_637 applied: {', '.join(_ok)}")

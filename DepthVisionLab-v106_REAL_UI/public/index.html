@@ -13325,7 +13325,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.636</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.637</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13785,11 +13785,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.636";
+const DVL_APP_VERSION = "Beta 0.637";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Fix: Paper Trading panel layout isolation — contain+height lock prevents oscillator layout thrashing; overlay layer relocated outside canvas DOM." },
+  { version: DVL_APP_VERSION, note: "Fix: Paper Trading overlay Y coordinates — __dvlLegacyPriceArea now uses dvlPricePanelHeight so TP/ENTRY/SL align with candles when oscillators are active." },
+  { version: "Beta 0.636", note: "Fix: Paper Trading panel layout isolation — contain+height lock prevents oscillator layout thrashing; overlay layer relocated outside canvas DOM." },
   { version: "Beta 0.635", note: "Feature: Paper Trading 0.598 — overlay TP/ENTRY/SL arrastavel, Limit pendente, TP auto-close, SL manual, multi-posicao por simbolo." },
   { version: "Beta 0.633", note: "Fix: candle fluido real — bug ticker stale 15s corrigido + poll REST 2s." },
   { version: "Beta 0.632", note: "Fix: remove TickVol; candle fluido (WS base TF + 250ms); Buy/Sell demo position." },
@@ -31844,6 +31845,39 @@ Do not rework this logic unless the user explicitly requests it.
   } else {
     waitForLayer();
   }
+})();
+</script>
+<script id="DVL_BETA_0637_PRICE_PANE_FIX">
+/*
+  DVL Beta 0.637 — Paper Trading price-pane Y alignment
+
+  __dvlLegacyPriceArea(H) is the source of y0/y1 for scale() and
+  __dvlSyncLegacyState(). The original version used the 'indicatorsOn' boolean
+  and ignored oscillator panels, returning y1 = H-24 (676px on a 700px chart)
+  even when oscillators compressed the price pane to y1 = 414px.
+
+  This replacement always calls dvlPricePanelHeight() and dvlMainTimeScaleHeight()
+  so scale().y(price) uses the same bounds as the canvas drawPriceSection() local
+  y() function at all times.
+*/
+(function(){
+"use strict";
+
+if(window.__dvl0637AreaFixed) return;
+window.__dvl0637AreaFixed = true;
+
+window.__dvlLegacyPriceArea = function(H){
+  var priceH = (typeof dvlPricePanelHeight === 'function')
+    ? dvlPricePanelHeight(H)
+    : H;
+  var timeH = (typeof dvlMainTimeScaleHeight === 'function')
+    ? dvlMainTimeScaleHeight()
+    : 20;
+  var y0 = 4;
+  var y1 = Math.max(y0 + 40, priceH - timeH);
+  return { y0: y0, y1: y1, priceH: priceH, timeH: timeH };
+};
+
 })();
 </script>
 </body>
