@@ -13325,7 +13325,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.634</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.635</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13785,11 +13785,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.634";
+const DVL_APP_VERSION = "Beta 0.635";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Feat: Paper Trading 0.598 — Y coords and layer bounds confined to price pane; oscillator-safe." },
+  { version: DVL_APP_VERSION, note: "Fix: Paper Trading — tags float 10 candles ahead of creation point; pending ENTRY shows LIMIT instead of Long/Short Limit." },
+  { version: "Beta 0.634", note: "Feat: Paper Trading 0.598 — Y coords and layer bounds confined to price pane; oscillator-safe." },
   { version: "Beta 0.633", note: "Fix: candle fluido real — bug ticker stale 15s corrigido + poll REST 2s." },
   { version: "Beta 0.632", note: "Fix: remove TickVol; candle fluido (WS base TF + 250ms); Buy/Sell demo position." },
   { version: "Beta 0.631", note: "Feature: VP Sessão 2 — POC·2/VAH·2/VAL·2 de timeframe independente, sem barras." },
@@ -30845,7 +30846,7 @@ Do not rework this logic unless the user explicitly requests it.
         makeLine(pos, "entry", entryY.y);
 
         if(pos.status === "pending"){
-          const pendingTitle = pos.side === "buy" ? "Long Limit" : "Short Limit";
+          const pendingTitle = "LIMIT";
           makeTag(pos, "entry", entryY.y, pendingTitle, "");
         }else{
           makeTag(pos, "entry", entryY.y, "ENTRY " + money(livePnl) + " USDT", fmtPct(livePct));
@@ -31676,6 +31677,102 @@ if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', dvlSyncLayerBounds, {once:true});
 } else {
   dvlSyncLayerBounds();
+}
+
+})();
+</script>
+<script id="DVL_BETA_0635_TAG_LEFT_FIX">
+/*
+  DVL Beta 0.635 — Float TP/ENTRY/SL tags 10 candles to the right of the
+  position's creation candle, instead of sticking to the chart's right edge.
+  Lines are NOT moved (they still span left-to-right).
+
+  Runs after every render() call: draw() -> render() -> dvlSyncTagLeft().
+*/
+(function(){
+"use strict";
+
+var PRICE_SCALE_W = 55;
+var CANDLE_OFFSET = 10; /* candles to the right of creation point */
+
+function getRuntime(){
+  return window.__dvlPaperRuntime0581 ||
+         window.__dvlPaperRuntime0582 ||
+         window.__dvlPaperRuntime0580 ||
+         window.__dvlPaperRuntime;
+}
+
+function candleIdxForTime(candles, createdAt){
+  if(!(createdAt > 0)) return candles.length - 1;
+  var lo = 0, hi = candles.length - 1, best = 0;
+  while(lo <= hi){
+    var mid = (lo + hi) >> 1;
+    var t = Number(candles[mid].t || candles[mid].time || 0);
+    if(t <= createdAt){ best = mid; lo = mid + 1; }
+    else              { hi  = mid - 1; }
+  }
+  return best;
+}
+
+function dvlSyncTagLeft(){
+  var layer = document.getElementById('dvlPaperLayer');
+  if(!layer) return;
+
+  var rt = getRuntime();
+  if(!rt || !rt.state || !rt.state.positions) return;
+  var positions = rt.state.positions;
+
+  var S = window.S;
+  if(!S || !S.view || !Array.isArray(S.candles) || !S.candles.length) return;
+
+  var span   = Math.max(0.1, S.view.end - S.view.start);
+  var wrap   = document.getElementById('chartWrap');
+  if(!wrap) return;
+  var chartW = Math.max(1, wrap.clientWidth - PRICE_SCALE_W);
+
+  var tags = layer.querySelectorAll('.dvl-paper-tag[data-id]');
+  for(var i = 0; i < tags.length; i++){
+    var tag = tags[i];
+
+    /* skip fixed-positioned labels used during drag */
+    if(tag.classList.contains('dvl-paper-edit-label-fixed')) continue;
+
+    var posId = tag.dataset.id;
+    var pos = null;
+    for(var j = 0; j < positions.length; j++){
+      if(String(positions[j].id) === String(posId)){ pos = positions[j]; break; }
+    }
+    if(!pos) continue;
+
+    var idx  = candleIdxForTime(S.candles, Number(pos.createdAt) || 0);
+    var idx10 = idx + CANDLE_OFFSET;
+    var xPx  = (idx10 - S.view.start + 0.5) * chartW / span;
+    xPx = Math.max(0, Math.min(xPx, chartW - 4)); /* clamp within chart */
+
+    tag.style.setProperty('left',  xPx.toFixed(1) + 'px', 'important');
+    tag.style.setProperty('right', 'auto',                 'important');
+  }
+}
+
+/* Hook into drawSoon after the 0634 layer-bounds wrapper */
+var _raf0635 = 0;
+var _orig0635 = window.drawSoon;
+if(typeof _orig0635 === 'function'){
+  window.drawSoon = function(){
+    var r = _orig0635.apply(this, arguments);
+    cancelAnimationFrame(_raf0635);
+    _raf0635 = requestAnimationFrame(dvlSyncTagLeft);
+    return r;
+  };
+}
+
+setInterval(dvlSyncTagLeft, 600);
+window.addEventListener('resize', dvlSyncTagLeft, {passive:true});
+
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', dvlSyncTagLeft, {once:true});
+} else {
+  dvlSyncTagLeft();
 }
 
 })();
