@@ -13325,7 +13325,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.637</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.638</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13785,11 +13785,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.637";
+const DVL_APP_VERSION = "Beta 0.638";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Fix: Interaction motor — DVLInteractionLock blocks chart pan/zoom during any drawing/ruler/paper-trading edit; cancelBubble detection covers trendline drag." },
+  { version: DVL_APP_VERSION, note: "Fix: Paper Trading overlay — lines start at creation candle and extend rightward only; no left-bleed across chart history." },
+  { version: "Beta 0.637", note: "Fix: Interaction motor — DVLInteractionLock blocks chart pan/zoom during any drawing/ruler/paper-trading edit; cancelBubble detection covers trendline drag." },
   { version: "Beta 0.636", note: "Fix: Paper Trading panel layout isolation — contain+height lock prevents oscillator layout thrashing; overlay layer relocated outside canvas DOM." },
   { version: "Beta 0.635", note: "Feature: Paper Trading 0.598 — overlay TP/ENTRY/SL arrastavel, Limit pendente, TP auto-close, SL manual, multi-posicao por simbolo." },
   { version: "Beta 0.633", note: "Fix: candle fluido real — bug ticker stale 15s corrigido + poll REST 2s." },
@@ -31982,6 +31983,139 @@ if(document.readyState === 'loading'){
   /* DOMContentLoaded already fired — use setTimeout(0) to still land after
      any other DOMContentLoaded callbacks that may not have run yet */
   setTimeout(_setupDragDetection, 0);
+}
+
+})();
+</script>
+<script id="DVL_BETA_0638_PAPER_LINE_LEFT_FIX">
+/*
+  DVL Beta 0.638 — Paper Trading line/hit-area left-anchor fix
+
+  After each render() call by the 0.598 runtime, a MutationObserver walks the
+  #dvlPaperLayer children and sets each .dvl-paper-line and .dvl-paper-hit
+  'left' to the pixel X of the candle where the position was created.
+
+  Position coordinate storage (price/time) and all trade logic are unchanged.
+*/
+(function(){
+"use strict";
+
+var PRICE_SCALE_W = 55; /* matches RP() — right-side price scale pixel width */
+
+/* ── Coordinate helpers ──────────────────────────────────────────────────── */
+function chartWrapWidth(){
+  var wrap = document.getElementById('chartWrap');
+  return wrap ? wrap.clientWidth : window.innerWidth;
+}
+
+function candleIndexToX(idx){
+  var S = window.S;
+  if(!S || !S.view) return -1;
+  var span = Math.max(0.1, S.view.end - S.view.start);
+  var chartW = Math.max(1, chartWrapWidth() - PRICE_SCALE_W);
+  return (idx - S.view.start + 0.5) * chartW / span;
+}
+
+/* Binary-search S.candles for the index whose time <= createdAt */
+function candleIdxForTime(createdAt){
+  var S = window.S;
+  if(!S || !Array.isArray(S.candles) || !S.candles.length) return -1;
+  if(!(createdAt > 0)) return S.candles.length - 1;
+
+  var candles = S.candles;
+  var lo = 0, hi = candles.length - 1;
+
+  /* candles are ordered oldest→newest; find last candle whose time ≤ createdAt */
+  var best = 0;
+  while(lo <= hi){
+    var mid = (lo + hi) >> 1;
+    var t = Number(candles[mid].t || candles[mid].time || 0);
+    if(t <= createdAt){ best = mid; lo = mid + 1; }
+    else               { hi  = mid - 1; }
+  }
+  return best;
+}
+
+function positionLeftPx(pos){
+  var createdAt = Number(pos.createdAt) || 0;
+  var idx = candleIdxForTime(createdAt);
+  if(idx < 0) return 0;
+  var xPx = candleIndexToX(idx);
+  return Math.max(0, xPx); /* never go left of chart edge */
+}
+
+/* ── Runtime accessor ────────────────────────────────────────────────────── */
+function findPos(id){
+  var rt = window.__dvlPaperRuntime0581 ||
+           window.__dvlPaperRuntime0582 ||
+           window.__dvlPaperRuntime0580 ||
+           window.__dvlPaperRuntime;
+  if(!rt || !rt.state || !rt.state.positions) return null;
+  var positions = rt.state.positions;
+  for(var i = 0; i < positions.length; i++){
+    if(String(positions[i].id) === String(id)) return positions[i];
+  }
+  return null;
+}
+
+/* ── Apply left to one element ───────────────────────────────────────────── */
+function applyLeft(el, posId){
+  var pos = findPos(posId);
+  if(!pos) return;
+  var xPx = positionLeftPx(pos);
+  el.style.setProperty('left', xPx.toFixed(1) + 'px', 'important');
+}
+
+/* ── Post-process the entire layer after a render ───────────────────────── */
+function postProcess(layer){
+  /* 1. Lines: get position ID from nextElementSibling (hit or tag, both have data-id) */
+  var lines = layer.querySelectorAll('.dvl-paper-line');
+  for(var i = 0; i < lines.length; i++){
+    var line = lines[i];
+    var next = line.nextElementSibling;
+    if(next && next.dataset && next.dataset.id){
+      applyLeft(line, next.dataset.id);
+    }
+  }
+
+  /* 2. Hit areas (drag zones) — also start at creation X */
+  var hits = layer.querySelectorAll('.dvl-paper-hit[data-id]');
+  for(var j = 0; j < hits.length; j++){
+    applyLeft(hits[j], hits[j].dataset.id);
+  }
+}
+
+/* ── MutationObserver on #dvlPaperLayer ─────────────────────────────────── */
+function attachObserver(layer){
+  var obs = new MutationObserver(function(mutations){
+    /* Only act when childList changed (render() rebuilt the layer) */
+    var hasChildListMutation = false;
+    for(var i = 0; i < mutations.length; i++){
+      if(mutations[i].type === 'childList'){ hasChildListMutation = true; break; }
+    }
+    if(hasChildListMutation) postProcess(layer);
+  });
+  obs.observe(layer, {childList: true});
+  /* Initial pass in case layer is already populated */
+  postProcess(layer);
+}
+
+/* ── Wait for layer to exist (created by 0.598 runtime on DOMContentLoaded) */
+function waitForLayer(){
+  var layer = document.getElementById('dvlPaperLayer');
+  if(layer){ attachObserver(layer); return; }
+  /* Poll — layer is appended by the 0.598 runtime after ready() fires */
+  var poll = setInterval(function(){
+    var l = document.getElementById('dvlPaperLayer');
+    if(l){ clearInterval(poll); attachObserver(l); }
+  }, 80);
+  setTimeout(function(){ clearInterval(poll); }, 15000);
+}
+
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', waitForLayer, {once:true});
+}else{
+  waitForLayer();
 }
 
 })();
