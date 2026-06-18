@@ -13325,7 +13325,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.636</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.637</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13785,11 +13785,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.636";
+const DVL_APP_VERSION = "Beta 0.637";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Fix: Paper Trading panel layout isolation — contain+height lock prevents oscillator layout thrashing; overlay layer relocated outside canvas DOM." },
+  { version: DVL_APP_VERSION, note: "Fix: Interaction motor — DVLInteractionLock blocks chart pan/zoom during any drawing/ruler/paper-trading edit; cancelBubble detection covers trendline drag." },
+  { version: "Beta 0.636", note: "Fix: Paper Trading panel layout isolation — contain+height lock prevents oscillator layout thrashing; overlay layer relocated outside canvas DOM." },
   { version: "Beta 0.635", note: "Feature: Paper Trading 0.598 — overlay TP/ENTRY/SL arrastavel, Limit pendente, TP auto-close, SL manual, multi-posicao por simbolo." },
   { version: "Beta 0.633", note: "Fix: candle fluido real — bug ticker stale 15s corrigido + poll REST 2s." },
   { version: "Beta 0.632", note: "Fix: remove TickVol; candle fluido (WS base TF + 250ms); Buy/Sell demo position." },
@@ -31844,6 +31845,145 @@ Do not rework this logic unless the user explicitly requests it.
   } else {
     waitForLayer();
   }
+})();
+</script>
+<script id="DVL_BETA_0637_INTERACTION_LOCK">
+/*
+  DVL Beta 0.637 — Central Interaction Motor
+
+  window.__dvlPositionDragActive is the single gate checked by _onDown and
+  _onMove before any chart pan/zoom. We replace it with a comprehensive getter
+  that returns true whenever ANY drawing, ruler, or paper-trading operation is
+  active, so the chart cannot pan/zoom while objects are being edited.
+
+  window.DVLInteractionLock is also exposed for external use.
+
+  The approved 0.598 Paper Trading logic is NOT modified.
+*/
+(function(){
+"use strict";
+
+/* ─── 1. DVLInteractionLock ──────────────────────────────────────────────── */
+var _locks = {};
+window.DVLInteractionLock = {
+  lock:     function(mode, owner){ _locks[owner || mode] = mode; },
+  unlock:   function(owner){
+    if(owner != null) delete _locks[owner]; else _locks = {};
+  },
+  isActive: function(){
+    for(var k in _locks){ if(Object.prototype.hasOwnProperty.call(_locks,k)) return true; }
+    return false;
+  },
+  getActiveModes: function(){
+    return Object.keys(_locks).map(function(k){ return _locks[k]; });
+  }
+};
+
+/* ─── 2. Backing variables for the three flag properties ─────────────────── */
+var _realPosActive = !!window.__dvlPositionDragActive;
+var _realPaperDrag = !!window.__dvlPaperDragging;
+var _realLSV2Drag  = !!window.__dvlLongShortV2Dragging;
+
+/* ─── 3. Master lock test ────────────────────────────────────────────────── */
+function _isMasterLocked(){
+  /* A) existing per-feature flags */
+  if(_realPosActive || _realPaperDrag || _realLSV2Drag) return true;
+  /* B) general lock entries (set by drag-detection handlers below) */
+  for(var k in _locks){
+    if(Object.prototype.hasOwnProperty.call(_locks,k)) return true;
+  }
+  /* C) drawing-system state exposed on window.S */
+  var S = window.S;
+  if(S){
+    if(S.drawingToolActive) return true;   /* line/rect/text/arrow + long/short creation */
+    if(S.tool === 'ruler')  return true;   /* ruler creation mode */
+    if(S._rulerDragSv)      return true;   /* ruler drag in progress */
+  }
+  /* D) belt-and-suspenders: crosshair cursor on chartWrap */
+  var wrap = document.getElementById('chartWrap');
+  if(wrap && wrap.style.cursor === 'crosshair') return true;
+  return false;
+}
+
+/* ─── 4. Redefine the three flag properties ──────────────────────────────── */
+function _defProp(prop, getter, setter){
+  try{
+    Object.defineProperty(window, prop, {
+      get: getter, set: setter,
+      configurable: true, enumerable: true
+    });
+  }catch(e){
+    /* If already non-configurable, fall back — existing code still works */
+  }
+}
+
+_defProp('__dvlPositionDragActive', _isMasterLocked, function(v){ _realPosActive = !!v; });
+_defProp('__dvlPaperDragging',      function(){ return _realPaperDrag; },  function(v){ _realPaperDrag  = !!v; });
+_defProp('__dvlLongShortV2Dragging',function(){ return _realLSV2Drag; },   function(v){ _realLSV2Drag  = !!v; });
+
+/* ─── 5. Drawing-drag detection via cancelBubble ──────────────────────────
+   We register wrap-level capture handlers AFTER DOMContentLoaded so they are
+   ordered AFTER the drawing system's _onMD / _onTS handlers (which are
+   registered via ready() → DOMContentLoaded from inline scripts that ran
+   before this patch script).
+
+   When _onMD or _onTS calls stopPropagation(), ev.cancelBubble becomes true.
+   Other handlers at the same element+phase still fire (stopPropagation only
+   halts crossing to a different DOM node, not same-node listeners).
+   We detect cancelBubble=true → drawing system consumed the event → set lock.
+   Lock is cleared on mouseup / touchend / pointercancel.
+─────────────────────────────────────────────────────────────────────────── */
+var CTX_GUARD = '#dvlDrawCtxBar,#dvlDrawSettingsPanel,#dvlDrawDelete,#viewBtnDock,#dvlMiniRefresh';
+
+function _onWrapMouseDown(ev){
+  /* Only lock when drawing system stopped propagation, not for UI controls */
+  if(!ev.cancelBubble) return;
+  var t = ev.target;
+  if(t && t.closest && t.closest(CTX_GUARD)) return;
+  _locks['__mouse'] = 'drawing-mouse-drag';
+}
+
+function _onWinMouseUp(){
+  delete _locks['__mouse'];
+}
+
+function _onWrapTouchStart(ev){
+  /* Same principle for touch — _onTS may have called stopPropagation */
+  if(!ev.cancelBubble) return;
+  var t = ev.target;
+  if(t && t.closest && t.closest(CTX_GUARD)) return;
+  _locks['__touch'] = 'drawing-touch-drag';
+}
+
+function _onWinTouchEnd(){   delete _locks['__touch']; }
+function _onWinTouchCancel(){ delete _locks['__touch']; }
+function _onWinPointerCancel(){
+  delete _locks['__mouse'];
+  delete _locks['__touch'];
+}
+
+function _setupDragDetection(){
+  var wrap = document.getElementById('chartWrap');
+  if(!wrap) return;
+
+  wrap.addEventListener('mousedown',  _onWrapMouseDown, {capture:true});
+  wrap.addEventListener('touchstart', _onWrapTouchStart, {capture:true, passive:false});
+
+  window.addEventListener('mouseup',       _onWinMouseUp,       {capture:true});
+  window.addEventListener('touchend',      _onWinTouchEnd,      {capture:true});
+  window.addEventListener('touchcancel',   _onWinTouchCancel,   {capture:true});
+  window.addEventListener('pointercancel', _onWinPointerCancel, {capture:true});
+}
+
+/* Register after app's DOMContentLoaded callbacks */
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', _setupDragDetection);
+}else{
+  /* DOMContentLoaded already fired — use setTimeout(0) to still land after
+     any other DOMContentLoaded callbacks that may not have run yet */
+  setTimeout(_setupDragDetection, 0);
+}
+
 })();
 </script>
 </body>
