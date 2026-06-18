@@ -1,26 +1,19 @@
 #!/usr/bin/env python3
 """
-patch_639.py — DVL Beta 0.639
-Fix: Paper Trading overlay lines re-anchor on every chart pan/zoom, not only
-when a position is created or modified.
+patch_639.py — DVL Beta 0.639 — Phase 0: UI/Touch Guard scaffold
 
-Root cause (0.638): The MutationObserver fired only when render() rebuilt the
-layer (position create/modify). When the user panned or zoomed the chart,
-drawSoon() → draw() updated S.view but render() was NOT called, so .dvl-paper-line
-elements kept their stale 'left' values. Lines drifted off the creation candle
-after any pan/zoom.
+Implements the DVL_TODO_0639 checklist from index-4_annotated_for_claude.html.
+Phase 0 only creates the touch-guard scaffold and marks UI surfaces so that
+buttons, panels, dropdowns, the number pad, paper-trading tags and tools do
+NOT leak pointer events into the chart (pan/zoom/crosshair). The chart canvas
+(#chart) keeps pan/pinch/zoom/crosshair working normally.
 
-Fix:
-  Wrap window.drawSoon (exposed at line ~15939) to schedule a
-  requestAnimationFrame callback that runs AFTER draw() has updated S.view.
-  Because we register our RAF right after drawSoon() registers its RAF, our
-  callback executes in the same frame but after draw() has already set S.view.
+No visual change: only data-dvl-ui markers, a minimal tap-highlight CSS rule,
+the DVL_TOUCH_GUARD module, and three guard consultations inside the chart
+pointer handlers. No colors/layout/sizes/logic touched.
 
-  We replace the entire DVL_BETA_0638_PAPER_LINE_LEFT_FIX script with a
-  revised version that contains both the original MutationObserver logic AND
-  the new drawSoon hook.
-
-The approved 0.598 Paper Trading logic is NOT modified.
+Blocks completed: 01,02,03,04,05,06,07,08,09,10,11,12,13,16.
+Blocks satisfied by existing mechanics + marking (no risky edits): 14,15,17.
 """
 import sys, pathlib
 
@@ -35,188 +28,232 @@ def rep(src, old, new, label):
     _ok.append(label)
     return src.replace(old, new, 1)
 
-# ── 1. Version ────────────────────────────────────────────────────────────────
-html = rep(html, 'BETA 0.638', 'BETA 0.639', "version badge")
+# ── Block 01 — Title (DVL_VERSION_TITLE_0639) ────────────────────────────────
+html = rep(html,
+    '<title>DVL Binance Live — Beta 0.629</title>',
+    '<title>DVL Binance Live — Beta 0.639</title>',
+    "01 title")
+
+# ── Block 02 — UI Touch Guard CSS (DVL_UI_TOUCH_GUARD_CSS_0639) ───────────────
+# Dedicated minimal style block before the first :root token. Only tap-highlight
+# removal + touch-action:manipulation on safe UI surfaces. Never targets #chart.
+GUARD_CSS = """\
+<style id="DVL_UI_TOUCH_GUARD_CSS_0639">
+/* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
+   Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
+   on safe buttons/menus. Does NOT affect #chart / canvas interactions. */
+[data-dvl-ui="true"], [data-dvl-ui="true"] *{ -webkit-tap-highlight-color: transparent; }
+[data-dvl-ui="true"] button,
+[data-dvl-ui="true"] [role="button"],
+.bottomNav button,
+.tradeDrawer .panelBtn,
+.tradeDrawer .tradeAction,
+.orderTypeMenu .orderTypeOption,
+.numberPadSheet button{ touch-action: manipulation; }
+</style>
+<style>
+:root{"""
+html = rep(html, '<style>\n:root{', GUARD_CSS, "02 guard css")
+
+# ── Block 03 — Version + Changelog (DVL_VERSION_CHANGELOG_0639) ───────────────
 html = rep(html,
     'const DVL_APP_VERSION = "Beta 0.638";',
     'const DVL_APP_VERSION = "Beta 0.639";',
-    "DVL_APP_VERSION")
+    "03 app version")
+# Pin the existing 0.638 entry to its literal version, then add the 0.639 entry.
 html = rep(html,
-    '  { version: DVL_APP_VERSION, note: "Fix: Paper Trading overlay — lines start at creation candle and extend rightward only; no left-bleed across chart history." },',
-    '  { version: DVL_APP_VERSION, note: "Fix: Paper Trading overlay — lines re-anchor on every chart pan/zoom, not only on position create/modify." },\n'
-    '  { version: "Beta 0.638", note: "Fix: Paper Trading overlay — lines start at creation candle and extend rightward only; no left-bleed across chart history." },',
-    "changelog 0.639")
+    '  { version: DVL_APP_VERSION, note: "Fix: native DVL demo-position text removed; labels 10 candles right of creation; edit label stable." },',
+    '  { version: DVL_APP_VERSION, note: "Phase 0: UI/touch guard scaffold e marcação de superfícies UI antes da padronização de botões." },\n'
+    '  { version: "Beta 0.638", note: "Fix: native DVL demo-position text removed; labels 10 candles right of creation; edit label stable." },',
+    "03 changelog")
+# Static badge (JS also auto-sets it from DVL_APP_VERSION).
+html = rep(html, '>BETA 0.638</div>', '>BETA 0.639</div>', "03 badge")
 
-# ── 2. Replace the 0.638 script with an improved version ─────────────────────
-OLD_SCRIPT = '<script id="DVL_BETA_0638_PAPER_LINE_LEFT_FIX">'
+# ── Block 04 — Trade drawer UI surface (DVL_TRADE_DRAWER_UI_SURFACE_0639) ─────
+html = rep(html,
+    '<div class="tradeDrawer" id="tradeDrawer">',
+    '<div class="tradeDrawer" id="tradeDrawer" data-dvl-ui="true">',
+    "04 tradeDrawer")
+html = rep(html,
+    '<div class="tradeDrawer" id="tradeDrawer" data-dvl-ui="true">\n  <div class="tradeDrawerSheet">',
+    '<div class="tradeDrawer" id="tradeDrawer" data-dvl-ui="true">\n  <div class="tradeDrawerSheet" data-dvl-ui="true">',
+    "04 tradeDrawerSheet")
+html = rep(html,
+    '<div class="tradeDrawerBody">',
+    '<div class="tradeDrawerBody" data-dvl-ui="true">',
+    "04 tradeDrawerBody")
 
-NEW_SCRIPT = """\
-<script id="DVL_BETA_0638_PAPER_LINE_LEFT_FIX">
-/*
-  DVL Beta 0.638 / 0.639 — Paper Trading line/hit-area left-anchor
+# ── Block 05 — Bottom nav UI surface (DVL_BOTTOM_NAV_UI_SURFACE_0639) ─────────
+html = rep(html,
+    '<nav class="bottomNav">',
+    '<nav class="bottomNav" data-dvl-ui="true">',
+    "05 bottomNav")
 
-  After each render() call OR chart pan/zoom (drawSoon hook), a MutationObserver
-  and a drawSoon wrapper walk #dvlPaperLayer and set each .dvl-paper-line and
-  .dvl-paper-hit 'left' to the pixel X of the candle where the position was
-  created.
+# ── Block 06 — Number pad UI surface (DVL_NUMBER_PAD_UI_SURFACE_0639) ─────────
+html = rep(html,
+    '<div class="numberPadOverlay" id="entryPadOverlay" aria-hidden="true">',
+    '<div class="numberPadOverlay" id="entryPadOverlay" aria-hidden="true" data-dvl-ui="true">',
+    "06 numberPadOverlay")
+html = rep(html,
+    '<div class="numberPadSheet" role="dialog" aria-modal="true" aria-label="Editar Entry">',
+    '<div class="numberPadSheet" role="dialog" aria-modal="true" aria-label="Editar Entry" data-dvl-ui="true">',
+    "06 numberPadSheet")
 
-  Position coordinate storage (price/time) and all trade logic are unchanged.
-*/
+# ── Block 07 — Asset dropdown UI surface (DVL_ASSET_DROPDOWN_UI_SURFACE_0639) ─
+html = rep(html,
+    '<div class="assetDropdown" id="assetDropdown" aria-hidden="true"></div>',
+    '<div class="assetDropdown" id="assetDropdown" aria-hidden="true" data-dvl-ui="true"></div>',
+    "07 assetDropdown")
+
+# ── Block 08 — Tools menu UI surface (DVL_TOOLS_MENU_UI_SURFACE_0639) ─────────
+html = rep(html,
+    '<div class="assetToolsMenu" id="assetToolsMenu" aria-hidden="true">',
+    '<div class="assetToolsMenu" id="assetToolsMenu" aria-hidden="true" data-dvl-ui="true">',
+    "08 assetToolsMenu")
+
+# ── Block 09 — Indicator dropdown (DVL_INDICATOR_DROPDOWN_UI_SURFACE_0639) ────
+html = rep(html,
+    '<div class="indicatorDropdown" id="indicatorDropdown" aria-hidden="true">',
+    '<div class="indicatorDropdown" id="indicatorDropdown" aria-hidden="true" data-dvl-ui="true">',
+    "09 indicatorDropdown")
+
+# ── Block 10 — Order type menu (DVL_ORDER_TYPE_MENU_UI_SURFACE_0639) ──────────
+html = rep(html,
+    '<div class="orderTypeMenu" id="orderTypeMenu" aria-hidden="true">',
+    '<div class="orderTypeMenu" id="orderTypeMenu" aria-hidden="true" data-dvl-ui="true">',
+    "10 orderTypeMenu")
+
+# ── Block 11 — DVL_TOUCH_GUARD module (DVL_TOUCH_GUARD_MODULE_0639) ───────────
+TOUCH_GUARD_MODULE = """\
+/* ===== DVL_TOUCH_GUARD_MODULE_0639 =====
+   Phase 0 scaffold. Identifies UI surfaces (buttons, panels, dropdowns, number
+   pad, paper-trading tags/labels, tools menus) so taps on them do not leak into
+   the chart as pan/zoom/crosshair. The chart canvas (#chart) and non-UI overlays
+   keep interacting normally. Visual design is unchanged. */
 (function(){
-"use strict";
+  "use strict";
 
-var PRICE_SCALE_W = 55; /* matches RP() — right-side price scale pixel width */
+  var UI_SELECTOR = [
+    'button','input','select','textarea','[role="button"]','[data-dvl-ui="true"]',
+    '.bottomNav','.tradeDrawer','.tradeDrawerSheet','.tradeDrawerBody',
+    '.panelBtn','.panelMetric','.tradeAction','.panelToggle',
+    '.numberPadOverlay','.numberPadSheet','.orderTypeMenu',
+    '.indicatorDropdown','.assetDropdown','.assetToolsMenu','.candleTypeMenu',
+    '.tfMoreMenu','.dvlDrawSettingsPanel','.dvlDrawCtxBar','.dvlTextPanel',
+    '.dvl-paper-tag','.dvl-paper-edit-label-fixed','.dvl-paper-confirm',
+    '.assetFavoritesDrawer','.assetFavoritesSheet'
+  ].join(',');
 
-/* ── Coordinate helpers ──────────────────────────────────────────────────── */
-function chartWrapWidth(){
-  var wrap = document.getElementById('chartWrap');
-  return wrap ? wrap.clientWidth : window.innerWidth;
-}
-
-function candleIndexToX(idx){
-  var S = window.S;
-  if(!S || !S.view) return -1;
-  var span = Math.max(0.1, S.view.end - S.view.start);
-  var chartW = Math.max(1, chartWrapWidth() - PRICE_SCALE_W);
-  return (idx - S.view.start + 0.5) * chartW / span;
-}
-
-/* Binary-search S.candles for the index whose time <= createdAt */
-function candleIdxForTime(createdAt){
-  var S = window.S;
-  if(!S || !Array.isArray(S.candles) || !S.candles.length) return -1;
-  if(!(createdAt > 0)) return S.candles.length - 1;
-
-  var candles = S.candles;
-  var lo = 0, hi = candles.length - 1;
-
-  /* candles are ordered oldest→newest; find last candle whose time ≤ createdAt */
-  var best = 0;
-  while(lo <= hi){
-    var mid = (lo + hi) >> 1;
-    var t = Number(candles[mid].t || candles[mid].time || 0);
-    if(t <= createdAt){ best = mid; lo = mid + 1; }
-    else               { hi  = mid - 1; }
-  }
-  return best;
-}
-
-function positionLeftPx(pos){
-  var createdAt = Number(pos.createdAt) || 0;
-  var idx = candleIdxForTime(createdAt);
-  if(idx < 0) return 0;
-  var xPx = candleIndexToX(idx);
-  return Math.max(0, xPx); /* never go left of chart edge */
-}
-
-/* ── Runtime accessor ────────────────────────────────────────────────────── */
-function findPos(id){
-  var rt = window.__dvlPaperRuntime0581 ||
-           window.__dvlPaperRuntime0582 ||
-           window.__dvlPaperRuntime0580 ||
-           window.__dvlPaperRuntime;
-  if(!rt || !rt.state || !rt.state.positions) return null;
-  var positions = rt.state.positions;
-  for(var i = 0; i < positions.length; i++){
-    if(String(positions[i].id) === String(id)) return positions[i];
-  }
-  return null;
-}
-
-/* ── Apply left to one element ───────────────────────────────────────────── */
-function applyLeft(el, posId){
-  var pos = findPos(posId);
-  if(!pos) return;
-  var xPx = positionLeftPx(pos);
-  el.style.setProperty('left', xPx.toFixed(1) + 'px', 'important');
-}
-
-/* ── Post-process the entire layer ──────────────────────────────────────── */
-function postProcess(layer){
-  /* 1. Lines: get position ID from nextElementSibling (hit or tag, both have data-id) */
-  var lines = layer.querySelectorAll('.dvl-paper-line');
-  for(var i = 0; i < lines.length; i++){
-    var line = lines[i];
-    var next = line.nextElementSibling;
-    if(next && next.dataset && next.dataset.id){
-      applyLeft(line, next.dataset.id);
-    }
+  function evTarget(ev){
+    if(!ev) return null;
+    return ev.target || ev.srcElement || null;
   }
 
-  /* 2. Hit areas (drag zones) — also start at creation X */
-  var hits = layer.querySelectorAll('.dvl-paper-hit[data-id]');
-  for(var j = 0; j < hits.length; j++){
-    applyLeft(hits[j], hits[j].dataset.id);
+  /* The real chart canvas must always interact (pan/pinch/zoom/crosshair). */
+  function isChartAllowedTarget(ev){
+    var t = evTarget(ev);
+    if(!t) return false;
+    if(t.id === 'chart') return true;
+    if(t.tagName && t.tagName.toUpperCase() === 'CANVAS' &&
+       t.closest && t.closest('#chartWrap')) return true;
+    return false;
   }
-}
 
-/* Expose for the drawSoon hook below */
-window.__dvl0638PostProcess = postProcess;
+  /* True when the pointer's real target is (inside) a UI surface. */
+  function isUiTarget(ev){
+    var t = evTarget(ev);
+    if(!t || !t.closest) return false;
+    return !!t.closest(UI_SELECTOR);
+  }
 
-/* ── MutationObserver on #dvlPaperLayer ─────────────────────────────────── */
-function attachObserver(layer){
-  var obs = new MutationObserver(function(mutations){
-    /* Only act when childList changed (render() rebuilt the layer) */
-    var hasChildListMutation = false;
-    for(var i = 0; i < mutations.length; i++){
-      if(mutations[i].type === 'childList'){ hasChildListMutation = true; break; }
-    }
-    if(hasChildListMutation) postProcess(layer);
-  });
-  obs.observe(layer, {childList: true});
-  /* Initial pass in case layer is already populated */
-  postProcess(layer);
-}
+  /* The chart handlers consult this: block chart reaction for UI taps,
+     never block a genuine canvas interaction. */
+  function shouldBlockChartPointer(ev){
+    if(isChartAllowedTarget(ev)) return false;
+    return isUiTarget(ev);
+  }
 
-/* ── Wait for layer to exist ─────────────────────────────────────────────── */
-function waitForLayer(){
-  var layer = document.getElementById('dvlPaperLayer');
-  if(layer){ attachObserver(layer); return; }
-  var poll = setInterval(function(){
-    var l = document.getElementById('dvlPaperLayer');
-    if(l){ clearInterval(poll); attachObserver(l); }
-  }, 80);
-  setTimeout(function(){ clearInterval(poll); }, 15000);
-}
-
-if(document.readyState === 'loading'){
-  document.addEventListener('DOMContentLoaded', waitForLayer, {once:true});
-}else{
-  waitForLayer();
-}
-
-/* ── drawSoon hook — re-anchor after every chart pan/zoom ───────────────────
-   draw() → __dvlSyncLegacyState() updates S.view, THEN our RAF runs
-   postProcess with the fresh view. We cancel any pending RAF before
-   registering a new one so rapid panning doesn't stack callbacks.
-──────────────────────────────────────────────────────────────────────────── */
-(function(){
-  var _raf = 0;
-  var _orig = window.drawSoon;
-  if(typeof _orig !== 'function') return;
-
-  window.drawSoon = function(){
-    var r = _orig.apply(this, arguments);
-    /* draw() runs in the RAF registered by _orig.  We register a SECOND RAF
-       right after — it executes in the same frame but after draw() has already
-       called __dvlSyncLegacyState() and updated S.view. */
-    cancelAnimationFrame(_raf);
-    _raf = requestAnimationFrame(function(){
-      if(typeof window.__dvl0638PostProcess !== 'function') return;
-      var layer = document.getElementById('dvlPaperLayer');
-      if(layer && layer.children.length){
-        window.__dvl0638PostProcess(layer);
+  /* Marks existing UI containers with data-dvl-ui="true" without visual change. */
+  function markUiSurface(root){
+    try{
+      var scope = root || document;
+      if(!scope.querySelectorAll) return;
+      var nodes = scope.querySelectorAll(UI_SELECTOR);
+      for(var i=0;i<nodes.length;i++){
+        var n = nodes[i];
+        if(!n || n.id === 'chart') continue;
+        if(n.setAttribute && n.getAttribute('data-dvl-ui') !== 'true'){
+          n.setAttribute('data-dvl-ui','true');
+        }
       }
-    });
-    return r;
+    }catch(_){}
+  }
+
+  function init(){ markUiSurface(document); }
+
+  window.DVL_TOUCH_GUARD = {
+    UI_SELECTOR: UI_SELECTOR,
+    isUiTarget: isUiTarget,
+    isChartAllowedTarget: isChartAllowedTarget,
+    shouldBlockChartPointer: shouldBlockChartPointer,
+    markUiSurface: markUiSurface,
+    init: init
   };
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, {once:true});
+  } else {
+    init();
+  }
 })();
 
-})();
-</script>"""
+window.DVL_SECTION_SIZES_PX = {"""
+html = rep(html,
+    'window.DVL_SECTION_SIZES_PX = {',
+    TOUCH_GUARD_MODULE,
+    "11 touch guard module")
 
-html = rep(html, OLD_SCRIPT, NEW_SCRIPT, "replace 0638 script with pan-sync version")
+# ── Block 12 — Integrate guard in chart interactions ─────────────────────────
+#   (DVL_CHART_TOUCH_GUARD_INTEGRATION_0639)
+# Only block pointers that are NOT already tracked as chart pointers, so an
+# active pan/pinch/crosshair gesture is never interrupted mid-stream.
+html = rep(html,
+    '  function _onDown(ev){\n'
+    '    if(window.__dvlPositionDragActive) return;\n',
+    '  function _onDown(ev){\n'
+    '    if(window.__dvlPositionDragActive) return;\n'
+    '    /* DVL_CHART_TOUCH_GUARD_INTEGRATION_0639 — ignore UI-originated taps */\n'
+    '    if(chartPointers.size === 0 && window.DVL_TOUCH_GUARD &&\n'
+    '       window.DVL_TOUCH_GUARD.shouldBlockChartPointer(ev)) return;\n',
+    "12 _onDown guard")
 
-# ── 3. Write ──────────────────────────────────────────────────────────────────
+html = rep(html,
+    '  function _onMove(ev){\n'
+    '    if(window.__dvlPositionDragActive) return;\n'
+    '    if(!chartPointers.has(ev.pointerId)) return;\n',
+    '  function _onMove(ev){\n'
+    '    if(window.__dvlPositionDragActive) return;\n'
+    '    /* DVL_CHART_TOUCH_GUARD_INTEGRATION_0639 — ignore untracked UI pointers */\n'
+    '    if(!chartPointers.has(ev.pointerId) && window.DVL_TOUCH_GUARD &&\n'
+    '       window.DVL_TOUCH_GUARD.shouldBlockChartPointer(ev)) return;\n'
+    '    if(!chartPointers.has(ev.pointerId)) return;\n',
+    "12 _onMove guard")
+
+html = rep(html,
+    '  function _onEnd(ev){\n'
+    '    if(!chartPointers.has(ev.pointerId)) return;\n',
+    '  function _onEnd(ev){\n'
+    '    /* DVL_CHART_TOUCH_GUARD_INTEGRATION_0639 — ignore untracked UI pointers */\n'
+    '    if(!chartPointers.has(ev.pointerId) && window.DVL_TOUCH_GUARD &&\n'
+    '       window.DVL_TOUCH_GUARD.shouldBlockChartPointer(ev)) return;\n'
+    '    if(!chartPointers.has(ev.pointerId)) return;\n',
+    "12 _onEnd guard")
+
+# ── Block 16 — Expand drawing context guard (DVL_DRAW_CONTEXT_GUARD_0639) ─────
+html = rep(html,
+    "const _CTX_GUARD='#dvlDrawCtxBar,#dvlDrawSettingsPanel,#dvlDrawDelete,#viewBtnDock,#dvlMiniRefresh';",
+    "const _CTX_GUARD='#dvlDrawCtxBar,#dvlDrawSettingsPanel,#dvlDrawDelete,#viewBtnDock,#dvlMiniRefresh,[data-dvl-ui=\"true\"]';",
+    "16 _CTX_GUARD expand")
+
 SRC.write_text(html, encoding="utf-8")
-print(f"[OK] patch_639 applied: {', '.join(_ok)}")
+print(f"[OK] patch_639 applied ({len(_ok)} edits): {', '.join(_ok)}")
