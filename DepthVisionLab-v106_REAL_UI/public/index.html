@@ -13325,7 +13325,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.636</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.637</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13785,11 +13785,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.636";
+const DVL_APP_VERSION = "Beta 0.637";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Fix: Paper Trading tag positioning — MutationObserver eliminates flicker; right:auto CSS override prevents CSS-caused flash." },
+  { version: DVL_APP_VERSION, note: "Fix: Limit ≠ Market (0.5% offset); labels centered; edit label no longer escapes to right edge." },
+  { version: "Beta 0.636", note: "Fix: Paper Trading tag positioning — MutationObserver eliminates flicker; right:auto CSS override prevents CSS-caused flash." },
   { version: "Beta 0.635", note: "Fix: Paper Trading — tags float 10 candles ahead of creation point; pending ENTRY shows LIMIT instead of Long/Short Limit." },
   { version: "Beta 0.634", note: "Feat: Paper Trading 0.598 — Y coords and layer bounds confined to price pane; oscillator-safe." },
   { version: "Beta 0.633", note: "Fix: candle fluido real — bug ticker stale 15s corrigido + poll REST 2s." },
@@ -30946,7 +30947,7 @@ Do not rework this logic unless the user explicitly requests it.
           return { main:"SL " + money(pnl(pos, pos.sl)) + " USDT", pct:fmtPct(pnlPct(pos, pos.sl)) };
         }
         if(pos.status === "pending"){
-          return { main:(pos.side === "buy" ? "Long Limit" : "Short Limit"), pct:"" };
+          return { main:"LIMIT", pct:"" };
         }
         return {
           main:"ENTRY " + money(live > 0 ? pnl(pos, live) : 0) + " USDT",
@@ -31684,222 +31685,121 @@ if(document.readyState === 'loading'){
 </script>
 <script id="DVL_BETA_0635_TAG_LEFT_FIX">
 /*
-  DVL Beta 0.636 — Flicker-free tag left positioning via MutationObserver.
+  DVL Beta 0.637 — Center TP/ENTRY/SL labels in the visible chart area.
 
-  0635 used setInterval(dvlSyncTagLeft, 600) but 0598 calls
-  setInterval(render, 1200) directly, which rebuilt tags at right:56px.
-  The 600ms correction window was visible as a flicker.
+  Replaces the candle-based left-offset from 0.635/0.636 with pure CSS:
+    left:50% + transform:translateX(-50%)
+  Tags are always centered in the paper layer (chart width minus price scale)
+  with zero JavaScript overhead. Stable through pan/zoom/oscillator toggle.
 
-  MutationObserver fires as a microtask BEFORE the browser paints, so
-  tags are repositioned in the same frame as render() — no visible jump.
-  CSS right:auto override prevents any CSS-caused flash at creation time.
+  Also centers .dvl-paper-edit-label-fixed (the draggable label during edit)
+  which previously used right:56px (position:fixed → viewport right edge),
+  causing the label to "escape" to the right side of the screen on drag start.
 */
 (function(){
 "use strict";
 
-var PRICE_SCALE_W = 55;
-var CANDLE_OFFSET = 10;
-
-/* Remove right:56px so tags default to left:auto (0) pending JS */
-(function(){
-  var id = 'DVL_0636_TAG_RIGHT_OVERRIDE';
-  if(document.getElementById(id)) return;
-  var s = document.createElement('style');
-  s.id = id;
-  s.textContent = '.dvl-paper-tag:not(.dvl-paper-edit-label-fixed){right:auto!important;}';
-  (document.head || document.documentElement).appendChild(s);
-})();
-
-function getRuntime(){
-  return window.__dvlPaperRuntime0581 ||
-         window.__dvlPaperRuntime0582 ||
-         window.__dvlPaperRuntime0580 ||
-         window.__dvlPaperRuntime;
-}
-
-function candleIdxForTime(candles, createdAt){
-  if(!(createdAt > 0)) return candles.length - 1;
-  var lo = 0, hi = candles.length - 1, best = 0;
-  while(lo <= hi){
-    var mid = (lo + hi) >> 1;
-    var t = Number(candles[mid].t || candles[mid].time || 0);
-    if(t <= createdAt){ best = mid; lo = mid + 1; }
-    else              { hi  = mid - 1; }
-  }
-  return best;
-}
-
-function dvlSyncTagLeft(){
-  var layer = document.getElementById('dvlPaperLayer');
-  if(!layer) return;
-
-  var rt = getRuntime();
-  if(!rt || !rt.state || !rt.state.positions) return;
-  var positions = rt.state.positions;
-
-  var S = window.S;
-  if(!S || !S.view || !Array.isArray(S.candles) || !S.candles.length) return;
-
-  var span   = Math.max(0.1, S.view.end - S.view.start);
-  var wrap   = document.getElementById('chartWrap');
-  if(!wrap) return;
-  var chartW = Math.max(1, wrap.clientWidth - PRICE_SCALE_W);
-
-  var tags = layer.querySelectorAll('.dvl-paper-tag[data-id]');
-  for(var i = 0; i < tags.length; i++){
-    var tag = tags[i];
-    if(tag.classList.contains('dvl-paper-edit-label-fixed')) continue;
-
-    var posId = tag.dataset.id;
-    var pos = null;
-    for(var j = 0; j < positions.length; j++){
-      if(String(positions[j].id) === String(posId)){ pos = positions[j]; break; }
-    }
-    if(!pos) continue;
-
-    var idx = candleIdxForTime(S.candles, Number(pos.createdAt) || 0);
-    var xPx = (idx + CANDLE_OFFSET - S.view.start + 0.5) * chartW / span;
-    xPx = Math.max(0, Math.min(xPx, chartW - 4));
-
-    tag.style.setProperty('left',  xPx.toFixed(1) + 'px', 'important');
-    tag.style.setProperty('right', 'auto',                 'important');
-  }
-}
-
-/* ── MutationObserver: fires before browser paint ─────────────────────── */
-function attachObserver(layer){
-  var obs = new MutationObserver(function(mutations){
-    for(var i = 0; i < mutations.length; i++){
-      if(mutations[i].type === 'childList'){ dvlSyncTagLeft(); return; }
-    }
-  });
-  obs.observe(layer, {childList: true});
-  dvlSyncTagLeft();
-}
-
-function waitForLayer(){
-  var layer = document.getElementById('dvlPaperLayer');
-  if(layer){ attachObserver(layer); return; }
-  var poll = setInterval(function(){
-    var l = document.getElementById('dvlPaperLayer');
-    if(l){ clearInterval(poll); attachObserver(l); }
-  }, 80);
-  setTimeout(function(){ clearInterval(poll); }, 15000);
-}
-
-/* ── drawSoon hook: re-anchor after pan/zoom view changes ─────────────── */
-var _raf0636 = 0;
-var _orig0636 = window.drawSoon;
-if(typeof _orig0636 === 'function'){
-  window.drawSoon = function(){
-    var r = _orig0636.apply(this, arguments);
-    cancelAnimationFrame(_raf0636);
-    _raf0636 = requestAnimationFrame(dvlSyncTagLeft);
-    return r;
-  };
-}
-
-window.addEventListener('resize', dvlSyncTagLeft, {passive:true});
-
-if(document.readyState === 'loading'){
-  document.addEventListener('DOMContentLoaded', waitForLayer, {once:true});
-} else {
-  waitForLayer();
-}
+var id = 'DVL_0637_TAG_CENTER_CSS';
+if(document.getElementById(id)) return;
+var s = document.createElement('style');
+s.id = id;
+s.textContent =
+  /* Normal tags: centered within the paper layer */
+  '.dvl-paper-tag:not(.dvl-paper-edit-label-fixed){' +
+    'left:50%!important;right:auto!important;transform:translateX(-50%)!important;' +
+  '}' +
+  /* Edit label during drag: centered in viewport (chart is full-width) */
+  '.dvl-paper-edit-label-fixed{' +
+    'left:50%!important;right:auto!important;transform:translateX(-50%)!important;' +
+  '}';
+(document.head || document.documentElement).appendChild(s);
 
 })();
 </script>
-/*
-  DVL Beta 0.635 — Float TP/ENTRY/SL tags 10 candles to the right of the
-  position's creation candle, instead of sticking to the chart's right edge.
-  Lines are NOT moved (they still span left-to-right).
 
-  Runs after every render() call: draw() -> render() -> dvlSyncTagLeft().
+<script id="DVL_BETA_0637_LIMIT_OFFSET_FIX">
+/*
+  DVL Beta 0.637 — Limit order default price offset.
+
+  maybeTriggerPending() fires when live >= entry (sell) or live <= entry (buy).
+  createPosition() sets entry = lastPrice(), so a pending Limit order created
+  at market price triggers immediately — indistinguishable from Market.
+
+  Fix: wrap createPosition() so pending orders start 0.5% away from market:
+    Buy Limit  → entry = live * 0.995  (wait for price to drop to entry)
+    Sell Limit → entry = live * 1.005  (wait for price to rise to entry)
+  TP and SL shift by the same absolute delta to preserve the user's spread.
 */
 (function(){
 "use strict";
 
-var PRICE_SCALE_W = 55;
-var CANDLE_OFFSET = 10; /* candles to the right of creation point */
-
-function getRuntime(){
-  return window.__dvlPaperRuntime0581 ||
-         window.__dvlPaperRuntime0582 ||
-         window.__dvlPaperRuntime0580 ||
-         window.__dvlPaperRuntime;
-}
-
-function candleIdxForTime(candles, createdAt){
-  if(!(createdAt > 0)) return candles.length - 1;
-  var lo = 0, hi = candles.length - 1, best = 0;
-  while(lo <= hi){
-    var mid = (lo + hi) >> 1;
-    var t = Number(candles[mid].t || candles[mid].time || 0);
-    if(t <= createdAt){ best = mid; lo = mid + 1; }
-    else              { hi  = mid - 1; }
-  }
-  return best;
-}
-
-function dvlSyncTagLeft(){
-  var layer = document.getElementById('dvlPaperLayer');
-  if(!layer) return;
-
-  var rt = getRuntime();
-  if(!rt || !rt.state || !rt.state.positions) return;
-  var positions = rt.state.positions;
-
-  var S = window.S;
-  if(!S || !S.view || !Array.isArray(S.candles) || !S.candles.length) return;
-
-  var span   = Math.max(0.1, S.view.end - S.view.start);
-  var wrap   = document.getElementById('chartWrap');
-  if(!wrap) return;
-  var chartW = Math.max(1, wrap.clientWidth - PRICE_SCALE_W);
-
-  var tags = layer.querySelectorAll('.dvl-paper-tag[data-id]');
-  for(var i = 0; i < tags.length; i++){
-    var tag = tags[i];
-
-    /* skip fixed-positioned labels used during drag */
-    if(tag.classList.contains('dvl-paper-edit-label-fixed')) continue;
-
-    var posId = tag.dataset.id;
-    var pos = null;
-    for(var j = 0; j < positions.length; j++){
-      if(String(positions[j].id) === String(posId)){ pos = positions[j]; break; }
+function getLive(){
+  try{
+    if(window.ticker && Number(window.ticker.lastPrice) > 0)
+      return Number(window.ticker.lastPrice);
+    var S = window.S;
+    if(S && Array.isArray(S.candles) && S.candles.length){
+      var c = S.candles[S.candles.length - 1];
+      return Number(c.c || c.close || 0);
     }
-    if(!pos) continue;
-
-    var idx  = candleIdxForTime(S.candles, Number(pos.createdAt) || 0);
-    var idx10 = idx + CANDLE_OFFSET;
-    var xPx  = (idx10 - S.view.start + 0.5) * chartW / span;
-    xPx = Math.max(0, Math.min(xPx, chartW - 4)); /* clamp within chart */
-
-    tag.style.setProperty('left',  xPx.toFixed(1) + 'px', 'important');
-    tag.style.setProperty('right', 'auto',                 'important');
-  }
+  }catch(_){}
+  return 0;
 }
 
-/* Hook into drawSoon after the 0634 layer-bounds wrapper */
-var _raf0635 = 0;
-var _orig0635 = window.drawSoon;
-if(typeof _orig0635 === 'function'){
-  window.drawSoon = function(){
-    var r = _orig0635.apply(this, arguments);
-    cancelAnimationFrame(_raf0635);
-    _raf0635 = requestAnimationFrame(dvlSyncTagLeft);
-    return r;
+function patchRuntime(rt){
+  if(rt.__dvl0637LimitPatched) return;
+  rt.__dvl0637LimitPatched = true;
+
+  var orig = rt.createPosition;
+  rt.createPosition = function(){
+    var result = orig.apply(this, arguments);
+    var positions = rt.state && rt.state.positions;
+    if(!positions || !positions.length) return result;
+    var pos = positions[positions.length - 1];
+    if(!pos || pos.status !== 'pending') return result;
+
+    var live = getLive();
+    if(!(live > 0)) return result;
+
+    /* Skip if entry is already far from market (user passed explicit price) */
+    if(Math.abs(Number(pos.entry) - live) / live > 0.003) return result;
+
+    var OFFSET = 0.005; /* 0.5% */
+    var oldEntry = Number(pos.entry);
+    var newEntry = pos.side === 'buy'
+      ? live * (1 - OFFSET)   /* buy limit waits for price to fall */
+      : live * (1 + OFFSET);  /* sell limit waits for price to rise */
+    var delta = newEntry - oldEntry;
+
+    pos.entry = newEntry;
+    if(Number.isFinite(Number(pos.tp))) pos.tp = Number(pos.tp) + delta;
+    if(Number.isFinite(Number(pos.sl))) pos.sl = Number(pos.sl) + delta;
+
+    rt.render();
+    return result;
   };
 }
 
-setInterval(dvlSyncTagLeft, 600);
-window.addEventListener('resize', dvlSyncTagLeft, {passive:true});
+function waitForRuntime(){
+  var rt = window.__dvlPaperRuntime0581 ||
+           window.__dvlPaperRuntime0582 ||
+           window.__dvlPaperRuntime0580 ||
+           window.__dvlPaperRuntime;
+  if(rt && rt.ready){ patchRuntime(rt); return; }
+  var poll = setInterval(function(){
+    var r = window.__dvlPaperRuntime0581 ||
+            window.__dvlPaperRuntime0582 ||
+            window.__dvlPaperRuntime0580 ||
+            window.__dvlPaperRuntime;
+    if(r && r.ready){ clearInterval(poll); patchRuntime(r); }
+  }, 100);
+  setTimeout(function(){ clearInterval(poll); }, 15000);
+}
 
 if(document.readyState === 'loading'){
-  document.addEventListener('DOMContentLoaded', dvlSyncTagLeft, {once:true});
+  document.addEventListener('DOMContentLoaded', waitForRuntime, {once:true});
 } else {
-  dvlSyncTagLeft();
+  waitForRuntime();
 }
 
 })();
