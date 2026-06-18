@@ -13325,7 +13325,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.637</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.638</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13785,11 +13785,12 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.637";
+const DVL_APP_VERSION = "Beta 0.638";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Fix: Limit ≠ Market (0.5% offset); labels centered; edit label no longer escapes to right edge." },
+  { version: DVL_APP_VERSION, note: "Fix: native DVL demo-position text removed; labels 10 candles right of creation; edit label stable." },
+  { version: "Beta 0.637", note: "Fix: Limit ≠ Market (0.5% offset); labels centered; edit label no longer escapes to right edge." },
   { version: "Beta 0.636", note: "Fix: Paper Trading tag positioning — MutationObserver eliminates flicker; right:auto CSS override prevents CSS-caused flash." },
   { version: "Beta 0.635", note: "Fix: Paper Trading — tags float 10 candles ahead of creation point; pending ENTRY shows LIMIT instead of Long/Short Limit." },
   { version: "Beta 0.634", note: "Feat: Paper Trading 0.598 — Y coords and layer bounds confined to price pane; oscillator-safe." },
@@ -30312,6 +30313,38 @@ window.__dvlLegacyPriceArea = function(H){
 })();
 </script>
 
+<script id="DVL_BETA_0638_DEMO_NEUTRALIZER">
+/*
+  DVL Beta 0.638 — Neutralize native _toggleDemoPos listeners.
+
+  DVL registers click handlers on #dvlBuyBtn/#dvlSellBtn at parse time
+  (lines ~14964-14965) that call _toggleDemoPos('long'/'short'), which
+  creates a DVL-native demo position and draws "SHORT/LONG price..." text
+  on the chart line in addition to our 0598 overlay.
+
+  We clone-replace both buttons at DOMContentLoaded (runs before 0598.js's
+  DOMContentLoaded since this script comes first in the HTML). The clone
+  has identical DOM/attributes/style but no event listeners. 0598.js then
+  registers its handlers on the clean clone — only our overlay fires.
+*/
+(function(){
+"use strict";
+function neutralize(){
+  ['dvlBuyBtn','dvlSellBtn'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el && el.parentNode){
+      el.parentNode.replaceChild(el.cloneNode(true), el);
+    }
+  });
+}
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', neutralize, {once:true});
+} else {
+  neutralize();
+}
+})();
+</script>
+
 <script id="DVL_BETA_0634_PAPER_TRADING_0598">
 /*
 DVL PAPER TRADING SCRIPT-ONLY — VERSION 0.598
@@ -31685,121 +31718,168 @@ if(document.readyState === 'loading'){
 </script>
 <script id="DVL_BETA_0635_TAG_LEFT_FIX">
 /*
-  DVL Beta 0.637 — Center TP/ENTRY/SL labels in the visible chart area.
+  DVL Beta 0.638 — Labels 10 candles right of creation point + edit label fix.
 
-  Replaces the candle-based left-offset from 0.635/0.636 with pure CSS:
-    left:50% + transform:translateX(-50%)
-  Tags are always centered in the paper layer (chart width minus price scale)
-  with zero JavaScript overhead. Stable through pan/zoom/oscillator toggle.
+  Replaces the CSS left:50% centering from 0.637 (which put labels on top of
+  price action) with JS positioning: creation_candle + 10 candles.
+  MutationObserver fires before browser paint → zero flicker.
 
-  Also centers .dvl-paper-edit-label-fixed (the draggable label during edit)
-  which previously used right:56px (position:fixed → viewport right edge),
-  causing the label to "escape" to the right side of the screen on drag start.
+  Also fixes .dvl-paper-edit-label-fixed: when 0598.js appends it to
+  document.body with position:fixed;right:56px, it jumps to the viewport
+  right edge. A body MutationObserver repositions it to the same
+  creation+10 left position as the normal tags.
 */
 (function(){
 "use strict";
 
-var id = 'DVL_0637_TAG_CENTER_CSS';
-if(document.getElementById(id)) return;
-var s = document.createElement('style');
-s.id = id;
-s.textContent =
-  /* Normal tags: centered within the paper layer */
-  '.dvl-paper-tag:not(.dvl-paper-edit-label-fixed){' +
-    'left:50%!important;right:auto!important;transform:translateX(-50%)!important;' +
-  '}' +
-  /* Edit label during drag: centered in viewport (chart is full-width) */
-  '.dvl-paper-edit-label-fixed{' +
-    'left:50%!important;right:auto!important;transform:translateX(-50%)!important;' +
-  '}';
-(document.head || document.documentElement).appendChild(s);
+var PRICE_SCALE_W = 55;
+var CANDLE_OFFSET = 10;
 
+/* CSS: override right:56px so tags default to left edge (pending JS) */
+(function(){
+  var id = 'DVL_0638_TAG_RIGHT_OVERRIDE';
+  if(document.getElementById(id)) return;
+  var s = document.createElement('style');
+  s.id = id;
+  /* Reset centering CSS from 0.637 and the right:56px from 0598 */
+  s.textContent =
+    '.dvl-paper-tag:not(.dvl-paper-edit-label-fixed){' +
+      'left:0!important;right:auto!important;transform:none!important;' +
+    '}';
+  (document.head || document.documentElement).appendChild(s);
 })();
-</script>
 
-<script id="DVL_BETA_0637_LIMIT_OFFSET_FIX">
-/*
-  DVL Beta 0.637 — Limit order default price offset.
+function getRuntime(){
+  return window.__dvlPaperRuntime0581 ||
+         window.__dvlPaperRuntime0582 ||
+         window.__dvlPaperRuntime0580 ||
+         window.__dvlPaperRuntime;
+}
 
-  maybeTriggerPending() fires when live >= entry (sell) or live <= entry (buy).
-  createPosition() sets entry = lastPrice(), so a pending Limit order created
-  at market price triggers immediately — indistinguishable from Market.
+function candleIdxForTime(candles, createdAt){
+  if(!(createdAt > 0)) return candles.length - 1;
+  var lo = 0, hi = candles.length - 1, best = 0;
+  while(lo <= hi){
+    var mid = (lo + hi) >> 1;
+    var t = Number(candles[mid].t || candles[mid].time || 0);
+    if(t <= createdAt){ best = mid; lo = mid + 1; }
+    else              { hi  = mid - 1; }
+  }
+  return best;
+}
 
-  Fix: wrap createPosition() so pending orders start 0.5% away from market:
-    Buy Limit  → entry = live * 0.995  (wait for price to drop to entry)
-    Sell Limit → entry = live * 1.005  (wait for price to rise to entry)
-  TP and SL shift by the same absolute delta to preserve the user's spread.
-*/
-(function(){
-"use strict";
+function tagLeftPx(pos, chartW, S){
+  var idx = candleIdxForTime(S.candles, Number(pos.createdAt) || 0);
+  var span = Math.max(0.1, S.view.end - S.view.start);
+  var xPx = (idx + CANDLE_OFFSET - S.view.start + 0.5) * chartW / span;
+  return Math.max(0, Math.min(xPx, chartW - 4));
+}
 
-function getLive(){
-  try{
-    if(window.ticker && Number(window.ticker.lastPrice) > 0)
-      return Number(window.ticker.lastPrice);
-    var S = window.S;
-    if(S && Array.isArray(S.candles) && S.candles.length){
-      var c = S.candles[S.candles.length - 1];
-      return Number(c.c || c.close || 0);
+function dvlSyncTagLeft(){
+  var layer = document.getElementById('dvlPaperLayer');
+  if(!layer) return;
+  var rt = getRuntime();
+  if(!rt || !rt.state || !rt.state.positions) return;
+  var positions = rt.state.positions;
+  var S = window.S;
+  if(!S || !S.view || !Array.isArray(S.candles) || !S.candles.length) return;
+  var wrap = document.getElementById('chartWrap');
+  if(!wrap) return;
+  var chartW = Math.max(1, wrap.clientWidth - PRICE_SCALE_W);
+
+  var tags = layer.querySelectorAll('.dvl-paper-tag[data-id]');
+  for(var i = 0; i < tags.length; i++){
+    var tag = tags[i];
+    if(tag.classList.contains('dvl-paper-edit-label-fixed')) continue;
+    var posId = tag.dataset.id;
+    var pos = null;
+    for(var j = 0; j < positions.length; j++){
+      if(String(positions[j].id) === String(posId)){ pos = positions[j]; break; }
     }
-  }catch(_){}
-  return 0;
+    if(!pos) continue;
+    var xPx = tagLeftPx(pos, chartW, S);
+    tag.style.setProperty('left',  xPx.toFixed(1) + 'px', 'important');
+    tag.style.setProperty('right', 'auto',                 'important');
+    tag.style.setProperty('transform', 'none',             'important');
+  }
 }
 
-function patchRuntime(rt){
-  if(rt.__dvl0637LimitPatched) return;
-  rt.__dvl0637LimitPatched = true;
-
-  var orig = rt.createPosition;
-  rt.createPosition = function(){
-    var result = orig.apply(this, arguments);
-    var positions = rt.state && rt.state.positions;
-    if(!positions || !positions.length) return result;
-    var pos = positions[positions.length - 1];
-    if(!pos || pos.status !== 'pending') return result;
-
-    var live = getLive();
-    if(!(live > 0)) return result;
-
-    /* Skip if entry is already far from market (user passed explicit price) */
-    if(Math.abs(Number(pos.entry) - live) / live > 0.003) return result;
-
-    var OFFSET = 0.005; /* 0.5% */
-    var oldEntry = Number(pos.entry);
-    var newEntry = pos.side === 'buy'
-      ? live * (1 - OFFSET)   /* buy limit waits for price to fall */
-      : live * (1 + OFFSET);  /* sell limit waits for price to rise */
-    var delta = newEntry - oldEntry;
-
-    pos.entry = newEntry;
-    if(Number.isFinite(Number(pos.tp))) pos.tp = Number(pos.tp) + delta;
-    if(Number.isFinite(Number(pos.sl))) pos.sl = Number(pos.sl) + delta;
-
-    rt.render();
-    return result;
-  };
+/* ── MutationObserver on #dvlPaperLayer ─────────────────────────────────── */
+function attachLayerObserver(layer){
+  var obs = new MutationObserver(function(mutations){
+    for(var i = 0; i < mutations.length; i++){
+      if(mutations[i].type === 'childList'){ dvlSyncTagLeft(); return; }
+    }
+  });
+  obs.observe(layer, {childList:true});
+  dvlSyncTagLeft();
 }
 
-function waitForRuntime(){
-  var rt = window.__dvlPaperRuntime0581 ||
-           window.__dvlPaperRuntime0582 ||
-           window.__dvlPaperRuntime0580 ||
-           window.__dvlPaperRuntime;
-  if(rt && rt.ready){ patchRuntime(rt); return; }
+function waitForLayer(){
+  var l = document.getElementById('dvlPaperLayer');
+  if(l){ attachLayerObserver(l); return; }
   var poll = setInterval(function(){
-    var r = window.__dvlPaperRuntime0581 ||
-            window.__dvlPaperRuntime0582 ||
-            window.__dvlPaperRuntime0580 ||
-            window.__dvlPaperRuntime;
-    if(r && r.ready){ clearInterval(poll); patchRuntime(r); }
-  }, 100);
+    var ll = document.getElementById('dvlPaperLayer');
+    if(ll){ clearInterval(poll); attachLayerObserver(ll); }
+  }, 80);
   setTimeout(function(){ clearInterval(poll); }, 15000);
 }
 
+/* ── Body MutationObserver: fix fixedLabel position when drag starts ─────── */
+(function(){
+  var bodyObs = new MutationObserver(function(muts){
+    for(var i = 0; i < muts.length; i++){
+      var added = muts[i].addedNodes;
+      for(var j = 0; j < added.length; j++){
+        var el = added[j];
+        if(!el.classList) continue;
+        if(!el.classList.contains('dvl-paper-edit-label-fixed')) continue;
+        /* Position the edit label at the same X as normal tags */
+        var rt = getRuntime();
+        var S = window.S;
+        var wrap = document.getElementById('chartWrap');
+        if(!rt || !S || !S.view || !S.candles || !wrap) continue;
+        var posId = el.dataset && el.dataset.id;
+        if(!posId) continue;
+        var pos = null;
+        var positions = rt.state && rt.state.positions;
+        if(positions){
+          for(var k = 0; k < positions.length; k++){
+            if(String(positions[k].id) === String(posId)){ pos = positions[k]; break; }
+          }
+        }
+        if(!pos) continue;
+        var chartW = Math.max(1, wrap.clientWidth - PRICE_SCALE_W);
+        var wrapRect = wrap.getBoundingClientRect();
+        var xInChart = tagLeftPx(pos, chartW, S);
+        var leftVp = wrapRect.left + xInChart;
+        el.style.setProperty('left',      leftVp.toFixed(1) + 'px', 'important');
+        el.style.setProperty('right',     'auto',                    'important');
+        el.style.setProperty('transform', 'none',                    'important');
+      }
+    }
+  });
+  bodyObs.observe(document.body, {childList:true});
+})();
+
+/* ── drawSoon hook for pan/zoom re-anchor ────────────────────────────────── */
+var _raf0638 = 0;
+var _orig0638 = window.drawSoon;
+if(typeof _orig0638 === 'function'){
+  window.drawSoon = function(){
+    var r = _orig0638.apply(this, arguments);
+    cancelAnimationFrame(_raf0638);
+    _raf0638 = requestAnimationFrame(dvlSyncTagLeft);
+    return r;
+  };
+}
+
+window.addEventListener('resize', dvlSyncTagLeft, {passive:true});
+
 if(document.readyState === 'loading'){
-  document.addEventListener('DOMContentLoaded', waitForRuntime, {once:true});
+  document.addEventListener('DOMContentLoaded', waitForLayer, {once:true});
 } else {
-  waitForRuntime();
+  waitForLayer();
 }
 
 })();
