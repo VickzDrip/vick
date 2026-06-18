@@ -31768,11 +31768,14 @@ function candleIdxForTime(candles, createdAt){
   return best;
 }
 
+var MAX_TAG_W = 162; /* CSS max-width:154px + 8px safety margin */
+
 function tagLeftPx(pos, chartW, S){
   var idx = candleIdxForTime(S.candles, Number(pos.createdAt) || 0);
   var span = Math.max(0.1, S.view.end - S.view.start);
   var xPx = (idx + CANDLE_OFFSET - S.view.start + 0.5) * chartW / span;
-  return Math.max(0, Math.min(xPx, chartW - 4));
+  /* Clamp so the label's right edge never overlaps the price scale */
+  return Math.max(0, Math.min(xPx, chartW - MAX_TAG_W));
 }
 
 function dvlSyncTagLeft(){
@@ -31853,6 +31856,9 @@ function waitForLayer(){
         var wrapRect = wrap.getBoundingClientRect();
         var xInChart = tagLeftPx(pos, chartW, S);
         var leftVp = wrapRect.left + xInChart;
+        /* Also clamp fixedLabel (position:fixed) against viewport price-scale edge */
+        var maxLeft = wrapRect.left + chartW - MAX_TAG_W;
+        leftVp = Math.min(leftVp, maxLeft);
         el.style.setProperty('left',      leftVp.toFixed(1) + 'px', 'important');
         el.style.setProperty('right',     'auto',                    'important');
         el.style.setProperty('transform', 'none',                    'important');
