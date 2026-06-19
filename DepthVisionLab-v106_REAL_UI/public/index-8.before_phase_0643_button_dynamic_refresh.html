@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.643</title>
+<title>DVL Binance Live — Beta 0.642</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -13344,7 +13344,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.643</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.642</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13804,12 +13804,11 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.643";
+const DVL_APP_VERSION = "Beta 0.642";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Phase 1.1: refresh/observer seguro do DVL_BUTTON_SYSTEM para registrar botões dinâmicos sem alteração visual." },
-  { version: "Beta 0.642", note: "Hotfix: corrige DVL_BUTTON_SYSTEM inserido como <script> aninhado dentro do script principal." },
+  { version: DVL_APP_VERSION, note: "Hotfix: corrige DVL_BUTTON_SYSTEM inserido como <script> aninhado dentro do script principal." },
   { version: "Beta 0.641", note: "Phase 1: scaffold do DVL_BUTTON_SYSTEM para padronização futura de botões sem alteração visual." },
   { version: "Beta 0.640", note: "Touch guard selector patch: inclui paper layer e confirmação de edição para impedir vazamento de eventos ao gráfico." },
   { version: "Beta 0.639", note: "Phase 0: UI/touch guard scaffold e marcação de superfícies UI antes da padronização de botões." },
@@ -13958,36 +13957,27 @@ window.DVL_CHANGELOG = [
   }
 })();
 
-// ===== DVL_BUTTON_SYSTEM_MODULE_0643 =====
+// ===== DVL_BUTTON_SYSTEM_MODULE_0642 =====
 (function(){
 "use strict";
 
 var SELECTOR_MAP = [
-  { selector: '.navItem',                       role: 'footer'    },
-  { selector: '.tfBtn',                         role: 'timeframe' },
-  { selector: '.smallChartBtn',                 role: 'header'    },
-  { selector: '.indBtn',                        role: 'header'    },
-  { selector: '.iconBtn',                       role: 'icon'      },
-  { selector: '.menuBtn',                       role: 'dropdown'  },
-  { selector: '.panelBtn',                      role: 'panel'     },
-  { selector: '.panelToggle',                   role: 'panel'     },
-  { selector: '.tradeAction',                   role: 'trade'     },
-  { selector: '.orderTypeOption',               role: 'dropdown'  },
-  { selector: '.numberPadSheet button',         role: 'keypad'    },
-  { selector: '.drawerBtn',                     role: 'panel'     },
-  { selector: '.panelCloseX',                   role: 'panel'     },
-  { selector: '.dvl-paper-confirm button',      role: 'paper'     },
-  { selector: '.dvl-paper-edit-confirm button', role: 'paper'     },
-  { selector: '.dvlDrawCtxBar button',          role: 'tools'     },
-  { selector: '.dvlDrawSettingsPanel button',   role: 'tools'     },
-  { selector: '.assetFavoritesSheet button',    role: 'dropdown'  },
-  { selector: '.assetDropdown button',          role: 'dropdown'  },
-  { selector: '.indicatorDropdown button',      role: 'dropdown'  }
+  { selector: '.navItem',               role: 'footer'    },
+  { selector: '.tfBtn',                 role: 'timeframe' },
+  { selector: '.smallChartBtn',         role: 'header'    },
+  { selector: '.indBtn',                role: 'header'    },
+  { selector: '.iconBtn',               role: 'icon'      },
+  { selector: '.menuBtn',               role: 'dropdown'  },
+  { selector: '.panelBtn',              role: 'panel'     },
+  { selector: '.panelToggle',           role: 'panel'     },
+  { selector: '.tradeAction',           role: 'trade'     },
+  { selector: '.orderTypeOption',       role: 'dropdown'  },
+  { selector: '.numberPadSheet button', role: 'keypad'    },
+  { selector: '.drawerBtn',             role: 'panel'     },
+  { selector: '.panelCloseX',           role: 'panel'     }
 ];
 
 var registry = [];
-var observer = null;
-var refreshScheduled = false;
 
 function registerButton(el, options){
   if(!el || el.__dvlButtonRegistered) return;
@@ -14020,42 +14010,14 @@ function preventChartLeak(ev){
   ev.stopPropagation();
 }
 
-function refresh(root){
-  var scope = root || document;
+function init(){
   for(var i = 0; i < SELECTOR_MAP.length; i++){
     var m = SELECTOR_MAP[i];
-    var els = scope.querySelectorAll(m.selector);
-    for(var j = 0; j < els.length; j++) registerButton(els[j], { role: m.role });
+    registerBySelector(m.selector, { role: m.role });
   }
   if(window.DVL_TOUCH_GUARD && typeof window.DVL_TOUCH_GUARD.markUiSurface === 'function'){
-    try{ window.DVL_TOUCH_GUARD.markUiSurface(scope); }catch(_){}
+    try{ window.DVL_TOUCH_GUARD.markUiSurface(document); }catch(_){}
   }
-  return registry.length;
-}
-
-function observe(root){
-  if(!window.MutationObserver) return;
-  if(observer) return;
-  var target = root || document.body;
-  observer = new MutationObserver(function(mutations){
-    var hasNew = false;
-    for(var i = 0; i < mutations.length; i++){
-      if(mutations[i].addedNodes.length){ hasNew = true; break; }
-    }
-    if(!hasNew || refreshScheduled) return;
-    refreshScheduled = true;
-    if(window.requestAnimationFrame){
-      requestAnimationFrame(function(){ refreshScheduled = false; refresh(document); });
-    } else {
-      setTimeout(function(){ refreshScheduled = false; refresh(document); }, 50);
-    }
-  });
-  observer.observe(target, { childList: true, subtree: true });
-}
-
-function init(){
-  refresh(document);
-  observe(document.body);
 }
 
 window.DVL_BUTTON_SYSTEM = {
@@ -14065,9 +14027,6 @@ window.DVL_BUTTON_SYSTEM = {
   setState: setState,
   isButtonTarget: isButtonTarget,
   preventChartLeak: preventChartLeak,
-  refresh: refresh,
-  observe: observe,
-  count: function(){ return registry.length; },
   init: init
 };
 
