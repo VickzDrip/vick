@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.669</title>
+<title>DVL Binance Live — Beta 0.668</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -14423,218 +14423,12 @@ window.DVL_FEATURE_GATE_AUDIT = {
 })();
 </script>
 
-<style id="DVL_BASELINE_FREEZE_CSS_0669">
-/* DVL Beta 0.669 — Phase 3.3: baseline freeze marker.
-   Marker-only. No selectors, no visual properties, no layout changes. */
-</style>
-
-<script id="DVL_BASELINE_FREEZE_MODULE_0669">
-(function(){
-"use strict";
-
-var BASELINE_CONTRACT = {
-  version: "0.669",
-  appVersion: "Beta 0.669",
-  purpose: "freeze structural baseline before final optimization and new features",
-
-  frozenLayout: {
-    headerH: 55,
-    assetbarH: 50,
-    chartToolbarH: 30,
-    footerH: 57,
-    footerButtonH: 55,
-    priceScaleW: 70,
-    tradeDrawerMaxH: 150
-  },
-
-  frozenModules: {
-    buttonSystem: "0.655",
-    layoutContract: "0.656",
-    layoutAssertions: "0.657",
-    priceScaleLock: "0.659",
-    chartToolbarLock: "0.660",
-    chromeLock: "0.661",
-    gapDrawerLock: "0.662",
-    paperAnchor: "0.665",
-    oscillatorBoundsPublisher: "0.666",
-    runtimeIntegrationAudit: "0.667",
-    featureGateAudit: "0.668"
-  },
-
-  extensionRules: {
-    doNotWrapDrawSoon: true,
-    doNotUseContinuousRaf: true,
-    doNotUseIntervalsForLayout: true,
-    doNotUseMutationObserverForLayout: true,
-    doNotMutateDomInsideAuditModules: true,
-    doNotRenameButtonSystem0655: true,
-    newFeaturesMustUseExtensionModules: true,
-    brokerConnectorMustStartReadOnly: true
-  },
-
-  protectedAreas: [
-    "Buy/Sell click handlers",
-    "TP/SL/ENTRY math",
-    "Paper position schema",
-    "Chart zoom/pan/crosshair handlers",
-    "Oscillator render logic",
-    "Tools/drawing logic",
-    "Dropdown/keypad logic",
-    "Button System 0.655"
-  ]
-};
-
-function getContract(){
-  try{ return JSON.parse(JSON.stringify(BASELINE_CONTRACT)); }catch(_){ return BASELINE_CONTRACT; }
-}
-
-function safeCall(fn, fallback){
-  try{ return (typeof fn === "function") ? fn() : fallback; }catch(_){ return fallback; }
-}
-
-function safeAudit(obj){
-  if(!obj || typeof obj.audit !== "function") return null;
-  return safeCall(function(){ return obj.audit(); }, null);
-}
-
-function audit(){
-  var featureGate  = window.DVL_FEATURE_GATE_AUDIT        || null;
-  var runtime      = window.DVL_RUNTIME_INTEGRATION_AUDIT  || null;
-  var layoutAsrt   = window.DVL_LAYOUT_ASSERTIONS          || null;
-  var paperAnchor  = window.DVL_PAPER_LAYER_ANCHOR         || null;
-  var publisher    = window.DVL_OSCILLATOR_BOUNDS_PUBLISHER || null;
-  var oscAudit     = window.DVL_OSCILLATOR_BOUNDS_AUDIT    || null;
-
-  var fgResult     = safeAudit(featureGate);
-  var rtResult     = safeAudit(runtime);
-  var laResult     = safeAudit(layoutAsrt);
-  var paResult     = safeAudit(paperAnchor);
-  var pubResult    = safeCall(function(){ return publisher && typeof publisher.audit === "function" ? publisher.audit() : null; }, null);
-  var oscResult    = safeAudit(oscAudit);
-
-  var blockers  = [];
-  var warnings  = [];
-
-  if(!featureGate)  blockers.push("DVL_FEATURE_GATE_AUDIT missing");
-  if(!runtime)      blockers.push("DVL_RUNTIME_INTEGRATION_AUDIT missing");
-  if(!layoutAsrt)   blockers.push("DVL_LAYOUT_ASSERTIONS missing");
-  if(!paperAnchor)  blockers.push("DVL_PAPER_LAYER_ANCHOR missing");
-  if(!publisher)    blockers.push("DVL_OSCILLATOR_BOUNDS_PUBLISHER missing");
-  if(!oscAudit)     blockers.push("DVL_OSCILLATOR_BOUNDS_AUDIT missing");
-
-  if(fgResult && fgResult.pass !== true)   blockers.push("Feature Gate 0.668 audit not passing");
-  if(rtResult && rtResult.pass !== true)   warnings.push("Runtime Integration Audit not passing");
-
-  if(paperAnchor  && paperAnchor.VERSION  !== "0.665") blockers.push("Paper Anchor version mismatch (expected 0.665)");
-  if(publisher    && publisher.VERSION    !== "0.666") blockers.push("Oscillator Publisher version mismatch (expected 0.666)");
-  if(runtime      && runtime.VERSION      !== "0.667") blockers.push("Runtime Integration Audit version mismatch (expected 0.667)");
-  if(featureGate  && featureGate.VERSION  !== "0.668") blockers.push("Feature Gate Audit version mismatch (expected 0.668)");
-
-  var frozenModulesPresent = !!(featureGate && runtime && layoutAsrt && paperAnchor && publisher && oscAudit);
-
-  var frozenLayoutMatch = true;
-  var noUnsafeScheduler = !!(
-    paResult && paResult.usesNonInvasiveScheduler === true &&
-    paResult.requestAnimationFrameUsed === false
-  );
-  var noChartFunctionOverride = !!(paResult && paResult.noChartFunctionOverride === true);
-
-  var oscInvades = !!(oscResult && oscResult.paperInvadesOscillatorArea === true);
-  if(oscInvades) blockers.push("Paper layer invades oscillator area");
-
-  var pass = blockers.length === 0;
-
-  return {
-    version:                          "0.669",
-    baselineName:                     "DVL_STRUCTURAL_BASELINE_0669",
-    pass:                             pass,
-    readyForFinalOptimization:        pass,
-    readyForNewFeatures:              pass,
-    blockers:                         blockers,
-    warnings:                         warnings,
-    contract:                         getContract(),
-    current: {
-      featureGateAudit:               fgResult,
-      runtimeIntegrationAudit:        rtResult,
-      layoutAssertions:               laResult,
-      paperAnchorAudit:               paResult,
-      oscillatorPublisherAudit:       pubResult,
-      oscillatorBoundsAudit:          oscResult
-    },
-    frozenLayoutMatch:                frozenLayoutMatch,
-    frozenModulesPresent:             frozenModulesPresent,
-    protectedAreasLocked:             true,
-    noUnsafeScheduler:                noUnsafeScheduler,
-    noChartFunctionOverride:          noChartFunctionOverride,
-    noDomMutationByThisModule:        true,
-    drawSoonWrappedByThisModule:      false,
-    requestAnimationFrameUsedByThisModule: false,
-    timerUsedByThisModule:            false,
-    observerUsedByThisModule:         false
-  };
-}
-
-function compare(){
-  var current = audit();
-  var contract = getContract();
-  var diffs = [];
-
-  var cl = contract.frozenLayout;
-  var sectionSizes = window.DVL_SECTION_SIZES_PX || {};
-  if(sectionSizes.header         !== cl.headerH)        diffs.push("headerH: expected " + cl.headerH + ", got " + sectionSizes.header);
-  if(sectionSizes.assetHotbar    !== cl.assetbarH)       diffs.push("assetbarH: expected " + cl.assetbarH + ", got " + sectionSizes.assetHotbar);
-  if(sectionSizes.chartToolbar   !== cl.chartToolbarH)   diffs.push("chartToolbarH: expected " + cl.chartToolbarH + ", got " + sectionSizes.chartToolbar);
-  if(sectionSizes.footerMenu     !== cl.footerH)         diffs.push("footerH: expected " + cl.footerH + ", got " + sectionSizes.footerMenu);
-  if(sectionSizes.footerButtons  !== cl.footerButtonH)   diffs.push("footerButtonH: expected " + cl.footerButtonH + ", got " + sectionSizes.footerButtons);
-  if(sectionSizes.rightPriceScaleWidth !== cl.priceScaleW) diffs.push("priceScaleW: expected " + cl.priceScaleW + ", got " + sectionSizes.rightPriceScaleWidth);
-
-  return {
-    version:         "0.669",
-    baselineName:    "DVL_STRUCTURAL_BASELINE_0669",
-    contract:        contract,
-    auditPass:       current.pass,
-    layoutDiffs:     diffs,
-    layoutMatch:     diffs.length === 0,
-    auditResult:     current
-  };
-}
-
-function run(){
-  var featureGate = window.DVL_FEATURE_GATE_AUDIT || null;
-
-  if(featureGate && typeof featureGate.run === "function"){
-    return featureGate.run().then(function(){
-      return audit();
-    });
-  }
-
-  if(typeof window.queueMicrotask === "function"){
-    return new Promise(function(resolve){
-      window.queueMicrotask(function(){ resolve(audit()); });
-    });
-  }
-
-  return Promise.resolve(audit());
-}
-
-window.DVL_BASELINE_FREEZE = {
-  VERSION:       "0.669",
-  BASELINE_NAME: "DVL_STRUCTURAL_BASELINE_0669",
-  getContract:   getContract,
-  audit:         audit,
-  compare:       compare,
-  run:           run
-};
-
-})();
-</script>
-
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.669</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.668</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -15094,12 +14888,11 @@ window.DVL_BASELINE_FREEZE = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.669";
+const DVL_APP_VERSION = "Beta 0.668";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.669 — Phase 3.3: baseline freeze candidate; congela contratos estruturais para otimização final e novas funções." },
-  { version: "Beta 0.668", note: "Phase 3.2: feature gate audit e freeze-candidate check para validar se a base está pronta para congelamento, otimização final e novas funções." },
+  { version: DVL_APP_VERSION, note: "Beta 0.668 — Phase 3.2: feature gate audit e freeze-candidate check para validar se a base está pronta para congelamento, otimização final e novas funções." },
   { version: "Beta 0.667", note: "Phase 3.1: runtime integration audit for Paper layer, oscillator bounds publisher and safe resync pipeline." },
   { version: "Beta 0.666", note: "Phase 3.0: oscillator bounds publisher + safe Paper resync hook." },
   { version: "Beta 0.665", note: "Phase 2.9: oscillator safe clamp + audit verification for Paper layer bounds." },
