@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.682</title>
+<title>DVL Binance Live — Beta 0.681</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -15003,24 +15003,16 @@ window.DVL_SAFE_CSS_CLEANUP_AUDIT={
 
 <style id="DVL_MOBILE_UI_POLISH_CSS_0681">
 /*
-  DVL Beta 0.681/0.682 — Mobile UI polish.
-  Fixed header code leak, non-sticky TP/SL/ENTRY labels, Limit/Stop order flow.
-  Non-global: only targets dvl-ls-* overlays.
+  DVL Beta 0.681 — Mobile UI polish.
+  Fixed header code leak, non-sticky TP/SL/ENTRY labels, Limit/Stop order flow,
+  and proportional scale labels.
+  Non-global: only targets dvl-ls-* overlays and price label sizing.
 */
 
-/* Allow TP/SL/ENTRY label containers to extend beyond their positioning box */
+/* Allow lines to visually extend beyond the position box boundaries */
 .dvl-ls-box { overflow: visible; }
-
-
-<style id="DVL_MOBILE_UI_POLISH_HOTFIX_CSS_0682">
-/*
-  DVL Beta 0.682 — Mobile UI polish hotfix.
-  Minimal corrective CSS: no global layout changes.
-*/
-
-/* Draft orders: dashed visual preview while pending confirmation */
-.dvl-paper-tag[data-status="draft"] { opacity: 0.6; }
-.dvl-ls-box[data-status="draft"]    { opacity: 0.6; }
+/* Lines extend to fill the chart width regardless of box X position */
+.dvl-ls-line { left: -9999px; right: 0; }
 </style></style>
 
 <script id="DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT_MODULE_0672">
@@ -16574,276 +16566,12 @@ window.DVL_MOBILE_UI_POLISH_AUDIT = {
 })();
 </script>
 
-<script id="DVL_MOBILE_UI_POLISH_HOTFIX_AUDIT_MODULE_0682">
-(function(){
-"use strict";
-
-var _lastAudit = null;
-
-// Anti-false-positive splits
-var _shimScanTxt  = "get" + "Migrated";
-var _migratedToken = "dvl-btn-" + "migrated-";
-
-var FINAL_LOCK_CSS = [
-  "DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659",
-  "DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660",
-  "DVL_CHROME_FINAL_LOCK_CSS_0661",
-  "DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662"
-];
-
-function _cntId(els, id){
-  var c = 0;
-  for(var i = 0; i < els.length; i++){ if(els[i].id === id) c++; }
-  return c;
-}
-
-function _fnSrc(full, fnName){
-  var start = full.indexOf("function " + fnName);
-  if(start === -1) return "";
-  // Find the next function at same indentation level (4 spaces)
-  var end = full.indexOf("\n    function ", start + 10);
-  return end === -1 ? full.slice(start) : full.slice(start, end);
-}
-
-function audit(){
-  var scriptEls = document.querySelectorAll('script[id]');
-  var styleEls  = document.querySelectorAll('style[id]');
-  var blockers  = [];
-  var warnings  = [];
-
-  // A1. No duplicate </style></style> (use split string to avoid false-positive in source scan)
-  var _dupStyleTag = '<' + '/style><' + '/style>';
-  var noDupStyle = document.documentElement.outerHTML.indexOf(_dupStyleTag) === -1;
-  if(!noDupStyle) blockers.push("duplicate " + _dupStyleTag + " found");
-
-  // A2. No raw code text nodes before .top
-  var headerLeakFixed = true;
-  var headerEl = document.querySelector('header.top, .top');
-  if(headerEl && document.body){
-    var node = document.body.firstChild;
-    while(node && node !== headerEl && node !== headerEl.parentElement){
-      if(node.nodeType === 3){
-        var txt = (node.textContent || "").trim();
-        if(txt && /[)();{}]|function|return|const|let|var/.test(txt)){
-          headerLeakFixed = false;
-          blockers.push("code leak before .top: " + txt.slice(0, 40));
-        }
-      }
-      node = node.nextSibling;
-    }
-  }
-
-  // A3. .top exists and is reachable
-  var headerOk = !!headerEl;
-  if(!headerOk) blockers.push(".top not found");
-
-  // A4. Module 0681 preserved
-  var m681Present = _cntId(scriptEls, "DVL_MOBILE_UI_POLISH_AUDIT_MODULE_0681") === 1;
-  if(!m681Present) warnings.push("DVL_MOBILE_UI_POLISH_AUDIT_MODULE_0681 not found");
-
-  // A5. Release candidate gate preserved
-  var rcGatePresent = typeof window.DVL_RELEASE_CANDIDATE_GATE !== "undefined";
-  if(!rcGatePresent) warnings.push("DVL_RELEASE_CANDIDATE_GATE not found");
-
-  // A6. Optimized baseline freeze preserved
-  var obfPresent = typeof window.DVL_OPTIMIZED_BASELINE_FREEZE !== "undefined";
-  if(!obfPresent) warnings.push("DVL_OPTIMIZED_BASELINE_FREEZE not found");
-
-  // A7. Final locks 0659-0662 present 1x each
-  var missingLocks = [];
-  for(var fl = 0; fl < FINAL_LOCK_CSS.length; fl++){
-    if(_cntId(styleEls, FINAL_LOCK_CSS[fl]) !== 1) missingLocks.push(FINAL_LOCK_CSS[fl]);
-  }
-  var finalLocksPresent = missingLocks.length === 0;
-  if(!finalLocksPresent) blockers.push("final locks missing: " + missingLocks.join(", "));
-
-  // Source scan
-  var _allScripts = document.querySelectorAll('script');
-  var _srcFull = "";
-  for(var si = 0; si < _allScripts.length; si++){ _srcFull += _allScripts[si].textContent; }
-
-  var draftFnSrc   = _fnSrc(_srcFull, "createPendingOrderDraft");
-  var confirmFnSrc = _fnSrc(_srcFull, "confirmPendingOrderDraft");
-  var cancelFnSrc  = _fnSrc(_srcFull, "cancelPendingOrderDraft");
-  var marketFnSrc  = _fnSrc(_srcFull, "executeMarketOrder");
-
-  // A8. state.pendingDraft in source
-  var hasPendingDraft = _srcFull.indexOf("pendingDraft") > -1;
-  if(!hasPendingDraft) blockers.push("pendingDraft not found in source");
-
-  // A9. createPendingOrderDraft does NOT call createPosition
-  var draftNoCreatePos = draftFnSrc.indexOf("createPosition") === -1;
-  if(!draftNoCreatePos) blockers.push("createPendingOrderDraft still calls createPosition");
-
-  // A10. createPendingOrderDraft does NOT push to state.positions
-  var draftNoPush = draftFnSrc.indexOf("state.positions.push") === -1;
-  if(!draftNoPush) blockers.push("createPendingOrderDraft still calls state.positions.push");
-
-  // A11. confirmPendingOrderDraft exists and pushes to positions
-  var confirmFnPresent = draftFnSrc !== "" && _srcFull.indexOf("function confirmPendingOrderDraft") > -1;
-  if(!confirmFnPresent) blockers.push("confirmPendingOrderDraft not found");
-
-  // A12. cancelPendingOrderDraft clears draft only
-  var cancelNoPush      = cancelFnSrc.indexOf("state.positions.push") === -1;
-  var cancelClearsDraft = cancelFnSrc.indexOf("pendingDraft = null") > -1;
-  if(!cancelNoPush)      blockers.push("cancelPendingOrderDraft still pushes to positions");
-  if(!cancelClearsDraft) warnings.push("cancelPendingOrderDraft doesn't clear pendingDraft");
-
-  // A13. Market creates position open immediately (via createPosition with "Market")
-  var marketCreatesOpen = marketFnSrc.indexOf('"Market"') > -1;
-  if(!marketCreatesOpen) warnings.push("executeMarketOrder may not pass Market type");
-
-  // A14. Limit draft sets status:"draft"
-  var draftSetsDraft = draftFnSrc.indexOf('status: "draft"') > -1;
-  if(!draftSetsDraft) blockers.push('createPendingOrderDraft does not set status:"draft"');
-
-  // A15. Stop also sets status:"draft" (same function handles both Limit and Stop)
-  var stopSetsDraft = draftSetsDraft; // same function, same status assignment
-
-  // A16. confirmPendingOrderDraft sets status:"pending"
-  var confirmSetsPending = confirmFnSrc.indexOf('status: "pending"') > -1;
-  if(!confirmSetsPending) blockers.push('confirmPendingOrderDraft does not set status:"pending"');
-
-  // A17. Stop confirmed also becomes "pending" (same confirmPendingOrderDraft)
-  var stopConfirmedPending = confirmSetsPending;
-
-  // A18. Buy Limit price below market
-  var buyLimitBelow = draftFnSrc.indexOf("isBuy ? price - offset : price + offset") > -1;
-  if(!buyLimitBelow) warnings.push("Limit buy-below / sell-above offset not found");
-
-  // A19. Sell Limit price above market (same expression, opposite branch)
-  var sellLimitAbove = buyLimitBelow;
-
-  // A20. Buy Stop price above market
-  var buyStopAbove = draftFnSrc.indexOf("isBuy ? price + offset : price - offset") > -1;
-  if(!buyStopAbove) warnings.push("Stop buy-above / sell-below offset not found");
-
-  // A21. Sell Stop price below market (same expression, opposite branch)
-  var sellStopBelow = buyStopAbove;
-
-  // A22. Labels use real anchor X via tagLeftPx
-  var labelsUseAnchor = _srcFull.indexOf("tagLeftPx(pos, chartW, S)") > -1;
-  if(!labelsUseAnchor) warnings.push("tagLeftPx anchor call not found");
-
-  // A23. Labels hidden when anchor X is off-screen
-  var labelsHideOffscreen = _srcFull.indexOf("'display', 'none', 'important'") > -1
-                         || _srcFull.indexOf('"display", "none", "important"') > -1;
-  if(!labelsHideOffscreen) warnings.push("off-screen label hiding not found");
-
-  // A24. Lines remain visible (renderPosition draws lines independent of label visibility)
-  var linesVisible = _srcFull.indexOf("makeLine(pos") > -1;
-  if(!linesVisible) warnings.push("makeLine not found (line rendering may be broken)");
-
-  // A25. No left:-9999px in HTML
-  // Check the specific .dvl-ls-line gambiarra (split to avoid false-positive in source scan)
-  var _dvlLsLineGambiarra = ".dvl-ls-line { left: " + "-9999px";
-  var noNinePx = document.documentElement.innerHTML.indexOf(_dvlLsLineGambiarra) === -1;
-  if(!noNinePx) warnings.push(".dvl-ls-line left:-9999px gambiarra still present");
-
-  // A26. Scale labels compact: tagH = 20 found in source
-  var scaleLabelsProportional = _srcFull.indexOf("const tagH = 20") > -1;
-  if(!scaleLabelsProportional) warnings.push("tagH = 20 not found (compact label not confirmed)");
-
-  // A27. Current price label compact (same tagH = 20)
-  var currentPriceLabelCompact = scaleLabelsProportional;
-
-  // A28. Oscillator labels: DVL_OSCILLATOR_BOUNDS_PUBLISHER present
-  var oscOk = typeof window.DVL_OSCILLATOR_BOUNDS_PUBLISHER !== "undefined";
-  if(!oscOk) warnings.push("DVL_OSCILLATOR_BOUNDS_PUBLISHER not found");
-
-  // A29. Buy/Sell buttons preserved
-  var buySellOk = !!document.getElementById("dvlBuyBtn") && !!document.getElementById("dvlSellBtn");
-  if(!buySellOk) warnings.push("Buy/Sell buttons not found");
-
-  // A30. renderPosition preserved
-  var renderPosOk = _srcFull.indexOf("function renderPosition") > -1;
-  if(!renderPosOk) blockers.push("renderPosition not found");
-
-  // A31. Multiple positions supported
-  var multiPosOk = _srcFull.indexOf("state.positions.slice()") > -1;
-  if(!multiPosOk) warnings.push("state.positions.slice() not found");
-
-  // A32. Chart handlers intact
-  var chartOk = !!document.querySelector("canvas") || typeof window.DVL_RUNTIME_INTEGRATION_AUDIT !== "undefined";
-
-  // A33. Oscillator render intact
-  var oscRenderOk = oscOk;
-
-  // A34. Tools/keypads intact
-  var toolsOk = document.documentElement.innerHTML.indexOf("dvl-btn-keypad") > -1;
-  if(!toolsOk) warnings.push("dvl-btn-keypad not found");
-
-  // A35-A39 checked against this module's own source (m682 = current script's text)
-  var m682 = document.currentScript ? document.currentScript.textContent : "";
-
-  var btnPresent = typeof window.DVL_BUTTON_SYSTEM !== "undefined";
-  if(!btnPresent) blockers.push("DVL_BUTTON_SYSTEM missing");
-
-  var pass = (
-    noDupStyle &&
-    headerOk &&
-    headerLeakFixed &&
-    finalLocksPresent &&
-    btnPresent &&
-    hasPendingDraft &&
-    draftNoCreatePos &&
-    draftNoPush &&
-    confirmFnPresent &&
-    cancelNoPush &&
-    draftSetsDraft &&
-    confirmSetsPending &&
-    renderPosOk
-  );
-
-  _lastAudit = {
-    pass:                    pass,
-    noDupStyle:              noDupStyle,
-    headerLeakFixed:         headerLeakFixed,
-    hasPendingDraft:         hasPendingDraft,
-    draftNoCreatePos:        draftNoCreatePos,
-    draftNoPush:             draftNoPush,
-    confirmFnPresent:        confirmFnPresent,
-    cancelNoPush:            cancelNoPush,
-    cancelClearsDraft:       cancelClearsDraft,
-    draftSetsDraft:          draftSetsDraft,
-    stopSetsDraft:           stopSetsDraft,
-    confirmSetsPending:      confirmSetsPending,
-    stopConfirmedPending:    stopConfirmedPending,
-    buyLimitBelow:           buyLimitBelow,
-    sellLimitAbove:          sellLimitAbove,
-    buyStopAbove:            buyStopAbove,
-    sellStopBelow:           sellStopBelow,
-    labelsUseAnchor:         labelsUseAnchor,
-    labelsHideOffscreen:     labelsHideOffscreen,
-    linesVisible:            linesVisible,
-    noNinePx:                noNinePx,
-    scaleLabelsProportional: scaleLabelsProportional,
-    currentPriceLabelCompact: currentPriceLabelCompact,
-    blockers:                blockers,
-    warnings:                warnings
-  };
-  return _lastAudit;
-}
-
-function getLastAudit(){ return _lastAudit; }
-function run(){ _lastAudit = audit(); return Promise.resolve(_lastAudit); }
-
-window.DVL_MOBILE_UI_POLISH_HOTFIX_AUDIT = {
-  VERSION:      "0.682",
-  audit:        audit,
-  run:          run,
-  getLastAudit: getLastAudit
-};
-
-})();
-</script>
-
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.682</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.681</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -17303,12 +17031,11 @@ window.DVL_MOBILE_UI_POLISH_HOTFIX_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.682";
+const DVL_APP_VERSION = "Beta 0.681";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.682 — Mobile UI polish hotfix: fixed duplicate style close, real Limit/Stop draft flow, anchored TP/SL/ENTRY labels, and measured scale label sizing." },
-  { version: "Beta 0.681", note: "Beta 0.681 — Mobile UI polish: fixed header code leak, non-sticky TP/SL/ENTRY labels, Limit/Stop pending order flow, and proportional scale labels." },
+  { version: DVL_APP_VERSION, note: "Beta 0.681 — Mobile UI polish: fixed header code leak, non-sticky TP/SL/ENTRY labels, Limit/Stop pending order flow, and proportional scale labels." },
   { version: "Beta 0.680", note: "Beta 0.680 — Release candidate gate: certified the optimized baseline as stable and ready for new feature work." },
   { version: "Beta 0.679", note: "Beta 0.679 — Optimized baseline freeze: froze the post-cleanup stable base after 0.678 verified readyForOptimizedBaselineFreeze." },
   { version: "Beta 0.678", note: "Beta 0.678 — Safe historical audit cleanup batch 3: removed retired 0.673/0.674 audit modules after 0.677 post-cleanup inventory confirmed safe removal." },
@@ -34736,8 +34463,7 @@ Do not rework this logic unless the user explicitly requests it.
       padDraft: "100",
       liqOn: true,
       positions: [],
-      pending: null,
-      pendingDraft: null
+      pending: null
     };
 
     function appSymbol(){
@@ -35564,48 +35290,15 @@ Do not rework this logic unless the user explicitly requests it.
     function createPendingOrderDraft(side){
       const price = lastPrice();
       if(!(price > 0)){ toast("Aguardando preço"); return; }
+      // Apply 0.2% offset so Limit/Stop don't trigger immediately at market price
       const offset = price * 0.002;
-      const isLimit = state.orderType === "Limit";
-      const isBuy = side === "buy";
-      // Limit: buy below market, sell above; Stop: buy above market, sell below
-      const draftPrice = isLimit
-        ? (isBuy ? price - offset : price + offset)
-        : (isBuy ? price + offset : price - offset);
-      const risk = Math.max(draftPrice * 0.004, 1);
-      state.pendingDraft = {
-        id: "draft_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,7),
-        symbol: appSymbol(),
-        side: isBuy ? "buy" : "sell",
-        orderType: state.orderType,
-        entry: draftPrice,
-        tp: isBuy ? draftPrice + risk : draftPrice - risk,
-        sl: isBuy ? draftPrice - risk : draftPrice + risk,
-        qty: qtyFor(draftPrice),
-        size: Number(state.entryAmount),
-        leverage: Number(state.leverage),
-        marginMode: state.marginMode,
-        createdAt: Date.now(),
-        status: "draft"
-      };
-      render();
+      const limitPrice = side === "buy" ? price - offset : price + offset;
+      createPosition(side, limitPrice, state.orderType);
     }
 
-    function confirmPendingOrderDraft(id){
-      if(!state.pendingDraft) return;
-      if(id && String(state.pendingDraft.id) !== String(id)) return;
-      const pos = Object.assign({}, state.pendingDraft, { status: "pending" });
-      state.positions.push(pos);
-      state.pendingDraft = null;
-      save();
-      render();
-    }
+    function confirmPendingOrder(id){ render(); }
 
-    function cancelPendingOrderDraft(id){
-      if(!state.pendingDraft) return;
-      if(id && String(state.pendingDraft.id) !== String(id)) return;
-      state.pendingDraft = null;
-      render();
-    }
+    function cancelPendingOrderDraft(id){ removePosition(id); }
 
     function fillPendingOrderIfTriggered(pos){ return maybeTriggerPending(pos); }
 
@@ -36076,8 +35769,9 @@ var MAX_TAG_W = 162; /* CSS max-width:154px + 8px safety margin */
 function tagLeftPx(pos, chartW, S){
   var idx = candleIdxForTime(S.candles, Number(pos.createdAt) || 0);
   var span = Math.max(0.1, S.view.end - S.view.start);
-  // 0682: raw pixel position — caller hides label when anchor is off-screen
-  return (idx + CANDLE_OFFSET - S.view.start + 0.5) * chartW / span;
+  var xPx = (idx + CANDLE_OFFSET - S.view.start + 0.5) * chartW / span;
+  /* Clamp so the label's right edge never overlaps the price scale */
+  return Math.max(0, Math.min(xPx, chartW - MAX_TAG_W));
 }
 
 function dvlSyncTagLeft(){
@@ -36103,18 +35797,11 @@ function dvlSyncTagLeft(){
     }
     if(!pos) continue;
     var xPx = tagLeftPx(pos, chartW, S);
-    // 0682: hide label when anchor candle is off-screen; never clamp to viewport
-    if(xPx < 0 || xPx > chartW){
-      tag.style.setProperty('display', 'none', 'important');
-    } else {
-      tag.style.removeProperty('display');
-      var clampedX = Math.min(xPx, chartW - MAX_TAG_W);
-      tag.style.setProperty('left',      clampedX.toFixed(1) + 'px', 'important');
-      tag.style.setProperty('right',     'auto',                      'important');
-      tag.style.setProperty('transform', 'none',                      'important');
-    }
+    tag.style.setProperty('left',  xPx.toFixed(1) + 'px', 'important');
+    tag.style.setProperty('right', 'auto',                 'important');
+    tag.style.setProperty('transform', 'none',             'important');
   }
-  // 0681/0682: sync .dvl-ls-box X positions; hide when anchor is off-screen
+  // 0681: sync .dvl-ls-box X positions so TP/SL/ENTRY labels follow chart candle anchor
   var boxes = layer.querySelectorAll('.dvl-ls-box[data-id]');
   for(var bi = 0; bi < boxes.length; bi++){
     var box = boxes[bi];
@@ -36126,12 +35813,7 @@ function dvlSyncTagLeft(){
     }
     if(!bPos) continue;
     var bX = tagLeftPx(bPos, chartW, S);
-    if(bX < 0 || bX > chartW){
-      box.style.setProperty('display', 'none', 'important');
-    } else {
-      box.style.removeProperty('display');
-      box.style.setProperty('left', bX.toFixed(1) + 'px', 'important');
-    }
+    box.style.setProperty('left', bX.toFixed(1) + 'px', 'important');
   }
 }
 
