@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.641</title>
+<title>DVL Binance Live — Beta 0.640</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -16,12 +16,6 @@
 .tradeDrawer .tradeAction,
 .orderTypeMenu .orderTypeOption,
 .numberPadSheet button{ touch-action: manipulation; }
-</style>
-
-<style id="DVL_BUTTON_SYSTEM_CSS_0641">
-/* DVL Beta 0.641 — Phase 1: neutral touch-highlight suppression for registered buttons.
-   Does NOT alter height, padding, color, border, radius or layout. */
-[data-dvl-button="true"]{ -webkit-tap-highlight-color: transparent; }
 </style>
 <style>
 :root{
@@ -13344,7 +13338,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.641</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.640</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13804,12 +13798,11 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.641";
+const DVL_APP_VERSION = "Beta 0.640";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Phase 1: scaffold do DVL_BUTTON_SYSTEM para padronização futura de botões sem alteração visual." },
-  { version: "Beta 0.640", note: "Touch guard selector patch: inclui paper layer e confirmação de edição para impedir vazamento de eventos ao gráfico." },
+  { version: DVL_APP_VERSION, note: "Touch guard selector patch: inclui paper layer e confirmação de edição para impedir vazamento de eventos ao gráfico." },
   { version: "Beta 0.639", note: "Phase 0: UI/touch guard scaffold e marcação de superfícies UI antes da padronização de botões." },
   { version: "Beta 0.638", note: "Fix: native DVL demo-position text removed; labels 10 candles right of creation; edit label stable." },
   { version: "Beta 0.637", note: "Fix: Limit ≠ Market (0.5% offset); labels centered; edit label no longer escapes to right edge." },
@@ -13955,89 +13948,6 @@ window.DVL_CHANGELOG = [
     init();
   }
 })();
-
-<script id="DVL_BUTTON_SYSTEM_MODULE_0641">
-// ===== DVL_BUTTON_SYSTEM_MODULE_0641 =====
-(function(){
-"use strict";
-
-var SELECTOR_MAP = [
-  { selector: '.navItem',               role: 'footer'    },
-  { selector: '.tfBtn',                 role: 'timeframe' },
-  { selector: '.smallChartBtn',         role: 'header'    },
-  { selector: '.indBtn',                role: 'header'    },
-  { selector: '.iconBtn',               role: 'icon'      },
-  { selector: '.menuBtn',               role: 'dropdown'  },
-  { selector: '.panelBtn',              role: 'panel'     },
-  { selector: '.panelToggle',           role: 'panel'     },
-  { selector: '.tradeAction',           role: 'trade'     },
-  { selector: '.orderTypeOption',       role: 'dropdown'  },
-  { selector: '.numberPadSheet button', role: 'keypad'    },
-  { selector: '.drawerBtn',             role: 'panel'     },
-  { selector: '.panelCloseX',           role: 'panel'     }
-];
-
-var registry = [];
-
-function registerButton(el, options){
-  if(!el || el.__dvlButtonRegistered) return;
-  el.__dvlButtonRegistered = true;
-  el.setAttribute('data-dvl-button', 'true');
-  el.setAttribute('data-dvl-ui', 'true');
-  if(options && options.role)
-    el.setAttribute('data-dvl-button-role', options.role);
-  registry.push(el);
-}
-
-function registerBySelector(selector, options){
-  var els = document.querySelectorAll(selector);
-  for(var i = 0; i < els.length; i++) registerButton(els[i], options);
-}
-
-function setState(el, state, value){
-  if(!el) return;
-  el.setAttribute('data-dvl-state-' + state, String(value));
-}
-
-function isButtonTarget(ev){
-  var t = ev && ev.target;
-  if(!t) return false;
-  return !!(t.closest && t.closest('[data-dvl-button="true"]'));
-}
-
-function preventChartLeak(ev){
-  if(!isButtonTarget(ev)) return;
-  ev.stopPropagation();
-}
-
-function init(){
-  for(var i = 0; i < SELECTOR_MAP.length; i++){
-    var m = SELECTOR_MAP[i];
-    registerBySelector(m.selector, { role: m.role });
-  }
-  if(window.DVL_TOUCH_GUARD && typeof window.DVL_TOUCH_GUARD.markUiSurface === 'function'){
-    try{ window.DVL_TOUCH_GUARD.markUiSurface(document); }catch(_){}
-  }
-}
-
-window.DVL_BUTTON_SYSTEM = {
-  registry: registry,
-  registerButton: registerButton,
-  registerBySelector: registerBySelector,
-  setState: setState,
-  isButtonTarget: isButtonTarget,
-  preventChartLeak: preventChartLeak,
-  init: init
-};
-
-if(document.readyState === 'loading'){
-  document.addEventListener('DOMContentLoaded', init, {once:true});
-} else {
-  init();
-}
-
-})();
-</script>
 
 window.DVL_SECTION_SIZES_PX = {
   header: 55,
