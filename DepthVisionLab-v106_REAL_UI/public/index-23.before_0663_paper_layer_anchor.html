@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.663</title>
+<title>DVL Binance Live — Beta 0.662</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -13650,161 +13650,12 @@ body{
 }
 </style>
 
-<style id="DVL_PAPER_LAYER_ANCHOR_CSS_0663">
-/* DVL Beta 0.663 — Phase 2.7: Paper layer anchor.
-   The paper layer itself reserves the 70px right price scale.
-   Internal paper lines/hits should not subtract the old 54/55/56/57px offsets again. */
-:root{
-  --dvl-paper-price-scale-w:var(--dvl-price-scale-w,70px)!important;
-}
-#dvlPaperLayer.dvl-paper-layer,
-.canvasWrap .dvl-paper-layer{
-  left:0!important;
-  right:var(--dvl-paper-price-scale-w)!important;
-  width:auto!important;
-}
-#dvlPaperLayer .dvl-paper-line,
-#dvlPaperLayer .dvl-paper-hit{
-  left:0!important;
-  right:0!important;
-}
-#dvlPaperLayer .dvl-paper-tag:not(.dvl-paper-edit-label-fixed){
-  right:auto!important;
-}
-#dvlPaperLayer .dvl-paper-pending,
-#dvlPaperLayer .dvl-paper-pending-controls,
-#dvlPaperLayer .dvl-paper-edit-confirm{
-  right:0!important;
-}
-</style>
-
-<script id="DVL_PAPER_LAYER_ANCHOR_MODULE_0663">
-(function(){
-"use strict";
-
-var _lastSync = null;
-
-function getScaleW(){
-  return (typeof window.DVL_PRICE_SCALE_W === "number") ? window.DVL_PRICE_SCALE_W : 70;
-}
-
-function getWrap(){
-  return document.getElementById("chartWrap") || document.querySelector(".canvasWrap");
-}
-
-function getLayer(){
-  return document.getElementById("dvlPaperLayer") || document.querySelector(".dvl-paper-layer");
-}
-
-function sync(){
-  var layer = getLayer();
-  var wrap  = getWrap();
-  if(!layer || !wrap) return { layerExists: false, wrapExists: !!wrap };
-
-  var scaleW = getScaleW();
-  var totalH = wrap.clientHeight;
-  var priceH = totalH;
-  try{
-    if(typeof dvlPricePanelHeight === "function") priceH = dvlPricePanelHeight(totalH);
-  }catch(_){}
-  var timeH = 20;
-  try{
-    if(typeof dvlMainTimeScaleHeight === "function") timeH = dvlMainTimeScaleHeight();
-  }catch(_){}
-  var paneH = Math.max(40, priceH - timeH);
-
-  layer.style.setProperty("top",    "0",               "important");
-  layer.style.setProperty("left",   "0",               "important");
-  layer.style.setProperty("right",  scaleW + "px",     "important");
-  layer.style.setProperty("width",  "auto",            "important");
-  layer.style.setProperty("height", paneH + "px",      "important");
-  layer.style.setProperty("bottom", "auto",            "important");
-
-  var result = {
-    layerExists:  true,
-    wrapExists:   true,
-    priceScaleW:  scaleW,
-    paneH:        paneH,
-    timestamp:    Date.now()
-  };
-  _lastSync = result;
-  return result;
-}
-
-function audit(){
-  var layer   = getLayer();
-  var wrap    = getWrap();
-  var scaleW  = getScaleW();
-  var layerRect = layer ? layer.getBoundingClientRect() : null;
-  var wrapRect  = wrap  ? wrap.getBoundingClientRect()  : null;
-  var rightGapPx = (layerRect && wrapRect) ? (wrapRect.right - layerRect.right) : null;
-  var lines = layer ? layer.querySelectorAll(".dvl-paper-line").length : 0;
-  var hits  = layer ? layer.querySelectorAll(".dvl-paper-hit").length  : 0;
-  var totalH = wrap ? wrap.clientHeight : 0;
-  var priceH = totalH;
-  try{ if(typeof dvlPricePanelHeight === "function") priceH = dvlPricePanelHeight(totalH); }catch(_){}
-  var timeH = 20;
-  try{ if(typeof dvlMainTimeScaleHeight === "function") timeH = dvlMainTimeScaleHeight(); }catch(_){}
-  var expectedMaxH = Math.max(40, priceH - timeH);
-
-  return {
-    version:              "0.663",
-    layerExists:          !!layer,
-    wrapExists:           !!wrap,
-    priceScaleW:          scaleW,
-    layerRect:            layerRect ? { top: layerRect.top, left: layerRect.left, right: layerRect.right, bottom: layerRect.bottom, width: layerRect.width, height: layerRect.height } : null,
-    wrapRect:             wrapRect  ? { top: wrapRect.top,  left: wrapRect.left,  right: wrapRect.right,  bottom: wrapRect.bottom,  width: wrapRect.width,  height: wrapRect.height  } : null,
-    rightGapPx:           rightGapPx,
-    heightPx:             layerRect ? layerRect.height : null,
-    expectedMaxHeightPx:  expectedMaxH,
-    internalLineCount:    lines,
-    internalHitCount:     hits,
-    noTradeLogicMutation: true,
-    lastSync:             _lastSync
-  };
-}
-
-function getLastSync(){
-  return _lastSync;
-}
-
-function run(){
-  sync();
-}
-
-if(document.readyState === "loading"){
-  document.addEventListener("DOMContentLoaded", run, { once: true });
-} else {
-  run();
-}
-
-window.addEventListener("resize", sync);
-
-if(typeof window.drawSoon === "function"){
-  var _prevDrawSoon = window.drawSoon;
-  window.drawSoon = function(){
-    var r = _prevDrawSoon.apply(this, arguments);
-    requestAnimationFrame(sync);
-    return r;
-  };
-}
-
-window.DVL_PAPER_LAYER_ANCHOR = {
-  VERSION:     "0.663",
-  sync:        sync,
-  audit:       audit,
-  getLastSync: getLastSync
-};
-
-})();
-</script>
-
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.663</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.662</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -14264,12 +14115,11 @@ window.DVL_PAPER_LAYER_ANCHOR = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.663";
+const DVL_APP_VERSION = "Beta 0.662";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.663 — Phase 2.7: Paper layer anchor + oscillator-safe sync; normaliza offsets internos do Paper após price scale 70px." },
-  { version: "Beta 0.662", note: "Phase 2.6: lock final de gap chart/canvas/footer e geometria do trade drawer 150px sem sobrepor o footer." },
+  { version: DVL_APP_VERSION, note: "Beta 0.662 — Phase 2.6: lock final de gap chart/canvas/footer e geometria do trade drawer 150px sem sobrepor o footer." },
   { version: "Beta 0.661", note: "Phase 2.5: lock final do chrome estrutural, travando header/assetbar e footer/footer buttons conforme Layout Contract." },
   { version: "Beta 0.660", note: "Phase 2.4: lock final da timer/Indicators hotbar em 30px, alinhando a cascata CSS com o Layout Contract." },
   { version: "Beta 0.659", note: "Phase 2.3: hotfix/final cascade lock for right price scale 70px." },
