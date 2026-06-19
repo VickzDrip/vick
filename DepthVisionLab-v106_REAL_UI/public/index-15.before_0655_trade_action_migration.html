@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.655</title>
+<title>DVL Binance Live — Beta 0.654</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -132,13 +132,6 @@
    Visual-neutral diagnostic class for migrated drawer buttons.
    Does NOT alter height, padding, gap, radius, color, font or layout. */
 .dvl-btn-migrated-drawer {}
-</style>
-
-<style id="DVL_BUTTON_TRADE_ACTION_MIGRATION_CSS_0655">
-/* DVL Beta 0.655 — Phase 1.13: tradeAction migration pilot.
-   Visual-neutral diagnostic class for migrated Buy/Sell buttons.
-   Does NOT alter height, padding, gap, radius, color, font or layout. */
-.dvl-btn-migrated-trade-action {}
 </style>
 
 <style>
@@ -13462,7 +13455,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.655</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.647</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13922,12 +13915,11 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.655";
+const DVL_APP_VERSION = "Beta 0.654";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.655 — Phase 1.13: migração piloto visual-neutral dos botões Buy/Sell .tradeAction para o DVL_BUTTON_SYSTEM." },
-  { version: "Beta 0.654", note: "Phase 1.12: migração piloto visual-neutral do drawerBtn para o DVL_BUTTON_SYSTEM." },
+  { version: DVL_APP_VERSION, note: "Beta 0.654 — Phase 1.12: migração piloto visual-neutral do drawerBtn para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.653", note: "Phase 1.11: migração piloto visual-neutral dos botões paper confirm/edit para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.652", note: "Phase 1.10: migração piloto visual-neutral dos botões de tools/desenhos para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.651", note: "Phase 1.9: migração piloto visual-neutral dos botões dos dropdowns de asset/favoritos/indicadores para o DVL_BUTTON_SYSTEM." },
@@ -14088,7 +14080,7 @@ window.DVL_CHANGELOG = [
   }
 })();
 
-// ===== DVL_BUTTON_SYSTEM_MODULE_0655 =====
+// ===== DVL_BUTTON_SYSTEM_MODULE_0654 =====
 (function(){
 "use strict";
 
@@ -14137,7 +14129,7 @@ function registerButton(el, options){
   el.__dvlButtonRegistered = true;
   el.setAttribute('data-dvl-button', 'true');
   el.setAttribute('data-dvl-ui', 'true');
-  el.setAttribute('data-dvl-button-version', '0.655');
+  el.setAttribute('data-dvl-button-version', '0.654');
   el.setAttribute('data-dvl-button-scaffold', 'true');
   if(options && options.role)
     el.setAttribute('data-dvl-button-role', options.role);
@@ -14214,12 +14206,6 @@ function registerButton(el, options){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-paper');
     el.classList.add('dvl-btn-migrated-paper-edit');
-  }
-  if(options && options.role === 'trade' &&
-     el.classList.contains('tradeAction')){
-    el.classList.add('dvl-btn');
-    el.classList.add('dvl-btn-trade');
-    el.classList.add('dvl-btn-migrated-trade-action');
   }
   if(options && options.role === 'panel' &&
      el.classList.contains('drawerBtn')){
@@ -14451,16 +14437,6 @@ function getMigratedDrawerButtons(){
   return result;
 }
 
-function getMigratedTradeActionButtons(){
-  var result = [];
-  for(var i = 0; i < registry.length; i++){
-    var el = registry[i];
-    if(el.classList.contains('dvl-btn-migrated-trade-action') &&
-       el.classList.contains('tradeAction')) result.push(el);
-  }
-  return result;
-}
-
 function audit(){
   var footerEls = listByRole('footer');
   var footerMigrated = 0;
@@ -14522,20 +14498,6 @@ function audit(){
   for(var i = 0; i < allPanelEls.length; i++){
     if(allPanelEls[i].classList.contains('drawerBtn')) drawerTotal++;
   }
-  var tradeEls = listByRole('trade');
-  var tradeActionTotal = 0;
-  var tradeActionMigrated = 0;
-  var buyTradeActionTotal = 0;
-  var sellTradeActionTotal = 0;
-  for(var i = 0; i < tradeEls.length; i++){
-    var el = tradeEls[i];
-    if(el.classList.contains('tradeAction')){
-      tradeActionTotal++;
-      if(el.classList.contains('dvl-btn-migrated-trade-action')) tradeActionMigrated++;
-      if(el.classList.contains('buy')) buyTradeActionTotal++;
-      if(el.classList.contains('sell')) sellTradeActionTotal++;
-    }
-  }
   var paperConfirmMigrated = getMigratedPaperConfirmButtons().length;
   var paperEditConfirmMigrated = getMigratedPaperEditConfirmButtons().length;
   var assetFavoriteMigrated = getMigratedAssetFavoriteButtons().length;
@@ -14560,10 +14522,6 @@ function audit(){
     panelControlMigrated:      panelControlMigrated,
     drawerTotal:               drawerTotal,
     drawerMigrated:            drawerEls.length,
-    tradeActionTotal:          tradeActionTotal,
-    tradeActionMigrated:       tradeActionMigrated,
-    buyTradeActionTotal:       buyTradeActionTotal,
-    sellTradeActionTotal:      sellTradeActionTotal,
     orderOptionTotal:          orderOptionTotal,
     orderOptionMigrated:       orderOptionEls.length,
     keypadTotal:               keypadEls.length,
@@ -14615,7 +14573,6 @@ window.DVL_BUTTON_SYSTEM = {
   getMigratedPaperConfirmButtons:    getMigratedPaperConfirmButtons,
   getMigratedPaperEditConfirmButtons: getMigratedPaperEditConfirmButtons,
   getMigratedDrawerButtons:          getMigratedDrawerButtons,
-  getMigratedTradeActionButtons:     getMigratedTradeActionButtons,
   audit:                             audit,
   init:                              init
 };
