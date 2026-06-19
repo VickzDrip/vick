@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.648</title>
+<title>DVL Binance Live — Beta 0.647</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -80,13 +80,6 @@
 .dvl-btn-migrated-header {}
 .dvl-btn-migrated-icon   {}
 .dvl-btn-migrated-menu   {}
-</style>
-
-<style id="DVL_BUTTON_PANEL_MIGRATION_CSS_0648">
-/* DVL Beta 0.648 — Phase 1.6: panel/control button migration pilot.
-   Visual-neutral diagnostic class for migrated panel buttons.
-   Does NOT alter height, padding, gap, radius, color, font or layout. */
-.dvl-btn-migrated-panel {}
 </style>
 
 <style>
@@ -13870,12 +13863,11 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.648";
+const DVL_APP_VERSION = "Beta 0.647";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.648 — Phase 1.6: migração piloto visual-neutral dos botões de painel/controles para o DVL_BUTTON_SYSTEM." },
-  { version: "Beta 0.647", note: "Phase 1.5: migração piloto visual-neutral dos botões de header/toolbar para o DVL_BUTTON_SYSTEM." },
+  { version: DVL_APP_VERSION, note: "Phase 1.5: migração piloto visual-neutral dos botões de header/toolbar para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.646", note: "Phase 1.4: migração piloto visual-neutral dos botões de timeframe para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.645", note: "Phase 1.3: migração piloto visual-neutral dos botões do footer para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.644", note: "Phase 1.2: adiciona tokens/classes scaffold do sistema de botões sem alteração visual." },
@@ -14029,7 +14021,7 @@ window.DVL_CHANGELOG = [
   }
 })();
 
-// ===== DVL_BUTTON_SYSTEM_MODULE_0648 =====
+// ===== DVL_BUTTON_SYSTEM_MODULE_0647 =====
 (function(){
 "use strict";
 
@@ -14078,7 +14070,7 @@ function registerButton(el, options){
   el.__dvlButtonRegistered = true;
   el.setAttribute('data-dvl-button', 'true');
   el.setAttribute('data-dvl-ui', 'true');
-  el.setAttribute('data-dvl-button-version', '0.648');
+  el.setAttribute('data-dvl-button-version', '0.647');
   el.setAttribute('data-dvl-button-scaffold', 'true');
   if(options && options.role)
     el.setAttribute('data-dvl-button-role', options.role);
@@ -14107,14 +14099,6 @@ function registerButton(el, options){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-dropdown');
     el.classList.add('dvl-btn-migrated-menu');
-  }
-  if(options && options.role === 'panel' &&
-     (el.classList.contains('panelBtn') ||
-      el.classList.contains('panelToggle') ||
-      el.classList.contains('panelCloseX'))){
-    el.classList.add('dvl-btn');
-    el.classList.add('dvl-btn-panel');
-    el.classList.add('dvl-btn-migrated-panel');
   }
   registry.push(el);
 }
@@ -14237,18 +14221,6 @@ function getMigratedMenuButtons(){
   return result;
 }
 
-function getMigratedPanelButtons(){
-  var result = [];
-  for(var i = 0; i < registry.length; i++){
-    var el = registry[i];
-    if(el.classList.contains('dvl-btn-migrated-panel') &&
-       (el.classList.contains('panelBtn') ||
-        el.classList.contains('panelToggle') ||
-        el.classList.contains('panelCloseX'))) result.push(el);
-  }
-  return result;
-}
-
 function audit(){
   var footerEls = listByRole('footer');
   var footerMigrated = 0;
@@ -14271,26 +14243,21 @@ function audit(){
     if(iconEls[i].classList.contains('dvl-btn-migrated-icon')) iconMigrated++;
   }
   var menuEls = getMigratedMenuButtons();
-  var panelControlEls = getMigratedPanelButtons();
-  var allPanelEls = listByRole('panel');
-  var panelControlMigrated = panelControlEls.length;
   return {
-    total:                registry.length,
-    roles:                getRoleCounts(),
-    registered:           registry.length,
-    observed:             observer !== null,
-    footerTotal:          footerEls.length,
-    footerMigrated:       footerMigrated,
-    timeframeTotal:       timeframeEls.length,
-    timeframeMigrated:    timeframeMigrated,
-    headerTotal:          headerEls.length,
-    headerMigrated:       headerMigrated,
-    iconTotal:            iconEls.length,
-    iconMigrated:         iconMigrated,
-    menuTotal:            getMigratedMenuButtons().length,
-    menuMigrated:         menuEls.length,
-    panelControlTotal:    allPanelEls.length,
-    panelControlMigrated: panelControlMigrated
+    total:              registry.length,
+    roles:              getRoleCounts(),
+    registered:         registry.length,
+    observed:           observer !== null,
+    footerTotal:        footerEls.length,
+    footerMigrated:     footerMigrated,
+    timeframeTotal:     timeframeEls.length,
+    timeframeMigrated:  timeframeMigrated,
+    headerTotal:        headerEls.length,
+    headerMigrated:     headerMigrated,
+    iconTotal:          iconEls.length,
+    iconMigrated:       iconMigrated,
+    menuTotal:          getMigratedMenuButtons().length,
+    menuMigrated:       menuEls.length
   };
 }
 
@@ -14316,7 +14283,6 @@ window.DVL_BUTTON_SYSTEM = {
   getMigratedHeaderButtons:    getMigratedHeaderButtons,
   getMigratedIconButtons:      getMigratedIconButtons,
   getMigratedMenuButtons:      getMigratedMenuButtons,
-  getMigratedPanelButtons:     getMigratedPanelButtons,
   audit:                       audit,
   init:                        init
 };
