@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.651</title>
+<title>DVL Binance Live — Beta 0.650</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -101,15 +101,6 @@
    Visual-neutral diagnostic class for migrated keypad buttons.
    Does NOT alter height, padding, gap, radius, color, font or layout. */
 .dvl-btn-migrated-keypad {}
-</style>
-
-<style id="DVL_BUTTON_ASSET_INDICATOR_DROPDOWN_MIGRATION_CSS_0651">
-/* DVL Beta 0.651 — Phase 1.9: asset/favorites/indicator dropdown migration pilot.
-   Visual-neutral diagnostic classes for migrated dropdown buttons.
-   Does NOT alter height, padding, gap, radius, color, font or layout. */
-.dvl-btn-migrated-asset-favorite {}
-.dvl-btn-migrated-asset-dropdown {}
-.dvl-btn-migrated-indicator-dropdown {}
 </style>
 
 <style>
@@ -13893,12 +13884,11 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.651";
+const DVL_APP_VERSION = "Beta 0.650";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.651 — Phase 1.9: migração piloto visual-neutral dos botões dos dropdowns de asset/favoritos/indicadores para o DVL_BUTTON_SYSTEM." },
-  { version: "Beta 0.650", note: "Phase 1.8: migração piloto visual-neutral dos botões do keypad custom para o DVL_BUTTON_SYSTEM." },
+  { version: DVL_APP_VERSION, note: "Beta 0.650 — Phase 1.8: migração piloto visual-neutral dos botões do keypad custom para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.649", note: "Phase 1.7: migração piloto visual-neutral das opções de order type/dropdown para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.648", note: "Phase 1.6: migração piloto visual-neutral dos botões de painel/controles para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.647", note: "Phase 1.5: migração piloto visual-neutral dos botões de header/toolbar para o DVL_BUTTON_SYSTEM." },
@@ -14055,7 +14045,7 @@ window.DVL_CHANGELOG = [
   }
 })();
 
-// ===== DVL_BUTTON_SYSTEM_MODULE_0651 =====
+// ===== DVL_BUTTON_SYSTEM_MODULE_0650 =====
 (function(){
 "use strict";
 
@@ -14104,7 +14094,7 @@ function registerButton(el, options){
   el.__dvlButtonRegistered = true;
   el.setAttribute('data-dvl-button', 'true');
   el.setAttribute('data-dvl-ui', 'true');
-  el.setAttribute('data-dvl-button-version', '0.651');
+  el.setAttribute('data-dvl-button-version', '0.650');
   el.setAttribute('data-dvl-button-scaffold', 'true');
   if(options && options.role)
     el.setAttribute('data-dvl-button-role', options.role);
@@ -14145,24 +14135,6 @@ function registerButton(el, options){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-keypad');
     el.classList.add('dvl-btn-migrated-keypad');
-  }
-  if(options && options.role === 'dropdown' &&
-     el.closest && el.closest('.assetFavoritesSheet')){
-    el.classList.add('dvl-btn');
-    el.classList.add('dvl-btn-dropdown');
-    el.classList.add('dvl-btn-migrated-asset-favorite');
-  }
-  if(options && options.role === 'dropdown' &&
-     el.closest && el.closest('.assetDropdown')){
-    el.classList.add('dvl-btn');
-    el.classList.add('dvl-btn-dropdown');
-    el.classList.add('dvl-btn-migrated-asset-dropdown');
-  }
-  if(options && options.role === 'dropdown' &&
-     el.closest && el.closest('.indicatorDropdown')){
-    el.classList.add('dvl-btn');
-    el.classList.add('dvl-btn-dropdown');
-    el.classList.add('dvl-btn-migrated-indicator-dropdown');
   }
   if(options && options.role === 'panel' &&
      (el.classList.contains('panelBtn') ||
@@ -14324,33 +14296,6 @@ function getMigratedKeypadButtons(){
   return result;
 }
 
-function getMigratedAssetFavoriteButtons(){
-  var result = [];
-  for(var i = 0; i < registry.length; i++){
-    var el = registry[i];
-    if(el.classList.contains('dvl-btn-migrated-asset-favorite')) result.push(el);
-  }
-  return result;
-}
-
-function getMigratedAssetDropdownButtons(){
-  var result = [];
-  for(var i = 0; i < registry.length; i++){
-    var el = registry[i];
-    if(el.classList.contains('dvl-btn-migrated-asset-dropdown')) result.push(el);
-  }
-  return result;
-}
-
-function getMigratedIndicatorDropdownButtons(){
-  var result = [];
-  for(var i = 0; i < registry.length; i++){
-    var el = registry[i];
-    if(el.classList.contains('dvl-btn-migrated-indicator-dropdown')) result.push(el);
-  }
-  return result;
-}
-
 function audit(){
   var footerEls = listByRole('footer');
   var footerMigrated = 0;
@@ -14379,51 +14324,35 @@ function audit(){
   var orderOptionEls = getMigratedOrderOptionButtons();
   var allDropdownEls = listByRole('dropdown');
   var orderOptionTotal = 0;
-  var assetFavoriteTotal = 0;
-  var assetDropdownTotal = 0;
-  var indicatorDropdownTotal = 0;
   for(var i = 0; i < allDropdownEls.length; i++){
-    var el = allDropdownEls[i];
-    if(el.classList.contains('orderTypeOption')) orderOptionTotal++;
-    if(el.classList.contains('dvl-btn-migrated-asset-favorite')) assetFavoriteTotal++;
-    if(el.classList.contains('dvl-btn-migrated-asset-dropdown')) assetDropdownTotal++;
-    if(el.classList.contains('dvl-btn-migrated-indicator-dropdown')) indicatorDropdownTotal++;
+    if(allDropdownEls[i].classList.contains('orderTypeOption')) orderOptionTotal++;
   }
   var keypadEls = listByRole('keypad');
   var keypadMigrated = 0;
   for(var i = 0; i < keypadEls.length; i++){
     if(keypadEls[i].classList.contains('dvl-btn-migrated-keypad')) keypadMigrated++;
   }
-  var assetFavoriteMigrated = getMigratedAssetFavoriteButtons().length;
-  var assetDropdownMigrated = getMigratedAssetDropdownButtons().length;
-  var indicatorDropdownMigrated = getMigratedIndicatorDropdownButtons().length;
   return {
-    total:                    registry.length,
-    roles:                    getRoleCounts(),
-    registered:               registry.length,
-    observed:                 observer !== null,
-    footerTotal:              footerEls.length,
-    footerMigrated:           footerMigrated,
-    timeframeTotal:           timeframeEls.length,
-    timeframeMigrated:        timeframeMigrated,
-    headerTotal:              headerEls.length,
-    headerMigrated:           headerMigrated,
-    iconTotal:                iconEls.length,
-    iconMigrated:             iconMigrated,
-    menuTotal:                getMigratedMenuButtons().length,
-    menuMigrated:             menuEls.length,
-    panelControlTotal:        allPanelEls.length,
-    panelControlMigrated:     panelControlMigrated,
-    orderOptionTotal:         orderOptionTotal,
-    orderOptionMigrated:      orderOptionEls.length,
-    keypadTotal:              keypadEls.length,
-    keypadMigrated:           keypadMigrated,
-    assetFavoriteTotal:       assetFavoriteTotal,
-    assetFavoriteMigrated:    assetFavoriteMigrated,
-    assetDropdownTotal:       assetDropdownTotal,
-    assetDropdownMigrated:    assetDropdownMigrated,
-    indicatorDropdownTotal:   indicatorDropdownTotal,
-    indicatorDropdownMigrated: indicatorDropdownMigrated
+    total:                registry.length,
+    roles:                getRoleCounts(),
+    registered:           registry.length,
+    observed:             observer !== null,
+    footerTotal:          footerEls.length,
+    footerMigrated:       footerMigrated,
+    timeframeTotal:       timeframeEls.length,
+    timeframeMigrated:    timeframeMigrated,
+    headerTotal:          headerEls.length,
+    headerMigrated:       headerMigrated,
+    iconTotal:            iconEls.length,
+    iconMigrated:         iconMigrated,
+    menuTotal:            getMigratedMenuButtons().length,
+    menuMigrated:         menuEls.length,
+    panelControlTotal:    allPanelEls.length,
+    panelControlMigrated: panelControlMigrated,
+    orderOptionTotal:     orderOptionTotal,
+    orderOptionMigrated:  orderOptionEls.length,
+    keypadTotal:          keypadEls.length,
+    keypadMigrated:       keypadMigrated
   };
 }
 
@@ -14433,30 +14362,27 @@ function init(){
 }
 
 window.DVL_BUTTON_SYSTEM = {
-  registry:                          registry,
-  registerButton:                    registerButton,
-  registerBySelector:                registerBySelector,
-  setState:                          setState,
-  isButtonTarget:                    isButtonTarget,
-  preventChartLeak:                  preventChartLeak,
-  refresh:                           refresh,
-  observe:                           observe,
-  count:                             function(){ return registry.length; },
-  getRoleCounts:                     getRoleCounts,
-  listByRole:                        listByRole,
-  getMigratedFooterButtons:          getMigratedFooterButtons,
-  getMigratedTimeframeButtons:       getMigratedTimeframeButtons,
-  getMigratedHeaderButtons:          getMigratedHeaderButtons,
-  getMigratedIconButtons:            getMigratedIconButtons,
-  getMigratedMenuButtons:            getMigratedMenuButtons,
-  getMigratedPanelButtons:           getMigratedPanelButtons,
-  getMigratedOrderOptionButtons:     getMigratedOrderOptionButtons,
-  getMigratedKeypadButtons:          getMigratedKeypadButtons,
-  getMigratedAssetFavoriteButtons:   getMigratedAssetFavoriteButtons,
-  getMigratedAssetDropdownButtons:   getMigratedAssetDropdownButtons,
-  getMigratedIndicatorDropdownButtons: getMigratedIndicatorDropdownButtons,
-  audit:                             audit,
-  init:                              init
+  registry:                       registry,
+  registerButton:                 registerButton,
+  registerBySelector:             registerBySelector,
+  setState:                       setState,
+  isButtonTarget:                 isButtonTarget,
+  preventChartLeak:               preventChartLeak,
+  refresh:                        refresh,
+  observe:                        observe,
+  count:                          function(){ return registry.length; },
+  getRoleCounts:                  getRoleCounts,
+  listByRole:                     listByRole,
+  getMigratedFooterButtons:       getMigratedFooterButtons,
+  getMigratedTimeframeButtons:    getMigratedTimeframeButtons,
+  getMigratedHeaderButtons:       getMigratedHeaderButtons,
+  getMigratedIconButtons:         getMigratedIconButtons,
+  getMigratedMenuButtons:         getMigratedMenuButtons,
+  getMigratedPanelButtons:        getMigratedPanelButtons,
+  getMigratedOrderOptionButtons:  getMigratedOrderOptionButtons,
+  getMigratedKeypadButtons:       getMigratedKeypadButtons,
+  audit:                          audit,
+  init:                           init
 };
 
 if(document.readyState === 'loading'){
