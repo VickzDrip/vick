@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.667</title>
+<title>DVL Binance Live — Beta 0.666</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -14090,170 +14090,12 @@ window.DVL_OSCILLATOR_BOUNDS_PUBLISHER = {
 })();
 </script>
 
-<style id="DVL_RUNTIME_INTEGRATION_AUDIT_CSS_0667">
-/* DVL Beta 0.667 — Phase 3.1: runtime integration audit marker only.
-   No visual/layout properties here. This phase only audits the integration between:
-   - DVL_OSCILLATOR_BOUNDS_PUBLISHER_MODULE_0666
-   - DVL_PAPER_LAYER_ANCHOR_MODULE_0665
-   - DVL_OSCILLATOR_BOUNDS_AUDIT_MODULE_0665
-   Do not change Paper Trading math, Buy/Sell, TP/SL/ENTRY, chart draw math, oscillator rendering, tools, dropdowns or Button System. */
-</style>
-
-<script id="DVL_RUNTIME_INTEGRATION_AUDIT_MODULE_0667">
-(function(){
-"use strict";
-
-var VERSION = "0.667";
-
-function safeCall(fn, fallback){
-  try{
-    return (typeof fn === "function") ? fn() : fallback;
-  }catch(err){
-    return fallback;
-  }
-}
-
-function getPublisher(){
-  return window.DVL_OSCILLATOR_BOUNDS_PUBLISHER || null;
-}
-
-function getPaperAnchor(){
-  return window.DVL_PAPER_LAYER_ANCHOR || null;
-}
-
-function getOscAudit(){
-  return window.DVL_OSCILLATOR_BOUNDS_AUDIT || null;
-}
-
-function getLayoutAudit(){
-  return window.DVL_LAYOUT_ASSERTIONS || null;
-}
-
-function getLastPublish(){
-  var mod = getPublisher();
-  return mod && typeof mod.getLastPublish === "function" ? safeCall(function(){ return mod.getLastPublish(); }, null) : null;
-}
-
-function getLastSync(){
-  var mod = getPaperAnchor();
-  return mod && typeof mod.getLastSync === "function" ? safeCall(function(){ return mod.getLastSync(); }, null) : null;
-}
-
-function getOscAuditResult(){
-  var mod = getOscAudit();
-  return mod && typeof mod.audit === "function" ? safeCall(function(){ return mod.audit(); }, null) : null;
-}
-
-function getLayoutAuditResult(){
-  var mod = getLayoutAudit();
-  return mod && typeof mod.audit === "function" ? safeCall(function(){ return mod.audit(); }, null) : null;
-}
-
-function buildIssues(report){
-  var issues = [];
-
-  if(!report.publisherAvailable) issues.push("oscillator bounds publisher missing");
-  if(!report.paperAnchorAvailable) issues.push("paper layer anchor missing");
-  if(!report.oscillatorAuditAvailable) issues.push("oscillator bounds audit missing");
-  if(!report.layoutAssertionsAvailable) issues.push("layout assertions missing");
-
-  if(report.lastPublish && report.lastPublish.count > 0 && !report.lastPublish.top){
-    issues.push("published oscillator bounds have count > 0 but no top");
-  }
-
-  if(report.oscillatorAudit && report.oscillatorAudit.paperInvadesOscillatorArea === true){
-    issues.push("paper layer invades oscillator area");
-  }
-
-  if(report.oscillatorAudit && report.oscillatorAudit.paperFitsPricePane === false){
-    issues.push("paper layer does not fit price pane");
-  }
-
-  if(report.layoutAudit && Array.isArray(report.layoutAudit.sectionSizeMismatches) && report.layoutAudit.sectionSizeMismatches.length){
-    issues.push("layout section size mismatches detected");
-  }
-
-  if(report.lastSync && report.lastSync.clampApplied && typeof report.lastSync.localOscillatorTopPx === "number"){
-    if(report.lastSync.localOscillatorTopPx < 40){
-      issues.push("oscillator top is too close to chart top for safe paper clamp");
-    }
-  }
-
-  return issues;
-}
-
-function audit(){
-  var publisher = getPublisher();
-  var anchor = getPaperAnchor();
-  var oscAudit = getOscAudit();
-  var layoutAudit = getLayoutAudit();
-
-  var report = {
-    version: VERSION,
-    publisherAvailable: !!publisher,
-    paperAnchorAvailable: !!anchor,
-    oscillatorAuditAvailable: !!oscAudit,
-    layoutAssertionsAvailable: !!layoutAudit,
-    publisherVersion: publisher && publisher.VERSION ? publisher.VERSION : null,
-    paperAnchorVersion: anchor && anchor.VERSION ? anchor.VERSION : null,
-    oscillatorAuditVersion: oscAudit && oscAudit.VERSION ? oscAudit.VERSION : null,
-    lastPublish: getLastPublish(),
-    lastSync: getLastSync(),
-    oscillatorAudit: getOscAuditResult(),
-    layoutAudit: getLayoutAuditResult(),
-    drawSoonWrappedByThisModule: false,
-    requestAnimationFrameUsedByThisModule: false,
-    timerUsedByThisModule: false,
-    observerUsedByThisModule: false,
-    mutatesDomStyleByThisModule: false
-  };
-
-  report.activeOscillatorBoundsDetected = !!(report.lastPublish && report.lastPublish.count > 0);
-  report.paperClampDetected = !!(report.lastSync && report.lastSync.clampApplied === true);
-  report.issues = buildIssues(report);
-  report.pass = report.issues.length === 0;
-  return report;
-}
-
-function run(){
-  var publisher = getPublisher();
-  var anchor = getPaperAnchor();
-
-  if(publisher && typeof publisher.publish === "function"){
-    safeCall(function(){ return publisher.publish(); }, null);
-  }
-
-  if(anchor && typeof anchor.scheduleSync === "function"){
-    safeCall(function(){ return anchor.scheduleSync(); }, null);
-  }
-
-  if(typeof window.queueMicrotask === "function"){
-    return new Promise(function(resolve){
-      window.queueMicrotask(function(){
-        resolve(audit());
-      });
-    });
-  }
-
-  return Promise.resolve(audit());
-}
-
-window.DVL_RUNTIME_INTEGRATION_AUDIT = {
-  VERSION: VERSION,
-  audit: audit,
-  run: run,
-  getLastPublish: getLastPublish,
-  getLastSync: getLastSync
-};
-})();
-</script>
-
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.667</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.666</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -14713,12 +14555,11 @@ window.DVL_RUNTIME_INTEGRATION_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.667";
+const DVL_APP_VERSION = "Beta 0.666";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.667 — Phase 3.1: runtime integration audit for Paper layer, oscillator bounds publisher and safe resync pipeline." },
-  { version: "Beta 0.666", note: "Phase 3.0: oscillator bounds publisher + safe Paper resync hook." },
+  { version: DVL_APP_VERSION, note: "Beta 0.666 — Phase 3.0: oscillator bounds publisher + safe Paper resync hook." },
   { version: "Beta 0.665", note: "Phase 2.9: oscillator safe clamp + audit verification for Paper layer bounds." },
   { version: "Beta 0.664", note: "Phase 2.8: Paper sync non-invasive hotfix + oscillator bounds read-only audit." },
   { version: "Beta 0.663", note: "Phase 2.7: Paper layer anchor + oscillator-safe sync; normaliza offsets internos do Paper após price scale 70px." },
