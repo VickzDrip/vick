@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.670</title>
+<title>DVL Binance Live — Beta 0.669</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -14629,224 +14629,12 @@ window.DVL_BASELINE_FREEZE = {
 })();
 </script>
 
-<style id="DVL_FINAL_OPTIMIZATION_INVENTORY_CSS_0670">
-/* DVL Beta 0.670 — Phase 4.0 final optimization inventory marker.
-   Marker only. No selectors, no properties, no visual effect. */
-</style>
-
-<script id="DVL_FINAL_OPTIMIZATION_INVENTORY_MODULE_0670">
-(function(){
-"use strict";
-
-var _lastAudit = null;
-
-var LAYOUT_VARS = [
-  "--dvl-header-h","--dvl-assetbar-h","--dvl-chart-toolbar-h",
-  "--dvl-footer-h","--dvl-price-scale-w","--dvl-trade-drawer-max-h"
-];
-
-var FINAL_LOCK_IDS = [
-  "DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659",
-  "DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660",
-  "DVL_CHROME_FINAL_LOCK_CSS_0661",
-  "DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662"
-];
-
-var DIAG_KW = ["CONTRACT","ASSERTIONS","AUDIT","FREEZE","INVENTORY","MARKER"];
-var MIG_KW  = ["BUTTON_","MIGRATION"];
-
-function hasDiag(id){ return DIAG_KW.some(function(k){ return id.indexOf(k)!==-1; }); }
-function hasMig(id){ return MIG_KW.every(function(k){ return id.indexOf(k)!==-1; }); }
-function isLegacyCss(id){
-  if(id.indexOf("DVL_")!==0) return false;
-  if(FINAL_LOCK_IDS.indexOf(id)!==-1) return false;
-  if(hasDiag(id)) return false;
-  if(hasMig(id)) return false;
-  return /_0[4-6]\d{2}$/.test(id);
-}
-
-function audit(){
-  var styleEls = [].slice.call(document.querySelectorAll("style[id]"));
-  var scriptEls = [].slice.call(document.querySelectorAll("script[id]"));
-
-  var totalStyleChars = 0;
-  var styleData = styleEls.map(function(el){
-    var txt = el.textContent||"";
-    totalStyleChars += txt.length;
-    return {id:el.id, chars:txt.length, text:txt};
-  });
-  var totalScriptChars = 0;
-  var scriptData = scriptEls.map(function(el){
-    var txt = el.textContent||"";
-    totalScriptChars += txt.length;
-    return {id:el.id, chars:txt.length};
-  });
-
-  var legacyCssIds=[], migCssIds=[], diagCssIds=[], dupRootIds=[];
-  var legacyCnt=0, lockCnt=0, diagCnt=0, migCnt=0;
-
-  styleData.forEach(function(s){
-    var id=s.id;
-    if(FINAL_LOCK_IDS.indexOf(id)!==-1){ lockCnt++; }
-    else if(hasMig(id)){ migCnt++; migCssIds.push(id); }
-    else if(hasDiag(id)){ diagCnt++; diagCssIds.push(id); }
-    else if(isLegacyCss(id)){ legacyCnt++; legacyCssIds.push(id); }
-    if(s.text.indexOf(":root")!==-1){
-      var vc=LAYOUT_VARS.filter(function(v){ return s.text.indexOf(v)!==-1; }).length;
-      if(vc>=3) dupRootIds.push(id);
-    }
-  });
-
-  var reMod=/^DVL_.+_MODULE_.+$/;
-  var reBad=/^DVL_BUTTON_SYSTEM_MODULE_0(\d{3})$/;
-  var modScripts=0, badBtnMods=0;
-  scriptData.forEach(function(s){
-    if(reMod.test(s.id)) modScripts++;
-    var mb=s.id.match(reBad);
-    if(mb){ var n=parseInt(mb[1],10); if(n>=656&&n<=670) badBtnMods++; }
-  });
-
-  var desc=function(a,b){ return b.chars-a.chars; };
-  var largeStyle=styleData.slice().sort(desc).slice(0,10).map(function(s){ return {id:s.id,chars:s.chars}; });
-  var largeScript=scriptData.slice().sort(desc).slice(0,10).map(function(s){ return {id:s.id,chars:s.chars}; });
-
-  function hasId(id){ return !!document.getElementById(id); }
-  var allScripts=[].slice.call(document.querySelectorAll("script"));
-  function hasMarker(m){ return allScripts.some(function(s){ return (s.textContent||"").indexOf(m)!==-1; }); }
-  function hasMod(id){ return hasId(id)||hasMarker(id); }
-
-  var btn0655  = hasMod("DVL_BUTTON_SYSTEM_MODULE_0655");
-  var lc0656   = hasMod("DVL_LAYOUT_CONTRACT_MODULE_0656");
-  var la0657   = hasMod("DVL_LAYOUT_ASSERTIONS_MODULE_0657");
-  var pa0665   = hasId("DVL_PAPER_LAYER_ANCHOR_MODULE_0665");
-  var op0666   = hasId("DVL_OSCILLATOR_BOUNDS_PUBLISHER_MODULE_0666");
-  var ri0667   = hasId("DVL_RUNTIME_INTEGRATION_AUDIT_MODULE_0667");
-  var fg0668   = hasId("DVL_FEATURE_GATE_AUDIT_MODULE_0668");
-  var bf0669   = hasId("DVL_BASELINE_FREEZE_MODULE_0669");
-
-  var ps0659   = hasEl("DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659");
-  var tb0660   = hasEl("DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660");
-  var ch0661   = hasEl("DVL_CHROME_FINAL_LOCK_CSS_0661");
-  var gd0662   = hasEl("DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662");
-
-  var cntLk=function(id){ return styleEls.filter(function(e){ return e.id===id; }).length; };
-  var c59=cntLk("DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659");
-  var c60=cntLk("DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660");
-  var c61=cntLk("DVL_CHROME_FINAL_LOCK_CSS_0661");
-  var c62=cntLk("DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662");
-
-  var baseExists=!!(window.DVL_BASELINE_FREEZE);
-  var basePass=false, baseFO=false, baseNF=false, baseCLM=false;
-  if(baseExists){
-    try{ var ba=window.DVL_BASELINE_FREEZE.audit(); basePass=!!ba.pass; baseFO=!!ba.readyForFinalOptimization; baseNF=!!ba.readyForNewFeatures; }catch(e){}
-    try{ var bc=window.DVL_BASELINE_FREEZE.compare(); baseCLM=!!(bc&&bc.layoutMatch); }catch(e){ baseCLM=true; }
-  }
-
-  var blockers=[]; var warnings=[];
-  if(!baseExists) blockers.push("DVL_BASELINE_FREEZE not found");
-  else if(!basePass) blockers.push("DVL_BASELINE_FREEZE.audit().pass is false");
-  if(!btn0655) blockers.push("DVL_BUTTON_SYSTEM_MODULE_0655 missing");
-  if(badBtnMods>0) blockers.push("Bad button system modules 0656-0670: "+badBtnMods);
-  if(c59!==1) blockers.push("DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659 count="+c59);
-  if(c60!==1) blockers.push("DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660 count="+c60);
-  if(c61!==1) blockers.push("DVL_CHROME_FINAL_LOCK_CSS_0661 count="+c61);
-  if(c62!==1) blockers.push("DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662 count="+c62);
-  if(!pa0665) blockers.push("DVL_PAPER_LAYER_ANCHOR_MODULE_0665 missing");
-  if(!op0666) blockers.push("DVL_OSCILLATOR_BOUNDS_PUBLISHER_MODULE_0666 missing");
-  if(!ri0667) blockers.push("DVL_RUNTIME_INTEGRATION_AUDIT_MODULE_0667 missing");
-  if(!fg0668) blockers.push("DVL_FEATURE_GATE_AUDIT_MODULE_0668 missing");
-  if(!bf0669) blockers.push("DVL_BASELINE_FREEZE_MODULE_0669 missing");
-
-  var pass=blockers.length===0;
-
-  var result={
-    version:"0.670",
-    phase:"final_optimization_inventory",
-    pass:pass,
-    readyForSafeCleanup:pass,
-    readyForFeatureWork:pass&&baseNF,
-    blockers:blockers,
-    warnings:warnings,
-    baseline:{
-      exists:baseExists, pass:basePass,
-      readyForFinalOptimization:baseFO, readyForNewFeatures:baseNF,
-      compareLayoutMatch:baseCLM
-    },
-    counts:{
-      styleTagsWithId:styleEls.length, scriptTagsWithId:scriptEls.length,
-      totalStyleChars:totalStyleChars, totalScriptChars:totalScriptChars,
-      legacyCssBlocks:legacyCnt, finalLockCssBlocks:lockCnt,
-      diagnosticCssBlocks:diagCnt, moduleScripts:modScripts,
-      migrationCssBlocks:migCnt, buttonSystemBadModules:badBtnMods
-    },
-    preservedModules:{
-      buttonSystem0655:btn0655, layoutContract0656:lc0656,
-      layoutAssertions0657:la0657, paperAnchor0665:pa0665,
-      oscillatorPublisher0666:op0666, runtimeIntegration0667:ri0667,
-      featureGate0668:fg0668, baselineFreeze0669:bf0669
-    },
-    preservedFinalLocks:{
-      priceScale0659:ps0659, toolbar0660:tb0660,
-      chrome0661:ch0661, gapDrawer0662:gd0662
-    },
-    cleanupCandidates:{
-      legacyCssIds:legacyCssIds,
-      duplicateRootVariableBlocks:dupRootIds,
-      migrationCssIds:migCssIds,
-      diagnosticCssIds:diagCssIds,
-      largeStyleBlocks:largeStyle,
-      largeScriptBlocks:largeScript
-    },
-    protectedAreas:[
-      "Buy/Sell click handlers","TP/SL/ENTRY math",
-      "Paper position schema","Chart zoom/pan/crosshair handlers",
-      "Oscillator render logic","Tools/drawing logic",
-      "Dropdown/keypad logic","Button System 0.655"
-    ],
-    cleanupRulesForNextPhase:{
-      noDeletionWithoutCandidateList:true, cleanupMustBeChunked:true,
-      oneFamilyPerPhase:true, preserveFinalLocks:true,
-      preserveBehavior:true, preserveVisualOutput:true,
-      preserveAuditModules:true
-    },
-    selfReport:{
-      drawSoonWrappedByThisModule:false,
-      requestAnimationFrameUsedByThisModule:false,
-      timerUsedByThisModule:false,
-      observerUsedByThisModule:false,
-      mutatesDomStyleByThisModule:false
-    }
-  };
-
-  _lastAudit=result;
-  return result;
-}
-
-function getLastAudit(){ return _lastAudit; }
-
-function run(){
-  if(window.DVL_BASELINE_FREEZE && typeof window.DVL_BASELINE_FREEZE.run==="function"){
-    return window.DVL_BASELINE_FREEZE.run().then(function(){ return audit(); });
-  }
-  return Promise.resolve(audit());
-}
-
-window.DVL_FINAL_OPTIMIZATION_INVENTORY={
-  VERSION:"0.670",
-  audit:audit,
-  run:run,
-  getLastAudit:getLastAudit
-};
-
-})();
-</script>
-
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.670</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.669</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -15306,12 +15094,11 @@ window.DVL_FINAL_OPTIMIZATION_INVENTORY={
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.670";
+const DVL_APP_VERSION = "Beta 0.669";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.670 — Phase 4.0: Final optimization inventory and safe cleanup map." },
-  { version: "Beta 0.669", note: "Beta 0.669 — Phase 3.3: baseline freeze candidate; congela contratos estruturais para otimização final e novas funções." },
+  { version: DVL_APP_VERSION, note: "Beta 0.669 — Phase 3.3: baseline freeze candidate; congela contratos estruturais para otimização final e novas funções." },
   { version: "Beta 0.668", note: "Phase 3.2: feature gate audit e freeze-candidate check para validar se a base está pronta para congelamento, otimização final e novas funções." },
   { version: "Beta 0.667", note: "Phase 3.1: runtime integration audit for Paper layer, oscillator bounds publisher and safe resync pipeline." },
   { version: "Beta 0.666", note: "Phase 3.0: oscillator bounds publisher + safe Paper resync hook." },
