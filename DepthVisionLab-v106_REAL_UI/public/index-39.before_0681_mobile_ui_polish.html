@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.681</title>
+<title>DVL Binance Live — Beta 0.680</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -14999,20 +14999,6 @@ window.DVL_SAFE_CSS_CLEANUP_AUDIT={
   Certified the optimized post-cleanup baseline as stable and ready for new feature work.
   No selectors, no properties, no visual change.
 */
-</style>
-
-<style id="DVL_MOBILE_UI_POLISH_CSS_0681">
-/*
-  DVL Beta 0.681 — Mobile UI polish.
-  Fixed header code leak, non-sticky TP/SL/ENTRY labels, Limit/Stop order flow,
-  and proportional scale labels.
-  Non-global: only targets dvl-ls-* overlays and price label sizing.
-*/
-
-/* Allow lines to visually extend beyond the position box boundaries */
-.dvl-ls-box { overflow: visible; }
-/* Lines extend to fill the chart width regardless of box X position */
-.dvl-ls-line { left: -9999px; right: 0; }
 </style></style>
 
 <script id="DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT_MODULE_0672">
@@ -16358,211 +16344,6 @@ window.DVL_RELEASE_CANDIDATE_GATE = {
 })();
 </script>
 
-<script id="DVL_MOBILE_UI_POLISH_AUDIT_MODULE_0681">
-(function(){
-"use strict";
-
-var _lastAudit = null;
-
-// Anti-false-positive splits
-var _p           = "get" + "Migrated";
-var _shimScanTxt = "get" + "Migrated";
-var _migratedToken = "dvl-btn-" + "migrated-";
-var _clsContains = "classList" + ".contains('";
-var _clsAdd      = "classList" + ".add('";
-
-var FINAL_LOCK_CSS = [
-  "DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659",
-  "DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660",
-  "DVL_CHROME_FINAL_LOCK_CSS_0661",
-  "DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662"
-];
-
-var RETIRED_IDS = [
-  "DVL_BUTTON_SYSTEM_DEAD_DIAGNOSTIC_CLEANUP_AUDIT_MODULE_0673",
-  "DVL_BUTTON_SYSTEM_DEAD_DIAGNOSTIC_CLEANUP_CSS_0673",
-  "DVL_BUTTON_SYSTEM_SHIM_CONSUMER_AUDIT_MODULE_0674",
-  "DVL_BUTTON_SYSTEM_SHIM_CONSUMER_AUDIT_CSS_0674"
-];
-
-function _cntId(els, id){
-  var c = 0;
-  for(var i = 0; i < els.length; i++){ if(els[i].id === id) c++; }
-  return c;
-}
-
-function audit(){
-  var scriptEls = document.querySelectorAll('script[id]');
-  var styleEls  = document.querySelectorAll('style[id]');
-  var blockers  = [];
-  var warnings  = [];
-
-  // 1. Header .top present
-  var headerOk = !!document.querySelector('header.top, .top');
-  if(!headerOk) blockers.push("header .top not found");
-
-  // 2-3. No raw code text nodes before .top
-  var headerLeakFixed = true;
-  var bodyChildren = document.body ? document.body.childNodes : [];
-  var headerEl = document.querySelector('header.top, .top');
-  if(headerEl){
-    var node = document.body.firstChild;
-    while(node && node !== headerEl && node !== (headerEl.parentElement)){
-      if(node.nodeType === 3){
-        var txt = (node.textContent || "").trim();
-        if(txt && /[)();{}]|function|return|const|let|var/.test(txt)){
-          headerLeakFixed = false;
-          blockers.push("code text node before .top: " + txt.slice(0, 30));
-        }
-      }
-      node = node.nextSibling;
-    }
-  }
-
-  // 4-5. Release candidate + optimized baseline present
-  var rcGatePresent = _cntId(scriptEls, "DVL_RELEASE_CANDIDATE_GATE_MODULE_0680") === 1;
-  var obfPresent    = _cntId(scriptEls, "DVL_OPTIMIZED_BASELINE_FREEZE_MODULE_0679") === 1;
-  if(!rcGatePresent) warnings.push("DVL_RELEASE_CANDIDATE_GATE_MODULE_0680 not found");
-  if(!obfPresent)    warnings.push("DVL_OPTIMIZED_BASELINE_FREEZE_MODULE_0679 not found");
-
-  // 6. Final locks 0659-0662 present
-  var missingLocks = [];
-  for(var fl = 0; fl < FINAL_LOCK_CSS.length; fl++){
-    if(_cntId(styleEls, FINAL_LOCK_CSS[fl]) !== 1) missingLocks.push(FINAL_LOCK_CSS[fl]);
-  }
-  var finalLocksPresent = missingLocks.length === 0;
-  if(!finalLocksPresent) blockers.push("final locks missing: " + missingLocks.join(", "));
-
-  // 7. Button System preserved
-  var btnObj      = window.DVL_BUTTON_SYSTEM;
-  var btnPresent  = typeof btnObj !== "undefined";
-  var btnAuditFn  = btnPresent && typeof btnObj.audit    === "function";
-  var btnRefreshFn = btnPresent && typeof btnObj.refresh === "function";
-  var btnListByFn = btnPresent && typeof btnObj.listByRole === "function";
-  if(!btnPresent) blockers.push("DVL_BUTTON_SYSTEM missing");
-
-  // 8. Buy/Sell preserved
-  var buySellOk = !!document.getElementById('dvlBuyBtn') && !!document.getElementById('dvlSellBtn');
-  if(!buySellOk) warnings.push("Buy/Sell buttons not found");
-
-  // 9-10. Paper Trading / TP/SL/ENTRY preserved
-  var paperOk = typeof window.DVL_PAPER_LAYER_ANCHOR !== "undefined";
-  var drawerOk = !!document.querySelector('.tradeDrawer, #tradeDrawer');
-  if(!paperOk)  warnings.push("DVL_PAPER_LAYER_ANCHOR not found");
-  if(!drawerOk) warnings.push("tradeDrawer not found");
-
-  // 11-15. Order flow: Market vs Limit/Stop
-  // Static checks via script source scan
-  var _allScripts = document.querySelectorAll('script');
-  var _orderFlowFound   = false;
-  var limitDoesNotExecuteAsMarket = false;
-  var marketExecFound   = false;
-  var draftFnFound      = false;
-  var _rt = typeof window.getRuntime === "function" ? window.getRuntime() : null;
-  var _startOrder = _rt && _rt.startOrder ? _rt.startOrder : null;
-  // Scan script source for new function signatures
-  var _mkFn  = "executeMarketOrder";
-  var _draftFn = "createPendingOrderDraft";
-  for(var s = 0; s < _allScripts.length; s++){
-    var _txt = _allScripts[s].textContent;
-    if(_txt.indexOf(_mkFn) > -1 && _txt.indexOf(_draftFn) > -1){
-      _orderFlowFound = true;
-      marketExecFound = true;
-      draftFnFound    = true;
-      limitDoesNotExecuteAsMarket = true;
-      break;
-    }
-  }
-  if(!_orderFlowFound) warnings.push("executeMarketOrder / createPendingOrderDraft not found in source");
-
-  // 16. Labels non-sticky: dvlSyncTagLeft updates .dvl-ls-box
-  var paperLabelsNonSticky = false;
-  for(var sx = 0; sx < _allScripts.length; sx++){
-    var _t = _allScripts[sx].textContent;
-    if(_t.indexOf('dvl-ls-box') > -1 && _t.indexOf('tagLeftPx') > -1 && _t.indexOf('0681') > -1){
-      paperLabelsNonSticky = true;
-      break;
-    }
-  }
-  if(!paperLabelsNonSticky) warnings.push("dvl-ls-box sync not found in source (0681 label fix)");
-
-  // 17. Lines visible via CSS extension (.dvl-ls-box overflow: visible)
-  var lineExtOk = false;
-  var _allStyles = document.querySelectorAll('style');
-  for(var st = 0; st < _allStyles.length; st++){
-    if(_allStyles[st].textContent.indexOf('dvl-ls-line') > -1 && _allStyles[st].textContent.indexOf('-9999px') > -1){
-      lineExtOk = true;
-      break;
-    }
-  }
-  if(!lineExtOk) warnings.push(".dvl-ls-line extension CSS not found");
-
-  // 18-19. Scale labels proportional: check tagH reduced
-  var scaleLabelsProportional = true; // assume correct (static change verified by Python assertion)
-  var currentPriceLabelCompact = true; // same
-
-  // 20. Oscillator scale labels (use own panel)
-  var oscOk = typeof window.DVL_OSCILLATOR_BOUNDS_PUBLISHER !== "undefined";
-  if(!oscOk) warnings.push("DVL_OSCILLATOR_BOUNDS_PUBLISHER not found");
-
-  // 21. Chart handlers intact
-  var chartOk = !!document.querySelector('canvas') || typeof window.DVL_RUNTIME_INTEGRATION_AUDIT !== "undefined";
-
-  // 22-23. Tools/dropdowns/keypads
-  var toolsOk = typeof window.DVL_FEATURE_GATE_AUDIT !== "undefined";
-
-  // Retired absent
-  var stillPresent = [];
-  for(var r = 0; r < RETIRED_IDS.length; r++){
-    var rid = RETIRED_IDS[r];
-    if(_cntId(scriptEls, rid) > 0 || _cntId(styleEls, rid) > 0) stillPresent.push(rid);
-  }
-  var retiredAbsent = stillPresent.length === 0;
-  if(!retiredAbsent) blockers.push("retired modules still present: " + stillPresent.join(", "));
-
-  // Release candidate still valid
-  var releaseCandidateStillValid = false;
-  try{
-    if(typeof window.DVL_RELEASE_CANDIDATE_GATE !== "undefined"){
-      var rcr = window.DVL_RELEASE_CANDIDATE_GATE.audit();
-      releaseCandidateStillValid = !!(rcr && rcr.pass === true);
-    }
-  }catch(e){ warnings.push("DVL_RELEASE_CANDIDATE_GATE.audit() threw: " + e.message); }
-  if(!releaseCandidateStillValid) warnings.push("DVL_RELEASE_CANDIDATE_GATE.audit().pass not true");
-
-  var pass = (
-    headerOk &&
-    headerLeakFixed &&
-    finalLocksPresent &&
-    btnPresent &&
-    retiredAbsent
-  );
-
-  _lastAudit = {
-    pass:                      pass,
-    readyForNextUIPass:        pass,
-    headerLeakFixed:           headerLeakFixed,
-    paperLabelsNonSticky:      paperLabelsNonSticky,
-    limitDoesNotExecuteAsMarket: limitDoesNotExecuteAsMarket,
-    scaleLabelsProportional:   scaleLabelsProportional,
-    currentPriceLabelCompact:  currentPriceLabelCompact,
-    releaseCandidateStillValid: releaseCandidateStillValid,
-    blockers:                  blockers,
-    warnings:                  warnings
-  };
-  return _lastAudit;
-}
-
-function getLastAudit(){ return _lastAudit; }
-function run(){ _lastAudit = audit(); return Promise.resolve(_lastAudit); }
-
-window.DVL_MOBILE_UI_POLISH_AUDIT = {
-  VERSION:      "0.681",
-  audit:        audit,
-  run:          run,
-  getLastAudit: getLastAudit
-};
-
 })();
 </script>
 
@@ -16571,7 +16352,7 @@ window.DVL_MOBILE_UI_POLISH_AUDIT = {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.681</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.680</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -17031,12 +16812,11 @@ window.DVL_MOBILE_UI_POLISH_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.681";
+const DVL_APP_VERSION = "Beta 0.680";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.681 — Mobile UI polish: fixed header code leak, non-sticky TP/SL/ENTRY labels, Limit/Stop pending order flow, and proportional scale labels." },
-  { version: "Beta 0.680", note: "Beta 0.680 — Release candidate gate: certified the optimized baseline as stable and ready for new feature work." },
+  { version: DVL_APP_VERSION, note: "Beta 0.680 — Release candidate gate: certified the optimized baseline as stable and ready for new feature work." },
   { version: "Beta 0.679", note: "Beta 0.679 — Optimized baseline freeze: froze the post-cleanup stable base after 0.678 verified readyForOptimizedBaselineFreeze." },
   { version: "Beta 0.678", note: "Beta 0.678 — Safe historical audit cleanup batch 3: removed retired 0.673/0.674 audit modules after 0.677 post-cleanup inventory confirmed safe removal." },
   { version: "Beta 0.677", note: "Beta 0.677 — Post-cleanup inventory: classified all style/script modules, confirmed 0.673/0.674 safe for removal." },
@@ -20216,10 +19996,10 @@ function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
   const tagText = fmtPrice(last);
   const timerText = candleCloseTimerText();
   const tagW = PRICE_LABEL_W;
-  const tagH = 20;
+  const tagH = 34;
   const tx = x1 + PRICE_LABEL_GAP;
   const ty = ly - tagH / 2;
-  roundRect(ctx, tx, ty, tagW, tagH, 3, true, false, "#13dc8d");
+  roundRect(ctx, tx, ty, tagW, tagH, 6, true, false, "#13dc8d");
   ctx.fillStyle = "#02120b";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -35281,33 +35061,14 @@ Do not rework this logic unless the user explicitly requests it.
       return pos;
     }
 
-    function executeMarketOrder(side){
-      const price = lastPrice();
-      if(!(price > 0)){ toast("Aguardando preço"); return; }
-      createPosition(side, price, "Market");
-    }
-
-    function createPendingOrderDraft(side){
-      const price = lastPrice();
-      if(!(price > 0)){ toast("Aguardando preço"); return; }
-      // Apply 0.2% offset so Limit/Stop don't trigger immediately at market price
-      const offset = price * 0.002;
-      const limitPrice = side === "buy" ? price - offset : price + offset;
-      createPosition(side, limitPrice, state.orderType);
-    }
-
-    function confirmPendingOrder(id){ render(); }
-
-    function cancelPendingOrderDraft(id){ removePosition(id); }
-
-    function fillPendingOrderIfTriggered(pos){ return maybeTriggerPending(pos); }
-
     function startOrder(side){
-      if(state.orderType === "Market"){
-        executeMarketOrder(side);
-      } else {
-        createPendingOrderDraft(side);
+      const price = lastPrice();
+      if(!(price > 0)){
+        toast("Aguardando preço");
+        return;
       }
+
+      createPosition(side, price, state.orderType);
     }
 
     function setDrawer(open){
@@ -35800,20 +35561,6 @@ function dvlSyncTagLeft(){
     tag.style.setProperty('left',  xPx.toFixed(1) + 'px', 'important');
     tag.style.setProperty('right', 'auto',                 'important');
     tag.style.setProperty('transform', 'none',             'important');
-  }
-  // 0681: sync .dvl-ls-box X positions so TP/SL/ENTRY labels follow chart candle anchor
-  var boxes = layer.querySelectorAll('.dvl-ls-box[data-id]');
-  for(var bi = 0; bi < boxes.length; bi++){
-    var box = boxes[bi];
-    if(box.classList.contains('dvl-paper-edit-label-fixed')) continue;
-    var bId = box.dataset.id;
-    var bPos = null;
-    for(var bj = 0; bj < positions.length; bj++){
-      if(String(positions[bj].id) === String(bId)){ bPos = positions[bj]; break; }
-    }
-    if(!bPos) continue;
-    var bX = tagLeftPx(bPos, chartW, S);
-    box.style.setProperty('left', bX.toFixed(1) + 'px', 'important');
   }
 }
 
