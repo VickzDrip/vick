@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.664</title>
+<title>DVL Binance Live — Beta 0.663</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -13682,8 +13682,7 @@ body{
 (function(){
 "use strict";
 
-var _lastSync   = null;
-var _syncQueued = false;
+var _lastSync = null;
 
 function getScaleW(){
   return (typeof window.DVL_PRICE_SCALE_W === "number") ? window.DVL_PRICE_SCALE_W : 70;
@@ -13714,39 +13713,28 @@ function sync(){
   }catch(_){}
   var paneH = Math.max(40, priceH - timeH);
 
-  layer.style.setProperty("top",    "0",           "important");
-  layer.style.setProperty("left",   "0",           "important");
-  layer.style.setProperty("right",  scaleW + "px", "important");
-  layer.style.setProperty("width",  "auto",        "important");
-  layer.style.setProperty("height", paneH + "px",  "important");
-  layer.style.setProperty("bottom", "auto",        "important");
+  layer.style.setProperty("top",    "0",               "important");
+  layer.style.setProperty("left",   "0",               "important");
+  layer.style.setProperty("right",  scaleW + "px",     "important");
+  layer.style.setProperty("width",  "auto",            "important");
+  layer.style.setProperty("height", paneH + "px",      "important");
+  layer.style.setProperty("bottom", "auto",            "important");
 
   var result = {
-    layerExists: true,
-    wrapExists:  true,
-    priceScaleW: scaleW,
-    paneH:       paneH,
-    timestamp:   Date.now()
+    layerExists:  true,
+    wrapExists:   true,
+    priceScaleW:  scaleW,
+    paneH:        paneH,
+    timestamp:    Date.now()
   };
   _lastSync = result;
   return result;
 }
 
-function scheduleSync(){
-  if(_syncQueued) return;
-  _syncQueued = true;
-  if(typeof queueMicrotask === "function"){
-    queueMicrotask(function(){ _syncQueued = false; sync(); });
-  } else {
-    _syncQueued = false;
-    sync();
-  }
-}
-
 function audit(){
-  var layer     = getLayer();
-  var wrap      = getWrap();
-  var scaleW    = getScaleW();
+  var layer   = getLayer();
+  var wrap    = getWrap();
+  var scaleW  = getScaleW();
   var layerRect = layer ? layer.getBoundingClientRect() : null;
   var wrapRect  = wrap  ? wrap.getBoundingClientRect()  : null;
   var rightGapPx = (layerRect && wrapRect) ? (wrapRect.right - layerRect.right) : null;
@@ -13760,22 +13748,19 @@ function audit(){
   var expectedMaxH = Math.max(40, priceH - timeH);
 
   return {
-    version:                   "0.664",
-    layerExists:               !!layer,
-    wrapExists:                !!wrap,
-    priceScaleW:               scaleW,
-    layerRect:                 layerRect ? { top: layerRect.top, left: layerRect.left, right: layerRect.right, bottom: layerRect.bottom, width: layerRect.width, height: layerRect.height } : null,
-    wrapRect:                  wrapRect  ? { top: wrapRect.top,  left: wrapRect.left,  right: wrapRect.right,  bottom: wrapRect.bottom,  width: wrapRect.width,  height: wrapRect.height  } : null,
-    rightGapPx:                rightGapPx,
-    heightPx:                  layerRect ? layerRect.height : null,
-    expectedMaxHeightPx:       expectedMaxH,
-    internalLineCount:         lines,
-    internalHitCount:          hits,
-    noTradeLogicMutation:      true,
-    noChartFunctionOverride:   true,
-    usesNonInvasiveScheduler:  true,
-    requestAnimationFrameUsed: false,
-    lastSync:                  _lastSync
+    version:              "0.663",
+    layerExists:          !!layer,
+    wrapExists:           !!wrap,
+    priceScaleW:          scaleW,
+    layerRect:            layerRect ? { top: layerRect.top, left: layerRect.left, right: layerRect.right, bottom: layerRect.bottom, width: layerRect.width, height: layerRect.height } : null,
+    wrapRect:             wrapRect  ? { top: wrapRect.top,  left: wrapRect.left,  right: wrapRect.right,  bottom: wrapRect.bottom,  width: wrapRect.width,  height: wrapRect.height  } : null,
+    rightGapPx:           rightGapPx,
+    heightPx:             layerRect ? layerRect.height : null,
+    expectedMaxHeightPx:  expectedMaxH,
+    internalLineCount:    lines,
+    internalHitCount:     hits,
+    noTradeLogicMutation: true,
+    lastSync:             _lastSync
   };
 }
 
@@ -13793,118 +13778,22 @@ if(document.readyState === "loading"){
   run();
 }
 
-window.addEventListener("resize",            sync);
-window.addEventListener("orientationchange", scheduleSync);
-window.addEventListener("load",              scheduleSync);
+window.addEventListener("resize", sync);
+
+if(typeof window.drawSoon === "function"){
+  var _prevDrawSoon = window.drawSoon;
+  window.drawSoon = function(){
+    var r = _prevDrawSoon.apply(this, arguments);
+    requestAnimationFrame(sync);
+    return r;
+  };
+}
 
 window.DVL_PAPER_LAYER_ANCHOR = {
-  VERSION:      "0.664",
-  sync:         sync,
-  scheduleSync: scheduleSync,
-  audit:        audit,
-  getLastSync:  getLastSync
-};
-
-})();
-</script>
-
-<style id="DVL_OSCILLATOR_BOUNDS_AUDIT_CSS_0664">
-/* DVL Beta 0.664 — Phase 2.8: oscillator bounds audit marker only.
-   Read-only/visual-neutral. No layout, color, spacing, z-index, radius, padding, height or width properties. */
-</style>
-
-<script id="DVL_OSCILLATOR_BOUNDS_AUDIT_MODULE_0664">
-(function(){
-"use strict";
-
-var _lastAudit = null;
-
-var KNOWN_OSCILLATORS = [
-  "DVLOpenInterestOscillator",
-  "DVLLongShortOscillator",
-  "DVLDeltaVolume",
-  "DVLTickVolume",
-  "DVLTestOscillator",
-  "DVLTestOscillator2"
-];
-
-function countActiveOscillators(){
-  var count = 0;
-  for(var i = 0; i < KNOWN_OSCILLATORS.length; i++){
-    var obj = window[KNOWN_OSCILLATORS[i]];
-    if(obj && typeof obj.on === "function") count++;
-  }
-  return count;
-}
-
-function audit(){
-  var canvasWrap  = document.querySelector(".canvasWrap");
-  var paperLayer  = document.getElementById("dvlPaperLayer") || document.querySelector(".dvl-paper-layer");
-  var paperAnchor = document.getElementById("DVL_PAPER_LAYER_ANCHOR_CSS_0663");
-
-  var activeCount = countActiveOscillators();
-
-  var oscBoundsSource = null;
-  var oscBounds       = null;
-  var firstOscTop     = null;
-  var lastOscBottom   = null;
-
-  if(window.__dvlOscillatorPanelBounds && typeof window.__dvlOscillatorPanelBounds === "object"){
-    oscBoundsSource = "window.__dvlOscillatorPanelBounds";
-    oscBounds       = window.__dvlOscillatorPanelBounds;
-    firstOscTop     = (typeof oscBounds.top    === "number") ? oscBounds.top    : null;
-    lastOscBottom   = (typeof oscBounds.bottom === "number") ? oscBounds.bottom : null;
-  }
-
-  var paperLayerRect = paperLayer ? paperLayer.getBoundingClientRect() : null;
-  var chartWrapRect  = canvasWrap ? canvasWrap.getBoundingClientRect() : null;
-
-  var paperBottomPx = paperLayerRect ? paperLayerRect.bottom : null;
-  var paperHeightPx = paperLayerRect ? paperLayerRect.height : null;
-
-  var invades     = false;
-  var overlapPx   = 0;
-  var recommendations = [];
-
-  if(firstOscTop !== null && paperBottomPx !== null){
-    if(paperBottomPx > firstOscTop){
-      invades   = true;
-      overlapPx = Math.round(paperBottomPx - firstOscTop);
-      recommendations.push("Paper layer should be limited to price pane only before oscillator fixes.");
-    }
-  }
-
-  var result = {
-    version:                    "0.664",
-    canvasWrapExists:           !!canvasWrap,
-    paperLayerExists:           !!paperLayer,
-    paperAnchorExists:          !!paperAnchor,
-    activeOscillatorCount:      activeCount,
-    oscillatorBoundsSource:     oscBoundsSource,
-    oscillatorBounds:           oscBounds,
-    firstOscillatorTopPx:       firstOscTop,
-    lastOscillatorBottomPx:     lastOscBottom,
-    paperLayerRect:             paperLayerRect ? { top: paperLayerRect.top, left: paperLayerRect.left, right: paperLayerRect.right, bottom: paperLayerRect.bottom, width: paperLayerRect.width, height: paperLayerRect.height } : null,
-    chartWrapRect:              chartWrapRect  ? { top: chartWrapRect.top,  left: chartWrapRect.left,  right: chartWrapRect.right,  bottom: chartWrapRect.bottom,  width: chartWrapRect.width,  height: chartWrapRect.height  } : null,
-    paperLayerBottomPx:         paperBottomPx,
-    paperLayerHeightPx:         paperHeightPx,
-    paperInvadesOscillatorArea: invades,
-    overlapPx:                  overlapPx,
-    recommendations:            recommendations
-  };
-
-  _lastAudit = result;
-  return result;
-}
-
-function getLastAudit(){
-  return _lastAudit;
-}
-
-window.DVL_OSCILLATOR_BOUNDS_AUDIT = {
-  VERSION:      "0.664",
-  audit:        audit,
-  getLastAudit: getLastAudit
+  VERSION:     "0.663",
+  sync:        sync,
+  audit:       audit,
+  getLastSync: getLastSync
 };
 
 })();
@@ -13915,7 +13804,7 @@ window.DVL_OSCILLATOR_BOUNDS_AUDIT = {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.664</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.663</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -14375,12 +14264,11 @@ window.DVL_OSCILLATOR_BOUNDS_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.664";
+const DVL_APP_VERSION = "Beta 0.663";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.664 — Phase 2.8: Paper sync non-invasive hotfix + oscillator bounds read-only audit." },
-  { version: "Beta 0.663", note: "Phase 2.7: Paper layer anchor + oscillator-safe sync; normaliza offsets internos do Paper após price scale 70px." },
+  { version: DVL_APP_VERSION, note: "Beta 0.663 — Phase 2.7: Paper layer anchor + oscillator-safe sync; normaliza offsets internos do Paper após price scale 70px." },
   { version: "Beta 0.662", note: "Phase 2.6: lock final de gap chart/canvas/footer e geometria do trade drawer 150px sem sobrepor o footer." },
   { version: "Beta 0.661", note: "Phase 2.5: lock final do chrome estrutural, travando header/assetbar e footer/footer buttons conforme Layout Contract." },
   { version: "Beta 0.660", note: "Phase 2.4: lock final da timer/Indicators hotbar em 30px, alinhando a cascata CSS com o Layout Contract." },
