@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.672</title>
+<title>DVL Binance Live — Beta 0.671</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -14944,168 +14944,12 @@ window.DVL_SAFE_CSS_CLEANUP_AUDIT={
 })();
 </script>
 
-<style id="DVL_SAFE_HTML_CLASS_CLEANUP_CSS_0672">
-/*
-  DVL Beta 0.672 — Safe HTML class cleanup batch 2.
-  Removed dead dvl-btn-migrated-* diagnostic class tokens from DOM elements.
-  No selectors, no properties, no visual change.
-*/
-</style>
-
-<script id="DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT_MODULE_0672">
-(function(){
-"use strict";
-
-var _lastAudit=null;
-
-var MIGRATED_TOKENS=[
-  "dvl-btn-migrated-footer","dvl-btn-migrated-timeframe",
-  "dvl-btn-migrated-header","dvl-btn-migrated-icon","dvl-btn-migrated-menu",
-  "dvl-btn-migrated-panel","dvl-btn-migrated-order-option",
-  "dvl-btn-migrated-keypad","dvl-btn-migrated-asset-favorite",
-  "dvl-btn-migrated-asset-dropdown","dvl-btn-migrated-indicator-dropdown",
-  "dvl-btn-migrated-tools","dvl-btn-migrated-paper-confirm",
-  "dvl-btn-migrated-paper-edit","dvl-btn-migrated-drawer",
-  "dvl-btn-migrated-trade-action"
-];
-
-function hasId(id){ return !!document.getElementById(id); }
-function cntId(styleEls,id){ return styleEls.filter(function(e){ return e.id===id; }).length; }
-var allScripts=[].slice.call(document.querySelectorAll("script"));
-function hasMarker(m){ return allScripts.some(function(s){ return (s.textContent||"").indexOf(m)!==-1; }); }
-
-function audit(){
-  var styleEls=[].slice.call(document.querySelectorAll("style[id]"));
-
-  // Check all migration tokens are absent from DOM elements
-  var migratedTokenCounts={};
-  var migratedTokensAbsent=true;
-  MIGRATED_TOKENS.forEach(function(cls){
-    var cnt=document.querySelectorAll("."+cls).length;
-    migratedTokenCounts[cls]=cnt;
-    if(cnt>0) migratedTokensAbsent=false;
-  });
-
-  // dvl-btn base class preserved
-  var dvlBtnPreserved=document.querySelectorAll(".dvl-btn").length>0;
-
-  // data-dvl-button preserved
-  var dataDvlButtonPreserved=document.querySelectorAll("[data-dvl-button]").length>0;
-
-  // Protected modules
-  var protectedModulesStillPresent={
-    buttonSystem0655:     hasId("DVL_BUTTON_SYSTEM_MODULE_0655")||hasMarker("DVL_BUTTON_SYSTEM_MODULE_0655"),
-    layoutContract0656:   hasId("DVL_LAYOUT_CONTRACT_MODULE_0656")||hasMarker("DVL_LAYOUT_CONTRACT_MODULE_0656"),
-    layoutAssertions0657: hasId("DVL_LAYOUT_ASSERTIONS_MODULE_0657")||hasMarker("DVL_LAYOUT_ASSERTIONS_MODULE_0657"),
-    paperAnchor0665:      hasId("DVL_PAPER_LAYER_ANCHOR_MODULE_0665"),
-    oscillatorPub0666:    hasId("DVL_OSCILLATOR_BOUNDS_PUBLISHER_MODULE_0666"),
-    runtimeInt0667:       hasId("DVL_RUNTIME_INTEGRATION_AUDIT_MODULE_0667"),
-    featureGate0668:      hasId("DVL_FEATURE_GATE_AUDIT_MODULE_0668"),
-    baselineFreeze0669:   hasId("DVL_BASELINE_FREEZE_MODULE_0669"),
-    inventory0670:        hasId("DVL_FINAL_OPTIMIZATION_INVENTORY_MODULE_0670"),
-    cssCleanup0671:       hasId("DVL_SAFE_CSS_CLEANUP_AUDIT_MODULE_0671")
-  };
-  var protectedModsPass=!!(
-    protectedModulesStillPresent.buttonSystem0655 &&
-    protectedModulesStillPresent.layoutContract0656 &&
-    protectedModulesStillPresent.layoutAssertions0657 &&
-    protectedModulesStillPresent.paperAnchor0665 &&
-    protectedModulesStillPresent.oscillatorPub0666 &&
-    protectedModulesStillPresent.runtimeInt0667 &&
-    protectedModulesStillPresent.featureGate0668 &&
-    protectedModulesStillPresent.baselineFreeze0669 &&
-    protectedModulesStillPresent.inventory0670 &&
-    protectedModulesStillPresent.cssCleanup0671
-  );
-
-  // Final locks
-  var finalLocksPass=!!(
-    cntId(styleEls,"DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659")===1 &&
-    cntId(styleEls,"DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660")===1 &&
-    cntId(styleEls,"DVL_CHROME_FINAL_LOCK_CSS_0661")===1 &&
-    cntId(styleEls,"DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662")===1
-  );
-
-  // Upstream audits
-  var baselineFreezePass=false;
-  var layoutMatch=false;
-  if(window.DVL_BASELINE_FREEZE){
-    try{ baselineFreezePass=!!window.DVL_BASELINE_FREEZE.audit().pass; }catch(e){}
-    try{ var cmp=window.DVL_BASELINE_FREEZE.compare(); layoutMatch=!!(cmp&&cmp.layoutMatch); }catch(e){}
-  }
-  var inventoryPass=false;
-  if(window.DVL_FINAL_OPTIMIZATION_INVENTORY){
-    try{ inventoryPass=!!window.DVL_FINAL_OPTIMIZATION_INVENTORY.audit().pass; }catch(e){}
-  }
-  var cssCleanupPass=false;
-  if(window.DVL_SAFE_CSS_CLEANUP_AUDIT){
-    try{ cssCleanupPass=!!window.DVL_SAFE_CSS_CLEANUP_AUDIT.audit().pass; }catch(e){}
-  }
-
-  var blockers=[];
-  if(!migratedTokensAbsent) blockers.push("Some dvl-btn-migrated-* tokens still in DOM");
-  if(!dvlBtnPreserved) blockers.push("dvl-btn base class not found in DOM");
-  if(!dataDvlButtonPreserved) blockers.push("data-dvl-button attribute not found in DOM");
-  if(!protectedModsPass) blockers.push("Some protected modules missing");
-  if(!finalLocksPass) blockers.push("Some final lock CSS blocks missing or duplicated");
-  if(!baselineFreezePass) blockers.push("DVL_BASELINE_FREEZE.audit().pass is false");
-  if(!inventoryPass) blockers.push("DVL_FINAL_OPTIMIZATION_INVENTORY.audit().pass is false");
-  if(!cssCleanupPass) blockers.push("DVL_SAFE_CSS_CLEANUP_AUDIT.audit().pass is false");
-  if(!layoutMatch) blockers.push("Layout does not match frozen baseline");
-
-  var result={
-    version:"0.672",
-    phase:"safe_html_class_cleanup_batch2",
-    pass:blockers.length===0,
-    migratedTokenCounts:migratedTokenCounts,
-    migratedTokensAbsent:migratedTokensAbsent,
-    dvlBtnPreserved:dvlBtnPreserved,
-    dataDvlButtonPreserved:dataDvlButtonPreserved,
-    protectedModulesStillPresent:protectedModulesStillPresent,
-    finalLocksPass:finalLocksPass,
-    baselineFreezePass:baselineFreezePass,
-    inventoryPass:inventoryPass,
-    cssCleanupPass:cssCleanupPass,
-    layoutStillMatchesFrozenBaseline:layoutMatch,
-    blockers:blockers,
-    warnings:[],
-    selfReport:{
-      drawSoonWrappedByThisModule:false,
-      requestAnimationFrameUsedByThisModule:false,
-      timerUsedByThisModule:false,
-      observerUsedByThisModule:false,
-      mutatesDomStyleByThisModule:false
-    }
-  };
-  _lastAudit=result;
-  return result;
-}
-
-function getLastAudit(){ return _lastAudit; }
-
-function run(){
-  if(window.DVL_SAFE_CSS_CLEANUP_AUDIT && typeof window.DVL_SAFE_CSS_CLEANUP_AUDIT.run==="function"){
-    return window.DVL_SAFE_CSS_CLEANUP_AUDIT.run().then(function(){ return audit(); });
-  }
-  return Promise.resolve(audit());
-}
-
-window.DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT={
-  VERSION:"0.672",
-  audit:audit,
-  run:run,
-  getLastAudit:getLastAudit
-};
-
-})();
-</script>
-
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.672</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.671</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -15565,12 +15409,11 @@ window.DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT={
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.672";
+const DVL_APP_VERSION = "Beta 0.671";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.672 — Safe HTML class cleanup batch 2: removed dead dvl-btn-migrated-* diagnostic class tokens." },
-  { version: "Beta 0.671", note: "Beta 0.671 — Phase 4.1: safe CSS cleanup batch 1, retiring empty button migration CSS markers 0.645–0.655." },
+  { version: DVL_APP_VERSION, note: "Beta 0.671 — Phase 4.1: safe CSS cleanup batch 1, retiring empty button migration CSS markers 0.645–0.655." },
   { version: "Beta 0.670", note: "Beta 0.670 — Phase 4.0: Final optimization inventory and safe cleanup map." },
   { version: "Beta 0.669", note: "Beta 0.669 — Phase 3.3: baseline freeze candidate; congela contratos estruturais para otimização final e novas funções." },
   { version: "Beta 0.668", note: "Phase 3.2: feature gate audit e freeze-candidate check para validar se a base está pronta para congelamento, otimização final e novas funções." },
@@ -15804,73 +15647,88 @@ function registerButton(el, options){
   if(options && options.role === 'footer'){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-footer');
+    el.classList.add('dvl-btn-migrated-footer');
   }
   if(options && options.role === 'timeframe'){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-header');
+    el.classList.add('dvl-btn-migrated-timeframe');
   }
   if(options && options.role === 'header'){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-header');
+    el.classList.add('dvl-btn-migrated-header');
   }
   if(options && options.role === 'icon'){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-icon');
+    el.classList.add('dvl-btn-migrated-icon');
   }
   if(options && options.role === 'dropdown' &&
      el.classList.contains('menuBtn')){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-dropdown');
+    el.classList.add('dvl-btn-migrated-menu');
   }
   if(options && options.role === 'dropdown' &&
      el.classList.contains('orderTypeOption')){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-dropdown');
+    el.classList.add('dvl-btn-migrated-order-option');
   }
   if(options && options.role === 'keypad' &&
      el.closest && el.closest('.numberPadSheet')){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-keypad');
+    el.classList.add('dvl-btn-migrated-keypad');
   }
   if(options && options.role === 'dropdown' &&
      el.closest && el.closest('.assetFavoritesSheet')){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-dropdown');
+    el.classList.add('dvl-btn-migrated-asset-favorite');
   }
   if(options && options.role === 'dropdown' &&
      el.closest && el.closest('.assetDropdown')){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-dropdown');
+    el.classList.add('dvl-btn-migrated-asset-dropdown');
   }
   if(options && options.role === 'dropdown' &&
      el.closest && el.closest('.indicatorDropdown')){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-dropdown');
+    el.classList.add('dvl-btn-migrated-indicator-dropdown');
   }
   if(options && options.role === 'tools' &&
      el.closest && (el.closest('.dvlDrawCtxBar') || el.closest('.dvlDrawSettingsPanel'))){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-tools');
+    el.classList.add('dvl-btn-migrated-tools');
   }
   if(options && options.role === 'paper' &&
      el.closest && el.closest('.dvl-paper-confirm')){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-paper');
+    el.classList.add('dvl-btn-migrated-paper-confirm');
   }
   if(options && options.role === 'paper' &&
      el.closest && el.closest('.dvl-paper-edit-confirm')){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-paper');
+    el.classList.add('dvl-btn-migrated-paper-edit');
   }
   if(options && options.role === 'trade' &&
      el.classList.contains('tradeAction')){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-trade');
+    el.classList.add('dvl-btn-migrated-trade-action');
   }
   if(options && options.role === 'panel' &&
      el.classList.contains('drawerBtn')){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-panel');
+    el.classList.add('dvl-btn-migrated-drawer');
   }
   if(options && options.role === 'panel' &&
      (el.classList.contains('panelBtn') ||
@@ -15878,6 +15736,7 @@ function registerButton(el, options){
       el.classList.contains('panelCloseX'))){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-panel');
+    el.classList.add('dvl-btn-migrated-panel');
   }
   registry.push(el);
 }
