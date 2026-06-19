@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.665</title>
+<title>DVL Binance Live — Beta 0.664</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -13678,7 +13678,7 @@ body{
 }
 </style>
 
-<script id="DVL_PAPER_LAYER_ANCHOR_MODULE_0665">
+<script id="DVL_PAPER_LAYER_ANCHOR_MODULE_0663">
 (function(){
 "use strict";
 
@@ -13697,19 +13697,6 @@ function getLayer(){
   return document.getElementById("dvlPaperLayer") || document.querySelector(".dvl-paper-layer");
 }
 
-function getOscillatorBounds(){
-  if(window.__dvlOscillatorPanelBounds &&
-     typeof window.__dvlOscillatorPanelBounds === "object" &&
-     typeof window.__dvlOscillatorPanelBounds.top === "number"){
-    return window.__dvlOscillatorPanelBounds;
-  }
-  return null;
-}
-
-function getMaxPricePaneHeight(wrapRect, totalH, priceH, timeH){
-  return Math.max(40, priceH - timeH);
-}
-
 function sync(){
   var layer = getLayer();
   var wrap  = getWrap();
@@ -13725,28 +13712,7 @@ function sync(){
   try{
     if(typeof dvlMainTimeScaleHeight === "function") timeH = dvlMainTimeScaleHeight();
   }catch(_){}
-
-  var wrapRect = wrap.getBoundingClientRect();
-  var paneH    = getMaxPricePaneHeight(wrapRect, totalH, priceH, timeH);
-
-  var oscBounds            = getOscillatorBounds();
-  var oscBoundsDetected    = false;
-  var firstOscTopPx        = null;
-  var localOscTopPx        = null;
-  var clampApplied         = false;
-  var clampMarginPx        = 0;
-
-  if(oscBounds !== null){
-    oscBoundsDetected = true;
-    firstOscTopPx    = oscBounds.top;
-    localOscTopPx    = firstOscTopPx - wrapRect.top;
-    var clamped      = Math.max(40, localOscTopPx - 1);
-    if(clamped < paneH){
-      paneH         = clamped;
-      clampApplied  = true;
-      clampMarginPx = 1;
-    }
-  }
+  var paneH = Math.max(40, priceH - timeH);
 
   layer.style.setProperty("top",    "0",           "important");
   layer.style.setProperty("left",   "0",           "important");
@@ -13756,17 +13722,11 @@ function sync(){
   layer.style.setProperty("bottom", "auto",        "important");
 
   var result = {
-    version:                 "0.665",
-    layerExists:             true,
-    wrapExists:              true,
-    priceScaleW:             scaleW,
-    paneH:                   paneH,
-    oscillatorBoundsDetected: oscBoundsDetected,
-    firstOscillatorTopPx:    firstOscTopPx,
-    localOscillatorTopPx:    localOscTopPx,
-    clampApplied:            clampApplied,
-    clampMarginPx:           clampMarginPx,
-    timestamp:               Date.now()
+    layerExists: true,
+    wrapExists:  true,
+    priceScaleW: scaleW,
+    paneH:       paneH,
+    timestamp:   Date.now()
   };
   _lastSync = result;
   return result;
@@ -13800,7 +13760,7 @@ function audit(){
   var expectedMaxH = Math.max(40, priceH - timeH);
 
   return {
-    version:                   "0.665",
+    version:                   "0.664",
     layerExists:               !!layer,
     wrapExists:                !!wrap,
     priceScaleW:               scaleW,
@@ -13838,7 +13798,7 @@ window.addEventListener("orientationchange", scheduleSync);
 window.addEventListener("load",              scheduleSync);
 
 window.DVL_PAPER_LAYER_ANCHOR = {
-  VERSION:      "0.665",
+  VERSION:      "0.664",
   sync:         sync,
   scheduleSync: scheduleSync,
   audit:        audit,
@@ -13848,14 +13808,12 @@ window.DVL_PAPER_LAYER_ANCHOR = {
 })();
 </script>
 
-<style id="DVL_OSCILLATOR_SAFE_CLAMP_CSS_0665">
-/* DVL Beta 0.665 — Phase 2.9: oscillator safe clamp marker only.
-   The Paper layer anchor JS module (DVL_PAPER_LAYER_ANCHOR_MODULE_0665) clamps #dvlPaperLayer
-   height to the price pane when window.__dvlOscillatorPanelBounds is present.
-   No visual/layout properties here. Read-only/visual-neutral. */
+<style id="DVL_OSCILLATOR_BOUNDS_AUDIT_CSS_0664">
+/* DVL Beta 0.664 — Phase 2.8: oscillator bounds audit marker only.
+   Read-only/visual-neutral. No layout, color, spacing, z-index, radius, padding, height or width properties. */
 </style>
 
-<script id="DVL_OSCILLATOR_BOUNDS_AUDIT_MODULE_0665">
+<script id="DVL_OSCILLATOR_BOUNDS_AUDIT_MODULE_0664">
 (function(){
 "use strict";
 
@@ -13904,21 +13862,6 @@ function audit(){
   var paperBottomPx = paperLayerRect ? paperLayerRect.bottom : null;
   var paperHeightPx = paperLayerRect ? paperLayerRect.height : null;
 
-  var totalH = canvasWrap ? canvasWrap.clientHeight : 0;
-  var priceH = totalH;
-  try{ if(typeof dvlPricePanelHeight === "function") priceH = dvlPricePanelHeight(totalH); }catch(_){}
-  var timeH = 20;
-  try{ if(typeof dvlMainTimeScaleHeight === "function") timeH = dvlMainTimeScaleHeight(); }catch(_){}
-  var expectedMaxPaneH = Math.max(40, priceH - timeH);
-
-  var lastSync      = window.DVL_PAPER_LAYER_ANCHOR ? window.DVL_PAPER_LAYER_ANCHOR.getLastSync() : null;
-  var clampApplied  = lastSync ? !!lastSync.clampApplied : false;
-  var clampMarginPx = lastSync ? (lastSync.clampMarginPx || 0) : 0;
-
-  var paperBottomVsFirstOscTopPx = (paperBottomPx !== null && firstOscTop !== null)
-    ? Math.round(paperBottomPx - firstOscTop)
-    : null;
-
   var invades     = false;
   var overlapPx   = 0;
   var recommendations = [];
@@ -13931,12 +13874,8 @@ function audit(){
     }
   }
 
-  var paperFitsPricePane = paperHeightPx !== null
-    ? (paperHeightPx <= expectedMaxPaneH + 1)
-    : true;
-
   var result = {
-    version:                    "0.665",
+    version:                    "0.664",
     canvasWrapExists:           !!canvasWrap,
     paperLayerExists:           !!paperLayer,
     paperAnchorExists:          !!paperAnchor,
@@ -13949,11 +13888,6 @@ function audit(){
     chartWrapRect:              chartWrapRect  ? { top: chartWrapRect.top,  left: chartWrapRect.left,  right: chartWrapRect.right,  bottom: chartWrapRect.bottom,  width: chartWrapRect.width,  height: chartWrapRect.height  } : null,
     paperLayerBottomPx:         paperBottomPx,
     paperLayerHeightPx:         paperHeightPx,
-    paperFitsPricePane:         paperFitsPricePane,
-    expectedMaxPaneH:           expectedMaxPaneH,
-    clampApplied:               clampApplied,
-    clampMarginPx:              clampMarginPx,
-    paperBottomVsFirstOscTopPx: paperBottomVsFirstOscTopPx,
     paperInvadesOscillatorArea: invades,
     overlapPx:                  overlapPx,
     recommendations:            recommendations
@@ -13968,7 +13902,7 @@ function getLastAudit(){
 }
 
 window.DVL_OSCILLATOR_BOUNDS_AUDIT = {
-  VERSION:      "0.665",
+  VERSION:      "0.664",
   audit:        audit,
   getLastAudit: getLastAudit
 };
@@ -13981,7 +13915,7 @@ window.DVL_OSCILLATOR_BOUNDS_AUDIT = {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.665</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.664</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -14441,12 +14375,11 @@ window.DVL_OSCILLATOR_BOUNDS_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.665";
+const DVL_APP_VERSION = "Beta 0.664";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.665 — Phase 2.9: oscillator safe clamp + audit verification for Paper layer bounds." },
-  { version: "Beta 0.664", note: "Phase 2.8: Paper sync non-invasive hotfix + oscillator bounds read-only audit." },
+  { version: DVL_APP_VERSION, note: "Beta 0.664 — Phase 2.8: Paper sync non-invasive hotfix + oscillator bounds read-only audit." },
   { version: "Beta 0.663", note: "Phase 2.7: Paper layer anchor + oscillator-safe sync; normaliza offsets internos do Paper após price scale 70px." },
   { version: "Beta 0.662", note: "Phase 2.6: lock final de gap chart/canvas/footer e geometria do trade drawer 150px sem sobrepor o footer." },
   { version: "Beta 0.661", note: "Phase 2.5: lock final do chrome estrutural, travando header/assetbar e footer/footer buttons conforme Layout Contract." },
