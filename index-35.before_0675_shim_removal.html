@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.675</title>
+<title>DVL Binance Live — Beta 0.674</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -14968,14 +14968,6 @@ window.DVL_SAFE_CSS_CLEANUP_AUDIT={
 */
 </style>
 
-<style id="DVL_BUTTON_SYSTEM_SHIM_REMOVAL_CSS_0675">
-/*
-  DVL Beta 0.675 — Button System shim removal.
-  Removed legacy getMigratedXxx() shims from DVL_BUTTON_SYSTEM after 0.674 confirmed no external consumers.
-  No selectors, no properties, no visual change.
-*/
-</style>
-
 <script id="DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT_MODULE_0672">
 (function(){
 "use strict";
@@ -15475,260 +15467,12 @@ window.DVL_BUTTON_SYSTEM_SHIM_CONSUMER_AUDIT={
 })();
 </script>
 
-<script id="DVL_BUTTON_SYSTEM_SHIM_REMOVAL_AUDIT_MODULE_0675">
-(function(){
-"use strict";
-
-var _lastAudit = null;
-
-// Anti-false-positive: old shim names by concat
-var _p = "get" + "Migrated";
-var _oldShimNames = [
-  _p+"FooterButtons",    _p+"TimeframeButtons", _p+"HeaderButtons",
-  _p+"IconButtons",      _p+"MenuButtons",      _p+"PanelButtons",
-  _p+"OrderOptionButtons", _p+"KeypadButtons",
-  _p+"AssetFavoriteButtons", _p+"AssetDropdownButtons",
-  _p+"IndicatorDropdownButtons", _p+"ToolsButtons",
-  _p+"PaperConfirmButtons", _p+"PaperEditConfirmButtons",
-  _p+"DrawerButtons",    _p+"TradeActionButtons"
-];
-
-// Anti-false-positive: migration token by concat
-var _migratedToken = "dvl-btn-" + "migrated-";
-var _getMigratedText = "get" + "Migrated";
-var _clsContains = "classList" + ".contains('";
-var _clsAdd      = "classList" + ".add('";
-var _containsMigrated = _clsContains + _migratedToken;
-var _addMigrated      = _clsAdd + _migratedToken;
-
-// Marker strings split
-var _BS_START = "// ===== DVL_BUTTON_SYSTEM_MODULE_" + "0655 =====";
-var _BS_END   = "// ===== DVL_LAYOUT_CONTRACT_MODULE_" + "0656 =====";
-
-function _cntId(col, id){
-  var n=0; for(var i=0;i<col.length;i++) if(col[i].id===id) n++; return n;
-}
-
-function _getBtnBlock(){
-  var scripts = document.querySelectorAll("script");
-  for(var i=0;i<scripts.length;i++){
-    var txt = scripts[i].textContent||"";
-    var s = txt.indexOf(_BS_START);
-    if(s===-1) continue;
-    var e = txt.indexOf(_BS_END, s);
-    if(e!==-1) return txt.slice(s, e);
-  }
-  return null;
-}
-
-function audit(){
-  var styleEls  = document.querySelectorAll("style");
-  var scriptEls = document.querySelectorAll("script");
-  var bs = window.DVL_BUTTON_SYSTEM;
-
-  // 1. DVL_BUTTON_SYSTEM_MODULE_0655 present
-  var btn0655Present = false;
-  for(var i=0;i<scriptEls.length;i++){
-    if((scriptEls[i].textContent||"").indexOf(_BS_START)!==-1){ btn0655Present=true; break; }
-  }
-
-  // 2. MODULE_0674 present (pre-removal history)
-  var mod0674Present = _cntId(scriptEls,"DVL_BUTTON_SYSTEM_SHIM_CONSUMER_AUDIT_MODULE_0674")===1;
-
-  // 3. window.DVL_BUTTON_SYSTEM exists
-  var btnSystemPresent = typeof bs!=="undefined" && bs!==null;
-
-  // 4-6. Core functions preserved
-  var auditFn  = btnSystemPresent && typeof bs.audit==="function";
-  var refreshFn= btnSystemPresent && typeof bs.refresh==="function";
-  var listByFn = btnSystemPresent && typeof bs.listByRole==="function";
-
-  // 7. No getMigratedXxx in window.DVL_BUTTON_SYSTEM
-  var shimsPurged = true; var shimsStillPresent = [];
-  if(btnSystemPresent){
-    for(var s=0;s<_oldShimNames.length;s++){
-      if(typeof bs[_oldShimNames[s]]==="function"){
-        shimsPurged=false; shimsStillPresent.push(_oldShimNames[s]);
-      }
-    }
-  }
-
-  // 8-11. Button system block text checks
-  var btnBlock = _getBtnBlock();
-  var btnBlockFound = btnBlock!==null;
-  var noGetMigratedInBlock  = btnBlockFound ? (btnBlock.indexOf(_getMigratedText)===-1) : false;
-  var noMigratedTokenInBlock = btnBlockFound ? (btnBlock.indexOf(_migratedToken)===-1) : false;
-  var noContainsMigrated    = btnBlockFound ? (btnBlock.indexOf(_containsMigrated)===-1) : false;
-  var noAddMigrated         = btnBlockFound ? (btnBlock.indexOf(_addMigrated)===-1) : false;
-
-  // 12-14. audit() still functional
-  var auditResult = null;
-  var auditReturnsObj = false;
-  var registeredIsNum = false;
-  var rolesIsObj = false;
-  if(auditFn){
-    try{
-      auditResult = bs.audit();
-      auditReturnsObj = typeof auditResult==="object" && auditResult!==null;
-      registeredIsNum = auditReturnsObj && typeof auditResult.registered==="number";
-      rolesIsObj      = auditReturnsObj && typeof auditResult.roles==="object" && auditResult.roles!==null;
-    }catch(e){}
-  }
-
-  // 15. data-dvl-button still applied
-  var dvlBtnAttr = document.querySelectorAll("[data-dvl-button=\"true\"]").length > 0;
-
-  // 16. Functional classes still applied
-  var _funcClasses = ["dvl-btn","dvl-btn-footer","dvl-btn-header","dvl-btn-icon",
-    "dvl-btn-panel","dvl-btn-trade","dvl-btn-dropdown","dvl-btn-keypad","dvl-btn-tools","dvl-btn-paper"];
-  var funcClassesOk = false;
-  try{
-    var _fc = 0;
-    for(var f=0;f<_funcClasses.length;f++){
-      if(document.getElementsByClassName(_funcClasses[f]).length>0) _fc++;
-    }
-    funcClassesOk = _fc>0;
-  }catch(e){}
-
-  // 17. DVL_BUTTON_SYSTEM_DEAD_DIAGNOSTIC_CLEANUP_AUDIT — may be retired after shim removal
-  var dead0673Pass = false; var dead0673Retired = false;
-  try{
-    var _d = window.DVL_BUTTON_SYSTEM_DEAD_DIAGNOSTIC_CLEANUP_AUDIT;
-    if(_d && typeof _d.audit==="function"){
-      var _dr = _d.audit();
-      if(_dr.pass){ dead0673Pass=true; }
-      else if(_dr.shimCount===0){ dead0673Retired=true; }
-    }
-  }catch(e){ dead0673Retired=true; }
-
-  // 18-21. Active prior audits
-  var htmlCleanupPass=false, cssCleanupPass=false, baselinePass=false, inventoryPass=false;
-  try{ htmlCleanupPass=!!(window.DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT&&window.DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT.audit().pass); }catch(e){}
-  try{ cssCleanupPass=!!(window.DVL_SAFE_CSS_CLEANUP_AUDIT&&window.DVL_SAFE_CSS_CLEANUP_AUDIT.audit().pass); }catch(e){}
-  try{ baselinePass=!!(window.DVL_BASELINE_FREEZE&&window.DVL_BASELINE_FREEZE.audit().pass); }catch(e){}
-  try{ inventoryPass=!!(window.DVL_FINAL_OPTIMIZATION_INVENTORY&&window.DVL_FINAL_OPTIMIZATION_INVENTORY.audit().pass); }catch(e){}
-
-  // 22. Layout matches baseline
-  var layoutMatch=false;
-  try{ var _c=window.DVL_BASELINE_FREEZE&&window.DVL_BASELINE_FREEZE.compare(); layoutMatch=!!((_c)&&_c.layoutMatch); }catch(e){}
-
-  // 23. Final locks 0659-0662
-  var _lockIds=["DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659","DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660","DVL_CHROME_FINAL_LOCK_CSS_0661","DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662"];
-  var finalLocksOk=true; var finalLocksMissing=[];
-  for(var f=0;f<_lockIds.length;f++){
-    if(_cntId(styleEls,_lockIds[f])!==1){ finalLocksOk=false; finalLocksMissing.push(_lockIds[f]); }
-  }
-
-  // 24. Protected modules 0655-0674
-  var _modIds=[
-    "DVL_BASELINE_FREEZE_MODULE_0669","DVL_FINAL_OPTIMIZATION_INVENTORY_MODULE_0670",
-    "DVL_SAFE_CSS_CLEANUP_AUDIT_MODULE_0671","DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT_MODULE_0672",
-    "DVL_BUTTON_SYSTEM_DEAD_DIAGNOSTIC_CLEANUP_AUDIT_MODULE_0673",
-    "DVL_BUTTON_SYSTEM_SHIM_CONSUMER_AUDIT_MODULE_0674"
-  ];
-  var _cssIds=[
-    "DVL_BUTTON_SYSTEM_DEAD_DIAGNOSTIC_CLEANUP_CSS_0673",
-    "DVL_BUTTON_SYSTEM_SHIM_CONSUMER_AUDIT_CSS_0674",
-    "DVL_BUTTON_SYSTEM_SHIM_REMOVAL_CSS_0675"
-  ];
-  var protectedOk=true; var protectedMissing=[];
-  if(!btn0655Present){ protectedOk=false; protectedMissing.push("DVL_BUTTON_SYSTEM_MODULE_0655"); }
-  for(var p=0;p<_modIds.length;p++){
-    if(_cntId(scriptEls,_modIds[p])!==1){ protectedOk=false; protectedMissing.push(_modIds[p]); }
-  }
-  for(var c=0;c<_cssIds.length;c++){
-    if(_cntId(styleEls,_cssIds[c])!==1){ protectedOk=false; protectedMissing.push(_cssIds[c]); }
-  }
-
-  // 25. readyForPostShimCleanup
-  var activeAuditsPass = htmlCleanupPass&&cssCleanupPass&&baselinePass&&inventoryPass;
-  var systemFunctional = btnSystemPresent&&auditFn&&refreshFn&&listByFn&&auditReturnsObj&&registeredIsNum&&rolesIsObj;
-  var readyForPostShimCleanup = shimsPurged&&systemFunctional&&activeAuditsPass&&layoutMatch&&protectedOk;
-
-  var blockers=[];
-  if(!btn0655Present)       blockers.push("DVL_BUTTON_SYSTEM_MODULE_0655 not found");
-  if(!mod0674Present)       blockers.push("DVL_BUTTON_SYSTEM_SHIM_CONSUMER_AUDIT_MODULE_0674 not found");
-  if(!btnSystemPresent)     blockers.push("window.DVL_BUTTON_SYSTEM not defined");
-  if(!auditFn)              blockers.push("DVL_BUTTON_SYSTEM.audit not a function");
-  if(!refreshFn)            blockers.push("DVL_BUTTON_SYSTEM.refresh not a function");
-  if(!listByFn)             blockers.push("DVL_BUTTON_SYSTEM.listByRole not a function");
-  if(!shimsPurged)          blockers.push("Shims still present: "+shimsStillPresent.join(", "));
-  if(!btnBlockFound)        blockers.push("Button system block not found");
-  if(!noGetMigratedInBlock)  blockers.push("getMigrated text still in button system block");
-  if(!noMigratedTokenInBlock) blockers.push("dvl-btn-migrated- still in button system block");
-  if(!noContainsMigrated)   blockers.push("classList.contains(dvl-btn-migrated- still present");
-  if(!noAddMigrated)        blockers.push("cls-add(dvl-btn-migrated-) still in btn block");
-  if(!auditReturnsObj)      blockers.push("DVL_BUTTON_SYSTEM.audit() did not return object");
-  if(!registeredIsNum)      blockers.push("audit().registered is not a number");
-  if(!rolesIsObj)           blockers.push("audit().roles is not an object");
-  if(!htmlCleanupPass)      blockers.push("DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT did not pass");
-  if(!cssCleanupPass)       blockers.push("DVL_SAFE_CSS_CLEANUP_AUDIT did not pass");
-  if(!baselinePass)         blockers.push("DVL_BASELINE_FREEZE did not pass");
-  if(!inventoryPass)        blockers.push("DVL_FINAL_OPTIMIZATION_INVENTORY did not pass");
-  if(!layoutMatch)          blockers.push("Layout does not match frozen baseline");
-  if(!finalLocksOk)         blockers.push("Final locks missing: "+finalLocksMissing.join(", "));
-  if(!protectedOk)          blockers.push("Protected modules missing: "+protectedMissing.join(", "));
-
-  return {
-    version: "0.675",
-    blockers: blockers,
-    pass: blockers.length===0,
-    readyForPostShimCleanup: readyForPostShimCleanup,
-    btn0655Present: btn0655Present,
-    mod0674Present: mod0674Present,
-    btnSystemPresent: btnSystemPresent,
-    auditFn: auditFn,
-    refreshFn: refreshFn,
-    listByFn: listByFn,
-    shimsPurged: shimsPurged,
-    shimsStillPresent: shimsStillPresent,
-    btnBlockFound: btnBlockFound,
-    noGetMigratedInBlock: noGetMigratedInBlock,
-    noMigratedTokenInBlock: noMigratedTokenInBlock,
-    noContainsMigrated: noContainsMigrated,
-    noAddMigrated: noAddMigrated,
-    auditReturnsObj: auditReturnsObj,
-    registeredIsNum: registeredIsNum,
-    rolesIsObj: rolesIsObj,
-    dvlBtnAttr: dvlBtnAttr,
-    funcClassesOk: funcClassesOk,
-    dead0673Pass: dead0673Pass,
-    dead0673Retired: dead0673Retired,
-    htmlCleanupPass: htmlCleanupPass,
-    cssCleanupPass: cssCleanupPass,
-    baselinePass: baselinePass,
-    inventoryPass: inventoryPass,
-    layoutMatch: layoutMatch,
-    finalLocksOk: finalLocksOk,
-    finalLocksMissing: finalLocksMissing,
-    protectedOk: protectedOk,
-    protectedMissing: protectedMissing
-  };
-}
-
-function getLastAudit(){ return _lastAudit; }
-
-function run(){
-  _lastAudit = audit();
-  return Promise.resolve(_lastAudit);
-}
-
-window.DVL_BUTTON_SYSTEM_SHIM_REMOVAL_AUDIT={
-  VERSION:"0.675",
-  audit:audit,
-  run:run,
-  getLastAudit:getLastAudit
-};
-
-})();
-</script>
-
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.675</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.674</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -16188,12 +15932,11 @@ window.DVL_BUTTON_SYSTEM_SHIM_REMOVAL_AUDIT={
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.675";
+const DVL_APP_VERSION = "Beta 0.674";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.675 — Removed legacy getMigratedXxx Button System shims after 0.674 confirmed no external consumers." },
-  { version: "Beta 0.674", note: "Beta 0.674 — Button System shim consumer audit: verified external usage before removing legacy getMigratedXxx compatibility shims." },
+  { version: DVL_APP_VERSION, note: "Beta 0.674 — Button System shim consumer audit: verified external usage before removing legacy getMigratedXxx compatibility shims." },
   { version: "Beta 0.673", note: "Beta 0.673 — Safe Button System cleanup: removed dead dvl-btn-migrated-* references from Button System while preserving compatibility shims." },
   { version: "Beta 0.672", note: "Beta 0.672 — Safe HTML class cleanup batch 2: removed dead dvl-btn-migrated-* diagnostic class tokens." },
   { version: "Beta 0.671", note: "Beta 0.671 — Phase 4.1: safe CSS cleanup batch 1, retiring empty button migration CSS markers 0.645–0.655." },
@@ -16579,6 +16322,70 @@ function listByRole(role){
   return result;
 }
 
+function getMigratedFooterButtons(){
+  return [];
+}
+
+function getMigratedTimeframeButtons(){
+  return [];
+}
+
+function getMigratedHeaderButtons(){
+  return [];
+}
+
+function getMigratedIconButtons(){
+  return [];
+}
+
+function getMigratedMenuButtons(){
+  return [];
+}
+
+function getMigratedPanelButtons(){
+  return [];
+}
+
+function getMigratedOrderOptionButtons(){
+  return [];
+}
+
+function getMigratedKeypadButtons(){
+  return [];
+}
+
+function getMigratedAssetFavoriteButtons(){
+  return [];
+}
+
+function getMigratedAssetDropdownButtons(){
+  return [];
+}
+
+function getMigratedIndicatorDropdownButtons(){
+  return [];
+}
+
+function getMigratedToolsButtons(){
+  return [];
+}
+
+function getMigratedPaperConfirmButtons(){
+  return [];
+}
+
+function getMigratedPaperEditConfirmButtons(){
+  return [];
+}
+
+function getMigratedDrawerButtons(){
+  return [];
+}
+
+function getMigratedTradeActionButtons(){
+  return [];
+}
+
 function audit(){
   var footerEls = listByRole('footer');
   var footerMigrated = 0;
@@ -16588,7 +16395,11 @@ function audit(){
   var headerMigrated = 0;
   var iconEls = listByRole('icon');
   var iconMigrated = 0;
+  var menuEls = getMigratedMenuButtons();
+  var panelControlEls = getMigratedPanelButtons();
   var allPanelEls = listByRole('panel');
+  var panelControlMigrated = panelControlEls.length;
+  var orderOptionEls = getMigratedOrderOptionButtons();
   var allDropdownEls = listByRole('dropdown');
   var orderOptionTotal = 0;
   var assetFavoriteTotal = 0;
@@ -16605,6 +16416,7 @@ function audit(){
   var paperEls = listByRole('paper');
   var paperConfirmTotal = 0;
   var paperEditConfirmTotal = 0;
+  var drawerEls = getMigratedDrawerButtons();
   var drawerTotal = 0;
   for(var i = 0; i < allPanelEls.length; i++){
     if(allPanelEls[i].classList.contains('drawerBtn')) drawerTotal++;
@@ -16622,6 +16434,11 @@ function audit(){
       if(el.classList.contains('sell')) sellTradeActionTotal++;
     }
   }
+  var paperConfirmMigrated = getMigratedPaperConfirmButtons().length;
+  var paperEditConfirmMigrated = getMigratedPaperEditConfirmButtons().length;
+  var assetFavoriteMigrated = getMigratedAssetFavoriteButtons().length;
+  var assetDropdownMigrated = getMigratedAssetDropdownButtons().length;
+  var indicatorDropdownMigrated = getMigratedIndicatorDropdownButtons().length;
   return {
     total:                     registry.length,
     roles:                     getRoleCounts(),
@@ -16635,22 +16452,32 @@ function audit(){
     headerMigrated:            headerMigrated,
     iconTotal:                 iconEls.length,
     iconMigrated:              iconMigrated,
+    menuTotal:                 getMigratedMenuButtons().length,
+    menuMigrated:              menuEls.length,
     panelControlTotal:         allPanelEls.length,
+    panelControlMigrated:      panelControlMigrated,
     drawerTotal:               drawerTotal,
+    drawerMigrated:            drawerEls.length,
     tradeActionTotal:          tradeActionTotal,
     tradeActionMigrated:       tradeActionMigrated,
     buyTradeActionTotal:       buyTradeActionTotal,
     sellTradeActionTotal:      sellTradeActionTotal,
     orderOptionTotal:          orderOptionTotal,
+    orderOptionMigrated:       orderOptionEls.length,
     keypadTotal:               keypadEls.length,
     keypadMigrated:            keypadMigrated,
     toolsTotal:                toolsEls.length,
     toolsMigrated:             toolsMigrated,
     paperConfirmTotal:         paperConfirmTotal,
+    paperConfirmMigrated:      paperConfirmMigrated,
     paperEditConfirmTotal:     paperEditConfirmTotal,
+    paperEditConfirmMigrated:  paperEditConfirmMigrated,
     assetFavoriteTotal:        assetFavoriteTotal,
+    assetFavoriteMigrated:     assetFavoriteMigrated,
     assetDropdownTotal:        assetDropdownTotal,
-    indicatorDropdownTotal:    indicatorDropdownTotal
+    assetDropdownMigrated:     assetDropdownMigrated,
+    indicatorDropdownTotal:    indicatorDropdownTotal,
+    indicatorDropdownMigrated: indicatorDropdownMigrated
   };
 }
 
@@ -16671,6 +16498,22 @@ window.DVL_BUTTON_SYSTEM = {
   count:                             function(){ return registry.length; },
   getRoleCounts:                     getRoleCounts,
   listByRole:                        listByRole,
+  getMigratedFooterButtons:          getMigratedFooterButtons,
+  getMigratedTimeframeButtons:       getMigratedTimeframeButtons,
+  getMigratedHeaderButtons:          getMigratedHeaderButtons,
+  getMigratedIconButtons:            getMigratedIconButtons,
+  getMigratedMenuButtons:            getMigratedMenuButtons,
+  getMigratedPanelButtons:           getMigratedPanelButtons,
+  getMigratedOrderOptionButtons:     getMigratedOrderOptionButtons,
+  getMigratedKeypadButtons:          getMigratedKeypadButtons,
+  getMigratedAssetFavoriteButtons:   getMigratedAssetFavoriteButtons,
+  getMigratedAssetDropdownButtons:   getMigratedAssetDropdownButtons,
+  getMigratedIndicatorDropdownButtons: getMigratedIndicatorDropdownButtons,
+  getMigratedToolsButtons:           getMigratedToolsButtons,
+  getMigratedPaperConfirmButtons:    getMigratedPaperConfirmButtons,
+  getMigratedPaperEditConfirmButtons: getMigratedPaperEditConfirmButtons,
+  getMigratedDrawerButtons:          getMigratedDrawerButtons,
+  getMigratedTradeActionButtons:     getMigratedTradeActionButtons,
   audit:                             audit,
   init:                              init
 };
