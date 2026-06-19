@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.656</title>
+<title>DVL Binance Live — Beta 0.655</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -139,11 +139,6 @@
    Visual-neutral diagnostic class for migrated Buy/Sell buttons.
    Does NOT alter height, padding, gap, radius, color, font or layout. */
 .dvl-btn-migrated-trade-action {}
-</style>
-
-<style id="DVL_LAYOUT_CONTRACT_CSS_0656">
-/* DVL Beta 0.656 — Phase 2.0: layout contract diagnostics.
-   Read-only/visual-neutral. No layout or visual properties. */
 </style>
 
 <style>
@@ -13467,7 +13462,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.656</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.655</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13927,12 +13922,11 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.656";
+const DVL_APP_VERSION = "Beta 0.655";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.656 — Phase 2.0: contrato/auditoria de layout read-only para chart, Paper Trading, osciladores e trade drawer." },
-  { version: "Beta 0.655", note: "Phase 1.13: migração piloto visual-neutral dos botões Buy/Sell .tradeAction para o DVL_BUTTON_SYSTEM." },
+  { version: DVL_APP_VERSION, note: "Beta 0.655 — Phase 1.13: migração piloto visual-neutral dos botões Buy/Sell .tradeAction para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.654", note: "Phase 1.12: migração piloto visual-neutral do drawerBtn para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.653", note: "Phase 1.11: migração piloto visual-neutral dos botões paper confirm/edit para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.652", note: "Phase 1.10: migração piloto visual-neutral dos botões de tools/desenhos para o DVL_BUTTON_SYSTEM." },
@@ -14631,162 +14625,6 @@ if(document.readyState === 'loading'){
 } else {
   init();
 }
-
-})();
-// ===== DVL_LAYOUT_CONTRACT_MODULE_0656 =====
-(function(){
-"use strict";
-
-var _lastSnapshot = null;
-var _baselines = {};
-
-function getRect(el){
-  if(!el) return { exists: false, top: null, left: null, right: null, bottom: null, width: null, height: null };
-  var r = el.getBoundingClientRect();
-  return {
-    exists: true,
-    top:    r.top,
-    left:   r.left,
-    right:  r.right,
-    bottom: r.bottom,
-    width:  r.width,
-    height: r.height
-  };
-}
-
-function getOscillators(){
-  var selectors = ['.dvlOscillator', '.dvl-oscillator', '.oscillatorPanel',
-                   '[data-dvl-oscillator]', '[data-oscillator-panel]'];
-  var found = [];
-  for(var s = 0; s < selectors.length; s++){
-    var els = document.querySelectorAll(selectors[s]);
-    for(var i = 0; i < els.length; i++) found.push(getRect(els[i]));
-  }
-  return found;
-}
-
-function getPaperLines(){
-  var els = document.querySelectorAll('.dvl-paper-line');
-  var result = [];
-  for(var i = 0; i < els.length; i++) result.push(getRect(els[i]));
-  return result;
-}
-
-function getPaperEditLabels(){
-  var els = document.querySelectorAll('.dvl-paper-edit-label');
-  var result = [];
-  for(var i = 0; i < els.length; i++) result.push(getRect(els[i]));
-  return result;
-}
-
-function measure(){
-  var snap = {
-    timestamp:       Date.now(),
-    viewport:        { width: window.innerWidth, height: window.innerHeight },
-    header:          getRect(document.querySelector('.top')),
-    assetBar:        getRect(document.querySelector('.marketRow')),
-    toolbar:         getRect(document.querySelector('.toolbar')),
-    canvasWrap:      getRect(document.querySelector('.canvasWrap')),
-    chart:           getRect(document.getElementById('chart')),
-    footer:          getRect(document.querySelector('.bottomNav')),
-    tradeDrawer:     getRect(document.querySelector('.tradeDrawer')),
-    tradeDrawerSheet:getRect(document.querySelector('.tradeDrawerSheet')),
-    paperLayer:      getRect(document.querySelector('.dvl-paper-layer')),
-    paperLines:      getPaperLines(),
-    paperEditLabels: getPaperEditLabels(),
-    paperConfirm:    getRect(document.querySelector('.dvl-paper-confirm')),
-    paperEditConfirm:getRect(document.querySelector('.dvl-paper-edit-confirm')),
-    oscillators:     getOscillators()
-  };
-  _lastSnapshot = snap;
-  return snap;
-}
-
-function audit(){
-  var snap = measure();
-  var bs = window.DVL_BUTTON_SYSTEM;
-  var bsAudit = null;
-  var tradeActionMigrated = 0;
-  var drawerMigrated = 0;
-  try{
-    if(bs && typeof bs.audit === 'function'){
-      bsAudit = bs.audit();
-      tradeActionMigrated = bsAudit.tradeActionMigrated || 0;
-      drawerMigrated = bsAudit.drawerMigrated || 0;
-    }
-  }catch(_){}
-  return {
-    version:              "0.656",
-    chartExists:          snap.chart.exists,
-    canvasWrapExists:     snap.canvasWrap.exists,
-    footerExists:         snap.footer.exists,
-    tradeDrawerExists:    snap.tradeDrawer.exists,
-    paperLayerExists:     snap.paperLayer.exists,
-    oscillatorCount:      snap.oscillators.length,
-    buttonSystemExists:   !!(bs),
-    buttonSystemFrozen:   !!(bs && bs.registry),
-    tradeActionMigrated:  tradeActionMigrated,
-    drawerMigrated:       drawerMigrated,
-    noLayoutMutation:     true,
-    snapshot:             snap
-  };
-}
-
-function freezeBaseline(name){
-  var key = name || "default";
-  _baselines[key] = measure();
-  return _baselines[key];
-}
-
-function compareWithBaseline(name){
-  var key = name || "default";
-  var base = _baselines[key];
-  if(!base) return { error: "no baseline stored for: " + key };
-  var now = measure();
-  function diff(a, b, field){
-    if(a == null || b == null) return null;
-    return b - a;
-  }
-  return {
-    canvasWrap: {
-      heightDiff: diff(base.canvasWrap.height, now.canvasWrap.height),
-      topDiff:    diff(base.canvasWrap.top,    now.canvasWrap.top),
-      bottomDiff: diff(base.canvasWrap.bottom, now.canvasWrap.bottom)
-    },
-    chart: {
-      heightDiff: diff(base.chart.height, now.chart.height),
-      topDiff:    diff(base.chart.top,    now.chart.top),
-      bottomDiff: diff(base.chart.bottom, now.chart.bottom)
-    },
-    footer: {
-      topDiff:    diff(base.footer.top,    now.footer.top),
-      bottomDiff: diff(base.footer.bottom, now.footer.bottom)
-    },
-    tradeDrawerSheet: {
-      topDiff:    diff(base.tradeDrawerSheet.top,    now.tradeDrawerSheet.top),
-      bottomDiff: diff(base.tradeDrawerSheet.bottom, now.tradeDrawerSheet.bottom),
-      heightDiff: diff(base.tradeDrawerSheet.height, now.tradeDrawerSheet.height)
-    },
-    oscillatorCount: {
-      before: base.oscillators.length,
-      after:  now.oscillators.length,
-      diff:   now.oscillators.length - base.oscillators.length
-    }
-  };
-}
-
-function getLastSnapshot(){
-  return _lastSnapshot;
-}
-
-window.DVL_LAYOUT_CONTRACT = {
-  VERSION:              "0.656",
-  measure:              measure,
-  audit:                audit,
-  freezeBaseline:       freezeBaseline,
-  compareWithBaseline:  compareWithBaseline,
-  getLastSnapshot:      getLastSnapshot
-};
 
 })();
 
