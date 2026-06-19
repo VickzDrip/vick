@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.647</title>
+<title>DVL Binance Live — Beta 0.646</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -71,15 +71,6 @@
    Visual-neutral diagnostic class for migrated .tfBtn buttons.
    Does NOT alter height, padding, gap, radius, color, font or layout. */
 .dvl-btn-migrated-timeframe {}
-</style>
-
-<style id="DVL_BUTTON_HEADER_MIGRATION_CSS_0647">
-/* DVL Beta 0.647 — Phase 1.5: header/toolbar button migration pilot.
-   Visual-neutral diagnostic classes for migrated header buttons.
-   Does NOT alter height, padding, gap, radius, color, font or layout. */
-.dvl-btn-migrated-header {}
-.dvl-btn-migrated-icon   {}
-.dvl-btn-migrated-menu   {}
 </style>
 
 <style>
@@ -13403,7 +13394,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.647</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.646</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13863,12 +13854,11 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.647";
+const DVL_APP_VERSION = "Beta 0.646";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Phase 1.5: migração piloto visual-neutral dos botões de header/toolbar para o DVL_BUTTON_SYSTEM." },
-  { version: "Beta 0.646", note: "Phase 1.4: migração piloto visual-neutral dos botões de timeframe para o DVL_BUTTON_SYSTEM." },
+  { version: DVL_APP_VERSION, note: "Phase 1.4: migração piloto visual-neutral dos botões de timeframe para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.645", note: "Phase 1.3: migração piloto visual-neutral dos botões do footer para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.644", note: "Phase 1.2: adiciona tokens/classes scaffold do sistema de botões sem alteração visual." },
   { version: "Beta 0.643", note: "Phase 1.1: refresh/observer seguro do DVL_BUTTON_SYSTEM para registrar botões dinâmicos sem alteração visual." },
@@ -14021,7 +14011,7 @@ window.DVL_CHANGELOG = [
   }
 })();
 
-// ===== DVL_BUTTON_SYSTEM_MODULE_0647 =====
+// ===== DVL_BUTTON_SYSTEM_MODULE_0646 =====
 (function(){
 "use strict";
 
@@ -14070,7 +14060,7 @@ function registerButton(el, options){
   el.__dvlButtonRegistered = true;
   el.setAttribute('data-dvl-button', 'true');
   el.setAttribute('data-dvl-ui', 'true');
-  el.setAttribute('data-dvl-button-version', '0.647');
+  el.setAttribute('data-dvl-button-version', '0.646');
   el.setAttribute('data-dvl-button-scaffold', 'true');
   if(options && options.role)
     el.setAttribute('data-dvl-button-role', options.role);
@@ -14083,22 +14073,6 @@ function registerButton(el, options){
     el.classList.add('dvl-btn');
     el.classList.add('dvl-btn-header');
     el.classList.add('dvl-btn-migrated-timeframe');
-  }
-  if(options && options.role === 'header'){
-    el.classList.add('dvl-btn');
-    el.classList.add('dvl-btn-header');
-    el.classList.add('dvl-btn-migrated-header');
-  }
-  if(options && options.role === 'icon'){
-    el.classList.add('dvl-btn');
-    el.classList.add('dvl-btn-icon');
-    el.classList.add('dvl-btn-migrated-icon');
-  }
-  if(options && options.role === 'dropdown' &&
-     el.classList.contains('menuBtn')){
-    el.classList.add('dvl-btn');
-    el.classList.add('dvl-btn-dropdown');
-    el.classList.add('dvl-btn-migrated-menu');
   }
   registry.push(el);
 }
@@ -14194,33 +14168,6 @@ function getMigratedTimeframeButtons(){
   return result;
 }
 
-function getMigratedHeaderButtons(){
-  var result = [];
-  for(var i = 0; i < registry.length; i++){
-    var el = registry[i];
-    if(el.classList.contains('dvl-btn-migrated-header')) result.push(el);
-  }
-  return result;
-}
-
-function getMigratedIconButtons(){
-  var result = [];
-  for(var i = 0; i < registry.length; i++){
-    var el = registry[i];
-    if(el.classList.contains('dvl-btn-migrated-icon')) result.push(el);
-  }
-  return result;
-}
-
-function getMigratedMenuButtons(){
-  var result = [];
-  for(var i = 0; i < registry.length; i++){
-    var el = registry[i];
-    if(el.classList.contains('dvl-btn-migrated-menu')) result.push(el);
-  }
-  return result;
-}
-
 function audit(){
   var footerEls = listByRole('footer');
   var footerMigrated = 0;
@@ -14232,17 +14179,6 @@ function audit(){
   for(var i = 0; i < timeframeEls.length; i++){
     if(timeframeEls[i].classList.contains('dvl-btn-migrated-timeframe')) timeframeMigrated++;
   }
-  var headerEls = listByRole('header');
-  var headerMigrated = 0;
-  for(var i = 0; i < headerEls.length; i++){
-    if(headerEls[i].classList.contains('dvl-btn-migrated-header')) headerMigrated++;
-  }
-  var iconEls = listByRole('icon');
-  var iconMigrated = 0;
-  for(var i = 0; i < iconEls.length; i++){
-    if(iconEls[i].classList.contains('dvl-btn-migrated-icon')) iconMigrated++;
-  }
-  var menuEls = getMigratedMenuButtons();
   return {
     total:              registry.length,
     roles:              getRoleCounts(),
@@ -14251,13 +14187,7 @@ function audit(){
     footerTotal:        footerEls.length,
     footerMigrated:     footerMigrated,
     timeframeTotal:     timeframeEls.length,
-    timeframeMigrated:  timeframeMigrated,
-    headerTotal:        headerEls.length,
-    headerMigrated:     headerMigrated,
-    iconTotal:          iconEls.length,
-    iconMigrated:       iconMigrated,
-    menuTotal:          getMigratedMenuButtons().length,
-    menuMigrated:       menuEls.length
+    timeframeMigrated:  timeframeMigrated
   };
 }
 
@@ -14280,9 +14210,6 @@ window.DVL_BUTTON_SYSTEM = {
   listByRole:                  listByRole,
   getMigratedFooterButtons:    getMigratedFooterButtons,
   getMigratedTimeframeButtons: getMigratedTimeframeButtons,
-  getMigratedHeaderButtons:    getMigratedHeaderButtons,
-  getMigratedIconButtons:      getMigratedIconButtons,
-  getMigratedMenuButtons:      getMigratedMenuButtons,
   audit:                       audit,
   init:                        init
 };
