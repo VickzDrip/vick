@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.666</title>
+<title>DVL Binance Live — Beta 0.665</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -13976,126 +13976,12 @@ window.DVL_OSCILLATOR_BOUNDS_AUDIT = {
 })();
 </script>
 
-<style id="DVL_OSCILLATOR_BOUNDS_PUBLISHER_CSS_0666">
-/* DVL Beta 0.666 — Phase 3.0: oscillator bounds publisher marker only.
-   DVL_OSCILLATOR_BOUNDS_PUBLISHER_MODULE_0666 reads canvas-local sub-keys from
-   window.__dvlOscillatorPanelBounds, converts to viewport coordinates, and publishes
-   the synthesized top/bottom/height into the same object for the Paper clamp module.
-   No visual/layout properties here. Read-only/visual-neutral. */
-</style>
-
-<script id="DVL_OSCILLATOR_BOUNDS_PUBLISHER_MODULE_0666">
-(function(){
-"use strict";
-
-var _lastPublish = null;
-
-var SUB_KEYS = ["teste", "teste2", "openInterest", "longShort"];
-
-function publish(){
-  var canvas     = document.getElementById("chart");
-  var canvasWrap = document.getElementById("chartWrap") || document.querySelector(".canvasWrap");
-  var bounds     = window.__dvlOscillatorPanelBounds || {};
-
-  var canvasRect = canvas ? canvas.getBoundingClientRect() : null;
-  var scaleY     = (canvas && canvasRect && canvas.height > 0)
-                   ? (canvasRect.height / canvas.height)
-                   : 1;
-
-  var list = [];
-  var i, key, entry;
-
-  for(i = 0; i < SUB_KEYS.length; i++){
-    key   = SUB_KEYS[i];
-    entry = bounds[key];
-    if(entry && typeof entry.top === "number" && typeof entry.h === "number"){
-      list.push({
-        key:    key,
-        top:    entry.top,
-        bottom: entry.top + entry.h,
-        height: entry.h
-      });
-    }
-  }
-
-  list.sort(function(a, b){ return a.top - b.top; });
-
-  var count  = list.length;
-  var result;
-  var now    = Date.now();
-
-  if(count > 0 && canvasRect){
-    var firstTop    = list[0].top;
-    var lastBottom  = list[count - 1].bottom;
-    var viewportTop = canvasRect.top + firstTop * scaleY;
-    var viewportBot = canvasRect.top + lastBottom * scaleY;
-    var heightPx    = viewportBot - viewportTop;
-
-    bounds.top       = viewportTop;
-    bounds.bottom    = viewportBot;
-    bounds.height    = heightPx;
-    bounds.count     = count;
-    bounds.source    = "DVL_OSCILLATOR_BOUNDS_PUBLISHER_0666";
-    bounds.updatedAt = now;
-
-    window.__dvlOscillatorPanelBounds     = bounds;
-    window.__dvlOscillatorPanelBoundsList = list;
-
-    result = {
-      count:     count,
-      top:       viewportTop,
-      bottom:    viewportBot,
-      height:    heightPx,
-      source:    "DVL_OSCILLATOR_BOUNDS_PUBLISHER_0666",
-      updatedAt: now
-    };
-  } else {
-    window.__dvlOscillatorPanelBoundsList = list;
-
-    result = {
-      count:     0,
-      top:       null,
-      bottom:    null,
-      height:    null,
-      source:    "DVL_OSCILLATOR_BOUNDS_PUBLISHER_0666",
-      updatedAt: now
-    };
-  }
-
-  _lastPublish = result;
-  return result;
-}
-
-function audit(){
-  return {
-    version:      "0.666",
-    boundsExists: !!(window.__dvlOscillatorPanelBounds &&
-                     typeof window.__dvlOscillatorPanelBounds.top === "number"),
-    boundsList:   window.__dvlOscillatorPanelBoundsList || [],
-    lastPublish:  _lastPublish
-  };
-}
-
-function getLastPublish(){
-  return _lastPublish;
-}
-
-window.DVL_OSCILLATOR_BOUNDS_PUBLISHER = {
-  VERSION:        "0.666",
-  publish:        publish,
-  audit:          audit,
-  getLastPublish: getLastPublish
-};
-
-})();
-</script>
-
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.666</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.665</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -14555,12 +14441,11 @@ window.DVL_OSCILLATOR_BOUNDS_PUBLISHER = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.666";
+const DVL_APP_VERSION = "Beta 0.665";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.666 — Phase 3.0: oscillator bounds publisher + safe Paper resync hook." },
-  { version: "Beta 0.665", note: "Phase 2.9: oscillator safe clamp + audit verification for Paper layer bounds." },
+  { version: DVL_APP_VERSION, note: "Beta 0.665 — Phase 2.9: oscillator safe clamp + audit verification for Paper layer bounds." },
   { version: "Beta 0.664", note: "Phase 2.8: Paper sync non-invasive hotfix + oscillator bounds read-only audit." },
   { version: "Beta 0.663", note: "Phase 2.7: Paper layer anchor + oscillator-safe sync; normaliza offsets internos do Paper após price scale 70px." },
   { version: "Beta 0.662", note: "Phase 2.6: lock final de gap chart/canvas/footer e geometria do trade drawer 150px sem sobrepor o footer." },
@@ -17599,9 +17484,6 @@ function draw(){
       panelTop += panelHeight;
     });
   }
-
-  if(window.DVL_OSCILLATOR_BOUNDS_PUBLISHER){ window.DVL_OSCILLATOR_BOUNDS_PUBLISHER.publish(); }
-  if(window.DVL_PAPER_LAYER_ANCHOR && typeof window.DVL_PAPER_LAYER_ANCHOR.scheduleSync === "function"){ window.DVL_PAPER_LAYER_ANCHOR.scheduleSync(); }
 
   if(crosshair.visible && window.__dvlLastCrossCfg){
     drawCrosshair(ctx, Object.assign({}, window.__dvlLastCrossCfg, {
