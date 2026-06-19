@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.684</title>
+<title>DVL Binance Live — Beta 0.683</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -15031,29 +15031,6 @@ window.DVL_SAFE_CSS_CLEANUP_AUDIT={
 */
 </style>
 
-<style id="DVL_PAPER_DRAFT_LABEL_POLISH_CSS_0684">
-/*
-  DVL Beta 0.684 — Paper Draft Entry Selection + Label Alignment Polish.
-  Draft preview: lower opacity, fixed-size labels, pointer-events:none.
-*/
-
-/* Draft ENTRY/TP/SL tag labels: semi-transparent, no pointer interactions */
-.dvl-paper-draft-tag {
-  opacity:        0.45;
-  pointer-events: none !important;
-  width:          130px;
-  height:         22px;
-  border-radius:  3px;
-  font-size:      11px;
-  overflow:       hidden;
-}
-
-/* Draft lines: lower opacity while awaiting confirmation */
-.dvl-paper-draft-line {
-  opacity: 0.60;
-}
-</style>
-
 <script id="DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT_MODULE_0672">
 (function(){
 "use strict";
@@ -17101,354 +17078,12 @@ window.DVL_HTML_CSS_STRUCTURE_HOTFIX_AUDIT = {
 })();
 </script>
 
-<script id="DVL_PAPER_DRAFT_LABEL_POLISH_AUDIT_MODULE_0684">
-(function(){
-"use strict";
-
-var _lastAudit = null;
-
-// Anti-false-positive splits
-var _dupStyleTag   = '<' + '/style><' + '/style>';
-var _brokerToken   = 'Broker' + 'Connector';
-
-var STYLE_IDS_0684 = [
-  "DVL_BUTTON_SYSTEM_SHIM_REMOVAL_CSS_0675",
-  "DVL_AUDIT_CHAIN_RECONCILIATION_CSS_0676",
-  "DVL_POST_CLEANUP_INVENTORY_CSS_0677",
-  "DVL_SAFE_HISTORICAL_AUDIT_CLEANUP_CSS_0678",
-  "DVL_OPTIMIZED_BASELINE_FREEZE_CSS_0679",
-  "DVL_RELEASE_CANDIDATE_GATE_CSS_0680",
-  "DVL_MOBILE_UI_POLISH_CSS_0681",
-  "DVL_MOBILE_UI_POLISH_HOTFIX_CSS_0682",
-  "DVL_HTML_CSS_STRUCTURE_HOTFIX_CSS_0683",
-  "DVL_PAPER_DRAFT_LABEL_POLISH_CSS_0684"
-];
-
-var FINAL_LOCK_CSS = [
-  "DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659",
-  "DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660",
-  "DVL_CHROME_FINAL_LOCK_CSS_0661",
-  "DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662"
-];
-
-function _cntId(els, id){
-  var c = 0;
-  for(var i = 0; i < els.length; i++){ if(els[i].id === id) c++; }
-  return c;
-}
-
-function _fnSrc(full, fnName){
-  var start = full.indexOf("function " + fnName);
-  if(start === -1) return "";
-  var end = full.indexOf("\n    function ", start + 10);
-  return end === -1 ? full.slice(start) : full.slice(start, end);
-}
-
-function audit(){
-  var scriptEls = document.querySelectorAll('script[id]');
-  var styleEls  = document.querySelectorAll('style[id]');
-  var blockers  = [];
-  var warnings  = [];
-
-  var _allScripts = document.querySelectorAll('script');
-  var _srcFull = "";
-  for(var si = 0; si < _allScripts.length; si++){ _srcFull += _allScripts[si].textContent; }
-
-  // A1. All style markers 0675-0684 present 1x each
-  var allStylesOk = true;
-  var styleProblems = [];
-  for(var ci = 0; ci < STYLE_IDS_0684.length; ci++){
-    var ccnt = _cntId(styleEls, STYLE_IDS_0684[ci]);
-    if(ccnt !== 1){ allStylesOk = false; styleProblems.push(STYLE_IDS_0684[ci] + ":" + ccnt); }
-  }
-  if(!allStylesOk) blockers.push("style count problems: " + styleProblems.join(", "));
-
-  // A2. No duplicate closing style tag
-  var noDupStyle = document.documentElement.outerHTML.indexOf(_dupStyleTag) === -1;
-  if(!noDupStyle) blockers.push("duplicate closing style tag found");
-
-  // A3. Header .top exists
-  var headerEl = document.querySelector('header.top, .top');
-  var headerOk = !!headerEl;
-  if(!headerOk) blockers.push(".top not found");
-
-  // A4. No raw code text nodes before .top
-  var headerLeakFixed = true;
-  if(headerEl && document.body){
-    var node = document.body.firstChild;
-    while(node && node !== headerEl && node !== headerEl.parentElement){
-      if(node.nodeType === 3){
-        var ntxt = (node.textContent || "").trim();
-        if(ntxt && /[)();{}]|function|return|const|let|var/.test(ntxt)){
-          headerLeakFixed = false;
-          blockers.push("code leak before .top: " + ntxt.slice(0, 40));
-        }
-      }
-      node = node.nextSibling;
-    }
-  }
-
-  // A5. Final locks 0659-0662 each present 1x
-  var missingLocks = [];
-  for(var fl = 0; fl < FINAL_LOCK_CSS.length; fl++){
-    if(_cntId(styleEls, FINAL_LOCK_CSS[fl]) !== 1) missingLocks.push(FINAL_LOCK_CSS[fl]);
-  }
-  var finalLocksPresent = missingLocks.length === 0;
-  if(!finalLocksPresent) blockers.push("final locks missing: " + missingLocks.join(", "));
-
-  // A6. DVL_BUTTON_SYSTEM present
-  var btnSysPresent = typeof window.DVL_BUTTON_SYSTEM !== "undefined";
-  if(!btnSysPresent) blockers.push("window.DVL_BUTTON_SYSTEM not found");
-
-  // A7. state.pendingDraft in source
-  var hasPendingDraft = _srcFull.indexOf("pendingDraft") > -1;
-  if(!hasPendingDraft) blockers.push("pendingDraft not found in source");
-
-  // A8. createPendingOrderDraft does NOT call createPosition
-  var draftFnSrc       = _fnSrc(_srcFull, "createPendingOrderDraft");
-  var draftNoCreatePos = draftFnSrc.indexOf("createPosition") === -1;
-  if(!draftNoCreatePos) blockers.push("createPendingOrderDraft still calls createPosition");
-
-  // A9. createPendingOrderDraft does NOT push to positions
-  var draftNoPush = draftFnSrc.indexOf("state.positions.push") === -1;
-  if(!draftNoPush) blockers.push("createPendingOrderDraft still calls state.positions.push");
-
-  // A10. confirmPendingOrderDraft exists
-  var confirmExists = _srcFull.indexOf("function confirmPendingOrderDraft") > -1;
-  if(!confirmExists) blockers.push("confirmPendingOrderDraft not found");
-
-  // A11. confirmPendingOrderDraft sets status:"pending"
-  var confirmFnSrc   = _fnSrc(_srcFull, "confirmPendingOrderDraft");
-  var confirmPending = confirmFnSrc.indexOf('status: "pending"') > -1;
-  if(!confirmPending) blockers.push('confirmPendingOrderDraft does not set status:"pending"');
-
-  // A12. cancelPendingOrderDraft clears pendingDraft
-  var cancelFnSrc  = _fnSrc(_srcFull, "cancelPendingOrderDraft");
-  var cancelClears = cancelFnSrc.indexOf("pendingDraft = null") > -1;
-  if(!cancelClears) warnings.push("cancelPendingOrderDraft doesn't clear pendingDraft");
-
-  // A13. Module 0682 preserved
-  var m682Present = _cntId(scriptEls, "DVL_MOBILE_UI_POLISH_HOTFIX_AUDIT_MODULE_0682") === 1;
-  if(!m682Present) blockers.push("DVL_MOBILE_UI_POLISH_HOTFIX_AUDIT_MODULE_0682 not found");
-
-  // A14. Module 0683 preserved
-  var m683Present = _cntId(scriptEls, "DVL_HTML_CSS_STRUCTURE_HOTFIX_AUDIT_MODULE_0683") === 1;
-  if(!m683Present) blockers.push("DVL_HTML_CSS_STRUCTURE_HOTFIX_AUDIT_MODULE_0683 not found");
-
-  // A15. CSS 0681 present 1x
-  var css681 = _cntId(styleEls, "DVL_MOBILE_UI_POLISH_CSS_0681") === 1;
-  if(!css681) warnings.push("DVL_MOBILE_UI_POLISH_CSS_0681 not 1x");
-
-  // A16. CSS 0682 present 1x
-  var css682 = _cntId(styleEls, "DVL_MOBILE_UI_POLISH_HOTFIX_CSS_0682") === 1;
-  if(!css682) warnings.push("DVL_MOBILE_UI_POLISH_HOTFIX_CSS_0682 not 1x");
-
-  // A17. CSS 0683 present 1x
-  var css683 = _cntId(styleEls, "DVL_HTML_CSS_STRUCTURE_HOTFIX_CSS_0683") === 1;
-  if(!css683) warnings.push("DVL_HTML_CSS_STRUCTURE_HOTFIX_CSS_0683 not 1x");
-
-  // A18. DVL_ORDER_LABEL_OFFSET_BARS defined in source
-  var labelOffsetBars = _srcFull.indexOf("DVL_ORDER_LABEL_OFFSET_BARS") > -1;
-  if(!labelOffsetBars) blockers.push("DVL_ORDER_LABEL_OFFSET_BARS not found in source");
-
-  // A19. labelLeftPx function defined
-  var labelLeftPxPresent = _srcFull.indexOf("function labelLeftPx") > -1;
-  if(!labelLeftPxPresent) blockers.push("labelLeftPx function not found in source");
-
-  // A20. labelLeftPx uses CANDLE_OFFSET + DVL_ORDER_LABEL_OFFSET_BARS
-  var labelPxUsesOffset = _srcFull.indexOf("CANDLE_OFFSET + DVL_ORDER_LABEL_OFFSET_BARS") > -1;
-  if(!labelPxUsesOffset) warnings.push("labelLeftPx does not use CANDLE_OFFSET + DVL_ORDER_LABEL_OFFSET_BARS");
-
-  // A21. dvlSyncTagLeft uses labelLeftPx (not tagLeftPx) for tag/box positioning
-  var _dvlSyncStart = _srcFull.indexOf("function dvlSyncTagLeft");
-  var _dvlSyncEnd   = _srcFull.indexOf("function attachLayerObserver", _dvlSyncStart + 10);
-  var dvlSyncSrc    = _dvlSyncStart > -1
-    ? (_dvlSyncEnd > -1 ? _srcFull.slice(_dvlSyncStart, _dvlSyncEnd) : _srcFull.slice(_dvlSyncStart, _dvlSyncStart + 3000))
-    : "";
-  var syncUsesLabelPx = dvlSyncSrc.indexOf("labelLeftPx(pos, chartW, S)") > -1 ||
-                        dvlSyncSrc.indexOf("labelLeftPx(bPos, chartW, S)") > -1;
-  if(!syncUsesLabelPx) blockers.push("dvlSyncTagLeft does not use labelLeftPx");
-
-  // A22. dvlSyncTagLeft checks pendingDraft
-  var syncChecksDraft = dvlSyncSrc.indexOf("pendingDraft") > -1;
-  if(!syncChecksDraft) warnings.push("dvlSyncTagLeft does not check pendingDraft");
-
-  // A23. renderDraftPosition defined
-  var renderDraftFnSrc  = _fnSrc(_srcFull, "renderDraftPosition");
-  var renderDraftPresent = renderDraftFnSrc.length > 0;
-  if(!renderDraftPresent) blockers.push("renderDraftPosition not found in source");
-
-  // A24. renderDraftPosition calls makeDraftLine
-  var draftCallsLine = renderDraftFnSrc.indexOf("makeDraftLine") > -1;
-  if(!draftCallsLine) blockers.push("renderDraftPosition does not call makeDraftLine");
-
-  // A25. renderDraftPosition calls makeDraftTag
-  var draftCallsTag = renderDraftFnSrc.indexOf("makeDraftTag") > -1;
-  if(!draftCallsTag) blockers.push("renderDraftPosition does not call makeDraftTag");
-
-  // A26. render() calls renderDraftPosition(state.pendingDraft)
-  var renderCallsDraft = _srcFull.indexOf("renderDraftPosition(state.pendingDraft)") > -1;
-  if(!renderCallsDraft) blockers.push("render() does not call renderDraftPosition(state.pendingDraft)");
-
-  // A27. dvl-paper-draft-tag in CSS_0684
-  var css684El  = document.getElementById("DVL_PAPER_DRAFT_LABEL_POLISH_CSS_0684");
-  var css684Txt = css684El ? css684El.textContent : "";
-  var hasDraftTagCSS = css684Txt.indexOf("dvl-paper-draft-tag") > -1;
-  if(!hasDraftTagCSS) blockers.push("dvl-paper-draft-tag not found in CSS_0684");
-
-  // A28. pointer-events in CSS_0684
-  var hasPointerNone684 = css684Txt.indexOf("pointer-events") > -1;
-  if(!hasPointerNone684) blockers.push("pointer-events not found in CSS_0684");
-
-  // A29. Draft label opacity (0.38-0.55) in CSS_0684
-  var hasDraftLabelOpacity = /opacity:\s*0\.[3-5]/.test(css684Txt);
-  if(!hasDraftLabelOpacity) warnings.push("draft label opacity (0.38-0.55) not found in CSS_0684");
-
-  // A30. Draft line opacity 0.60 in CSS_0684
-  var hasDraftLineOpacity = css684Txt.indexOf("0.60") > -1 || css684Txt.indexOf("0.6;") > -1;
-  if(!hasDraftLineOpacity) warnings.push("draft line opacity 0.60 not found in CSS_0684");
-
-  // A31. ORDER_TAG_W constant defined
-  var hasTagW = _srcFull.indexOf("ORDER_TAG_W") > -1;
-  if(!hasTagW) blockers.push("ORDER_TAG_W not found");
-
-  // A32. ORDER_TAG_H constant defined
-  var hasTagH = _srcFull.indexOf("ORDER_TAG_H") > -1;
-  if(!hasTagH) blockers.push("ORDER_TAG_H not found");
-
-  // A33. ORDER_TAG_RADIUS constant defined
-  var hasTagRadius = _srcFull.indexOf("ORDER_TAG_RADIUS") > -1;
-  if(!hasTagRadius) blockers.push("ORDER_TAG_RADIUS not found");
-
-  // A34. ORDER_TAG_FONT constant defined
-  var hasTagFont = _srcFull.indexOf("ORDER_TAG_FONT") > -1;
-  if(!hasTagFont) blockers.push("ORDER_TAG_FONT not found");
-
-  // A35. makeDraftLine sets dataset.status = "draft"
-  var draftLineSrc      = _fnSrc(_srcFull, "makeDraftLine");
-  var draftLineSetsDraft = draftLineSrc.indexOf('dataset.status = "draft"') > -1;
-  if(!draftLineSetsDraft) warnings.push('makeDraftLine does not set dataset.status="draft"');
-
-  // A36. makeDraftTag sets dataset.status = "draft"
-  var draftTagSrc       = _fnSrc(_srcFull, "makeDraftTag");
-  var draftTagSetsDraft = draftTagSrc.indexOf('dataset.status = "draft"') > -1;
-  if(!draftTagSetsDraft) warnings.push('makeDraftTag does not set dataset.status="draft"');
-
-  // A37. renderDraftConfirm appends to document.body
-  var draftConfirmSrc     = _fnSrc(_srcFull, "renderDraftConfirm");
-  var draftConfirmAppends = draftConfirmSrc.indexOf("document.body.appendChild") > -1;
-  if(!draftConfirmAppends) warnings.push("renderDraftConfirm does not append to document.body");
-
-  // A38. 0683 audit chain still passes
-  var chain683Pass = false;
-  try{
-    if(typeof window.DVL_HTML_CSS_STRUCTURE_HOTFIX_AUDIT !== "undefined"){
-      var r683 = window.DVL_HTML_CSS_STRUCTURE_HOTFIX_AUDIT.audit();
-      chain683Pass = !!(r683 && r683.pass === true);
-    }
-  }catch(e){ warnings.push("DVL_HTML_CSS_STRUCTURE_HOTFIX_AUDIT.audit() threw: " + e.message); }
-  if(!chain683Pass) warnings.push("DVL_HTML_CSS_STRUCTURE_HOTFIX_AUDIT.audit().pass not true");
-
-  // Zero _brokerToken in source (split string above avoids false-positive)
-  var noBroker = _srcFull.indexOf(_brokerToken) === -1;
-  if(!noBroker) blockers.push(_brokerToken + " found");
-
-  var pass = (
-    allStylesOk &&
-    noDupStyle &&
-    headerOk &&
-    headerLeakFixed &&
-    finalLocksPresent &&
-    btnSysPresent &&
-    hasPendingDraft &&
-    draftNoCreatePos &&
-    draftNoPush &&
-    confirmExists &&
-    confirmPending &&
-    m682Present &&
-    m683Present &&
-    labelOffsetBars &&
-    labelLeftPxPresent &&
-    syncUsesLabelPx &&
-    renderDraftPresent &&
-    draftCallsLine &&
-    draftCallsTag &&
-    renderCallsDraft &&
-    hasDraftTagCSS &&
-    hasPointerNone684 &&
-    hasTagW &&
-    hasTagH &&
-    hasTagRadius &&
-    hasTagFont &&
-    noBroker
-  );
-
-  _lastAudit = {
-    pass:                 pass,
-    allStylesOk:          allStylesOk,
-    noDupStyle:           noDupStyle,
-    headerOk:             headerOk,
-    headerLeakFixed:      headerLeakFixed,
-    finalLocksPresent:    finalLocksPresent,
-    btnSysPresent:        btnSysPresent,
-    hasPendingDraft:      hasPendingDraft,
-    draftNoCreatePos:     draftNoCreatePos,
-    draftNoPush:          draftNoPush,
-    confirmExists:        confirmExists,
-    confirmPending:       confirmPending,
-    cancelClears:         cancelClears,
-    m682Present:          m682Present,
-    m683Present:          m683Present,
-    css681:               css681,
-    css682:               css682,
-    css683:               css683,
-    labelOffsetBars:      labelOffsetBars,
-    labelLeftPxPresent:   labelLeftPxPresent,
-    labelPxUsesOffset:    labelPxUsesOffset,
-    syncUsesLabelPx:      syncUsesLabelPx,
-    syncChecksDraft:      syncChecksDraft,
-    renderDraftPresent:   renderDraftPresent,
-    draftCallsLine:       draftCallsLine,
-    draftCallsTag:        draftCallsTag,
-    renderCallsDraft:     renderCallsDraft,
-    hasDraftTagCSS:       hasDraftTagCSS,
-    hasPointerNone684:    hasPointerNone684,
-    hasDraftLabelOpacity: hasDraftLabelOpacity,
-    hasDraftLineOpacity:  hasDraftLineOpacity,
-    hasTagW:              hasTagW,
-    hasTagH:              hasTagH,
-    hasTagRadius:         hasTagRadius,
-    hasTagFont:           hasTagFont,
-    draftLineSetsDraft:   draftLineSetsDraft,
-    draftTagSetsDraft:    draftTagSetsDraft,
-    draftConfirmAppends:  draftConfirmAppends,
-    chain683Pass:         chain683Pass,
-    noBroker:             noBroker,
-    blockers:             blockers,
-    warnings:             warnings
-  };
-  return _lastAudit;
-}
-
-function getLastAudit(){ return _lastAudit; }
-function run(){ _lastAudit = audit(); return Promise.resolve(_lastAudit); }
-
-window.DVL_PAPER_DRAFT_LABEL_POLISH_AUDIT = {
-  VERSION:      "0.684",
-  audit:        audit,
-  run:          run,
-  getLastAudit: getLastAudit
-};
-
-})();
-</script>
-
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.684</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.683</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -17908,12 +17543,11 @@ window.DVL_PAPER_DRAFT_LABEL_POLISH_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.684";
+const DVL_APP_VERSION = "Beta 0.683";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.684 — Paper Draft Entry Selection + Label Alignment Polish: draft Limit/Stop plots ENTRY/TP/SL immediately, labels 10 bars right of anchor, reduced opacity, fixed size, pointer-events:none." },
-  { version: "Beta 0.683", note: "Beta 0.683 — HTML/CSS structure hotfix: fixed nested/duplicated style closing around 0675–0682 markers without changing Paper logic." },
+  { version: DVL_APP_VERSION, note: "Beta 0.683 — HTML/CSS structure hotfix: fixed nested/duplicated style closing around 0675–0682 markers without changing Paper logic." },
   { version: "Beta 0.682", note: "Beta 0.682 — Mobile UI polish hotfix: fixed duplicate style close, real Limit/Stop draft flow, anchored TP/SL/ENTRY labels, and measured scale label sizing." },
   { version: "Beta 0.681", note: "Beta 0.681 — Mobile UI polish: fixed header code leak, non-sticky TP/SL/ENTRY labels, Limit/Stop pending order flow, and proportional scale labels." },
   { version: "Beta 0.680", note: "Beta 0.680 — Release candidate gate: certified the optimized baseline as stable and ready for new feature work." },
@@ -35935,108 +35569,6 @@ Do not rework this logic unless the user explicitly requests it.
       document.body.appendChild(box);
     }
 
-    // 0684: draft position rendering constants and helpers
-    var ORDER_TAG_W      = 130;
-    var ORDER_TAG_H      = 22;
-    var ORDER_TAG_RADIUS = 3;
-    var ORDER_TAG_FONT   = 11;
-
-    function makeDraftLine(draft, handle, y){
-      var visual = document.createElement("div");
-      visual.className = "dvl-paper-line " + handle + " dvl-paper-draft-line";
-      visual.dataset.status = "draft";
-      visual.dataset.id = draft.id;
-      visual.style.top = y.toFixed(1) + "px";
-      visual.style.pointerEvents = "none";
-      layer.appendChild(visual);
-    }
-
-    function makeDraftTag(draft, handle, y, main){
-      var el = document.createElement("div");
-      el.className = "dvl-paper-tag " + handle + " dvl-paper-draft-tag";
-      el.dataset.status = "draft";
-      el.dataset.id = draft.id;
-      el.dataset.handle = handle;
-      el.style.top = (y - 19).toFixed(1) + "px";
-      el.style.width        = ORDER_TAG_W      + "px";
-      el.style.height       = ORDER_TAG_H      + "px";
-      el.style.borderRadius = ORDER_TAG_RADIUS + "px";
-      el.style.fontSize     = ORDER_TAG_FONT   + "px";
-      el.innerHTML = '<span class="txt"><span class="main">' + main + '</span></span>';
-      layer.appendChild(el);
-    }
-
-    function renderDraftConfirm(draft){
-      document.querySelectorAll(".dvl-paper-draft-confirm-fixed").forEach(function(el){ el.remove(); });
-      if(!draft) return;
-
-      var entryY = yPrice(draft.entry);
-      if(!entryY) return;
-
-      var si = scaleInfo();
-      var minTop = si ? Math.max(si.top + 4, 4) : 4;
-      var maxTop = si ? Math.max(minTop, si.bottom - 24) : Math.max(minTop, (dom.wrap ? dom.wrap.clientHeight - 42 : 420));
-      var topPx = clamp(entryY.y + 18, minTop, maxTop);
-
-      var rect = dom.wrap ? dom.wrap.getBoundingClientRect() : {top:0, right:window.innerWidth};
-      var fixedTop   = clamp(rect.top + topPx, 4, Math.max(4, window.innerHeight - 34));
-      var fixedRight = clamp(window.innerWidth - rect.right + 56, 6, Math.max(6, window.innerWidth - 34));
-
-      var confirmBox = document.createElement("div");
-      confirmBox.className = "dvl-paper-edit-confirm dvl-paper-edit-confirm-fixed dvl-paper-draft-confirm-fixed";
-      confirmBox.dataset.id = draft.id;
-      confirmBox.style.top   = fixedTop.toFixed(1)   + "px";
-      confirmBox.style.right = fixedRight.toFixed(1) + "px";
-      confirmBox.innerHTML =
-        '<button class="dvl-paper-confirm ok" type="button">✓</button>' +
-        '<button class="dvl-paper-confirm cancel" type="button">×</button>';
-
-      confirmBox.querySelectorAll(".dvl-paper-confirm").forEach(function(btn){
-        btn.addEventListener("pointerdown", function(ev){
-          ev.preventDefault();
-          ev.stopPropagation();
-          if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
-        }, {passive:false});
-        btn.addEventListener("touchstart", function(ev){
-          ev.stopPropagation();
-        }, {passive:true});
-      });
-
-      confirmBox.querySelector(".ok").addEventListener("click", function(ev){
-        ev.preventDefault();
-        ev.stopPropagation();
-        if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
-        confirmPendingOrderDraft(draft.id);
-      });
-
-      confirmBox.querySelector(".cancel").addEventListener("click", function(ev){
-        ev.preventDefault();
-        ev.stopPropagation();
-        if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
-        cancelPendingOrderDraft(draft.id);
-      });
-
-      document.body.appendChild(confirmBox);
-    }
-
-    function renderDraftPosition(draft){
-      if(!draft) return;
-
-      var entryY = yPrice(draft.entry);
-      var tpY    = yPrice(draft.tp);
-      var slY    = yPrice(draft.sl);
-
-      if(entryY) makeDraftLine(draft, "entry", entryY.y);
-      if(tpY)    makeDraftLine(draft, "tp",    tpY.y);
-      if(slY)    makeDraftLine(draft, "sl",    slY.y);
-
-      if(entryY) makeDraftTag(draft, "entry", entryY.y, "ENTRY");
-      if(tpY)    makeDraftTag(draft, "tp",    tpY.y,    "TP");
-      if(slY)    makeDraftTag(draft, "sl",    slY.y,    "SL");
-
-      renderDraftConfirm(draft);
-    }
-
     function render(){
       if(!layer) return;
 
@@ -36048,9 +35580,6 @@ Do not rework this logic unless the user explicitly requests it.
 
       layer.innerHTML = "";
       state.positions.slice().forEach(renderPosition);
-      // 0684: render draft ENTRY/TP/SL preview
-      document.querySelectorAll(".dvl-paper-draft-confirm-fixed").forEach(function(el){ el.remove(); });
-      if(state.pendingDraft){ renderDraftPosition(state.pendingDraft); }
       renderEditConfirm();
       updateLiq();
     }
@@ -36749,8 +36278,6 @@ if(document.readyState === 'loading'){
 
 var PRICE_SCALE_W = (typeof window.DVL_PRICE_SCALE_W === "number" ? window.DVL_PRICE_SCALE_W : 70);
 var CANDLE_OFFSET = 10;
-var DVL_ORDER_LABEL_OFFSET_BARS = 10;
-window.DVL_ORDER_LABEL_OFFSET_BARS = DVL_ORDER_LABEL_OFFSET_BARS;
 
 /* CSS: override right:56px so tags default to left edge (pending JS) */
 (function(){
@@ -36794,20 +36321,12 @@ function tagLeftPx(pos, chartW, S){
   return (idx + CANDLE_OFFSET - S.view.start + 0.5) * chartW / span;
 }
 
-function labelLeftPx(pos, chartW, S){
-  var idx = candleIdxForTime(S.candles, Number(pos.createdAt) || 0);
-  var span = Math.max(0.1, S.view.end - S.view.start);
-  // 0684: labels offset DVL_ORDER_LABEL_OFFSET_BARS bars right of anchor candle
-  return (idx + CANDLE_OFFSET + DVL_ORDER_LABEL_OFFSET_BARS - S.view.start + 0.5) * chartW / span;
-}
-
 function dvlSyncTagLeft(){
   var layer = document.getElementById('dvlPaperLayer');
   if(!layer) return;
   var rt = getRuntime();
   if(!rt || !rt.state || !rt.state.positions) return;
   var positions = rt.state.positions;
-  var pendingDraft = rt.state.pendingDraft || null;
   var S = window.S;
   if(!S || !S.view || !Array.isArray(S.candles) || !S.candles.length) return;
   var wrap = document.getElementById('chartWrap');
@@ -36823,10 +36342,8 @@ function dvlSyncTagLeft(){
     for(var j = 0; j < positions.length; j++){
       if(String(positions[j].id) === String(posId)){ pos = positions[j]; break; }
     }
-    // 0684: also resolve draft labels
-    if(!pos && pendingDraft && String(pendingDraft.id) === String(posId)) pos = pendingDraft;
     if(!pos) continue;
-    var xPx = labelLeftPx(pos, chartW, S);
+    var xPx = tagLeftPx(pos, chartW, S);
     // 0682: hide label when anchor candle is off-screen; never clamp to viewport
     if(xPx < 0 || xPx > chartW){
       tag.style.setProperty('display', 'none', 'important');
@@ -36838,7 +36355,7 @@ function dvlSyncTagLeft(){
       tag.style.setProperty('transform', 'none',                      'important');
     }
   }
-  // 0681/0682/0684: sync .dvl-ls-box X positions; hide when anchor is off-screen
+  // 0681/0682: sync .dvl-ls-box X positions; hide when anchor is off-screen
   var boxes = layer.querySelectorAll('.dvl-ls-box[data-id]');
   for(var bi = 0; bi < boxes.length; bi++){
     var box = boxes[bi];
@@ -36848,10 +36365,8 @@ function dvlSyncTagLeft(){
     for(var bj = 0; bj < positions.length; bj++){
       if(String(positions[bj].id) === String(bId)){ bPos = positions[bj]; break; }
     }
-    // 0684: also resolve draft boxes
-    if(!bPos && pendingDraft && String(pendingDraft.id) === String(bId)) bPos = pendingDraft;
     if(!bPos) continue;
-    var bX = labelLeftPx(bPos, chartW, S);
+    var bX = tagLeftPx(bPos, chartW, S);
     if(bX < 0 || bX > chartW){
       box.style.setProperty('display', 'none', 'important');
     } else {
