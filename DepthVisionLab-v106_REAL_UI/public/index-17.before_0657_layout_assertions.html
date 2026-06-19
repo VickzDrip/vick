@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.657</title>
+<title>DVL Binance Live — Beta 0.656</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -144,11 +144,6 @@
 <style id="DVL_LAYOUT_CONTRACT_CSS_0656">
 /* DVL Beta 0.656 — Phase 2.0: layout contract diagnostics.
    Read-only/visual-neutral. No layout or visual properties. */
-</style>
-
-<style id="DVL_LAYOUT_ASSERTIONS_CSS_0657">
-/* DVL Beta 0.657 — Phase 2.1: layout assertions diagnostics.
-   Read-only/visual-neutral. No layout, color, spacing, z-index, radius, padding, height or width properties. */
 </style>
 
 <style>
@@ -13472,7 +13467,7 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.657</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.656</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13932,12 +13927,11 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.657";
+const DVL_APP_VERSION = "Beta 0.656";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.657 — Phase 2.1: auditoria read-only de assertions do Layout Contract para detectar gaps, sobreposições e divergências de dimensões sem alterar visual." },
-  { version: "Beta 0.656", note: "Phase 2.0: contrato/auditoria de layout read-only para chart, Paper Trading, osciladores e trade drawer." },
+  { version: DVL_APP_VERSION, note: "Beta 0.656 — Phase 2.0: contrato/auditoria de layout read-only para chart, Paper Trading, osciladores e trade drawer." },
   { version: "Beta 0.655", note: "Phase 1.13: migração piloto visual-neutral dos botões Buy/Sell .tradeAction para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.654", note: "Phase 1.12: migração piloto visual-neutral do drawerBtn para o DVL_BUTTON_SYSTEM." },
   { version: "Beta 0.653", note: "Phase 1.11: migração piloto visual-neutral dos botões paper confirm/edit para o DVL_BUTTON_SYSTEM." },
@@ -14792,133 +14786,6 @@ window.DVL_LAYOUT_CONTRACT = {
   freezeBaseline:       freezeBaseline,
   compareWithBaseline:  compareWithBaseline,
   getLastSnapshot:      getLastSnapshot
-};
-
-})();
-// ===== DVL_LAYOUT_ASSERTIONS_MODULE_0657 =====
-(function(){
-"use strict";
-
-var _lastAudit = null;
-
-function getExpectedContract(){
-  return {
-    header:               55,
-    assetHotbar:          50,
-    chartToolbar:         30,
-    footerMenu:           57,
-    footerButtons:        55,
-    rightPriceScaleWidth: 70,
-    tradeDrawerMaxHeight: 150
-  };
-}
-
-function computeSectionMismatches(expected, staticSizes){
-  var mismatches = [];
-  if(!staticSizes) return mismatches;
-  var keys = Object.keys(expected);
-  for(var i = 0; i < keys.length; i++){
-    var k = keys[i];
-    if(typeof staticSizes[k] === 'number' && staticSizes[k] !== expected[k]){
-      mismatches.push({
-        key:      k,
-        expected: expected[k],
-        actual:   staticSizes[k],
-        diff:     staticSizes[k] - expected[k]
-      });
-    }
-  }
-  return mismatches;
-}
-
-function safeNum(val){
-  return (typeof val === 'number' && isFinite(val)) ? val : null;
-}
-
-function computeGap(a, b){
-  if(a == null || b == null) return null;
-  return b - a;
-}
-
-function audit(){
-  var expected = getExpectedContract();
-  var staticSizes = window.DVL_SECTION_SIZES_PX || null;
-  var mismatches = computeSectionMismatches(expected, staticSizes);
-  var recommendations = [];
-
-  var snap = null;
-  if(window.DVL_LAYOUT_CONTRACT && typeof window.DVL_LAYOUT_CONTRACT.measure === 'function'){
-    try{ snap = window.DVL_LAYOUT_CONTRACT.measure(); }catch(_){}
-  }
-
-  var chartBottom     = snap && snap.chart    && snap.chart.exists    ? safeNum(snap.chart.bottom)     : null;
-  var footerTop       = snap && snap.footer   && snap.footer.exists   ? safeNum(snap.footer.top)       : null;
-  var toolbarBottom   = snap && snap.toolbar  && snap.toolbar.exists  ? safeNum(snap.toolbar.bottom)   : null;
-  var canvasTop       = snap && snap.canvasWrap && snap.canvasWrap.exists ? safeNum(snap.canvasWrap.top) : null;
-  var drawerBottom    = snap && snap.tradeDrawerSheet && snap.tradeDrawerSheet.exists ? safeNum(snap.tradeDrawerSheet.bottom) : null;
-  var footerBottom    = snap && snap.footer   && snap.footer.exists   ? safeNum(snap.footer.bottom)    : null;
-
-  var chartFooterGapPx      = computeGap(chartBottom, footerTop);
-  var toolbarCanvasGapPx    = computeGap(toolbarBottom, canvasTop);
-  var drawerFooterOverlapPx = (drawerBottom != null && footerTop != null) ? drawerBottom - footerTop : null;
-
-  var oscillatorCount  = snap ? snap.oscillators.length : 0;
-  var paperLayerExists = snap ? snap.paperLayer.exists  : false;
-  var paperLineCount   = snap ? snap.paperLines.length  : 0;
-  var tradeDrawerExists = snap ? snap.tradeDrawer.exists : false;
-
-  // Section size mismatch recommendations
-  for(var m = 0; m < mismatches.length; m++){
-    var mm = mismatches[m];
-    recommendations.push(
-      "MISMATCH: " + mm.key + " is " + mm.actual + "px in DVL_SECTION_SIZES_PX but expected " + mm.expected + "px (diff=" + mm.diff + "). Do NOT fix in this phase."
-    );
-  }
-
-  // Gap diagnostics
-  if(chartFooterGapPx != null && Math.abs(chartFooterGapPx) > 2){
-    recommendations.push("GAP: chart bottom to footer top = " + chartFooterGapPx.toFixed(1) + "px (expected ~0). Investigate in next phase.");
-  }
-  if(toolbarCanvasGapPx != null && Math.abs(toolbarCanvasGapPx) > 2){
-    recommendations.push("GAP: toolbar bottom to canvasWrap top = " + toolbarCanvasGapPx.toFixed(1) + "px (expected ~0). Investigate in next phase.");
-  }
-  if(drawerFooterOverlapPx != null && drawerFooterOverlapPx > 2){
-    recommendations.push("OVERLAP: tradeDrawerSheet bottom overlaps footer top by " + drawerFooterOverlapPx.toFixed(1) + "px. Investigate in next phase.");
-  }
-  if(oscillatorCount > 0){
-    recommendations.push("INFO: " + oscillatorCount + " oscillator panel(s) detected. Measure impact on canvasWrap height if layout is off.");
-  }
-
-  var result = {
-    version:              "0.657",
-    noLayoutMutation:     true,
-    expected:             expected,
-    staticSectionSizes:   staticSizes,
-    sectionSizeMismatches: mismatches,
-    snapshot:             snap,
-    chartFooterGapPx:     chartFooterGapPx,
-    toolbarCanvasGapPx:   toolbarCanvasGapPx,
-    drawerFooterOverlapPx: drawerFooterOverlapPx,
-    oscillatorCount:      oscillatorCount,
-    paperLayerExists:     paperLayerExists,
-    paperLineCount:       paperLineCount,
-    tradeDrawerExists:    tradeDrawerExists,
-    recommendations:      recommendations
-  };
-
-  _lastAudit = result;
-  return result;
-}
-
-function getLastAudit(){
-  return _lastAudit;
-}
-
-window.DVL_LAYOUT_ASSERTIONS = {
-  VERSION:             "0.657",
-  getExpectedContract: getExpectedContract,
-  audit:               audit,
-  getLastAudit:        getLastAudit
 };
 
 })();
