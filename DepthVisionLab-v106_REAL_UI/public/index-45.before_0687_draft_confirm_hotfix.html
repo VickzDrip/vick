@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.687</title>
+<title>DVL Binance Live — Beta 0.686</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -15063,15 +15063,6 @@ window.DVL_SAFE_CSS_CLEANUP_AUDIT={
 */
 </style>
 
-<style id="DVL_DRAFT_CONFIRM_HOTFIX_CSS_0687">
-/*
-  DVL Beta 0.687 — Draft Confirm Hotfix.
-  render() now calls renderEditConfirm() before renderDraftPosition() so that
-  renderEditConfirm does not remove the draft confirm buttons added by renderDraftConfirm.
-  No DOM/CSS changes required; this marker records the beta boundary.
-*/
-</style>
-
 <style id="DVL_PAPER_PLACEMENT_FLOW_FIX_CSS_0686">
 /*
   DVL Beta 0.686 — Paper Trading Placement Flow Fix.
@@ -18198,210 +18189,12 @@ window.DVL_PAPER_PLACEMENT_FLOW_FIX_AUDIT = {
 })();
 </script>
 
-<script id="DVL_DRAFT_CONFIRM_HOTFIX_AUDIT_MODULE_0687">
-(function(){
-"use strict";
-
-var _lastAudit = null;
-
-var _dupStyleTag = '<' + '/style><' + '/style>';
-var _brokerToken = 'Broker' + 'Connector';
-
-var FINAL_LOCK_CSS = [
-  "DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659",
-  "DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660",
-  "DVL_CHROME_FINAL_LOCK_CSS_0661",
-  "DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662"
-];
-
-function _cntId(els, id){
-  var c = 0;
-  for(var i = 0; i < els.length; i++){ if(els[i].id === id) c++; }
-  return c;
-}
-
-function _fnSrc(full, fnName){
-  var start = full.indexOf("function " + fnName);
-  if(start === -1) return "";
-  var end = full.indexOf("\n    function ", start + 10);
-  return end === -1 ? full.slice(start) : full.slice(start, end);
-}
-
-function audit(){
-  var scriptEls = document.querySelectorAll('script[id]');
-  var styleEls  = document.querySelectorAll('style[id]');
-  var blockers  = [];
-  var warnings  = [];
-
-  var _allScripts = document.querySelectorAll('script');
-  var _srcFull = "";
-  for(var si = 0; si < _allScripts.length; si++){ _srcFull += _allScripts[si].textContent; }
-
-  var _mod687 = document.getElementById("DVL_DRAFT_CONFIRM_HOTFIX_AUDIT_MODULE_0687");
-  var _mod687src = _mod687 ? _mod687.textContent : "";
-
-  // A1. CSS_0687 present 1x
-  var css687Present = _cntId(styleEls, "DVL_DRAFT_CONFIRM_HOTFIX_CSS_0687") === 1;
-  if(!css687Present) blockers.push("DVL_DRAFT_CONFIRM_HOTFIX_CSS_0687 not found");
-
-  // A2. Audit module 0687 present 1x
-  var mod687Present = _cntId(scriptEls, "DVL_DRAFT_CONFIRM_HOTFIX_AUDIT_MODULE_0687") === 1;
-  if(!mod687Present) blockers.push("DVL_DRAFT_CONFIRM_HOTFIX_AUDIT_MODULE_0687 not 1x");
-
-  // A3. No duplicate closing style tag
-  var noDupStyle = document.documentElement.outerHTML.indexOf(_dupStyleTag) === -1;
-  if(!noDupStyle) blockers.push("duplicate closing style tag found");
-
-  // A4. Version is "Beta 0.687"
-  var versionOk = (typeof window.DVL_APP_VERSION !== "undefined") && window.DVL_APP_VERSION === "Beta 0.687";
-  if(!versionOk) blockers.push("DVL_APP_VERSION !== 'Beta 0.687' (got: " + window.DVL_APP_VERSION + ")");
-
-  // A5. render() calls renderEditConfirm BEFORE renderDraftPosition (key fix)
-  var renderSrc = _fnSrc(_srcFull, "render");
-  var editConfirmIdx = renderSrc.indexOf("renderEditConfirm()");
-  var draftPosIdx    = renderSrc.indexOf("renderDraftPosition");
-  var renderOrderOk  = editConfirmIdx > -1 && draftPosIdx > -1 && editConfirmIdx < draftPosIdx;
-  if(!renderOrderOk) blockers.push("render() does not call renderEditConfirm before renderDraftPosition");
-
-  // A6. render() still calls renderDraftPosition
-  var renderCallsDraft = renderSrc.indexOf("renderDraftPosition(state.pendingDraft)") > -1;
-  if(!renderCallsDraft) blockers.push("render() no longer calls renderDraftPosition");
-
-  // A7. render() still calls renderEditConfirm
-  var renderCallsEditConfirm = renderSrc.indexOf("renderEditConfirm()") > -1;
-  if(!renderCallsEditConfirm) blockers.push("render() no longer calls renderEditConfirm");
-
-  // A8. renderDraftConfirm appends to document.body
-  var draftConfirmSrc     = _fnSrc(_srcFull, "renderDraftConfirm");
-  var draftConfirmAppends = draftConfirmSrc.indexOf("document.body.appendChild") > -1;
-  if(!draftConfirmAppends) blockers.push("renderDraftConfirm does not append to document.body");
-
-  // A9. renderDraftConfirm creates dvl-paper-draft-confirm-fixed element
-  var hasDraftConfirmClass = draftConfirmSrc.indexOf("dvl-paper-draft-confirm-fixed") > -1;
-  if(!hasDraftConfirmClass) blockers.push("renderDraftConfirm does not use dvl-paper-draft-confirm-fixed class");
-
-  // A10. Prior 0686 audit passes
-  var audit686Pass = false;
-  try{
-    if(typeof window.DVL_PAPER_PLACEMENT_FLOW_FIX_AUDIT !== "undefined"){
-      var r686 = window.DVL_PAPER_PLACEMENT_FLOW_FIX_AUDIT.audit();
-      audit686Pass = !!(r686 && r686.pass === true);
-    }
-  }catch(e){ warnings.push("DVL_PAPER_PLACEMENT_FLOW_FIX_AUDIT threw: " + e.message); }
-  if(!audit686Pass) blockers.push("DVL_PAPER_PLACEMENT_FLOW_FIX_AUDIT.audit().pass not true");
-
-  // A11. Final locks 0659-0662 preserved
-  var missingLocks = [];
-  for(var fl = 0; fl < FINAL_LOCK_CSS.length; fl++){
-    if(_cntId(styleEls, FINAL_LOCK_CSS[fl]) !== 1) missingLocks.push(FINAL_LOCK_CSS[fl]);
-  }
-  var finalLocksPresent = missingLocks.length === 0;
-  if(!finalLocksPresent) blockers.push("final locks missing: " + missingLocks.join(", "));
-
-  // A12. DVL_BUTTON_SYSTEM preserved
-  var btnSysOk = typeof window.DVL_BUTTON_SYSTEM !== "undefined";
-  if(!btnSysOk) blockers.push("DVL_BUTTON_SYSTEM not found");
-
-  // A13. Paper Trading renderPosition exists
-  var renderPosExists = _srcFull.indexOf("function renderPosition") > -1;
-  if(!renderPosExists) blockers.push("renderPosition not found");
-
-  // A14. renderDraftPosition exists
-  var renderDraftExists = _srcFull.indexOf("function renderDraftPosition") > -1;
-  if(!renderDraftExists) blockers.push("renderDraftPosition not found");
-
-  // A15. cancelPendingOrder exists (0.686 preserved)
-  var cancelPOExists = _srcFull.indexOf("function cancelPendingOrder(") > -1;
-  if(!cancelPOExists) blockers.push("cancelPendingOrder not found");
-
-  // A16. orderTagTopFromLineY exists (0.686 preserved)
-  var tagTopExists = _srcFull.indexOf("function orderTagTopFromLineY") > -1;
-  if(!tagTopExists) blockers.push("orderTagTopFromLineY not found");
-
-  // A17. Zero _brokerToken in source
-  var noBroker = _srcFull.indexOf(_brokerToken) === -1;
-  if(!noBroker) blockers.push(_brokerToken + " found in source");
-
-  // A18. Zero timers/RAF/observers in this module
-  var noTimers687 = _mod687src.indexOf("setTimeout") === -1 &&
-                    _mod687src.indexOf("setInterval") === -1 &&
-                    _mod687src.indexOf("requestAnimationFrame") === -1 &&
-                    _mod687src.indexOf("MutationObserver") === -1 &&
-                    _mod687src.indexOf("ResizeObserver") === -1;
-  if(!noTimers687) blockers.push("timer/RAF/observer found in 0687 module");
-
-  // A19. Zero window.drawSoon= in this module
-  var noDrawSoon687 = _mod687src.indexOf("window.drawSoon") === -1;
-  if(!noDrawSoon687) blockers.push("window.drawSoon= found in 0687 module");
-
-  var pass = (
-    css687Present &&
-    mod687Present &&
-    noDupStyle &&
-    versionOk &&
-    renderOrderOk &&
-    renderCallsDraft &&
-    renderCallsEditConfirm &&
-    draftConfirmAppends &&
-    hasDraftConfirmClass &&
-    audit686Pass &&
-    finalLocksPresent &&
-    btnSysOk &&
-    renderPosExists &&
-    renderDraftExists &&
-    cancelPOExists &&
-    tagTopExists &&
-    noBroker &&
-    noTimers687 &&
-    noDrawSoon687
-  );
-
-  _lastAudit = {
-    pass:                 pass,
-    css687Present:        css687Present,
-    mod687Present:        mod687Present,
-    noDupStyle:           noDupStyle,
-    versionOk:            versionOk,
-    renderOrderOk:        renderOrderOk,
-    renderCallsDraft:     renderCallsDraft,
-    renderCallsEditConfirm: renderCallsEditConfirm,
-    draftConfirmAppends:  draftConfirmAppends,
-    hasDraftConfirmClass: hasDraftConfirmClass,
-    audit686Pass:         audit686Pass,
-    finalLocksPresent:    finalLocksPresent,
-    btnSysOk:             btnSysOk,
-    renderPosExists:      renderPosExists,
-    renderDraftExists:    renderDraftExists,
-    cancelPOExists:       cancelPOExists,
-    tagTopExists:         tagTopExists,
-    noBroker:             noBroker,
-    noTimers687:          noTimers687,
-    noDrawSoon687:        noDrawSoon687,
-    blockers:             blockers,
-    warnings:             warnings
-  };
-  return _lastAudit;
-}
-
-function getLastAudit(){ return _lastAudit; }
-function run(){ _lastAudit = audit(); return Promise.resolve(_lastAudit); }
-
-window.DVL_DRAFT_CONFIRM_HOTFIX_AUDIT = {
-  VERSION:      "0.687",
-  audit:        audit,
-  run:          run,
-  getLastAudit: getLastAudit
-};
-
-})();
-</script>
-
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.687</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.686</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -18861,12 +18654,11 @@ window.DVL_DRAFT_CONFIRM_HOTFIX_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.687";
+const DVL_APP_VERSION = "Beta 0.686";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.687 — Hotfix: draft Limit/Stop confirm (✓/×) buttons now appear correctly; render() calls renderEditConfirm before renderDraftPosition so draft confirm buttons are not immediately cleared." },
-  { version: "Beta 0.686", note: "Beta 0.686 — Paper Trading Placement Flow Fix: draft spawns at current price, ENTRY draggable, pending orders cancelable with ×, labels centered on lines." },
+  { version: DVL_APP_VERSION, note: "Beta 0.686 — Paper Trading Placement Flow Fix: draft spawns at current price, ENTRY draggable, pending orders cancelable with ×, labels centered on lines." },
   { version: "Beta 0.685", note: "Beta 0.685 — Scale label compact fix: standardized current price and oscillator scale labels to fit the 70px right scale without card-like oversized boxes." },
   { version: "Beta 0.684", note: "Beta 0.684 — Paper Draft Entry Selection + Label Alignment Polish: draft Limit/Stop plots ENTRY/TP/SL immediately, labels 10 bars right of anchor, reduced opacity, fixed size, pointer-events:none." },
   { version: "Beta 0.683", note: "Beta 0.683 — HTML/CSS structure hotfix: fixed nested/duplicated style closing around 0675–0682 markers without changing Paper logic." },
@@ -37027,11 +36819,10 @@ Do not rework this logic unless the user explicitly requests it.
 
       layer.innerHTML = "";
       state.positions.slice().forEach(renderPosition);
-      // 0687: renderEditConfirm FIRST — clears .dvl-paper-edit-confirm-fixed before draft appends its own
-      renderEditConfirm();
-      // draft confirm appended AFTER renderEditConfirm so it is not immediately removed
+      // 0684: render draft ENTRY/TP/SL preview
       document.querySelectorAll(".dvl-paper-draft-confirm-fixed").forEach(function(el){ el.remove(); });
       if(state.pendingDraft){ renderDraftPosition(state.pendingDraft); }
+      renderEditConfirm();
       updateLiq();
     }
 
