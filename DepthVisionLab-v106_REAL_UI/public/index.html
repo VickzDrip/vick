@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.711</title>
+<title>DVL Binance Live — Beta 0.712</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19089,7 +19089,7 @@ html.dvl-ui-1b-active .marketRow,
 html.dvl-ui-1b-active .chartCard > .toolbar{ display:none !important; }
 /* Phase 2B: reveal the OLD indicators dropdown from the hidden toolbar, anchored under the new button. */
 html.dvl1b-ind-open .chartCard > .toolbar{ display:block !important; visibility:hidden !important; position:fixed !important; left:0 !important; top:0 !important; width:0 !important; height:0 !important; min-height:0 !important; padding:0 !important; margin:0 !important; border:0 !important; background:transparent !important; box-shadow:none !important; overflow:visible !important; pointer-events:none !important; z-index:100000 !important; }
-html.dvl1b-ind-open #fxIndicatorWrap{ display:block !important; visibility:visible !important; position:fixed !important; pointer-events:auto !important; z-index:100000 !important; }
+html.dvl1b-ind-open #fxIndicatorWrap{ display:block !important; visibility:visible !important; position:fixed !important; height:0 !important; min-height:0 !important; max-height:none !important; overflow:visible !important; pointer-events:auto !important; z-index:100000 !important; }
 html.dvl1b-ind-open #fxIndicatorWrap *{ visibility:visible !important; }
 html.dvl1b-ind-open #fxIndicatorWrap > #toggleIndicators{ display:none !important; }
 html.dvl1b-ind-open #fxIndicatorWrap .indicatorDropdown{ left:0 !important; right:auto !important; top:calc(100% + 6px) !important; }
@@ -19144,6 +19144,45 @@ html.dvl1b-ind-open .indicatorItem.is-soon .indicatorFxMark{
   color:#9e8b50 !important;
   border-color:rgba(180,150,60,.22) !important;
 }
+/* Phase 2B-FIX-2: compact size for indicators panel — max-height, width, item density */
+html.dvl1b-ind-open #indicatorDropdown{
+  width:min(310px, calc(100vw - 18px)) !important;
+  max-height:56vh !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  -webkit-overflow-scrolling:touch !important;
+}
+html.dvl1b-ind-open .indicatorDropHead{
+  height:38px !important;
+  min-height:38px !important;
+  padding:0 12px !important;
+  font-size:11px !important;
+  letter-spacing:.04em !important;
+  text-transform:uppercase !important;
+}
+html.dvl1b-ind-open .indicatorItem{
+  min-height:44px !important;
+  max-height:52px !important;
+  padding:5px 10px !important;
+  grid-template-columns:30px minmax(0,1fr) 46px !important;
+  gap:8px !important;
+}
+html.dvl1b-ind-open .indicatorFxMark{
+  width:30px !important;
+  height:30px !important;
+  min-width:30px !important;
+  min-height:30px !important;
+  border-radius:7px !important;
+  font-size:10px !important;
+}
+html.dvl1b-ind-open .indicatorItem b{ font-size:13px !important; font-weight:650 !important; }
+html.dvl1b-ind-open .indicatorItem small{ font-size:10.5px !important; }
+html.dvl1b-ind-open .indicatorItem i{ font-size:9px !important; }
+html.dvl1b-ind-open .indicatorItem .dvl-vt-state{
+  width:44px !important; min-width:44px !important; max-width:44px !important;
+  height:20px !important; flex:0 0 44px !important;
+}
+html.dvl1b-ind-open .indicatorItem .dvl-vt-state.is-on::after{ transform:translateX(24px) !important; }
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-act.dvl1b-open{ color:var(--b-accent); background:rgba(16,223,119,.10); border:calc(1 * var(--px)) solid rgba(16,223,119,.30); }
 /* Phase 2C: reveal the OLD drawing tools shell from the hidden .marketRow, anchored under the new button. */
 html.dvl1b-draw-open .marketRow{ display:block !important; visibility:hidden !important; position:fixed !important; left:0 !important; top:0 !important; width:0 !important; height:0 !important; min-height:0 !important; padding:0 !important; margin:0 !important; border:0 !important; background:transparent !important; box-shadow:none !important; overflow:visible !important; pointer-events:none !important; z-index:100000 !important; }
@@ -19180,7 +19219,7 @@ html.dvl1b-draw-open .assetToolsShell.is-open > .assetToolBtn.toolGear{ color:#1
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.711</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.712</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19300,7 +19339,7 @@ html.dvl1b-draw-open .assetToolsShell.is-open > .assetToolBtn.toolGear{ color:#1
   var indBtn=document.getElementById("dvl1b_indBtn");
   var indOpen=false;
   function indWrap(){ return document.getElementById("fxIndicatorWrap"); }
-  function positionInd(){ var w=indWrap(); if(!w||!indBtn) return; try{ var r=indBtn.getBoundingClientRect(); var W=250, vw=window.innerWidth||360; var left=Math.max(8, Math.min(Math.round(r.left), vw-W-8)); w.style.left=left+"px"; w.style.top=Math.round(r.bottom)+"px"; w.style.width=W+"px"; }catch(_e){} }
+  function positionInd(){ var w=indWrap(); if(!w||!indBtn) return; try{ var r=indBtn.getBoundingClientRect(); var W=Math.min(310,Math.max(240,(window.innerWidth||360)-18)), vw=window.innerWidth||360; var left=Math.max(8, Math.min(Math.round(r.left), vw-W-8)); w.style.left=left+"px"; w.style.top=Math.round(r.bottom)+"px"; w.style.width=W+"px"; }catch(_e){} }
   function closeInd(){ indOpen=false; try{ document.documentElement.classList.remove("dvl1b-ind-open"); }catch(_e){} if(indBtn) indBtn.classList.remove("dvl1b-open"); try{ if(typeof closeIndicatorsDropdown==="function") closeIndicatorsDropdown(); else if(window.closeIndicatorsDropdown) window.closeIndicatorsDropdown(); }catch(_e){} var w=indWrap(); if(w){ w.style.left=""; w.style.top=""; w.style.width=""; } }
   function openInd(){ try{ document.documentElement.classList.add("dvl1b-ind-open"); }catch(_e){} positionInd(); try{ if(typeof openIndicatorsDropdown==="function") openIndicatorsDropdown(); else if(window.openIndicatorsDropdown) window.openIndicatorsDropdown(); }catch(_e){} if(indBtn) indBtn.classList.add("dvl1b-open"); indOpen=true; positionInd(); }
   if(indBtn) indBtn.addEventListener("click", function(e){ e.stopPropagation(); if(indOpen) closeInd(); else openInd(); }, false);
@@ -19327,7 +19366,7 @@ html.dvl1b-draw-open .assetToolsShell.is-open > .assetToolBtn.toolGear{ color:#1
 </script>
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.711</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.712</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -19787,11 +19826,12 @@ html.dvl1b-draw-open .assetToolsShell.is-open > .assetToolBtn.toolGear{ color:#1
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.711";
+const DVL_APP_VERSION = "Beta 0.712";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.711 — Phase 2C (Drawings): the new-UI Desenhos button now opens the existing old drawing tools panel (#assetToolsShell/#assetToolsMenu) via the old is-open/aria pattern (dvlCloseDrawToolsMenu reused). Panel revealed from the hidden .marketRow with the same visibility trick used for indicators; repositioned fixed under the new button. Green/black theme applied. Cache-Control meta tags added to fix mobile browser caching. Settings still not connected; Indicators 2B and Velas 2A unchanged." },
+  { version: DVL_APP_VERSION, note: "Beta 0.712 — Phase 2B-FIX-2 (Indicators Compact Size): CSS-only compact fix for the indicators panel. Root causes: #fxIndicatorWrap had height:32px making it a 32px ghost and misplacing the dropdown 39px too low — fixed with height:0. No max-height on dropdown — full sidebar height — fixed with max-height:56vh + overflow-y:auto. Width clamped to min(310px,100vw-18px). Items compacted: 44px min-height, 30px badge, 13px title, 10.5px subtext, 44px toggle. No new bridges; Drawings 2C, Indicators 2B, Velas 2A all unchanged." },
+  { version: "Beta 0.711", note: "Beta 0.711 — Phase 2C (Drawings): the new-UI Desenhos button now opens the existing old drawing tools panel (#assetToolsShell/#assetToolsMenu) via the old is-open/aria pattern (dvlCloseDrawToolsMenu reused). Panel revealed from the hidden .marketRow with the same visibility trick used for indicators; repositioned fixed under the new button. Green/black theme applied. Cache-Control meta tags added to fix mobile browser caching. Settings still not connected; Indicators 2B and Velas 2A unchanged." },
   { version: "Beta 0.710", note: "Beta 0.710 — Phase 2B-FIX (Theme Unification): CSS-only re-skin of the old #indicatorDropdown to match the new green/black UI when opened from the overlay (scoped to html.dvl1b-ind-open). Green/black gradient, green border, no cyan glow, muted soon labels in gold/gray. No new functional bridges; indicator logic untouched; Desenhos/Settings unconnected; Velas unchanged." },
   { version: "Beta 0.709", note: "Beta 0.709 — Phase 2B (Indicators): the new-UI Indicators button now opens the existing old indicators dropdown (#indicatorDropdown) via the old openIndicatorsDropdown/closeIndicatorsDropdown functions, revealed from the hidden toolbar and repositioned under the new button. Old panel reused (not recreated); indicator logic/oscillators untouched. Desenhos/Settings still not connected; Velas unchanged." },
   { version: "Beta 0.708", note: "Beta 0.708 — Badge/save fixes + Phase 2A (Candles): inline version badge now follows DVL_APP_VERSION; Save shows 'Salvar' on mobile and 'Salvar perfil' only >=768px; the new-UI Velas button now opens a custom DVL dropdown (Candles/Hollow/Heikin Ashi/Footprint/Renko call the old setCandleMode; Line/Area/Bars shown disabled). No other buttons connected; chart untouched." },
@@ -40857,18 +40897,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_2C_AUDIT_MODULE_0711">
+<script id="DVL_UI_OVERLAY_PHASE_2B_FIX2_AUDIT_MODULE_0712">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.711"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.711' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.712"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.712' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.711")===-1) blockers.push("A2: title missing 0.711");
+if(!_t || (_t.textContent||"").indexOf("0.712")===-1) blockers.push("A2: title missing 0.712");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40988,7 +41028,48 @@ if(document.getElementById("dvl1b_settingsMenu")) blockers.push("A32: dvl1b_sett
 // A33. Cache-Control meta present
 (function(){ var metas=document.querySelectorAll("meta[http-equiv]"); var found=false; metas.forEach(function(m){ if((m.getAttribute("http-equiv")||"").toLowerCase().indexOf("cache-control")!==-1) found=true; }); if(!found) warnings.push("A33: Cache-Control meta not found"); })();
 
-var N=33, name="DVL_UI_OVERLAY_PHASE_2C_AUDIT_MODULE_0711";
+// A34. Indicators compact CSS: max-height rule present (scoped to dvl1b-ind-open)
+(function(){
+  var found=false;
+  try{
+    var sheets=document.styleSheets;
+    for(var si=0;si<sheets.length;si++){
+      try{
+        var rules=sheets[si].cssRules||sheets[si].rules||[];
+        for(var ri=0;ri<rules.length;ri++){
+          var r=rules[ri];
+          if(r.selectorText&&r.selectorText.indexOf("dvl1b-ind-open")!==-1&&r.selectorText.indexOf("indicatorDropdown")!==-1&&r.style&&r.style.maxHeight){
+            found=true; break;
+          }
+        }
+        if(found) break;
+      }catch(_ie){}
+    }
+  }catch(_e){}
+  if(!found) warnings.push("A34: compact max-height rule for indicators not detected in styleSheets");
+})();
+// A35. #fxIndicatorWrap height:0 override present
+(function(){
+  var found=false;
+  try{
+    var sheets=document.styleSheets;
+    for(var si=0;si<sheets.length;si++){
+      try{
+        var rules=sheets[si].cssRules||sheets[si].rules||[];
+        for(var ri=0;ri<rules.length;ri++){
+          var r=rules[ri];
+          if(r.selectorText&&r.selectorText.indexOf("dvl1b-ind-open")!==-1&&r.selectorText.indexOf("fxIndicatorWrap")!==-1&&r.style&&r.style.height==="0px"){
+            found=true; break;
+          }
+        }
+        if(found) break;
+      }catch(_ie){}
+    }
+  }catch(_e){}
+  if(!found) warnings.push("A35: height:0 override for #fxIndicatorWrap not detected — ghost may still have 32px height");
+})();
+
+var N=35, name="DVL_UI_OVERLAY_PHASE_2B_FIX2_AUDIT_MODULE_0712";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
