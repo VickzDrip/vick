@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.710</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<title>DVL Binance Live — Beta 0.711</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19142,6 +19145,34 @@ html.dvl1b-ind-open .indicatorItem.is-soon .indicatorFxMark{
   border-color:rgba(180,150,60,.22) !important;
 }
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-act.dvl1b-open{ color:var(--b-accent); background:rgba(16,223,119,.10); border:calc(1 * var(--px)) solid rgba(16,223,119,.30); }
+/* Phase 2C: reveal the OLD drawing tools shell from the hidden .marketRow, anchored under the new button. */
+html.dvl1b-draw-open .marketRow{ display:block !important; visibility:hidden !important; position:fixed !important; left:0 !important; top:0 !important; width:0 !important; height:0 !important; min-height:0 !important; padding:0 !important; margin:0 !important; border:0 !important; background:transparent !important; box-shadow:none !important; overflow:visible !important; pointer-events:none !important; z-index:100000 !important; }
+html.dvl1b-draw-open #assetToolsShell{ display:block !important; visibility:visible !important; position:fixed !important; overflow:visible !important; pointer-events:auto !important; z-index:100000 !important; }
+html.dvl1b-draw-open #assetToolsShell *{ visibility:visible !important; }
+/* Phase 2C: green/black theme override for old drawing tools menu */
+html.dvl1b-draw-open #assetToolsMenu{
+  background:linear-gradient(180deg,rgba(8,18,15,.98),rgba(5,12,10,.98)) !important;
+  border:1px solid rgba(150,180,165,.20) !important;
+  box-shadow:0 18px 46px rgba(0,0,0,.55) !important;
+  border-radius:12px !important;
+  color:#d4e0d9 !important;
+  max-height:min(340px, calc(100svh - 120px)) !important;
+}
+html.dvl1b-draw-open .assetToolsMenuHead{ background:transparent !important; border-bottom:1px solid rgba(150,180,165,.12) !important; }
+html.dvl1b-draw-open .assetToolsMenuHead b{ color:#c8d8cf !important; }
+html.dvl1b-draw-open .assetToolsMenuHead small{ color:#6a8a78 !important; }
+html.dvl1b-draw-open .assetToolsMenuList{ scrollbar-width:none !important; }
+html.dvl1b-draw-open .assetToolMenuItem{ background:rgba(16,223,119,.04) !important; border:1px solid rgba(150,180,165,.10) !important; color:#c8d8cf !important; border-radius:8px !important; }
+html.dvl1b-draw-open .assetToolMenuItem:hover,
+html.dvl1b-draw-open .assetToolMenuItem:focus{ background:rgba(16,223,119,.10) !important; color:#eef2f0 !important; border-color:rgba(16,223,119,.22) !important; }
+html.dvl1b-draw-open .assetToolMenuItem svg,
+html.dvl1b-draw-open .assetToolMenuItem path,
+html.dvl1b-draw-open .assetToolMenuItem line,
+html.dvl1b-draw-open .assetToolMenuItem circle,
+html.dvl1b-draw-open .assetToolMenuItem rect,
+html.dvl1b-draw-open .assetToolMenuItem polyline,
+html.dvl1b-draw-open .assetToolMenuItem polygon{ stroke:#8fb8a0 !important; fill:none !important; }
+html.dvl1b-draw-open .assetToolsShell.is-open > .assetToolBtn.toolGear{ color:#10df77 !important; background:rgba(16,223,119,.08) !important; box-shadow:inset 0 0 0 1px rgba(16,223,119,.30) !important; }
 </style>
 <div id="DVL_UI_OVERLAY_PHASE_1B" data-dvl-overlay-phase="1B" aria-label="DVL new UI (phase 1B, visual)">
   <div class="dvl1b-card">
@@ -19149,7 +19180,7 @@ html.dvl1b-ind-open .indicatorItem.is-soon .indicatorFxMark{
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.710</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.711</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19275,6 +19306,16 @@ html.dvl1b-ind-open .indicatorItem.is-soon .indicatorFxMark{
   if(indBtn) indBtn.addEventListener("click", function(e){ e.stopPropagation(); if(indOpen) closeInd(); else openInd(); }, false);
   document.addEventListener("click", function(e){ if(!indOpen) return; var w=indWrap(); var inDrop=w && w.contains(e.target); var inBtn=indBtn && indBtn.contains(e.target); if(!inDrop && !inBtn) closeInd(); }, false);
 
+  /* ── Phase 2C: Desenhos — open the OLD drawing tools menu (reuse old DOM + fns) ── */
+  var drawBtn=document.getElementById("dvl1b_drawBtn");
+  var drawOpen=false;
+  function drawShell(){ return document.getElementById("assetToolsShell"); }
+  function positionDraw(){ var shell=drawShell(); if(!shell||!drawBtn) return; try{ var r=drawBtn.getBoundingClientRect(); var vw=window.innerWidth||360; shell.style.top=Math.round(r.bottom)+"px"; shell.style.right=Math.max(8, vw-Math.round(r.right))+"px"; shell.style.width="0"; shell.style.height="0"; }catch(_e){} }
+  function closeDraw(){ drawOpen=false; try{ document.documentElement.classList.remove("dvl1b-draw-open"); }catch(_e){} if(drawBtn) drawBtn.classList.remove("dvl1b-open"); try{ if(typeof window.dvlCloseDrawToolsMenu==="function") window.dvlCloseDrawToolsMenu(); else{ var sh=drawShell(); var mn=document.getElementById("assetToolsMenu"); var gr=document.getElementById("assetToolsGear"); if(sh) sh.classList.remove("is-open"); if(mn) mn.setAttribute("aria-hidden","true"); if(gr) gr.setAttribute("aria-expanded","false"); } }catch(_e){} var sh=drawShell(); if(sh){ sh.style.top=""; sh.style.right=""; sh.style.width=""; sh.style.height=""; } }
+  function openDraw(){ try{ document.documentElement.classList.add("dvl1b-draw-open"); }catch(_e){} positionDraw(); try{ var sh=drawShell(); var mn=document.getElementById("assetToolsMenu"); var gr=document.getElementById("assetToolsGear"); if(sh) sh.classList.add("is-open"); if(mn) mn.setAttribute("aria-hidden","false"); if(gr) gr.setAttribute("aria-expanded","true"); }catch(_e){} if(drawBtn) drawBtn.classList.add("dvl1b-open"); drawOpen=true; positionDraw(); }
+  if(drawBtn) drawBtn.addEventListener("click", function(e){ e.stopPropagation(); if(drawOpen) closeDraw(); else openDraw(); }, false);
+  document.addEventListener("click", function(e){ if(!drawOpen) return; var sh=drawShell(); var inSh=sh&&sh.contains(e.target); var inBtn=drawBtn&&drawBtn.contains(e.target); if(!inSh&&!inBtn) closeDraw(); }, false);
+
   /* Console helper: toggle the new UI on/off (also restores old chrome). */
   window.DVL_UI_1B_SET = function(on){
     try{
@@ -19286,7 +19327,7 @@ html.dvl1b-ind-open .indicatorItem.is-soon .indicatorFxMark{
 </script>
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.710</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.711</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -19746,11 +19787,12 @@ html.dvl1b-ind-open .indicatorItem.is-soon .indicatorFxMark{
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.710";
+const DVL_APP_VERSION = "Beta 0.711";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.710 — Phase 2B-FIX (Theme Unification): CSS-only re-skin of the old #indicatorDropdown to match the new green/black UI when opened from the overlay (scoped to html.dvl1b-ind-open). Green/black gradient, green border, no cyan glow, muted soon labels in gold/gray. No new functional bridges; indicator logic untouched; Desenhos/Settings unconnected; Velas unchanged." },
+  { version: DVL_APP_VERSION, note: "Beta 0.711 — Phase 2C (Drawings): the new-UI Desenhos button now opens the existing old drawing tools panel (#assetToolsShell/#assetToolsMenu) via the old is-open/aria pattern (dvlCloseDrawToolsMenu reused). Panel revealed from the hidden .marketRow with the same visibility trick used for indicators; repositioned fixed under the new button. Green/black theme applied. Cache-Control meta tags added to fix mobile browser caching. Settings still not connected; Indicators 2B and Velas 2A unchanged." },
+  { version: "Beta 0.710", note: "Beta 0.710 — Phase 2B-FIX (Theme Unification): CSS-only re-skin of the old #indicatorDropdown to match the new green/black UI when opened from the overlay (scoped to html.dvl1b-ind-open). Green/black gradient, green border, no cyan glow, muted soon labels in gold/gray. No new functional bridges; indicator logic untouched; Desenhos/Settings unconnected; Velas unchanged." },
   { version: "Beta 0.709", note: "Beta 0.709 — Phase 2B (Indicators): the new-UI Indicators button now opens the existing old indicators dropdown (#indicatorDropdown) via the old openIndicatorsDropdown/closeIndicatorsDropdown functions, revealed from the hidden toolbar and repositioned under the new button. Old panel reused (not recreated); indicator logic/oscillators untouched. Desenhos/Settings still not connected; Velas unchanged." },
   { version: "Beta 0.708", note: "Beta 0.708 — Badge/save fixes + Phase 2A (Candles): inline version badge now follows DVL_APP_VERSION; Save shows 'Salvar' on mobile and 'Salvar perfil' only >=768px; the new-UI Velas button now opens a custom DVL dropdown (Candles/Hollow/Heikin Ashi/Footprint/Renko call the old setCandleMode; Line/Area/Bars shown disabled). No other buttons connected; chart untouched." },
   { version: "Beta 0.707", note: "Beta 0.707 — Phase 1C visual refinement: lighter compact Salvar button (responsive label), premium BTC/USDT asset block, tighter header alignment, softer hotbar dividers and more uniform spacing. Visual-only — no new functional bridges, chart untouched." },
@@ -40815,18 +40857,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_2B_FIX_AUDIT_MODULE_0710">
+<script id="DVL_UI_OVERLAY_PHASE_2C_AUDIT_MODULE_0711">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.710"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.710' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.711"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.711' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.710")===-1) blockers.push("A2: title missing 0.710");
+if(!_t || (_t.textContent||"").indexOf("0.711")===-1) blockers.push("A2: title missing 0.711");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40935,7 +40977,18 @@ if(!document.getElementById("indicatorDropdown")) blockers.push("A27: #indicator
   if(!found) warnings.push("A28: green/black theme override rule not detected in styleSheets");
 })();
 
-var N=28, name="DVL_UI_OVERLAY_PHASE_2B_FIX_AUDIT_MODULE_0710";
+// A29. Phase 2C: Drawings button present
+if(!document.getElementById("dvl1b_drawBtn")) blockers.push("A29: new Drawings button (dvl1b_drawBtn) missing");
+// A30. Old drawing tools DOM intact
+if(!document.getElementById("assetToolsShell")||!document.getElementById("assetToolsMenu")) blockers.push("A30: old drawing tools DOM (#assetToolsShell/#assetToolsMenu) missing");
+// A31. dvlCloseDrawToolsMenu reachable
+if(typeof window.dvlCloseDrawToolsMenu!=="function") warnings.push("A31: dvlCloseDrawToolsMenu not yet reachable (may load later)");
+// A32. Settings still NOT integrated
+if(document.getElementById("dvl1b_settingsMenu")) blockers.push("A32: dvl1b_settingsMenu was added (out of Phase 2C scope — Settings not yet integrated)");
+// A33. Cache-Control meta present
+(function(){ var metas=document.querySelectorAll("meta[http-equiv]"); var found=false; metas.forEach(function(m){ if((m.getAttribute("http-equiv")||"").toLowerCase().indexOf("cache-control")!==-1) found=true; }); if(!found) warnings.push("A33: Cache-Control meta not found"); })();
+
+var N=33, name="DVL_UI_OVERLAY_PHASE_2C_AUDIT_MODULE_0711";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
