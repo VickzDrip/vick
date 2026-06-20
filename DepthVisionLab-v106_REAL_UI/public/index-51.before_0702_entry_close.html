@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.702</title>
+<title>DVL Binance Live — Beta 0.701</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -15199,11 +15199,10 @@ function _isPaperDragTarget(t){
   var el = t;
   while(el){
     if(el.classList){
-      if(el.classList.contains('dvl-pv2p-btn')||
-         el.classList.contains('dvl-pv2p-controls')||
-         el.classList.contains('dvl-pv2p-close')) return false;
       if(el.classList.contains('dvl-pv2p-hit')||
          el.classList.contains('dvl-pv2p-tag')) return true;
+      if(el.classList.contains('dvl-pv2p-btn')||
+         el.classList.contains('dvl-pv2p-controls')) return false;
     }
     if(el.id==='dvlPaperLayerV2Pro') return false;
     el = el.parentElement;
@@ -19007,7 +19006,7 @@ window.DVL_PAPER_LIMIT_PLACEMENT_RESET_AUDIT = {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.702</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.701</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -19467,12 +19466,11 @@ window.DVL_PAPER_LIMIT_PLACEMENT_RESET_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.702";
+const DVL_APP_VERSION = "Beta 0.701";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.702 — Paper ENTRY close fix: ENTRY X now closes active Paper trades or cancels pending Paper orders without starting drag, freezing the chart, or leaving Paper gesture locks active." },
-  { version: "Beta 0.701", note: "Beta 0.701 — Paper lock start fix: Paper drag lock no longer blocks the Paper startDrag event, buttons no longer trigger permanent lock, and all Paper locks are safely released on pointer/touch end." },
+  { version: DVL_APP_VERSION, note: "Beta 0.701 — Paper lock start fix: Paper drag lock no longer blocks the Paper startDrag event, buttons no longer trigger permanent lock, and all Paper locks are safely released on pointer/touch end." },
   { version: "Beta 0.700", note: "Beta 0.700 — Header leak and hard Paper gesture lock: removed raw JS leaking above the header and made Paper TP/SL/ENTRY drags lock chart pointerdown/pan/zoom/crosshair from the first touch." },
   { version: "Beta 0.699", note: "Beta 0.699 — Paper gesture isolation: TP/SL/ENTRY drags now lock chart pan/zoom/crosshair, keeping the graph static while Paper elements are moved." },
   { version: "Beta 0.698", note: "Beta 0.698 — Clean Paper V2 integration: removed legacy Paper Trading visual/runtime conflicts and made the 0.697 TradingView-style Paper module the single active Paper system." },
@@ -38633,7 +38631,6 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function confirmDraft(id){var o=find(id); if(!o||o.status!=='draft')return; var v=validDraft(o); if(!v.ok){toast(v.msg); render(); return;} o.status='pending'; o.selected=true; state.selectedId=o.id; save(); render();}
   function cancelPaperOrder(id){var o=find(id); if(!o)return; if(o.status==='open'){toast('Use o X do ENTRY para fechar o trade');return;} state.orders=state.orders.filter(function(p){return String(p.id)!==String(id);}); if(state.selectedId===id)state.selectedId=null; if(state.edit&&String(state.edit.id)===String(id))state.edit=null; save(); render();}
   function closePaperTrade(id){var o=find(id); if(!o||o.status!=='open')return; closeOpenOrder(o,'manual',currentPrice()||o.entry); render();}
-  function closeOrCancelPaperOrder(id){var idx=state.orders.findIndex(function(p){return String(p.id)===String(id);}); if(idx<0)return; state.orders.splice(idx,1); if(state.selectedId===id)state.selectedId=null; state.drag=null; state.edit=null; if(window.DVL_RELEASE_PAPER_LOCK)window.DVL_RELEASE_PAPER_LOCK(); save(); render();}
   function lastRange(){var live=currentPrice(); var hi=live, lo=live; try{if(window.S&&Array.isArray(S.candles)&&S.candles.length){var c=S.candles[S.candles.length-1]; var h=Number(c.high||c.h), l=Number(c.low||c.l); if(Number.isFinite(h)&&h>0)hi=Math.max(hi,h); if(Number.isFinite(l)&&l>0)lo=(lo>0?Math.min(lo,l):l);}}catch(_){} if(!(hi>0))hi=live; if(!(lo>0))lo=live; return {live:live, high:hi, low:lo};}
   function closeOpenOrder(o,reason,price){if(!o||o.status!=='open')return false; var closePrice=n(price,o.entry); o.status='closed'; o.closedReason=reason||'manual'; o.closedAt=Date.now(); o.closedPrice=closePrice; if(state.selectedId===o.id)state.selectedId=null; if(state.edit&&String(state.edit.id)===String(o.id))state.edit=null; try{window.dispatchEvent(new CustomEvent('dvl:paper-v2-close',{detail:{id:o.id,reason:o.closedReason,price:closePrice,pnl:pnlAt(o,closePrice),pct:pctAt(o,closePrice),symbol:o.symbol,side:o.side}}));}catch(_){} save(); toast(reason==='tp'?'TP ativado':reason==='sl'?'SL ativado':'Trade fechado'); return true;}
   function maybeCloseOpen(o){if(!o||o.status!=='open')return false; if(state.drag&&String(state.drag.id)===String(o.id))return false; if(state.edit&&String(state.edit.id)===String(o.id))return false; var r=lastRange(); if(!(r.live>0))return false; var tp=n(o.tp), sl=n(o.sl); if(!(tp>0&&sl>0))return false; if(o.side==='buy'){if(r.high>=tp)return closeOpenOrder(o,'tp',tp); if(r.low<=sl)return closeOpenOrder(o,'sl',sl);}else{if(r.low<=tp)return closeOpenOrder(o,'tp',tp); if(r.high>=sl)return closeOpenOrder(o,'sl',sl);} return false;}
@@ -38644,7 +38641,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function line(layer,o,kind,yy,si,x){var gap=LINE_LABEL_GAP_PX; var hasVisibleTag=(x!=null&&Number.isFinite(Number(x))&&x+TAG_W>=si.plotLeft&&x<=si.plotRight); if(hasVisibleTag){var leftEnd=clamp(x-gap,si.plotLeft,si.plotRight); makeLineSegment(layer,o,kind,yy,si.plotLeft,leftEnd-si.plotLeft,'segment-left'); var rightStart=clamp(x+TAG_W+gap,si.plotLeft,si.plotRight); makeLineSegment(layer,o,kind,yy,rightStart,si.plotRight-rightStart,'segment-right');}else{makeLineSegment(layer,o,kind,yy,si.plotLeft,si.plotRight-si.plotLeft,'segment-full');} var draggable=(o.status==='draft'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='pending'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='open'&&(kind==='tp'||kind==='sl')); if(draggable){var h=mk('dvl-pv2p-hit '+kind); h.dataset.id=o.id; h.dataset.kind=kind; h.style.top='0px'; h.style.left='0px'; h.style.width=Math.max(0,si.plotRight-si.plotLeft)+'px'; h.style.transform='translate3d('+Math.round(si.plotLeft)+'px,'+Math.round(yy)+'px,0)'; h.addEventListener('pointerdown',startDrag,{passive:false}); layer.appendChild(h);}}
   function labelText(o,kind){var price=kind==='tp'?o.tp:(kind==='sl'?o.sl:o.entry); if(kind==='tp'||kind==='sl'){var prefix=kind==='tp'?'TP':'SL'; return prefix+' '+fmtPaperPriceShort(price)+' '+fmtPctSigned(pctAt(o,price));} if(kind==='entry'){if(o.status==='draft'||o.status==='pending') return (o.type==='stop'?'STOP':'LIMIT'); var live=currentPrice(); return fmtPctSigned(pctAt(o,live))+' '+fmtMoneySigned(pnlAt(o,live));} return fmtPaperPriceShort(price);}
   function entryClass(o,kind){if(kind!=='entry')return ''; if(o.status==='draft'||o.status==='pending')return ''; var live=currentPrice(); var p=pctAt(o,live); if(p>0.0001)return ' profit'; if(p<-0.0001)return ' loss'; return ' neutral';}
-  function tag(layer,o,kind,yy,si,x){if(x==null)return; var editing=!!(state.edit&&String(state.edit.id)===String(o.id)&&state.edit.kind===kind); var d=mk('dvl-pv2p-tag '+kind+' '+o.status+entryClass(o,kind)+(o.selected?' selected':'')+(editing?' editing':'')); d.dataset.id=o.id; d.dataset.kind=kind; d.style.left='0px'; d.style.top='0px'; d.style.transform='translate3d('+Math.round(x)+'px,'+Math.round(tagTop(yy))+'px,0)'; d.style.fontSize=TAG_FONT+'px'; var html='<span class="dvl-pv2p-tag-text">'+labelText(o,kind)+'</span>'; if(kind==='entry'&&o.status==='open'){html+='<button class="dvl-pv2p-close" type="button" data-close-trade="1">×</button>';} d.innerHTML=html; var draggable=(o.status==='draft'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='pending'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='open'&&(kind==='tp'||kind==='sl')); if(draggable)d.addEventListener('pointerdown',function(ev){if(ev.target&&ev.target.dataset&&ev.target.dataset.closeTrade==='1')return;startDrag(ev);},{passive:false}); d.addEventListener('click',function(ev){ev.stopPropagation(); if(ev.target&&ev.target.dataset&&ev.target.dataset.closeTrade==='1'){ev.preventDefault();ev.stopImmediatePropagation();closeOrCancelPaperOrder(o.id);return;} deselect();o.selected=true;state.selectedId=o.id;render();}); layer.appendChild(d);}
+  function tag(layer,o,kind,yy,si,x){if(x==null)return; var editing=!!(state.edit&&String(state.edit.id)===String(o.id)&&state.edit.kind===kind); var d=mk('dvl-pv2p-tag '+kind+' '+o.status+entryClass(o,kind)+(o.selected?' selected':'')+(editing?' editing':'')); d.dataset.id=o.id; d.dataset.kind=kind; d.style.left='0px'; d.style.top='0px'; d.style.transform='translate3d('+Math.round(x)+'px,'+Math.round(tagTop(yy))+'px,0)'; d.style.fontSize=TAG_FONT+'px'; var html='<span class="dvl-pv2p-tag-text">'+labelText(o,kind)+'</span>'; if(kind==='entry'&&o.status==='open'){html+='<button class="dvl-pv2p-close" type="button" data-close-trade="1">×</button>';} d.innerHTML=html; var draggable=(o.status==='draft'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='pending'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='open'&&(kind==='tp'||kind==='sl')); if(draggable)d.addEventListener('pointerdown',function(ev){if(ev.target&&ev.target.dataset&&ev.target.dataset.closeTrade==='1')return;startDrag(ev);},{passive:false}); d.addEventListener('click',function(ev){ev.stopPropagation(); if(ev.target&&ev.target.dataset&&ev.target.dataset.closeTrade==='1'){ev.preventDefault();closePaperTrade(o.id);return;} deselect();o.selected=true;state.selectedId=o.id;render();}); layer.appendChild(d);}
   function controls(layer,o,si,entryY,x){if(x==null)return; var c=mk('dvl-pv2p-controls '+o.status); c.dataset.id=o.id; var count=o.status==='draft'?2:1; var w=count*20+(count-1)*4; var left=x+TAG_W+4; if(left+w>si.plotRight) left=x-w-4; left=clamp(left,si.plotLeft+3,Math.max(si.plotLeft+3,si.plotRight-w-3)); c.style.left='0px'; c.style.top='0px'; c.style.transform='translate3d('+Math.round(left)+'px,'+Math.round(entryY-10)+'px,0)'; if(o.status==='draft'){c.innerHTML='<button class="dvl-pv2p-btn ok" type="button">✓</button><button class="dvl-pv2p-btn cancel" type="button">×</button>'; c.querySelector('.ok').addEventListener('click',function(ev){ev.preventDefault();ev.stopPropagation();confirmDraft(o.id);}); c.querySelector('.cancel').addEventListener('click',function(ev){ev.preventDefault();ev.stopPropagation();cancelPaperOrder(o.id);});}
     else if(o.status==='pending' && o.selected){c.innerHTML='<button class="dvl-pv2p-btn cancel" type="button">×</button>'; c.querySelector('.cancel').addEventListener('click',function(ev){ev.preventDefault();ev.stopPropagation();cancelPaperOrder(o.id);});} else return; layer.appendChild(c);}
   function confirmTpSlEdit(id,kind){if(!state.edit||String(state.edit.id)!==String(id)||state.edit.kind!==kind)return; state.edit=null; save(); render();}
@@ -40057,262 +40054,6 @@ function run(){ _lastAudit = audit(); return Promise.resolve(_lastAudit); }
 
 window.DVL_PAPER_LOCK_FIX_AUDIT = {
   VERSION:      "0.701",
-  audit:        audit,
-  run:          run,
-  getLastAudit: getLastAudit
-};
-
-})();
-</script>
-
-<script id="DVL_PAPER_ENTRY_CLOSE_AUDIT_MODULE_0702">
-(function(){
-"use strict";
-
-var _lastAudit = null;
-var _brokerToken = 'Broker' + 'Connector';
-var _realOrder   = 'placeReal' + 'Order';
-
-var FINAL_LOCK_CSS = [
-  "DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659",
-  "DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660",
-  "DVL_CHROME_FINAL_LOCK_CSS_0661",
-  "DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662"
-];
-
-function _cntId(els, id){
-  var c=0; for(var i=0;i<els.length;i++){if(els[i].id===id)c++;} return c;
-}
-
-function audit(){
-  var scriptEls = document.querySelectorAll('script[id]');
-  var styleEls  = document.querySelectorAll('style[id]');
-  var blockers  = [];
-  var warnings  = [];
-
-  var _selfId = "DVL_PAPER_ENTRY_CLOSE_AUDIT_MODULE_0702";
-  var _allScripts = document.querySelectorAll('script');
-  var _srcFull = "";
-  for(var _si=0;_si<_allScripts.length;_si++){
-    if(_allScripts[_si].id === _selfId) continue;
-    _srcFull += _allScripts[_si].textContent;
-  }
-
-  var _modEl  = document.getElementById(_selfId);
-  var _modSrc = _modEl ? _modEl.textContent : "";
-
-  var _v2El   = document.getElementById("DVL_PAPER_TRADING_V2_PRO_FINE_LINES_MODULE_0697");
-  var _v2Src  = _v2El ? _v2El.textContent : "";
-
-  var _guardEl  = document.getElementById("DVL_PAPER_LOCK_FIX_GUARD_0701");
-  var _guardSrc = _guardEl ? _guardEl.textContent : "";
-
-  // ── A1. Title Beta 0.702 ─────────────────────────────────────────────────────
-  var titleOk = document.title.indexOf("0.702") > -1;
-  if(!titleOk) blockers.push("A1: title not 0.702: " + document.title);
-
-  // ── A2. Badge BETA 0.702 ──────────────────────────────────────────────────────
-  var badge = document.getElementById("versionBadge");
-  var badgeOk = badge && badge.textContent.indexOf("0.702") > -1;
-  if(!badgeOk) blockers.push("A2: badge not 0.702");
-
-  // ── A3. Changelog 0.702 at top ────────────────────────────────────────────────
-  var changelogOk = typeof window.DVL_CHANGELOG !== "undefined" &&
-    window.DVL_CHANGELOG.length > 0 &&
-    window.DVL_CHANGELOG[0].note &&
-    window.DVL_CHANGELOG[0].note.indexOf("0.702") > -1;
-  if(!changelogOk) blockers.push("A3: changelog 0.702 not at top");
-
-  // ── A4. closeOrCancelPaperOrder exists in V2 ─────────────────────────────────
-  var hasClose = _v2Src.indexOf("closeOrCancelPaperOrder") > -1;
-  if(!hasClose) blockers.push("A4: closeOrCancelPaperOrder missing from V2");
-
-  // ── A5. closeOrCancelPaperOrder splices from state.orders ────────────────────
-  var hasSpli = _v2Src.indexOf("state.orders.splice") > -1;
-  if(!hasSpli) blockers.push("A5: state.orders.splice missing from closeOrCancelPaperOrder");
-
-  // ── A6. X handler calls closeOrCancelPaperOrder (not closePaperTrade) ────────
-  var xCallsNew = _v2Src.indexOf("closeOrCancelPaperOrder(o.id)") > -1;
-  if(!xCallsNew) blockers.push("A6: ENTRY X handler does not call closeOrCancelPaperOrder");
-
-  // ── A7. closeOrCancelPaperOrder clears state.drag ────────────────────────────
-  var clearsDrag = _v2Src.indexOf("state.drag=null") > -1;
-  if(!clearsDrag) blockers.push("A7: closeOrCancelPaperOrder does not null state.drag");
-
-  // ── A8. closeOrCancelPaperOrder clears state.edit ────────────────────────────
-  var clearsEdit = _v2Src.indexOf("state.edit=null") > -1;
-  if(!clearsEdit) blockers.push("A8: closeOrCancelPaperOrder does not null state.edit");
-
-  // ── A9. closeOrCancelPaperOrder calls DVL_RELEASE_PAPER_LOCK ─────────────────
-  var closeClearsLock = (function(){
-    var idx = _v2Src.indexOf("function closeOrCancelPaperOrder");
-    if(idx < 0) return false;
-    var end = _v2Src.indexOf("}", idx);
-    return _v2Src.substring(idx, end+1).indexOf("DVL_RELEASE_PAPER_LOCK") > -1;
-  })();
-  if(!closeClearsLock) blockers.push("A9: closeOrCancelPaperOrder does not call DVL_RELEASE_PAPER_LOCK");
-
-  // ── A10. _isPaperDragTarget excludes dvl-pv2p-close ──────────────────────────
-  var guardExcludesClose = _guardSrc.indexOf("dvl-pv2p-close") > -1;
-  if(!guardExcludesClose) blockers.push("A10: guard _isPaperDragTarget missing dvl-pv2p-close exclusion");
-
-  // ── A11. Exclusions checked BEFORE drag targets in guard ─────────────────────
-  var guardExclFirst = (function(){
-    var idx = _guardSrc.indexOf("_isPaperDragTarget");
-    var body = _guardSrc.substring(idx, _guardSrc.indexOf("function _activateLock"));
-    var closeIdx = body.indexOf("dvl-pv2p-close");
-    var hitIdx = body.indexOf("dvl-pv2p-hit");
-    return closeIdx > -1 && hitIdx > -1 && closeIdx < hitIdx;
-  })();
-  if(!guardExclFirst) blockers.push("A11: guard checks exclusions after drag targets (wrong order)");
-
-  // ── A12. X click has stopImmediatePropagation ────────────────────────────────
-  var xHasStop = (function(){
-    var idx = _v2Src.indexOf("closeOrCancelPaperOrder(o.id)");
-    if(idx < 0) return false;
-    var before = _v2Src.substring(Math.max(0, idx-200), idx);
-    return before.indexOf("stopImmediatePropagation") > -1;
-  })();
-  if(!xHasStop) blockers.push("A12: ENTRY X click missing stopImmediatePropagation");
-
-  // ── A13. DVL_RELEASE_PAPER_LOCK is a function ─────────────────────────────────
-  var releaseOk = typeof window.DVL_RELEASE_PAPER_LOCK === "function";
-  if(!releaseOk) blockers.push("A13: window.DVL_RELEASE_PAPER_LOCK not a function");
-
-  // ── A14. Guard lock fix 0701 still present ───────────────────────────────────
-  var guardPresent = _cntId(scriptEls, "DVL_PAPER_LOCK_FIX_GUARD_0701") === 1;
-  if(!guardPresent) blockers.push("A14: DVL_PAPER_LOCK_FIX_GUARD_0701 missing");
-
-  // ── A15. _onPaperDown has no stopPropagation ──────────────────────────────────
-  var noStopProp = _guardSrc.indexOf("ev.stopPropagation()") === -1;
-  if(!noStopProp) blockers.push("A15: guard still has ev.stopPropagation in _onPaperDown");
-
-  // ── A16. Guard handles touchend/touchcancel ───────────────────────────────────
-  var guardTouch = _guardSrc.indexOf("touchend") > -1 && _guardSrc.indexOf("touchcancel") > -1;
-  if(!guardTouch) blockers.push("A16: guard missing touchend/touchcancel");
-
-  // ── A17. startDrag skips X button (data-close-trade check) ───────────────────
-  var startSkipsX = _v2Src.indexOf("closeTrade") > -1;
-  if(!startSkipsX) blockers.push("A17: pointerdown handler missing close-trade skip");
-
-  // ── A18. TP drag preserved (startDrag in V2) ─────────────────────────────────
-  var hasStartDrag = _v2Src.indexOf("function startDrag") > -1 ||
-                     _v2Src.indexOf("startDrag(ev)") > -1;
-  if(!hasStartDrag) blockers.push("A18: startDrag missing from V2");
-
-  // ── A19. SL drag preserved ───────────────────────────────────────────────────
-  var hasSL = _v2Src.indexOf("'sl'") > -1 || _v2Src.indexOf('"sl"') > -1;
-  if(!hasSL) blockers.push("A19: SL kind missing from V2");
-
-  // ── A20. ENTRY drag preserved ────────────────────────────────────────────────
-  var hasEntry = _v2Src.indexOf("'entry'") > -1 || _v2Src.indexOf('"entry"') > -1;
-  if(!hasEntry) blockers.push("A20: entry kind missing from V2");
-
-  // ── A21. TP/SL edit OK/X preserved ──────────────────────────────────────────
-  var hasEditOkX = _v2Src.indexOf("confirmTpSlEdit") > -1;
-  if(!hasEditOkX) blockers.push("A21: confirmTpSlEdit missing from V2");
-
-  // ── A22. Header leak still fixed ────────────────────────────────────────────
-  var _appEl = document.querySelector('.app');
-  var _orphan = [];
-  if(document.body && _appEl){
-    var _n = document.body.firstChild;
-    while(_n && _n !== _appEl){
-      if(_n.nodeType === 3 && _n.textContent.trim().length > 0)
-        _orphan.push(_n.textContent.trim().substring(0,30));
-      _n = _n.nextSibling;
-    }
-  }
-  var noOrphan = _orphan.length === 0;
-  if(!noOrphan) blockers.push("A22: orphan text before .app: " + _orphan.join("|"));
-
-  // ── A23. V2 Pro layer unique ─────────────────────────────────────────────────
-  var v2LayerCount = document.querySelectorAll("#dvlPaperLayerV2Pro").length;
-  if(v2LayerCount > 1) blockers.push("A23: multiple #dvlPaperLayerV2Pro: " + v2LayerCount);
-  if(v2LayerCount < 1) warnings.push("A23: #dvlPaperLayerV2Pro not yet in DOM");
-
-  // ── A24. Legacy paper hidden ─────────────────────────────────────────────────
-  var legacyLayer = document.getElementById("dvlPaperLayer");
-  var legacyHidden = !legacyLayer || getComputedStyle(legacyLayer).display === "none";
-  if(!legacyHidden) blockers.push("A24: #dvlPaperLayer still visible");
-
-  // ── A25. Final locks 0659-0662 present ───────────────────────────────────────
-  var missingLocks = [];
-  for(var _fl=0;_fl<FINAL_LOCK_CSS.length;_fl++){
-    if(_cntId(styleEls,FINAL_LOCK_CSS[_fl])!==1) missingLocks.push(FINAL_LOCK_CSS[_fl]);
-  }
-  if(missingLocks.length > 0) blockers.push("A25: final locks missing: " + missingLocks.join(", "));
-
-  // ── A26. Zero _brokerToken ───────────────────────────────────────────────────
-  var noBroker = _srcFull.indexOf(_brokerToken) === -1;
-  if(!noBroker) blockers.push("A26: " + _brokerToken + " found in source");
-
-  // ── A27. Zero Real order ─────────────────────────────────────────────────────
-  var noRealOrder = _srcFull.indexOf(_realOrder) === -1;
-  if(!noRealOrder) blockers.push("A27: " + _realOrder + " found in source");
-
-  // ── A28. No API key in audit module ──────────────────────────────────────────
-  var noApiKey = _modSrc.indexOf("apiKey:") === -1;
-  if(!noApiKey) warnings.push("A28: apiKey found in audit module");
-
-  // ── A29. drawSoon intact ─────────────────────────────────────────────────────
-  var _dsFn = "draw" + "Soon";
-  var hasDrawSoon = typeof window[_dsFn] === "function" ||
-                    _srcFull.indexOf("function drawSoon") > -1;
-  if(!hasDrawSoon) warnings.push("A29: drawSoon not found");
-
-  var pass = (
-    titleOk && badgeOk && changelogOk &&
-    hasClose && hasSpli && xCallsNew &&
-    clearsDrag && clearsEdit && closeClearsLock &&
-    guardExcludesClose && guardExclFirst &&
-    xHasStop && releaseOk &&
-    guardPresent && noStopProp && guardTouch &&
-    startSkipsX && hasStartDrag && hasSL && hasEntry && hasEditOkX &&
-    noOrphan && v2LayerCount <= 1 && legacyHidden &&
-    missingLocks.length === 0 && noBroker && noRealOrder
-  );
-
-  _lastAudit = {
-    pass:               pass,
-    titleOk:            titleOk,
-    badgeOk:            badgeOk,
-    changelogOk:        changelogOk,
-    hasClose:           hasClose,
-    hasSpli:            hasSpli,
-    xCallsNew:          xCallsNew,
-    clearsDrag:         clearsDrag,
-    clearsEdit:         clearsEdit,
-    closeClearsLock:    closeClearsLock,
-    guardExcludesClose: guardExcludesClose,
-    guardExclFirst:     guardExclFirst,
-    xHasStop:           xHasStop,
-    releaseOk:          releaseOk,
-    guardPresent:       guardPresent,
-    noStopProp:         noStopProp,
-    guardTouch:         guardTouch,
-    startSkipsX:        startSkipsX,
-    hasStartDrag:       hasStartDrag,
-    hasSL:              hasSL,
-    hasEntry:           hasEntry,
-    hasEditOkX:         hasEditOkX,
-    noOrphan:           noOrphan,
-    v2LayerCount:       v2LayerCount,
-    legacyHidden:       legacyHidden,
-    finalLocksOk:       missingLocks.length === 0,
-    noBroker:           noBroker,
-    noRealOrder:        noRealOrder,
-    blockers:           blockers,
-    warnings:           warnings
-  };
-  return _lastAudit;
-}
-
-function getLastAudit(){ return _lastAudit; }
-function run(){ _lastAudit = audit(); return Promise.resolve(_lastAudit); }
-
-window.DVL_ENTRY_CLOSE_AUDIT = {
-  VERSION:      "0.702",
   audit:        audit,
   run:          run,
   getLastAudit: getLastAudit
