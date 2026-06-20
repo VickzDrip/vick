@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.704</title>
+<title>DVL Binance Live — Beta 0.705</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19008,10 +19008,80 @@ window.DVL_PAPER_LIMIT_PLACEMENT_RESET_AUDIT = {
 
 </head>
 <body>
+<!-- ════════════════ DVL_UI_OVERLAY_PHASE_1 (Beta 0.705) ════════════════
+     Visual-only new UI layer (0.728 design) over the functional core.
+     Isolated in an iframe: no CSS/JS collision with the host app. -->
+<style id="DVL_UI_OVERLAY_PHASE_1_CSS">
+#DVL_UI_OVERLAY_PHASE_1{
+  position:fixed; inset:0; width:100%; height:100%;
+  margin:0; padding:0; border:0; z-index:2000000; background:#000;
+}
+#DVL_UI_OVERLAY_PHASE_1 > iframe{
+  display:block; width:100%; height:100%;
+  margin:0; padding:0; border:0; background:#000;
+}
+/* Visually hide the OLD chrome (kept in DOM; visibility => no reflow). */
+html.dvl-overlay-phase1-active header.top,
+html.dvl-overlay-phase1-active section.marketRow,
+html.dvl-overlay-phase1-active .chartCard > .toolbar,
+html.dvl-overlay-phase1-active nav.bottomNav{
+  visibility:hidden !important;
+}
+</style>
+<div id="DVL_UI_OVERLAY_PHASE_1" data-dvl-overlay-phase="1" aria-label="DVL new UI overlay (phase 1, visual)">
+  <iframe id="DVL_UI_OVERLAY_PHASE_1_FRAME" src="dvl_ui_0728.html?v=0705" title="DVL 0.728 UI preview"></iframe>
+</div>
+<script id="DVL_UI_OVERLAY_PHASE_1_BRIDGE">
+/* Phase 1 bridge (host side): receives SAFE control events from the overlay
+   iframe and calls the real app functions. Asset selection stays visual. */
+(function(){
+  "use strict";
+  try{ document.documentElement.classList.add("dvl-overlay-phase1-active"); }catch(_e){}
+
+  function curSym(){
+    try{ if(typeof symbol !== "undefined" && symbol) return symbol; }catch(_e){}
+    try{ if(window.symbol) return window.symbol; }catch(_e){}
+    return null;
+  }
+
+  window.addEventListener("message", function(ev){
+    var d = ev && ev.data;
+    if(!d || d.__dvlOverlayPhase1 !== true) return;
+    try{
+      if(d.type === "save"){
+        if(typeof saveProfile === "function") saveProfile();
+        else if(window.saveProfile) window.saveProfile();
+      } else if(d.type === "favorite"){
+        var s = curSym();
+        if(s){
+          if(typeof toggleFavoriteSymbol === "function") toggleFavoriteSymbol(s);
+          else if(window.toggleFavoriteSymbol) window.toggleFavoriteSymbol(s);
+        }
+      } else if(d.type === "timeframe"){
+        var tf = String(d.payload || "");
+        if(tf === "1m" || tf === "5m" || tf === "15m"){
+          if(typeof setIntervalUi === "function") setIntervalUi(tf);
+          else if(window.setIntervalUi) window.setIntervalUi(tf);
+        }
+      }
+      /* d.type === "assetClick": Phase 2 (no host action in Phase 1) */
+    }catch(_e){}
+  }, false);
+
+  /* Console helper to toggle the overlay for side-by-side comparison. */
+  window.DVL_UI_OVERLAY_PHASE_1_SET = function(on){
+    try{
+      var el = document.getElementById("DVL_UI_OVERLAY_PHASE_1");
+      if(el) el.style.display = on ? "block" : "none";
+      document.documentElement.classList.toggle("dvl-overlay-phase1-active", !!on);
+    }catch(_e){}
+  };
+})();
+</script>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.704</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.705</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -19471,11 +19541,12 @@ window.DVL_PAPER_LIMIT_PLACEMENT_RESET_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.704";
+const DVL_APP_VERSION = "Beta 0.705";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.704 — Rollback stability and object persistence: restored the stable 0.702 Paper baseline, removed the unstable 0.703 smooth viewport changes, and protected Paper/drawings from disappearing when changing timeframe by resolving anchors from time+price instead of index-only." },
+  { version: DVL_APP_VERSION, note: "Beta 0.705 — Phase 1 UI overlay: added DVL_UI_OVERLAY_PHASE_1, a visual-only redesigned mobile UI (based on the approved 0.728 pixel-separated design) rendered as an isolated iframe layer on top of the existing functional core; old header/market-row/timeframe-toolbar/bottom-nav are visually hidden (kept in DOM), and only Save / Favorite / Timeframe 1m-5m-15m are bridged to real functions." },
+  { version: "Beta 0.704", note: "Beta 0.704 — Rollback stability and object persistence: restored the stable 0.702 Paper baseline, removed the unstable 0.703 smooth viewport changes, and protected Paper/drawings from disappearing when changing timeframe by resolving anchors from time+price instead of index-only." },
   { version: "Beta 0.703", note: "Beta 0.703 — Smooth Viewport Engine: chart pan now moves continuously by pixel/fractional candle offset instead of snapping by rounded candle slices, with Paper and drawings aligned to the same continuous chart transform." },
   { version: "Beta 0.702", note: "Beta 0.702 — Paper ENTRY close fix: ENTRY X now closes active Paper trades or cancels pending Paper orders without starting drag, freezing the chart, or leaving Paper gesture locks active." },
   { version: "Beta 0.701", note: "Beta 0.701 — Paper lock start fix: Paper drag lock no longer blocks the Paper startDrag event, buttons no longer trigger permanent lock, and all Paper locks are safely released on pointer/touch end." },
@@ -40529,6 +40600,78 @@ if(blockers.length > 0){
   var _ok = "[" + _auditName + "] OK — " + N_CHECKS + " checks passed";
   if(warnings.length) _ok += " (" + warnings.length + " warning" + (warnings.length > 1 ? "s" : "") + ": " + warnings.join("; ") + ")";
   console.log(_ok);
+}
+})();
+</script>
+
+<script id="DVL_UI_OVERLAY_PHASE_1_AUDIT_MODULE_0705">
+(function(){
+"use strict";
+var blockers = [], warnings = [];
+
+// A1. Version constant
+if(!(typeof window.DVL_APP_VERSION !== "undefined" && window.DVL_APP_VERSION === "Beta 0.705"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.705' (got: " + window.DVL_APP_VERSION + ")");
+
+// A2. Title
+var _t = document.querySelector("title");
+if(!_t || (_t.textContent||"").indexOf("0.705") === -1) blockers.push("A2: title missing 0.705");
+
+// A3. Badge
+var _b = document.getElementById("versionBadge");
+if(!_b || (_b.textContent||"").toUpperCase().indexOf("0.705") === -1) blockers.push("A3: versionBadge missing 0.705");
+
+// A4. Overlay container present
+var _ov = document.getElementById("DVL_UI_OVERLAY_PHASE_1");
+if(!_ov) blockers.push("A4: DVL_UI_OVERLAY_PHASE_1 container missing");
+
+// A5. Overlay iframe present + correct src
+var _if = document.getElementById("DVL_UI_OVERLAY_PHASE_1_FRAME");
+if(!_if) blockers.push("A5: overlay iframe missing");
+else if((_if.getAttribute("src")||"").indexOf("dvl_ui_0728.html") === -1) blockers.push("A5: iframe src not dvl_ui_0728.html");
+
+// A6. Host bridge script present
+if(!document.getElementById("DVL_UI_OVERLAY_PHASE_1_BRIDGE")) blockers.push("A6: host bridge script missing");
+
+// A7. Overlay-active class on <html>
+if(!document.documentElement.classList.contains("dvl-overlay-phase1-active")) blockers.push("A7: dvl-overlay-phase1-active class not set");
+
+// A8. Console toggle helper exposed
+if(typeof window.DVL_UI_OVERLAY_PHASE_1_SET !== "function") blockers.push("A8: DVL_UI_OVERLAY_PHASE_1_SET not a function");
+
+// A9. NO design version leak into host (host must NOT be "0.728")
+if(window.DVL_APP_VERSION === "0.728" || window.DVL_APP_VERSION === "Beta 0.728")
+  blockers.push("A9: design version leaked into host");
+
+// A10-A13. Old chrome KEPT in DOM (not removed) — header/marketRow/toolbar/bottomNav
+if(!document.querySelector("header.top")) blockers.push("A10: old header.top removed (must stay in DOM)");
+if(!document.querySelector("section.marketRow")) blockers.push("A11: old section.marketRow removed (must stay in DOM)");
+if(!document.querySelector(".chartCard > .toolbar")) blockers.push("A12: old .chartCard toolbar removed (must stay in DOM)");
+if(!document.querySelector("nav.bottomNav")) blockers.push("A13: old nav.bottomNav removed (must stay in DOM)");
+
+// A14. Chart canvas untouched (still present)
+if(!document.getElementById("chart")) blockers.push("A14: #chart canvas missing (must not be moved/removed)");
+if(!document.getElementById("chartWrap")) warnings.push("A14b: #chartWrap not found");
+
+// A15. Bridge target functions exist in host scope
+if(typeof window.setIntervalUi !== "function" && typeof setIntervalUi !== "function") warnings.push("A15: setIntervalUi not reachable");
+if(typeof window.saveProfile !== "function" && typeof saveProfile !== "function") warnings.push("A15b: saveProfile not reachable");
+if(typeof window.toggleFavoriteSymbol !== "function" && typeof toggleFavoriteSymbol !== "function") warnings.push("A15c: toggleFavoriteSymbol not reachable");
+
+// A16. Paper V2 baseline preserved (0.701 guard + 0.702 audit + 0.704 audit)
+if(!document.getElementById("DVL_PAPER_LOCK_FIX_GUARD_0701")) blockers.push("A16: DVL_PAPER_LOCK_FIX_GUARD_0701 missing");
+if(!document.getElementById("DVL_OBJECT_PERSISTENCE_ROLLBACK_AUDIT_MODULE_0704")) warnings.push("A16b: 0704 audit module missing");
+
+var N = 16, name = "DVL_UI_OVERLAY_PHASE_1_AUDIT_MODULE_0705";
+if(blockers.length){
+  var m = "[" + name + "] BLOCKED (" + blockers.length + "): " + blockers.join("; ");
+  if(warnings.length) m += " | Warnings: " + warnings.join("; ");
+  console.error(m);
+  if(typeof window.DVL_AUDIT_BLOCK === "function") window.DVL_AUDIT_BLOCK(name, blockers);
+}else{
+  var ok = "[" + name + "] OK — " + N + " checks passed";
+  if(warnings.length) ok += " (" + warnings.length + " warning(s): " + warnings.join("; ") + ")";
+  console.log(ok);
 }
 })();
 </script>
