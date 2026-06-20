@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.708</title>
+<title>DVL Binance Live — Beta 0.709</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19084,6 +19084,13 @@ window.DVL_PAPER_LIMIT_PLACEMENT_RESET_AUDIT = {
 html.dvl-ui-1b-active .top,
 html.dvl-ui-1b-active .marketRow,
 html.dvl-ui-1b-active .chartCard > .toolbar{ display:none !important; }
+/* Phase 2B: reveal the OLD indicators dropdown from the hidden toolbar, anchored under the new button. */
+html.dvl1b-ind-open .chartCard > .toolbar{ display:block !important; visibility:hidden !important; position:fixed !important; left:0 !important; top:0 !important; width:0 !important; height:0 !important; min-height:0 !important; padding:0 !important; margin:0 !important; border:0 !important; background:transparent !important; box-shadow:none !important; overflow:visible !important; pointer-events:none !important; z-index:100000 !important; }
+html.dvl1b-ind-open #fxIndicatorWrap{ display:block !important; visibility:visible !important; position:fixed !important; pointer-events:auto !important; z-index:100000 !important; }
+html.dvl1b-ind-open #fxIndicatorWrap *{ visibility:visible !important; }
+html.dvl1b-ind-open #fxIndicatorWrap > #toggleIndicators{ display:none !important; }
+html.dvl1b-ind-open #fxIndicatorWrap .indicatorDropdown{ left:0 !important; right:auto !important; top:calc(100% + 6px) !important; }
+#DVL_UI_OVERLAY_PHASE_1B .dvl1b-act.dvl1b-open{ color:var(--b-accent); background:rgba(16,223,119,.10); border:calc(1 * var(--px)) solid rgba(16,223,119,.30); }
 </style>
 <div id="DVL_UI_OVERLAY_PHASE_1B" data-dvl-overlay-phase="1B" aria-label="DVL new UI (phase 1B, visual)">
   <div class="dvl1b-card">
@@ -19091,7 +19098,7 @@ html.dvl-ui-1b-active .chartCard > .toolbar{ display:none !important; }
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.708</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.709</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19207,6 +19214,16 @@ html.dvl-ui-1b-active .chartCard > .toolbar{ display:none !important; }
   if(cMenu) cMenu.addEventListener("click", function(e){ var it=e.target&&e.target.closest?e.target.closest(".dvl1b-menu-item"):null; if(!it) return; if(it.classList.contains("is-disabled")){ return; } var m=it.getAttribute("data-candle"); if(CANDLE_OK[m]){ try{ if(typeof setCandleMode==="function") setCandleMode(m); else if(window.setCandleMode) window.setCandleMode(m); }catch(_e){} } closeCandle(); markCandle(); }, false);
   document.addEventListener("click", function(e){ if(cWrap && cWrap.classList.contains("is-open") && !cWrap.contains(e.target)) closeCandle(); }, false);
 
+  /* ── Phase 2B: Indicators — open the OLD indicators dropdown (reuse old DOM + fns) ── */
+  var indBtn=document.getElementById("dvl1b_indBtn");
+  var indOpen=false;
+  function indWrap(){ return document.getElementById("fxIndicatorWrap"); }
+  function positionInd(){ var w=indWrap(); if(!w||!indBtn) return; try{ var r=indBtn.getBoundingClientRect(); var W=250, vw=window.innerWidth||360; var left=Math.max(8, Math.min(Math.round(r.left), vw-W-8)); w.style.left=left+"px"; w.style.top=Math.round(r.bottom)+"px"; w.style.width=W+"px"; }catch(_e){} }
+  function closeInd(){ indOpen=false; try{ document.documentElement.classList.remove("dvl1b-ind-open"); }catch(_e){} if(indBtn) indBtn.classList.remove("dvl1b-open"); try{ if(typeof closeIndicatorsDropdown==="function") closeIndicatorsDropdown(); else if(window.closeIndicatorsDropdown) window.closeIndicatorsDropdown(); }catch(_e){} var w=indWrap(); if(w){ w.style.left=""; w.style.top=""; w.style.width=""; } }
+  function openInd(){ try{ document.documentElement.classList.add("dvl1b-ind-open"); }catch(_e){} positionInd(); try{ if(typeof openIndicatorsDropdown==="function") openIndicatorsDropdown(); else if(window.openIndicatorsDropdown) window.openIndicatorsDropdown(); }catch(_e){} if(indBtn) indBtn.classList.add("dvl1b-open"); indOpen=true; positionInd(); }
+  if(indBtn) indBtn.addEventListener("click", function(e){ e.stopPropagation(); if(indOpen) closeInd(); else openInd(); }, false);
+  document.addEventListener("click", function(e){ if(!indOpen) return; var w=indWrap(); var inDrop=w && w.contains(e.target); var inBtn=indBtn && indBtn.contains(e.target); if(!inDrop && !inBtn) closeInd(); }, false);
+
   /* Console helper: toggle the new UI on/off (also restores old chrome). */
   window.DVL_UI_1B_SET = function(on){
     try{
@@ -19218,7 +19235,7 @@ html.dvl-ui-1b-active .chartCard > .toolbar{ display:none !important; }
 </script>
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.708</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.709</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -19678,11 +19695,12 @@ html.dvl-ui-1b-active .chartCard > .toolbar{ display:none !important; }
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.708";
+const DVL_APP_VERSION = "Beta 0.709";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.708 — Badge/save fixes + Phase 2A (Candles): inline version badge now follows DVL_APP_VERSION; Save shows 'Salvar' on mobile and 'Salvar perfil' only >=768px; the new-UI Velas button now opens a custom DVL dropdown (Candles/Hollow/Heikin Ashi/Footprint/Renko call the old setCandleMode; Line/Area/Bars shown disabled). No other buttons connected; chart untouched." },
+  { version: DVL_APP_VERSION, note: "Beta 0.709 — Phase 2B (Indicators): the new-UI Indicators button now opens the existing old indicators dropdown (#indicatorDropdown) via the old openIndicatorsDropdown/closeIndicatorsDropdown functions, revealed from the hidden toolbar and repositioned under the new button. Old panel reused (not recreated); indicator logic/oscillators untouched. Desenhos/Settings still not connected; Velas unchanged." },
+  { version: "Beta 0.708", note: "Beta 0.708 — Badge/save fixes + Phase 2A (Candles): inline version badge now follows DVL_APP_VERSION; Save shows 'Salvar' on mobile and 'Salvar perfil' only >=768px; the new-UI Velas button now opens a custom DVL dropdown (Candles/Hollow/Heikin Ashi/Footprint/Renko call the old setCandleMode; Line/Area/Bars shown disabled). No other buttons connected; chart untouched." },
   { version: "Beta 0.707", note: "Beta 0.707 — Phase 1C visual refinement: lighter compact Salvar button (responsive label), premium BTC/USDT asset block, tighter header alignment, softer hotbar dividers and more uniform spacing. Visual-only — no new functional bridges, chart untouched." },
   { version: "Beta 0.706", note: "Beta 0.706 — Phase 1B inline UI: replaced the failed 0.705 iframe overlay with an inline single-file header/hotbar (#DVL_UI_OVERLAY_PHASE_1B) styled like the 0.728 design. No iframe, no second file. The real #chart stays visible; old header/market-row/timeframe-toolbar are hidden only after the inline UI is confirmed present, so the app survives if it is missing. Bridges Save / Favorite / Timeframe 1m-5m-15m." },
   { version: "Beta 0.705", note: "Beta 0.705 (superseded by 0.706) — Phase 1 iframe UI overlay: blanked the screen on deploy when the second file failed to load; removed." },
@@ -40745,18 +40763,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_2A_AUDIT_MODULE_0708">
+<script id="DVL_UI_OVERLAY_PHASE_2B_AUDIT_MODULE_0709">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.708"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.708' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.709"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.709' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.708")===-1) blockers.push("A2: title missing 0.708");
+if(!_t || (_t.textContent||"").indexOf("0.709")===-1) blockers.push("A2: title missing 0.709");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40826,7 +40844,22 @@ if(document.getElementById("dvl1b_indMenu")||document.getElementById("dvl1b_draw
 // A21. Mobile-first Save label present
 if(!document.querySelector("#dvl1b_saveBtn .dvl1b-save-short")) warnings.push("A21: compact save label missing");
 
-var N=21, name="DVL_UI_OVERLAY_PHASE_2A_AUDIT_MODULE_0708";
+// A22. Phase 2B: Indicators connected to the OLD panel (reused, not recreated)
+if(!document.getElementById("dvl1b_indBtn")) blockers.push("A22: new Indicators button missing");
+if(!document.getElementById("fxIndicatorWrap") || !document.getElementById("indicatorDropdown")) blockers.push("A22b: old indicators panel missing");
+if(typeof openIndicatorsDropdown!=="function" && typeof window.openIndicatorsDropdown!=="function") blockers.push("A22c: openIndicatorsDropdown not reachable");
+// A23. Indicators reuses the OLD panel — no new custom indicators dropdown was created
+if(_ui2 && _ui2.querySelector("#dvl1b_indMenu")) blockers.push("A23: a new custom indicators dropdown was created (must reuse old)");
+// A24. Desenhos / Settings still NOT integrated (no new dropdown, no open-state class)
+if(document.getElementById("dvl1b_drawMenu")||document.getElementById("dvl1b_settingsMenu"))
+  blockers.push("A24: a Desenhos/Settings dropdown was added (out of Phase 2B scope)");
+if(document.documentElement.classList.contains("dvl1b-draw-open")||document.documentElement.classList.contains("dvl1b-settings-open"))
+  warnings.push("A24b: draw/settings open-state class present");
+// A25. Velas (2A) still present and engines not rewritten
+if(!document.getElementById("dvl1b_candleMenu")) blockers.push("A25: candle dropdown (2A) lost");
+if(typeof visibleWindow!=="function" && typeof window.visibleWindow!=="function") warnings.push("A25b: visibleWindow not reachable");
+
+var N=25, name="DVL_UI_OVERLAY_PHASE_2B_AUDIT_MODULE_0709";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
