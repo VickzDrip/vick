@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.685</title>
+<title>DVL Binance Live — Beta 0.686</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -15063,6 +15063,27 @@ window.DVL_SAFE_CSS_CLEANUP_AUDIT={
 */
 </style>
 
+<style id="DVL_PAPER_PLACEMENT_FLOW_FIX_CSS_0686">
+/*
+  DVL Beta 0.686 — Paper Trading Placement Flow Fix.
+  Draft born at current price; user drags ENTRY to desired price.
+  Pending confirmed orders show cancel on all handles.
+  Labels vertically centered on lines via orderTagTopFromLineY(y).
+*/
+.dvl-paper-draft-hit {
+  position: absolute !important;
+  left: 0 !important;
+  right: 54px !important;
+  height: 24px !important;
+  margin-top: -12px !important;
+  pointer-events: auto !important;
+  touch-action: none !important;
+  background: transparent !important;
+  cursor: ns-resize !important;
+  z-index: 18 !important;
+}
+</style>
+
 <script id="DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT_MODULE_0672">
 (function(){
 "use strict";
@@ -17777,12 +17798,403 @@ window.DVL_SCALE_LABEL_COMPACT_FIX_AUDIT = {
 })();
 </script>
 
+<script id="DVL_PAPER_PLACEMENT_FLOW_FIX_AUDIT_MODULE_0686">
+(function(){
+"use strict";
+
+var _lastAudit = null;
+
+// Anti-false-positive splits
+var _dupStyleTag  = '<' + '/style><' + '/style>';
+var _brokerToken  = 'Broker' + 'Connector';
+var _yMinus19     = '(y' + ' - 19)';
+var _priceOffset  = 'price' + ' * 0.002';
+
+var FINAL_LOCK_CSS = [
+  "DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659",
+  "DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660",
+  "DVL_CHROME_FINAL_LOCK_CSS_0661",
+  "DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662"
+];
+
+function _cntId(els, id){
+  var c = 0;
+  for(var i = 0; i < els.length; i++){ if(els[i].id === id) c++; }
+  return c;
+}
+
+function _fnSrc(full, fnName){
+  var start = full.indexOf("function " + fnName);
+  if(start === -1) return "";
+  var end = full.indexOf("\n    function ", start + 10);
+  return end === -1 ? full.slice(start) : full.slice(start, end);
+}
+
+function audit(){
+  var scriptEls = document.querySelectorAll('script[id]');
+  var styleEls  = document.querySelectorAll('style[id]');
+  var blockers  = [];
+  var warnings  = [];
+
+  var _allScripts = document.querySelectorAll('script');
+  var _srcFull = "";
+  for(var si = 0; si < _allScripts.length; si++){ _srcFull += _allScripts[si].textContent; }
+
+  var _mod686 = document.getElementById("DVL_PAPER_PLACEMENT_FLOW_FIX_AUDIT_MODULE_0686");
+  var _mod686src = _mod686 ? _mod686.textContent : "";
+
+  // ── CSS & module presence ─────────────────────────────────────────────────
+
+  // A1. CSS_0686 present 1x
+  var css686Present = _cntId(styleEls, "DVL_PAPER_PLACEMENT_FLOW_FIX_CSS_0686") === 1;
+  if(!css686Present) blockers.push("DVL_PAPER_PLACEMENT_FLOW_FIX_CSS_0686 not found");
+
+  // A2. Audit module 0686 present 1x
+  var mod686Present = _cntId(scriptEls, "DVL_PAPER_PLACEMENT_FLOW_FIX_AUDIT_MODULE_0686") === 1;
+  if(!mod686Present) blockers.push("DVL_PAPER_PLACEMENT_FLOW_FIX_AUDIT_MODULE_0686 not 1x");
+
+  // A3. No duplicate closing style tag
+  var noDupStyle = document.documentElement.outerHTML.indexOf(_dupStyleTag) === -1;
+  if(!noDupStyle) blockers.push("duplicate closing style tag found");
+
+  // ── Version ───────────────────────────────────────────────────────────────
+
+  // A4. DVL_APP_VERSION === "Beta 0.686"
+  var versionOk = (typeof window.DVL_APP_VERSION !== "undefined") && window.DVL_APP_VERSION === "Beta 0.686";
+  if(!versionOk) blockers.push("DVL_APP_VERSION !== 'Beta 0.686' (got: " + window.DVL_APP_VERSION + ")");
+
+  // ── createPendingOrderDraft — no offset ──────────────────────────────────
+
+  // A5. createPendingOrderDraft does NOT use price offset
+  var createDraftSrc = _fnSrc(_srcFull, "createPendingOrderDraft");
+  var draftNoOffset  = createDraftSrc.indexOf(_priceOffset) === -1;
+  if(!draftNoOffset) blockers.push("createPendingOrderDraft still uses price * 0.002 offset");
+
+  // A6. createPendingOrderDraft sets draftPrice = price (born at current price)
+  var draftAtCurrentPrice = createDraftSrc.indexOf("draftPrice = price") > -1;
+  if(!draftAtCurrentPrice) blockers.push("createPendingOrderDraft: draftPrice not set to current price");
+
+  // ── confirmPendingOrderDraft — validation ─────────────────────────────────
+
+  // A7. confirmPendingOrderDraft has Limit validation
+  var confirmSrc = _fnSrc(_srcFull, "confirmPendingOrderDraft");
+  var hasLimitValidation = confirmSrc.indexOf('"Limit"') > -1 && confirmSrc.indexOf("validOrder") > -1;
+  if(!hasLimitValidation) blockers.push("confirmPendingOrderDraft missing Limit validation");
+
+  // A8. confirmPendingOrderDraft has Stop validation
+  var hasStopValidation = confirmSrc.indexOf('"Stop"') > -1;
+  if(!hasStopValidation) blockers.push("confirmPendingOrderDraft missing Stop validation");
+
+  // A9. confirmPendingOrderDraft toasts on invalid (calls toast + return)
+  var confirmToasts = confirmSrc.indexOf("toast(validMsg)") > -1;
+  if(!confirmToasts) blockers.push("confirmPendingOrderDraft does not toast on invalid");
+
+  // A10. confirmPendingOrderDraft still sets status:"pending" (0.684 invariant)
+  var confirmPendingStatus = confirmSrc.indexOf('status: "pending"') > -1;
+  if(!confirmPendingStatus) blockers.push('confirmPendingOrderDraft does not set status:"pending"');
+
+  // ── cancelPendingOrder ────────────────────────────────────────────────────
+
+  // A11. cancelPendingOrder function exists
+  var cancelPendingOrderExists = _srcFull.indexOf("function cancelPendingOrder") > -1;
+  if(!cancelPendingOrderExists) blockers.push("cancelPendingOrder function not found");
+
+  // A12. cancelPendingOrder only removes status === "pending"
+  var cancelPOSrc        = _fnSrc(_srcFull, "cancelPendingOrder");
+  var cancelOnlyPending  = cancelPOSrc.indexOf('p.status === "pending"') > -1;
+  if(!cancelOnlyPending) blockers.push('cancelPendingOrder does not check p.status === "pending"');
+
+  // A13. cancelPendingOrder does NOT match "open" positions
+  var cancelNotOpen = cancelPOSrc.indexOf('"open"') === -1;
+  if(!cancelNotOpen) warnings.push('cancelPendingOrder references "open" unexpectedly');
+
+  // ── orderTagTopFromLineY ──────────────────────────────────────────────────
+
+  // A14. orderTagTopFromLineY function exists
+  var tagTopFnExists = _srcFull.indexOf("function orderTagTopFromLineY") > -1;
+  if(!tagTopFnExists) blockers.push("orderTagTopFromLineY function not found");
+
+  // A15. orderTagTopFromLineY uses ORDER_TAG_H / 2
+  var tagTopSrc     = _fnSrc(_srcFull, "orderTagTopFromLineY");
+  var tagTopUsesH   = tagTopSrc.indexOf("ORDER_TAG_H / 2") > -1;
+  if(!tagTopUsesH) blockers.push("orderTagTopFromLineY does not use ORDER_TAG_H / 2");
+
+  // ── makeTag / makeDraftTag ────────────────────────────────────────────────
+
+  // A16. makeTag uses orderTagTopFromLineY (source check)
+  var makeTagSrc        = _fnSrc(_srcFull, "makeTag");
+  var makeTagUsesHelper = makeTagSrc.indexOf("orderTagTopFromLineY(y)") > -1;
+  if(!makeTagUsesHelper) blockers.push("makeTag does not use orderTagTopFromLineY");
+
+  // A17. makeTag does NOT use hardcoded (y - 19)
+  var makeTagNoY19 = makeTagSrc.indexOf(_yMinus19) === -1;
+  if(!makeTagNoY19) blockers.push("makeTag still uses (y - 19) hardcoded offset");
+
+  // A18. makeDraftTag uses orderTagTopFromLineY (source check)
+  var makeDraftTagSrc     = _fnSrc(_srcFull, "makeDraftTag");
+  var draftTagUsesHelper  = makeDraftTagSrc.indexOf("orderTagTopFromLineY(y)") > -1;
+  if(!draftTagUsesHelper) blockers.push("makeDraftTag does not use orderTagTopFromLineY");
+
+  // A19. makeDraftTag does NOT use hardcoded (y - 19)
+  var makeDraftTagNoY19 = makeDraftTagSrc.indexOf(_yMinus19) === -1;
+  if(!makeDraftTagNoY19) blockers.push("makeDraftTag still uses (y - 19) hardcoded offset");
+
+  // A20. makeTag shows X for pending orders (checks pos.status === "pending")
+  var makeTagShowsXForPending = makeTagSrc.indexOf('pos.status === "pending"') > -1;
+  if(!makeTagShowsXForPending) blockers.push('makeTag does not check pos.status === "pending" for X button');
+
+  // A21. makeTag click calls cancelPendingOrder for pending
+  var makeTagCallsCancelPending = makeTagSrc.indexOf("cancelPendingOrder(pos.id)") > -1;
+  if(!makeTagCallsCancelPending) blockers.push("makeTag does not call cancelPendingOrder for pending orders");
+
+  // A22. makeTag still calls removePosition for non-pending
+  var makeTagCallsRemove = makeTagSrc.indexOf("removePosition(pos.id)") > -1;
+  if(!makeTagCallsRemove) blockers.push("makeTag does not call removePosition (non-pending path missing)");
+
+  // ── makeDraftLine ENTRY hit ───────────────────────────────────────────────
+
+  // A23. makeDraftLine adds dvl-paper-draft-hit for ENTRY
+  var makeDraftLineSrc     = _fnSrc(_srcFull, "makeDraftLine");
+  var draftLineHasHit      = makeDraftLineSrc.indexOf("dvl-paper-draft-hit") > -1;
+  if(!draftLineHasHit) blockers.push("makeDraftLine does not add dvl-paper-draft-hit");
+
+  // A24. makeDraftLine calls startDraftDrag
+  var draftLineCallsDrag = makeDraftLineSrc.indexOf("startDraftDrag(ev)") > -1;
+  if(!draftLineCallsDrag) blockers.push("makeDraftLine does not call startDraftDrag");
+
+  // ── Draft drag functions ──────────────────────────────────────────────────
+
+  // A25. startDraftDrag exists
+  var startDraftDragExists = _srcFull.indexOf("function startDraftDrag") > -1;
+  if(!startDraftDragExists) blockers.push("startDraftDrag function not found");
+
+  // A26. moveDraftDrag exists
+  var moveDraftDragExists = _srcFull.indexOf("function moveDraftDrag") > -1;
+  if(!moveDraftDragExists) blockers.push("moveDraftDrag function not found");
+
+  // A27. endDraftDrag exists
+  var endDraftDragExists = _srcFull.indexOf("function endDraftDrag") > -1;
+  if(!endDraftDragExists) blockers.push("endDraftDrag function not found");
+
+  // A28. startDraftDrag sets state.draftDrag
+  var startDraftSrc    = _fnSrc(_srcFull, "startDraftDrag");
+  var startSetsDraft   = startDraftSrc.indexOf("state.draftDrag = {") > -1;
+  if(!startSetsDraft) blockers.push("startDraftDrag does not set state.draftDrag");
+
+  // A29. moveDraftDrag updates pendingDraft.entry (ENTRY follows drag)
+  var moveDraftSrc   = _fnSrc(_srcFull, "moveDraftDrag");
+  var moveUpdatesEntry = moveDraftSrc.indexOf("state.pendingDraft.entry") > -1;
+  if(!moveUpdatesEntry) blockers.push("moveDraftDrag does not update pendingDraft.entry");
+
+  // A30. moveDraftDrag updates pendingDraft.tp (TP follows with R:R)
+  var moveUpdatesTp = moveDraftSrc.indexOf("state.pendingDraft.tp") > -1;
+  if(!moveUpdatesTp) blockers.push("moveDraftDrag does not update pendingDraft.tp");
+
+  // A31. moveDraftDrag updates pendingDraft.sl (SL follows with R:R)
+  var moveUpdatesSl = moveDraftSrc.indexOf("state.pendingDraft.sl") > -1;
+  if(!moveUpdatesSl) blockers.push("moveDraftDrag does not update pendingDraft.sl");
+
+  // A32. endDraftDrag clears state.draftDrag
+  var endDraftSrc    = _fnSrc(_srcFull, "endDraftDrag");
+  var endClearsDraft = endDraftSrc.indexOf("state.draftDrag = null") > -1;
+  if(!endClearsDraft) blockers.push("endDraftDrag does not clear state.draftDrag");
+
+  // A33. state.draftDrag initialized in state object
+  var draftDragInState = _srcFull.indexOf("draftDrag: null") > -1;
+  if(!draftDragInState) blockers.push("state.draftDrag not initialized");
+
+  // ── CSS_0686 content ──────────────────────────────────────────────────────
+
+  // A34. dvl-paper-draft-hit class in CSS_0686
+  var css686El  = document.getElementById("DVL_PAPER_PLACEMENT_FLOW_FIX_CSS_0686");
+  var css686Txt = css686El ? css686El.textContent : "";
+  var draftHitInCSS = css686Txt.indexOf("dvl-paper-draft-hit") > -1;
+  if(!draftHitInCSS) blockers.push("dvl-paper-draft-hit not found in CSS_0686");
+
+  // A35. cursor:ns-resize in CSS_0686 (drag hint)
+  var draftHitCursor = css686Txt.indexOf("ns-resize") > -1;
+  if(!draftHitCursor) warnings.push("ns-resize cursor not in CSS_0686");
+
+  // ── Prior patches preserved ───────────────────────────────────────────────
+
+  // A36. DVL_SCALE_LABEL_COMPACT_FIX_AUDIT passes (0.685 chain)
+  var audit685Pass = false;
+  try{
+    if(typeof window.DVL_SCALE_LABEL_COMPACT_FIX_AUDIT !== "undefined"){
+      var r685 = window.DVL_SCALE_LABEL_COMPACT_FIX_AUDIT.audit();
+      audit685Pass = !!(r685 && r685.pass === true);
+    }
+  }catch(e){ warnings.push("DVL_SCALE_LABEL_COMPACT_FIX_AUDIT threw: " + e.message); }
+  if(!audit685Pass) blockers.push("DVL_SCALE_LABEL_COMPACT_FIX_AUDIT.audit().pass not true");
+
+  // A37. Final locks 0659-0662 preserved
+  var missingLocks = [];
+  for(var fl = 0; fl < FINAL_LOCK_CSS.length; fl++){
+    if(_cntId(styleEls, FINAL_LOCK_CSS[fl]) !== 1) missingLocks.push(FINAL_LOCK_CSS[fl]);
+  }
+  var finalLocksPresent = missingLocks.length === 0;
+  if(!finalLocksPresent) blockers.push("final locks missing: " + missingLocks.join(", "));
+
+  // A38. DVL_BUTTON_SYSTEM preserved
+  var btnSysOk = typeof window.DVL_BUTTON_SYSTEM !== "undefined";
+  if(!btnSysOk) blockers.push("DVL_BUTTON_SYSTEM not found");
+
+  // A39. renderDraftPosition exists (0.684 preserved)
+  var renderDraftExists = _srcFull.indexOf("function renderDraftPosition") > -1;
+  if(!renderDraftExists) blockers.push("renderDraftPosition not found (0.684 broken)");
+
+  // A40. createPendingOrderDraft exists
+  var createDraftExists = _srcFull.indexOf("function createPendingOrderDraft") > -1;
+  if(!createDraftExists) blockers.push("createPendingOrderDraft not found");
+
+  // A41. cancelPendingOrderDraft exists (draft cancel preserved)
+  var cancelDraftExists = _srcFull.indexOf("function cancelPendingOrderDraft") > -1;
+  if(!cancelDraftExists) blockers.push("cancelPendingOrderDraft not found");
+
+  // A42. renderPosition exists (paper trading)
+  var renderPosExists = _srcFull.indexOf("function renderPosition") > -1;
+  if(!renderPosExists) blockers.push("renderPosition not found (Paper Trading broken)");
+
+  // A43. Zero _brokerToken in source (split string above avoids false-positive)
+  var noBroker = _srcFull.indexOf(_brokerToken) === -1;
+  if(!noBroker) blockers.push(_brokerToken + " found in source");
+
+  // A44. Zero timers/RAF/observers in this module source
+  var noTimers686 = _mod686src.indexOf("setTimeout") === -1 &&
+                    _mod686src.indexOf("setInterval") === -1 &&
+                    _mod686src.indexOf("requestAnimationFrame") === -1 &&
+                    _mod686src.indexOf("MutationObserver") === -1 &&
+                    _mod686src.indexOf("ResizeObserver") === -1;
+  if(!noTimers686) blockers.push("timer/RAF/observer found in 0686 module");
+
+  // A45. Zero window.drawSoon= in this module source
+  var noDrawSoon686 = _mod686src.indexOf("window.drawSoon") === -1;
+  if(!noDrawSoon686) blockers.push("window.drawSoon= found in 0686 module");
+
+  // A46. createPendingOrderDraft does NOT push to positions (0.684 invariant)
+  var draftNoPush = createDraftSrc.indexOf("state.positions.push") === -1;
+  if(!draftNoPush) blockers.push("createPendingOrderDraft still calls state.positions.push");
+
+  var pass = (
+    css686Present &&
+    mod686Present &&
+    noDupStyle &&
+    versionOk &&
+    draftNoOffset &&
+    draftAtCurrentPrice &&
+    hasLimitValidation &&
+    hasStopValidation &&
+    confirmToasts &&
+    confirmPendingStatus &&
+    cancelPendingOrderExists &&
+    cancelOnlyPending &&
+    tagTopFnExists &&
+    tagTopUsesH &&
+    makeTagUsesHelper &&
+    makeTagNoY19 &&
+    draftTagUsesHelper &&
+    makeDraftTagNoY19 &&
+    makeTagShowsXForPending &&
+    makeTagCallsCancelPending &&
+    makeTagCallsRemove &&
+    draftLineHasHit &&
+    draftLineCallsDrag &&
+    startDraftDragExists &&
+    moveDraftDragExists &&
+    endDraftDragExists &&
+    startSetsDraft &&
+    moveUpdatesEntry &&
+    moveUpdatesTp &&
+    moveUpdatesSl &&
+    endClearsDraft &&
+    draftDragInState &&
+    draftHitInCSS &&
+    audit685Pass &&
+    finalLocksPresent &&
+    btnSysOk &&
+    renderDraftExists &&
+    createDraftExists &&
+    cancelDraftExists &&
+    renderPosExists &&
+    noBroker &&
+    noTimers686 &&
+    noDrawSoon686 &&
+    draftNoPush
+  );
+
+  _lastAudit = {
+    pass:                     pass,
+    css686Present:            css686Present,
+    mod686Present:            mod686Present,
+    noDupStyle:               noDupStyle,
+    versionOk:                versionOk,
+    draftNoOffset:            draftNoOffset,
+    draftAtCurrentPrice:      draftAtCurrentPrice,
+    hasLimitValidation:       hasLimitValidation,
+    hasStopValidation:        hasStopValidation,
+    confirmToasts:            confirmToasts,
+    confirmPendingStatus:     confirmPendingStatus,
+    cancelPendingOrderExists: cancelPendingOrderExists,
+    cancelOnlyPending:        cancelOnlyPending,
+    cancelNotOpen:            cancelNotOpen,
+    tagTopFnExists:           tagTopFnExists,
+    tagTopUsesH:              tagTopUsesH,
+    makeTagUsesHelper:        makeTagUsesHelper,
+    makeTagNoY19:             makeTagNoY19,
+    draftTagUsesHelper:       draftTagUsesHelper,
+    makeDraftTagNoY19:        makeDraftTagNoY19,
+    makeTagShowsXForPending:  makeTagShowsXForPending,
+    makeTagCallsCancelPending:makeTagCallsCancelPending,
+    makeTagCallsRemove:       makeTagCallsRemove,
+    draftLineHasHit:          draftLineHasHit,
+    draftLineCallsDrag:       draftLineCallsDrag,
+    startDraftDragExists:     startDraftDragExists,
+    moveDraftDragExists:      moveDraftDragExists,
+    endDraftDragExists:       endDraftDragExists,
+    startSetsDraft:           startSetsDraft,
+    moveUpdatesEntry:         moveUpdatesEntry,
+    moveUpdatesTp:            moveUpdatesTp,
+    moveUpdatesSl:            moveUpdatesSl,
+    endClearsDraft:           endClearsDraft,
+    draftDragInState:         draftDragInState,
+    draftHitInCSS:            draftHitInCSS,
+    draftHitCursor:           draftHitCursor,
+    audit685Pass:             audit685Pass,
+    finalLocksPresent:        finalLocksPresent,
+    btnSysOk:                 btnSysOk,
+    renderDraftExists:        renderDraftExists,
+    createDraftExists:        createDraftExists,
+    cancelDraftExists:        cancelDraftExists,
+    renderPosExists:          renderPosExists,
+    noBroker:                 noBroker,
+    noTimers686:              noTimers686,
+    noDrawSoon686:            noDrawSoon686,
+    draftNoPush:              draftNoPush,
+    blockers:                 blockers,
+    warnings:                 warnings
+  };
+  return _lastAudit;
+}
+
+function getLastAudit(){ return _lastAudit; }
+function run(){ _lastAudit = audit(); return Promise.resolve(_lastAudit); }
+
+window.DVL_PAPER_PLACEMENT_FLOW_FIX_AUDIT = {
+  VERSION:      "0.686",
+  audit:        audit,
+  run:          run,
+  getLastAudit: getLastAudit
+};
+
+})();
+</script>
+
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.685</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.686</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -18242,11 +18654,12 @@ window.DVL_SCALE_LABEL_COMPACT_FIX_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.685";
+const DVL_APP_VERSION = "Beta 0.686";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.685 — Scale label compact fix: standardized current price and oscillator scale labels to fit the 70px right scale without card-like oversized boxes." },
+  { version: DVL_APP_VERSION, note: "Beta 0.686 — Paper Trading Placement Flow Fix: draft spawns at current price, ENTRY draggable, pending orders cancelable with ×, labels centered on lines." },
+  { version: "Beta 0.685", note: "Beta 0.685 — Scale label compact fix: standardized current price and oscillator scale labels to fit the 70px right scale without card-like oversized boxes." },
   { version: "Beta 0.684", note: "Beta 0.684 — Paper Draft Entry Selection + Label Alignment Polish: draft Limit/Stop plots ENTRY/TP/SL immediately, labels 10 bars right of anchor, reduced opacity, fixed size, pointer-events:none." },
   { version: "Beta 0.683", note: "Beta 0.683 — HTML/CSS structure hotfix: fixed nested/duplicated style closing around 0675–0682 markers without changing Paper logic." },
   { version: "Beta 0.682", note: "Beta 0.682 — Mobile UI polish hotfix: fixed duplicate style close, real Limit/Stop draft flow, anchored TP/SL/ENTRY labels, and measured scale label sizing." },
@@ -35685,7 +36098,8 @@ Do not rework this logic unless the user explicitly requests it.
       liqOn: true,
       positions: [],
       pending: null,
-      pendingDraft: null
+      pendingDraft: null,
+      draftDrag: null
     };
 
     function appSymbol(){
@@ -35915,7 +36329,7 @@ Do not rework this logic unless the user explicitly requests it.
       const el = document.createElement("div");
       const pendingClass = handle === "entry" && pos.status === "pending" ? " pending" : "";
       el.className = "dvl-paper-tag " + handle + pendingClass;
-      el.style.top = (y - 19).toFixed(1) + "px";
+      el.style.top = orderTagTopFromLineY(y).toFixed(1) + "px";
       el.dataset.id = pos.id;
       el.dataset.handle = handle;
       el.innerHTML =
@@ -35923,7 +36337,7 @@ Do not rework this logic unless the user explicitly requests it.
           '<span class="main">' + main + '</span>' +
           '<span class="pct">' + pct + '</span>' +
         '</span>' +
-        (handle === "entry" ? '<span class="x" data-remove="1">×</span>' : "");
+        (pos.status === "pending" || handle === "entry" ? '<span class="x" data-remove="1">×</span>' : "");
       el.addEventListener("pointerdown", function(ev){
         if(ev.target && ev.target.dataset && ev.target.dataset.remove === "1") return;
 
@@ -35936,7 +36350,11 @@ Do not rework this logic unless the user explicitly requests it.
         if(ev.target && ev.target.dataset && ev.target.dataset.remove === "1"){
           ev.preventDefault();
           ev.stopPropagation();
-          removePosition(pos.id);
+          if(pos.status === "pending"){
+            cancelPendingOrder(pos.id);
+          }else{
+            removePosition(pos.id);
+          }
         }
       });
       layer.appendChild(el);
@@ -36282,6 +36700,10 @@ Do not rework this logic unless the user explicitly requests it.
     var ORDER_TAG_RADIUS = 3;
     var ORDER_TAG_FONT   = 11;
 
+    function orderTagTopFromLineY(y){
+      return Math.round(y - ORDER_TAG_H / 2);
+    }
+
     function makeDraftLine(draft, handle, y){
       var visual = document.createElement("div");
       visual.className = "dvl-paper-line " + handle + " dvl-paper-draft-line";
@@ -36290,6 +36712,14 @@ Do not rework this logic unless the user explicitly requests it.
       visual.style.top = y.toFixed(1) + "px";
       visual.style.pointerEvents = "none";
       layer.appendChild(visual);
+      if(handle === "entry"){
+        var hit = document.createElement("div");
+        hit.className = "dvl-paper-draft-hit entry";
+        hit.style.top = y.toFixed(1) + "px";
+        hit.dataset.id = draft.id;
+        hit.addEventListener("pointerdown", function(ev){ startDraftDrag(ev); }, {passive:false});
+        layer.appendChild(hit);
+      }
     }
 
     function makeDraftTag(draft, handle, y, main){
@@ -36298,7 +36728,7 @@ Do not rework this logic unless the user explicitly requests it.
       el.dataset.status = "draft";
       el.dataset.id = draft.id;
       el.dataset.handle = handle;
-      el.style.top = (y - 19).toFixed(1) + "px";
+      el.style.top = orderTagTopFromLineY(y).toFixed(1) + "px";
       el.style.width        = ORDER_TAG_W      + "px";
       el.style.height       = ORDER_TAG_H      + "px";
       el.style.borderRadius = ORDER_TAG_RADIUS + "px";
@@ -36617,13 +37047,10 @@ Do not rework this logic unless the user explicitly requests it.
     function createPendingOrderDraft(side){
       const price = lastPrice();
       if(!(price > 0)){ toast("Aguardando preço"); return; }
-      const offset = price * 0.002;
       const isLimit = state.orderType === "Limit";
       const isBuy = side === "buy";
-      // Limit: buy below market, sell above; Stop: buy above market, sell below
-      const draftPrice = isLimit
-        ? (isBuy ? price - offset : price + offset)
-        : (isBuy ? price + offset : price - offset);
+      // Draft born at current price; user drags ENTRY to desired position
+      const draftPrice = price;
       const risk = Math.max(draftPrice * 0.004, 1);
       state.pendingDraft = {
         id: "draft_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,7),
@@ -36646,7 +37073,24 @@ Do not rework this logic unless the user explicitly requests it.
     function confirmPendingOrderDraft(id){
       if(!state.pendingDraft) return;
       if(id && String(state.pendingDraft.id) !== String(id)) return;
-      const pos = Object.assign({}, state.pendingDraft, { status: "pending" });
+      var draft = state.pendingDraft;
+      var live  = lastPrice();
+      if(live > 0){
+        var dEntry = Number(draft.entry);
+        var dType  = draft.orderType || state.orderType;
+        var dSide  = draft.side;
+        var validOrder = true;
+        var validMsg   = "";
+        if(dType === "Limit"){
+          if(dSide === "buy"  && !(dEntry < live)){ validOrder = false; validMsg = "Limit Buy: entrada deve estar abaixo do preço atual"; }
+          if(dSide === "sell" && !(dEntry > live)){ validOrder = false; validMsg = "Limit Sell: entrada deve estar acima do preço atual"; }
+        }else if(dType === "Stop"){
+          if(dSide === "buy"  && !(dEntry > live)){ validOrder = false; validMsg = "Stop Buy: entrada deve estar acima do preço atual"; }
+          if(dSide === "sell" && !(dEntry < live)){ validOrder = false; validMsg = "Stop Sell: entrada deve estar abaixo do preço atual"; }
+        }
+        if(!validOrder){ toast(validMsg); render(); return; }
+      }
+      const pos = Object.assign({}, draft, { status: "pending" });
       state.positions.push(pos);
       state.pendingDraft = null;
       save();
@@ -36660,7 +37104,64 @@ Do not rework this logic unless the user explicitly requests it.
       render();
     }
 
+    function cancelPendingOrder(orderId){
+      state.positions = state.positions.filter(function(p){
+        return !(String(p.id) === String(orderId) && p.status === "pending");
+      });
+      save();
+      render();
+    }
+
     function fillPendingOrderIfTriggered(pos){ return maybeTriggerPending(pos); }
+
+    function startDraftDrag(ev){
+      if(!state.pendingDraft) return;
+      var si = scaleInfo();
+      if(!si) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+      var rect = dom.wrap.getBoundingClientRect();
+      var y = ev.clientY - rect.top;
+      state.draftDrag = {
+        pointerId: ev.pointerId,
+        startPrice: si.pY(y),
+        origEntry: Number(state.pendingDraft.entry),
+        origTp:    Number(state.pendingDraft.tp),
+        origSl:    Number(state.pendingDraft.sl)
+      };
+      window.__dvlPaperDragging = true;
+      document.documentElement.classList.add("dvl-paper-dragging");
+      try{
+        ev.currentTarget.setPointerCapture && ev.currentTarget.setPointerCapture(ev.pointerId);
+      }catch(_){}
+    }
+
+    function moveDraftDrag(ev){
+      if(!state.draftDrag || !state.pendingDraft) return;
+      if(state.draftDrag.pointerId != null && ev.pointerId != null && state.draftDrag.pointerId !== ev.pointerId) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+      var si = scaleInfo();
+      if(!si) return;
+      var rect = dom.wrap.getBoundingClientRect();
+      var y = ev.clientY - rect.top;
+      var curPrice = si.pY(y);
+      var dp = curPrice - state.draftDrag.startPrice;
+      state.pendingDraft.entry = state.draftDrag.origEntry + dp;
+      state.pendingDraft.tp    = state.draftDrag.origTp    + dp;
+      state.pendingDraft.sl    = state.draftDrag.origSl    + dp;
+      render();
+    }
+
+    function endDraftDrag(){
+      if(!state.draftDrag) return;
+      state.draftDrag = null;
+      window.__dvlPaperDragging = false;
+      document.documentElement.classList.remove("dvl-paper-dragging");
+      render();
+    }
 
     function startOrder(side){
       if(state.orderType === "Market"){
@@ -36902,6 +37403,23 @@ Do not rework this logic unless the user explicitly requests it.
     window.addEventListener("mouseup", function(){
       if(state.drag) endPaperDrag();
       levDrag = false;
+    }, {passive:true, capture:true});
+
+    window.addEventListener("pointermove", function(ev){
+      if(!state.draftDrag) return;
+      moveDraftDrag(ev);
+    }, {passive:false, capture:true});
+    window.addEventListener("pointerup", function(){
+      if(state.draftDrag) endDraftDrag();
+    }, {passive:true, capture:true});
+    window.addEventListener("pointercancel", function(){
+      if(state.draftDrag) endDraftDrag();
+    }, {passive:true, capture:true});
+    window.addEventListener("touchend", function(){
+      if(state.draftDrag) endDraftDrag();
+    }, {passive:true, capture:true});
+    window.addEventListener("mouseup", function(){
+      if(state.draftDrag) endDraftDrag();
     }, {passive:true, capture:true});
 
     bind(dom.entryCard, "click", openPad);
