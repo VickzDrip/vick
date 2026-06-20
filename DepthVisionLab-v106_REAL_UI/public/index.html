@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.702</title>
+<title>DVL Binance Live — Beta 0.703</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19002,12 +19002,269 @@ window.DVL_PAPER_LIMIT_PLACEMENT_RESET_AUDIT = {
 </script>
 
 
+<script id="DVL_SMOOTH_VIEWPORT_ENGINE_0703">
+(function(){
+"use strict";
+
+// Smooth Viewport Engine — Beta 0.703
+// Registers window.DVL_CHART_TRANSFORM_0703 with the current chart
+// coordinate transform. Updated on every drawPriceSection() call.
+window.DVL_CHART_TRANSFORM_0703 = (function(){
+  var _x0=0, _x1=1, _y0=0, _y1=1, _slots=2, _slotOffset=0, _min=0, _max=1;
+
+  function update(x0, x1, y0, y1, slots, slotOffset, min, max){
+    _x0=x0; _x1=x1; _y0=y0; _y1=y1;
+    _slots=Math.max(2, slots);
+    _slotOffset=slotOffset;
+    _min=min; _max=max;
+  }
+
+  function xIndex(slot){
+    return _x0 + slot / (_slots - 1) * (_x1 - _x0);
+  }
+
+  function indexAtX(px){
+    return (px - _x0) / Math.max(_x1 - _x0, 1) * (_slots - 1) - _slotOffset;
+  }
+
+  function yPrice(price){
+    return _y1 - (price - _min) / Math.max(_max - _min, 1) * (_y1 - _y0);
+  }
+
+  function priceAtY(py){
+    return _max - (py - _y0) / Math.max(_y1 - _y0, 1) * (_max - _min);
+  }
+
+  return { update:update, xIndex:xIndex, indexAtX:indexAtX, yPrice:yPrice, priceAtY:priceAtY };
+})();
+
+})();
+</script>
+
+<script id="DVL_SMOOTH_VIEWPORT_ENGINE_AUDIT_MODULE_0703">
+(function(){
+"use strict";
+
+var _selfEl = document.getElementById("DVL_SMOOTH_VIEWPORT_ENGINE_AUDIT_MODULE_0703");
+var _src    = _selfEl ? (_selfEl.textContent || "") : "";
+var _engEl  = document.getElementById("DVL_SMOOTH_VIEWPORT_ENGINE_0703");
+var _engSrc = _engEl  ? (_engEl.textContent  || "") : "";
+
+var blockers = [];
+var warnings = [];
+
+// ── A1. DVL_APP_VERSION === "Beta 0.703" ──────────────────────────────────
+var versionOk = (typeof window.DVL_APP_VERSION !== "undefined") && window.DVL_APP_VERSION === "Beta 0.703";
+if(!versionOk) blockers.push("DVL_APP_VERSION !== 'Beta 0.703' (got: " + window.DVL_APP_VERSION + ")");
+
+// ── A2. DVL_CHART_TRANSFORM_0703 is a non-null object ─────────────────────
+var hasTransform = typeof window.DVL_CHART_TRANSFORM_0703 === "object" && window.DVL_CHART_TRANSFORM_0703 !== null;
+if(!hasTransform) blockers.push("DVL_CHART_TRANSFORM_0703 not registered");
+
+// ── A3. DVL_CHART_TRANSFORM_0703.xIndex is a function ─────────────────────
+if(!hasTransform || typeof window.DVL_CHART_TRANSFORM_0703.xIndex !== "function")
+  blockers.push("DVL_CHART_TRANSFORM_0703.xIndex not a function");
+
+// ── A4. DVL_CHART_TRANSFORM_0703.indexAtX is a function ───────────────────
+if(!hasTransform || typeof window.DVL_CHART_TRANSFORM_0703.indexAtX !== "function")
+  blockers.push("DVL_CHART_TRANSFORM_0703.indexAtX not a function");
+
+// ── A5. DVL_CHART_TRANSFORM_0703.yPrice is a function ─────────────────────
+if(!hasTransform || typeof window.DVL_CHART_TRANSFORM_0703.yPrice !== "function")
+  blockers.push("DVL_CHART_TRANSFORM_0703.yPrice not a function");
+
+// ── A6. DVL_CHART_TRANSFORM_0703.priceAtY is a function ───────────────────
+if(!hasTransform || typeof window.DVL_CHART_TRANSFORM_0703.priceAtY !== "function")
+  blockers.push("DVL_CHART_TRANSFORM_0703.priceAtY not a function");
+
+// ── A7. DVL_CHART_TRANSFORM_0703.update is a function ─────────────────────
+if(!hasTransform || typeof window.DVL_CHART_TRANSFORM_0703.update !== "function")
+  blockers.push("DVL_CHART_TRANSFORM_0703.update not a function");
+
+// ── A8. DVL_SMOOTH_VIEWPORT_ENGINE_0703 script tag present ────────────────
+if(!_engEl) blockers.push("DVL_SMOOTH_VIEWPORT_ENGINE_0703 script tag not found");
+
+// ── A9. Engine source: contains DVL_CHART_TRANSFORM_0703 identifier ────────
+if(_engSrc.indexOf("DVL_CHART_TRANSFORM_0703") === -1)
+  blockers.push("engine source missing DVL_CHART_TRANSFORM_0703");
+
+// ── A10. Engine source: has update function ───────────────────────────────
+if(_engSrc.indexOf("function update") === -1)
+  blockers.push("engine source missing function update");
+
+// ── A11. Engine source: has xIndex function ───────────────────────────────
+if(_engSrc.indexOf("function xIndex") === -1)
+  blockers.push("engine source missing function xIndex");
+
+// ── A12. Engine source: has indexAtX function ─────────────────────────────
+if(_engSrc.indexOf("function indexAtX") === -1)
+  blockers.push("engine source missing function indexAtX");
+
+// ── A13. Engine source: has yPrice function ───────────────────────────────
+if(_engSrc.indexOf("function yPrice") === -1)
+  blockers.push("engine source missing function yPrice");
+
+// ── A14. Engine source: has priceAtY function ─────────────────────────────
+if(_engSrc.indexOf("function priceAtY") === -1)
+  blockers.push("engine source missing function priceAtY");
+
+// ── A15-A19. No timers/RAF/observers in engine ────────────────────────────
+var _sTO = "set"+"Timeout";
+var _sIV = "set"+"Interval";
+var _rAF = "request"+"AnimationFrame";
+var _mOb = "Mutation"+"Observer";
+var _rOb = "Resize"+"Observer";
+if(_engSrc.indexOf(_sTO) !== -1) blockers.push("engine contains "+_sTO);
+if(_engSrc.indexOf(_sIV) !== -1) blockers.push("engine contains "+_sIV);
+if(_engSrc.indexOf(_rAF) !== -1) blockers.push("engine contains "+_rAF);
+if(_engSrc.indexOf(_mOb) !== -1) blockers.push("engine contains "+_mOb);
+if(_engSrc.indexOf(_rOb) !== -1) blockers.push("engine contains "+_rOb);
+
+// ── A20. No drawSoon wrapper in engine ────────────────────────────────────
+var _dS = "draw"+"Soon";
+if(_engSrc.indexOf(_dS) !== -1) warnings.push("engine references "+_dS);
+
+// ── A21. Zero BrokerConnector token in engine ─────────────────────────────
+var _bc = "Broker"+"Connector";
+if(_engSrc.indexOf(_bc) !== -1) blockers.push("engine references "+"'Broker'+'Connector'");
+
+// ── A22. Audit self: no setTimeout literal ────────────────────────────────
+if(_src.indexOf(_sTO) !== -1) blockers.push("audit self-check: "+_sTO+" literal found");
+
+// ── A23. Audit self: no setInterval literal ───────────────────────────────
+if(_src.indexOf(_sIV) !== -1) blockers.push("audit self-check: "+_sIV+" literal found");
+
+// ── A24. Audit self: no requestAnimationFrame literal ─────────────────────
+if(_src.indexOf(_rAF) !== -1) blockers.push("audit self-check: "+_rAF+" literal found");
+
+// ── A25. DVL_PAPER_LOCK_FIX_GUARD_0701 still present ─────────────────────
+if(document.getElementById("DVL_PAPER_LOCK_FIX_GUARD_0701") === null)
+  blockers.push("DVL_PAPER_LOCK_FIX_GUARD_0701 missing");
+
+// ── A26. DVL_RELEASE_PAPER_LOCK still a function ──────────────────────────
+if(typeof window.DVL_RELEASE_PAPER_LOCK !== "function")
+  blockers.push("DVL_RELEASE_PAPER_LOCK not a function");
+
+// ── A27. Paper gesture flags all present ──────────────────────────────────
+if(typeof window.__dvlPaperGestureActive  === "undefined" ||
+   typeof window.__dvlPaperDragLock       === "undefined" ||
+   typeof window.__dvlPaperDragging       === "undefined" ||
+   typeof window.__dvlPaperV2ProDragging  === "undefined")
+  blockers.push("Paper gesture flags missing (0.701 guard lost)");
+
+// ── A28. DVL_PAPER_GESTURE_ISOLATION_CSS_0699 style present ───────────────
+if(document.getElementById("DVL_PAPER_GESTURE_ISOLATION_CSS_0699") === null)
+  warnings.push("DVL_PAPER_GESTURE_ISOLATION_CSS_0699 missing");
+
+// ── A29. versionBadge text contains 0.703 ────────────────────────────────
+var _badgeEl = document.getElementById("versionBadge");
+if(!_badgeEl){
+  warnings.push("versionBadge element not found");
+}else{
+  var _badgeTxt = (_badgeEl.textContent || "").toUpperCase();
+  if(_badgeTxt.indexOf("0.703") === -1)
+    blockers.push("versionBadge missing 0.703 (got: " + _badgeTxt + ")");
+}
+
+// ── A30. No realMode reference in engine ──────────────────────────────────
+if(_engSrc.indexOf("realMode") !== -1 || _engSrc.indexOf("RealMode") !== -1)
+  blockers.push("engine references realMode");
+
+// ── A31. No fetch() in engine ─────────────────────────────────────────────
+if(_engSrc.indexOf("fetch(") !== -1)
+  blockers.push("engine contains fetch()");
+
+// ── A32. xIndex smoke: xIndex(0) === x0 ──────────────────────────────────
+if(hasTransform && typeof window.DVL_CHART_TRANSFORM_0703.xIndex === "function"){
+  try{
+    window.DVL_CHART_TRANSFORM_0703.update(0,100,0,100,10,0,0,100);
+    var _xi0 = window.DVL_CHART_TRANSFORM_0703.xIndex(0);
+    if(_xi0 !== 0) blockers.push("xIndex(0) expected 0, got " + _xi0);
+  }catch(_e){ blockers.push("xIndex(0) smoke threw: " + _e.message); }
+}
+
+// ── A33. xIndex smoke: xIndex(9) === x1 for 10-slot range ────────────────
+if(hasTransform && typeof window.DVL_CHART_TRANSFORM_0703.xIndex === "function"){
+  try{
+    window.DVL_CHART_TRANSFORM_0703.update(0,100,0,100,10,0,0,100);
+    var _xi9 = window.DVL_CHART_TRANSFORM_0703.xIndex(9);
+    if(Math.abs(_xi9 - 100) > 0.001) blockers.push("xIndex(9) expected 100, got " + _xi9);
+  }catch(_e){ blockers.push("xIndex(9) smoke threw: " + _e.message); }
+}
+
+// ── A34. yPrice smoke: mid-range price maps to canvas mid ─────────────────
+if(hasTransform && typeof window.DVL_CHART_TRANSFORM_0703.yPrice === "function"){
+  try{
+    window.DVL_CHART_TRANSFORM_0703.update(0,100,0,100,10,0,50000,60000);
+    var _yp = window.DVL_CHART_TRANSFORM_0703.yPrice(55000);
+    var _eyp = 100 - (55000 - 50000) / (60000 - 50000) * 100;
+    if(Math.abs(_yp - _eyp) > 0.001) blockers.push("yPrice(55000) expected " + _eyp + ", got " + _yp);
+  }catch(_e){ blockers.push("yPrice smoke threw: " + _e.message); }
+}
+
+// ── A35. priceAtY smoke ───────────────────────────────────────────────────
+if(hasTransform && typeof window.DVL_CHART_TRANSFORM_0703.priceAtY === "function"){
+  try{
+    window.DVL_CHART_TRANSFORM_0703.update(0,100,0,100,10,0,50000,60000);
+    var _pa = window.DVL_CHART_TRANSFORM_0703.priceAtY(50);
+    var _epa = 60000 - (50 / 100) * (60000 - 50000);
+    if(Math.abs(_pa - _epa) > 0.001) blockers.push("priceAtY(50) expected " + _epa + ", got " + _pa);
+  }catch(_e){ blockers.push("priceAtY smoke threw: " + _e.message); }
+}
+
+// ── A36. indexAtX roundtrip ───────────────────────────────────────────────
+if(hasTransform &&
+   typeof window.DVL_CHART_TRANSFORM_0703.xIndex   === "function" &&
+   typeof window.DVL_CHART_TRANSFORM_0703.indexAtX === "function"){
+  try{
+    window.DVL_CHART_TRANSFORM_0703.update(0,100,0,100,11,0,0,100);
+    var _si  = 5;
+    var _px  = window.DVL_CHART_TRANSFORM_0703.xIndex(_si);
+    var _so  = window.DVL_CHART_TRANSFORM_0703.indexAtX(_px);
+    if(Math.abs(_so - _si) > 0.001) blockers.push("indexAtX roundtrip: expected " + _si + ", got " + _so);
+  }catch(_e){ blockers.push("indexAtX roundtrip threw: " + _e.message); }
+}
+
+// ── A37. DVL_PAPER_TRADING_V2_PRO_FINE_LINES_MODULE_0697 present ──────────
+if(document.getElementById("DVL_PAPER_TRADING_V2_PRO_FINE_LINES_MODULE_0697") === null)
+  warnings.push("DVL_PAPER_TRADING_V2_PRO_FINE_LINES_MODULE_0697 not found");
+
+// ── A38. DVL_PAPER_LEGACY_SUPPRESSOR_0698 present ────────────────────────
+if(document.getElementById("DVL_PAPER_LEGACY_SUPPRESSOR_0698") === null)
+  warnings.push("DVL_PAPER_LEGACY_SUPPRESSOR_0698 not found");
+
+// ── A39. DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT_MODULE_0672 present ────────────
+if(document.getElementById("DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT_MODULE_0672") === null)
+  warnings.push("DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT_MODULE_0672 not found");
+
+// ── A40. dvlPaperLayerV2Pro element present ───────────────────────────────
+if(document.getElementById("dvlPaperLayerV2Pro") === null)
+  warnings.push("dvlPaperLayerV2Pro not found in DOM");
+
+// ── RESULT ────────────────────────────────────────────────────────────────
+var N_CHECKS = 40;
+var _auditName = "DVL_SMOOTH_VIEWPORT_ENGINE_AUDIT_MODULE_0703";
+if(blockers.length > 0){
+  var _msg = "[" + _auditName + "] BLOCKED (" + blockers.length +
+             " blocker" + (blockers.length > 1 ? "s" : "") + "): " +
+             blockers.map(function(b, i){ return "B" + (i+1) + ". " + b; }).join("; ");
+  if(warnings.length) _msg += " | Warnings: " + warnings.join("; ");
+  console.error(_msg);
+  if(typeof window.DVL_AUDIT_BLOCK === "function") window.DVL_AUDIT_BLOCK(_auditName, blockers);
+}else{
+  var _ok = "[" + _auditName + "] OK — " + N_CHECKS + " checks passed";
+  if(warnings.length) _ok += " (" + warnings.length + " warning" + (warnings.length > 1 ? "s" : "") + ": " + warnings.join("; ") + ")";
+  console.log(_ok);
+}
+})();
+</script>
+
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.702</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.703</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -19467,11 +19724,12 @@ window.DVL_PAPER_LIMIT_PLACEMENT_RESET_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.702";
+const DVL_APP_VERSION = "Beta 0.703";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.702 — Paper ENTRY close fix: ENTRY X now closes active Paper trades or cancels pending Paper orders without starting drag, freezing the chart, or leaving Paper gesture locks active." },
+  { version: DVL_APP_VERSION, note: "Beta 0.703 — Smooth Viewport Engine: chart pan now moves continuously by pixel/fractional candle offset instead of snapping by rounded candle slices, with Paper and drawings aligned to the same continuous chart transform." },
+  { version: "Beta 0.702", note: "Beta 0.702 — Paper ENTRY close fix: ENTRY X now closes active Paper trades or cancels pending Paper orders without starting drag, freezing the chart, or leaving Paper gesture locks active." },
   { version: "Beta 0.701", note: "Beta 0.701 — Paper lock start fix: Paper drag lock no longer blocks the Paper startDrag event, buttons no longer trigger permanent lock, and all Paper locks are safely released on pointer/touch end." },
   { version: "Beta 0.700", note: "Beta 0.700 — Header leak and hard Paper gesture lock: removed raw JS leaking above the header and made Paper TP/SL/ENTRY drags lock chart pointerdown/pan/zoom/crosshair from the first touch." },
   { version: "Beta 0.699", note: "Beta 0.699 — Paper gesture isolation: TP/SL/ENTRY drags now lock chart pan/zoom/crosshair, keeping the graph static while Paper elements are moved." },
@@ -21152,16 +21410,18 @@ function clampChartViewport(){
 function visibleWindow(){
   clampChartViewport();
 
-  const totalSlots = chartViewCount;                       // float: smooth candle width/spacing
-  const futureSlots = Math.max(0, -chartOffsetCandles);    // float: smooth right-edge gap
-  const pastOffset = Math.max(0, Math.round(chartOffsetCandles)); // int: array slice index
-  const visibleSlots = Math.max(1, Math.ceil(totalSlots - futureSlots)); // int: how many candles to slice
+  const totalSlots   = chartViewCount;
+  const futureSlots  = Math.max(0, -chartOffsetCandles);
+  const pastFloat    = Math.max(0, chartOffsetCandles);
+  const pastWhole    = Math.floor(pastFloat);
+  const pastFrac     = pastFloat - pastWhole;
+  const visibleSlots = Math.max(1, Math.ceil(totalSlots - futureSlots));
 
-  const end = Math.max(0, klines.length - pastOffset);
+  const end   = Math.max(0, klines.length - pastWhole);
   const start = Math.max(0, end - visibleSlots);
   const candles = klines.slice(start, end);
 
-  return { candles, totalSlots, futureSlots, start, end };
+  return { candles, totalSlots, futureSlots, start, end, pastFrac, fractionalShiftSlots: pastFrac };
 }
 
 function visibleKlines(){
@@ -22489,8 +22749,15 @@ function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
     const candleMin=allPts[i05];
     const candleMax=allPts[i95];
     const candleRange=(candleMax-candleMin)||Math.max(candleMax*.002,1);
-    priceViewRange=candleRange*1.16;
-    priceViewCenter=(candleMax+candleMin)/2;
+    const targetRange=candleRange*1.16;
+    const targetCenter=(candleMax+candleMin)/2;
+    const HYSTERESIS=0.08, SMOOTH=0.22;
+    if(!Number.isFinite(priceViewCenter)||!Number.isFinite(priceViewRange)||
+       Math.abs(targetCenter-priceViewCenter)/Math.max(Math.abs(priceViewCenter),1)>HYSTERESIS||
+       Math.abs(targetRange-priceViewRange)/Math.max(priceViewRange,1)>HYSTERESIS){
+      priceViewRange=Number.isFinite(priceViewRange)?priceViewRange+(targetRange-priceViewRange)*SMOOTH:targetRange;
+      priceViewCenter=Number.isFinite(priceViewCenter)?priceViewCenter+(targetCenter-priceViewCenter)*SMOOTH:targetCenter;
+    }
   }
 
   const min = priceViewCenter - priceViewRange / 2;
@@ -22502,7 +22769,9 @@ function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
     return x0 + slot/(slots-1)*(x1-x0);
   };
 
-  const slotOffset = Math.max(0, win.totalSlots - win.futureSlots - view.length);
+  const pastFrac = win.pastFrac || 0;
+  const slotOffset = Math.max(0, win.totalSlots - win.futureSlots - view.length) + pastFrac;
+  if(window.DVL_CHART_TRANSFORM_0703) DVL_CHART_TRANSFORM_0703.update(x0,x1,y0,y1,win.totalSlots,slotOffset,min,max);
 
   ctx.save();
   ctx.beginPath();
@@ -23763,10 +24032,11 @@ function __dvlSyncLegacyState(){
 
   const win = visibleWindow();
   const slotOffset = Math.max(0, win.totalSlots - win.futureSlots - win.candles.length);
+  const pastFrac = win.pastFrac || 0;
   const span = Math.max(1, win.totalSlots - 1);
   S.view = {
-    start: win.start - slotOffset + 0.5,
-    end: win.start - slotOffset + 0.5 + span
+    start: win.start - slotOffset + 0.5 - pastFrac,
+    end: win.start - slotOffset + 0.5 - pastFrac + span
   };
 }
 
@@ -33322,7 +33592,8 @@ const lowerCrossActive = !stackDividerActive && !dividerActive && !isOnScale(ev)
   function xForIndex(i, m, win){
     const slots = Math.max(2, win.totalSlots || 2);
     const slotOffset = Math.max(0, win.totalSlots - win.futureSlots - (win.candles || []).length);
-    return m.x0 + (slotOffset + i) / (slots-1) * (m.x1-m.x0);
+    const pastFrac = win.pastFrac || 0;
+    return m.x0 + (slotOffset + i + pastFrac) / (slots-1) * (m.x1-m.x0);
   }
 
   function drawScaleTag(ctx, m, value, sc){
@@ -34139,7 +34410,8 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
   function xForIndex(i, m, win){
     const slots = Math.max(2, win.totalSlots || 2);
     const slotOffset = Math.max(0, win.totalSlots - win.futureSlots - (win.candles || []).length);
-    return m.x0 + (slotOffset + i) / (slots-1) * (m.x1-m.x0);
+    const pastFrac = win.pastFrac || 0;
+    return m.x0 + (slotOffset + i + pastFrac) / (slots-1) * (m.x1-m.x0);
   }
 
   function basePanel(ctx, m, title, right, kind){
@@ -34766,7 +35038,8 @@ drag = {
   function xForIndex(i, m, win){
     const slots = Math.max(2, win.totalSlots || 2);
     const slotOffset = Math.max(0, win.totalSlots - win.futureSlots - (win.candles||[]).length);
-    return m.x0 + (slotOffset + i) / (slots - 1) * (m.x1 - m.x0);
+    const pastFrac = win.pastFrac || 0;
+    return m.x0 + (slotOffset + i + pastFrac) / (slots - 1) * (m.x1 - m.x0);
   }
 
   function yMap(m, v, sc){
