@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>DVL Binance Live — Beta 0.699</title>
+<title>DVL Binance Live — Beta 0.698</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -15147,62 +15147,6 @@ window.DVL_SAFE_CSS_CLEANUP_AUDIT={
 }
 </style>
 
-<style id="DVL_PAPER_GESTURE_ISOLATION_CSS_0699">
-/*
-  DVL Beta 0.699 — Paper gesture isolation.
-  While a Paper element is being dragged, the chart is frozen.
-*/
-html.dvl-paper-gesture-active,
-html.dvl-paper-gesture-active body,
-html.dvl-paper-gesture-active .canvasWrap,
-html.dvl-paper-gesture-active #chartWrap {
-  touch-action: none !important;
-  overscroll-behavior: contain !important;
-}
-#dvlPaperLayerV2Pro,
-#dvlPaperLayerV2Pro * {
-  -webkit-user-select: none !important;
-  user-select: none !important;
-}
-.dvl-pv2p-hit,
-.dvl-pv2p-tag,
-.dvl-pv2p-controls,
-.dvl-pv2p-btn {
-  touch-action: none !important;
-}
-</style>
-
-<script id="DVL_PAPER_GESTURE_ISOLATION_GUARD_0699">
-(function(){
-"use strict";
-// Initialise flags before any chart or Paper code runs.
-window.__dvlPaperGestureActive   = false;
-window.__dvlPaperDragLock        = false;
-window.__dvlPositionDragActive   = false;
-window.__dvlLongShortV2Dragging  = false;
-window.__dvlPaperV2ProMoveDrag   = null;
-window.__dvlPaperV2ProEndDrag    = null;
-
-function _onMove(ev){
-  if(!window.__dvlPaperGestureActive) return;
-  // Block chart — registered before chart scripts so stopImmediatePropagation
-  // fires before chart window capture listeners.
-  ev.preventDefault();
-  ev.stopImmediatePropagation();
-  if(window.__dvlPaperV2ProMoveDrag) window.__dvlPaperV2ProMoveDrag(ev);
-}
-function _onUp(ev){
-  if(!window.__dvlPaperGestureActive) return;
-  ev.stopImmediatePropagation();
-  if(window.__dvlPaperV2ProEndDrag) window.__dvlPaperV2ProEndDrag(ev);
-}
-
-window.addEventListener('pointermove',   _onMove, {capture:true, passive:false});
-window.addEventListener('pointerup',     _onUp,   {capture:true, passive:false});
-window.addEventListener('pointercancel', _onUp,   {capture:true, passive:false});
-})();
-</script>
-
 <script id="DVL_SAFE_HTML_CLASS_CLEANUP_AUDIT_MODULE_0672">
 (function(){
 "use strict";
@@ -18934,7 +18878,7 @@ window.DVL_DRAFT_CONFIRM_HOTFIX_AUDIT = {
 <div class="app">
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.699</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 0.698</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -19394,12 +19338,11 @@ window.DVL_DRAFT_CONFIRM_HOTFIX_AUDIT = {
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.699";
+const DVL_APP_VERSION = "Beta 0.698";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.699 — Paper gesture isolation: TP/SL/ENTRY drags now lock chart pan/zoom/crosshair, keeping the graph static while Paper elements are moved." },
-  { version: "Beta 0.698", note: "Beta 0.698 — Clean Paper V2 integration: removed legacy Paper Trading visual/runtime conflicts and made the 0.697 TradingView-style Paper module the single active Paper system." },
+  { version: DVL_APP_VERSION, note: "Beta 0.698 — Clean Paper V2 integration: removed legacy Paper Trading visual/runtime conflicts and made the 0.697 TradingView-style Paper module the single active Paper system." },
   { version: "Beta 0.688", note: "Beta 0.688 — Paper Limit placement reset: simplified Limit/Stop draft placement, ENTRY tag draggable with × cancel button, draft confirm buttons follow ENTRY during drag, suppressed stray legacy elements, unified Market/Limit visual base." },
   { version: "Beta 0.687", note: "Beta 0.687 — Hotfix: draft Limit/Stop confirm (✓/×) buttons now appear correctly; render() calls renderEditConfirm before renderDraftPosition so draft confirm buttons are not immediately cleared." },
   { version: "Beta 0.686", note: "Beta 0.686 — Paper Trading Placement Flow Fix: draft spawns at current price, ENTRY draggable, pending orders cancelable with ×, labels centered on lines." },
@@ -38575,13 +38518,13 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function ensureLayer(){var wrap=getWrap(); if(!wrap)return null; if(getComputedStyle(wrap).position==='static')wrap.style.position='relative'; var layer=getLayer(); if(!layer){layer=document.createElement('div'); layer.id='dvlPaperLayerV2Pro'; layer.className='dvl-pv2p-layer'; wrap.appendChild(layer);} return layer;}
   function cleanupLegacy(){qsa('.dvl-paper-edit-confirm-fixed,.dvl-paper-edit-label-fixed,.dvl-paper-draft-confirm-fixed,.dvl-paper-pending,.dvl-paper-pending-controls').forEach(function(e){try{e.remove();}catch(_){}});}
   function render(){if(!ENABLED)return; var layer=ensureLayer(); if(!layer)return; cleanupLegacy(); layer.innerHTML=''; state.orders=state.orders.filter(function(o){return o&&o.status!=='closed';}); if(state.edit&&!find(state.edit.id))state.edit=null; state.orders.forEach(function(o){renderOrder(layer,o);});}
-  function startDrag(ev){var id=ev.currentTarget.dataset.id,kind=ev.currentTarget.dataset.kind||'entry',o=find(id),si=priceScaleInfo(); if(!o||!si)return; var allowed=(o.status==='draft'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='pending'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='open'&&(kind==='tp'||kind==='sl')); if(!allowed)return; ev.preventDefault();ev.stopPropagation();if(ev.stopImmediatePropagation)ev.stopImmediatePropagation(); var rect=si.wrap.getBoundingClientRect(), y=ev.clientY-rect.top; if(o.status==='open'&&(kind==='tp'||kind==='sl')){if(!(state.edit&&String(state.edit.id)===String(id)&&state.edit.kind===kind)){state.edit={id:id,kind:kind,orig:{entry:n(o.entry),tp:n(o.tp),sl:n(o.sl)}};}} state.drag={id:id,kind:kind,pid:ev.pointerId,startPrice:si.yToPrice(y),entry:n(o.entry),tp:n(o.tp),sl:n(o.sl),scaleSnapshot:si}; window.__dvlPaperDragging=true; window.__dvlPaperGestureActive=true; window.__dvlPaperDragLock=true; window.__dvlPositionDragActive=true; window.__dvlLongShortV2Dragging=true; document.documentElement.classList.add('dvl-pv2p-dragging'); document.documentElement.classList.add('dvl-paper-gesture-active'); try{ev.currentTarget.setPointerCapture&&ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}}
-  function moveDrag(ev){if(!state.drag)return; if(state.drag.pid!=null&&ev.pointerId!=null&&state.drag.pid!==ev.pointerId)return; var o=find(state.drag.id),si=(state.drag&&state.drag.scaleSnapshot)||priceScaleInfo(); if(!o||!si)return; ev.preventDefault();ev.stopPropagation();if(ev.stopImmediatePropagation)ev.stopImmediatePropagation(); var rect=si.wrap.getBoundingClientRect(), y=ev.clientY-rect.top, cur=si.yToPrice(y), dp=cur-state.drag.startPrice; if(state.drag.kind==='entry'){o.entry=state.drag.entry+dp; o.tp=state.drag.tp+dp; o.sl=state.drag.sl+dp; o.qty=qty(o.entry);} else if(state.drag.kind==='tp'){o.tp=state.drag.tp+dp;} else if(state.drag.kind==='sl'){o.sl=state.drag.sl+dp;} render();}
-  function endDrag(){if(!state.drag)return; var d=state.drag; state.drag=null; window.__dvlPaperDragging=false; window.__dvlPaperGestureActive=false; window.__dvlPaperDragLock=false; window.__dvlPositionDragActive=false; window.__dvlLongShortV2Dragging=false; document.documentElement.classList.remove('dvl-pv2p-dragging'); document.documentElement.classList.remove('dvl-paper-gesture-active'); if(!(state.edit&&String(state.edit.id)===String(d.id)&&state.edit.kind===d.kind))save(); render();}
+  function startDrag(ev){var id=ev.currentTarget.dataset.id,kind=ev.currentTarget.dataset.kind||'entry',o=find(id),si=priceScaleInfo(); if(!o||!si)return; var allowed=(o.status==='draft'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='pending'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='open'&&(kind==='tp'||kind==='sl')); if(!allowed)return; ev.preventDefault();ev.stopPropagation();if(ev.stopImmediatePropagation)ev.stopImmediatePropagation(); var rect=si.wrap.getBoundingClientRect(), y=ev.clientY-rect.top; if(o.status==='open'&&(kind==='tp'||kind==='sl')){if(!(state.edit&&String(state.edit.id)===String(id)&&state.edit.kind===kind)){state.edit={id:id,kind:kind,orig:{entry:n(o.entry),tp:n(o.tp),sl:n(o.sl)}};}} state.drag={id:id,kind:kind,pid:ev.pointerId,startPrice:si.yToPrice(y),entry:n(o.entry),tp:n(o.tp),sl:n(o.sl)}; window.__dvlPaperDragging=true; document.documentElement.classList.add('dvl-pv2p-dragging'); try{ev.currentTarget.setPointerCapture&&ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}}
+  function moveDrag(ev){if(!state.drag)return; if(state.drag.pid!=null&&ev.pointerId!=null&&state.drag.pid!==ev.pointerId)return; var o=find(state.drag.id),si=priceScaleInfo(); if(!o||!si)return; ev.preventDefault();ev.stopPropagation();if(ev.stopImmediatePropagation)ev.stopImmediatePropagation(); var rect=si.wrap.getBoundingClientRect(), y=ev.clientY-rect.top, cur=si.yToPrice(y), dp=cur-state.drag.startPrice; if(state.drag.kind==='entry'){o.entry=state.drag.entry+dp; o.tp=state.drag.tp+dp; o.sl=state.drag.sl+dp; o.qty=qty(o.entry);} else if(state.drag.kind==='tp'){o.tp=state.drag.tp+dp;} else if(state.drag.kind==='sl'){o.sl=state.drag.sl+dp;} render();}
+  function endDrag(){if(!state.drag)return; var d=state.drag; state.drag=null; window.__dvlPaperDragging=false; document.documentElement.classList.remove('dvl-pv2p-dragging'); if(!(state.edit&&String(state.edit.id)===String(d.id)&&state.edit.kind===d.kind))save(); render();}
   function tradeClick(ev){var b=ev.target.closest&&ev.target.closest('.tradeAction.buy'); var s=ev.target.closest&&ev.target.closest('.tradeAction.sell'); if(!b&&!s)return; ev.preventDefault();ev.stopPropagation();if(ev.stopImmediatePropagation)ev.stopImmediatePropagation(); var side=b?'buy':'sell', type=orderType(); if(type==='market')openMarket(side); else createDraft(side,type);}
   function chartRefresh(){if(state.drag)return; if(state.orders.length)render();}
   function startPnlRefresh(){if(window.__DVL_PAPER_V2_PRO_0697_PNL_INTERVAL__)return; window.__DVL_PAPER_V2_PRO_0697_PNL_INTERVAL__=setInterval(function(){try{if(!state.drag&&state.orders.some(function(o){return o&&o.status==='open';}))render();}catch(_){}},900);}
-  function install(){var wrap=getWrap(); if(!wrap){console.warn('[DVL Paper V2 Pro] chart wrapper missing');return;} document.documentElement.classList.add('dvl-paper-v2-pro-enabled'); load(); ensureLayer(); cleanupLegacy(); startPnlRefresh(); document.addEventListener('click',tradeClick,true); document.addEventListener('pointermove',moveDrag,{capture:true,passive:false}); document.addEventListener('pointerup',endDrag,{capture:true,passive:false}); document.addEventListener('pointercancel',endDrag,{capture:true,passive:false}); document.addEventListener('click',function(ev){if(!ev.target.closest('#dvlPaperLayerV2Pro')&&!ev.target.closest('.tradeDrawer')){deselect();render();}},true); wrap.addEventListener('pointerup',chartRefresh,{passive:true}); wrap.addEventListener('wheel',chartRefresh,{passive:true}); window.addEventListener('resize',render,{passive:true}); window.__dvlPaperV2ProMoveDrag=moveDrag; window.__dvlPaperV2ProEndDrag=endDrag; render();}
+  function install(){var wrap=getWrap(); if(!wrap){console.warn('[DVL Paper V2 Pro] chart wrapper missing');return;} document.documentElement.classList.add('dvl-paper-v2-pro-enabled'); load(); ensureLayer(); cleanupLegacy(); startPnlRefresh(); document.addEventListener('click',tradeClick,true); document.addEventListener('pointermove',moveDrag,{capture:true,passive:false}); document.addEventListener('pointerup',endDrag,{capture:true,passive:false}); document.addEventListener('pointercancel',endDrag,{capture:true,passive:false}); document.addEventListener('click',function(ev){if(!ev.target.closest('#dvlPaperLayerV2Pro')&&!ev.target.closest('.tradeDrawer')){deselect();render();}},true); wrap.addEventListener('pointerup',chartRefresh,{passive:true}); wrap.addEventListener('wheel',chartRefresh,{passive:true}); window.addEventListener('resize',render,{passive:true}); render();}
   function audit(){var blockers=[],layer=getLayer(),wrap=getWrap(); if(!window.DVL_PAPER_V2_PRO_ENABLED)blockers.push('V2 Pro flag off'); if(!layer)blockers.push('Layer missing'); if(layer&&wrap&&layer.parentElement!==wrap)blockers.push('Layer outside chart wrapper'); if(qs('.dvl-paper-edit-confirm-fixed')||qs('.dvl-paper-edit-label-fixed'))blockers.push('legacy fixed paper portal active'); if(TAG_W!==86||TAG_H!==17||TAG_FONT!==6.9)blockers.push('tag constants changed'); if(TAG_ALPHA!==0.75)blockers.push('tag opacity not 0.75'); if(SELECTED_TAG_ALPHA!==0.85||EDITING_TAG_ALPHA!==0.85)blockers.push('selected/editing opacity not 0.85'); if(typeof maybeCloseOpen!=='function')blockers.push('TP/SL activation missing'); if(!closePaperTrade)blockers.push('closePaperTrade missing'); if(!confirmTpSlEdit||!cancelTpSlEdit)blockers.push('TP/SL edit confirm missing'); if(LABEL_OFFSET_BARS!==10)blockers.push('offset not 10'); var old=$('dvlPaperLayer'), oldHidden=!old||getComputedStyle(old).display==='none'; if(!oldHidden)blockers.push('legacy layer still visible'); var res={version:VERSION,pass:blockers.length===0,readyForMobileTest:blockers.length===0,layerInsideChart:!!(layer&&wrap&&layer.parentElement===wrap),legacyHidden:oldHidden,orderCount:state.orders.length,entryShowsPnlAfterActivation:true,tpSlShowPriceAndDistancePct:true,entryProfitLossColors:true,entryCloseXForOpen:true,tpSlEditConfirmCancel:true,infiniteTpSlMove:true,marketTpSlEditable:true,labelsCompact:true,lineGapAroundLabels:true,tagOpacity:TAG_ALPHA,lineOpacity:LINE_OPACITY,lineWidth:LINE_WIDTH,draftLineOpacity:DRAFT_LINE_OPACITY,selectedTagOpacity:SELECTED_TAG_ALPHA,editingTagOpacity:EDITING_TAG_ALPHA,tpSlActivation:true,tpSlAutoClose:true,tpSlAutoOneToOne:true,allDraftAndPendingTagsMovable:true,constants:{LABEL_OFFSET_BARS:LABEL_OFFSET_BARS,TAG_W:TAG_W,TAG_H:TAG_H,TAG_FONT:TAG_FONT,TAG_ALPHA:TAG_ALPHA,LINE_OPACITY:LINE_OPACITY,LINE_WIDTH:LINE_WIDTH,DRAFT_LINE_OPACITY:DRAFT_LINE_OPACITY,SELECTED_TAG_OPACITY:SELECTED_TAG_ALPHA,EDITING_TAG_OPACITY:EDITING_TAG_ALPHA,LINE_LABEL_GAP_PX:LINE_LABEL_GAP_PX,SMOOTH_TRANSFORM3D:true,TP_SL_ACTIVATION:true},blockers:blockers,warnings:[]}; state.lastAudit=res; return res;}
   window.DVL_PAPER_TRADING_V2_PRO={VERSION:VERSION,getState:function(){return state;},render:render,audit:audit,run:audit,getLastAudit:function(){return state.lastAudit;},openMarket:openMarket,createDraft:createDraft,cancelPaperOrder:cancelPaperOrder,closePaperTrade:closePaperTrade,confirmDraft:confirmDraft,confirmTpSlEdit:confirmTpSlEdit,cancelTpSlEdit:cancelTpSlEdit};
   window.DVL_PAPER_TRADING_V2_TV_PRO_AUDIT={VERSION:VERSION,audit:audit,run:audit,getLastAudit:function(){return state.lastAudit;}};
@@ -39098,280 +39041,6 @@ function run(){ _lastAudit = audit(); return Promise.resolve(_lastAudit); }
 
 window.DVL_PAPER_V2_CLEAN_INTEGRATION_AUDIT = {
   VERSION:      "0.698",
-  audit:        audit,
-  run:          run,
-  getLastAudit: getLastAudit
-};
-
-})();
-</script>
-
-<script id="DVL_PAPER_GESTURE_ISOLATION_AUDIT_MODULE_0699">
-(function(){
-"use strict";
-
-var _lastAudit = null;
-var _brokerToken = 'Broker' + 'Connector';
-var _realOrder   = 'placeReal' + 'Order';
-
-var FINAL_LOCK_CSS = [
-  "DVL_PRICE_SCALE_FINAL_LOCK_CSS_0659",
-  "DVL_CHART_TOOLBAR_FINAL_LOCK_CSS_0660",
-  "DVL_CHROME_FINAL_LOCK_CSS_0661",
-  "DVL_LAYOUT_GAP_DRAWER_FINAL_LOCK_CSS_0662"
-];
-
-function _cntId(els, id){
-  var c=0; for(var i=0;i<els.length;i++){if(els[i].id===id)c++;} return c;
-}
-
-function audit(){
-  var scriptEls = document.querySelectorAll('script[id]');
-  var styleEls  = document.querySelectorAll('style[id]');
-  var blockers  = [];
-  var warnings  = [];
-
-  var _allScripts = document.querySelectorAll('script');
-  var _srcFull = "";
-  for(var si=0;si<_allScripts.length;si++){ _srcFull+=_allScripts[si].textContent; }
-
-  var _modEl  = document.getElementById("DVL_PAPER_GESTURE_ISOLATION_AUDIT_MODULE_0699");
-  var _modSrc = _modEl ? _modEl.textContent : "";
-
-  var _v2El   = document.getElementById("DVL_PAPER_TRADING_V2_PRO_FINE_LINES_MODULE_0697");
-  var _v2Src  = _v2El ? _v2El.textContent : "";
-
-  var _guardEl  = document.getElementById("DVL_PAPER_GESTURE_ISOLATION_GUARD_0699");
-  var _guardSrc = _guardEl ? _guardEl.textContent : "";
-
-  // A1. __dvlPaperGestureActive flag exists
-  var flagExists = "dvlPaperGestureActive" in window;
-  if(!flagExists) blockers.push("window.__dvlPaperGestureActive not initialised");
-
-  // A2. __dvlPaperDragLock flag exists
-  var lockExists = "dvlPaperDragLock" in window;
-  if(!lockExists) blockers.push("window.__dvlPaperDragLock not initialised");
-
-  // A3. Guard moveDrag reference exposed
-  var moveDragExposed = window.__dvlPaperV2ProMoveDrag !== null &&
-                        window.__dvlPaperV2ProMoveDrag !== undefined;
-  if(!moveDragExposed) blockers.push("window.__dvlPaperV2ProMoveDrag not set by install()");
-
-  // A4. Guard endDrag reference exposed
-  var endDragExposed = window.__dvlPaperV2ProEndDrag !== null &&
-                       window.__dvlPaperV2ProEndDrag !== undefined;
-  if(!endDragExposed) blockers.push("window.__dvlPaperV2ProEndDrag not set by install()");
-
-  // A5. Guard script present
-  var guardPresent = _cntId(scriptEls,"DVL_PAPER_GESTURE_ISOLATION_GUARD_0699") === 1;
-  if(!guardPresent) blockers.push("DVL_PAPER_GESTURE_ISOLATION_GUARD_0699 not found");
-
-  // A6. Guard initialises __dvlPaperGestureActive
-  var guardInitsFlag = _guardSrc.indexOf("__dvlPaperGestureActive") > -1;
-  if(!guardInitsFlag) blockers.push("guard does not init __dvlPaperGestureActive");
-
-  // A7. Guard uses stopImmediatePropagation
-  var guardBlocksChart = _guardSrc.indexOf("stopImmediatePropagation") > -1;
-  if(!guardBlocksChart) blockers.push("guard does not call stopImmediatePropagation");
-
-  // A8. Guard handles pointermove
-  var guardMoveSrc = _guardSrc.indexOf("pointermove") > -1;
-  if(!guardMoveSrc) blockers.push("guard does not handle pointermove");
-
-  // A9. Guard handles pointerup
-  var guardUpSrc = _guardSrc.indexOf("pointerup") > -1;
-  if(!guardUpSrc) blockers.push("guard does not handle pointerup");
-
-  // A10. Guard handles pointercancel
-  var guardCancelSrc = _guardSrc.indexOf("pointercancel") > -1;
-  if(!guardCancelSrc) blockers.push("guard does not handle pointercancel");
-
-  // A11. Chart locked via guard (chart receives no events during Paper drag)
-  // Verified by guard's stopImmediatePropagation blocking window-level listeners.
-  var chartLocked = guardBlocksChart;
-  if(!chartLocked) warnings.push("chart lock not confirmed (guard missing stopImmediatePropagation)");
-
-  // A12. V2 startDrag sets __dvlPaperGestureActive
-  var startSetsFlag = _v2Src.indexOf("__dvlPaperGestureActive=true") > -1;
-  if(!startSetsFlag) blockers.push("startDrag does not set __dvlPaperGestureActive=true");
-
-  // A13. V2 endDrag clears __dvlPaperGestureActive
-  var endClearsFlag = _v2Src.indexOf("__dvlPaperGestureActive=false") > -1;
-  if(!endClearsFlag) blockers.push("endDrag does not clear __dvlPaperGestureActive=false");
-
-  // A14. V2 startDrag sets dvl-paper-gesture-active class
-  var startSetsClass = _v2Src.indexOf("dvl-paper-gesture-active") > -1;
-  if(!startSetsClass) blockers.push("startDrag does not add dvl-paper-gesture-active class");
-
-  // A15. V2 startDrag stores scaleSnapshot
-  var hasSnapshot = _v2Src.indexOf("scaleSnapshot") > -1;
-  if(!hasSnapshot) blockers.push("startDrag does not store scaleSnapshot");
-
-  // A16. V2 moveDrag uses scaleSnapshot
-  var moveUsesSnapshot = _v2Src.indexOf("state.drag.scaleSnapshot") > -1 ||
-                         _v2Src.indexOf("drag.scaleSnapshot") > -1;
-  if(!moveUsesSnapshot) blockers.push("moveDrag does not use scaleSnapshot");
-
-  // A17. V2 startDrag calls setPointerCapture
-  var hasPointerCapture = _v2Src.indexOf("setPointerCapture") > -1;
-  if(!hasPointerCapture) blockers.push("startDrag does not call setPointerCapture");
-
-  // A18. V2 moveDrag calls preventDefault
-  var movePrevent = _v2Src.indexOf("ev.preventDefault()") > -1;
-  if(!movePrevent) blockers.push("moveDrag does not call preventDefault");
-
-  // A19. V2 moveDrag calls stopPropagation
-  var moveStop = _v2Src.indexOf("ev.stopPropagation()") > -1;
-  if(!moveStop) blockers.push("moveDrag does not call stopPropagation");
-
-  // A20. V2 moveDrag calls stopImmediatePropagation
-  var moveStopImm = _v2Src.indexOf("stopImmediatePropagation") > -1;
-  if(!moveStopImm) blockers.push("moveDrag does not call stopImmediatePropagation");
-
-  // A21. V2 endDrag sets __dvlPaperDragLock=false
-  var endClearsLock = _v2Src.indexOf("__dvlPaperDragLock=false") > -1;
-  if(!endClearsLock) blockers.push("endDrag does not clear __dvlPaperDragLock");
-
-  // A22. V2 startDrag sets __dvlPositionDragActive (TP drag flag)
-  var tpDragLock = _v2Src.indexOf("__dvlPositionDragActive=true") > -1;
-  if(!tpDragLock) blockers.push("startDrag does not set __dvlPositionDragActive");
-
-  // A23. V2 startDrag sets __dvlLongShortV2Dragging (SL drag flag)
-  var slDragLock = _v2Src.indexOf("__dvlLongShortV2Dragging=true") > -1;
-  if(!slDragLock) blockers.push("startDrag does not set __dvlLongShortV2Dragging");
-
-  // A24. Entry draft drag activates lock (same startDrag)
-  var entryDraftLock = _v2Src.indexOf("status==='draft'") > -1 ||
-                       _v2Src.indexOf("status==="draft"") > -1;
-  if(!entryDraftLock) blockers.push("V2 does not handle draft drag");
-
-  // A25. Entry pending drag activates lock
-  var entryPendingLock = _v2Src.indexOf("status==='pending'") > -1 ||
-                         _v2Src.indexOf("status==="pending"") > -1;
-  if(!entryPendingLock) blockers.push("V2 does not handle pending drag");
-
-  // A26. Labels remain inside chart (V2 uses transform3d, not fixed)
-  var noFixed = _v2Src.indexOf("position:fixed") === -1 &&
-                _v2Src.indexOf("position: fixed") === -1;
-  if(!noFixed) blockers.push("V2 uses position:fixed (labels escape chart)");
-
-  // A27. V2 Pro layer is unique
-  var v2LayerCount = document.querySelectorAll("#dvlPaperLayerV2Pro").length;
-  if(v2LayerCount > 1) blockers.push("multiple #dvlPaperLayerV2Pro: "+v2LayerCount);
-  if(v2LayerCount < 1) warnings.push("#dvlPaperLayerV2Pro not yet in DOM");
-
-  // A28. Legacy paper layer hidden
-  var legacyLayer = document.getElementById("dvlPaperLayer");
-  var legacyHidden = !legacyLayer || getComputedStyle(legacyLayer).display === "none";
-  if(!legacyHidden) blockers.push("#dvlPaperLayer is still visible");
-
-  // A29. TP/SL activation preserved (maybeCloseOpen)
-  var hasTpSlActivation = _v2Src.indexOf("function maybeCloseOpen(") > -1;
-  if(!hasTpSlActivation) blockers.push("maybeCloseOpen not in V2 source");
-
-  // A30. TP/SL infinite drag preserved (edit controls)
-  var hasTpSlEdit = _v2Src.indexOf("confirmTpSlEdit") > -1;
-  if(!hasTpSlEdit) blockers.push("confirmTpSlEdit not in V2 source");
-
-  // A31. ENTRY close X preserved
-  var hasCloseX = _v2Src.indexOf("data-close-trade") > -1;
-  if(!hasCloseX) blockers.push("data-close-trade (ENTRY close X) not in V2 source");
-
-  // A32. OK/X for TP/SL edit preserved
-  var hasEditOkX = _v2Src.indexOf("cancelTpSlEdit") > -1;
-  if(!hasEditOkX) blockers.push("cancelTpSlEdit not in V2 source");
-
-  // A33. Market preserved
-  var hasMarket = _v2Src.indexOf("openMarket") > -1;
-  if(!hasMarket) blockers.push("openMarket not in V2 source");
-
-  // A34. Limit/Stop draft preserved
-  var hasDraft = _v2Src.indexOf("createDraft") > -1;
-  if(!hasDraft) blockers.push("createDraft not in V2 source");
-
-  // A35. Final locks 0659-0662 present
-  var missingLocks = [];
-  for(var fl=0;fl<FINAL_LOCK_CSS.length;fl++){
-    if(_cntId(styleEls,FINAL_LOCK_CSS[fl])!==1) missingLocks.push(FINAL_LOCK_CSS[fl]);
-  }
-  if(missingLocks.length>0) blockers.push("final locks missing: "+missingLocks.join(", "));
-
-  // A36. Zero _brokerToken in source (split avoids self-match)
-  var noBroker = _srcFull.indexOf(_brokerToken) === -1;
-  if(!noBroker) blockers.push(_brokerToken+" found in source");
-
-  // A37. Zero Real order
-  var noRealOrder = _srcFull.indexOf(_realOrder) === -1;
-  if(!noRealOrder) blockers.push(_realOrder+" found in source");
-
-  // A38. No API key in audit module
-  var noApiKey = _modSrc.indexOf("apiKey:") === -1;
-  if(!noApiKey) warnings.push("apiKey found in 0699 audit module");
-
-  // A39. drawSoon intact (split to avoid literal)
-  var _dsFn = "draw" + "Soon";
-  var hasDrawSoon = typeof window[_dsFn]==="function" ||
-                    _srcFull.indexOf("function drawSoon")>-1;
-  if(!hasDrawSoon) warnings.push("drawSoon not found");
-
-  var pass = (
-    flagExists && lockExists && moveDragExposed && endDragExposed &&
-    guardPresent && guardInitsFlag && guardBlocksChart && guardMoveSrc &&
-    guardUpSrc && guardCancelSrc &&
-    startSetsFlag && endClearsFlag && startSetsClass &&
-    hasSnapshot && moveUsesSnapshot && hasPointerCapture &&
-    movePrevent && moveStop && moveStopImm &&
-    endClearsLock && tpDragLock && slDragLock &&
-    entryDraftLock && entryPendingLock &&
-    noFixed && v2LayerCount <= 1 && legacyHidden &&
-    hasTpSlActivation && hasTpSlEdit && hasCloseX && hasEditOkX &&
-    hasMarket && hasDraft && missingLocks.length===0 &&
-    noBroker && noRealOrder
-  );
-
-  _lastAudit = {
-    pass:               pass,
-    flagExists:         flagExists,
-    lockExists:         lockExists,
-    moveDragExposed:    moveDragExposed,
-    endDragExposed:     endDragExposed,
-    guardPresent:       guardPresent,
-    guardInitsFlag:     guardInitsFlag,
-    guardBlocksChart:   guardBlocksChart,
-    startSetsFlag:      startSetsFlag,
-    endClearsFlag:      endClearsFlag,
-    startSetsClass:     startSetsClass,
-    hasSnapshot:        hasSnapshot,
-    moveUsesSnapshot:   moveUsesSnapshot,
-    hasPointerCapture:  hasPointerCapture,
-    movePrevent:        movePrevent,
-    moveStop:           moveStop,
-    moveStopImm:        moveStopImm,
-    endClearsLock:      endClearsLock,
-    tpDragLock:         tpDragLock,
-    slDragLock:         slDragLock,
-    noFixed:            noFixed,
-    v2LayerCount:       v2LayerCount,
-    legacyHidden:       legacyHidden,
-    hasTpSlActivation:  hasTpSlActivation,
-    hasTpSlEdit:        hasTpSlEdit,
-    hasCloseX:          hasCloseX,
-    hasMarket:          hasMarket,
-    hasDraft:           hasDraft,
-    finalLocksOk:       missingLocks.length===0,
-    noBroker:           noBroker,
-    noRealOrder:        noRealOrder,
-    blockers:           blockers,
-    warnings:           warnings
-  };
-  return _lastAudit;
-}
-
-function getLastAudit(){ return _lastAudit; }
-function run(){ _lastAudit = audit(); return Promise.resolve(_lastAudit); }
-
-window.DVL_PAPER_GESTURE_ISOLATION_AUDIT = {
-  VERSION:      "0.699",
   audit:        audit,
   run:          run,
   getLastAudit: getLastAudit
