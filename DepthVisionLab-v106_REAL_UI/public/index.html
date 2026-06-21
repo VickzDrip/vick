@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.716</title>
+<title>DVL Binance Live — Beta 0.717</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19349,7 +19349,7 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.716</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.717</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19969,11 +19969,12 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.716";
+const DVL_APP_VERSION = "Beta 0.717";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.716 — Global removal of legacy navy/blue/cyan theme residues, unified black/green DVL theme across chart body, price scale, bottom nav, drawers and panels. Header frozen." },
+  { version: DVL_APP_VERSION, note: "Beta 0.717 — Bottom nav visual transplant from 0.728 and final black/green theme lock. Header frozen." },
+  { version: "Beta 0.716", note: "Beta 0.716 — Global removal of legacy navy/blue/cyan theme residues, unified black/green DVL theme across chart body, price scale, bottom nav, drawers and panels. Header frozen." },
   { version: "Beta 0.715", note: "Beta 0.715 — Global black/green visual unification for chart body, price scale, time scale, volume and bottom nav using 0.728 as reference. Header frozen. Removed navy/blue from canvas drawing: grid rgba(64,105,145)->(122,155,145), price/time labels blue-grey->green-grey, current price line brighter green, candle bull #13dc8d->#10df77, bear #ff4a61->#ff3037, oscillator scale pills cyan->#10df77, volume MA cyan->#10df77. CSS token overrides: --green, --red, --grid, --text, --muted." },
   { version: "Beta 0.714", note: "Beta 0.714 — Chart Body + Bottom Nav Visual Match: body bg blue->green radial, canvasWrap green borders, bottomNav floating pill (17px radius, green-black gradient, green border), navItem.active green radial + glow (color #10df77), homeLine hidden, app padding-bottom 88px for floating nav clearance. CSS-only; no chart engine changes." },
   { version: "Beta 0.713", note: "Beta 0.713 — 4-point UI/bridge correction: (1) Indicators compact: width min(300px,100vw-20px), max-height 54vh, denser items; (2) Desenhos clean open: strip/gear hidden, only menu visible; (3) Candles active state: Velas button turns green when menu open, active item highlighted in menu; (4) TF scroll picker: replaces 3 fixed TF buttons with 13-TF horizontal scroll strip (1s-1D), active TF in green, scroll into view on tap." },
@@ -41044,18 +41045,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0716_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0717_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.716"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.716' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.717"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.717' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.716")===-1) blockers.push("A2: title missing 0.716");
+if(!_t || (_t.textContent||"").indexOf("0.717")===-1) blockers.push("A2: title missing 0.717");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -41262,7 +41263,18 @@ if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") 
 // A55. Header Phase 1B overlay intact
 if(!document.getElementById("DVL_UI_OVERLAY_PHASE_1B")) blockers.push("A55: DVL_UI_OVERLAY_PHASE_1B missing (header removed!)");
 
-var N=55, name="DVL_UI_OVERLAY_PHASE_0716_AUDIT_MODULE";
+// A56. DVL_717_BOTTOM_NAV_0728_TRANSPLANT present
+if(!document.getElementById("DVL_717_BOTTOM_NAV_0728_TRANSPLANT")) blockers.push("A56: bottom nav transplant style missing");
+// A57. DVL_717_FINAL_BLACK_GREEN_THEME_LOCK present
+if(!document.getElementById("DVL_717_FINAL_BLACK_GREEN_THEME_LOCK")) blockers.push("A57: final theme lock style missing");
+// A58. --cyan locked to #10df77
+(function(){try{var v=getComputedStyle(document.documentElement).getPropertyValue("--cyan").trim();if(v!=="#10df77")warnings.push("A58: --cyan="+v+" (expected #10df77)");}catch(_e){}})();
+// A59. navItem.active has no old drop-shadow filter
+(function(){var el=document.querySelector(".navItem.active");if(el){try{var cs=getComputedStyle(el);if(cs.filter&&cs.filter.indexOf("drop-shadow")!==-1&&cs.filter.indexOf("207,255")!==-1)warnings.push("A59: .navItem.active still has cyan drop-shadow");}catch(_e){}}})();
+// A60. setCandleMode reachable (chart engine intact)
+if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") blockers.push("A60: setCandleMode missing");
+
+var N=60, name="DVL_UI_OVERLAY_PHASE_0717_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
@@ -41275,5 +41287,207 @@ if(blockers.length){
 }
 })();
 </script>
+<style id="DVL_717_BOTTOM_NAV_0728_TRANSPLANT">
+/* ─── Beta 0.717 — Bottom Nav 0.728 visual transplant ─── */
+/* Placed at end of document: wins ALL legacy cascade battles with !important */
+
+/* Floating pill container — final override */
+nav.bottomNav,
+.bottomNav{
+  position:fixed !important;
+  left:6px !important;
+  right:6px !important;
+  bottom:calc(8px + env(safe-area-inset-bottom)) !important;
+  width:auto !important;
+  height:68px !important;
+  padding:0 !important;
+  margin:0 !important;
+  border-radius:18px !important;
+  background:linear-gradient(180deg,rgba(5,14,12,.93),rgba(4,11,10,.97)) !important;
+  border:1px solid rgba(145,175,165,.18) !important;
+  box-shadow:0 8px 28px rgba(0,0,0,.42),0 0 0 1px rgba(16,223,119,.05) !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:stretch !important;
+  z-index:200 !important;
+  overflow:hidden !important;
+}
+
+/* Inner grid */
+.bottomNav .navInner,
+nav.bottomNav .navInner{
+  display:grid !important;
+  grid-template-columns:repeat(5,1fr) !important;
+  width:100% !important;
+  height:100% !important;
+  padding:0 5px !important;
+  gap:0 !important;
+  align-items:center !important;
+}
+
+/* Inactive buttons */
+.bottomNav .navItem,
+nav.bottomNav .navItem{
+  position:relative !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:3px !important;
+  height:52px !important;
+  color:#6b7d70 !important;
+  font-size:10px !important;
+  font-weight:700 !important;
+  letter-spacing:.01em !important;
+  border-radius:12px !important;
+  background:transparent !important;
+  border:none !important;
+  box-shadow:none !important;
+  filter:none !important;
+  padding:0 !important;
+  margin:0 !important;
+  cursor:pointer !important;
+  overflow:visible !important;
+}
+
+/* SVG icons */
+.bottomNav .navItem svg,
+nav.bottomNav .navItem svg{
+  width:20px !important;
+  height:20px !important;
+  stroke:currentColor !important;
+  fill:none !important;
+  stroke-width:1.75 !important;
+  stroke-linecap:round !important;
+  stroke-linejoin:round !important;
+  flex-shrink:0 !important;
+  margin:0 !important;
+}
+
+/* Label text */
+.bottomNav .navItem > span:last-of-type,
+nav.bottomNav .navItem > span:last-of-type{
+  font-size:9.5px !important;
+  font-weight:700 !important;
+  color:inherit !important;
+  line-height:1 !important;
+}
+
+/* ── Active Trade button — elevated green card ── */
+.bottomNav #tradeNavBtn,
+nav.bottomNav #tradeNavBtn,
+.bottomNav .navItem.active,
+nav.bottomNav .navItem.active{
+  height:62px !important;
+  margin-top:-3px !important;
+  color:#10df77 !important;
+  background:radial-gradient(circle at 50% 18%,rgba(16,223,119,.22),rgba(16,223,119,.07) 58%,rgba(4,12,10,.90)) !important;
+  border:1px solid rgba(16,223,119,.58) !important;
+  box-shadow:0 0 18px rgba(16,223,119,.16),0 2px 8px rgba(0,0,0,.28) !important;
+  border-radius:14px !important;
+  filter:none !important;
+}
+
+/* Pull glyph (arrow above Trade button) */
+.bottomNav .tradePullGlyph,
+nav.bottomNav .tradePullGlyph{
+  color:#10df77 !important;
+  opacity:.85 !important;
+}
+
+/* Pull glyph arrow shape */
+.bottomNav .tradePullGlyph b,
+nav.bottomNav .tradePullGlyph b{
+  border-bottom-color:currentColor !important;
+}
+</style>
+<style id="DVL_717_FINAL_BLACK_GREEN_THEME_LOCK">
+/* ─── Beta 0.717 — Final Black/Green Theme Lock ─── */
+/* ABSOLUTE LAST style block in document */
+/* Locks all CSS variables and neutralizes any residual navy/blue/cyan */
+
+:root{
+  --bg0:#020806 !important;
+  --bg1:#030d0a !important;
+  --bg2:#010504 !important;
+  --card:rgba(5,14,12,.92) !important;
+  --card2:rgba(7,17,15,.94) !important;
+  --panel:rgba(5,14,12,.92) !important;
+  --panel-soft:rgba(4,12,10,.68) !important;
+  --line:rgba(110,140,130,.16) !important;
+  --lineSoft:rgba(145,175,165,.22) !important;
+  --grid:rgba(122,155,145,.092) !important;
+  --gridSoft:rgba(122,155,145,.055) !important;
+  --text:#f4f6f4 !important;
+  --muted:#a5aaa9 !important;
+  --muted2:#737b79 !important;
+  --cyan:#10df77 !important;
+  --cyan2:#10df77 !important;
+  --accent:#10df77 !important;
+  --green:#10df77 !important;
+  --accentLine:rgba(16,223,119,.76) !important;
+  --red:#ff3037 !important;
+  --yellow:#ffd321 !important;
+  --orange:#ff9900 !important;
+}
+
+/* Trade drawer */
+.tradeDrawerSheet{
+  background:linear-gradient(180deg,rgba(5,14,12,.97),rgba(3,10,8,.99)) !important;
+  border-color:rgba(16,223,119,.18) !important;
+}
+.tradeDrawerHandle{border-bottom-color:rgba(110,140,130,.16) !important}
+
+/* Panel buttons and metrics */
+.panelBtn{background:rgba(7,17,15,.88) !important;border-color:rgba(110,140,130,.18) !important;color:var(--text) !important}
+.panelToggle{background:rgba(5,14,12,.82) !important;border-color:rgba(110,140,130,.16) !important}
+.panelMetric{background:rgba(5,14,12,.76) !important;border-color:rgba(110,140,130,.14) !important}
+
+/* Order type, number pad, confirms */
+.orderTypeMenu,.orderTypeSheet,
+.numberPadSheet,.numPadWrap{
+  background:rgba(5,14,12,.97) !important;
+  border-color:rgba(110,140,130,.18) !important;
+}
+.numKey,.numPadKey{
+  background:rgba(7,17,15,.82) !important;
+  border-color:rgba(110,140,130,.14) !important;
+  color:var(--text) !important;
+}
+
+/* Toast */
+.toast,.toastMsg{
+  background:rgba(5,14,12,.96) !important;
+  border-color:rgba(16,223,119,.24) !important;
+  color:var(--text) !important;
+}
+
+/* Chart settings panel */
+.chartSettingsPanel,[class*="chartSettings"]{
+  background:rgba(5,14,12,.97) !important;
+  border-color:rgba(110,140,130,.16) !important;
+}
+
+/* Indicators dropdown */
+#indicatorDropdown,.indicatorDropdown{
+  background:linear-gradient(180deg,rgba(5,14,12,.98),rgba(3,10,8,.99)) !important;
+  border-color:rgba(16,223,119,.22) !important;
+}
+
+/* Drawing tools menu */
+#assetToolsMenu{
+  background:rgba(5,14,12,.97) !important;
+  border-color:rgba(16,223,119,.22) !important;
+}
+
+/* Canvas area */
+.canvasWrap,#chart{background:#020806 !important}
+
+/* Favorites drawer */
+.assetFavoritesSheet{
+  background:rgba(5,14,12,.97) !important;
+  border-color:rgba(110,140,130,.18) !important;
+}
+</style>
 </body>
 </html>
