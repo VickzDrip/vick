@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.734</title>
+<title>DVL Binance Live — Beta 0.735</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19349,7 +19349,7 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.734</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.735</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19968,11 +19968,12 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.734";
+const DVL_APP_VERSION = "Beta 0.735";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.734 — fixed history detail using live price instead of realizedPnl; timeline now shows date." },
+  { version: DVL_APP_VERSION, note: "Beta 0.735 — Real mode shows no demo data; pending orders have delete button." },
+  { version: "Beta 0.734", note: "Beta 0.734 — fixed history detail using live price instead of realizedPnl; timeline now shows date." },
   { version: "Beta 0.733", note: "Beta 0.733 — position details panel now shows real V2 Pro order data (entry, qty, TP, SL, PnL, timeline)." },
   { version: "Beta 0.732", note: "Beta 0.732 — dvl:position-detail-open event; Funding field removed; Gestão rápida moved above grid, open trades only." },
   { version: "Beta 0.731", note: "Beta 0.731 — fixed Positions click-outside using composedPath so tab/list clicks inside the panel never trigger close." },
@@ -39777,18 +39778,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0734_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0735_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.734"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.734' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.735"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.735' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.734")===-1) blockers.push("A2: title missing 0.734");
+if(!_t || (_t.textContent||"").indexOf("0.735")===-1) blockers.push("A2: title missing 0.735");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40105,7 +40106,7 @@ if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") 
 // A103. Details panel uses buildRealRow for real trade data
 (function(){ var s=document.getElementById("DVL_POSITION_DETAILS_PANEL_MODULE_0724"); var t=s?(s.textContent||""):""; if(t.indexOf("buildRealRow")===-1) blockers.push("A103: details panel missing buildRealRow"); })();
 
-var N=103, name="DVL_UI_OVERLAY_PHASE_0734_AUDIT_MODULE";
+var N=103, name="DVL_UI_OVERLAY_PHASE_0735_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
@@ -41407,6 +41408,23 @@ body.dvl-positions-v2-active .tradeDrawer.is-open{
   opacity:.9!important;
 }
 
+.dvlPosV2Del{
+  width:20px!important;
+  height:20px!important;
+  border-radius:50%!important;
+  background:rgba(231,61,61,.12)!important;
+  border:1px solid rgba(231,61,61,.38)!important;
+  color:#e73d3d!important;
+  font-size:15px!important;
+  font-weight:900!important;
+  display:grid!important;
+  place-items:center!important;
+  cursor:pointer!important;
+  padding:0!important;
+  line-height:1!important;
+  justify-self:center!important;
+}
+
 .dvlPosV2Empty{
   height:120px!important;
   display:grid!important;
@@ -42111,6 +42129,7 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
   function elById(id){ return document.getElementById(id); }
 
   function syncFromAdapter(){
+    if(state.mode === "real"){ data.open=[]; data.pending=[]; data.history=[]; return; }
     var rows=window.DVL_POSITIONS_ADAPTER?window.DVL_POSITIONS_ADAPTER.readOrders():{open:[],pending:[],history:[]};
     data.open=rows.open;
     data.pending=rows.pending;
@@ -42251,7 +42270,9 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
             '<b>' + row.pnl + '</b>' +
             '<small>' + row.pct + '</small>' +
           '</div>' +
-          '<div class="dvlPosV2Next"></div>' +
+          (state.activeTab === "pending" ?
+            '<button class="dvlPosV2Del" type="button" data-dvl-del-id="' + (row.id||"") + '">×</button>' :
+            '<div class="dvlPosV2Next"></div>') +
         '</article>';
     }
     list.innerHTML = html;
@@ -42328,12 +42349,20 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
         if(modeBtn){
           state.mode = modeBtn.getAttribute("data-dvl-mode");
           renderModes();
+          renderList();
           return;
         }
         var tabBtn = ev.target.closest ? ev.target.closest("[data-dvl-tab]") : null;
         if(tabBtn){
           state.activeTab = tabBtn.getAttribute("data-dvl-tab");
           renderTabs();
+          renderList();
+          return;
+        }
+        var delBtn = ev.target.closest ? ev.target.closest("[data-dvl-del-id]") : null;
+        if(delBtn){
+          var delId = delBtn.getAttribute("data-dvl-del-id");
+          if(delId && window.DVL_PAPER_TRADING_V2_PRO) window.DVL_PAPER_TRADING_V2_PRO.cancelPaperOrder(delId);
           renderList();
         }
       });
@@ -42579,6 +42608,8 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
   document.addEventListener("click", function(ev){
     var closeBtn = ev.target.closest ? ev.target.closest("[data-dvl-detail-close]") : null;
     if(closeBtn){ closeDetails(); return; }
+    var delBtn = ev.target.closest ? ev.target.closest("[data-dvl-del-id]") : null;
+    if(delBtn) return;
 
     var card = ev.target.closest ? ev.target.closest(".dvlPosV2Card") : null;
     if(card){ renderDetails(card.getAttribute("data-dvl-symbol") || "BTC/USDT", card, card.getAttribute("data-dvl-status") || "open", card.getAttribute("data-dvl-order-id") || ""); return; }
