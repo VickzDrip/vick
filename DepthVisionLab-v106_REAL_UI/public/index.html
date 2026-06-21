@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.733</title>
+<title>DVL Binance Live — Beta 0.734</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19349,7 +19349,7 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.733</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.734</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19968,11 +19968,12 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.733";
+const DVL_APP_VERSION = "Beta 0.734";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.733 — position details panel now shows real V2 Pro order data (entry, qty, TP, SL, PnL, timeline)." },
+  { version: DVL_APP_VERSION, note: "Beta 0.734 — fixed history detail using live price instead of realizedPnl; timeline now shows date." },
+  { version: "Beta 0.733", note: "Beta 0.733 — position details panel now shows real V2 Pro order data (entry, qty, TP, SL, PnL, timeline)." },
   { version: "Beta 0.732", note: "Beta 0.732 — dvl:position-detail-open event; Funding field removed; Gestão rápida moved above grid, open trades only." },
   { version: "Beta 0.731", note: "Beta 0.731 — fixed Positions click-outside using composedPath so tab/list clicks inside the panel never trigger close." },
   { version: "Beta 0.730", note: "Beta 0.730 — click-outside closes all panels (Trade excepted); history capped at 100 trades." },
@@ -39776,18 +39777,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0733_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0734_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.733"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.733' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.734"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.734' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.733")===-1) blockers.push("A2: title missing 0.733");
+if(!_t || (_t.textContent||"").indexOf("0.734")===-1) blockers.push("A2: title missing 0.734");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40104,7 +40105,7 @@ if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") 
 // A103. Details panel uses buildRealRow for real trade data
 (function(){ var s=document.getElementById("DVL_POSITION_DETAILS_PANEL_MODULE_0724"); var t=s?(s.textContent||""):""; if(t.indexOf("buildRealRow")===-1) blockers.push("A103: details panel missing buildRealRow"); })();
 
-var N=103, name="DVL_UI_OVERLAY_PHASE_0733_AUDIT_MODULE";
+var N=103, name="DVL_UI_OVERLAY_PHASE_0734_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
@@ -42460,7 +42461,7 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
   }
 
   function _lvPrc(){ try{ if(window.ticker&&Number(window.ticker.lastPrice)>0) return Number(window.ticker.lastPrice); }catch(_){} try{ if(window.S&&Array.isArray(window.S.candles)&&window.S.candles.length){ var _c=window.S.candles[window.S.candles.length-1]; var _p=Number(_c.close||_c.c||0); if(Number.isFinite(_p)&&_p>0) return _p; } }catch(_){} return 0; }
-  function _fmtTime(ts){ try{ var d=new Date(Number(ts)); return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }catch(_){ return "--:--"; } }
+  function _fmtTime(ts){ try{ var d=new Date(Number(ts)); return ("0"+d.getDate()).slice(-2)+"/"+(("0"+(d.getMonth()+1)).slice(-2))+" "+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }catch(_){ return "--"; } }
   function _fp2(v){ v=Number(v); if(!Number.isFinite(v)||v<=0) return "--"; return v.toLocaleString("en-US",{minimumFractionDigits:v>=1000?2:3,maximumFractionDigits:v>=1000?2:4}); }
   function _fm2(v){ v=Number(v); if(!Number.isFinite(v)) v=0; var s=v>=0?"+":(v<0?"-":""); return s+Math.abs(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})+" USDT"; }
   function _ft2(v){ v=Number(v); if(!Number.isFinite(v)) v=0; var s=v>=0?"+":(v<0?"-":""); return s+Math.abs(v).toFixed(2)+"%"; }
@@ -42471,7 +42472,7 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
     var sym=String(o.symbol||"").toUpperCase(), disp=sym.replace(/USDT$/i,"/USDT")||sym;
     var coin=sym.replace(/USDT$/i,"").toLowerCase(), coinUpper=sym.replace(/USDT$/i,"");
     var pv=0, pc=0, cur="--", direction="positive";
-    if(status==="closed"){
+    if(status==="closed"||status==="history"){
       var exitP=Number(o.exitPrice||o.closedPrice||0);
       pv=Number(o.realizedPnl); pc=Number(o.realizedPnlPct);
       cur=exitP>0?_fp2(exitP):"--"; direction=(Number.isFinite(pv)&&pv>=0)?"positive":"negative";
