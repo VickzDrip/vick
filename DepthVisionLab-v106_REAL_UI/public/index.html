@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.747</title>
+<title>DVL Binance Live — Beta 0.748</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19360,7 +19360,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.747</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.748</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -20052,11 +20052,12 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.747";
+const DVL_APP_VERSION = "Beta 0.748";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.747 — dropdown 400px, site palette (no blue); watchlist opens favorites panel; symbol text syncs after selection." },
+  { version: DVL_APP_VERSION, note: "Beta 0.748 — limit orders show confirm/cancel on drag; editConfirm guards maybeTriggerPending; infinite re-edit." },
+  { version: "Beta 0.747", note: "Beta 0.747 — dropdown 400px, site palette (no blue); watchlist opens favorites panel; symbol text syncs after selection." },
   { version: "Beta 0.746", note: "Beta 0.746 — drag cannot trigger/close trades; X only on entry line; TP/SL clamped at entry." },
   { version: "Beta 0.745", note: "Beta 0.745 — symbol dropdown: full-width on mobile, clamped on desktop." },
   { version: "Beta 0.744", note: "Beta 0.744 — reset CSS static; symbol dropdown moves to body to escape display:none parent." },
@@ -36541,6 +36542,7 @@ Do not rework this logic unless the user explicitly requests it.
     function maybeTriggerPending(pos){
       if(!pos || pos.status !== "pending") return false;
       if(state.drag && String(state.drag.id) === String(pos.id)) return false;
+      if(state.editConfirm && String(state.editConfirm.id) === String(pos.id)) return false;
 
       const live = lastPrice();
       if(!(live > 0)) return false;
@@ -37064,22 +37066,18 @@ Do not rework this logic unless the user explicitly requests it.
         }
       };
 
-      if(pos.status !== "pending"){
-        state.editConfirm = {
-          id: pos.id,
-          handle: activeHandle,
-          yPx: y,
-          fixedTop: previousEdit ? previousEdit.fixedTop : undefined,
-          fixedRight: previousEdit ? previousEdit.fixedRight : undefined,
-          orig: previousEdit && previousEdit.orig ? previousEdit.orig : {
-            entry: Number(pos.entry),
-            tp: Number(pos.tp),
-            sl: Number(pos.sl)
-          }
-        };
-      }else{
-        state.editConfirm = null;
-      }
+      state.editConfirm = {
+        id: pos.id,
+        handle: activeHandle,
+        yPx: y,
+        fixedTop: previousEdit ? previousEdit.fixedTop : undefined,
+        fixedRight: previousEdit ? previousEdit.fixedRight : undefined,
+        orig: previousEdit && previousEdit.orig ? previousEdit.orig : {
+          entry: Number(pos.entry),
+          tp: Number(pos.tp),
+          sl: Number(pos.sl)
+        }
+      };
 
       window.__dvlPositionDragActive = true;
       window.__dvlLongShortV2Dragging = true;
@@ -37144,16 +37142,6 @@ Do not rework this logic unless the user explicitly requests it.
       window.__dvlLongShortV2Dragging = false;
       window.__dvlPaperDragging = false;
       document.documentElement.classList.remove("dvl-paper-dragging");
-
-      if(pos && pos.status === "pending"){
-        state.editConfirm = null;
-        document.querySelectorAll(".dvl-paper-edit-confirm-fixed,.dvl-paper-edit-label-fixed").forEach(function(el){
-          el.remove();
-        });
-        save();
-        render();
-        return;
-      }
 
       if(pos){
         const handle = dragData.handle || "entry";
@@ -39877,18 +39865,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0747_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0748_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.747"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.747' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.748"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.748' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.747")===-1) blockers.push("A2: title missing 0.747");
+if(!_t || (_t.textContent||"").indexOf("0.748")===-1) blockers.push("A2: title missing 0.748");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40205,7 +40193,7 @@ if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") 
 // A103. Details panel uses buildRealRow for real trade data
 (function(){ var s=document.getElementById("DVL_POSITION_DETAILS_PANEL_MODULE_0724"); var t=s?(s.textContent||""):""; if(t.indexOf("buildRealRow")===-1) blockers.push("A103: details panel missing buildRealRow"); })();
 
-var N=103, name="DVL_UI_OVERLAY_PHASE_0747_AUDIT_MODULE";
+var N=103, name="DVL_UI_OVERLAY_PHASE_0748_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
