@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.720</title>
+<title>DVL Binance Live — Beta 0.721</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19349,7 +19349,7 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.720</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.721</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19968,11 +19968,12 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.720";
+const DVL_APP_VERSION = "Beta 0.721";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.720 — replaced Trade button HTML (clean glyph, removed tradePullGlyph and swap SVG), cancelled conflicting ::before rules." },
+  { version: DVL_APP_VERSION, note: "Beta 0.721 — expanded indicator dropdown proportions to match 0.728 reference, fixed Trade button top-clip (margin-top correction)." },
+  { version: "Beta 0.720", note: "Beta 0.720 — replaced Trade button HTML (clean glyph, removed tradePullGlyph and swap SVG), cancelled conflicting ::before rules." },
   { version: "Beta 0.719", note: "Beta 0.719 — fixed Trade footer button visual, prevented trade panel from overlapping bottom nav, restored compact chart corner controls, and removed remaining blue/cyan toggles." },
   { version: "Beta 0.718", note: "Beta 0.718 — real bottom nav button transplant from 0.728, chart corner controls aligned, removed dead space above footer, and final blue/cyan purge across switches, toggles, keypads, tools and panels." },
   { version: "Beta 0.717", note: "Beta 0.717 — Bottom nav visual transplant from 0.728 and final black/green theme lock. Header frozen." },
@@ -41047,18 +41048,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0720_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0721_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.720"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.720' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.721"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.721' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.720")===-1) blockers.push("A2: title missing 0.720");
+if(!_t || (_t.textContent||"").indexOf("0.721")===-1) blockers.push("A2: title missing 0.721");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -41307,7 +41308,14 @@ if(!document.getElementById("DVL_720_TRADE_BTN_CLEAN")) blockers.push("A72: DVL_
 // A73. chart engine intact
 if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") blockers.push("A73: setCandleMode missing");
 
-var N=73, name="DVL_UI_OVERLAY_PHASE_0720_AUDIT_MODULE";
+// A74. DVL_721_INDIC_PROPORTIONS style block present
+if(!document.getElementById("DVL_721_INDIC_PROPORTIONS")) blockers.push("A74: DVL_721_INDIC_PROPORTIONS missing");
+// A75. DVL_721_TRADE_CLIP_FIX style block present
+if(!document.getElementById("DVL_721_TRADE_CLIP_FIX")) blockers.push("A75: DVL_721_TRADE_CLIP_FIX missing");
+// A76. chart engine intact
+if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") blockers.push("A76: setCandleMode missing");
+
+var N=76, name="DVL_UI_OVERLAY_PHASE_0721_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
@@ -41981,6 +41989,96 @@ nav.bottomNav #tradeNavBtn::before{
   text-align:center !important;
   margin-bottom:2px !important;
   pointer-events:none !important;
+}
+</style>
+<style id="DVL_721_INDIC_PROPORTIONS">
+/* ─── Beta 0.721 — Indicator dropdown proportions match 0.728 reference ─── */
+/* positionInd() sets wrapper left/width via inline style (no !important).
+   CSS !important overrides non-!important inline styles — no JS change needed. */
+
+/* Override JS-capped width (310px): expand wrapper to almost full screen */
+html.dvl1b-ind-open #fxIndicatorWrap{
+  left:12px !important;
+  width:calc(100vw - 24px) !important;
+}
+
+/* Dropdown fills the repositioned wrapper */
+html.dvl1b-ind-open #fxIndicatorWrap .indicatorDropdown,
+html.dvl1b-ind-open #indicatorDropdown{
+  left:0 !important;
+  right:0 !important;
+  width:100% !important;
+  max-height:62vh !important;
+  border-radius:14px !important;
+}
+
+/* Header row */
+html.dvl1b-ind-open .indicatorDropHead{
+  height:44px !important;
+  min-height:44px !important;
+  padding:0 14px !important;
+  font-size:11px !important;
+  letter-spacing:.06em !important;
+  text-transform:uppercase !important;
+}
+
+/* Indicator rows — taller, more breathing room */
+html.dvl1b-ind-open .indicatorItem{
+  min-height:56px !important;
+  max-height:none !important;
+  padding:8px 14px !important;
+  grid-template-columns:36px minmax(0,1fr) 46px !important;
+  gap:10px !important;
+}
+
+/* Icon badge — 36×36 matching reference */
+html.dvl1b-ind-open .indicatorFxMark{
+  width:36px !important;
+  height:36px !important;
+  min-width:36px !important;
+  min-height:36px !important;
+  border-radius:9px !important;
+  font-size:10px !important;
+}
+
+/* Text sizes */
+html.dvl1b-ind-open .indicatorItem b{
+  font-size:14px !important;
+  font-weight:700 !important;
+}
+html.dvl1b-ind-open .indicatorItem small{
+  font-size:11px !important;
+  line-height:1.3 !important;
+}
+html.dvl1b-ind-open .indicatorItem i{
+  font-size:9.5px !important;
+}
+
+/* Toggle — wider/taller: 44×22px */
+html.dvl1b-ind-open .indicatorItem .dvl-vt-state{
+  width:44px !important;
+  min-width:44px !important;
+  max-width:44px !important;
+  height:22px !important;
+  flex:0 0 44px !important;
+}
+html.dvl1b-ind-open .indicatorItem .dvl-vt-state.is-on::after{
+  transform:translateX(24px) !important;
+}
+</style>
+<style id="DVL_721_TRADE_CLIP_FIX">
+/* ─── Beta 0.721 — Trade button top-clip fix ─── */
+/* Root cause: margin-top:-3px pushed the 62px active button flush to the top
+   of the 68px nav. The nav's overflow:hidden + border-radius:18px then clipped
+   the button's top corners and 1px green border.
+   Fix: margin-top:2px → 6px clearance from nav top, well inside the 18px radius. */
+
+.bottomNav #tradeNavBtn,
+nav.bottomNav #tradeNavBtn,
+.bottomNav .navItem.active,
+nav.bottomNav .navItem.active{
+  height:60px !important;
+  margin-top:2px !important;
 }
 </style>
 </body>
