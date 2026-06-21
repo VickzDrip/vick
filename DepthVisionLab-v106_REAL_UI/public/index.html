@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.725</title>
+<title>DVL Binance Live — Beta 0.726</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19349,7 +19349,7 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.725</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.726</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19968,11 +19968,12 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.725";
+const DVL_APP_VERSION = "Beta 0.726";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.725 — removed fake trades from Positions panel, removed DVL Teste 1 and Teste 2 indicators." },
+  { version: DVL_APP_VERSION, note: "Beta 0.726 — Positions panel wired to paper trading runtime; Limit/Stop orders auto-close drawer." },
+  { version: "Beta 0.725", note: "Beta 0.725 — removed fake trades from Positions panel, removed DVL Teste 1 and Teste 2 indicators." },
   { version: "Beta 0.724", note: "Beta 0.724 — integrated functional Positions panel, Watchlist bottom nav rename, Demo/Real toggle and Position Details drawer." },
   { version: "Beta 0.723", note: "Beta 0.723 — all indicators OFF by default for new users, sessions OFF by default, DVL Teste removed from defaults." },
   { version: "Beta 0.722", note: "Beta 0.722 — footer active button 55px centered, logo click reloads page, indicator panel 250px." },
@@ -39767,18 +39768,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0725_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0726_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.725"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.725' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.726"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.726' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.725")===-1) blockers.push("A2: title missing 0.725");
+if(!_t || (_t.textContent||"").indexOf("0.726")===-1) blockers.push("A2: title missing 0.726");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40043,7 +40044,7 @@ if(!document.getElementById("DVL_POSITION_DETAILS_PANEL_CSS_0724")) warnings.pus
 // A80. assetsNavBtn bridge target present
 if(!document.getElementById("assetsNavBtn")) warnings.push("A80: assetsNavBtn missing — Watchlist bridge broken");
 
-var N=80, name="DVL_UI_OVERLAY_PHASE_0725_AUDIT_MODULE";
+var N=80, name="DVL_UI_OVERLAY_PHASE_0726_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
@@ -41964,6 +41965,40 @@ body.dvl-trade-v2-open .dvlNavV2Btn[data-dvl-nav-key="trade"]{
 
   function elById(id){ return document.getElementById(id); }
 
+  function paperRt(){
+    return window.__dvlPaperRuntime0581||window.__dvlPaperRuntime0582||window.__dvlPaperRuntime0580||window.__dvlPaperRuntime;
+  }
+  function lvPrc(){
+    try{ if(window.ticker&&Number(window.ticker.lastPrice)>0) return Number(window.ticker.lastPrice); }catch(_){}
+    try{ if(window.S&&Array.isArray(window.S.candles)&&window.S.candles.length){ var _c=window.S.candles[window.S.candles.length-1]; var _p=Number(_c.close||_c.c||0); if(Number.isFinite(_p)&&_p>0) return _p; } }catch(_){}
+    return 0;
+  }
+  function _fp(v){ v=Number(v); if(!Number.isFinite(v)) return "--"; return v.toLocaleString("en-US",{minimumFractionDigits:v>=1000?2:3,maximumFractionDigits:v>=1000?2:4}); }
+  function _fm(v){ v=Number(v); if(!Number.isFinite(v)) v=0; var s=v>0?"+":(v<0?"-":""); return s+Math.abs(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function _ft(v){ v=Number(v); if(!Number.isFinite(v)) v=0; var s=v>0?"+":(v<0?"-":""); return s+Math.abs(v).toFixed(2)+"%"; }
+  function syncFromRt(){
+    var rt=paperRt();
+    if(!rt||!rt.state||!Array.isArray(rt.state.positions)) return;
+    var live=lvPrc();
+    data.open=[];
+    data.pending=[];
+    for(var _i=0;_i<rt.state.positions.length;_i++){
+      var _pos=rt.state.positions[_i];
+      if(!_pos) continue;
+      var _sym=String(_pos.symbol||"").toUpperCase();
+      var _disp=_sym.replace(/USDT$/i,"/USDT")||_sym;
+      var _coin=_sym.replace(/USDT$/i,"").toLowerCase();
+      var _buy=_pos.side==="buy";
+      var _ep=Number(_pos.entry)||0;
+      var _qty=Number(_pos.qty)||0;
+      var _pv=live>0&&_ep>0?(_buy?(live-_ep)*_qty:(_ep-live)*_qty):0;
+      var _pc=live>0&&_ep>0?(_buy?((live-_ep)/_ep)*100:((_ep-live)/_ep)*100):0;
+      var _row={symbol:_disp,coin:_coin,side:_buy?"Long":"Short",leverage:(Number(_pos.leverage)||1)+"x",entry:_fp(_ep),current:live>0?_fp(live):"--",pnl:_fm(_pv),pct:_ft(_pc),direction:_pv>=0?"positive":"negative"};
+      if(_pos.status==="open"){ data.open.push(_row); }
+      else if(_pos.status==="pending"){ _row.current="Aguardando"; _row.pnl="Pendente"; _row.pct=_pos.orderType||"Limite"; _row.direction="positive"; data.pending.push(_row); }
+    }
+  }
+
   function svgIcon(name){
     var icons = {
       home: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
@@ -42068,6 +42103,7 @@ body.dvl-trade-v2-open .dvlNavV2Btn[data-dvl-nav-key="trade"]{
   }
 
   function renderList(){
+    syncFromRt();
     var list = elById("dvlPosV2List");
     if(!list) return;
     var rows = data[state.activeTab] || [];
@@ -42182,6 +42218,23 @@ body.dvl-trade-v2-open .dvlNavV2Btn[data-dvl-nav-key="trade"]{
           renderList();
         }
       });
+    }
+
+    var _taBtns = document.querySelectorAll(".tradeAction.buy, .tradeAction.sell");
+    for(var _ti=0;_ti<_taBtns.length;_ti++){
+      (function(_btn){
+        if(_btn.dataset.dvlLimitBound) return;
+        _btn.dataset.dvlLimitBound = "1";
+        _btn.addEventListener("click", function(){
+          var _ol = document.getElementById("orderTypeLabel");
+          var _ot = _ol ? _ol.textContent.trim() : "";
+          if(_ot === "Market") return;
+          var _rt = paperRt();
+          if(_rt && typeof _rt.close === "function"){ _rt.close(); }
+          else{ var _dr=document.querySelector(".tradeDrawer"); if(_dr) _dr.classList.remove("is-open"); }
+          document.body.classList.remove("dvl-trade-v2-open");
+        }, false);
+      })(_taBtns[_ti]);
     }
   }
 
