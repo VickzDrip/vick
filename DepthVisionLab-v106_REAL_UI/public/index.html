@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.731</title>
+<title>DVL Binance Live — Beta 0.732</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19349,7 +19349,7 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.731</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.732</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19968,11 +19968,12 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.731";
+const DVL_APP_VERSION = "Beta 0.732";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.731 — fixed Positions click-outside using composedPath so tab/list clicks inside the panel never trigger close." },
+  { version: DVL_APP_VERSION, note: "Beta 0.732 — dvl:position-detail-open event; Funding field removed; Gestão rápida moved above grid, open trades only." },
+  { version: "Beta 0.731", note: "Beta 0.731 — fixed Positions click-outside using composedPath so tab/list clicks inside the panel never trigger close." },
   { version: "Beta 0.730", note: "Beta 0.730 — click-outside closes all panels (Trade excepted); history capped at 100 trades." },
   { version: "Beta 0.729", note: "Beta 0.729 — fixed pending order lifecycle, smart Limit/Stop classification and closed trade history for Positions." },
   { version: "Beta 0.728", note: "Beta 0.728 — Fixed Positions data adapter and pending order lifecycle: drafts no longer appear or activate before confirmation, and Limit/Stop triggers now respect orderType." },
@@ -39774,18 +39775,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0731_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0732_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.731"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.731' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.732"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.732' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.731")===-1) blockers.push("A2: title missing 0.731");
+if(!_t || (_t.textContent||"").indexOf("0.732")===-1) blockers.push("A2: title missing 0.732");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40096,7 +40097,10 @@ if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") 
 // A101. Positions click-outside uses composedPath
 (function(){ var s=document.getElementById("DVL_POSITIONS_WATCHLIST_OVERLAY_MODULE_0722"); var t=s?(s.textContent||""):""; if(t.indexOf("composedPath")===-1) blockers.push("A101: Positions click-outside not using composedPath"); })();
 
-var N=101, name="DVL_UI_OVERLAY_PHASE_0731_AUDIT_MODULE";
+// A102. Position details dispatches dvl:position-detail-open
+(function(){ var s=document.getElementById("DVL_POSITION_DETAILS_PANEL_MODULE_0724"); var t=s?(s.textContent||""):""; if(t.indexOf("dvl:position-detail-open")===-1) blockers.push("A102: position details not dispatching dvl:position-detail-open"); })();
+
+var N=102, name="DVL_UI_OVERLAY_PHASE_0732_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
@@ -42226,7 +42230,7 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
       var lower = String(row.side).toLowerCase();
       var sideClass = (lower.indexOf("short") !== -1 || lower.indexOf("sell") !== -1) ? "short" : "long";
       html +=
-        '<article class="dvlPosV2Card" data-dvl-symbol="' + row.symbol + '">' +
+        '<article class="dvlPosV2Card" data-dvl-symbol="' + row.symbol + '" data-dvl-status="' + state.activeTab + '">' +
           '<div class="dvlPosV2Token ' + row.coin + '">' + tokenGlyph(row.coin) + '</div>' +
           '<div class="dvlPosV2Pair">' +
             '<b>' + row.symbol + '</b>' +
@@ -42451,7 +42455,8 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
     for(var i=0; i<cards.length; i++) cards[i].classList.remove("is-detail-open");
   }
 
-  function renderDetails(symbol, sourceCard){
+  function renderDetails(symbol, sourceCard, status){
+    status = status || "open";
     var row = details[symbol] || details["BTC/USDT"];
     var panel = ensurePanel();
 
@@ -42466,6 +42471,15 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
     for(var j=0; j<row.timeline.length; j++){
       tl += '<div class="dvlDetailV2Event"><time>' + row.timeline[j][0] + '</time><span>' + row.timeline[j][1] + '</span></div>';
     }
+
+    var gestaoHtml = status === "open" ?
+      '<div class="dvlDetailV2SectionTitle">Gestão rápida</div>' +
+      '<div class="dvlDetailV2Actions">' +
+        '<button class="dvlDetailV2Action primary" type="button">Ver no gráfico</button>' +
+        '<button class="dvlDetailV2Action primary" type="button">Mover TP/SL</button>' +
+        '<button class="dvlDetailV2Action" type="button">Fechar parcial</button>' +
+        '<button class="dvlDetailV2Action danger" type="button">Fechar posição</button>' +
+      '</div>' : "";
 
     panel.innerHTML =
       '<header class="dvlDetailV2Head">' +
@@ -42487,6 +42501,7 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
           '<div><span>Resultado líquido</span><strong class="' + pnlClass + '">' + row.net + '</strong></div>' +
           '<small>' + row.pnl + '<br>' + row.pct + '</small>' +
         '</div>' +
+        gestaoHtml +
         '<div class="dvlDetailV2Grid">' +
           '<div class="dvlDetailV2Cell"><span>Tamanho</span><b>' + row.size + '</b></div>' +
           '<div class="dvlDetailV2Cell"><span>Margem usada</span><b>' + row.margin + '</b></div>' +
@@ -42497,20 +42512,13 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
           '<div class="dvlDetailV2Cell green"><span>Take Profit</span><b>' + row.tp + '</b></div>' +
           '<div class="dvlDetailV2Cell red"><span>Stop Loss</span><b>' + row.sl + '</b></div>' +
           '<div class="dvlDetailV2Cell"><span>Fees</span><b>' + row.fees + '</b></div>' +
-          '<div class="dvlDetailV2Cell"><span>Funding</span><b>' + row.funding + '</b></div>' +
-        '</div>' +
-        '<div class="dvlDetailV2SectionTitle">Gestão rápida</div>' +
-        '<div class="dvlDetailV2Actions">' +
-          '<button class="dvlDetailV2Action primary" type="button">Ver no gráfico</button>' +
-          '<button class="dvlDetailV2Action primary" type="button">Mover TP/SL</button>' +
-          '<button class="dvlDetailV2Action" type="button">Fechar parcial</button>' +
-          '<button class="dvlDetailV2Action danger" type="button">Fechar posição</button>' +
         '</div>' +
         '<div class="dvlDetailV2SectionTitle">Timeline</div>' +
         '<div class="dvlDetailV2Timeline">' + tl + '</div>' +
       '</div>';
 
     panel.classList.add("is-open");
+    try{ document.dispatchEvent(new CustomEvent("dvl:position-detail-open", {bubbles:true, detail:{symbol:symbol, status:status, row:row}})); }catch(_){}
   }
 
   document.addEventListener("click", function(ev){
@@ -42518,7 +42526,7 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
     if(closeBtn){ closeDetails(); return; }
 
     var card = ev.target.closest ? ev.target.closest(".dvlPosV2Card") : null;
-    if(card){ renderDetails(card.getAttribute("data-dvl-symbol") || "BTC/USDT", card); return; }
+    if(card){ renderDetails(card.getAttribute("data-dvl-symbol") || "BTC/USDT", card, card.getAttribute("data-dvl-status") || "open"); return; }
 
     var panel = elById("dvlPositionDetailsV2");
     if(panel && panel.classList.contains("is-open")){
