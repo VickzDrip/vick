@@ -42174,11 +42174,20 @@ nav.bottomNav .navItem.active{
 }
 </style>
 <script id="DVL_LOGO_RELOAD_JS">
-/* Logo click → page reload */
-(function(){
-  var b=document.querySelector(".dvl1b-brand");
-  if(b) b.addEventListener("click",function(){ location.reload(); });
-})();
+/* Logo click → page reload (capture:true fires before any child handler) */
+document.addEventListener("click", function(e){
+  var t = e.target;
+  if(t && t.closest && t.closest(".dvl1b-brand")){
+    location.reload();
+  }
+}, true);
+document.addEventListener("touchend", function(e){
+  var t = e.target;
+  if(t && t.closest && t.closest(".dvl1b-brand")){
+    e.preventDefault();
+    location.reload();
+  }
+}, true);
 </script>
 </body>
 </html>
