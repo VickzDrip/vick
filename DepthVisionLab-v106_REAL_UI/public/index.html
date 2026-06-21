@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.719</title>
+<title>DVL Binance Live — Beta 0.720</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19349,7 +19349,7 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.719</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.720</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19906,8 +19906,7 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
     <button class="navItem"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></button>
     <button class="navItem"><svg viewBox="0 0 24 24"><path d="M5 20V9"/><path d="M12 20V4"/><path d="M19 20v-7"/><path d="M16 13h6"/></svg><span>Markets</span></button>
     <button class="navItem active tradeNavWithPull" id="tradeNavBtn" aria-label="Abrir painel de trade">
-      <span class="tradePullGlyph" aria-hidden="true"><b></b></span>
-      <svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>
+      <span class="tradeArrowsGlyph" aria-hidden="true">↑↓</span>
       <span>Trade</span>
     </button>
     <button class="navItem"><svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/></svg><span>Positions</span></button>
@@ -19969,11 +19968,12 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.719";
+const DVL_APP_VERSION = "Beta 0.720";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.719 — fixed Trade footer button visual, prevented trade panel from overlapping bottom nav, restored compact chart corner controls, and removed remaining blue/cyan toggles." },
+  { version: DVL_APP_VERSION, note: "Beta 0.720 — replaced Trade button HTML (clean glyph, removed tradePullGlyph and swap SVG), cancelled conflicting ::before rules." },
+  { version: "Beta 0.719", note: "Beta 0.719 — fixed Trade footer button visual, prevented trade panel from overlapping bottom nav, restored compact chart corner controls, and removed remaining blue/cyan toggles." },
   { version: "Beta 0.718", note: "Beta 0.718 — real bottom nav button transplant from 0.728, chart corner controls aligned, removed dead space above footer, and final blue/cyan purge across switches, toggles, keypads, tools and panels." },
   { version: "Beta 0.717", note: "Beta 0.717 — Bottom nav visual transplant from 0.728 and final black/green theme lock. Header frozen." },
   { version: "Beta 0.716", note: "Beta 0.716 — Global removal of legacy navy/blue/cyan theme residues, unified black/green DVL theme across chart body, price scale, bottom nav, drawers and panels. Header frozen." },
@@ -41047,18 +41047,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0719_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0720_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.719"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.719' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.720"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.720' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.719")===-1) blockers.push("A2: title missing 0.719");
+if(!_t || (_t.textContent||"").indexOf("0.720")===-1) blockers.push("A2: title missing 0.720");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -41300,7 +41300,14 @@ else warnings.push("A68: .tradeDrawer not found");})();
 // A70. chart engine intact
 if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") blockers.push("A70: setCandleMode missing (chart engine altered)");
 
-var N=70, name="DVL_UI_OVERLAY_PHASE_0719_AUDIT_MODULE";
+// A71. tradeArrowsGlyph span present (clean HTML, no tradePullGlyph)
+(function(){var btn=document.getElementById("tradeNavBtn");if(btn){if(btn.querySelector(".tradePullGlyph")) warnings.push("A71: tradePullGlyph still in DOM (should be replaced)");if(!btn.querySelector(".tradeArrowsGlyph")) blockers.push("A71: .tradeArrowsGlyph missing from #tradeNavBtn");}else blockers.push("A71: #tradeNavBtn not found");})();
+// A72. DVL_720_TRADE_BTN_CLEAN style block present
+if(!document.getElementById("DVL_720_TRADE_BTN_CLEAN")) blockers.push("A72: DVL_720_TRADE_BTN_CLEAN missing");
+// A73. chart engine intact
+if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") blockers.push("A73: setCandleMode missing");
+
+var N=73, name="DVL_UI_OVERLAY_PHASE_0720_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
@@ -41949,6 +41956,32 @@ nav.bottomNav,
 
 /* Session dot colors remain intentional (Asia=gold, London=blue(map), NY=green, Sydney=purple)
    Only London dot kept as is — these are geographic identifiers, not theme colors. */
+</style>
+<style id="DVL_720_TRADE_BTN_CLEAN">
+/* ─── Beta 0.720 — Trade button clean HTML glyph ─── */
+/* tradePullGlyph + swap SVG removed from DOM.
+   Using .tradeArrowsGlyph span with literal ↑↓ text.
+   Cancel ::before from 0.718/0.719 to prevent any residual injection. */
+
+/* Cancel conflicting ::before from 0.718 and 0.719 */
+.bottomNav #tradeNavBtn::before,
+nav.bottomNav #tradeNavBtn::before{
+  content:none !important;
+  display:none !important;
+}
+
+/* Style the clean glyph span — same proportions as 0.728 reference */
+.tradeArrowsGlyph{
+  display:block !important;
+  font-size:17px !important;
+  font-weight:700 !important;
+  line-height:.7 !important;
+  letter-spacing:-.04em !important;
+  color:inherit !important;
+  text-align:center !important;
+  margin-bottom:2px !important;
+  pointer-events:none !important;
+}
 </style>
 </body>
 </html>
