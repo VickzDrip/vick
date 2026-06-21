@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.743</title>
+<title>DVL Binance Live — Beta 0.744</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19343,6 +19343,10 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
 /* Bottom nav label text */
 .navItem span,.navItem .navLabel{color:inherit !important}
 
+/* reset button: static CSS — fills pill height as a square */
+.dvlDemoReset{background:none!important;border:none!important;color:var(--orange)!important;opacity:.60!important;cursor:pointer!important;font-size:16px!important;line-height:1!important;padding:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;align-self:stretch!important;aspect-ratio:1/1!important;margin-left:4px!important;}
+.dvlDemoReset:hover,.dvlDemoReset:active{opacity:1!important;}
+
 /* asset dropdown: escape hidden .marketRow via same overflow trick */
 html.dvl-ui-1b-active .marketRow:has(#assetDropdown.is-open){display:block!important;visibility:hidden!important;position:fixed!important;left:0!important;top:0!important;width:0!important;height:0!important;min-height:0!important;padding:0!important;margin:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important;pointer-events:none!important;z-index:99998!important;}
 html.dvl-ui-1b-active #assetDropdown.is-open{pointer-events:auto!important;}
@@ -19357,7 +19361,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.743</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.744</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19506,56 +19510,34 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
   if(drawBtn) drawBtn.addEventListener("click", function(e){ e.stopPropagation(); if(drawOpen) closeDraw(); else openDraw(); }, false);
   document.addEventListener("click", function(e){ if(!drawOpen) return; var sh=drawShell(); var inSh=sh&&sh.contains(e.target); var inBtn=drawBtn&&drawBtn.contains(e.target); if(!inSh&&!inBtn) closeDraw(); }, false);
 
-  /* ── Symbol button — pure-JS: make .marketRow visible, reposition dropdown fixed ── */
+  /* ── Symbol button — move #assetDropdown to body to escape display:none .marketRow ── */
   (function(){
     var symBtn=document.getElementById("dvl1b_symbolBtn");
     if(!symBtn) return;
-    var dvlDDOpen=false;
-    var SP=["display","visibility","position","left","top","width","height",
-            "min-height","padding","margin","border","background","box-shadow",
-            "overflow","pointer-events","z-index"];
-    function getMR(){ return document.querySelector(".marketRow"); }
+    var dvlDDOpen=false, ddHome=null;
     function getDD(){ return document.getElementById("assetDropdown"); }
-    function showMR(mr){
-      mr.style.setProperty("display","block","important");
-      mr.style.setProperty("visibility","hidden","important");
-      mr.style.setProperty("position","fixed","important");
-      mr.style.setProperty("left","0","important");
-      mr.style.setProperty("top","0","important");
-      mr.style.setProperty("width","0","important");
-      mr.style.setProperty("height","0","important");
-      mr.style.setProperty("min-height","0","important");
-      mr.style.setProperty("padding","0","important");
-      mr.style.setProperty("margin","0","important");
-      mr.style.setProperty("border","0","important");
-      mr.style.setProperty("background","transparent","important");
-      mr.style.setProperty("box-shadow","none","important");
-      mr.style.setProperty("overflow","visible","important");
-      mr.style.setProperty("pointer-events","none","important");
-      mr.style.setProperty("z-index","99998","important");
-    }
-    function hideMR(mr){ SP.forEach(function(p){ mr.style.removeProperty(p); }); }
-    function posDD(dd){
+    function dvlOpen(){
+      var dd=getDD(); if(!dd) return;
+      if(!ddHome) ddHome=dd.parentElement;
+      document.body.appendChild(dd);
+      try{ if(typeof openAssetDropdown==="function") openAssetDropdown();
+           else if(window.openAssetDropdown) window.openAssetDropdown(); }catch(_e){}
       var r=symBtn.getBoundingClientRect();
       dd.style.setProperty("position","fixed","important");
       dd.style.setProperty("left",Math.round(r.left)+"px","important");
       dd.style.setProperty("top",Math.round(r.bottom+6)+"px","important");
       dd.style.setProperty("right","auto","important");
-      dd.style.setProperty("pointer-events","auto","important");
-    }
-    function hideDD(dd){ ["position","left","top","right","pointer-events"].forEach(function(p){ dd.style.removeProperty(p); }); }
-    function dvlOpen(){
-      var mr=getMR(), dd=getDD(); if(!mr||!dd) return;
-      showMR(mr);
-      try{ if(typeof openAssetDropdown==="function") openAssetDropdown(); }catch(_e){}
-      posDD(dd);
+      dd.style.setProperty("z-index","999999","important");
       dvlDDOpen=true;
     }
     function dvlClose(){
-      var mr=getMR(), dd=getDD();
-      try{ if(typeof closeAssetDropdown==="function") closeAssetDropdown(); }catch(_e){}
-      if(mr) hideMR(mr);
-      if(dd) hideDD(dd);
+      var dd=getDD();
+      try{ if(typeof closeAssetDropdown==="function") closeAssetDropdown();
+           else if(window.closeAssetDropdown) window.closeAssetDropdown(); }catch(_e){}
+      if(dd){
+        if(ddHome) ddHome.appendChild(dd);
+        ["position","left","top","right","z-index"].forEach(function(p){ dd.style.removeProperty(p); });
+      }
       dvlDDOpen=false;
     }
     symBtn.addEventListener("click",function(e){
@@ -19566,7 +19548,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       if(!dvlDDOpen) return;
       var dd=getDD();
       if(dd&&dd.contains(e.target)) return;
-      if(symBtn.contains(e.target)) return;
+      if(symBtn&&symBtn.contains(e.target)) return;
       dvlClose();
     },true);
   })();
@@ -20052,11 +20034,12 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.743";
+const DVL_APP_VERSION = "Beta 0.744";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.743 — reset fills pill height as square; symbol dropdown via pure JS." },
+  { version: DVL_APP_VERSION, note: "Beta 0.744 — reset CSS static; symbol dropdown moves to body to escape display:none parent." },
+  { version: "Beta 0.743", note: "Beta 0.743 — reset fills pill height as square; symbol dropdown via pure JS." },
   { version: "Beta 0.742", note: "Beta 0.742 — reset icon scales with pill; asset dropdown escapes hidden marketRow." },
   { version: "Beta 0.741", note: "Beta 0.741 — gear icon fixed; settings panel wired to chart settings." },
   { version: "Beta 0.740", note: "Beta 0.740 — reset ↺ fills pill height; symbol selector wired in new header." },
@@ -39870,18 +39853,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0743_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0744_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.743"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.743' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.744"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.744' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.743")===-1) blockers.push("A2: title missing 0.743");
+if(!_t || (_t.textContent||"").indexOf("0.744")===-1) blockers.push("A2: title missing 0.744");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40198,7 +40181,7 @@ if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") 
 // A103. Details panel uses buildRealRow for real trade data
 (function(){ var s=document.getElementById("DVL_POSITION_DETAILS_PANEL_MODULE_0724"); var t=s?(s.textContent||""):""; if(t.indexOf("buildRealRow")===-1) blockers.push("A103: details panel missing buildRealRow"); })();
 
-var N=103, name="DVL_UI_OVERLAY_PHASE_0743_AUDIT_MODULE";
+var N=103, name="DVL_UI_OVERLAY_PHASE_0744_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
