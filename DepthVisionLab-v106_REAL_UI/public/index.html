@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.730</title>
+<title>DVL Binance Live — Beta 0.731</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19349,7 +19349,7 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.730</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.731</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19968,11 +19968,12 @@ html,body{background:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.18
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.730";
+const DVL_APP_VERSION = "Beta 0.731";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.730 — click-outside closes all panels (Trade excepted); history capped at 100 trades." },
+  { version: DVL_APP_VERSION, note: "Beta 0.731 — fixed Positions click-outside using composedPath so tab/list clicks inside the panel never trigger close." },
+  { version: "Beta 0.730", note: "Beta 0.730 — click-outside closes all panels (Trade excepted); history capped at 100 trades." },
   { version: "Beta 0.729", note: "Beta 0.729 — fixed pending order lifecycle, smart Limit/Stop classification and closed trade history for Positions." },
   { version: "Beta 0.728", note: "Beta 0.728 — Fixed Positions data adapter and pending order lifecycle: drafts no longer appear or activate before confirmation, and Limit/Stop triggers now respect orderType." },
   { version: "Beta 0.727", note: "Beta 0.727 — Positions panel refreshes on open; limit order price validation removed." },
@@ -39773,18 +39774,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0730_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0731_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.730"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.730' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.731"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.731' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.730")===-1) blockers.push("A2: title missing 0.730");
+if(!_t || (_t.textContent||"").indexOf("0.731")===-1) blockers.push("A2: title missing 0.731");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40092,7 +40093,10 @@ if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") 
 // A100. chart engine intact
 if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") blockers.push("A100: setCandleMode missing (chart engine altered)");
 
-var N=100, name="DVL_UI_OVERLAY_PHASE_0730_AUDIT_MODULE";
+// A101. Positions click-outside uses composedPath
+(function(){ var s=document.getElementById("DVL_POSITIONS_WATCHLIST_OVERLAY_MODULE_0722"); var t=s?(s.textContent||""):""; if(t.indexOf("composedPath")===-1) blockers.push("A101: Positions click-outside not using composedPath"); })();
+
+var N=101, name="DVL_UI_OVERLAY_PHASE_0731_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
@@ -42345,11 +42349,15 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
       document.__dvlPositionsOutsideBound = true;
       document.addEventListener("click", function(ev){
         if(!state.panelOpen) return;
-        var inPanel = ev.target.closest ? ev.target.closest("#dvlPositionsPanelV2") : null;
-        var inNav   = ev.target.closest ? ev.target.closest("#dvlBottomNavV2") : null;
-        var inDet   = ev.target.closest ? ev.target.closest("#dvlPositionDetailsV2") : null;
-        var inTrade = ev.target.closest ? ev.target.closest(".tradeDrawer") : null;
-        if(!inPanel && !inNav && !inDet && !inTrade){
+        // composedPath() captures the event path at dispatch time,
+        // before renderTabs()/renderList() can detach the clicked element.
+        var path = ev.composedPath ? ev.composedPath() : [];
+        var panelEl = elById("dvlPositionsPanelV2");
+        var navEl   = elById("dvlBottomNavV2");
+        var detEl   = elById("dvlPositionDetailsV2");
+        var tradeEl = document.querySelector(".tradeDrawer");
+        function _inPath(el){ return !!el && path.indexOf(el) !== -1; }
+        if(!_inPath(panelEl) && !_inPath(navEl) && !_inPath(detEl) && !_inPath(tradeEl)){
           state.panelOpen = false;
           renderNav();
         }
