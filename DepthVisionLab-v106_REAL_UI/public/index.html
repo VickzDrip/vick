@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.756</title>
+<title>DVL Binance Live — Beta 0.757</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19360,7 +19360,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.756</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.757</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -20052,11 +20052,12 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.756";
+const DVL_APP_VERSION = "Beta 0.757";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.756 — Fix trade close root cause: rawSym() bypasses S.sym lag so symbol guard and key() use the correct symbol immediately." },
+  { version: DVL_APP_VERSION, note: "Beta 0.757 — Multi-symbol positions: show all assets' trades in Positions panel; fix history lost on symbol switch; baseOrder uses rawSym()." },
+  { version: "Beta 0.756", note: "Beta 0.756 — Fix trade close root cause: rawSym() bypasses S.sym lag so symbol guard and key() use the correct symbol immediately." },
   { version: "Beta 0.755", note: "Beta 0.755 — Fix trade closes on symbol change; fix selector button not updating on symbol change." },
   { version: "Beta 0.754", note: "Beta 0.754 — Fix risk() hardcoded min=1 that sent TP/SL to limbo on low-priced coins (XRP, DOGE etc); sanitize corrupted orders." },
   { version: "Beta 0.753", note: "Beta 0.753 — Remove setTimeout; fix entry label during loading; re-render paper after loadAll." },
@@ -37989,8 +37990,9 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function symbolName(){try{if(window.S&&S.sym)return String(S.sym);}catch(_){} try{if(typeof symbol!=='undefined'&&symbol)return String(symbol);}catch(_){} return 'BTCUSDT';}
   function rawSym(){try{if(typeof symbol!=='undefined'&&symbol)return String(symbol);}catch(_){} return symbolName();}
   function key(){return 'dvl_paper_v2_pro_0695_'+rawSym();}
-  function save(){try{var _a=[],_h=[];for(var _i=0;_i<state.orders.length;_i++){var _o=state.orders[_i];if(!_o)continue;if(_o.status==='closed')_h.push(_o);else if(_o.status!=='draft')_a.push(_o);}if(_h.length>100)_h=_h.slice(-100);var _dr=state.orders.filter(function(_o){return _o&&_o.status==='draft';});state.orders=_dr.concat(_a).concat(_h);localStorage.setItem(key(),JSON.stringify(_a.concat(_h)));}catch(_){}}
+  function save(){try{var _a=[],_h=[];for(var _i=0;_i<state.orders.length;_i++){var _o=state.orders[_i];if(!_o)continue;if(_o.status==='closed')_h.push(_o);else if(_o.status!=='draft')_a.push(_o);}if(_h.length>100)_h=_h.slice(-100);var _dr=state.orders.filter(function(_o){return _o&&_o.status==='draft';});state.orders=_dr.concat(_a).concat(_h);localStorage.setItem(key(),JSON.stringify(_a.concat(_h)));}catch(_){} try{var _rk='dvl_paper_v2_pro_0695_symbols';var _rs=JSON.parse(localStorage.getItem(_rk)||'[]');var _cs=rawSym();if(_cs&&_rs.indexOf(_cs)===-1){_rs.push(_cs);localStorage.setItem(_rk,JSON.stringify(_rs));}}catch(_){}}
   function load(){try{var a=JSON.parse(localStorage.getItem(key())||'[]'); state.orders=Array.isArray(a)?a.filter(function(o){return o&&o.id&&o.status!=='draft';}).map(sanitizeOrder):[];}catch(_){state.orders=[];}}
+  function getAllOrders(){var _all=state.orders.filter(function(o){return o&&o.id&&o.status!=='draft';}); var _cur=rawSym(); try{var _syms=JSON.parse(localStorage.getItem('dvl_paper_v2_pro_0695_symbols')||'[]'); _syms.forEach(function(_s){if(_s===_cur)return; try{var _a=JSON.parse(localStorage.getItem('dvl_paper_v2_pro_0695_'+_s)||'[]'); if(Array.isArray(_a))_all=_all.concat(_a.filter(function(o){return o&&o.id&&o.status!=='draft';}));}catch(_){}});}catch(_){} return _all;}
   function toast(msg){try{if(typeof showToast==='function'){showToast(msg);return;}}catch(_){} var t=$('toast'); if(t){t.textContent=msg;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(function(){t.classList.remove('show');},1500);} else console.warn('[DVL Paper V2 Pro]', msg);}
   function syncLegacy(){try{if(typeof __dvlSyncLegacyState==='function') __dvlSyncLegacyState();}catch(_){}}
   function area(H){syncLegacy();try{if(typeof __dvlLegacyPriceArea==='function') return __dvlLegacyPriceArea(H);}catch(_){} return {y0:4,y1:Math.max(40,H-24)};}
@@ -38016,7 +38018,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function orderType(){var txt=''; var el=$('orderTypeLabel'); if(el) txt=String(el.textContent||''); if(!txt){var b=qs('.orderTypeOption.activeOrderType'); if(b) txt=b.dataset.orderType||b.textContent||'';} txt=txt.toLowerCase(); if(txt.indexOf('market')>=0)return 'market'; if(txt.indexOf('stop')>=0)return 'stop'; return 'limit';}
   function sanitizeOrder(o){if(!o||o.status==='closed')return o; var e=n(o.entry); if(!(e>0))return o; var tp=n(o.tp),sl=n(o.sl); if(tp>0&&sl>0)return o; var r=risk(e); if(o.side==='buy'){if(!(tp>0))o.tp=e+r; if(!(sl>0))o.sl=e-r;}else{if(!(tp>0))o.tp=e-r; if(!(sl>0))o.sl=e+r;} return o;}
   function find(id){return state.orders.find(function(o){return String(o.id)===String(id);});}
-  function baseOrder(side,type,status,entry){entry=n(entry,currentPrice()); var buy=side==='buy', r=risk(entry), idx=currentIndex(); return {id:'pv2p_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7),symbol:symbolName(),side:buy?'buy':'sell',type:type,status:status,entry:entry,tp:buy?entry+r:entry-r,sl:buy?entry-r:entry+r,qty:qty(entry),size:n(getEntrySize(),100),leverage:n(getLeverage(),1),marginMode:'isolated',rr:1,createdAt:Date.now(),anchorIndex:idx,anchorTime:(function(i){try{var cs=window.S&&window.S.candles;var c=cs&&cs[i];return Number(c&&(c.t||c.time||c.openTime))||Date.now();}catch(_){return Date.now();}})(idx),labelAnchorIndex:idx+LABEL_OFFSET_BARS,selected:true};}
+  function baseOrder(side,type,status,entry){entry=n(entry,currentPrice()); var buy=side==='buy', r=risk(entry), idx=currentIndex(); return {id:'pv2p_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7),symbol:rawSym(),side:buy?'buy':'sell',type:type,status:status,entry:entry,tp:buy?entry+r:entry-r,sl:buy?entry-r:entry+r,qty:qty(entry),size:n(getEntrySize(),100),leverage:n(getLeverage(),1),marginMode:'isolated',rr:1,createdAt:Date.now(),anchorIndex:idx,anchorTime:(function(i){try{var cs=window.S&&window.S.candles;var c=cs&&cs[i];return Number(c&&(c.t||c.time||c.openTime))||Date.now();}catch(_){return Date.now();}})(idx),labelAnchorIndex:idx+LABEL_OFFSET_BARS,selected:true};}
   function classifyPendingOrder(side,entry,live){var e=n(entry),lv=n(live),isBuy=side==='buy'; if(isBuy){return e<lv?{triggerType:'limit',orderLabel:'Buy Limit'}:{triggerType:'stop',orderLabel:'Buy Stop'};} return e>lv?{triggerType:'limit',orderLabel:'Sell Limit'}:{triggerType:'stop',orderLabel:'Sell Stop'};}
   function clearDrafts(){state.orders=state.orders.filter(function(o){return o.status!=='draft'});}
   function openMarket(side){var p=currentPrice(); if(!(p>0)){toast('Aguardando preço');return;} clearDrafts(); deselect(); var o=baseOrder(side,'market','open',p); state.orders.push(o); state.selectedId=o.id; save(); render();}
@@ -38046,7 +38048,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function renderOrder(layer,o){if(!o||o.status==='closed')return; if(o.symbol&&o.symbol!==rawSym())return; maybeFill(o); if(maybeCloseOpen(o))return; var ey=priceToY(o.entry),ty=priceToY(o.tp),sy=priceToY(o.sl); if(o.status!=='pending'&&!ey&&!ty&&!sy)return; if(o.status==='pending'&&!ty&&!sy&&!ey)return; var si=(ey||ty||sy).si; var x=labelX(o,si); if(x===null||x===undefined||!Number.isFinite(x))x=Math.max(si.plotLeft+3,si.plotRight-TAG_W-4); if(ty){line(layer,o,'tp',ty.y,si,x);tag(layer,o,'tp',ty.y,si,x);editControls(layer,o,'tp',ty.y,si,x);} if(ey){line(layer,o,'entry',ey.y,si,x);tag(layer,o,'entry',ey.y,si,x);controls(layer,o,si,ey.y,x);} if(sy){line(layer,o,'sl',sy.y,si,x);tag(layer,o,'sl',sy.y,si,x);editControls(layer,o,'sl',sy.y,si,x);}}
   function ensureLayer(){var wrap=getWrap(); if(!wrap)return null; if(getComputedStyle(wrap).position==='static')wrap.style.position='relative'; var layer=getLayer(); if(!layer){layer=document.createElement('div'); layer.id='dvlPaperLayerV2Pro'; layer.className='dvl-pv2p-layer'; wrap.appendChild(layer);} return layer;}
   function cleanupLegacy(){qsa('.dvl-paper-edit-confirm-fixed,.dvl-paper-edit-label-fixed,.dvl-paper-draft-confirm-fixed,.dvl-paper-pending,.dvl-paper-pending-controls').forEach(function(e){try{e.remove();}catch(_){}});}
-  function render(){var _sym=rawSym(); if(_lastSym&&_sym!==_lastSym){try{var _sv=state.orders.filter(function(o){return o&&o.status!=='closed'&&o.status!=='draft';}); if(_sv.length)localStorage.setItem('dvl_paper_v2_pro_0695_'+_lastSym,JSON.stringify(_sv));}catch(_){} state.orders=[];state.selectedId=null;state.edit=null;state.drag=null; load();} _lastSym=_sym; if(!ENABLED)return; var layer=ensureLayer(); if(!layer)return; cleanupLegacy(); layer.innerHTML=''; if(state.edit&&!find(state.edit.id))state.edit=null; state.orders.forEach(function(o){renderOrder(layer,o);});}
+  function render(){var _sym=rawSym(); if(_lastSym&&_sym!==_lastSym){try{var _sv=state.orders.filter(function(o){return o&&o.status!=='draft';}); if(_sv.length){localStorage.setItem('dvl_paper_v2_pro_0695_'+_lastSym,JSON.stringify(_sv)); try{var _rk='dvl_paper_v2_pro_0695_symbols';var _rs=JSON.parse(localStorage.getItem(_rk)||'[]');if(_lastSym&&_rs.indexOf(_lastSym)===-1){_rs.push(_lastSym);localStorage.setItem(_rk,JSON.stringify(_rs));}}catch(_){}}}catch(_){} state.orders=[];state.selectedId=null;state.edit=null;state.drag=null; load();} _lastSym=_sym; if(!ENABLED)return; var layer=ensureLayer(); if(!layer)return; cleanupLegacy(); layer.innerHTML=''; if(state.edit&&!find(state.edit.id))state.edit=null; state.orders.forEach(function(o){renderOrder(layer,o);});}
   function startDrag(ev){var id=ev.currentTarget.dataset.id,kind=ev.currentTarget.dataset.kind||'entry',o=find(id),si=priceScaleInfo(); if(!o||!si)return; var allowed=(o.status==='draft'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='pending'&&(kind==='entry'||kind==='tp'||kind==='sl'))||(o.status==='open'&&(kind==='tp'||kind==='sl')); if(!allowed)return; ev.preventDefault();ev.stopPropagation();if(ev.stopImmediatePropagation)ev.stopImmediatePropagation(); var rect=si.wrap.getBoundingClientRect(), y=ev.clientY-rect.top; if(o.status==='open'&&(kind==='tp'||kind==='sl')){if(!(state.edit&&String(state.edit.id)===String(id)&&state.edit.kind===kind)){state.edit={id:id,kind:kind,orig:{entry:n(o.entry),tp:n(o.tp),sl:n(o.sl)}};}} if(o.status==='pending'){if(!(state.edit&&String(state.edit.id)===String(id)&&state.edit.kind===kind)){state.edit={id:id,kind:kind,orig:{entry:n(o.entry),tp:n(o.tp),sl:n(o.sl)}};}} state.drag={id:id,kind:kind,pid:ev.pointerId,startPrice:si.yToPrice(y),entry:n(o.entry),tp:n(o.tp),sl:n(o.sl),scaleSnapshot:si}; window.__dvlPaperDragging=true; window.__dvlPaperGestureActive=true; window.__dvlPaperDragLock=true; window.__dvlPositionDragActive=true; window.__dvlLongShortV2Dragging=true; window.__dvlPaperV2ProDragging=true; document.documentElement.classList.add('dvl-pv2p-dragging'); document.documentElement.classList.add('dvl-paper-gesture-active'); try{ev.currentTarget.setPointerCapture&&ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){}}
   function moveDrag(ev){if(!state.drag)return; if(state.drag.pid!=null&&ev.pointerId!=null&&state.drag.pid!==ev.pointerId)return; var o=find(state.drag.id),si=(state.drag&&state.drag.scaleSnapshot)||priceScaleInfo(); if(!o||!si)return; ev.preventDefault();ev.stopPropagation();if(ev.stopImmediatePropagation)ev.stopImmediatePropagation(); var rect=si.wrap.getBoundingClientRect(), y=clamp(ev.clientY-rect.top,si.top,si.bottom), cur=si.yToPrice(y), dp=cur-state.drag.startPrice; if(state.drag.kind==='entry'){o.entry=state.drag.entry+dp; o.tp=state.drag.tp+dp; o.sl=state.drag.sl+dp; o.qty=qty(o.entry);} else if(state.drag.kind==='tp'){o.tp=state.drag.tp+dp;} else if(state.drag.kind==='sl'){o.sl=state.drag.sl+dp;} render();}
   function endDrag(){if(!state.drag)return; var d=state.drag; state.drag=null; window.__dvlPaperDragging=false; window.__dvlPaperGestureActive=false; window.__dvlPaperDragLock=false; window.__dvlPositionDragActive=false; window.__dvlLongShortV2Dragging=false; document.documentElement.classList.remove('dvl-pv2p-dragging'); document.documentElement.classList.remove('dvl-paper-gesture-active'); if(!(state.edit&&String(state.edit.id)===String(d.id)&&state.edit.kind===d.kind))save(); render(); window.__dvlPaperV2ProDragging=false; if(window.DVL_RELEASE_PAPER_LOCK)window.DVL_RELEASE_PAPER_LOCK();}
@@ -38055,7 +38057,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function startPnlRefresh(){if(window.__DVL_PAPER_V2_PRO_0697_PNL_INTERVAL__)return; window.__DVL_PAPER_V2_PRO_0697_PNL_INTERVAL__=setInterval(function(){try{if(!state.drag&&!window.__dvlPaperV2ProDragging&&state.orders.some(function(o){return o&&(o.status==='open'||o.status==='pending');}))render();}catch(_){}},900);}
   function install(){var wrap=getWrap(); if(!wrap){console.warn('[DVL Paper V2 Pro] chart wrapper missing');return;} document.documentElement.classList.add('dvl-paper-v2-pro-enabled'); load(); ensureLayer(); cleanupLegacy(); startPnlRefresh(); document.addEventListener('click',tradeClick,true); document.addEventListener('pointermove',moveDrag,{capture:true,passive:false}); document.addEventListener('pointerup',endDrag,{capture:true,passive:false}); document.addEventListener('pointercancel',endDrag,{capture:true,passive:false}); document.addEventListener('click',function(ev){if(!ev.target.closest('#dvlPaperLayerV2Pro')&&!ev.target.closest('.tradeDrawer')){deselect();render();}},true); wrap.addEventListener('pointerup',chartRefresh,{passive:true}); wrap.addEventListener('wheel',chartRefresh,{passive:true}); window.addEventListener('resize',render,{passive:true}); window.__dvlPaperV2ProMoveDrag=moveDrag; window.__dvlPaperV2ProEndDrag=endDrag; render();}
   function audit(){var blockers=[],layer=getLayer(),wrap=getWrap(); if(!window.DVL_PAPER_V2_PRO_ENABLED)blockers.push('V2 Pro flag off'); if(!layer)blockers.push('Layer missing'); if(layer&&wrap&&layer.parentElement!==wrap)blockers.push('Layer outside chart wrapper'); if(qs('.dvl-paper-edit-confirm-fixed')||qs('.dvl-paper-edit-label-fixed'))blockers.push('legacy fixed paper portal active'); if(TAG_W!==86||TAG_H!==17||TAG_FONT!==6.9)blockers.push('tag constants changed'); if(TAG_ALPHA!==0.75)blockers.push('tag opacity not 0.75'); if(SELECTED_TAG_ALPHA!==0.85||EDITING_TAG_ALPHA!==0.85)blockers.push('selected/editing opacity not 0.85'); if(typeof maybeCloseOpen!=='function')blockers.push('TP/SL activation missing'); if(!closePaperTrade)blockers.push('closePaperTrade missing'); if(!confirmTpSlEdit||!cancelTpSlEdit)blockers.push('TP/SL edit confirm missing'); if(LABEL_OFFSET_BARS!==10)blockers.push('offset not 10'); var old=$('dvlPaperLayer'), oldHidden=!old||getComputedStyle(old).display==='none'; if(!oldHidden)blockers.push('legacy layer still visible'); var res={version:VERSION,pass:blockers.length===0,readyForMobileTest:blockers.length===0,layerInsideChart:!!(layer&&wrap&&layer.parentElement===wrap),legacyHidden:oldHidden,orderCount:state.orders.length,entryShowsPnlAfterActivation:true,tpSlShowPriceAndDistancePct:true,entryProfitLossColors:true,entryCloseXForOpen:true,tpSlEditConfirmCancel:true,infiniteTpSlMove:true,marketTpSlEditable:true,labelsCompact:true,lineGapAroundLabels:true,tagOpacity:TAG_ALPHA,lineOpacity:LINE_OPACITY,lineWidth:LINE_WIDTH,draftLineOpacity:DRAFT_LINE_OPACITY,selectedTagOpacity:SELECTED_TAG_ALPHA,editingTagOpacity:EDITING_TAG_ALPHA,tpSlActivation:true,tpSlAutoClose:true,tpSlAutoOneToOne:true,allDraftAndPendingTagsMovable:true,constants:{LABEL_OFFSET_BARS:LABEL_OFFSET_BARS,TAG_W:TAG_W,TAG_H:TAG_H,TAG_FONT:TAG_FONT,TAG_ALPHA:TAG_ALPHA,LINE_OPACITY:LINE_OPACITY,LINE_WIDTH:LINE_WIDTH,DRAFT_LINE_OPACITY:DRAFT_LINE_OPACITY,SELECTED_TAG_OPACITY:SELECTED_TAG_ALPHA,EDITING_TAG_OPACITY:EDITING_TAG_ALPHA,LINE_LABEL_GAP_PX:LINE_LABEL_GAP_PX,SMOOTH_TRANSFORM3D:true,TP_SL_ACTIVATION:true},blockers:blockers,warnings:[]}; state.lastAudit=res; return res;}
-  window.DVL_PAPER_TRADING_V2_PRO={VERSION:VERSION,getState:function(){return state;},render:render,audit:audit,run:audit,getLastAudit:function(){return state.lastAudit;},openMarket:openMarket,createDraft:createDraft,cancelPaperOrder:cancelPaperOrder,closePaperTrade:closePaperTrade,confirmDraft:confirmDraft,confirmTpSlEdit:confirmTpSlEdit,cancelTpSlEdit:cancelTpSlEdit};
+  window.DVL_PAPER_TRADING_V2_PRO={VERSION:VERSION,getState:function(){return state;},getAllOrders:getAllOrders,render:render,audit:audit,run:audit,getLastAudit:function(){return state.lastAudit;},openMarket:openMarket,createDraft:createDraft,cancelPaperOrder:cancelPaperOrder,closePaperTrade:closePaperTrade,confirmDraft:confirmDraft,confirmTpSlEdit:confirmTpSlEdit,cancelTpSlEdit:cancelTpSlEdit};
   window.DVL_PAPER_TRADING_V2_TV_PRO_AUDIT={VERSION:VERSION,audit:audit,run:audit,getLastAudit:function(){return state.lastAudit;}};
   ready(install);
 })();
@@ -39909,18 +39911,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0756_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0757_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.756"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.756' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.757"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.757' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.756")===-1) blockers.push("A2: title missing 0.756");
+if(!_t || (_t.textContent||"").indexOf("0.757")===-1) blockers.push("A2: title missing 0.757");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40237,7 +40239,7 @@ if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") 
 // A103. Details panel uses buildRealRow for real trade data
 (function(){ var s=document.getElementById("DVL_POSITION_DETAILS_PANEL_MODULE_0724"); var t=s?(s.textContent||""):""; if(t.indexOf("buildRealRow")===-1) blockers.push("A103: details panel missing buildRealRow"); })();
 
-var N=103, name="DVL_UI_OVERLAY_PHASE_0756_AUDIT_MODULE";
+var N=103, name="DVL_UI_OVERLAY_PHASE_0757_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
@@ -42166,10 +42168,11 @@ function readOrders(){
   // Primary: DVL_PAPER_TRADING_V2_PRO
   if(window.DVL_PAPER_TRADING_V2_PRO){
     try{
-      var st=window.DVL_PAPER_TRADING_V2_PRO.getState();
-      if(st&&Array.isArray(st.orders)){
-        for(var i=0;i<st.orders.length;i++){
-          var o=st.orders[i];
+      var _allOrds=typeof window.DVL_PAPER_TRADING_V2_PRO.getAllOrders==='function'?window.DVL_PAPER_TRADING_V2_PRO.getAllOrders():(function(){var _st=window.DVL_PAPER_TRADING_V2_PRO.getState();return _st&&Array.isArray(_st.orders)?_st.orders:[];})();
+      var _curSym=(window.symbol&&String(window.symbol).toUpperCase())||'';
+      if(Array.isArray(_allOrds)){
+        for(var i=0;i<_allOrds.length;i++){
+          var o=_allOrds[i];
           if(!o||o.status==="draft") continue;
           var sym=String(o.symbol||"").toUpperCase();
           var disp=sym.replace(/USDT$/i,"/USDT")||sym;
@@ -42177,9 +42180,10 @@ function readOrders(){
           var buy=o.side==="buy";
           var ep=Number(o.entry)||0;
           var qty=Number(o.qty)||0;
-          var pv=live>0&&ep>0?(buy?(live-ep)*qty:(ep-live)*qty):0;
-          var pc=live>0&&ep>0?(buy?((live-ep)/ep)*100:((ep-live)/ep)*100):0;
-          var row={id:o.id,symbol:disp,coin:coin,side:buy?"Long":"Short",leverage:(Number(o.leverage)||1)+"x",entry:_fp(ep),current:live>0?_fp(live):"--",pnl:_fm(pv),pct:_ft(pc),direction:pv>=0?"positive":"negative"};
+          var _lv=sym===_curSym?live:0;
+          var pv=_lv>0&&ep>0?(buy?(_lv-ep)*qty:(ep-_lv)*qty):0;
+          var pc=_lv>0&&ep>0?(buy?((_lv-ep)/ep)*100:((ep-_lv)/ep)*100):0;
+          var row={id:o.id,symbol:disp,coin:coin,side:buy?"Long":"Short",leverage:(Number(o.leverage)||1)+"x",entry:_fp(ep),current:_lv>0?_fp(_lv):"--",pnl:_lv>0?_fm(pv):"--",pct:_lv>0?_ft(pc):"--",direction:pv>=0?"positive":"negative"};
           if(o.status==="open"){ rows.open.push(row); }
           else if(o.status==="pending"){ row.current="Aguardando"; row.pnl="Pendente"; row.pct=o.orderLabel||(o.type||"Limite"); row.direction="positive"; rows.pending.push(row); }
           else if(o.status==="closed"){ var exitP=Number(o.exitPrice||o.closedPrice||0); if(exitP>0) row.current=_fp(exitP); var rpnl=Number(o.realizedPnl); var rpct=Number(o.realizedPnlPct); if(Number.isFinite(rpnl)){ row.pnl=_fm(rpnl); row.direction=rpnl>=0?"positive":"negative"; } if(Number.isFinite(rpct)) row.pct=_ft(rpct); rows.history.push(row); }
