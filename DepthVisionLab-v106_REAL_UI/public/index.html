@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.758</title>
+<title>DVL Binance Live — Beta 0.759</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19360,7 +19360,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.758</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.759</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -20052,11 +20052,12 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.758";
+const DVL_APP_VERSION = "Beta 0.759";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.758 — getAllOrders() scan direto de localStorage: garante todos os ativos sem depender de registry." },
+  { version: DVL_APP_VERSION, note: "Beta 0.759 — DVL_PAPER_TRADE_STORE: store central com pendingOrders, openPositions e tradeHistory; histórico máximo 100 trades; persistência cross-reload." },
+  { version: "Beta 0.758", note: "Beta 0.758 — getAllOrders() scan direto de localStorage: garante todos os ativos sem depender de registry." },
   { version: "Beta 0.757", note: "Beta 0.757 — Multi-symbol positions: show all assets' trades in Positions panel; fix history lost on symbol switch; baseOrder uses rawSym()." },
   { version: "Beta 0.756", note: "Beta 0.756 — Fix trade close root cause: rawSym() bypasses S.sym lag so symbol guard and key() use the correct symbol immediately." },
   { version: "Beta 0.755", note: "Beta 0.755 — Fix trade closes on symbol change; fix selector button not updating on symbol change." },
@@ -38030,7 +38031,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function closePaperTrade(id){var o=find(id); if(!o||o.status!=='open')return; closeOpenOrder(o,'manual',currentPrice()||o.entry); render();}
   function closeOrCancelPaperOrder(id){var o=find(id); if(!o)return; if(o.status==='open'){closeOpenOrder(o,'manual',currentPrice()||o.entry); if(window.DVL_RELEASE_PAPER_LOCK)window.DVL_RELEASE_PAPER_LOCK(); render(); return;} var idx=state.orders.findIndex(function(p){return String(p.id)===String(id);}); if(idx<0)return; state.orders.splice(idx,1); if(state.selectedId===id)state.selectedId=null; state.drag=null; state.edit=null; if(window.DVL_RELEASE_PAPER_LOCK)window.DVL_RELEASE_PAPER_LOCK(); save(); render();}
   function lastRange(){var live=currentPrice(); var hi=live, lo=live; try{if(window.S&&Array.isArray(S.candles)&&S.candles.length){var c=S.candles[S.candles.length-1]; var h=Number(c.high||c.h), l=Number(c.low||c.l); if(Number.isFinite(h)&&h>0)hi=Math.max(hi,h); if(Number.isFinite(l)&&l>0)lo=(lo>0?Math.min(lo,l):l);}}catch(_){} if(!(hi>0))hi=live; if(!(lo>0))lo=live; return {live:live, high:hi, low:lo};}
-  function closeOpenOrder(o,reason,price){if(!o||o.status!=='open')return false; var closePrice=n(price,o.entry); var pv=pnlAt(o,closePrice); var pc=pctAt(o,closePrice); o.status='closed'; o.closeReason=reason||'manual'; o.closedReason=reason||'manual'; o.closedAt=Date.now(); o.closedPrice=closePrice; o.exitPrice=closePrice; o.realizedPnl=pv; o.realizedPnlPct=pc; if(state.selectedId===o.id)state.selectedId=null; if(state.edit&&String(state.edit.id)===String(o.id))state.edit=null; try{window.dispatchEvent(new CustomEvent('dvl:paper-v2-close',{detail:{id:o.id,reason:reason||'manual',price:closePrice,pnl:pv,pct:pc,symbol:o.symbol,side:o.side}}));}catch(_){} save(); toast(reason==='tp'?'TP ativado':reason==='sl'?'SL ativado':'Trade fechado'); return true;}
+  function closeOpenOrder(o,reason,price){if(!o||o.status!=='open')return false; var closePrice=n(price,o.entry); var pv=pnlAt(o,closePrice); var pc=pctAt(o,closePrice); o.status='closed'; o.closeReason=reason||'manual'; o.closedReason=reason||'manual'; o.closedAt=Date.now(); o.closedPrice=closePrice; o.exitPrice=closePrice; o.realizedPnl=pv; o.realizedPnlPct=pc; if(state.selectedId===o.id)state.selectedId=null; if(state.edit&&String(state.edit.id)===String(o.id))state.edit=null; try{window.dispatchEvent(new CustomEvent('dvl:paper-v2-close',{detail:{id:o.id,reason:reason||'manual',price:closePrice,pnl:pv,pct:pc,symbol:o.symbol,side:o.side}}));}catch(_){} try{if(typeof window.addTradeToHistory==='function')window.addTradeToHistory(o);}catch(_){} save(); toast(reason==='tp'?'TP ativado':reason==='sl'?'SL ativado':'Trade fechado'); return true;}
   function maybeCloseOpen(o){if(!o||o.status!=='open')return false; if(state.drag&&String(state.drag.id)===String(o.id))return false; if(state.edit&&String(state.edit.id)===String(o.id))return false; var r=lastRange(); if(!(r.live>0))return false; var tp=n(o.tp), sl=n(o.sl); if(!(tp>0&&sl>0))return false; if(o.side==='buy'){if(r.high>=tp)return closeOpenOrder(o,'tp',tp); if(r.low<=sl)return closeOpenOrder(o,'sl',sl);}else{if(r.low<=tp)return closeOpenOrder(o,'tp',tp); if(r.high>=sl)return closeOpenOrder(o,'sl',sl);} return false;}
   function deselect(){state.orders.forEach(function(o){o.selected=false;}); state.selectedId=null;}
   function maybeFill(o){if(!o||o.status!=='pending')return; if(state.drag||window.__dvlPaperV2ProDragging)return; if(state.edit&&String(state.edit.id)===String(o.id))return; var live=currentPrice(); if(!(live>0))return; var e=n(o.entry); var trig=o.triggerType||o.type||'limit'; var hit=false; if(trig==='limit') hit=(o.side==='buy'? live<=e : live>=e); else if(trig==='stop') hit=(o.side==='buy'? live>=e : live<=e); if(hit){o.status='open'; o.activatedAt=Date.now(); o.activatedPrice=live; o.selected=true; state.selectedId=o.id; save();}}
@@ -39912,18 +39913,18 @@ if(blockers.length > 0){
 </script>
 
 
-<script id="DVL_UI_OVERLAY_PHASE_0758_AUDIT_MODULE">
+<script id="DVL_UI_OVERLAY_PHASE_0759_AUDIT_MODULE">
 (function(){
 "use strict";
 var blockers=[], warnings=[];
 
 // A1. Version
-if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.758"))
-  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.758' (got: "+window.DVL_APP_VERSION+")");
+if(!(typeof window.DVL_APP_VERSION!=="undefined" && window.DVL_APP_VERSION==="Beta 0.759"))
+  blockers.push("A1: DVL_APP_VERSION !== 'Beta 0.759' (got: "+window.DVL_APP_VERSION+")");
 
 // A2. Title
 var _t=document.querySelector("title");
-if(!_t || (_t.textContent||"").indexOf("0.758")===-1) blockers.push("A2: title missing 0.758");
+if(!_t || (_t.textContent||"").indexOf("0.759")===-1) blockers.push("A2: title missing 0.759");
 
 // A3. NO iframe anywhere (Phase 1B requirement)
 if(document.querySelector("iframe")) blockers.push("A3: an <iframe> exists (must be none)");
@@ -40240,7 +40241,7 @@ if(typeof setCandleMode!=="function"&&typeof window.setCandleMode!=="function") 
 // A103. Details panel uses buildRealRow for real trade data
 (function(){ var s=document.getElementById("DVL_POSITION_DETAILS_PANEL_MODULE_0724"); var t=s?(s.textContent||""):""; if(t.indexOf("buildRealRow")===-1) blockers.push("A103: details panel missing buildRealRow"); })();
 
-var N=103, name="DVL_UI_OVERLAY_PHASE_0758_AUDIT_MODULE";
+var N=103, name="DVL_UI_OVERLAY_PHASE_0759_AUDIT_MODULE";
 if(blockers.length){
   var m="["+name+"] BLOCKED ("+blockers.length+"): "+blockers.join("; ");
   if(warnings.length) m+=" | Warnings: "+warnings.join("; ");
@@ -42148,6 +42149,50 @@ body.dvl-trade-v2-open .dvlNavV2Btn[data-dvl-nav-key="trade"]{
 }
 </style>
 
+<script id="DVL_PAPER_TRADE_STORE_MODULE_0759">
+(function(){
+"use strict";
+if(window.DVL_PAPER_TRADE_STORE)return;
+var _SKEY='DVL_PAPER_TRADE_STORE_V1';
+var _MAX=100;
+window.DVL_PAPER_TRADE_STORE={version:'0.759',pendingOrders:[],openPositions:[],tradeHistory:[],maxHistory:_MAX};
+
+function savePaperTradeStore(){try{var s=window.DVL_PAPER_TRADE_STORE;localStorage.setItem(_SKEY,JSON.stringify({version:s.version,pendingOrders:s.pendingOrders,openPositions:s.openPositions,tradeHistory:s.tradeHistory}));}catch(e){}}
+
+function loadPaperTradeStore(){
+  try{
+    var raw=localStorage.getItem(_SKEY);var s=window.DVL_PAPER_TRADE_STORE;
+    if(raw){var data=JSON.parse(raw);if(data){s.pendingOrders=Array.isArray(data.pendingOrders)?data.pendingOrders:[];s.openPositions=Array.isArray(data.openPositions)?data.openPositions:[];s.tradeHistory=Array.isArray(data.tradeHistory)?data.tradeHistory.slice(-_MAX):[];}}
+    if(!s.tradeHistory.length){
+      var _pfx='dvl_paper_v2_pro_0695_',_rk=_pfx+'symbols',_seen={};
+      try{
+        for(var _k=0;_k<localStorage.length;_k++){var _lk=localStorage.key(_k);if(!_lk||_lk.indexOf(_pfx)!==0||_lk===_rk)continue;try{var _la=JSON.parse(localStorage.getItem(_lk)||'[]');if(Array.isArray(_la))_la.forEach(function(o){if(o&&o.id&&o.status==='closed'&&!_seen[o.id]){_seen[o.id]=true;s.tradeHistory.push(o);}});}catch(_){}}
+      }catch(_){}
+      s.tradeHistory.sort(function(a,b){return(a.closedAt||0)-(b.closedAt||0);});
+      if(s.tradeHistory.length>_MAX)s.tradeHistory=s.tradeHistory.slice(-_MAX);
+    }
+  }catch(e){}
+}
+
+function addTradeToHistory(trade){var s=window.DVL_PAPER_TRADE_STORE;if(!s||!trade)return;s.tradeHistory.push(trade);while(s.tradeHistory.length>s.maxHistory)s.tradeHistory.shift();savePaperTradeStore();}
+
+function syncPaperStoreFromOrders(){var s=window.DVL_PAPER_TRADE_STORE;if(!s)return;try{var V2=window.DVL_PAPER_TRADING_V2_PRO;if(!V2)return;var all=typeof V2.getAllOrders==='function'?V2.getAllOrders():(V2.getState().orders||[]);s.pendingOrders=all.filter(function(o){return o&&(o.status==='pending'||o.status==='draft');});s.openPositions=all.filter(function(o){return o&&o.status==='open';});}catch(_){}}
+
+window.savePaperTradeStore=savePaperTradeStore;
+window.loadPaperTradeStore=loadPaperTradeStore;
+window.addTradeToHistory=addTradeToHistory;
+window.syncPaperStoreFromOrders=syncPaperStoreFromOrders;
+
+window.DVL_PAPER_TRADE_STORE_AUDIT={run:function(){var bl=[];var s=window.DVL_PAPER_TRADE_STORE;if(!s){bl.push('store missing');}else{if(!Array.isArray(s.pendingOrders))bl.push('pendingOrders missing');if(!Array.isArray(s.openPositions))bl.push('openPositions missing');if(!Array.isArray(s.tradeHistory))bl.push('tradeHistory missing');if(s.maxHistory!==100)bl.push('maxHistory!=100');if(s.tradeHistory.length>100)bl.push('history>100');}if(typeof window.savePaperTradeStore!=='function')bl.push('savePaperTradeStore missing');if(typeof window.loadPaperTradeStore!=='function')bl.push('loadPaperTradeStore missing');if(typeof window.addTradeToHistory!=='function')bl.push('addTradeToHistory missing');if(typeof window.syncPaperStoreFromOrders!=='function')bl.push('syncPaperStoreFromOrders missing');return{pass:bl.length===0,blockers:bl,version:'0.759'};}};
+
+function _init(){loadPaperTradeStore();syncPaperStoreFromOrders();}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_init,{once:true});else _init();
+document.addEventListener('dvl:paper-v2-close',syncPaperStoreFromOrders);
+document.addEventListener('dvl:paper-position',syncPaperStoreFromOrders);
+document.addEventListener('dvl:paper-position-closed',syncPaperStoreFromOrders);
+})();
+</script>
+
 <script id="DVL_POSITIONS_ADAPTER_MODULE_0728">
 (function(){
 "use strict";
@@ -42165,6 +42210,7 @@ function _ft(v){ v=Number(v); if(!Number.isFinite(v)) v=0; var s=v>0?"+":(v<0?"-
 function readOrders(){
   var rows={open:[],pending:[],history:[]};
   var live=lvPrc();
+  try{if(typeof window.syncPaperStoreFromOrders==='function')window.syncPaperStoreFromOrders();}catch(_){}
 
   // Primary: DVL_PAPER_TRADING_V2_PRO
   if(window.DVL_PAPER_TRADING_V2_PRO){
@@ -42189,6 +42235,7 @@ function readOrders(){
           else if(o.status==="pending"){ row.current="Aguardando"; row.pnl="Pendente"; row.pct=o.orderLabel||(o.type||"Limite"); row.direction="positive"; rows.pending.push(row); }
           else if(o.status==="closed"){ var exitP=Number(o.exitPrice||o.closedPrice||0); if(exitP>0) row.current=_fp(exitP); var rpnl=Number(o.realizedPnl); var rpct=Number(o.realizedPnlPct); if(Number.isFinite(rpnl)){ row.pnl=_fm(rpnl); row.direction=rpnl>=0?"positive":"negative"; } if(Number.isFinite(rpct)) row.pct=_ft(rpct); rows.history.push(row); }
         }
+        try{if(window.DVL_PAPER_TRADE_STORE&&(window.DVL_PAPER_TRADE_STORE.tradeHistory||[]).length>0){rows.history=[];var _th=window.DVL_PAPER_TRADE_STORE.tradeHistory.slice().reverse();for(var _thi=0;_thi<_th.length;_thi++){var _tho=_th[_thi];if(!_tho)continue;var _thsym=String(_tho.symbol||"").toUpperCase();var _thd=_thsym.replace(/USDT$/i,"/USDT")||_thsym;var _thc=_thsym.replace(/USDT$/i,"").toLowerCase();var _thb=_tho.side==="buy";var _the=Number(_tho.entry)||0;var _thx=Number(_tho.exitPrice||_tho.closedPrice||0);var _thrn=Number(_tho.realizedPnl);var _thrc=Number(_tho.realizedPnlPct);rows.history.push({id:_tho.id,symbol:_thd,coin:_thc,side:_thb?"Long":"Short",leverage:(Number(_tho.leverage)||1)+"x",entry:_fp(_the),current:_thx>0?_fp(_thx):"--",pnl:Number.isFinite(_thrn)?_fm(_thrn):"--",pct:Number.isFinite(_thrc)?_ft(_thrc):"--",direction:Number.isFinite(_thrn)?(_thrn>=0?"positive":"negative"):"positive"});}}catch(_){}
         return rows;
       }
     }catch(_){}
