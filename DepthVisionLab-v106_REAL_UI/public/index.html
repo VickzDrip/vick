@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.767</title>
+<title>DVL Binance Live — Beta 0.768</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19360,7 +19360,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.767</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.768</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -20052,11 +20052,12 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.767";
+const DVL_APP_VERSION = "Beta 0.768";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.767 — Fix header star not turning yellow: window.symbol is IIFE-local and never exposed on window; watchlist module now reads the current symbol from the #symbolText DOM element via _getCurSym(), so the star correctly turns yellow/filled when the asset is in the Watchlist." },
+  { version: DVL_APP_VERSION, note: "Beta 0.768 — Header star yellow: triple-layer fix — is-wl-active class + is-favorite class (reuses existing CSS) + inline style on span and SVG as absolute fallback, so yellow fill works regardless of CSS cache or specificity issues." },
+  { version: "Beta 0.767", note: "Beta 0.767 — Fix header star not turning yellow: window.symbol is IIFE-local and never exposed on window; watchlist module now reads the current symbol from the #symbolText DOM element via _getCurSym(), so the star correctly turns yellow/filled when the asset is in the Watchlist." },
   { version: "Beta 0.766", note: "Beta 0.766 — TP/SL execution fix: the price engine was reading window.ticker which is never set (ticker is a local IIFE variable); now reads window.S.candles for the current chart price, so TP/SL fires correctly for the current asset and via WebSocket for all other assets." },
   { version: "Beta 0.765", note: "Beta 0.765 — Watchlist and asset icons: the header star now adds/removes the current asset from a persistent Watchlist, the footer Watchlist button opens a real favorites panel, and asset icons now update per symbol instead of showing the BTC icon for every pair." },
   { version: "Beta 0.764", note: "Beta 0.764 — Demo wallet and realtime execution: Paper TP/SL and pending orders now execute in real time across symbols without opening the asset, Demo balance uses margin like real trading, Tax was renamed to Fee, and entry/exit fees now affect PnL, equity and trade history." },
@@ -43764,7 +43765,13 @@ function updateHeaderIconAndStar(){
   if(starBtn){
     var active=_wlHas(sym);
     starBtn.classList.toggle('is-wl-active',active);
+    starBtn.classList.toggle('is-favorite',active);  // reuse existing yellow CSS
     starBtn.setAttribute('aria-pressed',active?'true':'false');
+    // Inline style as absolute fallback — bypasses any CSS cache/specificity issues
+    starBtn.style.color=active?'#ffd055':'';
+    starBtn.style.filter=active?'drop-shadow(0 0 8px rgba(255,208,85,.35))':'';
+    var svgEl=starBtn.querySelector('svg');
+    if(svgEl){svgEl.style.fill=active?'#ffd055':'none';svgEl.style.stroke=active?'#ffd055':'currentColor';}
   }
 }
 window.updateHeaderIconAndStar=updateHeaderIconAndStar;
