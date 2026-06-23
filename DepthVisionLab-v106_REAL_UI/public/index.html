@@ -43587,15 +43587,19 @@ window.renderAssetIcon=renderAssetIcon;
     +'.dvlWLList{flex:1;overflow-y:auto;padding:4px 0 max(env(safe-area-inset-bottom,12px),12px);}'
     +'.dvlWLEmpty{padding:40px 20px;text-align:center;color:#9aa3b2;}'
     +'.dvlWLEmpty strong{display:block;color:#fff;font-size:15px;margin-bottom:8px;}'
-    +'.dvlWLRow{display:flex;align-items:center;gap:8px;padding:1px 14px;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;color:inherit;-webkit-tap-highlight-color:transparent;min-height:20px;}'
+    +'.dvlWLRow{display:flex;align-items:center;gap:8px;padding:5px 14px;width:100%;text-align:left;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;color:inherit;-webkit-tap-highlight-color:transparent;}'
     +'.dvlWLRow:active{background:rgba(255,255,255,.05);}'
     +'.dvlWLInfo{flex:1;min-width:0;}'
-    +'.dvlWLInfo strong{display:block;font-size:12px;color:#fff;font-weight:600;line-height:1.2;}'
+    +'.dvlWLInfo strong{display:block;font-size:12px;color:#fff;font-weight:600;line-height:1.3;}'
     +'.dvlWLInfo span{font-size:10px;color:#9aa3b2;line-height:1;}'
-    +'.dvlWLPrice{text-align:right;padding-right:2px;}'
-    +'.dvlWLPrice strong{display:block;font-size:11px;color:#d7dae3;font-weight:500;}'
-    +'.dvlWLRemove{background:none;border:none;color:#555e6e;font-size:16px;cursor:pointer;padding:2px 0 2px 8px;line-height:1;flex:0 0 auto;-webkit-tap-highlight-color:transparent;}'
-    +'.dvlWLRemove:active{color:#e84142;}';
+    +'.dvlWLPrice{text-align:right;min-width:60px;}'
+    +'.dvlWLPrice strong{display:block;font-size:11px;color:#d7dae3;font-weight:500;line-height:1.3;}'
+    +'.dvlWLChange{display:block;font-size:10px;font-weight:500;line-height:1;}'
+    +'.dvlWLChange.pos{color:#10df77;}'
+    +'.dvlWLChange.neg{color:#e84142;}'
+    +'.dvlWLChange.neu{color:#9aa3b2;}'
+    +'.dvlWLStar{background:none;border:none;color:#ffd055;font-size:17px;cursor:pointer;padding:4px 0 4px 10px;line-height:1;flex:0 0 auto;-webkit-tap-highlight-color:transparent;opacity:.9;}'
+    +'.dvlWLStar:active{opacity:1;transform:scale(1.2);}';
   (document.head||document.documentElement).appendChild(s);
 })();
 
@@ -43640,6 +43644,8 @@ function _ensureWLPanel(){
 
 function _fmtWLPrice(sym){
   sym=_normSym(sym);
+  var st=window.DVL_24H_STATS&&window.DVL_24H_STATS[sym];
+  if(st&&Number.isFinite(st.price)&&st.price>0){var p=st.price;return p.toLocaleString('en-US',{minimumFractionDigits:p>=1000?2:3,maximumFractionDigits:p>=1000?2:6});}
   var lp=window.DVL_LAST_PRICE_BY_SYMBOL&&window.DVL_LAST_PRICE_BY_SYMBOL[sym];
   if(lp&&Number.isFinite(lp.price)&&lp.price>0){
     var p=lp.price;
@@ -43647,6 +43653,37 @@ function _fmtWLPrice(sym){
   }
   try{var cur=_normSym(typeof window.symbol!=='undefined'?String(window.symbol):'');if(sym===cur&&window.ticker&&Number(window.ticker.lastPrice)>0)return Number(window.ticker.lastPrice).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4});}catch(_){}
   return '--';
+}
+
+window.DVL_24H_STATS=window.DVL_24H_STATS||{};
+
+function _fmtWLChange(sym){
+  sym=_normSym(sym);
+  var st=window.DVL_24H_STATS[sym];
+  if(st&&Number.isFinite(st.change)){var c=st.change;var sign=c>=0?'+':'';return{text:sign+c.toFixed(2)+'%',cls:c>0?'pos':c<0?'neg':'neu'};}
+  try{var cur=_normSym(typeof window.symbol!=='undefined'?String(window.symbol):'');if(sym===cur&&window.ticker&&window.ticker.priceChangePercent!=null){var c2=Number(window.ticker.priceChangePercent);var s2=c2>=0?'+':'';return{text:s2+c2.toFixed(2)+'%',cls:c2>0?'pos':c2<0?'neg':'neu'};}}catch(_){}
+  return{text:'',cls:'neu'};
+}
+
+function _fetchWLStats(){
+  var syms=window.DVL_WATCHLIST_STORE&&window.DVL_WATCHLIST_STORE.symbols||[];
+  if(!syms.length)return;
+  try{
+    var arr='['+syms.map(function(s){return'"'+s+'"';}).join(',')+']';
+    fetch('https://api.binance.com/api/v3/ticker/24hr?symbols='+encodeURIComponent(arr)+'&type=MINI')
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(!Array.isArray(data))return;
+        data.forEach(function(t){
+          if(!t.symbol)return;
+          window.DVL_24H_STATS[t.symbol]={price:parseFloat(t.lastPrice),change:parseFloat(t.priceChangePercent)};
+          if(!window.DVL_LAST_PRICE_BY_SYMBOL)window.DVL_LAST_PRICE_BY_SYMBOL={};
+          window.DVL_LAST_PRICE_BY_SYMBOL[t.symbol]={price:parseFloat(t.lastPrice)};
+        });
+        var p=document.getElementById('dvlWatchlistPanel');
+        if(p&&p.classList.contains('is-open'))renderWatchlistPanel();
+      }).catch(function(){});
+  }catch(_){}
 }
 
 function renderWatchlistPanel(){
@@ -43660,12 +43697,14 @@ function renderWatchlistPanel(){
     var name=asset?asset.name:s.replace(/USDT$/,'');
     var icon=renderAssetIcon(s);
     var price=_fmtWLPrice(s);
-    rows+='<button class="dvlWLRow" type="button" data-wl-pick="'+s+'" aria-label="'+disp+'">'+
+    var chg=_fmtWLChange(s);
+    var chgHtml=chg.text?'<span class="dvlWLChange '+chg.cls+'">'+chg.text+'</span>':'';
+    rows+='<div class="dvlWLRow" data-wl-pick="'+s+'" role="button" tabindex="0" aria-label="'+disp+'">'+
       icon+
       '<div class="dvlWLInfo"><strong>'+disp+'</strong><span>'+name+'</span></div>'+
-      '<div class="dvlWLPrice"><strong>'+price+'</strong></div>'+
-      '<button class="dvlWLRemove" type="button" data-wl-remove="'+s+'" aria-label="Remover '+disp+'">\u00d7</button>'+
-    '</button>';
+      '<div class="dvlWLPrice"><strong>'+price+'</strong>'+chgHtml+'</div>'+
+      '<button class="dvlWLStar" type="button" data-wl-remove="'+s+'" aria-label="Remover '+disp+'">\u2605</button>'+
+    '</div>';
   }
   panel.innerHTML=
     '<div class="dvlWLHead"><span class="dvlWLTitle">Watchlist</span><button class="dvlWLClose" type="button" id="dvlWLCloseBtn" aria-label="Fechar">\u00d7</button></div>'+
@@ -43791,7 +43830,10 @@ window.updateHeaderIconAndStar=updateHeaderIconAndStar;
     // Retry wiring for late-rendered elements
     setTimeout(function(){_wireStarBtn();_wireNavWatchlist();updateHeaderIconAndStar();},600);
     setTimeout(function(){_wireStarBtn();_wireNavWatchlist();updateHeaderIconAndStar();},2000);
-    // Update icon when ticker updates
+    // Fetch 24h stats immediately and every 5s
+    setTimeout(_fetchWLStats,1200);
+    setInterval(_fetchWLStats,5000);
+    // Update icon + panel every 2s
     setInterval(function(){
       try{
         updateHeaderIconAndStar();
