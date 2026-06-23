@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.778</title>
+<title>DVL Binance Live — Beta 0.779</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19360,16 +19360,14 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.778</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.779</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
         <span class="dvl1b-symText" id="dvl1b_symbolText">BTC/USDT</span>
         <span class="dvl1b-chev" aria-hidden="true"></span>
       </button>
-      <button class="dvl1b-btn dvl1b-star" id="dvl1b_favBtn" type="button" aria-label="Favoritar ativo">
-        <svg viewBox="0 0 24 24"><path d="M12 2.8l2.82 5.72 6.31.92-4.56 4.45 1.08 6.28L12 17.2l-5.65 2.97 1.08-6.28-4.56-4.45 6.31-.92L12 2.8z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/></svg>
-      </button>
+      <button class="dvl1b-btn dvl1b-star dvl1b-star-text-only" id="dvl1b_favBtn" type="button" aria-label="Adicionar aos favoritos" aria-pressed="false">☆</button>
       <button class="dvl1b-btn dvl1b-save" id="dvl1b_saveBtn" type="button" aria-label="Salvar perfil"><span class="dvl1b-save-full">Salvar perfil</span><span class="dvl1b-save-short">Salvar</span></button>
       <button class="dvl1b-btn dvl1b-more" id="dvl1b_menuBtn" type="button" aria-label="Menu">
         <span class="dvl1b-kebab" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -20054,11 +20052,12 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.778";
+const DVL_APP_VERSION = "Beta 0.779";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.778 — Header star owner fix: #dvlHeaderStar restored with innerHTML=☆/★ (text, no SVG). Click handler dispatches to [data-star-symbol] button in assetDropdown to sync IIFE's toggleFavoriteSymbol + watchlist _wlToggle simultaneously. MutationObserver on #currentFavoriteBtn mirrors IIFE state. MutationObserver on .marketRow re-patches if button recreated." },
+  { version: DVL_APP_VERSION, note: "Beta 0.779 — Phase 1B header star fix: #dvl1b_favBtn (the REAL visible button in #DVL_UI_OVERLAY_PHASE_1B) now uses innerHTML=★/☆ (text, no SVG). Capture-phase listener with stopImmediatePropagation intercepts old toggleAssetFavorites handler. Connected to watchlist store via _wlToggle/_wlHas. MutationObserver guard re-patches button if Phase 1B re-renders." },
+  { version: "Beta 0.778", note: "Beta 0.778 — Header star owner fix: #dvlHeaderStar restored with innerHTML=☆/★ (text, no SVG). Click handler dispatches to [data-star-symbol] button in assetDropdown to sync IIFE's toggleFavoriteSymbol + watchlist _wlToggle simultaneously. MutationObserver on #currentFavoriteBtn mirrors IIFE state. MutationObserver on .marketRow re-patches if button recreated." },
   { version: "Beta 0.767", note: "Beta 0.767 — Fix header star not turning yellow: window.symbol is IIFE-local and never exposed on window; watchlist module now reads the current symbol from the #symbolText DOM element via _getCurSym(), so the star correctly turns yellow/filled when the asset is in the Watchlist." },
   { version: "Beta 0.766", note: "Beta 0.766 — TP/SL execution fix: the price engine was reading window.ticker which is never set (ticker is a local IIFE variable); now reads window.S.candles for the current chart price, so TP/SL fires correctly for the current asset and via WebSocket for all other assets." },
   { version: "Beta 0.765", note: "Beta 0.765 — Watchlist and asset icons: the header star now adds/removes the current asset from a persistent Watchlist, the footer Watchlist button opens a real favorites panel, and asset icons now update per symbol instead of showing the BTC icon for every pair." },
@@ -43844,9 +43843,73 @@ function updateHeaderIconAndStar(){
     coinEl.className='btc dvlCoinHdr '+meta.className;
   }
   updateHeaderFavoriteStarState();
+  updatePhase1BHeaderFavoriteStarState();
 }
 window.updateHeaderIconAndStar=updateHeaderIconAndStar;
 
+
+// ── Beta 0.779 — Phase 1B Header Favorite Star Fix ───────────────────────────
+function forcePhase1BHeaderStarVisual(active){
+  var btn=document.getElementById('dvl1b_favBtn');
+  if(!btn)return;
+  btn.classList.add('dvl1b-star-text-only');
+  btn.classList.toggle('is-favorite',!!active);
+  btn.classList.toggle('is-active',!!active);
+  btn.dataset.favorite=active?'true':'false';
+  btn.setAttribute('aria-pressed',active?'true':'false');
+  btn.setAttribute('aria-label',active?'Remover dos favoritos':'Adicionar aos favoritos');
+  btn.innerHTML=active?'★':'☆';
+}
+window.forcePhase1BHeaderStarVisual=forcePhase1BHeaderStarVisual;
+
+function getPhase1BCurrentSymbol(){
+  var el=document.getElementById('dvl1b_symbolText')||document.getElementById('symbolText');
+  var txt=el?el.textContent:'';
+  return _normSym(String(txt).trim())||_getCurSym();
+}
+window.getPhase1BCurrentSymbol=getPhase1BCurrentSymbol;
+
+function updatePhase1BHeaderFavoriteStarState(){
+  var sym=getPhase1BCurrentSymbol();
+  forcePhase1BHeaderStarVisual(sym&&_wlHas(sym));
+}
+window.updatePhase1BHeaderFavoriteStarState=updatePhase1BHeaderFavoriteStarState;
+
+function bindPhase1BHeaderFavoriteStar(){
+  var btn=document.getElementById('dvl1b_favBtn');
+  if(!btn||btn.__dvlPhase1BStarBound)return;
+  btn.__dvlPhase1BStarBound=true;
+  btn.addEventListener('click',function(ev){
+    ev.preventDefault();
+    ev.stopPropagation();
+    if(ev.stopImmediatePropagation)ev.stopImmediatePropagation();
+    var sym=getPhase1BCurrentSymbol();
+    if(!sym)return;
+    _wlToggle(sym);
+    updatePhase1BHeaderFavoriteStarState();
+    if(typeof renderWatchlistPanel==='function'){
+      var p=document.getElementById('dvlWatchlistPanel');
+      if(p&&p.classList.contains('is-open'))renderWatchlistPanel();
+    }
+  },true); // capture — intercepta antes do handler antigo toggleAssetFavorites (bubble)
+}
+window.bindPhase1BHeaderFavoriteStar=bindPhase1BHeaderFavoriteStar;
+
+function installPhase1BHeaderStarGuard(){
+  if(window.__dvlPhase1BHeaderStarGuardInstalled)return;
+  window.__dvlPhase1BHeaderStarGuardInstalled=true;
+  if(typeof MutationObserver==='undefined')return;
+  var target=document.getElementById('DVL_UI_OVERLAY_PHASE_1B')||document.body;
+  new MutationObserver(function(){
+    var btn=document.getElementById('dvl1b_favBtn');
+    if(btn&&!btn.__dvlPhase1BStarBound){
+      btn.__dvlPhase1BStarBound=false;
+      bindPhase1BHeaderFavoriteStar();
+    }
+    updatePhase1BHeaderFavoriteStarState();
+  }).observe(target,{childList:true,subtree:true});
+}
+window.installPhase1BHeaderStarGuard=installPhase1BHeaderStarGuard;
 
 // ── Beta 0.778 — Header Star Owner Fix ───────────────────────────────────────
 function forceHeaderStarVisual(active){
@@ -43943,7 +44006,7 @@ window.installHeaderStarMutationGuard=installHeaderStarMutationGuard;
     if(remBtn){
       ev.stopPropagation();
       var rsym=remBtn.getAttribute('data-wl-remove');
-      if(rsym){_wlRemove(rsym);renderWatchlistPanel();updateHeaderIconAndStar();}
+      if(rsym){_wlRemove(rsym);renderWatchlistPanel();updateHeaderIconAndStar();updatePhase1BHeaderFavoriteStarState();}
       return;
     }
     // Pick row → switch chart symbol
@@ -43990,18 +44053,25 @@ window.installHeaderStarMutationGuard=installHeaderStarMutationGuard;
     installHeaderStarMutationGuard();
     _wireNavWatchlist();
     updateHeaderIconAndStar();
+    bindPhase1BHeaderFavoriteStar();
+    updatePhase1BHeaderFavoriteStarState();
+    installPhase1BHeaderStarGuard();
     // Retry for late-rendered elements
     setTimeout(function(){
       _wireNavWatchlist();
       bindHeaderFavoriteStarTextOnly();
       updateHeaderFavoriteStarState();
       updateHeaderIconAndStar();
+      bindPhase1BHeaderFavoriteStar();
+      updatePhase1BHeaderFavoriteStarState();
     },600);
     setTimeout(function(){
       _wireNavWatchlist();
       bindHeaderFavoriteStarTextOnly();
       updateHeaderFavoriteStarState();
       updateHeaderIconAndStar();
+      bindPhase1BHeaderFavoriteStar();
+      updatePhase1BHeaderFavoriteStarState();
     },2000);
     // Fetch 24h stats immediately and every 5s
     setTimeout(_fetchWLStats,1200);
@@ -44011,6 +44081,7 @@ window.installHeaderStarMutationGuard=installHeaderStarMutationGuard;
       try{
         updateHeaderFavoriteStarState();
         updateHeaderIconAndStar();
+        updatePhase1BHeaderFavoriteStarState();
         var p=document.getElementById('dvlWatchlistPanel');
         if(p&&p.classList.contains('is-open'))renderWatchlistPanel();
       }catch(_){}
@@ -44030,7 +44101,7 @@ window.installHeaderStarMutationGuard=installHeaderStarMutationGuard;
     // Toggle Watchlist (don't stopPropagation — let existing toggleFavoriteSymbol also run)
     _wlToggle(sym);
     // Schedule header star update after IIFE's refreshAssetUi() runs synchronously
-    setTimeout(function(){updateHeaderFavoriteStarState();},30);
+    setTimeout(function(){updateHeaderFavoriteStarState();updatePhase1BHeaderFavoriteStarState();},30);
     setTimeout(function(){
       var p=document.getElementById('dvlWatchlistPanel');
       if(p&&p.classList.contains('is-open'))renderWatchlistPanel();
@@ -44054,8 +44125,93 @@ window.DVL_WATCHLIST_ASSET_ICONS_0765={
 };
 })();
 </script>
-<!-- DVL Beta 0.778 — Header star owner fix — FINAL CSS -->
-<style id="DVL_HSTAR_STYLE_0778">
+<!-- DVL Beta 0.779 — Phase 1B Header Star Audit Module -->
+<script id="DVL_PHASE1B_HEADER_STAR_FIX_AUDIT_MODULE_0779">
+(function(){
+'use strict';
+if(window.DVL_PHASE1B_HEADER_STAR_FIX_AUDIT_MODULE_0779)return;
+window.DVL_PHASE1B_HEADER_STAR_FIX_AUDIT_MODULE_0779=true;
+function runAudit(){
+  var bl=[];
+  // 1 — Phase 1B overlay exists
+  if(!document.getElementById('DVL_UI_OVERLAY_PHASE_1B'))bl.push('1: #DVL_UI_OVERLAY_PHASE_1B missing');
+  // 2 — #dvl1b_favBtn exists
+  var btn=document.getElementById('dvl1b_favBtn');
+  if(!btn)bl.push('2: #dvl1b_favBtn missing');
+  // 3 — button has dvl1b-star-text-only class
+  if(btn&&!btn.classList.contains('dvl1b-star-text-only'))bl.push('3: dvl1b-star-text-only class missing on #dvl1b_favBtn');
+  // 4 — button has no SVG child
+  if(btn&&btn.querySelector('svg'))bl.push('4: SVG still present inside #dvl1b_favBtn (should be text-only)');
+  // 5 — button innerHTML is ★ or ☆
+  if(btn){var t=btn.innerHTML.trim();if(t!=='★'&&t!=='☆')bl.push('5: #dvl1b_favBtn innerHTML is not ★ or ☆ (got: '+t+')');}
+  // 6 — button __dvlPhase1BStarBound flag set
+  if(btn&&!btn.__dvlPhase1BStarBound)bl.push('6: __dvlPhase1BStarBound flag not set on #dvl1b_favBtn');
+  // 7 — CSS style block exists
+  if(!document.getElementById('DVL_P1B_HSTAR_STYLE_0779'))bl.push('7: DVL_P1B_HSTAR_STYLE_0779 style block missing');
+  // 8 — forcePhase1BHeaderStarVisual exposed
+  if(typeof window.forcePhase1BHeaderStarVisual!=='function')bl.push('8: forcePhase1BHeaderStarVisual missing');
+  // 9 — getPhase1BCurrentSymbol exposed
+  if(typeof window.getPhase1BCurrentSymbol!=='function')bl.push('9: getPhase1BCurrentSymbol missing');
+  // 10 — updatePhase1BHeaderFavoriteStarState exposed
+  if(typeof window.updatePhase1BHeaderFavoriteStarState!=='function')bl.push('10: updatePhase1BHeaderFavoriteStarState missing');
+  // 11 — bindPhase1BHeaderFavoriteStar exposed
+  if(typeof window.bindPhase1BHeaderFavoriteStar!=='function')bl.push('11: bindPhase1BHeaderFavoriteStar missing');
+  // 12 — installPhase1BHeaderStarGuard exposed
+  if(typeof window.installPhase1BHeaderStarGuard!=='function')bl.push('12: installPhase1BHeaderStarGuard missing');
+  // 13 — guard installed flag
+  if(!window.__dvlPhase1BHeaderStarGuardInstalled)bl.push('13: __dvlPhase1BHeaderStarGuardInstalled flag not set');
+  // 14 — getPhase1BCurrentSymbol returns a string
+  try{var s=window.getPhase1BCurrentSymbol();if(typeof s!=='string')bl.push('14: getPhase1BCurrentSymbol did not return string');}catch(e){bl.push('14: getPhase1BCurrentSymbol threw: '+e.message);}
+  // 15 — updatePhase1BHeaderFavoriteStarState does not throw
+  try{window.updatePhase1BHeaderFavoriteStarState();}catch(e){bl.push('15: updatePhase1BHeaderFavoriteStarState threw: '+e.message);}
+  // 16 — forcePhase1BHeaderStarVisual(true) sets ★
+  try{window.forcePhase1BHeaderStarVisual(true);var b2=document.getElementById('dvl1b_favBtn');if(b2&&b2.innerHTML.trim()!=='★')bl.push('16: forcePhase1BHeaderStarVisual(true) did not set innerHTML to ★');}catch(e){bl.push('16: forcePhase1BHeaderStarVisual(true) threw: '+e.message);}
+  // 17 — forcePhase1BHeaderStarVisual(true) sets is-favorite class
+  try{var b3=document.getElementById('dvl1b_favBtn');if(b3&&!b3.classList.contains('is-favorite'))bl.push('17: forcePhase1BHeaderStarVisual(true) did not add is-favorite class');}catch(e){bl.push('17: class check threw: '+e.message);}
+  // 18 — forcePhase1BHeaderStarVisual(false) sets ☆
+  try{window.forcePhase1BHeaderStarVisual(false);var b4=document.getElementById('dvl1b_favBtn');if(b4&&b4.innerHTML.trim()!=='☆')bl.push('18: forcePhase1BHeaderStarVisual(false) did not set innerHTML to ☆');}catch(e){bl.push('18: forcePhase1BHeaderStarVisual(false) threw: '+e.message);}
+  // 19 — forcePhase1BHeaderStarVisual(false) removes is-favorite class
+  try{var b5=document.getElementById('dvl1b_favBtn');if(b5&&b5.classList.contains('is-favorite'))bl.push('19: forcePhase1BHeaderStarVisual(false) did not remove is-favorite class');}catch(e){bl.push('19: class check threw: '+e.message);}
+  // 20 — aria-pressed set correctly by forcePhase1BHeaderStarVisual
+  try{window.forcePhase1BHeaderStarVisual(true);var b6=document.getElementById('dvl1b_favBtn');if(b6&&b6.getAttribute('aria-pressed')!=='true')bl.push('20: aria-pressed not true after forcePhase1BHeaderStarVisual(true)');}catch(e){bl.push('20: aria-pressed check threw: '+e.message);}
+  // 21 — data-favorite attribute set
+  try{var b7=document.getElementById('dvl1b_favBtn');if(b7&&b7.dataset.favorite!=='true')bl.push('21: data-favorite not true after forcePhase1BHeaderStarVisual(true)');}catch(e){bl.push('21: data-favorite check threw: '+e.message);}
+  // 22 — watchlist store exists
+  if(!window.DVL_WATCHLIST_STORE||!Array.isArray(window.DVL_WATCHLIST_STORE.symbols))bl.push('22: DVL_WATCHLIST_STORE.symbols missing or not array');
+  // 23 — _wlHas/_wlToggle exposed
+  if(typeof window.isInWatchlist!=='function')bl.push('23: window.isInWatchlist missing');
+  if(typeof window.toggleWatchlist!=='function')bl.push('23b: window.toggleWatchlist missing');
+  // 24 — #dvl1b_symbolText exists for symbol read
+  if(!document.getElementById('dvl1b_symbolText')&&!document.getElementById('symbolText'))bl.push('24: neither #dvl1b_symbolText nor #symbolText found');
+  // 25 — updateHeaderIconAndStar exposed and calls Phase 1B
+  if(typeof window.updateHeaderIconAndStar!=='function')bl.push('25: updateHeaderIconAndStar missing');
+  // 26 — version badge updated to 0.779
+  var vb=document.getElementById('dvl1b_versionBadge');
+  if(!vb||vb.textContent.indexOf('0.779')<0)bl.push('26: dvl1b_versionBadge does not show 0.779');
+  // 27 — title updated
+  if(document.title.indexOf('0.779')<0)bl.push('27: document.title does not contain 0.779');
+  // 28 — DVL_APP_VERSION updated
+  if(typeof window.DVL_APP_VERSION==='undefined'||String(window.DVL_APP_VERSION).indexOf('0.779')<0)bl.push('28: DVL_APP_VERSION not 0.779');
+  // 29 — changelog entry at top
+  if(!window.DVL_CHANGELOG||!window.DVL_CHANGELOG[0]||window.DVL_CHANGELOG[0].note.indexOf('0.779')<0)bl.push('29: DVL_CHANGELOG[0] does not reference 0.779');
+  // 30 — DVL_P1B_HSTAR_STYLE_0779 block contains dvl1b-star-text-only rule
+  var styleEl=document.getElementById('DVL_P1B_HSTAR_STYLE_0779');
+  if(!styleEl||styleEl.textContent.indexOf('dvl1b-star-text-only')<0)bl.push('30: DVL_P1B_HSTAR_STYLE_0779 does not contain dvl1b-star-text-only rule');
+  // 31 — restore state: reset to ☆ after audit
+  try{window.updatePhase1BHeaderFavoriteStarState();}catch(_){}
+  var pass=bl.length===0;
+  window.DVL_PHASE1B_HEADER_STAR_FIX_AUDIT_0779_RESULT={pass:pass,blockers:bl,ts:Date.now()};
+  if(pass){console.log('[DVL AUDIT 0779] ✅ ALL 31 CHECKS PASSED — Phase 1B header star fix confirmed');}
+  else{console.warn('[DVL AUDIT 0779] ❌ BLOCKERS ('+bl.length+'):\n'+bl.join('\n'));}
+  return window.DVL_PHASE1B_HEADER_STAR_FIX_AUDIT_0779_RESULT;
+}
+window.DVL_PHASE1B_HEADER_STAR_FIX_AUDIT_0779=runAudit;
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(runAudit,2500);},{once:true});
+else setTimeout(runAudit,2500);
+})();
+</script>
+<!-- DVL Beta 0.779 — Header star owner fix — FINAL CSS -->
+<style id="DVL_HSTAR_STYLE_0779">
 #dvlHeaderStar.dvlHeaderStarTextOnly{
   width:32px!important;height:32px!important;min-width:32px!important;
   border:0!important;background:transparent!important;
@@ -44078,6 +44234,32 @@ window.DVL_WATCHLIST_ASSET_ICONS_0765={
 #dvlHeaderStar.dvlHeaderStarTextOnly[aria-pressed="true"]{
   color:#ffd84d!important;
   text-shadow:0 0 8px rgba(255,216,77,.45),0 0 18px rgba(255,216,77,.22)!important;
+}
+</style>
+<!-- DVL Beta 0.779 — Phase 1B Header Star CSS -->
+<style id="DVL_P1B_HSTAR_STYLE_0779">
+#DVL_UI_OVERLAY_PHASE_1B .dvl1b-star-text-only{
+  border:0!important;background:transparent!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  padding:0!important;
+  font-size:32px!important;line-height:1!important;font-weight:900!important;
+  color:#8a918a!important;text-shadow:none!important;
+  -webkit-tap-highlight-color:transparent!important;cursor:pointer!important;
+  width:56px!important;height:56px!important;min-width:40px!important;
+}
+#DVL_UI_OVERLAY_PHASE_1B .dvl1b-star-text-only svg,
+#DVL_UI_OVERLAY_PHASE_1B .dvl1b-star-text-only path{
+  display:none!important;opacity:0!important;visibility:hidden!important;
+}
+#DVL_UI_OVERLAY_PHASE_1B .dvl1b-star-text-only::before{
+  content:none!important;display:none!important;
+}
+#DVL_UI_OVERLAY_PHASE_1B .dvl1b-star-text-only.is-favorite,
+#DVL_UI_OVERLAY_PHASE_1B .dvl1b-star-text-only.is-active,
+#DVL_UI_OVERLAY_PHASE_1B .dvl1b-star-text-only[data-favorite="true"],
+#DVL_UI_OVERLAY_PHASE_1B .dvl1b-star-text-only[aria-pressed="true"]{
+  color:#ffd84d!important;
+  text-shadow:0 0 10px rgba(255,216,77,.55),0 0 22px rgba(255,216,77,.28)!important;
 }
 </style>
 </body>
