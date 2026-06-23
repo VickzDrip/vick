@@ -43593,9 +43593,9 @@ window.renderAssetIcon=renderAssetIcon;
     +'.coin-link,.dvlCoinHdr.coin-link{background:linear-gradient(180deg,#2a5ada,#153c9e)!important;}'
     +'.coin-generic,.dvlCoinHdr.coin-generic{background:linear-gradient(180deg,#10df77,#087b43)!important;}'
     +'.dvlCoinHdr{width:27px!important;height:27px!important;border-radius:50%!important;display:grid!important;place-items:center!important;color:#fff!important;font-size:15px!important;font-weight:900!important;flex:0 0 auto!important;transition:background .25s!important;}'
-    // Header star active (watchlist)
-    +'#currentFavoriteBtn.is-wl-active svg{fill:#ffd055!important;stroke:#ffd055!important;}'
-    +'#currentFavoriteBtn.is-wl-active{opacity:1!important;}'
+    +'#currentFavoriteBtn.is-wl-active svg,#currentFavoriteBtn.is-favorite svg{fill:#ffd055!important;stroke:#ffd055!important;}'
+    +'#currentFavoriteBtn.is-wl-active,#currentFavoriteBtn.is-favorite{opacity:1!important;}'
+    +'#assetFavoritesList{display:none!important;}'
     // Watchlist panel — mesmo tema do Positions panel
     +'#dvlWatchlistPanel{position:fixed;left:4px;right:4px;bottom:calc(var(--dvl-pos-bottom-h,56px) + 17px + env(safe-area-inset-bottom,0px));z-index:3500;border-radius:24px;border:1px solid rgba(16,223,119,.28);background:radial-gradient(360px 180px at 52% 0%,rgba(16,223,119,.09),transparent 70%),linear-gradient(180deg,rgba(5,14,12,.965),rgba(3,10,8,.985));box-shadow:0 22px 60px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.025);max-height:68vh;overflow:hidden;display:none;flex-direction:column;}'
     +'#dvlWatchlistPanel.is-open{display:flex;}'
@@ -43857,6 +43857,25 @@ window.updateHeaderIconAndStar=updateHeaderIconAndStar;
       }catch(_){}
     },2000);
   }
+
+  // ── Bridge: dropdown/favorites star → Watchlist ──────────────────────────
+  // Capture phase fires before existing listeners' ev.stopPropagation()
+  // We call _wlToggle; the existing bubble handler still calls toggleFavoriteSymbol
+  // keeping both systems in sync so dropdown star icons (.is-favorite) stay correct.
+  document.addEventListener('click',function(ev){
+    if(!ev.target)return;
+    var star=ev.target.closest?ev.target.closest('[data-star-symbol]'):null;
+    if(!star)return;
+    var sym=_normSym(star.getAttribute('data-star-symbol'));
+    if(!sym)return;
+    // Toggle Watchlist (don't stopPropagation — let existing toggleFavoriteSymbol also run)
+    _wlToggle(sym);
+    updateHeaderIconAndStar();
+    setTimeout(function(){
+      var p=document.getElementById('dvlWatchlistPanel');
+      if(p&&p.classList.contains('is-open'))renderWatchlistPanel();
+    },60);
+  },true); // true = capture
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_init,{once:true});
   else _init();
