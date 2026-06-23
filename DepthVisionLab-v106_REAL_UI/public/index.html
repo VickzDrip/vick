@@ -19610,7 +19610,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <button class="symbolBtn" id="symbolBtn"><span class="btc">₿</span><span class="symText" id="symbolText">BTC/USDT</span><svg class="chevSvg" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>
     </div>
     <span id="currentFavoriteBtn" aria-hidden="true" style="display:none"></span>
-    <button id="headerWatchStar" class="dvlHeaderFavoriteStar" type="button" aria-label="Favoritar ativo" aria-pressed="false"></button>
+    <button id="dvlHeaderStar" class="dvlHeaderStarHard" type="button" aria-label="Favoritar ativo" aria-pressed="false"></button>
     <div class="priceBox"><div class="lastPrice" id="lastPrice">--</div><div class="change" id="changePct">--</div></div>
     <div class="stats">
       <span>24H High</span><b id="high24">--</b>
@@ -20058,7 +20058,7 @@ const DVL_APP_VERSION = "Beta 0.775";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.775 — Header favorite star hard override: replaced SVG button with CSS ::before Unicode star (☆/★). Button #headerWatchStar.dvlHeaderFavoriteStar, state via is-active class + data-favorite attr + aria-pressed. Functions: normalizeHeaderFavoriteStarButton(), updateHeaderStarState(), bindHeaderFavoriteStar(). _init() wires and retries all three. Interval reduced to 500ms. Audit module DVL_HEADER_FAVORITE_STAR_AUDIT_0775 with 26 checks." },
+  { version: DVL_APP_VERSION, note: "Beta 0.775 — Header favorite star hard override: #dvlHeaderStar + dvlHeaderStarHard class. SVG escondido via CSS. ::before Unicode ☆/★ via color property. is-favorite/is-active/data-favorite/aria-pressed. Functions: normalizeHeaderStarHardOverride(), updateHeaderFavoriteStarState(), bindHeaderFavoriteStarHardOverride(), cleanupDuplicateHeaderStars(). CSS <style> block antes de </body>. Audit 27 checks." },
   { version: "Beta 0.767", note: "Beta 0.767 — Fix header star not turning yellow: window.symbol is IIFE-local and never exposed on window; watchlist module now reads the current symbol from the #symbolText DOM element via _getCurSym(), so the star correctly turns yellow/filled when the asset is in the Watchlist." },
   { version: "Beta 0.766", note: "Beta 0.766 — TP/SL execution fix: the price engine was reading window.ticker which is never set (ticker is a local IIFE variable); now reads window.S.candles for the current chart price, so TP/SL fires correctly for the current asset and via WebSocket for all other assets." },
   { version: "Beta 0.765", note: "Beta 0.765 — Watchlist and asset icons: the header star now adds/removes the current asset from a persistent Watchlist, the footer Watchlist button opens a real favorites panel, and asset icons now update per symbol instead of showing the BTC icon for every pair." },
@@ -43035,11 +43035,11 @@ window.DVL_WATCHLIST_ASSET_ICONS_AUDIT_0765={run:function(){
   if(typeof window.updateHeaderIconAndStar!=='function')bl.push('27: updateHeaderIconAndStar missing');
   try{window.renderWatchlistPanel();var p=document.getElementById('dvlWatchlistPanel');if(!p)bl.push('28: dvlWatchlistPanel not created by renderWatchlistPanel');}catch(e){bl.push('28: renderWatchlistPanel threw');}
   if(document.querySelector('[data-dvl-nav-key="watchlist"]')&&!document.querySelector('#dvlBottomNavV2[data-wl-nav-bound]'))bl.push('29: footer watchlist nav not wl-bound (wire may have failed)');
-  if(!document.getElementById('headerWatchStar'))bl.push('30: #headerWatchStar missing');
-  if(document.getElementById('headerWatchStar')&&!document.getElementById('headerWatchStar').classList.contains('dvlHeaderFavoriteStar'))bl.push('30b: #headerWatchStar missing dvlHeaderFavoriteStar class');
-  if(typeof window.normalizeHeaderFavoriteStarButton!=='function')bl.push('30c: normalizeHeaderFavoriteStarButton missing');
-  if(typeof window.updateHeaderStarState!=='function')bl.push('30d: updateHeaderStarState missing');
-  if(typeof window.bindHeaderFavoriteStar!=='function')bl.push('30e: bindHeaderFavoriteStar missing');
+  if(!document.getElementById('dvlHeaderStar'))bl.push('30: #dvlHeaderStar missing');
+  if(document.getElementById('dvlHeaderStar')&&!document.getElementById('dvlHeaderStar').classList.contains('dvlHeaderStarHard'))bl.push('30b: #dvlHeaderStar missing dvlHeaderStarHard class');
+  if(typeof window.normalizeHeaderStarHardOverride!=='function')bl.push('30c: normalizeHeaderStarHardOverride missing');
+  if(typeof window.updateHeaderFavoriteStarState!=='function')bl.push('30d: updateHeaderFavoriteStarState missing');
+  if(typeof window.bindHeaderFavoriteStarHardOverride!=='function')bl.push('30e: bindHeaderFavoriteStarHardOverride missing');
   var wls=window.DVL_WATCHLIST_STORE;if(wls&&!Array.isArray(wls.symbols))bl.push('31: DVL_WATCHLIST_STORE.symbols not an array');
   if(!window.DVL_PAPER_EXECUTION_ENGINE&&!window.DVL_PAPER_REALTIME_ENGINE)bl.push('33: execution engine missing - 0.764 regression');
   if(!window.DVL_DEMO_WALLET)bl.push('34: DVL_DEMO_WALLET missing - 0.764 regression');
@@ -43051,71 +43051,82 @@ window.DVL_WATCHLIST_ASSET_ICONS_AUDIT_0765={run:function(){
 })();
 </script>
 
-<script id="DVL_HEADER_FAVORITE_STAR_AUDIT_MODULE_0775">
+<script id="DVL_HEADER_FAVORITE_STAR_HARD_OVERRIDE_AUDIT_MODULE_0775">
 (function(){
 "use strict";
-window.DVL_HEADER_FAVORITE_STAR_AUDIT_0775={run:function(){
+window.DVL_HEADER_FAVORITE_STAR_HARD_OVERRIDE_AUDIT_0775={run:function(){
   var bl=[];
-  // 01 — version
+  // 01 — Title Beta 0.775
   if(document.title.indexOf('0.775')<0)bl.push('01: title missing 0.775');
+  // 02 — Badge BETA 0.775
   if(document.body.innerHTML.indexOf('BETA 0.775')<0)bl.push('02: badge missing 0.775');
+  // 03 — Changelog 0.775 no topo
   if(document.body.innerHTML.indexOf('Beta 0.775')<0)bl.push('03: changelog missing 0.775');
-  // 04 — button exists
-  var btn=document.getElementById('headerWatchStar');
-  if(!btn)bl.push('04: #headerWatchStar not found');
-  // 05 — correct class
-  if(btn&&!btn.classList.contains('dvlHeaderFavoriteStar'))bl.push('05: dvlHeaderFavoriteStar class missing');
-  // 06 — type=button
-  if(btn&&btn.getAttribute('type')!=='button')bl.push('06: type attribute not button');
-  // 07 — aria-label
-  if(btn&&!btn.getAttribute('aria-label'))bl.push('07: aria-label missing');
-  // 08 — aria-pressed present
-  if(btn&&btn.getAttribute('aria-pressed')===null)bl.push('08: aria-pressed missing');
-  // 09 — data-favorite present
-  if(btn&&btn.dataset.favorite===undefined)bl.push('09: data-favorite attribute missing');
-  // 10 — no innerHTML (no SVG children)
-  if(btn&&btn.innerHTML.trim()!=='')bl.push('10: #headerWatchStar should have no innerHTML (::before only)');
-  // 11 — not nested inside another button
-  var parent=btn&&btn.parentElement;
-  while(parent){if(parent.tagName==='BUTTON'){bl.push('11: #headerWatchStar is nested inside a <button>');break;}parent=parent.parentElement;}
-  // 12 — style element injected
+  // 04 — #dvlHeaderStar existe
+  var btn=document.getElementById('dvlHeaderStar');
+  if(!btn)bl.push('04: #dvlHeaderStar not found');
+  // 05 — dvlHeaderStarHard aplicado
+  if(btn&&!btn.classList.contains('dvlHeaderStarHard'))bl.push('05: dvlHeaderStarHard class missing on #dvlHeaderStar');
+  // 06 — SVG interno não controla visual (sem innerHTML visível)
+  if(btn&&btn.querySelector('svg'))bl.push('06: #dvlHeaderStar still has SVG child element');
+  // 07 — CSS esconde SVG/path via DVL_WL_STYLE_0773
   var styleEl=document.getElementById('DVL_WL_STYLE_0773');
-  if(!styleEl)bl.push('12: DVL_WL_STYLE_0773 style not injected');
-  // 13 — ::before CSS present (star char in style text)
-  if(styleEl&&styleEl.textContent.indexOf('dvlHeaderFavoriteStar')<0)bl.push('13: dvlHeaderFavoriteStar CSS not in style block');
-  // 14 — functions exposed
-  if(typeof window.normalizeHeaderFavoriteStarButton!=='function')bl.push('14: normalizeHeaderFavoriteStarButton missing');
-  if(typeof window.updateHeaderStarState!=='function')bl.push('15: updateHeaderStarState missing');
-  if(typeof window.bindHeaderFavoriteStar!=='function')bl.push('16: bindHeaderFavoriteStar missing');
-  if(typeof window.updateHeaderIconAndStar!=='function')bl.push('17: updateHeaderIconAndStar missing');
-  // 18 — normalizeHeaderFavoriteStarButton returns the button
-  try{var nb=window.normalizeHeaderFavoriteStarButton();if(!nb)bl.push('18: normalizeHeaderFavoriteStarButton returned null');}catch(e){bl.push('18: normalizeHeaderFavoriteStarButton threw: '+e.message);}
-  // 19 — updateHeaderStarState does not throw
-  try{window.updateHeaderStarState();}catch(e){bl.push('19: updateHeaderStarState threw: '+e.message);}
-  // 20 — bindHeaderFavoriteStar does not throw
-  try{window.bindHeaderFavoriteStar();}catch(e){bl.push('20: bindHeaderFavoriteStar threw: '+e.message);}
-  // 21 — __dvlBoundFavoriteStar flag set after bind
-  var b2=document.getElementById('headerWatchStar');
-  if(b2&&!b2.__dvlBoundFavoriteStar)bl.push('21: __dvlBoundFavoriteStar flag not set');
-  // 22 — DVL_WATCHLIST_STORE intact
-  if(!window.DVL_WATCHLIST_STORE||!Array.isArray(window.DVL_WATCHLIST_STORE.symbols))bl.push('22: DVL_WATCHLIST_STORE invalid');
-  // 23 — currentFavoriteBtn hidden (backward compat shim)
-  var cfb=document.getElementById('currentFavoriteBtn');
-  if(cfb&&cfb.style.display!=='none')bl.push('23: #currentFavoriteBtn should be display:none');
-  // 24 — state sync: active flag matches store
+  if(styleEl&&styleEl.textContent.indexOf('dvlHeaderStarHard')<0)bl.push('07: dvlHeaderStarHard CSS not found in DVL_WL_STYLE_0773');
+  // 08 — ::before mostra ☆ quando OFF
+  if(styleEl&&styleEl.textContent.indexOf('content:"☆"')<0&&styleEl.textContent.indexOf("content:'☆'")<0)bl.push('08: empty star ☆ ::before not defined in injected style');
+  // 09 — ::before mostra ★ quando ON
+  if(styleEl&&styleEl.textContent.indexOf('content:"★"')<0&&styleEl.textContent.indexOf("content:'★'")<0)bl.push('09: filled star ★ ::before not defined in injected style');
+  // 10 — ON usa .is-favorite
+  if(!document.getElementById('DVL_HSTAR_STYLE_0775'))bl.push('10: DVL_HSTAR_STYLE_0775 end-of-body <style> block missing');
+  // 11 — data-favorite presente
+  if(btn&&btn.dataset.favorite===undefined)bl.push('11: data-favorite attribute missing on #dvlHeaderStar');
+  // 12 — aria-pressed presente
+  if(btn&&btn.getAttribute('aria-pressed')===null)bl.push('12: aria-pressed missing on #dvlHeaderStar');
+  // 13 — type=button
+  if(btn&&btn.getAttribute('type')!=='button')bl.push('13: type not button on #dvlHeaderStar');
+  // 14 — normalizeHeaderStarHardOverride exposta
+  if(typeof window.normalizeHeaderStarHardOverride!=='function')bl.push('14: normalizeHeaderStarHardOverride missing');
+  // 15 — updateHeaderFavoriteStarState exposta
+  if(typeof window.updateHeaderFavoriteStarState!=='function')bl.push('15: updateHeaderFavoriteStarState missing');
+  // 16 — bindHeaderFavoriteStarHardOverride exposta
+  if(typeof window.bindHeaderFavoriteStarHardOverride!=='function')bl.push('16: bindHeaderFavoriteStarHardOverride missing');
+  // 17 — cleanupDuplicateHeaderStars exposta
+  if(typeof window.cleanupDuplicateHeaderStars!=='function')bl.push('17: cleanupDuplicateHeaderStars missing');
+  // 18 — normalizeHeaderStarHardOverride retorna o botão
+  try{var nb=window.normalizeHeaderStarHardOverride();if(!nb)bl.push('18: normalizeHeaderStarHardOverride returned null');}catch(e){bl.push('18: normalizeHeaderStarHardOverride threw: '+e.message);}
+  // 19 — updateHeaderFavoriteStarState não lança erro
+  try{window.updateHeaderFavoriteStarState();}catch(e){bl.push('19: updateHeaderFavoriteStarState threw: '+e.message);}
+  // 20 — __dvlHeaderStarHardBound flag setado após bind
+  var b2=document.getElementById('dvlHeaderStar');
+  if(b2&&!b2.__dvlHeaderStarHardBound)bl.push('20: __dvlHeaderStarHardBound flag not set — bindHeaderFavoriteStarHardOverride not called');
+  // 21 — State sync: is-favorite/is-active batem com store
   try{
-    var sym=document.getElementById('symbolText')?document.getElementById('symbolText').textContent.trim():'';
-    if(sym&&b2){
-      var inWl=window.DVL_WATCHLIST_STORE.symbols.some(function(s){return s.replace('/','').replace('-','').toUpperCase()===sym.replace('/','').replace('-','').toUpperCase();});
-      var isA=b2.classList.contains('is-active');
-      if(inWl!==isA)bl.push('24: is-active class does not match DVL_WATCHLIST_STORE for current symbol');
+    var symEl=document.getElementById('symbolText');
+    var sym=symEl?symEl.textContent.trim():'';
+    if(sym&&b2&&window.DVL_WATCHLIST_STORE&&Array.isArray(window.DVL_WATCHLIST_STORE.symbols)){
+      var sn=sym.replace('/','').replace('-','').toUpperCase();
+      var inWl=window.DVL_WATCHLIST_STORE.symbols.some(function(s){return s.replace('/','').replace('-','').toUpperCase()===sn;});
+      var isFav=b2.classList.contains('is-favorite');
+      if(inWl!==isFav)bl.push('21: is-favorite does not match DVL_WATCHLIST_STORE for "'+sym+'"');
     }
-  }catch(e){bl.push('24: state sync check threw: '+e.message);}
-  // 25 — no Broker Connector
-  if(document.body.innerHTML.toLowerCase().indexOf('broker connector')>=0)bl.push('25: Broker Connector found');
-  // 26 — no Real Mode bridge exposed
-  if(window.DVL_REAL_MODE_BRIDGE)bl.push('26: DVL_REAL_MODE_BRIDGE should not be exposed');
-  return{pass:bl.length===0,blockers:bl,version:'0.775',checks:26};
+  }catch(e){bl.push('21: state sync check threw: '+e.message);}
+  // 22 — Não existe estrela duplicada visível no header
+  var dupes=Array.prototype.slice.call(document.querySelectorAll('.top .star, .marketRow .assetStar'));
+  var visibleDupes=dupes.filter(function(el){return el!==b2&&el.offsetParent!==null;});
+  if(visibleDupes.length>0)bl.push('22: visible duplicate star(s) found in header: '+visibleDupes.length);
+  // 23 — Watchlist Store funcionando
+  if(!window.DVL_WATCHLIST_STORE||!Array.isArray(window.DVL_WATCHLIST_STORE.symbols))bl.push('23: DVL_WATCHLIST_STORE invalid');
+  // 24 — Zero Broker Connector
+  if(document.body.innerHTML.toLowerCase().indexOf('broker connector')>=0)bl.push('24: Broker Connector found');
+  // 25 — Zero Real order / Real Mode bridge
+  if(window.DVL_REAL_MODE_BRIDGE)bl.push('25: DVL_REAL_MODE_BRIDGE exposed');
+  // 26 — Zero API key / token exposto
+  if(window.DVL_API_KEY||window.DVL_API_SECRET)bl.push('26: API key/secret exposed on window');
+  // 27 — aliases de backward compat
+  if(typeof window.normalizeHeaderFavoriteStarButton!=='function')bl.push('27: backward-compat alias normalizeHeaderFavoriteStarButton missing');
+  if(typeof window.updateHeaderStarState!=='function')bl.push('27b: backward-compat alias updateHeaderStarState missing');
+  if(typeof window.bindHeaderFavoriteStar!=='function')bl.push('27c: backward-compat alias bindHeaderFavoriteStar missing');
+  return{pass:bl.length===0,blockers:bl,version:'0.775',checks:27};
 }};
 })();
 </script>
@@ -43671,10 +43682,10 @@ window.renderAssetIcon=renderAssetIcon;
     +'.coin-link,.dvlCoinHdr.coin-link{background:linear-gradient(180deg,#2a5ada,#153c9e)!important;}'
     +'.coin-generic,.dvlCoinHdr.coin-generic{background:linear-gradient(180deg,#10df77,#087b43)!important;}'
     +'.dvlCoinHdr{width:27px!important;height:27px!important;border-radius:50%!important;display:grid!important;place-items:center!important;color:#fff!important;font-size:15px!important;font-weight:900!important;flex:0 0 auto!important;transition:background .25s!important;}'
-    +'#headerWatchStar.dvlHeaderFavoriteStar{width:32px!important;height:32px!important;min-width:32px!important;border:0!important;background:transparent!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;margin:0!important;color:#6f776f!important;-webkit-tap-highlight-color:transparent!important;position:relative!important;cursor:pointer!important;}'
-    +'#headerWatchStar.dvlHeaderFavoriteStar svg,#headerWatchStar.dvlHeaderFavoriteStar path{display:none!important;opacity:0!important;visibility:hidden!important;fill:transparent!important;stroke:transparent!important;}'
-    +'#headerWatchStar.dvlHeaderFavoriteStar::before{content:"☆"!important;font-size:28px!important;line-height:1!important;font-weight:900!important;color:#8a918a!important;text-shadow:none!important;transform:translateY(-1px)!important;}'
-    +'#headerWatchStar.dvlHeaderFavoriteStar.is-active::before,#headerWatchStar.dvlHeaderFavoriteStar[data-favorite="true"]::before,#headerWatchStar.dvlHeaderFavoriteStar[aria-pressed="true"]::before{content:"★"!important;color:#ffd84d!important;text-shadow:0 0 8px rgba(255,216,77,.45),0 0 18px rgba(255,216,77,.22)!important;}'
+    +'#dvlHeaderStar.dvlHeaderStarHard{width:32px!important;height:32px!important;min-width:32px!important;border:0!important;background:transparent!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;margin:0!important;color:#8a918a!important;-webkit-tap-highlight-color:transparent!important;position:relative!important;cursor:pointer!important;}'
+    +'#dvlHeaderStar.dvlHeaderStarHard svg,#dvlHeaderStar.dvlHeaderStarHard path{display:none!important;opacity:0!important;visibility:hidden!important;fill:transparent!important;stroke:transparent!important;}'
+    +'#dvlHeaderStar.dvlHeaderStarHard::before{content:"☆"!important;font-size:28px!important;line-height:1!important;font-weight:900!important;color:#8a918a!important;text-shadow:none!important;transform:translateY(-1px)!important;}'
+    +'#dvlHeaderStar.dvlHeaderStarHard.is-favorite::before,#dvlHeaderStar.dvlHeaderStarHard.is-active::before,#dvlHeaderStar.dvlHeaderStarHard[data-favorite="true"]::before,#dvlHeaderStar.dvlHeaderStarHard[aria-pressed="true"]::before{content:"★"!important;color:#ffd84d!important;text-shadow:0 0 8px rgba(255,216,77,.45),0 0 18px rgba(255,216,77,.22)!important;}'
     +'#assetFavoritesList{display:none!important;}'    // Watchlist panel — mesmo tema do Positions panel
     +'#dvlWatchlistPanel{position:fixed;left:4px;right:4px;bottom:calc(var(--dvl-pos-bottom-h,56px) + 17px + env(safe-area-inset-bottom,0px));z-index:3500;border-radius:24px;border:1px solid rgba(16,223,119,.28);background:radial-gradient(360px 180px at 52% 0%,rgba(16,223,119,.09),transparent 70%),linear-gradient(180deg,rgba(5,14,12,.965),rgba(3,10,8,.985));box-shadow:0 22px 60px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.025);max-height:68vh;overflow:hidden;display:none;flex-direction:column;}'
     +'#dvlWatchlistPanel.is-open{display:flex;}'
@@ -43836,57 +43847,73 @@ function updateHeaderIconAndStar(){
     coinEl.textContent=meta.label;
     coinEl.className='btc dvlCoinHdr '+meta.className;
   }
-  updateHeaderStarState();
+  updateHeaderFavoriteStarState();
 }
 window.updateHeaderIconAndStar=updateHeaderIconAndStar;
 
 // ── Beta 0.775 — Header Favorite Star Hard Override ──────────────────────────
-function normalizeHeaderFavoriteStarButton(){
-  var btn=document.getElementById('headerWatchStar');
+function normalizeHeaderStarHardOverride(){
+  var btn=document.getElementById('dvlHeaderStar');
   if(!btn){
-    btn=document.querySelector('.dvlHeaderFavoriteStar')||
+    btn=document.querySelector('.dvlHeaderStarHard')||
         document.querySelector("[data-role='header-watch-star']");
   }
   if(!btn)return null;
-  btn.id='headerWatchStar';
-  btn.classList.add('dvlHeaderFavoriteStar');
+  btn.id='dvlHeaderStar';
+  btn.classList.add('dvlHeaderStarHard');
   btn.setAttribute('type','button');
   btn.setAttribute('aria-label','Favoritar ativo');
   btn.innerHTML='';
   return btn;
 }
-window.normalizeHeaderFavoriteStarButton=normalizeHeaderFavoriteStarButton;
+window.normalizeHeaderStarHardOverride=normalizeHeaderStarHardOverride;
+// aliases
+window.normalizeHeaderFavoriteStarButton=normalizeHeaderStarHardOverride;
 
-function updateHeaderStarState(){
-  var btn=document.getElementById('headerWatchStar');
+function updateHeaderFavoriteStarState(){
+  var btn=document.getElementById('dvlHeaderStar');
   if(!btn)return;
   var sym=_getCurSym();
   if(!sym)return;
   var active=_wlHas(sym);
+  btn.classList.toggle('is-favorite',active);
   btn.classList.toggle('is-active',active);
   btn.dataset.favorite=active?'true':'false';
   btn.setAttribute('aria-pressed',active?'true':'false');
 }
-window.updateHeaderStarState=updateHeaderStarState;
+window.updateHeaderFavoriteStarState=updateHeaderFavoriteStarState;
+// alias
+window.updateHeaderStarState=updateHeaderFavoriteStarState;
 
-function bindHeaderFavoriteStar(){
-  var btn=normalizeHeaderFavoriteStarButton();
-  if(!btn||btn.__dvlBoundFavoriteStar)return;
-  btn.__dvlBoundFavoriteStar=true;
+function bindHeaderFavoriteStarHardOverride(){
+  var btn=normalizeHeaderStarHardOverride();
+  if(!btn||btn.__dvlHeaderStarHardBound)return;
+  btn.__dvlHeaderStarHardBound=true;
   btn.addEventListener('click',function(ev){
     ev.preventDefault();
     ev.stopPropagation();
     var sym=_getCurSym();
     if(!sym)return;
     _wlToggle(sym);
-    updateHeaderStarState();
+    updateHeaderFavoriteStarState();
     if(typeof renderWatchlistPanel==='function'){
       var p=document.getElementById('dvlWatchlistPanel');
       if(p&&p.classList.contains('is-open'))renderWatchlistPanel();
     }
+  },true);
+}
+window.bindHeaderFavoriteStarHardOverride=bindHeaderFavoriteStarHardOverride;
+// alias
+window.bindHeaderFavoriteStar=bindHeaderFavoriteStarHardOverride;
+
+function cleanupDuplicateHeaderStars(){
+  var main=document.querySelector('#dvlHeaderStar');
+  var dupes=Array.prototype.slice.call(document.querySelectorAll('.top .star, .top [data-role="header-watch-star"], .marketRow .assetStar'));
+  dupes.forEach(function(el){
+    if(main&&el!==main){el.style.display='none';el.setAttribute('aria-hidden','true');}
   });
 }
-window.bindHeaderFavoriteStar=bindHeaderFavoriteStar;
+window.cleanupDuplicateHeaderStars=cleanupDuplicateHeaderStars;
 
 // ── Wire events ──────────────────────────────────────────────────────────────
 (function(){
@@ -43907,7 +43934,7 @@ window.bindHeaderFavoriteStar=bindHeaderFavoriteStar;
     var pickRow=ev.target.closest?ev.target.closest('[data-wl-pick]'):null;
     if(pickRow){
       var sym=pickRow.getAttribute('data-wl-pick');
-      if(sym){try{if(typeof selectSymbol==='function')selectSymbol(sym);}catch(_){}updateHeaderStarState();closeWatchlistPanel();}
+      if(sym){try{if(typeof selectSymbol==='function')selectSymbol(sym);}catch(_){}updateHeaderFavoriteStarState();closeWatchlistPanel();}
       return;
     }
     // Outside click (not inside panel, not inside footer nav)
@@ -43942,21 +43969,22 @@ window.bindHeaderFavoriteStar=bindHeaderFavoriteStar;
 
   function _init(){
     _wlLoad();
-    normalizeHeaderFavoriteStarButton();
-    bindHeaderFavoriteStar();
-    updateHeaderStarState();
+    cleanupDuplicateHeaderStars();
+    normalizeHeaderStarHardOverride();
+    bindHeaderFavoriteStarHardOverride();
+    updateHeaderFavoriteStarState();
     _wireNavWatchlist();
     updateHeaderIconAndStar();
     // Retry wiring for late-rendered elements
-    setTimeout(function(){_wireNavWatchlist();normalizeHeaderFavoriteStarButton();bindHeaderFavoriteStar();updateHeaderStarState();updateHeaderIconAndStar();},600);
-    setTimeout(function(){_wireNavWatchlist();normalizeHeaderFavoriteStarButton();bindHeaderFavoriteStar();updateHeaderStarState();updateHeaderIconAndStar();},2000);
+    setTimeout(function(){_wireNavWatchlist();cleanupDuplicateHeaderStars();normalizeHeaderStarHardOverride();bindHeaderFavoriteStarHardOverride();updateHeaderFavoriteStarState();updateHeaderIconAndStar();},600);
+    setTimeout(function(){_wireNavWatchlist();cleanupDuplicateHeaderStars();normalizeHeaderStarHardOverride();bindHeaderFavoriteStarHardOverride();updateHeaderFavoriteStarState();updateHeaderIconAndStar();},2000);
     // Fetch 24h stats immediately and every 5s
     setTimeout(_fetchWLStats,1200);
     setInterval(_fetchWLStats,5000);
     // Update icon + star + panel every 500ms
     setInterval(function(){
       try{
-        updateHeaderStarState();
+        updateHeaderFavoriteStarState();
         updateHeaderIconAndStar();
         var p=document.getElementById('dvlWatchlistPanel');
         if(p&&p.classList.contains('is-open'))renderWatchlistPanel();
@@ -43976,7 +44004,7 @@ window.bindHeaderFavoriteStar=bindHeaderFavoriteStar;
     if(!sym)return;
     // Toggle Watchlist (don't stopPropagation — let existing toggleFavoriteSymbol also run)
     _wlToggle(sym);
-    updateHeaderStarState();
+    updateHeaderFavoriteStarState();
     updateHeaderIconAndStar();
     setTimeout(function(){
       var p=document.getElementById('dvlWatchlistPanel');
@@ -44001,5 +44029,52 @@ window.DVL_WATCHLIST_ASSET_ICONS_0765={
 };
 })();
 </script>
+<!-- DVL Beta 0.775 — Header favorite star hard override — FINAL CSS (highest cascade priority) -->
+<style id="DVL_HSTAR_STYLE_0775">
+/* DVL Beta 0.775 — Header favorite star hard override */
+#dvlHeaderStar.dvlHeaderStarHard{
+  width:32px!important;
+  height:32px!important;
+  min-width:32px!important;
+  border:0!important;
+  background:transparent!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:0!important;
+  margin:0!important;
+  color:#8a918a!important;
+  position:relative!important;
+  -webkit-tap-highlight-color:transparent!important;
+  cursor:pointer!important;
+}
+#dvlHeaderStar.dvlHeaderStarHard svg,
+#dvlHeaderStar.dvlHeaderStarHard path{
+  display:none!important;
+  opacity:0!important;
+  visibility:hidden!important;
+  fill:transparent!important;
+  stroke:transparent!important;
+}
+#dvlHeaderStar.dvlHeaderStarHard::before{
+  content:"☆"!important;
+  font-size:28px!important;
+  line-height:1!important;
+  font-weight:900!important;
+  color:#8a918a!important;
+  text-shadow:none!important;
+  transform:translateY(-1px)!important;
+}
+#dvlHeaderStar.dvlHeaderStarHard.is-favorite::before,
+#dvlHeaderStar.dvlHeaderStarHard.is-active::before,
+#dvlHeaderStar.dvlHeaderStarHard[data-favorite="true"]::before,
+#dvlHeaderStar.dvlHeaderStarHard[aria-pressed="true"]::before{
+  content:"★"!important;
+  color:#ffd84d!important;
+  text-shadow:
+    0 0 8px rgba(255,216,77,.45),
+    0 0 18px rgba(255,216,77,.22)!important;
+}
+</style>
 </body>
 </html>
