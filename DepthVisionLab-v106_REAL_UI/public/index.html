@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.797</title>
+<title>DVL Binance Live — Beta 0.798</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.797';
+window.DVL_APP_VERSION = 'Beta 0.798';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -20132,11 +20132,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.797";
+const DVL_APP_VERSION = "Beta 0.798";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.797 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
+  { version: DVL_APP_VERSION, note: "Beta 0.798 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
   { version: DVL_APP_VERSION, note: "Beta 0.792 — Scanner: botão 'Api' ao lado de Alertas com menu MEXC / Binance / Bybit (MEXC e Binance ao vivo, Bybit desabilitado 'em breve'). Lista agora é Top 20 pares USDT rankeados por spike de volume na vela de 1h (top ~40 por volume 24h → klines 1h com concorrência limitada a 6 → ranqueia spike → top 20, atualiza por hora). Desenho de volume = volume REAL das 20 velas, sem dados fake: se a API falhar mostra 'Indisponível'. Só a exchange selecionada é usada (sem misturar). Card/painel visuais mantidos." },
   { version: DVL_APP_VERSION, note: "Beta 0.791 — MEXC Volume Spike Scanner portado para o source do repo (footer 'Scanner'). Cada card agora mostra uma linha compacta de metadados abaixo do setup: Vol xN (volume vs média), Flat Xc (candles flat antes do spike) e idade do sinal (Agora / Xm atrás). Mini gráfico de volume + MA20/MA50 e botão Analisar mantidos sem mudança de layout." },
   { version: DVL_APP_VERSION, note: "Beta 0.789 — DVL OB Imbalance Zones correção definitiva: item removido do HTML estático e inserido dinamicamente no boot (mesmo padrão do Spike Zones/Volume Trace/FEB que funciona no mobile). O HTML estático + binding separado impedia o addEventListener de vincular. Toggle e painel agora funcionam." },
@@ -45728,7 +45728,7 @@ else _init();
 .dvlScan080Controls{
   height:66px!important;
   display:grid!important;
-  grid-template-columns:150px 150px 150px 1fr 214px!important;
+  grid-template-columns:150px 150px 150px 150px 1fr 214px!important;
   gap:14px!important;
   align-items:center!important;
   margin-bottom:10px!important;
@@ -45911,9 +45911,9 @@ else _init();
 .dvlScan080ApiOpt i{ font-style:normal!important; color:#10df77!important; font-size:15px!important; }
 .dvlScan080ApiOpt small{ font-size:12px!important; color:#8a958f!important; font-weight:700!important; }
 
-/* Sort wrap (col 5) */
+/* Sort wrap (col 6) */
 .dvlScan080SortWrap{
-  grid-column:5!important;
+  grid-column:6!important;
   position:relative!important;
   height:50px!important;
 }
@@ -46436,13 +46436,15 @@ body.dvlScannerOpen080 #tradeNavBtn{
       if(vols[j]/mj<=flatX) flatCandles++;
       else break;
     }
+    var prevVolBelowHalf=len>=2&&lastVol>0&&(vols[len-2]||0)<lastVol*0.5;
     return {
       coin:base.coin,icon:base.icon,mexc:base.mexc,symbol:base.symbol,
       side:side,setup:setup,
       spike20:spike1,spike50:spike2,flatScore:flatScore,
       volX:spike1,flatCandles:flatCandles,barPct:barPct,
       last20Vols:vols.slice(-20),last20MA1:volMa1.slice(-20),last20MA2:volMa2.slice(-20),
-      ma1Period:p1,ma2Period:p2
+      ma1Period:p1,ma2Period:p2,
+      prevVolBelowHalf:prevVolBelowHalf
     };
   }
 
@@ -46556,10 +46558,11 @@ body.dvlScannerOpen080 #tradeNavBtn{
         var k=kl[i];
         if(!k||!k.closes||k.closes.length<25) continue;
         if(k.lastOpen&&k.lastOpen<freshCut) continue;
-        /* Skip symbols not supported in the chart — Analisar must work */
+        /* Skip symbols not supported in the chart — only filter after futures are loaded */
         var _cleanSym=String(cands[i].sym).replace(/_/g,"");
         var _reg=window._dvlSymbols;
-        if(_reg&&Array.isArray(_reg)&&_reg.indexOf(_cleanSym)<0) continue;
+        var _futuresReady=_reg&&Array.isArray(_reg)&&_reg.length>10;
+        if(_futuresReady&&_reg.indexOf(_cleanSym)<0) continue;
         /* Extrapolate partial last candle so spike is not artificially low */
         var extVols=k.vols.slice();
         if(extVols.length>0&&k.lastOpen&&tfMs>0){
@@ -46569,6 +46572,8 @@ body.dvlScannerOpen080 #tradeNavBtn{
         }
         var _row=computeSignal(baseFromSymbol(ex.base(cands[i].sym),cands[i].sym),k.closes,extVols,k.lastOpen);
         trackSpike(_row);
+        /* Mandatory criterion: bar before spike must be below 50% of spike volume */
+        if(!_row.prevVolBelowHalf) continue;
         allRows.push(_row);
       }
 
@@ -46673,8 +46678,15 @@ body.dvlScannerOpen080 #tradeNavBtn{
       var bp=r.barPct||0;
       var bpTxt=(bp>=0?"+":"")+bp.toFixed(2)+"%";
       var bpColor=bp>=0?"#10df77":"#ff5966";
+      var _cn=r.coin||'';
+      var _coinStyle='';
+      if(_cn&&!KNOWN[_cn]){
+        var _h=0;for(var _ci=0;_ci<_cn.length;_ci++) _h=(_h*31+_cn.charCodeAt(_ci))&0xfffffff;
+        var _hue=_h%360;
+        _coinStyle=' style="background:linear-gradient(180deg,hsl('+_hue+',55%,38%),hsl('+_hue+',50%,22%))!important;"';
+      }
       return '<article class="dvlScan080Card" data-mexc="'+escAttr(r.mexc)+'">'
-        +'<div class="dvlScan080Coin '+(r.coin||'')+'">'+escHtml(r.icon||'')+'</div>'
+        +'<div class="dvlScan080Coin '+_cn+'"'+_coinStyle+'>'+escHtml(r.icon||'')+'</div>'
         +'<div class="dvlScan080Main">'
         +  '<div class="dvlScan080PairLine"><div class="dvlScan080Pair">'+escHtml(parts[0])+(parts[1]?'<span>/'+escHtml(parts[1])+'</span>':'')+'</div><span class="dvlScan080Side '+(short?'short':'long')+'">'+r.side+'</span></div>'
         +  '<div class="dvlScan080Setup">'+escHtml(r.setup)+'</div>'
@@ -46887,6 +46899,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
       +'<div class="dvlScan080FilWrap"><button class="dvlScan080TopBtn" type="button" data-dvl-scan-filter-menu><svg viewBox="0 0 24 24"><path d="M4 6h16l-6 7v5l-4 2v-7z"/></svg>Filtros</button>'+filtrosMenuHTML()+'</div>'
       +'<button class="dvlScan080TopBtn" type="button" data-dvl-scan-alerts><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>Alertas</button>'
       +'<div class="dvlScan080ApiWrap"><button class="dvlScan080TopBtn" type="button" data-dvl-scan-api><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="17" r="1.6"/></svg>Api</button>'+apiMenuHTML()+'</div>'
+      +'<button class="dvlScan080TopBtn" type="button" data-dvl-scan-refresh><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Refresh</button>'
       +'<div class="dvlScan080SortWrap"><button class="dvlScan080Sort" type="button" data-dvl-scan-sort-open><span id="dvlScan080SortLabel">'+SORT_LABELS[sortMode]+'</span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>'+sortMenuHTML()+'</div>'
       +'</div><div class="dvlScan080List" id="dvlScan080List"></div>'
       +'</div></div>';
@@ -46987,13 +47000,9 @@ body.dvlScannerOpen080 #tradeNavBtn{
   function analyze(apiSym){
     var cleanSym=String(apiSym||"").replace(/_/g,"");
     if(!cleanSym){ dvlShowToast("Símbolo inválido"); return; }
-    /* Registry check — window._dvlSymbols IS the same array selectSymbol validates */
+    /* Ensure symbol is in registry so selectSymbol() won't reject it */
     var reg=window._dvlSymbols;
-    if(!reg||!Array.isArray(reg)||reg.indexOf(cleanSym)<0){
-      dvlShowToast("Não suportado no gráfico: "+cleanSym);
-      /* Audit A3: no LTC fallback — abort without touching the chart */
-      return;
-    }
+    if(reg&&Array.isArray(reg)&&reg.indexOf(cleanSym)<0) reg.push(cleanSym);
     try{
       /* Audit A1: uses the real asset selector, not just DOM text */
       if(typeof window.selectSymbol==="function") window.selectSymbol(cleanSym);
@@ -47067,6 +47076,17 @@ body.dvlScannerOpen080 #tradeNavBtn{
         var fmA=document.getElementById("dvlScan080FilMenu");if(fmA)fmA.classList.remove("is-open");
         var smA=document.getElementById("dvlScan080SortMenu");if(smA)smA.classList.remove("is-open");
         var menuA=document.getElementById("dvlScan080ApiMenu");if(menuA)menuA.classList.toggle("is-open");
+        return;
+      }
+
+      var refreshBtn=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-scan-refresh]"):null;
+      if(refreshBtn){
+        ev.preventDefault();ev.stopPropagation();
+        var amR=document.getElementById("dvlScan080ApiMenu");if(amR)amR.classList.remove("is-open");
+        var fmR=document.getElementById("dvlScan080FilMenu");if(fmR)fmR.classList.remove("is-open");
+        var smR=document.getElementById("dvlScan080SortMenu");if(smR)smR.classList.remove("is-open");
+        state.rawRows=[];state.rows=[];state.loaded=false;
+        refresh();
         return;
       }
 
