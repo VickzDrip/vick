@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.799</title>
+<title>DVL Binance Live — Beta 0.800</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.799';
+window.DVL_APP_VERSION = 'Beta 0.800';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -20132,11 +20132,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.799";
+const DVL_APP_VERSION = "Beta 0.800";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.799 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
+  { version: DVL_APP_VERSION, note: "Beta 0.800 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
   { version: DVL_APP_VERSION, note: "Beta 0.792 — Scanner: botão 'Api' ao lado de Alertas com menu MEXC / Binance / Bybit (MEXC e Binance ao vivo, Bybit desabilitado 'em breve'). Lista agora é Top 20 pares USDT rankeados por spike de volume na vela de 1h (top ~40 por volume 24h → klines 1h com concorrência limitada a 6 → ranqueia spike → top 20, atualiza por hora). Desenho de volume = volume REAL das 20 velas, sem dados fake: se a API falhar mostra 'Indisponível'. Só a exchange selecionada é usada (sem misturar). Card/painel visuais mantidos." },
   { version: DVL_APP_VERSION, note: "Beta 0.791 — MEXC Volume Spike Scanner portado para o source do repo (footer 'Scanner'). Cada card agora mostra uma linha compacta de metadados abaixo do setup: Vol xN (volume vs média), Flat Xc (candles flat antes do spike) e idade do sinal (Agora / Xm atrás). Mini gráfico de volume + MA20/MA50 e botão Analisar mantidos sem mudança de layout." },
   { version: DVL_APP_VERSION, note: "Beta 0.789 — DVL OB Imbalance Zones correção definitiva: item removido do HTML estático e inserido dinamicamente no boot (mesmo padrão do Spike Zones/Volume Trace/FEB que funciona no mobile). O HTML estático + binding separado impedia o addEventListener de vincular. Toggle e painel agora funcionam." },
@@ -46262,9 +46262,11 @@ body.dvlScannerOpen080 #tradeNavBtn{
   var KLIM      = 80;            /* candles per symbol */
   var CAND      = 200;           /* scan top 200 by 24h volume */
   var POOL      = 8;
-  var REFRESH_MS= 3600000;
+  var REFRESH_MS= 300000;        /* auto-refresh every 5 min */
   var STALE_MS  = 300000;
   var FRESH_MS  = 3 * 3600000;
+  var HIST_KEY  = "dvlScanHist0800";
+  var HIST_MAX_AGE = 86400000;   /* keep signals for 24h */
   var LS_KEY    = "dvlScanExchange0790";
   var LS_FIL    = "dvlScanFilter0795";
   var LS_SORT   = "dvlScanSort0794";
@@ -46566,6 +46568,49 @@ body.dvlScannerOpen080 #tradeNavBtn{
     return Math.round(ms/86400000)+"d";
   }
 
+  /* ── 24h signal history ─────────────────────────────────────────
+     Rows are keyed by mexc + tagged with the detection TF so switching
+     timeframes shows only the relevant signals. */
+  function loadHistory(){
+    try{
+      var h=JSON.parse(localStorage.getItem(HIST_KEY)||"[]");
+      return Array.isArray(h)?h:[];
+    }catch(_){return [];}
+  }
+  function saveHistory(rows){
+    try{localStorage.setItem(HIST_KEY,JSON.stringify(rows.slice(0,300)));}catch(_){}
+  }
+  function clearHistory(){
+    try{localStorage.removeItem(HIST_KEY);}catch(_){}
+  }
+  function mergeWithHistory(newRows){
+    var hist=loadHistory();
+    var now=Date.now();
+    var curTF=filterState.scanTF;
+    /* Build map from history — only for same TF */
+    var map={};
+    hist.forEach(function(r){if(r.mexc&&r._histTF===curTF)map[r.mexc]=r;});
+    /* Update/add new rows, stamping TF and time */
+    newRows.forEach(function(r){
+      if(r.mexc){r._histAt=now;r._histTF=curTF;map[r.mexc]=r;}
+    });
+    /* Evict entries older than 24h */
+    var merged=[];
+    var keys=Object.keys(map);
+    for(var ki=0;ki<keys.length;ki++){
+      var row=map[keys[ki]];
+      if(row._histAt&&(now-row._histAt)<HIST_MAX_AGE) merged.push(row);
+    }
+    /* Sort: most recently detected first */
+    merged.sort(function(a,b){
+      var ta=a.spikeAt||a._histAt||0;
+      var tb=b.spikeAt||b._histAt||0;
+      return tb-ta;
+    });
+    saveHistory(merged);
+    return merged;
+  }
+
   async function refresh(){
     if(state.loading) return;
     var ex=EX[state.exchange];
@@ -46614,7 +46659,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
         allRows.push(_row);
       }
 
-      state.rawRows=allRows;
+      state.rawRows=mergeWithHistory(allRows);
       state.rows=getDisplayRows();
       state.loaded=true;
       state.lastUpdate=new Date();
@@ -46622,14 +46667,17 @@ body.dvlScannerOpen080 #tradeNavBtn{
       state.lastMaPeriod1=curP1;
       state.lastMaPeriod2=curP2;
       renderRows();
-      updateLive(state.rows.length?"Ao vivo":"Sem dados");
+      var freshCount=allRows.length;
+      var histCount=state.rawRows.length-freshCount;
+      updateLive(freshCount?"Ao vivo":(histCount?"Histórico 24h":"Sem dados"));
     }catch(err){
       console.warn("DVL scanner refresh failed",err);
-      state.rawRows=[];
-      state.rows=[];
+      /* On error: keep showing historical signals instead of clearing */
+      state.rawRows=mergeWithHistory([]);
+      state.rows=getDisplayRows();
       state.lastUpdate=new Date();
       renderRows();
-      updateLive("Indisponível");
+      updateLive(state.rawRows.length?"Histórico 24h":"Indisponível");
     }finally{
       state.loading=false;
     }
@@ -46795,7 +46843,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
       +'<input class="dvlScan080FilInput" type="number" id="dvlFilFlatN" min="0" max="50" step="1" value="'+f.minFlatBefore+'"></div>'
       +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Nº de ativos (máx 100)</label>'
       +'<input class="dvlScan080FilInput" type="number" id="dvlFilCount" min="1" max="100" step="1" value="'+f.maxAssets+'"></div>'
-      +'<button class="dvlScan080FilApply" type="button" data-dvl-fil-apply>Analisar</button>'
+      +'<button class="dvlScan080FilApply" type="button" data-dvl-fil-apply>Salvar</button>'
       +'</div>';
   }
 
@@ -46823,6 +46871,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
 
     var needFull=(filterState.scanTF!==prevTF)||(filterState.maPeriod1!==prevP1)||(filterState.maPeriod2!==prevP2);
     if(needFull){
+      clearHistory(); /* criteria changed — old signals no longer valid */
       state.loaded=false;
       state.rawRows=[];
       state.rows=[];
