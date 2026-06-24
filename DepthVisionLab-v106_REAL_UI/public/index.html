@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.794</title>
+<title>DVL Binance Live — Beta 0.795</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.794';
+window.DVL_APP_VERSION = 'Beta 0.795';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -20132,11 +20132,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.794";
+const DVL_APP_VERSION = "Beta 0.795";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.794 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
+  { version: DVL_APP_VERSION, note: "Beta 0.795 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
   { version: DVL_APP_VERSION, note: "Beta 0.792 — Scanner: botão 'Api' ao lado de Alertas com menu MEXC / Binance / Bybit (MEXC e Binance ao vivo, Bybit desabilitado 'em breve'). Lista agora é Top 20 pares USDT rankeados por spike de volume na vela de 1h (top ~40 por volume 24h → klines 1h com concorrência limitada a 6 → ranqueia spike → top 20, atualiza por hora). Desenho de volume = volume REAL das 20 velas, sem dados fake: se a API falhar mostra 'Indisponível'. Só a exchange selecionada é usada (sem misturar). Card/painel visuais mantidos." },
   { version: DVL_APP_VERSION, note: "Beta 0.791 — MEXC Volume Spike Scanner portado para o source do repo (footer 'Scanner'). Cada card agora mostra uma linha compacta de metadados abaixo do setup: Vol xN (volume vs média), Flat Xc (candles flat antes do spike) e idade do sinal (Agora / Xm atrás). Mini gráfico de volume + MA20/MA50 e botão Analisar mantidos sem mudança de layout." },
   { version: DVL_APP_VERSION, note: "Beta 0.789 — DVL OB Imbalance Zones correção definitiva: item removido do HTML estático e inserido dinamicamente no boot (mesmo padrão do Spike Zones/Volume Trace/FEB que funciona no mobile). O HTML estático + binding separado impedia o addEventListener de vincular. Toggle e painel agora funcionam." },
@@ -45625,11 +45625,12 @@ else _init();
 <style id="DVL_MEXC_VOLUME_SPIKE_SCANNER_CSS_0780">
 /*
   DVL — Multi-exchange Volume Spike Scanner (ported into repo source)
-  Top-N USDT pairs ranked by 1h volume spike. Real data only (no fallback).
+  Top-N USDT pairs ranked by volume spike. Real data only (no fallback).
   API picker: MEXC / Binance (live) · Bybit (disabled).
-  Cards: last 20 real volume columns + Volume MA20/MA50, compact metadata
-  (Vol xN · Flat Xc · idade), Analisar button. Approved layout unchanged.
-  v0.794: Filtros panel, Sort menu, scroll fix, futures dropdown, search bar.
+  Cards: last 20 real volume columns + Volume MA lines, compact metadata
+  (Vol xN · Flat Xc · barPct%), Analisar button. Approved layout unchanged.
+  v0.795: TF selector, MA period config, partial candle extrapolation,
+          barPct instead of age, flat_x threshold, smart refresh, analyze→setTF.
 */
 
 .bottomNav .navInner #scannerNavBtn .dvlScannerRadar080,
@@ -45766,7 +45767,9 @@ else _init();
   position:absolute!important;
   top:calc(100% + 8px)!important;
   left:0!important;
-  width:300px!important;
+  width:320px!important;
+  max-height:85vh!important;
+  overflow-y:auto!important;
   display:none!important;
   flex-direction:column!important;
   gap:10px!important;
@@ -45776,6 +45779,8 @@ else _init();
   background:rgba(3,11,9,.98)!important;
   box-shadow:0 20px 46px rgba(0,0,0,.55)!important;
   z-index:62!important;
+  scrollbar-width:thin!important;
+  scrollbar-color:rgba(16,223,119,.22) transparent!important;
 }
 .dvlScan080FilMenu.is-open{ display:flex!important; }
 .dvlScan080FilTitle{
@@ -45784,6 +45789,14 @@ else _init();
   color:#10df77!important;
   padding-bottom:8px!important;
   border-bottom:1px solid rgba(16,223,119,.18)!important;
+}
+.dvlScan080FilSub{
+  font-size:13px!important;
+  font-weight:800!important;
+  color:#8a958f!important;
+  text-transform:uppercase!important;
+  letter-spacing:.06em!important;
+  margin-top:2px!important;
 }
 .dvlScan080FilRow{
   display:flex!important;
@@ -45825,6 +45838,32 @@ else _init();
   display:grid!important;
   place-items:center!important;
   margin-top:4px!important;
+}
+
+/* TF chip selector */
+.dvlScan080TFChips{
+  display:flex!important;
+  gap:6px!important;
+  flex-wrap:wrap!important;
+}
+.dvlScan080TFChip{
+  height:34px!important;
+  min-width:44px!important;
+  padding:0 10px!important;
+  border-radius:8px!important;
+  border:1px solid rgba(145,175,165,.22)!important;
+  background:rgba(4,12,10,.6)!important;
+  color:#c3cdc7!important;
+  font-size:14px!important;
+  font-weight:820!important;
+  display:grid!important;
+  place-items:center!important;
+  white-space:nowrap!important;
+}
+.dvlScan080TFChip.is-sel{
+  border-color:rgba(16,223,119,.50)!important;
+  background:rgba(16,223,119,.15)!important;
+  color:#10df77!important;
 }
 
 /* Api picker (col 3) */
@@ -46070,7 +46109,7 @@ else _init();
   text-overflow:ellipsis!important;
 }
 
-/* Compact metadata line: Vol xN · Flat Xc · idade do sinal */
+/* Compact metadata line: Vol xN · Flat Xc · barPct% */
 .dvlScan080Meta{
   margin-top:8px!important;
   display:flex!important;
@@ -46087,7 +46126,7 @@ else _init();
 }
 .dvlScan080MetaVol{ color:#10df77!important; }
 .dvlScan080MetaFlat{ color:#c3cdc7!important; }
-.dvlScan080MetaAge{ color:#8a958f!important; }
+.dvlScan080MetaBar{ font-size:14px!important; line-height:1!important; font-weight:820!important; }
 .dvlScan080MetaDot{
   width:3px!important;
   height:3px!important;
@@ -46150,22 +46189,24 @@ body.dvlScannerOpen080 #tradeNavBtn{
   if(window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780) return;
 
   /* ── Tuning ──────────────────────────────────────────────── */
-  var TF_LABEL  = "1h";
-  var KLIM      = 60;
-  var CAND      = 200;           /* vasculha os 200 maiores por volume 24h */
+  var KLIM      = 80;            /* candles per symbol */
+  var CAND      = 200;           /* scan top 200 by 24h volume */
   var POOL      = 8;
   var REFRESH_MS= 3600000;
   var STALE_MS  = 300000;
   var FRESH_MS  = 3 * 3600000;
   var LS_KEY    = "dvlScanExchange0790";
-  var LS_FIL   = "dvlScanFilter0794";
-  var LS_SORT  = "dvlScanSort0794";
+  var LS_FIL    = "dvlScanFilter0795";
+  var LS_SORT   = "dvlScanSort0794";
+
+  var TF_LIST   = ["1m","3m","5m","15m","30m","1h"];
+  var MEXC_TF   = {"1m":"Min1","3m":"Min5","5m":"Min5","15m":"Min15","30m":"Min30","1h":"Min60"};
 
   var ICONS = { BTC:"₿", ETH:"◆", LTC:"Ł", BNB:"⬡", XRP:"X", DOGE:"D", AVAX:"A" };
   var KNOWN = {btc:1,eth:1,sol:1,bnb:1,xrp:1,ada:1,doge:1,avax:1,link:1,ltc:1,sui:1};
 
   /* ── Sort modes ─────────────────────────────────────────────── */
-  var SORT_LABELS = {spike:"Maior spike",recente:"Mais recente",volume:"Maior volume",raw:"Sem filtro"};
+  var SORT_LABELS = {spike:"Maior spike",recente:"Maior variação",volume:"Maior volume",raw:"Sem filtro"};
 
   var sortMode = (function(){
     try{ var s=localStorage.getItem(LS_SORT); return SORT_LABELS[s]?s:"spike"; }catch(_){ return "spike"; }
@@ -46176,12 +46217,15 @@ body.dvlScannerOpen080 #tradeNavBtn{
     try{
       var o=JSON.parse(localStorage.getItem(LS_FIL)||"{}");
       return {
-        spikeMin : isNaN(parseFloat(o.spikeMin))  ? 1.0 : Math.max(0,parseFloat(o.spikeMin)),
-        ma20Min  : isNaN(parseFloat(o.ma20Min))   ? 0   : Math.max(0,parseFloat(o.ma20Min)),
-        ma50Min  : isNaN(parseFloat(o.ma50Min))   ? 0   : Math.max(0,parseFloat(o.ma50Min)),
-        maxAssets: Math.min(100,Math.max(1,parseInt(o.maxAssets)||20))
+        spikeMin     : isNaN(parseFloat(o.spikeMin))    ? 0   : Math.max(0,parseFloat(o.spikeMin)),
+        maPeriod1    : Math.min(200,Math.max(2,parseInt(o.maPeriod1)||20)),
+        maPeriod2    : Math.min(500,Math.max(2,parseInt(o.maPeriod2)||50)),
+        flat_x       : isNaN(parseFloat(o.flat_x))      ? 10  : Math.max(0.1,parseFloat(o.flat_x)),
+        minFlatBefore: Math.max(0,parseInt(o.minFlatBefore)||0),
+        maxAssets    : Math.min(100,Math.max(1,parseInt(o.maxAssets)||20)),
+        scanTF       : TF_LIST.indexOf(o.scanTF)>=0 ? o.scanTF : "15m"
       };
-    }catch(_){ return {spikeMin:1.0,ma20Min:0,ma50Min:0,maxAssets:20}; }
+    }catch(_){ return {spikeMin:0,maPeriod1:20,maPeriod2:50,flat_x:10,minFlatBefore:0,maxAssets:20,scanTF:"15m"}; }
   })();
 
   /* ── Exchange adapters (FUTURES) ─────────────────────────────── */
@@ -46199,7 +46243,8 @@ body.dvlScannerOpen080 #tradeNavBtn{
         }).map(function(t){return{sym:t.symbol,qv:Number(t.quoteVolume)};});
       },
       klines:async function(sym){
-        var url="https://fapi.binance.com/fapi/v1/klines?symbol="+encodeURIComponent(sym)+"&interval=1h&limit="+KLIM;
+        var tf=filterState.scanTF||"15m";
+        var url="https://fapi.binance.com/fapi/v1/klines?symbol="+encodeURIComponent(sym)+"&interval="+encodeURIComponent(tf)+"&limit="+KLIM;
         var r=await fetch(url,{cache:"no-store"});
         if(!r.ok) throw new Error("kl "+r.status);
         var d=await r.json();
@@ -46221,8 +46266,11 @@ body.dvlScannerOpen080 #tradeNavBtn{
         return d.filter(function(t){var s=t&&t.symbol?t.symbol:"";return /_USDT$/.test(s)&&Number(t.amount24)>0;}).map(function(t){return{sym:t.symbol,qv:Number(t.amount24)};});
       },
       klines:async function(sym){
-        var start=Math.floor(Date.now()/1000)-KLIM*3600;
-        var url="https://contract.mexc.com/api/v1/contract/kline/"+encodeURIComponent(sym)+"?interval=Min60&start="+start;
+        var tf=filterState.scanTF||"15m";
+        var mexcTf=MEXC_TF[tf]||"Min15";
+        var tfSec=tfToMs(tf)/1000;
+        var start=Math.floor(Date.now()/1000)-KLIM*tfSec;
+        var url="https://contract.mexc.com/api/v1/contract/kline/"+encodeURIComponent(sym)+"?interval="+mexcTf+"&start="+start;
         var r=await fetch(url,{cache:"no-store"});
         if(!r.ok) throw new Error("kl "+r.status);
         var j=await r.json();
@@ -46251,8 +46299,17 @@ body.dvlScannerOpen080 #tradeNavBtn{
     loading:false,
     filterMode:"all",
     exchange:readExchange(),
-    scale:1
+    scale:1,
+    lastScanTF:filterState.scanTF,
+    lastMaPeriod1:filterState.maPeriod1,
+    lastMaPeriod2:filterState.maPeriod2
   };
+
+  /* ── Helpers ─────────────────────────────────────────────────── */
+  function tfToMs(tf){
+    var m={"1m":60000,"3m":180000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000};
+    return m[tf]||900000;
+  }
 
   function radarSVG(){
     return '<svg class="dvlScannerRadar080" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2.15"/><path d="M12 2.7v2.1M12 19.2v2.1M2.7 12h2.1M19.2 12h2.1M17 7l1.8-1.8"/></g></svg>';
@@ -46288,58 +46345,72 @@ body.dvlScannerOpen080 #tradeNavBtn{
     try{ return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }catch(_){ return ""; }
   }
 
-  function ageLabel(openMs){
-    if(!openMs) return "Agora";
-    var min=Math.floor((Date.now()-openMs)/60000);
-    if(min<=0) return "Agora";
-    if(min<60) return min+"m atrás";
-    var h=Math.floor(min/60);
-    if(h<48) return h+"h atrás";
-    return Math.floor(h/24)+"d atrás";
-  }
-
   function baseFromSymbol(b,fullSym){
     var low=b.toLowerCase();
     return {coin:KNOWN[low]?low:"",icon:ICONS[b.toUpperCase()]||(b.charAt(0)||"?"),mexc:fullSym,symbol:b+"/USDT",side:"LONG",setup:""};
   }
 
+  /* ── Signal computation (dynamic MA periods, volume-based flat) ── */
   function computeSignal(base,closes,vols,lastOpenMs){
+    var p1=filterState.maPeriod1||20;
+    var p2=filterState.maPeriod2||50;
     var len=vols.length;
-    var volMa20=[],volMa50=[],priceMa20=[],priceMa50=[];
+    var volMa1=[],volMa2=[],priceMa1=[],priceMa2=[];
     for(var i=0;i<len;i++){
-      volMa20.push(sma(vols,20,i));
-      volMa50.push(sma(vols,50,i));
-      priceMa20.push(sma(closes,20,i));
-      priceMa50.push(sma(closes,50,i));
+      volMa1.push(sma(vols,p1,i));
+      volMa2.push(sma(vols,p2,i));
+      priceMa1.push(sma(closes,p1,i));
+      priceMa2.push(sma(closes,p2,i));
     }
     var lastVol=vols[len-1]||0;
-    var lastMa20=volMa20[len-1]||(sma(vols,Math.min(20,len),len-1)||1);
-    var lastMa50=volMa50[len-1]||(sma(vols,Math.min(50,len),len-1)||1);
-    var spike20=lastVol/Math.max(lastMa20,1e-9);
-    var spike50=lastVol/Math.max(lastMa50,1e-9);
-    var ma20Now=priceMa20[len-1]||closes[len-1];
-    var ma20Past=priceMa20[len-11]||priceMa20[len-2]||ma20Now;
-    var ma50Now=priceMa50[len-1]||closes[len-1];
-    var ma50Past=priceMa50[len-11]||priceMa50[len-2]||ma50Now;
-    var slope20=Math.abs(pct(ma20Now,ma20Past));
-    var slope50=Math.abs(pct(ma50Now,ma50Past));
-    var flatScore=Math.max(0,1-((slope20+slope50)/1.2));
+    var lastMa1=volMa1[len-1]||(sma(vols,Math.min(p1,len),len-1)||1);
+    var lastMa2=volMa2[len-1]||(sma(vols,Math.min(p2,len),len-1)||1);
+    var spike1=lastVol/Math.max(lastMa1,1e-9);
+    var spike2=lastVol/Math.max(lastMa2,1e-9);
+    var ma1Now=priceMa1[len-1]||closes[len-1];
+    var ma1Past=priceMa1[Math.max(0,len-p1-1)]||priceMa1[len-2]||ma1Now;
+    var ma2Now=priceMa2[len-1]||closes[len-1];
+    var ma2Past=priceMa2[Math.max(0,len-p1-1)]||priceMa2[len-2]||ma2Now;
+    var slope1=Math.abs(pct(ma1Now,ma1Past));
+    var slope2=Math.abs(pct(ma2Now,ma2Past));
+    var flatScore=Math.max(0,1-((slope1+slope2)/1.2));
     var lastClose=closes[len-1]||0;
     var prevClose=closes[len-2]||lastClose;
     var side=lastClose>=prevClose?"LONG":"SHORT";
-    var setup=flatScore>.55?"MAs flat + Volume Spike":(spike20>2?"Volume acima da MA20":"Volume spike 1h");
-    var flatTol=0.18,flatCandles=0;
-    for(var j=len-2;j>0;j--){
-      if(Math.abs(pct(closes[j],closes[j-1]))<=flatTol) flatCandles++;
+    var barPct=prevClose>0?((lastClose-prevClose)/prevClose)*100:0;
+    var setup=flatScore>.55?"MAs flat + Volume Spike":(spike1>2?"Volume acima da MA"+p1:"Volume spike "+filterState.scanTF);
+    /* Volume-based flat candles: bars where vol/MA1 <= flat_x */
+    var flatX=filterState.flat_x||10;
+    var flatCandles=0;
+    for(var j=len-2;j>=0;j--){
+      var mj=volMa1[j];
+      if(!mj||!Number.isFinite(mj)||mj<=0) break;
+      if(vols[j]/mj<=flatX) flatCandles++;
       else break;
     }
     return {
       coin:base.coin,icon:base.icon,mexc:base.mexc,symbol:base.symbol,
       side:side,setup:setup,
-      spike20:spike20,spike50:spike50,flatScore:flatScore,
-      volX:spike20,flatCandles:flatCandles,ageOpen:lastOpenMs||0,
-      last20Vols:vols.slice(-20),last20MA20:volMa20.slice(-20),last20MA50:volMa50.slice(-20)
+      spike20:spike1,spike50:spike2,flatScore:flatScore,
+      volX:spike1,flatCandles:flatCandles,barPct:barPct,
+      last20Vols:vols.slice(-20),last20MA1:volMa1.slice(-20),last20MA2:volMa2.slice(-20),
+      ma1Period:p1,ma2Period:p2
     };
+  }
+
+  /* ── Recompute flatCandles from stored data (no API refetch) ── */
+  function recomputeFlatCandles(row){
+    var vols=row.last20Vols||[];
+    var ma1=row.last20MA1||[];
+    var flatX=filterState.flat_x||10;
+    var count=0;
+    for(var j=vols.length-2;j>=0;j--){
+      var mj=ma1[j];
+      if(!mj||!Number.isFinite(mj)||mj<=0) break;
+      if(vols[j]/mj<=flatX) count++;
+      else break;
+    }
+    row.flatCandles=count;
   }
 
   async function mapPool(items,limit,fn){
@@ -46357,33 +46428,22 @@ body.dvlScannerOpen080 #tradeNavBtn{
   }
 
   /* ── Display logic ───────────────────────────────────────────────
-     Applies Alertas toggle, Filtros panel, and sort mode.
-     "raw" = 24h vol order, no spike/MA filter. */
+     Applies Alertas toggle, Filtros panel, sort mode.
+     "raw" = 24h vol order, no spike/flat filter. */
   function getDisplayRows(){
     var rows=state.rawRows.slice();
-
     if(state.filterMode==="alerts")
       rows=rows.filter(function(r){return (r.spike20||0)>=1.7||(r.spike50||0)>=1.5;});
-
     if(sortMode!=="raw"){
       if(filterState.spikeMin>0)
         rows=rows.filter(function(r){return (r.spike20||0)>=filterState.spikeMin;});
-      if(filterState.ma20Min>0)
-        rows=rows.filter(function(r){
-          var m=(r.last20MA20&&r.last20MA20.length)?r.last20MA20[r.last20MA20.length-1]||0:0;
-          return m>=filterState.ma20Min;
-        });
-      if(filterState.ma50Min>0)
-        rows=rows.filter(function(r){
-          var m=(r.last20MA50&&r.last20MA50.length)?r.last20MA50[r.last20MA50.length-1]||0:0;
-          return m>=filterState.ma50Min;
-        });
+      if(filterState.minFlatBefore>0)
+        rows=rows.filter(function(r){return (r.flatCandles||0)>=filterState.minFlatBefore;});
     }
-
     if(sortMode==="spike"){
       rows.sort(function(a,b){return (b.spike20||0)-(a.spike20||0);});
     } else if(sortMode==="recente"){
-      rows.sort(function(a,b){return (b.ageOpen||0)-(a.ageOpen||0);});
+      rows.sort(function(a,b){return Math.abs(b.barPct||0)-Math.abs(a.barPct||0);});
     } else if(sortMode==="volume"){
       rows.sort(function(a,b){
         var va=(a.last20Vols&&a.last20Vols.length)?a.last20Vols[a.last20Vols.length-1]||0:0;
@@ -46391,8 +46451,6 @@ body.dvlScannerOpen080 #tradeNavBtn{
         return vb-va;
       });
     }
-    /* raw: keep 24h vol order as-is */
-
     return rows.slice(0,filterState.maxAssets);
   }
 
@@ -46404,6 +46462,11 @@ body.dvlScannerOpen080 #tradeNavBtn{
     state.loading=true;
     updateLive("Carregando");
     renderRows();
+
+    var curTF=filterState.scanTF;
+    var curP1=filterState.maPeriod1;
+    var curP2=filterState.maPeriod2;
+    var tfMs=tfToMs(curTF);
 
     try{
       var cands=await ex.tickers();
@@ -46417,13 +46480,23 @@ body.dvlScannerOpen080 #tradeNavBtn{
         var k=kl[i];
         if(!k||!k.closes||k.closes.length<25) continue;
         if(k.lastOpen&&k.lastOpen<freshCut) continue;
-        allRows.push(computeSignal(baseFromSymbol(ex.base(cands[i].sym),cands[i].sym),k.closes,k.vols,k.lastOpen));
+        /* Extrapolate partial last candle so spike is not artificially low */
+        var extVols=k.vols.slice();
+        if(extVols.length>0&&k.lastOpen&&tfMs>0){
+          var elapsed=Math.max(5000,Date.now()-k.lastOpen);
+          var fraction=Math.min(1,Math.max(0.05,elapsed/tfMs));
+          extVols[extVols.length-1]=extVols[extVols.length-1]/fraction;
+        }
+        allRows.push(computeSignal(baseFromSymbol(ex.base(cands[i].sym),cands[i].sym),k.closes,extVols,k.lastOpen));
       }
 
       state.rawRows=allRows;
       state.rows=getDisplayRows();
       state.loaded=true;
       state.lastUpdate=new Date();
+      state.lastScanTF=curTF;
+      state.lastMaPeriod1=curP1;
+      state.lastMaPeriod2=curP2;
       renderRows();
       updateLive(state.rows.length?"Ao vivo":"Sem dados");
     }catch(err){
@@ -46444,14 +46517,16 @@ body.dvlScannerOpen080 #tradeNavBtn{
     var live=document.getElementById("dvlScan080LiveText");
     var time=document.getElementById("dvlScan080LiveTime");
     if(live) live.textContent=label||"Ao vivo";
-    if(time) time.textContent=exLabel()+" · FUT"+(state.lastUpdate?" · "+formatTime(state.lastUpdate):"");
+    if(time) time.textContent=exLabel()+" · FUT · "+(filterState.scanTF||"15m")+(state.lastUpdate?" · "+formatTime(state.lastUpdate):"");
   }
 
   function volumeSvg(row){
     var vols=row.last20Vols||[];
-    var ma20=row.last20MA20||[];
-    var ma50=row.last20MA50||[];
-    var maxVal=Math.max.apply(null,vols.concat(ma20).concat(ma50).filter(function(v){return Number.isFinite(v)&&v>0;}).concat([1]));
+    var ma1=row.last20MA1||[];
+    var ma2=row.last20MA2||[];
+    var p1=row.ma1Period||filterState.maPeriod1||20;
+    var p2=row.ma2Period||filterState.maPeriod2||50;
+    var maxVal=Math.max.apply(null,vols.concat(ma1).concat(ma2).filter(function(v){return Number.isFinite(v)&&v>0;}).concat([1]));
     var short=row.side==="SHORT";
     var barColor=short?"#ff4858":"#10df77";
     var left=10,top=14,chartH=52,gap=3,barW=10;
@@ -46475,16 +46550,14 @@ body.dvlScannerOpen080 #tradeNavBtn{
     }
     return '<svg viewBox="0 0 300 74" preserveAspectRatio="none">'
       +'<text x="10" y="10" class="dvlScan080VolLabel">Vol</text>'
-      +'<circle cx="72" cy="7" r="2.2" fill="#10df77"/><text x="79" y="10" class="dvlScan080VolMeta">MA20</text>'
-      +'<circle cx="125" cy="7" r="2.2" fill="#ffd321"/><text x="132" y="10" class="dvlScan080VolMeta">MA50</text>'
-      +bars+line(ma20,"#10df77")+line(ma50,"#ffd321")+'</svg>';
+      +'<circle cx="72" cy="7" r="2.2" fill="#10df77"/><text x="79" y="10" class="dvlScan080VolMeta">MA'+p1+'</text>'
+      +'<circle cx="125" cy="7" r="2.2" fill="#ffd321"/><text x="132" y="10" class="dvlScan080VolMeta">MA'+p2+'</text>'
+      +bars+line(ma1,"#10df77")+line(ma2,"#ffd321")+'</svg>';
   }
 
   function escAttr(s){return String(s).replace(/"/g,"&quot;");}
   function escHtml(s){return String(s).replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 
-  /* ── Scale compensation: collapses empty layout space so panel
-     scroll stops exactly at last card's visual bottom. */
   function compensateScale(){
     var panel=document.getElementById("dvlScannerPanel0780");
     if(!panel) return;
@@ -46515,7 +46588,9 @@ body.dvlScannerOpen080 #tradeNavBtn{
       var parts=r.symbol.indexOf("/")>-1?r.symbol.split("/"):[r.symbol,""];
       var volTxt="Vol x"+(Number(r.volX)||0).toFixed(1);
       var flatTxt="Flat "+(Number(r.flatCandles)||0)+"c";
-      var ageTxt=ageLabel(r.ageOpen);
+      var bp=r.barPct||0;
+      var bpTxt=(bp>=0?"+":"")+bp.toFixed(2)+"%";
+      var bpColor=bp>=0?"#10df77":"#ff5966";
       return '<article class="dvlScan080Card" data-mexc="'+escAttr(r.mexc)+'">'
         +'<div class="dvlScan080Coin '+(r.coin||'')+'">'+escHtml(r.icon||'')+'</div>'
         +'<div class="dvlScan080Main">'
@@ -46526,11 +46601,11 @@ body.dvlScannerOpen080 #tradeNavBtn{
         +    '<i class="dvlScan080MetaDot"></i>'
         +    '<span class="dvlScan080MetaFlat">'+flatTxt+'</span>'
         +    '<i class="dvlScan080MetaDot"></i>'
-        +    '<span class="dvlScan080MetaAge">'+ageTxt+'</span>'
+        +    '<span class="dvlScan080MetaBar" style="color:'+bpColor+'">'+bpTxt+'</span>'
         +  '</div>'
         +'</div>'
         +'<div class="dvlScan080Vol">'+volumeSvg(r)+'</div>'
-        +'<button class="dvlScan080Btn" type="button" data-dvl-scan-analyze="'+escAttr(r.symbol)+'">Analisar</button>'
+        +'<button class="dvlScan080Btn" type="button" data-dvl-scan-analyze="'+escAttr(r.symbol)+'" data-dvl-scan-mexc="'+escAttr(r.mexc)+'">Analisar</button>'
         +'</article>';
     }).join("");
     compensateScale();
@@ -46560,19 +46635,36 @@ body.dvlScannerOpen080 #tradeNavBtn{
   }
 
   /* ── Filtros menu ────────────────────────────────────────────── */
+  function tfChipsHTML(){
+    return '<div class="dvlScan080TFChips" id="dvlScan080TFChips">'
+      +TF_LIST.map(function(tf){
+        var sel=filterState.scanTF===tf;
+        return '<button class="dvlScan080TFChip'+(sel?' is-sel':'')+'" type="button" data-dvl-tf-chip="'+tf+'">'+tf+'</button>';
+      }).join("")
+      +'</div>';
+  }
+
   function filtrosMenuHTML(){
     var f=filterState;
     return '<div class="dvlScan080FilMenu" id="dvlScan080FilMenu">'
       +'<div class="dvlScan080FilTitle">Filtros</div>'
+      +'<div class="dvlScan080FilSub">Timeframe de detecção</div>'
+      +tfChipsHTML()
       +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Spike mínimo (×)</label>'
       +'<input class="dvlScan080FilInput" type="number" id="dvlFilSpike" min="0" max="100" step="0.1" value="'+f.spikeMin+'"></div>'
-      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">MA20 mínimo</label>'
-      +'<input class="dvlScan080FilInput" type="number" id="dvlFilMa20" min="0" step="1" value="'+f.ma20Min+'"></div>'
-      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">MA50 mínimo</label>'
-      +'<input class="dvlScan080FilInput" type="number" id="dvlFilMa50" min="0" step="1" value="'+f.ma50Min+'"></div>'
+      +'<div class="dvlScan080FilSub">Médias móveis</div>'
+      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Período MA rápida</label>'
+      +'<input class="dvlScan080FilInput" type="number" id="dvlFilMa1" min="2" max="200" step="1" value="'+f.maPeriod1+'"></div>'
+      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Período MA lenta</label>'
+      +'<input class="dvlScan080FilInput" type="number" id="dvlFilMa2" min="2" max="500" step="1" value="'+f.maPeriod2+'"></div>'
+      +'<div class="dvlScan080FilSub">MAs flat + spike repentino</div>'
+      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Flat máx (× vol MA)</label>'
+      +'<input class="dvlScan080FilInput" type="number" id="dvlFilFlatX" min="0.1" max="100" step="0.5" value="'+f.flat_x+'"></div>'
+      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Flat mín antes (barras)</label>'
+      +'<input class="dvlScan080FilInput" type="number" id="dvlFilFlatN" min="0" max="50" step="1" value="'+f.minFlatBefore+'"></div>'
       +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Nº de ativos (máx 100)</label>'
       +'<input class="dvlScan080FilInput" type="number" id="dvlFilCount" min="1" max="100" step="1" value="'+f.maxAssets+'"></div>'
-      +'<button class="dvlScan080FilApply" type="button" data-dvl-fil-apply>Aplicar</button>'
+      +'<button class="dvlScan080FilApply" type="button" data-dvl-fil-apply>Analisar</button>'
       +'</div>';
   }
 
@@ -46581,15 +46673,36 @@ body.dvlScannerOpen080 #tradeNavBtn{
       var v=parseFloat((document.getElementById(id)||{}).value);
       return isNaN(v)?def:Math.min(mx,Math.max(mn,v));
     }
-    filterState.spikeMin =rdN("dvlFilSpike",1.0,0,999);
-    filterState.ma20Min  =rdN("dvlFilMa20",0,0,1e12);
-    filterState.ma50Min  =rdN("dvlFilMa50",0,0,1e12);
-    filterState.maxAssets=Math.round(rdN("dvlFilCount",20,1,100));
+    /* Save TF/period BEFORE update to detect change */
+    var prevTF=state.lastScanTF;
+    var prevP1=state.lastMaPeriod1;
+    var prevP2=state.lastMaPeriod2;
+
+    /* filterState.scanTF is already updated by chip click */
+    filterState.spikeMin     =rdN("dvlFilSpike",0,0,999);
+    filterState.maPeriod1    =Math.round(rdN("dvlFilMa1",20,2,200));
+    filterState.maPeriod2    =Math.round(rdN("dvlFilMa2",50,2,500));
+    filterState.flat_x       =rdN("dvlFilFlatX",10,0.1,100);
+    filterState.minFlatBefore=Math.round(rdN("dvlFilFlatN",0,0,50));
+    filterState.maxAssets    =Math.round(rdN("dvlFilCount",20,1,100));
     try{localStorage.setItem(LS_FIL,JSON.stringify(filterState));}catch(_){}
+
     var fm=document.getElementById("dvlScan080FilMenu");
     if(fm) fm.classList.remove("is-open");
-    state.rows=getDisplayRows();
-    renderRows();
+
+    var needFull=(filterState.scanTF!==prevTF)||(filterState.maPeriod1!==prevP1)||(filterState.maPeriod2!==prevP2);
+    if(needFull){
+      state.loaded=false;
+      state.rawRows=[];
+      state.rows=[];
+      renderRows();
+      refresh();
+    } else {
+      /* Reapply flat_x to stored data, no API refetch */
+      for(var ri=0;ri<state.rawRows.length;ri++) recomputeFlatCandles(state.rawRows[ri]);
+      state.rows=getDisplayRows();
+      renderRows();
+    }
   }
 
   /* ── Sort menu ───────────────────────────────────────────────── */
@@ -46618,7 +46731,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
     renderRows();
   }
 
-  /* ── Futures dropdown patch (Tasks 1+2) ──────────────────────── */
+  /* ── Futures dropdown patch ──────────────────────────────────── */
   var _dvlFutPairs=null,_dvlFutFetching=false;
 
   async function loadFuturesPairs(){
@@ -46764,6 +46877,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
     else open();
   }
 
+  /* analyze: switch chart symbol AND timeframe to match scan TF */
   function analyze(symbol){
     try{
       var s1=document.getElementById("dvl1b_symbolText");
@@ -46772,7 +46886,9 @@ body.dvlScannerOpen080 #tradeNavBtn{
       if(s1) s1.textContent=symbol;
       if(s2) s2.textContent=symbol;
       if(s3) s3.textContent=symbol;
-      window.dispatchEvent(new CustomEvent("dvl-scanner-analyze",{detail:{symbol:symbol,source:"volume-spike",exchange:state.exchange}}));
+      if(typeof window.selectSymbol==="function") window.selectSymbol(symbol);
+      window.dispatchEvent(new CustomEvent("dvl-scanner-analyze",{detail:{symbol:symbol,source:"volume-spike",exchange:state.exchange,tf:filterState.scanTF}}));
+      if(typeof window.setIntervalUi==="function") window.setIntervalUi(filterState.scanTF);
     }catch(_){}
     close();
   }
@@ -46835,6 +46951,17 @@ body.dvlScannerOpen080 #tradeNavBtn{
         var amF=document.getElementById("dvlScan080ApiMenu");if(amF)amF.classList.remove("is-open");
         var smF=document.getElementById("dvlScan080SortMenu");if(smF)smF.classList.remove("is-open");
         var fmF=document.getElementById("dvlScan080FilMenu");if(fmF)fmF.classList.toggle("is-open");
+        return;
+      }
+
+      /* TF chip click — update filterState.scanTF immediately */
+      var tfChip=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-tf-chip]"):null;
+      if(tfChip){
+        ev.preventDefault();ev.stopPropagation();
+        var newTF=tfChip.getAttribute("data-dvl-tf-chip");
+        filterState.scanTF=newTF;
+        var chips=document.querySelectorAll(".dvlScan080TFChip");
+        for(var ci=0;ci<chips.length;ci++) chips[ci].classList.toggle("is-sel",chips[ci].getAttribute("data-dvl-tf-chip")===newTF);
         return;
       }
 
