@@ -45543,9 +45543,15 @@ function _insertRow(){
     '<span><b>DVL OB Imbalance Zones</b><small>Order Book · Dados Reais</small></span>'+
     '<i class="dvl-vt-state'+(_s.on?' is-on':'')+'" id="dvlOBIZState">'+(_s.on?'ON':'OFF')+'</i>';
 
-  var last=menu.querySelector('.indicatorItem:last-child');
-  if(last&&last.parentNode)last.parentNode.insertBefore(_rowEl,last.nextSibling);
-  else menu.appendChild(_rowEl);
+  // Insert before first is-soon placeholder (same position as other live indicators)
+  var firstSoon=menu.querySelector('.indicatorItem.is-soon');
+  if(firstSoon&&firstSoon.parentNode){
+    firstSoon.parentNode.insertBefore(_rowEl,firstSoon);
+  } else {
+    var head=menu.querySelector('.indicatorDropHead');
+    if(head&&head.nextSibling)menu.insertBefore(_rowEl,head.nextSibling);
+    else menu.appendChild(_rowEl);
+  }
 
   _rowEl.querySelector('#dvlOBIZState').addEventListener('click',function(ev){
     ev.preventDefault();ev.stopPropagation();
