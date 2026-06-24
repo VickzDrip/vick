@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.786</title>
+<title>DVL Binance Live — Beta 0.787</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.786';
+window.DVL_APP_VERSION = 'Beta 0.787';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -19205,6 +19205,9 @@ html.dvl1b-ind-open .indicatorItem .dvl-vt-state{
 html.dvl1b-ind-open .indicatorItem .dvl-vt-state.is-on::after{ transform:translateX(24px) !important; }
 /* 0.786 — indicator panels must appear ABOVE #fxIndicatorWrap (z-index:100000) */
 html.dvl1b-ind-open .dvl-vt-panel{ z-index:100002 !important; }
+/* 0.787 — OB Imbalance Zones row + toggle must respond to mobile taps (no 300ms limbo) */
+#dvlOBIZItem{ touch-action:manipulation !important; -webkit-tap-highlight-color:rgba(16,223,119,.18) !important; cursor:pointer !important; }
+#dvlOBIZItem #dvlOBIZState{ touch-action:manipulation !important; cursor:pointer !important; }
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-act.dvl1b-open{ color:var(--b-accent); background:rgba(16,223,119,.10); border:calc(1 * var(--px)) solid rgba(16,223,119,.30); }
 /* Phase 2C: reveal the OLD drawing tools shell from the hidden .marketRow, anchored under the new button. */
 html.dvl1b-draw-open .marketRow{ display:block !important; visibility:hidden !important; position:fixed !important; left:0 !important; top:0 !important; width:0 !important; height:0 !important; min-height:0 !important; padding:0 !important; margin:0 !important; border:0 !important; background:transparent !important; box-shadow:none !important; overflow:visible !important; pointer-events:none !important; z-index:100000 !important; }
@@ -19399,7 +19402,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.786</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.787</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -20134,11 +20137,12 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.786";
+const DVL_APP_VERSION = "Beta 0.787";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.786 — DVL OB Imbalance Zones fix: painel de configurações abria atrás do dropdown de indicadores (z-index:100000 do fxIndicatorWrap vs z-index:99999 do painel); corrigido fechando o dropdown antes de abrir o painel, usando classList.add('is-open'), e adicionando CSS z-index:100002 para todos os painéis dvl-vt-panel quando dvl1b-ind-open está ativo." },
+  { version: DVL_APP_VERSION, note: "Beta 0.787 — DVL OB Imbalance Zones fix: o item não respondia ao toque no mobile ('limbo'). Adicionados handlers touchend+click com dedup de 600ms na linha do indicador e no toggle ON/OFF (mesmo padrão que corrigiu o botão TF), e CSS touch-action:manipulation em #dvlOBIZItem. Tocar no toggle ativa/desativa; tocar na linha abre o painel de configurações." },
+  { version: "Beta 0.786", note: "Beta 0.786 — DVL OB Imbalance Zones fix: painel de configurações abria atrás do dropdown de indicadores (z-index:100000 do fxIndicatorWrap vs z-index:99999 do painel); corrigido fechando o dropdown antes de abrir o painel, usando classList.add('is-open'), e adicionando CSS z-index:100002 para todos os painéis dvl-vt-panel quando dvl1b-ind-open está ativo." },
   { version: "Beta 0.785", note: "Beta 0.785 — DVL OB Imbalance Zones fix: painel de configurações agora abre corretamente ao clicar no indicador (display:block em vez de display:'')." },
   { version: "Beta 0.784", note: "Beta 0.784 — DVL OB Imbalance Zones: indicador overlay em tempo real via WebSocket público (Binance Futures/Spot, MEXC Futures/Spot); agrupa níveis do order book em buckets por ATR, calcula desequilíbrio bid/ask, desenha zonas de demanda/oferta com glow, borda e labels no gráfico; painel de configurações DVL com Exchange Adapter, Depth Levels, Bucket Mode, Min Imbalance, Strong Imbalance, Min Volume Pct, Max Zones, ATR Distance, cores, opacidade e glow; throttle de 400ms, auto-reconexão, detecção automática de troca de ativo." },
   { version: "Beta 0.783", note: "Beta 0.783 — TF dropdown fix: button label fixed as static 'TF'; click binding moved from bridge to module with touchend+click dedup guard for reliable mobile tap; touch-action:manipulation added to wrapper; version badge auto-updates via DVL_APP_VERSION." },
@@ -45561,20 +45565,46 @@ function _updRow(){
   if(pill){pill.textContent=_s.on?'ON':'OFF';pill.className='dvl-vt-state'+(_s.on?' is-on':'');}
 }
 
+var _obTouch=0;
+function _toggleOn(){
+  _s.on=!_s.on;_save();
+  if(_s.on)_connect();else _disconnect();
+  _updRow();_dsoon();
+}
 function _insertRow(){
-  var menu=document.getElementById('indicatorDropdown');
   // Item está no HTML estático — só vincula eventos
   _rowEl=document.getElementById('dvlOBIZItem');
   if(!_rowEl||_rowEl.dataset.obizBound)return;
   _rowEl.dataset.obizBound='1';
   var pill=document.getElementById('dvlOBIZState');
-  if(pill)pill.addEventListener('click',function(ev){
+
+  /* Toggle pill — touchend + click with dedup (mirrors the proven TF button fix) */
+  if(pill){
+    pill.addEventListener('touchend',function(ev){
+      _obTouch=Date.now();
+      ev.preventDefault();ev.stopPropagation();
+      _toggleOn();
+    },{capture:false,passive:false});
+    pill.addEventListener('click',function(ev){
+      ev.preventDefault();ev.stopPropagation();
+      if(Date.now()-_obTouch<600)return;
+      _toggleOn();
+    },false);
+  }
+
+  /* Row — opens settings panel; touchend + click with dedup */
+  _rowEl.addEventListener('touchend',function(ev){
+    if(pill&&pill.contains(ev.target))return;
+    _obTouch=Date.now();
     ev.preventDefault();ev.stopPropagation();
-    _s.on=!_s.on;_save();
-    if(_s.on)_connect();else _disconnect();
-    _updRow();_dsoon();
-  });
-  _rowEl.addEventListener('click',function(ev){ev.stopPropagation();_openPanel();});
+    _openPanel();
+  },{capture:false,passive:false});
+  _rowEl.addEventListener('click',function(ev){
+    if(pill&&pill.contains(ev.target))return;
+    ev.stopPropagation();
+    if(Date.now()-_obTouch<600)return;
+    _openPanel();
+  },false);
 }
 
 /* ─── init ─── */
