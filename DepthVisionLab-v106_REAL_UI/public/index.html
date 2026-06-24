@@ -19364,7 +19364,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-tfDropBtn{ height:calc(40 * var(--px)); min-width:calc(44 * var(--px)); padding:0 calc(10 * var(--px)); font-size:calc(18 * var(--px)); font-weight:700; color:rgba(160,185,172,.65); border:calc(1 * var(--px)) solid rgba(150,180,165,.18); border-radius:calc(8 * var(--px)); background:transparent; flex:0 0 auto; letter-spacing:.02em; display:flex; align-items:center; justify-content:center; }
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-tfDropBtn.dvl1b-open{ color:#10df77; border-color:rgba(16,223,119,.35); background:rgba(16,223,119,.07); }
 /* 0.782 — TF dropdown menu items */
-#DVL_UI_OVERLAY_PHASE_1B .dvl1b-tfDropMenu{ min-width:calc(150 * var(--px)); max-height:calc(380 * var(--px)); overflow-y:auto; scrollbar-width:none; }
+#DVL_UI_OVERLAY_PHASE_1B .dvl1b-tfDropMenu{ min-width:calc(150 * var(--px)); max-height:calc(380 * var(--px)); overflow-y:auto; scrollbar-width:none; z-index:999999!important; }
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-tfDropMenu::-webkit-scrollbar{ display:none; }
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-tfDropItem{ display:flex; align-items:center; gap:calc(10 * var(--px)); width:100%; height:calc(44 * var(--px)); padding:0 calc(12 * var(--px)); border-radius:calc(8 * var(--px)); font-size:calc(19 * var(--px)); font-weight:500; color:#e7ecea; white-space:nowrap; cursor:pointer; border:0; background:transparent; text-align:left; }
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-tfDropItem:active{ background:rgba(16,223,119,.12); }
@@ -19396,7 +19396,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
         <div class="dvl1b-tfScroll" id="dvl1b_tfScroll">
           <button class="dvl1b-tf" data-tf="1m" type="button">1m</button>
           <button class="dvl1b-tf" data-tf="3m" type="button">3m</button>
-          <button class="dvl1b-tf" data-tf="5m" type="button">5m</button>
+          <button class="dvl1b-tf is-active" data-tf="5m" type="button">5m</button>
           <button class="dvl1b-tf" data-tf="15m" type="button">15m</button>
         </div>
       </div>
@@ -44705,12 +44705,25 @@ function getActiveTf0782(){
   return '5m';
 }
 
+function closestEl(el,sel){
+  if(!el)return null;
+  if(el.closest)return el.closest(sel);
+  // fallback for older browsers
+  var cur=el;
+  while(cur&&cur!==document){
+    try{if(cur.matches&&cur.matches(sel))return cur;}catch(_){}
+    cur=cur.parentElement;
+  }
+  return null;
+}
+
 function callApplyTf0782(tf){
   tf=normTf0782(tf);
+  if(window.DVL_REAL_TIMEFRAME_STATE)window.DVL_REAL_TIMEFRAME_STATE.activeTf=tf;
   if(typeof applyRealTimeframe==='function'){try{applyRealTimeframe(tf,{autosave:true});}catch(e){}}
   else if(typeof setIntervalUi==='function'){try{setIntervalUi(tf);}catch(e){}}
   else if(typeof loadKlines==='function'){try{loadKlines(window.currentSymbol||window.symbol,tf);}catch(e){}}
-  if(window.DVL_REAL_TIMEFRAME_STATE)window.DVL_REAL_TIMEFRAME_STATE.activeTf=tf;
+  // update hotbar visual
   var scroll=document.getElementById('dvl1b_tfScroll');
   if(scroll){
     var btns=scroll.querySelectorAll('.dvl1b-tf');
@@ -44775,11 +44788,13 @@ function renderTfDropdown(){
   if(!menu.__dvlTfDropItemsBound0782){
     menu.__dvlTfDropItemsBound0782=true;
     menu.addEventListener('click',function(ev){
-      var starEl=ev.target&&ev.target.closest?ev.target.closest('[data-tf-star]'):null;
-      if(starEl){ev.stopPropagation();toggleTfFavorite(starEl.getAttribute('data-tf-star'));return;}
-      var itemEl=ev.target&&ev.target.closest?ev.target.closest('[data-tf-drop]'):null;
+      ev.stopPropagation();
+      if(ev.stopImmediatePropagation)ev.stopImmediatePropagation();
+      var starEl=closestEl(ev.target,'[data-tf-star]');
+      if(starEl){toggleTfFavorite(starEl.getAttribute('data-tf-star'));return;}
+      var itemEl=closestEl(ev.target,'[data-tf-drop]');
       if(itemEl){var tf2=itemEl.getAttribute('data-tf-drop');callApplyTf0782(tf2);closeTfDrop();renderTfDropdown();}
-    },false);
+    },true); // capture
   }
 }
 window.renderTfDropdown=renderTfDropdown;
@@ -44812,7 +44827,12 @@ function bindTfDropBtn0782(){
   var btn=document.getElementById('dvl1b_tfDropBtn');
   if(!btn||btn.__dvlTfDropBtnBound0782)return;
   btn.__dvlTfDropBtnBound0782=true;
-  btn.addEventListener('click',function(e){e.stopPropagation();if(_tfDropOpen)closeTfDrop();else openTfDrop();},false);
+  btn.addEventListener('click',function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    if(e.stopImmediatePropagation)e.stopImmediatePropagation();
+    if(_tfDropOpen)closeTfDrop();else openTfDrop();
+  },true); // capture so no other handler can block it
 }
 
 document.addEventListener('click',function(e){
@@ -44824,15 +44844,29 @@ document.addEventListener('click',function(e){
 
 function initTfFavorites0782(){
   loadTfFavorites();
+  // Default to 5m if no active TF is saved
+  var startTf=getActiveTf0782();
+  if(startTf==='5m'||!window.DVL_REAL_TIMEFRAME_STATE||!window.DVL_REAL_TIMEFRAME_STATE.activeTf){
+    if(window.DVL_REAL_TIMEFRAME_STATE)window.DVL_REAL_TIMEFRAME_STATE.activeTf='5m';
+    startTf='5m';
+  }
   renderTfHotbarFavorites();
   bindTfDropBtn0782();
+  // Apply 5m to chart on startup
+  if(startTf==='5m'){
+    try{if(typeof applyRealTimeframe==='function')applyRealTimeframe('5m',{autosave:false,startup:true});}catch(e){}
+    try{if(typeof setIntervalUi==='function'&&typeof applyRealTimeframe!=='function')setIntervalUi('5m');}catch(e){}
+  }
 }
 
 // Run immediately (script is at end of body, DOM is already parsed)
-// and also on DOMContentLoaded as a safety net
 initTfFavorites0782();
+// DOMContentLoaded safety net (re-bind TF button if needed after full parse)
 if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',initTfFavorites0782,{once:true});
+  document.addEventListener('DOMContentLoaded',function(){
+    bindTfDropBtn0782(); // re-bind in case the button was recreated
+    renderTfHotbarFavorites(); // re-render to ensure active state is correct
+  },{once:true});
 }
 
 })();
