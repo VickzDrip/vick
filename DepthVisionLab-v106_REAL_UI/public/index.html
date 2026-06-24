@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.783</title>
+<title>DVL Binance Live — Beta 0.784</title>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19382,7 +19382,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.783</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.784</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -20112,11 +20112,12 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.783";
+const DVL_APP_VERSION = "Beta 0.784";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.783 — TF dropdown fix: button label fixed as static 'TF'; click binding moved from bridge to module with touchend+click dedup guard for reliable mobile tap; touch-action:manipulation added to wrapper; version badge auto-updates via DVL_APP_VERSION." },
+  { version: DVL_APP_VERSION, note: "Beta 0.784 — DVL OB Imbalance Zones: indicador overlay em tempo real via WebSocket público (Binance Futures/Spot, MEXC Futures/Spot); agrupa níveis do order book em buckets por ATR, calcula desequilíbrio bid/ask, desenha zonas de demanda/oferta com glow, borda e labels no gráfico; painel de configurações DVL com Exchange Adapter, Depth Levels, Bucket Mode, Min Imbalance, Strong Imbalance, Min Volume Pct, Max Zones, ATR Distance, cores, opacidade e glow; throttle de 400ms, auto-reconexão, detecção automática de troca de ativo." },
+  { version: "Beta 0.783", note: "Beta 0.783 — TF dropdown fix: button label fixed as static 'TF'; click binding moved from bridge to module with touchend+click dedup guard for reliable mobile tap; touch-action:manipulation added to wrapper; version badge auto-updates via DVL_APP_VERSION." },
   { version: "Beta 0.782", note: "Beta 0.782 — Phase 1B header and TF favorites: removed the top more button, moved Settings into its place, shortened the asset selector, expanded visible TF favorites to four, and added a compact TF dropdown for favoriting/unfavoriting timeframes in the existing hotbar." },
   { version: "Beta 0.781", note: "Beta 0.781 — Existing UI timeframe binding: removed the extra header 5m button, bound the existing timeframe hotbar to the real chart interval engine, defaulted the real interval to 5m when no saved TF exists, and added a compact save/autosave status indicator next to Save." },
   { version: "Beta 0.780", note: "Beta 0.780 — Timeframe scroll selector and save status: vertical up/down TF wheel (dvlTfWheel) with 5m default, persisted via DVL_SELECTED_TIMEFRAME autosave/manual save; mini save status indicator (dvlSaveStatusMini) beside Save button shows dirty/saving/saved/auto/error states; existing .dvl1b-tf buttons sync with wheel." },
@@ -23258,6 +23259,10 @@ function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
       priceBottom,
       priceH
     });
+  }
+
+  if(window.DVLOrderBookImbalanceZonesDraw){
+    try{window.DVLOrderBookImbalanceZonesDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW:Math.max(1.8,Math.min(28,(x1-x0)/Math.max(win.totalSlots,1)*.56)),priceBottom,priceH});}catch(_obiz_e){}
   }
 
   draw24hStatsOverlay(ctx, { x0, x1, y0, y1 });
@@ -44948,7 +44953,7 @@ if(document.readyState==='loading'){
 })();
 </script>
 
-<!-- DVL Beta 0.783 — Phase 1B Header + TF Favorites Audit -->
+<!-- DVL Beta 0.784 — Phase 1B Header + TF Favorites Audit -->
 <script id="DVL_PHASE1B_HEADER_TF_FAVORITES_AUDIT_MODULE_0782">
 (function(){
 'use strict';
@@ -44958,13 +44963,13 @@ window.DVL_PHASE1B_HEADER_TF_FAVORITES_AUDIT_MODULE_0782=true;
 function runAudit0782(){
   var bl=[];
 
-  // 1 — Title Beta 0.783
-  if(document.title.indexOf('0.783')<0)bl.push('1: title does not contain 0.783');
-  // 2 — Badge BETA 0.783
+  // 1 — Title Beta 0.784
+  if(document.title.indexOf('0.784')<0)bl.push('1: title does not contain 0.784');
+  // 2 — Badge BETA 0.784
   var badge=document.getElementById('dvl1b_versionBadge');
-  if(!badge||badge.textContent.indexOf('0.783')<0)bl.push('2: #dvl1b_versionBadge does not show 0.783');
-  // 3 — Changelog 0.783
-  if(!window.DVL_CHANGELOG||!window.DVL_CHANGELOG[0]||window.DVL_CHANGELOG[0].note.indexOf('0.783')<0)bl.push('3: DVL_CHANGELOG[0] does not reference 0.783');
+  if(!badge||badge.textContent.indexOf('0.784')<0)bl.push('2: #dvl1b_versionBadge does not show 0.784');
+  // 3 — Changelog 0.784
+  if(!window.DVL_CHANGELOG||!window.DVL_CHANGELOG[0]||window.DVL_CHANGELOG[0].note.indexOf('0.784')<0)bl.push('3: DVL_CHANGELOG[0] does not reference 0.784');
   // 4 — Header is Phase 1B real
   if(!document.getElementById('DVL_UI_OVERLAY_PHASE_1B'))bl.push('4: #DVL_UI_OVERLAY_PHASE_1B missing');
   // 5 — 3 dots button removed from row1
@@ -45051,6 +45056,517 @@ function runAudit0782(){
 window.DVL_AUDIT_0782=runAudit0782;
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(runAudit0782,3500);},{once:true});
 else setTimeout(runAudit0782,3500);
+})();
+</script>
+
+<!-- DVL Beta 0.784 — OrderBook Imbalance Zones Overlay -->
+<script id="DVL_OB_IMBALANCE_MODULE_0784">
+(function(){
+'use strict';
+if(window.DVL_OB_IMBALANCE_MODULE_0784)return;
+window.DVL_OB_IMBALANCE_MODULE_0784=true;
+
+/* ─── constants ─── */
+var _LS='DVL_OB_IZ_0784';
+var _THROTTLE=400;
+
+/* ─── defaults ─── */
+var _DEF={
+  on:true,adapter:'auto',depthLevels:20,
+  bucketMode:'auto',bucketSize:0,
+  minImbalance:35,strongImbalance:65,minVolumePct:70,
+  maxZones:8,persistenceCandles:3,
+  smoothUpdates:true,showLabels:true,showWeak:false,
+  maxDistATR:true,atrDistance:5,
+  colorSD:'#00e676',colorD:'#66bb6a',colorO:'#ef5350',colorSO:'#c62828',
+  opacity:0.55,glowStrength:0.7
+};
+
+/* ─── state ─── */
+var _s=Object.assign({},_DEF);
+try{var _lsr=localStorage.getItem(_LS);if(_lsr){Object.assign(_s,JSON.parse(_lsr));}}catch(_e){}
+function _save(){try{localStorage.setItem(_LS,JSON.stringify(_s));}catch(_e){}}
+
+/* ─── order book state ─── */
+var _bids=new Map();
+var _asks=new Map();
+var _lastUpdId=-1;
+var _buf=[];
+var _snapReady=false;
+var _snapFetching=false;
+var _unavail=false;
+
+function _applyLvl(map,lvl){
+  for(var i=0;i<lvl.length;i++){
+    var p=parseFloat(lvl[i][0]);
+    var q=parseFloat(lvl[i][1]);
+    if(isNaN(p)||isNaN(q))continue;
+    if(q===0)map.delete(p);else map.set(p,q);
+  }
+}
+
+function _clearBook(){
+  _bids.clear();_asks.clear();
+  _lastUpdId=-1;_buf=[];
+  _snapReady=false;_snapFetching=false;
+}
+
+/* ─── websocket ─── */
+var _ws=null;
+var _wsSym='';
+var _wsAdapt='';
+var _wsDepth=0;
+var _retryDelay=2000;
+var _retryTmr=null;
+
+function _getSym(){
+  try{return(window.currentSymbol||window.symbol||'BTCUSDT').toUpperCase().replace(/[^A-Z0-9]/g,'');}catch(_e){return'BTCUSDT';}
+}
+function _getAdapt(){
+  return _s.adapter==='auto'?'binance_futures':_s.adapter;
+}
+
+function _wsUrl(adapt,sym,depth){
+  var s=sym.toLowerCase();
+  if(adapt==='binance_futures')
+    return depth<=20?'wss://fstream.binance.com/ws/'+s+'@depth20@500ms':'wss://fstream.binance.com/ws/'+s+'@depth@500ms';
+  if(adapt==='binance_spot')
+    return depth<=20?'wss://stream.binance.com:9443/ws/'+s+'@depth20@500ms':'wss://stream.binance.com:9443/ws/'+s+'@depth@500ms';
+  if(adapt==='mexc_futures')return'wss://contract.mexc.com/edge';
+  if(adapt==='mexc_spot')return'wss://wbs.mexc.com/ws';
+  return'wss://fstream.binance.com/ws/'+s+'@depth20@500ms';
+}
+
+function _snapUrl(adapt,sym,depth){
+  if(adapt==='binance_futures')return'https://fapi.binance.com/fapi/v1/depth?symbol='+sym+'&limit='+Math.min(depth,1000);
+  if(adapt==='binance_spot')return'https://api.binance.com/api/v3/depth?symbol='+sym+'&limit='+Math.min(depth,5000);
+  return null;
+}
+
+function _fetchSnap(adapt,sym,depth){
+  if(_snapFetching)return;
+  var url=_snapUrl(adapt,sym,depth);
+  if(!url){_unavail=true;_dsoon();return;}
+  _snapFetching=true;
+  fetch(url)
+    .then(function(r){return r.json();})
+    .then(function(data){
+      _bids.clear();_asks.clear();
+      _applyLvl(_bids,data.bids||[]);
+      _applyLvl(_asks,data.asks||[]);
+      _lastUpdId=data.lastUpdateId||0;
+      _snapReady=true;_snapFetching=false;
+      var buf=_buf.splice(0);
+      for(var i=0;i<buf.length;i++){
+        var u=buf[i];
+        if(u.u<=_lastUpdId)continue;
+        _applyLvl(_bids,u.b||[]);
+        _applyLvl(_asks,u.a||[]);
+        _lastUpdId=u.u;
+      }
+      _schedCalc();
+    })
+    .catch(function(){_snapFetching=false;_unavail=true;_dsoon();});
+}
+
+function _connect(){
+  if(!_s.on)return;
+  var sym=_getSym(),adapt=_getAdapt(),depth=_s.depthLevels||20;
+  if(_ws&&_wsSym===sym&&_wsAdapt===adapt&&_wsDepth===depth)return;
+  _disconnect();
+  _wsSym=sym;_wsAdapt=adapt;_wsDepth=depth;
+  _unavail=false;_clearBook();
+  try{
+    _ws=new WebSocket(_wsUrl(adapt,sym,depth));
+    _ws.onopen=function(){
+      _retryDelay=2000;
+      if(adapt==='mexc_futures')
+        try{_ws.send(JSON.stringify({method:'sub.depth',param:{symbol:sym.replace('USDT','_USDT')}}));}catch(_e){}
+      if(adapt==='mexc_spot')
+        try{_ws.send(JSON.stringify({method:'SUBSCRIPTION',params:['spot@public.limit.depth.v3.api@'+sym+'@20']}));}catch(_e){}
+    };
+    _ws.onmessage=function(ev){try{_handleMsg(JSON.parse(ev.data),adapt,depth);}catch(_e){}};
+    _ws.onerror=function(){};
+    _ws.onclose=function(){
+      _ws=null;
+      if(_s.on){_retryTmr=setTimeout(_connect,_retryDelay);_retryDelay=Math.min(_retryDelay*2,30000);}
+    };
+    if(depth>20&&(adapt==='binance_futures'||adapt==='binance_spot'))_fetchSnap(adapt,sym,depth);
+  }catch(_e){_unavail=true;_dsoon();}
+}
+
+function _disconnect(){
+  if(_retryTmr){clearTimeout(_retryTmr);_retryTmr=null;}
+  if(_ws){try{_ws.close();}catch(_e){}_ws=null;}
+  _wsSym='';_wsAdapt='';_wsDepth=0;_clearBook();
+}
+
+function _handleMsg(msg,adapt,depth){
+  if(adapt==='binance_futures'||adapt==='binance_spot'){
+    if(msg.lastUpdateId!==undefined&&Array.isArray(msg.bids)){
+      _bids.clear();_asks.clear();
+      _applyLvl(_bids,msg.bids);_applyLvl(_asks,msg.asks);
+      _lastUpdId=msg.lastUpdateId;_snapReady=true;
+      _schedCalc();return;
+    }
+    if(msg.e==='depthUpdate'){
+      if(!_snapReady){_buf.push({U:msg.U,u:msg.u,b:msg.b,a:msg.a});return;}
+      if(msg.u<=_lastUpdId)return;
+      _applyLvl(_bids,msg.b||[]);_applyLvl(_asks,msg.a||[]);
+      _lastUpdId=msg.u;_schedCalc();return;
+    }
+  }
+  if(adapt==='mexc_futures'){
+    if(msg.channel==='push.depth'&&msg.data){
+      if(Array.isArray(msg.data.bids))_applyLvl(_bids,msg.data.bids);
+      if(Array.isArray(msg.data.asks))_applyLvl(_asks,msg.data.asks);
+      _snapReady=true;_schedCalc();
+    }return;
+  }
+  if(adapt==='mexc_spot'){
+    if(msg.d){
+      if(Array.isArray(msg.d.bids))_applyLvl(_bids,msg.d.bids);
+      if(Array.isArray(msg.d.asks))_applyLvl(_asks,msg.d.asks);
+      _snapReady=true;_schedCalc();
+    }
+  }
+}
+
+/* ─── zone calculator ─── */
+var _zones=[];
+var _calcTmr=null;
+var _lastCalc=0;
+
+function _midPx(){
+  try{var kl=window.klines||window.S&&window.S.candles;if(kl&&kl.length){var k=kl[kl.length-1];return+(k.close||k.c||0);}}catch(_e){}
+  return 0;
+}
+
+function _atr14(){
+  try{
+    var kl=window.klines||window.S&&window.S.candles;
+    if(!kl||kl.length<15)return 0;
+    var n=Math.min(14,kl.length-1),sum=0;
+    for(var i=kl.length-n;i<kl.length;i++){
+      var k=kl[i],pk=kl[i-1];
+      var h=+(k.high||k.h||0),l=+(k.low||k.l||0),pc=+(pk.close||pk.c||0);
+      sum+=Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc));
+    }
+    return sum/n;
+  }catch(_e){return 0;}
+}
+
+function _autoBsz(price,bids,asks){
+  if(!price)return 10;
+  var all=[];
+  for(var i=0;i<bids.length;i++)all.push(bids[i][0]);
+  for(var i=0;i<asks.length;i++)all.push(asks[i][0]);
+  if(all.length<2)return price*0.0002;
+  var hi=Math.max.apply(null,all),lo=Math.min.apply(null,all);
+  var target=Math.max((hi-lo)/40,price*0.00005);
+  var mag=Math.pow(10,Math.floor(Math.log10(target)));
+  var norm=target/mag;
+  var nice=norm<1.5?1:norm<3.5?2:norm<7.5?5:10;
+  return nice*mag;
+}
+
+function _calcZones(){
+  if(!_snapReady)return[];
+  var price=_midPx();if(!price)return[];
+
+  var bids=[],asks=[];
+  _bids.forEach(function(q,p){bids.push([p,q]);});
+  _asks.forEach(function(q,p){asks.push([p,q]);});
+
+  var bsz=_s.bucketMode==='manual'&&_s.bucketSize>0?_s.bucketSize:_autoBsz(price,bids,asks);
+  if(!bsz||bsz<=0)bsz=price*0.0002;
+
+  var buckets={};
+  function addB(p,q,side){
+    var key=Math.floor(p/bsz);
+    if(!buckets[key])buckets[key]={mid:key*bsz+bsz/2,bid:0,ask:0};
+    var val=p*q;
+    if(side==='bid')buckets[key].bid+=val;else buckets[key].ask+=val;
+  }
+  for(var i=0;i<bids.length;i++)addB(bids[i][0],bids[i][1],'bid');
+  for(var i=0;i<asks.length;i++)addB(asks[i][0],asks[i][1],'ask');
+
+  var arr=Object.values(buckets);
+  arr.forEach(function(b){
+    b.total=b.bid+b.ask;
+    b.imb=b.total>0?(b.bid-b.ask)/b.total*100:0;
+  });
+
+  var sorted=arr.slice().sort(function(a,b){return b.total-a.total;});
+  var pIdx=Math.floor(sorted.length*(1-Math.max(0,Math.min(99,_s.minVolumePct))/100));
+  var minVol=sorted[Math.min(pIdx,sorted.length-1)]?sorted[Math.min(pIdx,sorted.length-1)].total:0;
+
+  var atr=_atr14();
+  var maxDist=_s.maxDistATR&&atr>0?atr*(_s.atrDistance||5):Infinity;
+  var minIm=_s.minImbalance||35;
+  var stgIm=_s.strongImbalance||65;
+  var half=bsz/2;
+
+  var zones=[];
+  arr.forEach(function(b){
+    if(Math.abs(b.imb)<minIm)return;
+    if(!_s.showWeak&&Math.abs(b.imb)<35)return;
+    if(b.total<minVol)return;
+    if(Math.abs(b.mid-price)>maxDist)return;
+
+    var abs=Math.abs(b.imb);
+    var isStrong=abs>=stgIm;
+    var isBid=b.imb>0;
+    var type=isBid?(isStrong?'sd':'d'):(isStrong?'so':'o');
+    var prox=maxDist<Infinity?1-Math.min(1,Math.abs(b.mid-price)/maxDist):0.5;
+    var score=b.total*abs*(0.4+prox*0.6);
+    var strength=Math.min(1,(abs-minIm)/Math.max(1,stgIm-minIm));
+
+    zones.push({mid:b.mid,lo:b.mid-half,hi:b.mid+half,type:type,imb:b.imb,total:b.total,score:score,isBid:isBid,isStrong:isStrong,strength:strength});
+  });
+
+  zones.sort(function(a,b){return b.score-a.score;});
+  return zones.slice(0,Math.max(1,_s.maxZones||8));
+}
+
+function _schedCalc(){
+  var now=Date.now(),el=now-_lastCalc;
+  if(el>=_THROTTLE){_lastCalc=now;_zones=_calcZones();_dsoon();}
+  else{if(_calcTmr)return;_calcTmr=setTimeout(function(){_calcTmr=null;_lastCalc=Date.now();_zones=_calcZones();_dsoon();},_THROTTLE-el);}
+}
+
+function _dsoon(){try{if(typeof drawSoon==='function')drawSoon();}catch(_e){}}
+
+/* ─── color/label helpers ─── */
+function _col(t){return t==='sd'?(_s.colorSD||'#00e676'):t==='d'?(_s.colorD||'#66bb6a'):t==='o'?(_s.colorO||'#ef5350'):(_s.colorSO||'#c62828');}
+function _lbl(t){return t==='sd'?'Forte Demanda':t==='d'?'Demanda':t==='o'?'Oferta':'Forte Oferta';}
+
+/* ─── draw function ─── */
+var _lastSym='';
+
+function draw(ctx,cfg){
+  if(!_s.on||!cfg||typeof cfg.y!=='function')return;
+
+  var sym=_getSym();
+  if(sym!==_lastSym){_lastSym=sym;setTimeout(function(){_disconnect();_connect();},0);}
+
+  if(_unavail){
+    ctx.save();
+    ctx.font='bold 10px -apple-system,sans-serif';
+    ctx.fillStyle='rgba(255,100,60,0.65)';
+    ctx.textAlign='right';ctx.textBaseline='top';
+    ctx.fillText('OB: indisponível',cfg.x1-4,(cfg.y0||0)+4);
+    ctx.restore();
+    return;
+  }
+
+  var zones=_zones;
+  if(!zones||!zones.length)return;
+
+  var x0=cfg.x0||0,x1=cfg.x1||800;
+  var op=Math.min(1,Math.max(0.05,_s.opacity||0.55));
+  var glow=Math.min(1,Math.max(0,_s.glowStrength||0.7));
+
+  ctx.save();
+
+  for(var i=zones.length-1;i>=0;i--){
+    var z=zones[i];
+    var col=_col(z.type);
+    var yTop=cfg.y(z.hi),yBot=cfg.y(z.lo);
+    if(yTop>yBot){var tmp=yTop;yTop=yBot;yBot=tmp;}
+    var minH=z.isStrong?4:2;
+    if(yBot-yTop<minH)yBot=yTop+minH;
+
+    var alpha=op*(0.2+z.strength*0.8);
+
+    ctx.globalAlpha=alpha;
+    ctx.shadowBlur=0;
+    ctx.fillStyle=col;
+    ctx.fillRect(x0,yTop,x1-x0,yBot-yTop);
+
+    if(glow>0&&z.isStrong){
+      ctx.globalAlpha=alpha*glow*0.45;
+      ctx.shadowColor=col;ctx.shadowBlur=12*glow;
+      ctx.fillRect(x0,yTop,x1-x0,Math.min(4,yBot-yTop));
+      ctx.shadowBlur=0;
+    }
+
+    var edgeY=z.isBid?yTop:yBot;
+    ctx.globalAlpha=Math.min(0.92,alpha*2);
+    ctx.strokeStyle=col;
+    ctx.lineWidth=z.isStrong?2:1;
+    ctx.shadowColor=col;ctx.shadowBlur=z.isStrong?6*glow:0;
+    ctx.beginPath();ctx.moveTo(x0,edgeY);ctx.lineTo(x1,edgeY);ctx.stroke();
+    ctx.shadowBlur=0;
+
+    if(_s.showLabels){
+      var labelY=z.isBid?yTop:yBot;
+      var pStr=z.mid>=1000?z.mid.toFixed(1):z.mid>=10?z.mid.toFixed(2):z.mid.toFixed(4);
+      ctx.font=(z.isStrong?'bold ':'')+'9.5px -apple-system,sans-serif';
+      ctx.fillStyle=col;
+      ctx.globalAlpha=Math.min(0.96,alpha*2.5);
+      ctx.textAlign='right';
+      ctx.textBaseline=z.isBid?'bottom':'top';
+      ctx.shadowBlur=0;
+      ctx.fillText(pStr+'  '+_lbl(z.type),x1-4,labelY+(z.isBid?-2:2));
+    }
+  }
+
+  ctx.globalAlpha=1;ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+window.DVLOrderBookImbalanceZonesDraw=draw;
+
+/* ─── settings panel ─── */
+var _panel=null;
+
+function _ensPanel(){
+  if(_panel)return _panel;
+  _panel=document.createElement('div');
+  _panel.id='dvlOBIZPanel';
+  _panel.className='dvl-vt-panel';
+  _panel.innerHTML=
+    '<div class="dvl-vt-head">'+
+      '<div class="dvl-vt-title"><b>DVL OB Imbalance Zones</b><small>Order Book · Dados Reais</small></div>'+
+      '<div class="dvl-vt-head-actions"><button class="dvl-vt-close" id="dvlOBIZClose" type="button">×</button></div>'+
+    '</div>'+
+    '<div class="dvl-vt-body" id="dvlOBIZBody"></div>';
+  document.body.appendChild(_panel);
+  _panel.addEventListener('pointerdown',function(ev){ev.stopPropagation();},true);
+  _panel.querySelector('#dvlOBIZClose').addEventListener('click',function(){_panel.style.display='none';});
+  return _panel;
+}
+
+function _openPanel(){_ensPanel();_renderPanel();_panel.style.display='';}
+
+function _sel(id,opts,val){
+  return'<select id="'+id+'" class="dvl-vt-select">'+
+    opts.map(function(o){return'<option value="'+o.v+'"'+(String(o.v)===String(val)?' selected':'')+'>'+o.l+'</option>';}).join('')+
+  '</select>';
+}
+function _inp(id,val,ex){return'<input id="'+id+'" class="dvl-vt-input" type="number" value="'+val+'"'+(ex||'')+' style="width:80px">';}
+function _sw(id,chk){return'<label class="dvl-switch"><input id="'+id+'" type="checkbox"'+(chk?' checked':'')+'><i></i><b></b></label>';}
+function _cinp(id,val){return'<input id="'+id+'" type="color" value="'+val+'" style="width:36px;height:28px;border:0;background:0;cursor:pointer;padding:0">';}
+function _fld(lbl,inner){return'<div class="dvl-vt-field"><label>'+lbl+'</label>'+inner+'</div>';}
+
+function _renderPanel(){
+  _ensPanel();
+  var body=_panel.querySelector('#dvlOBIZBody');
+  body.innerHTML=
+    '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Geral</span></div><div class="dvl-vt-grid">'+
+    _fld('Indicador',_sw('dvlOBIZOn',_s.on))+
+    _fld('Exchange',_sel('dvlOBIZAdapt',[
+      {v:'auto',l:'Auto'},{v:'binance_futures',l:'Binance Futures'},
+      {v:'binance_spot',l:'Binance Spot'},{v:'mexc_futures',l:'MEXC Futures'},
+      {v:'mexc_spot',l:'MEXC Spot'}],_s.adapter))+
+    _fld('Níveis',_sel('dvlOBIZDepth',[{v:20,l:'20'},{v:50,l:'50'},{v:100,l:'100'},{v:500,l:'500'}],_s.depthLevels))+
+    '</div></div>'+
+
+    '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Cálculo</span></div><div class="dvl-vt-grid">'+
+    _fld('Bucket Mode',_sel('dvlOBIZBMode',[{v:'auto',l:'Auto'},{v:'manual',l:'Manual'}],_s.bucketMode))+
+    _fld('Bucket Size',_inp('dvlOBIZBSz',_s.bucketSize,'min="0" step="any"'))+
+    _fld('Min Imbalance %',_inp('dvlOBIZMinIm',_s.minImbalance,'min="0" max="100" step="1"'))+
+    _fld('Strong Imb. %',_inp('dvlOBIZStgIm',_s.strongImbalance,'min="0" max="100" step="1"'))+
+    _fld('Min Vol. Percentil',_inp('dvlOBIZMinVP',_s.minVolumePct,'min="0" max="100" step="5"'))+
+    _fld('Max Zonas',_inp('dvlOBIZMaxZ',_s.maxZones,'min="1" max="30" step="1"'))+
+    _fld('Persistência (velas)',_inp('dvlOBIZPers',_s.persistenceCandles,'min="0" max="20" step="1"'))+
+    '</div></div>'+
+
+    '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Visual</span></div><div class="dvl-vt-grid">'+
+    _fld('Suavizar',_sw('dvlOBIZSmooth',_s.smoothUpdates))+
+    _fld('Labels',_sw('dvlOBIZLbls',_s.showLabels))+
+    _fld('Mostrar fracos',_sw('dvlOBIZWeak',_s.showWeak))+
+    _fld('Dist. ATR max',_sw('dvlOBIZMaxD',_s.maxDistATR))+
+    _fld('ATR Multiplier',_inp('dvlOBIZAtrD',_s.atrDistance,'min="1" max="20" step="0.5"'))+
+    _fld('Opacidade',_inp('dvlOBIZOp',_s.opacity,'min="0.05" max="1" step="0.05"'))+
+    _fld('Glow',_inp('dvlOBIZGlow',_s.glowStrength,'min="0" max="1" step="0.1"'))+
+    '</div></div>'+
+
+    '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Cores</span></div><div class="dvl-vt-grid">'+
+    _fld('Forte Demanda',_cinp('dvlOBIZCSD',_s.colorSD))+
+    _fld('Demanda',_cinp('dvlOBIZCD',_s.colorD))+
+    _fld('Oferta',_cinp('dvlOBIZCO',_s.colorO))+
+    _fld('Forte Oferta',_cinp('dvlOBIZCSO',_s.colorSO))+
+    '</div></div>';
+
+  function _bind(id,key,conv,cb){
+    var el=body.querySelector('#'+id);if(!el)return;
+    var ev=el.type==='checkbox'?'change':'input';
+    el.addEventListener(ev,function(){
+      _s[key]=el.type==='checkbox'?el.checked:(conv?conv(el.value):el.value);
+      _save();if(cb)cb();_dsoon();
+    });
+  }
+  var _rc=function(){_disconnect();_connect();};
+  var _rx=function(){_zones=_calcZones();};
+
+  _bind('dvlOBIZOn','on',null,function(){if(_s.on)_connect();else _disconnect();_updRow();});
+  _bind('dvlOBIZAdapt','adapter',null,_rc);
+  _bind('dvlOBIZDepth','depthLevels',function(v){return+v||20;},_rc);
+  _bind('dvlOBIZBMode','bucketMode',null,_rx);
+  _bind('dvlOBIZBSz','bucketSize',function(v){return parseFloat(v)||0;},_rx);
+  _bind('dvlOBIZMinIm','minImbalance',function(v){return+v||35;},_rx);
+  _bind('dvlOBIZStgIm','strongImbalance',function(v){return+v||65;},_rx);
+  _bind('dvlOBIZMinVP','minVolumePct',function(v){return+v||70;},_rx);
+  _bind('dvlOBIZMaxZ','maxZones',function(v){return+v||8;},_rx);
+  _bind('dvlOBIZPers','persistenceCandles',function(v){return+v||3;});
+  _bind('dvlOBIZSmooth','smoothUpdates');
+  _bind('dvlOBIZLbls','showLabels');
+  _bind('dvlOBIZWeak','showWeak',null,_rx);
+  _bind('dvlOBIZMaxD','maxDistATR',null,_rx);
+  _bind('dvlOBIZAtrD','atrDistance',function(v){return+v||5;},_rx);
+  _bind('dvlOBIZOp','opacity',function(v){return parseFloat(v)||0.55;});
+  _bind('dvlOBIZGlow','glowStrength',function(v){return parseFloat(v)||0.7;});
+  _bind('dvlOBIZCSD','colorSD');_bind('dvlOBIZCD','colorD');
+  _bind('dvlOBIZCO','colorO');_bind('dvlOBIZCSO','colorSO');
+}
+
+/* ─── indicator dropdown row ─── */
+var _rowEl=null;
+
+function _updRow(){
+  var pill=document.getElementById('dvlOBIZState');
+  if(pill){pill.textContent=_s.on?'ON':'OFF';pill.className='dvl-vt-state'+(_s.on?' is-on':'');}
+}
+
+function _insertRow(){
+  var menu=document.getElementById('indicatorDropdown');
+  if(!menu)return;
+  if(document.getElementById('dvlOBIZItem'))return;
+
+  _rowEl=document.createElement('div');
+  _rowEl.id='dvlOBIZItem';
+  _rowEl.className='indicatorItem dvl-vt-indicator-item';
+  _rowEl.innerHTML=
+    '<span class="indicatorFxMark">OB</span>'+
+    '<span><b>DVL OB Imbalance Zones</b><small>Order Book · Dados Reais</small></span>'+
+    '<i class="dvl-vt-state'+(_s.on?' is-on':'')+'" id="dvlOBIZState">'+(_s.on?'ON':'OFF')+'</i>';
+
+  var last=menu.querySelector('.indicatorItem:last-child');
+  if(last&&last.parentNode)last.parentNode.insertBefore(_rowEl,last.nextSibling);
+  else menu.appendChild(_rowEl);
+
+  _rowEl.querySelector('#dvlOBIZState').addEventListener('click',function(ev){
+    ev.preventDefault();ev.stopPropagation();
+    _s.on=!_s.on;_save();
+    if(_s.on)_connect();else _disconnect();
+    _updRow();_dsoon();
+  });
+  _rowEl.addEventListener('click',function(ev){ev.stopPropagation();_openPanel();});
+}
+
+/* ─── init ─── */
+function _init(){
+  _lastSym=_getSym();
+  if(_s.on)_connect();
+  if(document.getElementById('indicatorDropdown'))_insertRow();
+  else document.addEventListener('DOMContentLoaded',_insertRow,{once:true});
+}
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_init,{once:true});
+else _init();
+
 })();
 </script>
 </body>
