@@ -46429,7 +46429,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
     mexc:{
       label:"MEXC",enabled:true,
       tickers:async function(){
-        var r=await fetch("https://contract.mexc.com/api/v1/contract/ticker",{cache:"no-store"});
+        var r=await fetch("/mexc-proxy/api/v1/contract/ticker",{cache:"no-store"});
         if(!r.ok) throw new Error("ticker "+r.status);
         var j=await r.json();
         var d=j&&j.data?j.data:[];
@@ -46441,7 +46441,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
         var mexcTf=MEXC_TF[tf]||"Min15";
         var tfSec=tfToMs(tf)/1000;
         var start=Math.floor(Date.now()/1000)-KLIM*tfSec;
-        var url="https://contract.mexc.com/api/v1/contract/kline/"+encodeURIComponent(sym)+"?interval="+mexcTf+"&start="+start;
+        var url="/mexc-proxy/api/v1/contract/kline/"+encodeURIComponent(sym)+"?interval="+mexcTf+"&start="+start;
         var r=await fetch(url,{cache:"no-store"});
         if(!r.ok) throw new Error("kl "+r.status);
         var j=await r.json();
