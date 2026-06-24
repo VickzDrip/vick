@@ -12,7 +12,7 @@
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.789';
+window.DVL_APP_VERSION = 'Beta 0.790';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -20132,7 +20132,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.789";
+const DVL_APP_VERSION = "Beta 0.790";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
@@ -45573,8 +45573,6 @@ function _updRow(){
 }
 
 function _insertRow(){
-  /* Insert item dynamically — same pattern as DVL Spike Zones (proven on mobile).
-     Static HTML + separate binding was unreliable; binding at insertion time is not. */
   var menu=document.getElementById('indicatorDropdown');
   if(!menu||document.getElementById('dvlOBIZItem'))return;
 
@@ -45586,10 +45584,8 @@ function _insertRow(){
     '<span><b>DVL OB Imbalance Zones</b><small>Order Book · Dados Reais</small></span>'+
     '<i class="dvl-vt-state" id="dvlOBIZState"></i>';
 
-  /* Insert after the last real (non-soon) indicator item, or after head */
-  var items=menu.querySelectorAll('.indicatorItem:not(.is-soon)');
-  var ref=items.length?items[items.length-1]:menu.querySelector('.indicatorDropHead');
-  if(ref&&ref.nextSibling)menu.insertBefore(_rowEl,ref.nextSibling);
+  var firstSoon=menu.querySelector('.indicatorItem.is-soon');
+  if(firstSoon)menu.insertBefore(_rowEl,firstSoon);
   else menu.appendChild(_rowEl);
 
   var pill=_rowEl.querySelector('#dvlOBIZState');
