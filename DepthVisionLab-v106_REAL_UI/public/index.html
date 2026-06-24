@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.802</title>
+<title>DVL Binance Live — Beta 0.803</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.802';
+window.DVL_APP_VERSION = 'Beta 0.803';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -20159,7 +20159,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.802";
+const DVL_APP_VERSION = "Beta 0.803";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
@@ -23067,7 +23067,9 @@ function draw(){
     const lowerH = Math.max(90, h - priceH);
     let heights = [];
 
-    if(activeOscillators.length === 1){
+    if(window.__dvlOscRatios && Array.isArray(window.__dvlOscRatios) && window.__dvlOscRatios.length === activeOscillators.length){
+      heights = window.__dvlOscRatios.map(r => Math.max(60, lowerH * r));
+    } else if(activeOscillators.length === 1){
       heights = [lowerH];
     }else{
       const ratio = (
@@ -23085,10 +23087,13 @@ function draw(){
       }
     }
 
+    window.__dvlDividerYPositions = [];
     let panelTop = priceH;
 
     activeOscillators.forEach((osc, i) => {
       const panelHeight = Math.max(60, heights[i] || (lowerH / activeOscillators.length));
+
+      window.__dvlDividerYPositions.push(panelTop);
 
       if(window.DVLTestOscillator && typeof window.DVLTestOscillator.drawDivider === "function"){
         window.DVLTestOscillator.drawDivider(ctx, padL, padR, panelTop, w);
@@ -47366,6 +47371,166 @@ body.dvlScannerOpen080 #tradeNavBtn{
   }
   setTimeout(bind,160);
   setTimeout(bind,700);
+})();
+</script>
+<script id="DVL_OSC_DIVIDER_DRAG_0803">
+(function(){
+  'use strict';
+
+  var LS_KEY     = 'dvlDivRatios0803';
+  var MIN_OSC_PX = 60;
+  var MIN_PRC_PX = 250;
+  var SNAP_PX    = 14;
+
+  function loadRatios(){ try{ return JSON.parse(localStorage.getItem(LS_KEY))||{}; }catch(_){ return {}; } }
+  function saveRatios(r){ try{ localStorage.setItem(LS_KEY, JSON.stringify(r)); }catch(_){} }
+
+  /* init globals from localStorage */
+  var _stored = loadRatios();
+  if(_stored.priceRatio)                       window.__dvlPriceRatio = _stored.priceRatio;
+  if(_stored.oscRatios && _stored.oscRatios.length) window.__dvlOscRatios = _stored.oscRatios;
+
+  /* override splitHeight to use __dvlPriceRatio */
+  if(!window.DVLTestOscillator) window.DVLTestOscillator = {};
+  var _origSplit = window.DVLTestOscillator.splitHeight;
+  window.DVLTestOscillator.splitHeight = function(totalH){
+    var ratio = window.__dvlPriceRatio;
+    if(ratio) return Math.max(MIN_PRC_PX, totalH * ratio);
+    if(typeof _origSplit === 'function') return _origSplit(totalH);
+    return Math.max(MIN_PRC_PX, totalH * 0.62);
+  };
+
+  /* override drawDivider with visible drag handle */
+  window.DVLTestOscillator.drawDivider = function(ctx, padL, padR, y, w){
+    ctx.save();
+    ctx.strokeStyle = 'rgba(16,223,119,0.32)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(w - padR, y);
+    ctx.stroke();
+    /* grip ticks */
+    var cx = padL + (w - padR - padL) / 2;
+    ctx.strokeStyle = 'rgba(16,223,119,0.65)';
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    for(var d = -8; d <= 8; d += 8){
+      ctx.beginPath();
+      ctx.moveTo(cx + d, y - 3);
+      ctx.lineTo(cx + d, y + 3);
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  /* drag state */
+  var drag = { active:false, divIdx:-1, startY:0, startPriceH:0, startOscHs:[], lowerH:0, totalH:0, pointerId:-1 };
+
+  function getCanvas(){ return document.getElementById('chart'); }
+
+  function onDown(e){
+    var divYs = window.__dvlDividerYPositions;
+    if(!divYs || !divYs.length) return;
+    var canvas = getCanvas();
+    if(!canvas) return;
+    var rect = canvas.getBoundingClientRect();
+    var my = e.clientY - rect.top;
+    for(var i = 0; i < divYs.length; i++){
+      if(Math.abs(my - divYs[i]) <= SNAP_PX){
+        drag.active     = true;
+        drag.divIdx     = i;
+        drag.startY     = my;
+        drag.pointerId  = e.pointerId;
+        drag.totalH     = rect.height;
+        drag.startPriceH= divYs[0];
+        drag.startOscHs = [];
+        for(var j = 0; j < divYs.length; j++){
+          drag.startOscHs.push((j+1 < divYs.length ? divYs[j+1] : rect.height) - divYs[j]);
+        }
+        drag.lowerH = rect.height - divYs[0];
+        e.stopPropagation();
+        e.preventDefault();
+        try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+        canvas.style.cursor = 'ns-resize';
+        return;
+      }
+    }
+  }
+
+  function onMove(e){
+    if(!drag.active || e.pointerId !== drag.pointerId) return;
+    var canvas = getCanvas();
+    if(!canvas) return;
+    var rect   = canvas.getBoundingClientRect();
+    var my     = e.clientY - rect.top;
+    var delta  = my - drag.startY;
+    e.stopPropagation();
+    canvas.style.cursor = 'ns-resize';
+
+    if(drag.divIdx === 0){
+      var newPH = Math.max(MIN_PRC_PX, Math.min(drag.totalH - MIN_OSC_PX, drag.startPriceH + delta));
+      window.__dvlPriceRatio = newPH / drag.totalH;
+    } else {
+      var a = drag.divIdx - 1, b = drag.divIdx;
+      var hA = drag.startOscHs[a], hB = drag.startOscHs[b];
+      var combined = hA + hB;
+      var nA = Math.max(MIN_OSC_PX, Math.min(combined - MIN_OSC_PX, hA + delta));
+      var nB = Math.max(MIN_OSC_PX, combined - nA);
+      var hs = drag.startOscHs.slice();
+      hs[a] = nA; hs[b] = nB;
+      if(drag.lowerH > 0)
+        window.__dvlOscRatios = hs.map(function(v){ return v / drag.lowerH; });
+    }
+
+    if(typeof window.drawSoon === 'function') window.drawSoon();
+  }
+
+  function onUp(e){
+    if(!drag.active || e.pointerId !== drag.pointerId) return;
+    e.stopPropagation();
+    drag.active = false;
+    drag.pointerId = -1;
+    var canvas = getCanvas();
+    if(canvas) canvas.style.cursor = '';
+    var r = loadRatios();
+    if(window.__dvlPriceRatio !== undefined) r.priceRatio = window.__dvlPriceRatio;
+    if(window.__dvlOscRatios && window.__dvlOscRatios.length) r.oscRatios = window.__dvlOscRatios.slice();
+    saveRatios(r);
+    if(typeof window.drawSoon === 'function') window.drawSoon();
+  }
+
+  function onHover(e){
+    if(drag.active) return;
+    var divYs = window.__dvlDividerYPositions;
+    if(!divYs || !divYs.length) return;
+    var canvas = getCanvas();
+    if(!canvas) return;
+    var rect = canvas.getBoundingClientRect();
+    var my = e.clientY - rect.top;
+    var near = false;
+    for(var i = 0; i < divYs.length; i++){
+      if(Math.abs(my - divYs[i]) <= SNAP_PX){ near = true; break; }
+    }
+    canvas.style.cursor = near ? 'ns-resize' : '';
+  }
+
+  function attach(){
+    var canvas = getCanvas();
+    if(!canvas) return;
+    canvas.addEventListener('pointerdown', onDown,  true);
+    canvas.addEventListener('pointermove', onMove,  true);
+    canvas.addEventListener('pointermove', onHover, false);
+    canvas.addEventListener('pointerup',   onUp,    true);
+    canvas.addEventListener('pointercancel', onUp,  true);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', attach, {once:true});
+  } else {
+    attach();
+  }
+
 })();
 </script>
 </body>
