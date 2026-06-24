@@ -19401,7 +19401,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
         </div>
       </div>
       <div class="dvl1b-menuwrap" id="dvl1b_tfDropWrap">
-        <button class="dvl1b-act dvl1b-tfDropBtn" id="dvl1b_tfDropBtn" type="button" aria-label="Selecionar timeframe" aria-haspopup="true" aria-expanded="false">TF</button>
+        <button class="dvl1b-act dvl1b-tfDropBtn" id="dvl1b_tfDropBtn" type="button" aria-label="Selecionar timeframe" aria-haspopup="true" aria-expanded="false" onclick="event.stopPropagation();window.dvlTfDrop0782&&window.dvlTfDrop0782.toggle(event)">TF</button>
         <div class="dvl1b-menu dvl1b-tfDropMenu" id="dvl1b_tfDropMenu" role="menu" aria-hidden="true"></div>
       </div>
       <span class="dvl1b-sep"></span>
@@ -44799,47 +44799,47 @@ function renderTfDropdown(){
 }
 window.renderTfDropdown=renderTfDropdown;
 
-function openTfDrop(){
-  var wrap=document.getElementById('dvl1b_tfDropWrap');
-  var btn=document.getElementById('dvl1b_tfDropBtn');
-  var menu=document.getElementById('dvl1b_tfDropMenu');
-  if(!wrap||!btn||!menu)return;
-  renderTfDropdown();
-  try{var r=btn.getBoundingClientRect();menu.style.left=Math.round(r.left)+'px';menu.style.top=Math.round(r.bottom+6)+'px';}catch(e){}
-  wrap.classList.add('is-open');
-  btn.classList.add('dvl1b-open');
-  btn.setAttribute('aria-expanded','true');
-  menu.setAttribute('aria-hidden','false');
-  _tfDropOpen=true;
-}
-
-function closeTfDrop(){
-  var wrap=document.getElementById('dvl1b_tfDropWrap');
-  var btn=document.getElementById('dvl1b_tfDropBtn');
-  var menu=document.getElementById('dvl1b_tfDropMenu');
-  if(wrap)wrap.classList.remove('is-open');
-  if(btn){btn.classList.remove('dvl1b-open');btn.setAttribute('aria-expanded','false');}
-  if(menu)menu.setAttribute('aria-hidden','true');
-  _tfDropOpen=false;
-}
+window.dvlTfDrop0782={
+  toggle:function(e){if(_tfDropOpen)this.close();else this.open();},
+  open:function(){
+    var wrap=document.getElementById('dvl1b_tfDropWrap');
+    var btn=document.getElementById('dvl1b_tfDropBtn');
+    var menu=document.getElementById('dvl1b_tfDropMenu');
+    if(!wrap||!btn||!menu)return;
+    renderTfDropdown();
+    try{
+      var r=btn.getBoundingClientRect();
+      menu.style.left=Math.round(r.left)+'px';
+      menu.style.top=Math.round(r.bottom+6)+'px';
+    }catch(e){}
+    wrap.classList.add('is-open');
+    btn.classList.add('dvl1b-open');
+    btn.setAttribute('aria-expanded','true');
+    menu.setAttribute('aria-hidden','false');
+    _tfDropOpen=true;
+  },
+  close:function(){
+    var wrap=document.getElementById('dvl1b_tfDropWrap');
+    var btn=document.getElementById('dvl1b_tfDropBtn');
+    var menu=document.getElementById('dvl1b_tfDropMenu');
+    if(wrap)wrap.classList.remove('is-open');
+    if(btn){btn.classList.remove('dvl1b-open');btn.setAttribute('aria-expanded','false');}
+    if(menu)menu.setAttribute('aria-hidden','true');
+    _tfDropOpen=false;
+  }
+};
 
 function bindTfDropBtn0782(){
+  // onclick inline handles the toggle; this just sets the guard flag
   var btn=document.getElementById('dvl1b_tfDropBtn');
-  if(!btn||btn.__dvlTfDropBtnBound0782)return;
-  btn.__dvlTfDropBtnBound0782=true;
-  btn.addEventListener('click',function(e){
-    e.preventDefault();
-    e.stopPropagation();
-    if(e.stopImmediatePropagation)e.stopImmediatePropagation();
-    if(_tfDropOpen)closeTfDrop();else openTfDrop();
-  },true); // capture so no other handler can block it
+  if(btn)btn.__dvlTfDropBtnBound0782=true;
 }
 
 document.addEventListener('click',function(e){
   if(!_tfDropOpen)return;
   var wrap=document.getElementById('dvl1b_tfDropWrap');
   if(wrap&&wrap.contains(e.target))return;
-  closeTfDrop();
+  window.dvlTfDrop0782.close();
 },false);
 
 function initTfFavorites0782(){
