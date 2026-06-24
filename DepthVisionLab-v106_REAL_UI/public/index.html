@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.785</title>
+<title>DVL Binance Live — Beta 0.786</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.785';
+window.DVL_APP_VERSION = 'Beta 0.786';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -19203,6 +19203,8 @@ html.dvl1b-ind-open .indicatorItem .dvl-vt-state{
   height:18px !important; flex:0 0 40px !important;
 }
 html.dvl1b-ind-open .indicatorItem .dvl-vt-state.is-on::after{ transform:translateX(24px) !important; }
+/* 0.786 — indicator panels must appear ABOVE #fxIndicatorWrap (z-index:100000) */
+html.dvl1b-ind-open .dvl-vt-panel{ z-index:100002 !important; }
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-act.dvl1b-open{ color:var(--b-accent); background:rgba(16,223,119,.10); border:calc(1 * var(--px)) solid rgba(16,223,119,.30); }
 /* Phase 2C: reveal the OLD drawing tools shell from the hidden .marketRow, anchored under the new button. */
 html.dvl1b-draw-open .marketRow{ display:block !important; visibility:hidden !important; position:fixed !important; left:0 !important; top:0 !important; width:0 !important; height:0 !important; min-height:0 !important; padding:0 !important; margin:0 !important; border:0 !important; background:transparent !important; box-shadow:none !important; overflow:visible !important; pointer-events:none !important; z-index:100000 !important; }
@@ -19397,7 +19399,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.785</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.786</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -20132,11 +20134,12 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.785";
+const DVL_APP_VERSION = "Beta 0.786";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.785 — DVL OB Imbalance Zones fix: painel de configurações agora abre corretamente ao clicar no indicador (display:block em vez de display:'')." },
+  { version: DVL_APP_VERSION, note: "Beta 0.786 — DVL OB Imbalance Zones fix: painel de configurações abria atrás do dropdown de indicadores (z-index:100000 do fxIndicatorWrap vs z-index:99999 do painel); corrigido fechando o dropdown antes de abrir o painel, usando classList.add('is-open'), e adicionando CSS z-index:100002 para todos os painéis dvl-vt-panel quando dvl1b-ind-open está ativo." },
+  { version: "Beta 0.785", note: "Beta 0.785 — DVL OB Imbalance Zones fix: painel de configurações agora abre corretamente ao clicar no indicador (display:block em vez de display:'')." },
   { version: "Beta 0.784", note: "Beta 0.784 — DVL OB Imbalance Zones: indicador overlay em tempo real via WebSocket público (Binance Futures/Spot, MEXC Futures/Spot); agrupa níveis do order book em buckets por ATR, calcula desequilíbrio bid/ask, desenha zonas de demanda/oferta com glow, borda e labels no gráfico; painel de configurações DVL com Exchange Adapter, Depth Levels, Bucket Mode, Min Imbalance, Strong Imbalance, Min Volume Pct, Max Zones, ATR Distance, cores, opacidade e glow; throttle de 400ms, auto-reconexão, detecção automática de troca de ativo." },
   { version: "Beta 0.783", note: "Beta 0.783 — TF dropdown fix: button label fixed as static 'TF'; click binding moved from bridge to module with touchend+click dedup guard for reliable mobile tap; touch-action:manipulation added to wrapper; version badge auto-updates via DVL_APP_VERSION." },
   { version: "Beta 0.782", note: "Beta 0.782 — Phase 1B header and TF favorites: removed the top more button, moved Settings into its place, shortened the asset selector, expanded visible TF favorites to four, and added a compact TF dropdown for favoriting/unfavoriting timeframes in the existing hotbar." },
@@ -45455,11 +45458,18 @@ function _ensPanel(){
     '<div class="dvl-vt-body" id="dvlOBIZBody"></div>';
   document.body.appendChild(_panel);
   _panel.addEventListener('pointerdown',function(ev){ev.stopPropagation();},true);
-  _panel.querySelector('#dvlOBIZClose').addEventListener('click',function(){_panel.style.display='none';});
+  _panel.querySelector('#dvlOBIZClose').addEventListener('click',function(){_panel.classList.remove('is-open');});
   return _panel;
 }
 
-function _openPanel(){_ensPanel();_renderPanel();_panel.style.display='block';}
+function _openPanel(){
+  /* Close the indicators dropdown before opening the panel.
+     fxIndicatorWrap has z-index:100000 (dvl1b-ind-open context) while dvl-vt-panel
+     has z-index:99999 — without closing the dropdown the panel opens BEHIND it. */
+  try{if(typeof closeIndicatorsDropdown==='function')closeIndicatorsDropdown();}catch(_e){}
+  try{document.documentElement.classList.remove('dvl1b-ind-open');}catch(_e){}
+  _ensPanel();_renderPanel();_panel.classList.add('is-open');
+}
 
 function _sel(id,opts,val){
   return'<select id="'+id+'" class="dvl-vt-select">'+
