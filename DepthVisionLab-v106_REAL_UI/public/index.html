@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.793</title>
+<title>DVL Binance Live — Beta 0.794</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.793';
+window.DVL_APP_VERSION = 'Beta 0.794';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -20132,11 +20132,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.793";
+const DVL_APP_VERSION = "Beta 0.794";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.793 — Scanner agora vasculha FUTUROS: Binance USDT-M perps (fapi.binance.com) e MEXC Futuros (contract.mexc.com, direto — pode falhar por CORS). Varre os ~120 maiores por volume 24h, busca klines de 1h (concorrência 8) e mostra o Top 20 por spike de volume. Corrige o bug do '1707h atrás'/UTK: símbolos parados/deslistados (última vela > 3h) são descartados. Volume do mini-gráfico = volume real das 20 velas de 1h do perp. Header mostra exchange + FUT." },
+  { version: DVL_APP_VERSION, note: "Beta 0.794 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
   { version: DVL_APP_VERSION, note: "Beta 0.792 — Scanner: botão 'Api' ao lado de Alertas com menu MEXC / Binance / Bybit (MEXC e Binance ao vivo, Bybit desabilitado 'em breve'). Lista agora é Top 20 pares USDT rankeados por spike de volume na vela de 1h (top ~40 por volume 24h → klines 1h com concorrência limitada a 6 → ranqueia spike → top 20, atualiza por hora). Desenho de volume = volume REAL das 20 velas, sem dados fake: se a API falhar mostra 'Indisponível'. Só a exchange selecionada é usada (sem misturar). Card/painel visuais mantidos." },
   { version: DVL_APP_VERSION, note: "Beta 0.791 — MEXC Volume Spike Scanner portado para o source do repo (footer 'Scanner'). Cada card agora mostra uma linha compacta de metadados abaixo do setup: Vol xN (volume vs média), Flat Xc (candles flat antes do spike) e idade do sinal (Agora / Xm atrás). Mini gráfico de volume + MA20/MA50 e botão Analisar mantidos sem mudança de layout." },
   { version: DVL_APP_VERSION, note: "Beta 0.789 — DVL OB Imbalance Zones correção definitiva: item removido do HTML estático e inserido dinamicamente no boot (mesmo padrão do Spike Zones/Volume Trace/FEB que funciona no mobile). O HTML estático + binding separado impedia o addEventListener de vincular. Toggle e painel agora funcionam." },
@@ -21023,6 +21023,7 @@ window.DVL_SECTION_SIZES_PX = {
 const BINANCE = "https://fapi.binance.com";
 const DATA = "https://fapi.binance.com/futures/data";
 const symbols = ["BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","AVAXUSDT","LINKUSDT","LTCUSDT"];
+window._dvlSymbols = symbols; /* expose for futures-dropdown patch */
 const symbolIcons = { BTCUSDT:"₿", ETHUSDT:"Ξ", SOLUSDT:"S", BNBUSDT:"B", XRPUSDT:"X", ADAUSDT:"A", DOGEUSDT:"Ð", AVAXUSDT:"A", LINKUSDT:"L", LTCUSDT:"Ł" };
 const symbolNames = {
   BTCUSDT:"Bitcoin",
@@ -45624,10 +45625,11 @@ else _init();
 <style id="DVL_MEXC_VOLUME_SPIKE_SCANNER_CSS_0780">
 /*
   DVL — Multi-exchange Volume Spike Scanner (ported into repo source)
-  Top 20 USDT pairs ranked by 1h volume spike. Real data only (no fallback).
+  Top-N USDT pairs ranked by 1h volume spike. Real data only (no fallback).
   API picker: MEXC / Binance (live) · Bybit (disabled).
   Cards: last 20 real volume columns + Volume MA20/MA50, compact metadata
   (Vol xN · Flat Xc · idade), Analisar button. Approved layout unchanged.
+  v0.794: Filtros panel, Sort menu, scroll fix, futures dropdown, search bar.
 */
 
 .bottomNav .navInner #scannerNavBtn .dvlScannerRadar080,
@@ -45671,10 +45673,11 @@ else _init();
   position:relative!important;
   width:100%!important;
   min-height:100%!important;
+  overflow-x:hidden!important;
 }
 .dvlScan080Canvas{
   width:864px!important;
-  min-height:1230px!important;
+  min-height:auto!important;
   transform:scale(var(--dvl-scan080-scale,1))!important;
   transform-origin:top left!important;
   padding:24px 22px 96px!important;
@@ -45720,7 +45723,7 @@ else _init();
   box-shadow:0 0 12px rgba(16,223,119,.44)!important;
 }
 
-/* Compact top controls — Filtros / Alertas / Api ... Ordenar */
+/* Compact top controls */
 .dvlScan080Controls{
   height:66px!important;
   display:grid!important;
@@ -45729,13 +45732,12 @@ else _init();
   align-items:center!important;
   margin-bottom:10px!important;
 }
-.dvlScan080TopBtn,
-.dvlScan080Sort{
+.dvlScan080TopBtn{
   height:50px!important;
   border-radius:12px!important;
-  border:1px solid rgba(145,175,165,.14)!important;
-  background:rgba(4,12,10,.62)!important;
-  color:#d9e1dd!important;
+  border:1px solid rgba(16,223,119,.42)!important;
+  background:radial-gradient(120px 54px at 50% 0%, rgba(16,223,119,.12), transparent 72%),rgba(5,14,12,.72)!important;
+  color:#10df77!important;
   display:flex!important;
   align-items:center!important;
   justify-content:center!important;
@@ -45745,13 +45747,7 @@ else _init();
   white-space:nowrap!important;
   width:100%!important;
 }
-.dvlScan080TopBtn{
-  color:#10df77!important;
-  border-color:rgba(16,223,119,.42)!important;
-  background:radial-gradient(120px 54px at 50% 0%, rgba(16,223,119,.12), transparent 72%),rgba(5,14,12,.72)!important;
-}
-.dvlScan080TopBtn svg,
-.dvlScan080Sort svg{
+.dvlScan080TopBtn svg{
   width:22px!important;
   height:22px!important;
   stroke:currentColor!important;
@@ -45760,13 +45756,78 @@ else _init();
   stroke-linecap:round!important;
   stroke-linejoin:round!important;
 }
-.dvlScan080Sort{
-  grid-column:5!important;
+
+/* Filtros wrap (col 1) */
+.dvlScan080FilWrap{
+  position:relative!important;
+  height:50px!important;
+}
+.dvlScan080FilMenu{
+  position:absolute!important;
+  top:calc(100% + 8px)!important;
+  left:0!important;
+  width:300px!important;
+  display:none!important;
+  flex-direction:column!important;
+  gap:10px!important;
+  padding:14px!important;
+  border-radius:13px!important;
+  border:1px solid rgba(16,223,119,.32)!important;
+  background:rgba(3,11,9,.98)!important;
+  box-shadow:0 20px 46px rgba(0,0,0,.55)!important;
+  z-index:62!important;
+}
+.dvlScan080FilMenu.is-open{ display:flex!important; }
+.dvlScan080FilTitle{
+  font-size:18px!important;
+  font-weight:900!important;
+  color:#10df77!important;
+  padding-bottom:8px!important;
+  border-bottom:1px solid rgba(16,223,119,.18)!important;
+}
+.dvlScan080FilRow{
+  display:flex!important;
+  align-items:center!important;
   justify-content:space-between!important;
-  padding:0 20px!important;
+  gap:10px!important;
+}
+.dvlScan080FilLabel{
+  font-size:14px!important;
+  font-weight:760!important;
+  color:#c3cdc7!important;
+  flex:1!important;
+  white-space:nowrap!important;
+}
+.dvlScan080FilInput{
+  width:80px!important;
+  height:36px!important;
+  border-radius:8px!important;
+  border:1px solid rgba(145,175,165,.22)!important;
+  background:rgba(4,12,10,.8)!important;
+  color:#f4f7f4!important;
+  font-size:15px!important;
+  font-weight:800!important;
+  text-align:center!important;
+  padding:0 8px!important;
+  box-sizing:border-box!important;
+  outline:none!important;
+}
+.dvlScan080FilInput:focus{ border-color:rgba(16,223,119,.5)!important; }
+.dvlScan080FilApply{
+  width:100%!important;
+  height:44px!important;
+  border-radius:10px!important;
+  border:1px solid rgba(16,223,119,.5)!important;
+  background:rgba(16,223,119,.12)!important;
+  color:#10df77!important;
+  font-size:17px!important;
+  font-weight:880!important;
+  display:grid!important;
+  place-items:center!important;
+  margin-top:4px!important;
 }
 
-/* Api picker */
+/* Api picker (col 3) */
 .dvlScan080ApiWrap{
   grid-column:3!important;
   position:relative!important;
@@ -45810,6 +45871,92 @@ else _init();
 .dvlScan080ApiOpt.is-disabled{ opacity:.42!important; }
 .dvlScan080ApiOpt i{ font-style:normal!important; color:#10df77!important; font-size:15px!important; }
 .dvlScan080ApiOpt small{ font-size:12px!important; color:#8a958f!important; font-weight:700!important; }
+
+/* Sort wrap (col 5) */
+.dvlScan080SortWrap{
+  grid-column:5!important;
+  position:relative!important;
+  height:50px!important;
+}
+.dvlScan080Sort{
+  height:50px!important;
+  width:100%!important;
+  border-radius:12px!important;
+  border:1px solid rgba(145,175,165,.14)!important;
+  background:rgba(4,12,10,.62)!important;
+  color:#d9e1dd!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  padding:0 20px!important;
+  font-size:20px!important;
+  font-weight:780!important;
+  white-space:nowrap!important;
+}
+.dvlScan080Sort svg{
+  width:22px!important;
+  height:22px!important;
+  stroke:currentColor!important;
+  fill:none!important;
+  stroke-width:2.2!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+}
+.dvlScan080SortMenu{
+  position:absolute!important;
+  top:calc(100% + 8px)!important;
+  right:0!important;
+  width:210px!important;
+  display:none!important;
+  flex-direction:column!important;
+  gap:5px!important;
+  padding:8px!important;
+  border-radius:13px!important;
+  border:1px solid rgba(145,175,165,.20)!important;
+  background:rgba(3,11,9,.98)!important;
+  box-shadow:0 20px 46px rgba(0,0,0,.55)!important;
+  z-index:61!important;
+}
+.dvlScan080SortMenu.is-open{ display:flex!important; }
+.dvlScan080SortOpt{
+  height:44px!important;
+  border-radius:10px!important;
+  border:1px solid rgba(145,175,165,.16)!important;
+  background:rgba(6,16,13,.72)!important;
+  color:#d9e1dd!important;
+  display:flex!important;
+  align-items:center!important;
+  padding:0 14px!important;
+  font-size:17px!important;
+  font-weight:820!important;
+  white-space:nowrap!important;
+}
+.dvlScan080SortOpt.is-sel{
+  color:#10df77!important;
+  border-color:rgba(16,223,119,.40)!important;
+  background:rgba(16,223,119,.08)!important;
+}
+
+/* Asset dropdown search bar (injected by scanner module) */
+.dvlFutSearchBar{
+  padding:6px 12px 4px!important;
+}
+.dvlFutSearch{
+  width:100%!important;
+  height:36px!important;
+  border-radius:9px!important;
+  border:1px solid rgba(145,175,165,.22)!important;
+  background:rgba(3,8,6,.82)!important;
+  color:#f4f7f4!important;
+  font-size:14px!important;
+  font-weight:700!important;
+  padding:0 12px!important;
+  outline:none!important;
+  box-sizing:border-box!important;
+  -webkit-appearance:none!important;
+}
+.dvlFutSearch::placeholder{ color:#5e706a!important; }
+.dvlFutSearch:focus{ border-color:rgba(16,223,119,.44)!important; }
 
 .dvlScan080List{
   display:grid!important;
@@ -46003,92 +46150,108 @@ body.dvlScannerOpen080 #tradeNavBtn{
   if(window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780) return;
 
   /* ── Tuning ──────────────────────────────────────────────── */
-  var TF_LABEL = "1h";       /* 1-hour candles — "top 20 por hora" */
-  var KLIM = 60;             /* candles per symbol (mini-chart + spike) */
-  var CAND = 120;            /* candidates scanned by 24h volume (vasculhar fundo, sem pesar) */
-  var TOP = 20;              /* final list size */
-  var POOL = 8;              /* max concurrent kline requests */
-  var REFRESH_MS = 3600000;  /* hourly auto-refresh while open */
-  var STALE_MS = 300000;     /* re-fetch on open only if data older than 5 min */
-  var FRESH_MS = 3 * 3600000;/* drop symbols whose last candle is older than 3h (deslistado/parado) */
-  var LS_KEY = "dvlScanExchange0790";
+  var TF_LABEL  = "1h";
+  var KLIM      = 60;
+  var CAND      = 200;           /* vasculha os 200 maiores por volume 24h */
+  var POOL      = 8;
+  var REFRESH_MS= 3600000;
+  var STALE_MS  = 300000;
+  var FRESH_MS  = 3 * 3600000;
+  var LS_KEY    = "dvlScanExchange0790";
+  var LS_FIL   = "dvlScanFilter0794";
+  var LS_SORT  = "dvlScanSort0794";
 
   var ICONS = { BTC:"₿", ETH:"◆", LTC:"Ł", BNB:"⬡", XRP:"X", DOGE:"D", AVAX:"A" };
   var KNOWN = {btc:1,eth:1,sol:1,bnb:1,xrp:1,ada:1,doge:1,avax:1,link:1,ltc:1,sui:1};
 
-  /* ── Exchange adapters (FUTURES) ─────────────────────────────
-     Binance USDT-M perps (fapi) speak the same row-array kline shape as spot.
-     MEXC contract API uses columnar arrays and BTC_USDT symbols. */
+  /* ── Sort modes ─────────────────────────────────────────────── */
+  var SORT_LABELS = {spike:"Maior spike",recente:"Mais recente",volume:"Maior volume",raw:"Sem filtro"};
+
+  var sortMode = (function(){
+    try{ var s=localStorage.getItem(LS_SORT); return SORT_LABELS[s]?s:"spike"; }catch(_){ return "spike"; }
+  })();
+
+  /* ── Filter state ───────────────────────────────────────────── */
+  var filterState = (function(){
+    try{
+      var o=JSON.parse(localStorage.getItem(LS_FIL)||"{}");
+      return {
+        spikeMin : isNaN(parseFloat(o.spikeMin))  ? 1.0 : Math.max(0,parseFloat(o.spikeMin)),
+        ma20Min  : isNaN(parseFloat(o.ma20Min))   ? 0   : Math.max(0,parseFloat(o.ma20Min)),
+        ma50Min  : isNaN(parseFloat(o.ma50Min))   ? 0   : Math.max(0,parseFloat(o.ma50Min)),
+        maxAssets: Math.min(100,Math.max(1,parseInt(o.maxAssets)||20))
+      };
+    }catch(_){ return {spikeMin:1.0,ma20Min:0,ma50Min:0,maxAssets:20}; }
+  })();
+
+  /* ── Exchange adapters (FUTURES) ─────────────────────────────── */
   var EX = {
-    binance: {
-      label: "Binance",
-      enabled: true,
-      tickers: async function(){
-        var r = await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr", {cache:"no-store"});
-        if(!r.ok) throw new Error("ticker " + r.status);
-        var d = await r.json();
+    binance:{
+      label:"Binance",enabled:true,
+      tickers:async function(){
+        var r=await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr",{cache:"no-store"});
+        if(!r.ok) throw new Error("ticker "+r.status);
+        var d=await r.json();
         if(!Array.isArray(d)) throw new Error("ticker shape");
         return d.filter(function(t){
-          var s = t && t.symbol ? t.symbol : "";
-          return /USDT$/.test(s) && s.indexOf("_") < 0 && Number(t.quoteVolume) > 0;
-        }).map(function(t){ return { sym:t.symbol, qv:Number(t.quoteVolume) }; });
+          var s=t&&t.symbol?t.symbol:"";
+          return /USDT$/.test(s)&&s.indexOf("_")<0&&Number(t.quoteVolume)>0;
+        }).map(function(t){return{sym:t.symbol,qv:Number(t.quoteVolume)};});
       },
-      klines: async function(sym){
-        var url = "https://fapi.binance.com/fapi/v1/klines?symbol=" + encodeURIComponent(sym) + "&interval=1h&limit=" + KLIM;
-        var r = await fetch(url, {cache:"no-store"});
-        if(!r.ok) throw new Error("kl " + r.status);
-        var d = await r.json();
-        if(!Array.isArray(d) || d.length < 25) throw new Error("kl short");
-        var closes = [], vols = [];
-        for(var i=0;i<d.length;i++){ closes.push(Number(d[i][4])); vols.push(Number(d[i][5])); }
-        return { closes:closes, vols:vols, lastOpen:Number(d[d.length-1][0]) || 0 };
+      klines:async function(sym){
+        var url="https://fapi.binance.com/fapi/v1/klines?symbol="+encodeURIComponent(sym)+"&interval=1h&limit="+KLIM;
+        var r=await fetch(url,{cache:"no-store"});
+        if(!r.ok) throw new Error("kl "+r.status);
+        var d=await r.json();
+        if(!Array.isArray(d)||d.length<25) throw new Error("kl short");
+        var closes=[],vols=[];
+        for(var i=0;i<d.length;i++){closes.push(Number(d[i][4]));vols.push(Number(d[i][5]));}
+        return {closes:closes,vols:vols,lastOpen:Number(d[d.length-1][0])||0};
       },
-      base: function(sym){ return String(sym).replace(/USDT$/,""); }
+      base:function(sym){return String(sym).replace(/USDT$/,"");}
     },
-    mexc: {
-      label: "MEXC",
-      enabled: true,
-      tickers: async function(){
-        var r = await fetch("https://contract.mexc.com/api/v1/contract/ticker", {cache:"no-store"});
-        if(!r.ok) throw new Error("ticker " + r.status);
-        var j = await r.json();
-        var d = j && j.data ? j.data : [];
+    mexc:{
+      label:"MEXC",enabled:true,
+      tickers:async function(){
+        var r=await fetch("https://contract.mexc.com/api/v1/contract/ticker",{cache:"no-store"});
+        if(!r.ok) throw new Error("ticker "+r.status);
+        var j=await r.json();
+        var d=j&&j.data?j.data:[];
         if(!Array.isArray(d)) throw new Error("ticker shape");
-        return d.filter(function(t){
-          var s = t && t.symbol ? t.symbol : "";
-          return /_USDT$/.test(s) && Number(t.amount24) > 0;
-        }).map(function(t){ return { sym:t.symbol, qv:Number(t.amount24) }; });
+        return d.filter(function(t){var s=t&&t.symbol?t.symbol:"";return /_USDT$/.test(s)&&Number(t.amount24)>0;}).map(function(t){return{sym:t.symbol,qv:Number(t.amount24)};});
       },
-      klines: async function(sym){
-        var start = Math.floor(Date.now()/1000) - KLIM * 3600;
-        var url = "https://contract.mexc.com/api/v1/contract/kline/" + encodeURIComponent(sym) + "?interval=Min60&start=" + start;
-        var r = await fetch(url, {cache:"no-store"});
-        if(!r.ok) throw new Error("kl " + r.status);
-        var j = await r.json();
-        var d = j && j.data ? j.data : null;
-        if(!d || !d.close || d.close.length < 25) throw new Error("kl short");
-        var closes = d.close.map(Number);
-        var vols = (d.vol || d.amount || []).map(Number);
-        var times = d.time || [];
-        return { closes:closes, vols:vols, lastOpen:(Number(times[times.length-1]) || 0) * 1000 };
+      klines:async function(sym){
+        var start=Math.floor(Date.now()/1000)-KLIM*3600;
+        var url="https://contract.mexc.com/api/v1/contract/kline/"+encodeURIComponent(sym)+"?interval=Min60&start="+start;
+        var r=await fetch(url,{cache:"no-store"});
+        if(!r.ok) throw new Error("kl "+r.status);
+        var j=await r.json();
+        var d=j&&j.data?j.data:null;
+        if(!d||!d.close||d.close.length<25) throw new Error("kl short");
+        var closes=d.close.map(Number);
+        var vols=(d.vol||d.amount||[]).map(Number);
+        var times=d.time||[];
+        return {closes:closes,vols:vols,lastOpen:(Number(times[times.length-1])||0)*1000};
       },
-      base: function(sym){ return String(sym).replace(/_USDT$/,""); }
+      base:function(sym){return String(sym).replace(/_USDT$/,"");}
     },
-    bybit: { label:"Bybit", enabled:false }
+    bybit:{label:"Bybit",enabled:false}
   };
 
   function readExchange(){
-    try{ var v = localStorage.getItem(LS_KEY); if(v && EX[v] && EX[v].enabled) return v; }catch(_){}
+    try{ var v=localStorage.getItem(LS_KEY); if(v&&EX[v]&&EX[v].enabled) return v; }catch(_){}
     return "binance";
   }
 
-  var state = {
-    rows: [],
+  var state={
+    rows:[],
+    rawRows:[],
     loaded:false,
     lastUpdate:null,
     loading:false,
     filterMode:"all",
-    exchange: readExchange()
+    exchange:readExchange(),
+    scale:1
   };
 
   function radarSVG(){
@@ -46096,497 +46259,637 @@ body.dvlScannerOpen080 #tradeNavBtn{
   }
 
   function scannerBtn(){
-    return document.getElementById("scannerNavBtn") || document.querySelector(".bottomNav .navInner .navItem:nth-child(2)");
+    return document.getElementById("scannerNavBtn")||document.querySelector(".bottomNav .navInner .navItem:nth-child(2)");
   }
 
   function forceButton(){
-    var btn = scannerBtn();
+    var btn=scannerBtn();
     if(!btn) return;
-    btn.id = "scannerNavBtn";
-    btn.type = "button";
+    btn.id="scannerNavBtn";
+    btn.type="button";
     btn.setAttribute("aria-label","Scanner");
     btn.setAttribute("title","Scanner");
     btn.setAttribute("data-dvl-scanner-nav","true");
-    if(!btn.querySelector(".dvlScannerRadar080") || !/Scanner/i.test(btn.textContent || "")){
-      btn.innerHTML = radarSVG() + '<span>Scanner</span>';
+    if(!btn.querySelector(".dvlScannerRadar080")||!/Scanner/i.test(btn.textContent||"")){
+      btn.innerHTML=radarSVG()+'<span>Scanner</span>';
     }
   }
 
-  function sma(values, period, idx){
-    if(idx < period - 1) return null;
-    var sum = 0;
-    for(var i = idx - period + 1; i <= idx; i++) sum += Number(values[i] || 0);
-    return sum / period;
+  function sma(values,period,idx){
+    if(idx<period-1) return null;
+    var sum=0;
+    for(var i=idx-period+1;i<=idx;i++) sum+=Number(values[i]||0);
+    return sum/period;
   }
 
-  function pct(a,b){
-    if(!b) return 0;
-    return ((a - b) / b) * 100;
-  }
+  function pct(a,b){ if(!b) return 0; return((a-b)/b)*100; }
 
   function formatTime(d){
-    try{
-      return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
-    }catch(_){ return ""; }
+    try{ return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }catch(_){ return ""; }
   }
 
   function ageLabel(openMs){
     if(!openMs) return "Agora";
-    var min = Math.floor((Date.now() - openMs) / 60000);
-    if(min <= 0) return "Agora";
-    if(min < 60) return min + "m atrás";
-    var h = Math.floor(min / 60);
-    if(h < 48) return h + "h atrás";
-    return Math.floor(h / 24) + "d atrás";
+    var min=Math.floor((Date.now()-openMs)/60000);
+    if(min<=0) return "Agora";
+    if(min<60) return min+"m atrás";
+    var h=Math.floor(min/60);
+    if(h<48) return h+"h atrás";
+    return Math.floor(h/24)+"d atrás";
   }
 
-  function baseFromSymbol(b, fullSym){
-    var low = b.toLowerCase();
-    return {
-      coin: KNOWN[low] ? low : "",
-      icon: ICONS[b.toUpperCase()] || (b.charAt(0) || "?"),
-      mexc: fullSym,
-      symbol: b + "/USDT",
-      side: "LONG",
-      setup: ""
-    };
+  function baseFromSymbol(b,fullSym){
+    var low=b.toLowerCase();
+    return {coin:KNOWN[low]?low:"",icon:ICONS[b.toUpperCase()]||(b.charAt(0)||"?"),mexc:fullSym,symbol:b+"/USDT",side:"LONG",setup:""};
   }
 
-  /* Build a row from REAL klines only — no synthetic data. */
-  function computeSignal(base, closes, vols, lastOpenMs){
-    var len = vols.length;
-    var volMa20 = [];
-    var volMa50 = [];
-    var priceMa20 = [];
-    var priceMa50 = [];
-
+  function computeSignal(base,closes,vols,lastOpenMs){
+    var len=vols.length;
+    var volMa20=[],volMa50=[],priceMa20=[],priceMa50=[];
     for(var i=0;i<len;i++){
       volMa20.push(sma(vols,20,i));
       volMa50.push(sma(vols,50,i));
       priceMa20.push(sma(closes,20,i));
       priceMa50.push(sma(closes,50,i));
     }
-
-    var lastVol = vols[len-1] || 0;
-    var lastMa20 = volMa20[len-1] || (sma(vols, Math.min(20,len), len-1) || 1);
-    var lastMa50 = volMa50[len-1] || (sma(vols, Math.min(50,len), len-1) || 1);
-    var spike20 = lastVol / Math.max(lastMa20, 1e-9);
-    var spike50 = lastVol / Math.max(lastMa50, 1e-9);
-
-    var ma20Now = priceMa20[len-1] || closes[len-1];
-    var ma20Past = priceMa20[len-11] || priceMa20[len-2] || ma20Now;
-    var ma50Now = priceMa50[len-1] || closes[len-1];
-    var ma50Past = priceMa50[len-11] || priceMa50[len-2] || ma50Now;
-    var slope20 = Math.abs(pct(ma20Now, ma20Past));
-    var slope50 = Math.abs(pct(ma50Now, ma50Past));
-    var flatScore = Math.max(0, 1 - ((slope20 + slope50) / 1.2));
-
-    var lastClose = closes[len-1] || 0;
-    var prevClose = closes[len-2] || lastClose;
-    var side = lastClose >= prevClose ? "LONG" : "SHORT";
-    var setup = flatScore > .55
-      ? "MAs flat + Volume Spike"
-      : (spike20 > 2 ? "Volume acima da MA20" : "Volume spike 1h");
-
-    /* Metadata field 2 — consecutive flat candles immediately before the last bar. */
-    var flatTol = 0.18;
-    var flatCandles = 0;
-    for(var j = len - 2; j > 0; j--){
-      if(Math.abs(pct(closes[j], closes[j-1])) <= flatTol) flatCandles++;
+    var lastVol=vols[len-1]||0;
+    var lastMa20=volMa20[len-1]||(sma(vols,Math.min(20,len),len-1)||1);
+    var lastMa50=volMa50[len-1]||(sma(vols,Math.min(50,len),len-1)||1);
+    var spike20=lastVol/Math.max(lastMa20,1e-9);
+    var spike50=lastVol/Math.max(lastMa50,1e-9);
+    var ma20Now=priceMa20[len-1]||closes[len-1];
+    var ma20Past=priceMa20[len-11]||priceMa20[len-2]||ma20Now;
+    var ma50Now=priceMa50[len-1]||closes[len-1];
+    var ma50Past=priceMa50[len-11]||priceMa50[len-2]||ma50Now;
+    var slope20=Math.abs(pct(ma20Now,ma20Past));
+    var slope50=Math.abs(pct(ma50Now,ma50Past));
+    var flatScore=Math.max(0,1-((slope20+slope50)/1.2));
+    var lastClose=closes[len-1]||0;
+    var prevClose=closes[len-2]||lastClose;
+    var side=lastClose>=prevClose?"LONG":"SHORT";
+    var setup=flatScore>.55?"MAs flat + Volume Spike":(spike20>2?"Volume acima da MA20":"Volume spike 1h");
+    var flatTol=0.18,flatCandles=0;
+    for(var j=len-2;j>0;j--){
+      if(Math.abs(pct(closes[j],closes[j-1]))<=flatTol) flatCandles++;
       else break;
     }
-
     return {
-      coin: base.coin,
-      icon: base.icon,
-      mexc: base.mexc,
-      symbol: base.symbol,
-      side: side,
-      setup: setup,
-      spike20: spike20,
-      spike50: spike50,
-      flatScore: flatScore,
-      volX: spike20,
-      flatCandles: flatCandles,
-      ageOpen: lastOpenMs || 0,
-      last20Vols: vols.slice(-20),
-      last20MA20: volMa20.slice(-20),
-      last20MA50: volMa50.slice(-20)
+      coin:base.coin,icon:base.icon,mexc:base.mexc,symbol:base.symbol,
+      side:side,setup:setup,
+      spike20:spike20,spike50:spike50,flatScore:flatScore,
+      volX:spike20,flatCandles:flatCandles,ageOpen:lastOpenMs||0,
+      last20Vols:vols.slice(-20),last20MA20:volMa20.slice(-20),last20MA50:volMa50.slice(-20)
     };
   }
 
-  /* Bounded-concurrency map so we never fire all requests at once. */
-  async function mapPool(items, limit, fn){
-    var out = new Array(items.length);
-    var idx = 0;
+  async function mapPool(items,limit,fn){
+    var out=new Array(items.length),idx=0;
     async function worker(){
-      while(idx < items.length){
-        var i = idx++;
-        try{ out[i] = await fn(items[i], i); }
-        catch(e){ out[i] = null; }
+      while(idx<items.length){
+        var i=idx++;
+        try{ out[i]=await fn(items[i],i); }catch(e){ out[i]=null; }
       }
     }
-    var workers = [];
-    var n = Math.min(limit, items.length);
-    for(var w=0; w<n; w++) workers.push(worker());
+    var workers=[],n=Math.min(limit,items.length);
+    for(var w=0;w<n;w++) workers.push(worker());
     await Promise.all(workers);
     return out;
   }
 
+  /* ── Display logic ───────────────────────────────────────────────
+     Applies Alertas toggle, Filtros panel, and sort mode.
+     "raw" = 24h vol order, no spike/MA filter. */
+  function getDisplayRows(){
+    var rows=state.rawRows.slice();
+
+    if(state.filterMode==="alerts")
+      rows=rows.filter(function(r){return (r.spike20||0)>=1.7||(r.spike50||0)>=1.5;});
+
+    if(sortMode!=="raw"){
+      if(filterState.spikeMin>0)
+        rows=rows.filter(function(r){return (r.spike20||0)>=filterState.spikeMin;});
+      if(filterState.ma20Min>0)
+        rows=rows.filter(function(r){
+          var m=(r.last20MA20&&r.last20MA20.length)?r.last20MA20[r.last20MA20.length-1]||0:0;
+          return m>=filterState.ma20Min;
+        });
+      if(filterState.ma50Min>0)
+        rows=rows.filter(function(r){
+          var m=(r.last20MA50&&r.last20MA50.length)?r.last20MA50[r.last20MA50.length-1]||0:0;
+          return m>=filterState.ma50Min;
+        });
+    }
+
+    if(sortMode==="spike"){
+      rows.sort(function(a,b){return (b.spike20||0)-(a.spike20||0);});
+    } else if(sortMode==="recente"){
+      rows.sort(function(a,b){return (b.ageOpen||0)-(a.ageOpen||0);});
+    } else if(sortMode==="volume"){
+      rows.sort(function(a,b){
+        var va=(a.last20Vols&&a.last20Vols.length)?a.last20Vols[a.last20Vols.length-1]||0:0;
+        var vb=(b.last20Vols&&b.last20Vols.length)?b.last20Vols[b.last20Vols.length-1]||0:0;
+        return vb-va;
+      });
+    }
+    /* raw: keep 24h vol order as-is */
+
+    return rows.slice(0,filterState.maxAssets);
+  }
+
   async function refresh(){
     if(state.loading) return;
-    var ex = EX[state.exchange];
-    if(!ex || !ex.enabled){ state.rows = []; renderRows(); updateLive("Indisponível"); return; }
+    var ex=EX[state.exchange];
+    if(!ex||!ex.enabled){state.rawRows=[];state.rows=[];renderRows();updateLive("Indisponível");return;}
 
-    state.loading = true;
+    state.loading=true;
     updateLive("Carregando");
     renderRows();
 
     try{
-      var cands = await ex.tickers();
-      cands.sort(function(a,b){ return b.qv - a.qv; });
-      cands = cands.slice(0, CAND);
+      var cands=await ex.tickers();
+      cands.sort(function(a,b){return b.qv-a.qv;});
+      cands=cands.slice(0,CAND);
 
-      var kl = await mapPool(cands, POOL, function(c){ return ex.klines(c.sym); });
-      var rows = [];
-      var freshCut = Date.now() - FRESH_MS;
+      var kl=await mapPool(cands,POOL,function(c){return ex.klines(c.sym);});
+      var allRows=[];
+      var freshCut=Date.now()-FRESH_MS;
       for(var i=0;i<cands.length;i++){
-        var k = kl[i];
-        if(!k || !k.closes || k.closes.length < 25) continue;
-        if(k.lastOpen && k.lastOpen < freshCut) continue;   /* skip stale/delisted */
-        rows.push(computeSignal(baseFromSymbol(ex.base(cands[i].sym), cands[i].sym), k.closes, k.vols, k.lastOpen));
+        var k=kl[i];
+        if(!k||!k.closes||k.closes.length<25) continue;
+        if(k.lastOpen&&k.lastOpen<freshCut) continue;
+        allRows.push(computeSignal(baseFromSymbol(ex.base(cands[i].sym),cands[i].sym),k.closes,k.vols,k.lastOpen));
       }
-      rows.sort(function(a,b){ return (b.spike20 || 0) - (a.spike20 || 0); });
-      rows = rows.slice(0, TOP);
 
-      state.rows = rows;
-      state.loaded = true;
-      state.lastUpdate = new Date();
+      state.rawRows=allRows;
+      state.rows=getDisplayRows();
+      state.loaded=true;
+      state.lastUpdate=new Date();
       renderRows();
-      updateLive(rows.length ? "Ao vivo" : "Sem dados");
+      updateLive(state.rows.length?"Ao vivo":"Sem dados");
     }catch(err){
-      console.warn("DVL scanner refresh failed", err);
-      state.rows = [];
-      state.lastUpdate = new Date();
+      console.warn("DVL scanner refresh failed",err);
+      state.rawRows=[];
+      state.rows=[];
+      state.lastUpdate=new Date();
       renderRows();
       updateLive("Indisponível");
     }finally{
-      state.loading = false;
+      state.loading=false;
     }
   }
 
-  function exLabel(){
-    var ex = EX[state.exchange];
-    return ex ? ex.label : "—";
-  }
+  function exLabel(){ var ex=EX[state.exchange]; return ex?ex.label:"—"; }
 
   function updateLive(label){
-    var live = document.getElementById("dvlScan080LiveText");
-    var time = document.getElementById("dvlScan080LiveTime");
-    if(live) live.textContent = label || "Ao vivo";
-    if(time) time.textContent = exLabel() + " · FUT" + (state.lastUpdate ? " · " + formatTime(state.lastUpdate) : "");
+    var live=document.getElementById("dvlScan080LiveText");
+    var time=document.getElementById("dvlScan080LiveTime");
+    if(live) live.textContent=label||"Ao vivo";
+    if(time) time.textContent=exLabel()+" · FUT"+(state.lastUpdate?" · "+formatTime(state.lastUpdate):"");
   }
 
   function volumeSvg(row){
-    var vols = row.last20Vols || [];
-    var ma20 = row.last20MA20 || [];
-    var ma50 = row.last20MA50 || [];
-    var maxVal = Math.max.apply(null, vols.concat(ma20).concat(ma50).filter(function(v){ return Number.isFinite(v) && v > 0; }).concat([1]));
-    var short = row.side === "SHORT";
-    var barColor = short ? "#ff4858" : "#10df77";
-    var left = 10, top = 14, chartH = 52, gap = 3, barW = 10;
-    var bars = vols.map(function(v, i){
-      var bh = Math.max(2, (v / maxVal) * chartH);
-      var x = left + i * (barW + gap);
-      var y = top + chartH - bh;
-      var isSpike = i >= vols.length - 2;
-      return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW + '" height="' + bh.toFixed(1) + '" rx="1.2" fill="' + barColor + '" opacity="' + (isSpike ? ".95" : ".46") + '"/>';
+    var vols=row.last20Vols||[];
+    var ma20=row.last20MA20||[];
+    var ma50=row.last20MA50||[];
+    var maxVal=Math.max.apply(null,vols.concat(ma20).concat(ma50).filter(function(v){return Number.isFinite(v)&&v>0;}).concat([1]));
+    var short=row.side==="SHORT";
+    var barColor=short?"#ff4858":"#10df77";
+    var left=10,top=14,chartH=52,gap=3,barW=10;
+    var bars=vols.map(function(v,i){
+      var bh=Math.max(2,(v/maxVal)*chartH);
+      var x=left+i*(barW+gap);
+      var y=top+chartH-bh;
+      var isSpike=i>=vols.length-2;
+      return '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW+'" height="'+bh.toFixed(1)+'" rx="1.2" fill="'+barColor+'" opacity="'+(isSpike?".95":".46")+'"/>';
     }).join("");
-
-    function line(vals, color){
-      var pts = vals.map(function(v, i){
+    function line(vals,color){
+      var pts=vals.map(function(v,i){
         if(!Number.isFinite(v)) return null;
-        var x = left + i * (barW + gap) + barW / 2;
-        var y = top + chartH - (v / maxVal) * chartH;
+        var x=left+i*(barW+gap)+barW/2;
+        var y=top+chartH-(v/maxVal)*chartH;
         return [x,y];
       }).filter(Boolean);
       if(!pts.length) return "";
-      var d = pts.map(function(p,i){ return (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1); }).join(" ");
-      return '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
+      var d=pts.map(function(p,i){return(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1);}).join(" ");
+      return '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
     }
-
     return '<svg viewBox="0 0 300 74" preserveAspectRatio="none">'
-      + '<text x="10" y="10" class="dvlScan080VolLabel">Vol</text>'
-      + '<circle cx="72" cy="7" r="2.2" fill="#10df77"/><text x="79" y="10" class="dvlScan080VolMeta">MA20</text>'
-      + '<circle cx="125" cy="7" r="2.2" fill="#ffd321"/><text x="132" y="10" class="dvlScan080VolMeta">MA50</text>'
-      + bars
-      + line(ma20, "#10df77")
-      + line(ma50, "#ffd321")
-      + '</svg>';
+      +'<text x="10" y="10" class="dvlScan080VolLabel">Vol</text>'
+      +'<circle cx="72" cy="7" r="2.2" fill="#10df77"/><text x="79" y="10" class="dvlScan080VolMeta">MA20</text>'
+      +'<circle cx="125" cy="7" r="2.2" fill="#ffd321"/><text x="132" y="10" class="dvlScan080VolMeta">MA50</text>'
+      +bars+line(ma20,"#10df77")+line(ma50,"#ffd321")+'</svg>';
   }
 
-  function filteredRows(){
-    var rows = state.rows.slice();
-    if(state.filterMode === "alerts") rows = rows.filter(function(r){ return (r.spike20 || 0) >= 1.7 || (r.spike50 || 0) >= 1.5; });
-    return rows;
-  }
+  function escAttr(s){return String(s).replace(/"/g,"&quot;");}
+  function escHtml(s){return String(s).replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 
-  function escAttr(s){ return String(s).replace(/"/g,"&quot;"); }
-  function escHtml(s){ return String(s).replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  /* ── Scale compensation: collapses empty layout space so panel
+     scroll stops exactly at last card's visual bottom. */
+  function compensateScale(){
+    var panel=document.getElementById("dvlScannerPanel0780");
+    if(!panel) return;
+    var canvas=panel.querySelector(".dvlScan080Canvas");
+    if(!canvas) return;
+    var s=state.scale||1;
+    if(s>=1){ canvas.style.marginBottom=""; return; }
+    var H=canvas.offsetHeight;
+    canvas.style.marginBottom=Math.round((s-1)*H)+"px";
+  }
 
   function renderRows(){
-    var list = document.getElementById("dvlScan080List");
+    var list=document.getElementById("dvlScan080List");
     if(!list) return;
-    var rows = filteredRows();
+    var rows=state.rows;
 
     if(!rows.length){
-      var msg = state.loading ? "Carregando sinais…"
-        : (state.exchange === "bybit" ? "Bybit indisponível"
-          : (state.loaded ? "Sem sinais agora" : "Sem dados da " + exLabel()));
-      list.innerHTML = '<div class="dvlScan080Empty">' + msg + '</div>';
+      var msg=state.loading?"Carregando sinais…"
+        :(state.exchange==="bybit"?"Bybit indisponível"
+          :(state.loaded?"Sem sinais agora":"Sem dados da "+exLabel()));
+      list.innerHTML='<div class="dvlScan080Empty">'+msg+'</div>';
+      compensateScale();
       return;
     }
 
-    list.innerHTML = rows.map(function(r){
-      var short = r.side === "SHORT";
-      var parts = r.symbol.indexOf("/") > -1 ? r.symbol.split("/") : [r.symbol,""];
-      var volTxt = "Vol x" + (Number(r.volX) || 0).toFixed(1);
-      var flatTxt = "Flat " + (Number(r.flatCandles) || 0) + "c";
-      var ageTxt = ageLabel(r.ageOpen);
-      return '<article class="dvlScan080Card" data-mexc="' + escAttr(r.mexc) + '">'
-        + '<div class="dvlScan080Coin ' + (r.coin || '') + '">' + escHtml(r.icon || '') + '</div>'
-        + '<div class="dvlScan080Main">'
-        +   '<div class="dvlScan080PairLine"><div class="dvlScan080Pair">' + escHtml(parts[0]) + (parts[1] ? '<span>/' + escHtml(parts[1]) + '</span>' : '') + '</div><span class="dvlScan080Side ' + (short ? 'short' : 'long') + '">' + r.side + '</span></div>'
-        +   '<div class="dvlScan080Setup">' + escHtml(r.setup) + '</div>'
-        +   '<div class="dvlScan080Meta">'
-        +     '<span class="dvlScan080MetaVol">' + volTxt + '</span>'
-        +     '<i class="dvlScan080MetaDot"></i>'
-        +     '<span class="dvlScan080MetaFlat">' + flatTxt + '</span>'
-        +     '<i class="dvlScan080MetaDot"></i>'
-        +     '<span class="dvlScan080MetaAge">' + ageTxt + '</span>'
-        +   '</div>'
-        + '</div>'
-        + '<div class="dvlScan080Vol">' + volumeSvg(r) + '</div>'
-        + '<button class="dvlScan080Btn" type="button" data-dvl-scan-analyze="' + escAttr(r.symbol) + '">Analisar</button>'
-        + '</article>';
+    list.innerHTML=rows.map(function(r){
+      var short=r.side==="SHORT";
+      var parts=r.symbol.indexOf("/")>-1?r.symbol.split("/"):[r.symbol,""];
+      var volTxt="Vol x"+(Number(r.volX)||0).toFixed(1);
+      var flatTxt="Flat "+(Number(r.flatCandles)||0)+"c";
+      var ageTxt=ageLabel(r.ageOpen);
+      return '<article class="dvlScan080Card" data-mexc="'+escAttr(r.mexc)+'">'
+        +'<div class="dvlScan080Coin '+(r.coin||'')+'">'+escHtml(r.icon||'')+'</div>'
+        +'<div class="dvlScan080Main">'
+        +  '<div class="dvlScan080PairLine"><div class="dvlScan080Pair">'+escHtml(parts[0])+(parts[1]?'<span>/'+escHtml(parts[1])+'</span>':'')+'</div><span class="dvlScan080Side '+(short?'short':'long')+'">'+r.side+'</span></div>'
+        +  '<div class="dvlScan080Setup">'+escHtml(r.setup)+'</div>'
+        +  '<div class="dvlScan080Meta">'
+        +    '<span class="dvlScan080MetaVol">'+volTxt+'</span>'
+        +    '<i class="dvlScan080MetaDot"></i>'
+        +    '<span class="dvlScan080MetaFlat">'+flatTxt+'</span>'
+        +    '<i class="dvlScan080MetaDot"></i>'
+        +    '<span class="dvlScan080MetaAge">'+ageTxt+'</span>'
+        +  '</div>'
+        +'</div>'
+        +'<div class="dvlScan080Vol">'+volumeSvg(r)+'</div>'
+        +'<button class="dvlScan080Btn" type="button" data-dvl-scan-analyze="'+escAttr(r.symbol)+'">Analisar</button>'
+        +'</article>';
     }).join("");
+    compensateScale();
   }
 
+  /* ── Api menu ────────────────────────────────────────────────── */
   function apiMenuHTML(){
-    var keys = ["binance","mexc","bybit"];
-    return '<div class="dvlScan080ApiMenu" id="dvlScan080ApiMenu">' + keys.map(function(k){
-      var ex = EX[k];
-      var sel = state.exchange === k;
-      var cls = "dvlScan080ApiOpt" + (sel ? " is-sel" : "") + (ex.enabled ? "" : " is-disabled");
-      var right = ex.enabled ? (sel ? '<i>●</i>' : '') : '<small>em breve</small>';
-      return '<button class="' + cls + '" type="button" data-dvl-api-pick="' + k + '"' + (ex.enabled ? '' : ' disabled') + '><span>' + ex.label + '</span>' + right + '</button>';
-    }).join("") + '</div>';
+    var keys=["binance","mexc","bybit"];
+    return '<div class="dvlScan080ApiMenu" id="dvlScan080ApiMenu">'+keys.map(function(k){
+      var ex=EX[k];
+      var sel=state.exchange===k;
+      var cls="dvlScan080ApiOpt"+(sel?" is-sel":"")+(ex.enabled?"":" is-disabled");
+      var right=ex.enabled?(sel?'<i>●</i>':''):'<small>em breve</small>';
+      return '<button class="'+cls+'" type="button" data-dvl-api-pick="'+k+'"'+(ex.enabled?'':' disabled')+'><span>'+ex.label+'</span>'+right+'</button>';
+    }).join("")+'</div>';
   }
 
   function refreshApiMenu(){
-    var menu = document.getElementById("dvlScan080ApiMenu");
+    var menu=document.getElementById("dvlScan080ApiMenu");
     if(!menu) return;
-    var open = menu.classList.contains("is-open");
-    var wrap = menu.parentNode;
+    var open=menu.classList.contains("is-open");
+    var wrap=menu.parentNode;
     if(!wrap) return;
     wrap.removeChild(menu);
-    wrap.insertAdjacentHTML("beforeend", apiMenuHTML());
-    if(open){ var m2 = document.getElementById("dvlScan080ApiMenu"); if(m2) m2.classList.add("is-open"); }
+    wrap.insertAdjacentHTML("beforeend",apiMenuHTML());
+    if(open){ var m2=document.getElementById("dvlScan080ApiMenu"); if(m2) m2.classList.add("is-open"); }
   }
 
+  /* ── Filtros menu ────────────────────────────────────────────── */
+  function filtrosMenuHTML(){
+    var f=filterState;
+    return '<div class="dvlScan080FilMenu" id="dvlScan080FilMenu">'
+      +'<div class="dvlScan080FilTitle">Filtros</div>'
+      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Spike mínimo (×)</label>'
+      +'<input class="dvlScan080FilInput" type="number" id="dvlFilSpike" min="0" max="100" step="0.1" value="'+f.spikeMin+'"></div>'
+      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">MA20 mínimo</label>'
+      +'<input class="dvlScan080FilInput" type="number" id="dvlFilMa20" min="0" step="1" value="'+f.ma20Min+'"></div>'
+      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">MA50 mínimo</label>'
+      +'<input class="dvlScan080FilInput" type="number" id="dvlFilMa50" min="0" step="1" value="'+f.ma50Min+'"></div>'
+      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Nº de ativos (máx 100)</label>'
+      +'<input class="dvlScan080FilInput" type="number" id="dvlFilCount" min="1" max="100" step="1" value="'+f.maxAssets+'"></div>'
+      +'<button class="dvlScan080FilApply" type="button" data-dvl-fil-apply>Aplicar</button>'
+      +'</div>';
+  }
+
+  function applyFiltros(){
+    function rdN(id,def,mn,mx){
+      var v=parseFloat((document.getElementById(id)||{}).value);
+      return isNaN(v)?def:Math.min(mx,Math.max(mn,v));
+    }
+    filterState.spikeMin =rdN("dvlFilSpike",1.0,0,999);
+    filterState.ma20Min  =rdN("dvlFilMa20",0,0,1e12);
+    filterState.ma50Min  =rdN("dvlFilMa50",0,0,1e12);
+    filterState.maxAssets=Math.round(rdN("dvlFilCount",20,1,100));
+    try{localStorage.setItem(LS_FIL,JSON.stringify(filterState));}catch(_){}
+    var fm=document.getElementById("dvlScan080FilMenu");
+    if(fm) fm.classList.remove("is-open");
+    state.rows=getDisplayRows();
+    renderRows();
+  }
+
+  /* ── Sort menu ───────────────────────────────────────────────── */
+  function sortMenuHTML(){
+    var keys=["spike","recente","volume","raw"];
+    return '<div class="dvlScan080SortMenu" id="dvlScan080SortMenu">'
+      +keys.map(function(k){
+        var cls="dvlScan080SortOpt"+(sortMode===k?" is-sel":"");
+        return '<button class="'+cls+'" type="button" data-dvl-sort="'+k+'">'+SORT_LABELS[k]+'</button>';
+      }).join("")+'</div>';
+  }
+
+  function pickSort(mode){
+    if(!SORT_LABELS[mode]) return;
+    sortMode=mode;
+    try{localStorage.setItem(LS_SORT,mode);}catch(_){}
+    var lbl=document.getElementById("dvlScan080SortLabel");
+    if(lbl) lbl.textContent=SORT_LABELS[mode];
+    var sm=document.getElementById("dvlScan080SortMenu");
+    if(sm){
+      var opts=sm.querySelectorAll(".dvlScan080SortOpt");
+      for(var i=0;i<opts.length;i++) opts[i].classList.toggle("is-sel",opts[i].getAttribute("data-dvl-sort")===mode);
+      sm.classList.remove("is-open");
+    }
+    state.rows=getDisplayRows();
+    renderRows();
+  }
+
+  /* ── Futures dropdown patch (Tasks 1+2) ──────────────────────── */
+  var _dvlFutPairs=null,_dvlFutFetching=false;
+
+  async function loadFuturesPairs(){
+    if(_dvlFutPairs!==null||_dvlFutFetching) return;
+    _dvlFutFetching=true;
+    try{
+      var r=await fetch("https://fapi.binance.com/fapi/v1/exchangeInfo",{cache:"no-store"});
+      var j=await r.json();
+      _dvlFutPairs=(j.symbols||[])
+        .filter(function(s){return s.contractType==="PERPETUAL"&&s.quoteAsset==="USDT"&&s.status==="TRADING";})
+        .map(function(s){return s.symbol;})
+        .sort();
+      var sArr=window._dvlSymbols;
+      if(sArr&&Array.isArray(sArr)){
+        _dvlFutPairs.forEach(function(sym){if(sArr.indexOf(sym)<0) sArr.push(sym);});
+      }
+      var dd=document.getElementById("assetDropdown");
+      if(dd&&dd.classList.contains("is-open")&&typeof window.renderAssetDropdown==="function"){
+        window.renderAssetDropdown();
+      }
+    }catch(e){ _dvlFutPairs=[]; }
+    _dvlFutFetching=false;
+  }
+
+  function dvlFilterDropdown(q){
+    var dd=document.getElementById("assetDropdown");
+    if(!dd) return;
+    var qU=(q||"").trim().toUpperCase();
+    var opts=dd.querySelectorAll(".assetOption");
+    for(var i=0;i<opts.length;i++){
+      var sym=(opts[i].getAttribute("data-symbol")||"").toUpperCase();
+      opts[i].style.display=(!qU||sym.indexOf(qU)>-1)?"":"none";
+    }
+  }
+
+  function patchDropdown(){
+    if(window._dvlDropPatched080) return;
+    window._dvlDropPatched080=true;
+    var _orig=window.renderAssetDropdown;
+    if(typeof _orig!=="function") return;
+    window.renderAssetDropdown=function(){
+      loadFuturesPairs();
+      _orig.call(this);
+      var dd=document.getElementById("assetDropdown");
+      if(!dd) return;
+      var prevQ=(dd.querySelector(".dvlFutSearch")||{}).value||"";
+      var list=dd.querySelector(".assetDropdownList");
+      if(!list) return;
+      var bar=document.createElement("div");
+      bar.className="dvlFutSearchBar";
+      bar.innerHTML='<input class="dvlFutSearch" type="search" placeholder="Pesquisar par… ex: BTC" autocomplete="off" spellcheck="false" aria-label="Pesquisar par">';
+      dd.insertBefore(bar,list);
+      var inp=bar.querySelector(".dvlFutSearch");
+      if(prevQ){ inp.value=prevQ; dvlFilterDropdown(prevQ); }
+      inp.addEventListener("input",function(){dvlFilterDropdown(inp.value);},false);
+      inp.addEventListener("keydown",function(e){e.stopPropagation();},false);
+      inp.addEventListener("click",function(e){e.stopPropagation();},false);
+    };
+  }
+
+  /* ── Build ───────────────────────────────────────────────────── */
   function build(){
     if(document.getElementById("dvlScannerPanel0780")) return;
-
-    var panel = document.createElement("section");
-    panel.id = "dvlScannerPanel0780";
+    var panel=document.createElement("section");
+    panel.id="dvlScannerPanel0780";
     panel.setAttribute("data-dvl-ui","true");
-    panel.innerHTML =
+    panel.innerHTML=
       '<div class="dvlScan080Sizer"><div class="dvlScan080Canvas">'
-      + '<header class="dvlScan080TitleRow"><div class="dvlScan080Title">Sinais em tempo real</div><div class="dvlScan080Live"><i></i><span id="dvlScan080LiveText">Ao vivo</span><b id="dvlScan080LiveTime">' + exLabel() + '</b></div></header>'
-      + '<div class="dvlScan080Controls">'
-      + '<button class="dvlScan080TopBtn" type="button" data-dvl-scan-filter-menu><svg viewBox="0 0 24 24"><path d="M4 6h16l-6 7v5l-4 2v-7z"/></svg>Filtros</button>'
-      + '<button class="dvlScan080TopBtn" type="button" data-dvl-scan-alerts><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>Alertas</button>'
-      + '<div class="dvlScan080ApiWrap"><button class="dvlScan080TopBtn" type="button" data-dvl-scan-api><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="17" r="1.6"/></svg>Api</button>' + apiMenuHTML() + '</div>'
-      + '<button class="dvlScan080Sort" type="button"><span>Mais recentes</span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>'
-      + '</div><div class="dvlScan080List" id="dvlScan080List"></div>'
-      + '</div></div>';
+      +'<header class="dvlScan080TitleRow"><div class="dvlScan080Title">Sinais em tempo real</div><div class="dvlScan080Live"><i></i><span id="dvlScan080LiveText">Ao vivo</span><b id="dvlScan080LiveTime">'+exLabel()+'</b></div></header>'
+      +'<div class="dvlScan080Controls">'
+      +'<div class="dvlScan080FilWrap"><button class="dvlScan080TopBtn" type="button" data-dvl-scan-filter-menu><svg viewBox="0 0 24 24"><path d="M4 6h16l-6 7v5l-4 2v-7z"/></svg>Filtros</button>'+filtrosMenuHTML()+'</div>'
+      +'<button class="dvlScan080TopBtn" type="button" data-dvl-scan-alerts><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>Alertas</button>'
+      +'<div class="dvlScan080ApiWrap"><button class="dvlScan080TopBtn" type="button" data-dvl-scan-api><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="17" r="1.6"/></svg>Api</button>'+apiMenuHTML()+'</div>'
+      +'<div class="dvlScan080SortWrap"><button class="dvlScan080Sort" type="button" data-dvl-scan-sort-open><span id="dvlScan080SortLabel">'+SORT_LABELS[sortMode]+'</span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>'+sortMenuHTML()+'</div>'
+      +'</div><div class="dvlScan080List" id="dvlScan080List"></div>'
+      +'</div></div>';
     document.body.appendChild(panel);
     renderRows();
     resize();
   }
 
+  /* ── Resize ──────────────────────────────────────────────────── */
   function resize(){
-    var panel = document.getElementById("dvlScannerPanel0780");
+    var panel=document.getElementById("dvlScannerPanel0780");
     if(!panel) return;
-    var sizer = panel.querySelector(".dvlScan080Sizer");
+    var sizer=panel.querySelector(".dvlScan080Sizer");
     if(!sizer) return;
-    var scale = Math.max(0.36, Math.min(1, window.innerWidth / 864));
-    document.documentElement.style.setProperty("--dvl-scan080-scale", String(scale));
-    sizer.style.width = Math.ceil(864 * scale) + "px";
-    sizer.style.minHeight = Math.ceil(1230 * scale) + "px";
+    var scale=Math.max(0.36,Math.min(1,window.innerWidth/864));
+    state.scale=scale;
+    document.documentElement.style.setProperty("--dvl-scan080-scale",String(scale));
+    sizer.style.width=Math.ceil(864*scale)+"px";
+    sizer.style.minHeight="";
+    compensateScale();
   }
 
   function closeTrade(){
     try{
-      var d = document.querySelector(".tradeDrawer");
-      var t = document.getElementById("tradeNavBtn");
-      if(d && d.classList.contains("is-open") && t) t.click();
+      var d=document.querySelector(".tradeDrawer");
+      var t=document.getElementById("tradeNavBtn");
+      if(d&&d.classList.contains("is-open")&&t) t.click();
     }catch(_){}
   }
 
   function isStale(){
     if(!state.lastUpdate) return true;
-    return (Date.now() - state.lastUpdate.getTime()) > STALE_MS;
+    return (Date.now()-state.lastUpdate.getTime())>STALE_MS;
   }
 
   function open(){
     forceButton();
     build();
     closeTrade();
-    var panel = document.getElementById("dvlScannerPanel0780");
-    var btn = scannerBtn();
+    var panel=document.getElementById("dvlScannerPanel0780");
+    var btn=scannerBtn();
     if(panel) panel.classList.add("is-open");
     if(btn) btn.classList.add("active");
-    var trade = document.getElementById("tradeNavBtn");
+    var trade=document.getElementById("tradeNavBtn");
     if(trade) trade.classList.remove("active");
     document.body.classList.add("dvlScannerOpen080");
     resize();
-    updateLive(state.loaded ? "Ao vivo" : "Carregando");
-    if(!state.rows.length || isStale()) refresh();
+    updateLive(state.loaded?"Ao vivo":"Carregando");
+    if(!state.rawRows.length||isStale()) refresh();
   }
 
   function close(){
-    var panel = document.getElementById("dvlScannerPanel0780");
-    var btn = scannerBtn();
-    var menu = document.getElementById("dvlScan080ApiMenu");
-    if(menu) menu.classList.remove("is-open");
+    var panel=document.getElementById("dvlScannerPanel0780");
+    var btn=scannerBtn();
+    var apiM=document.getElementById("dvlScan080ApiMenu");
+    var filM=document.getElementById("dvlScan080FilMenu");
+    var sorM=document.getElementById("dvlScan080SortMenu");
+    if(apiM) apiM.classList.remove("is-open");
+    if(filM) filM.classList.remove("is-open");
+    if(sorM) sorM.classList.remove("is-open");
     if(panel) panel.classList.remove("is-open");
     if(btn) btn.classList.remove("active");
     document.body.classList.remove("dvlScannerOpen080");
   }
 
   function toggle(ev){
-    if(ev){
-      ev.preventDefault();
-      ev.stopPropagation();
-      if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
-    }
-    var panel = document.getElementById("dvlScannerPanel0780");
-    if(panel && panel.classList.contains("is-open")) close();
+    if(ev){ev.preventDefault();ev.stopPropagation();if(ev.stopImmediatePropagation)ev.stopImmediatePropagation();}
+    var panel=document.getElementById("dvlScannerPanel0780");
+    if(panel&&panel.classList.contains("is-open")) close();
     else open();
   }
 
   function analyze(symbol){
     try{
-      var s1 = document.getElementById("dvl1b_symbolText");
-      var s2 = document.getElementById("symbolText");
-      var s3 = document.querySelector(".symText");
-      if(s1) s1.textContent = symbol;
-      if(s2) s2.textContent = symbol;
-      if(s3) s3.textContent = symbol;
-      window.dispatchEvent(new CustomEvent("dvl-scanner-analyze", {detail:{symbol:symbol, source:"volume-spike", exchange:state.exchange}}));
+      var s1=document.getElementById("dvl1b_symbolText");
+      var s2=document.getElementById("symbolText");
+      var s3=document.querySelector(".symText");
+      if(s1) s1.textContent=symbol;
+      if(s2) s2.textContent=symbol;
+      if(s3) s3.textContent=symbol;
+      window.dispatchEvent(new CustomEvent("dvl-scanner-analyze",{detail:{symbol:symbol,source:"volume-spike",exchange:state.exchange}}));
     }catch(_){}
     close();
   }
 
   function pickExchange(key){
-    var ex = EX[key];
-    if(!ex || !ex.enabled) return;
-    if(state.exchange === key){
-      var m = document.getElementById("dvlScan080ApiMenu");
-      if(m) m.classList.remove("is-open");
-      return;
-    }
-    state.exchange = key;
-    try{ localStorage.setItem(LS_KEY, key); }catch(_){}
-    state.loaded = false;
-    state.rows = [];
+    var ex=EX[key];
+    if(!ex||!ex.enabled) return;
+    if(state.exchange===key){var m=document.getElementById("dvlScan080ApiMenu");if(m)m.classList.remove("is-open");return;}
+    state.exchange=key;
+    try{localStorage.setItem(LS_KEY,key);}catch(_){}
+    state.loaded=false;
+    state.rawRows=[];
+    state.rows=[];
     refreshApiMenu();
-    var menu = document.getElementById("dvlScan080ApiMenu");
+    var menu=document.getElementById("dvlScan080ApiMenu");
     if(menu) menu.classList.remove("is-open");
     updateLive("Carregando");
     renderRows();
     refresh();
   }
 
+  /* ── Bind ────────────────────────────────────────────────────── */
   function bind(){
     forceButton();
     build();
+    patchDropdown();
 
     if(document.__dvlScan080Bound) return;
-    document.__dvlScan080Bound = true;
+    document.__dvlScan080Bound=true;
 
-    document.addEventListener("click", function(ev){
-      var btn = scannerBtn();
-      if(btn && (ev.target === btn || btn.contains(ev.target))){
-        toggle(ev);
-        return;
-      }
+    document.addEventListener("click",function(ev){
+      var btn=scannerBtn();
 
-      var apiPick = ev.target && ev.target.closest ? ev.target.closest("[data-dvl-api-pick]") : null;
-      if(apiPick){
-        ev.preventDefault(); ev.stopPropagation();
-        pickExchange(apiPick.getAttribute("data-dvl-api-pick"));
-        return;
-      }
+      if(btn&&(ev.target===btn||btn.contains(ev.target))){ toggle(ev); return; }
 
-      var apiBtn = ev.target && ev.target.closest ? ev.target.closest("[data-dvl-scan-api]") : null;
+      var apiPick=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-api-pick]"):null;
+      if(apiPick){ev.preventDefault();ev.stopPropagation();pickExchange(apiPick.getAttribute("data-dvl-api-pick"));return;}
+
+      var apiBtn=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-scan-api]"):null;
       if(apiBtn){
-        ev.preventDefault(); ev.stopPropagation();
-        var menu = document.getElementById("dvlScan080ApiMenu");
-        if(menu) menu.classList.toggle("is-open");
+        ev.preventDefault();ev.stopPropagation();
+        var fmA=document.getElementById("dvlScan080FilMenu");if(fmA)fmA.classList.remove("is-open");
+        var smA=document.getElementById("dvlScan080SortMenu");if(smA)smA.classList.remove("is-open");
+        var menuA=document.getElementById("dvlScan080ApiMenu");if(menuA)menuA.classList.toggle("is-open");
         return;
       }
 
-      var alertBtn = ev.target && ev.target.closest ? ev.target.closest("[data-dvl-scan-alerts]") : null;
+      var alertBtn=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-scan-alerts]"):null;
       if(alertBtn){
-        state.filterMode = state.filterMode === "alerts" ? "all" : "alerts";
-        alertBtn.classList.toggle("active", state.filterMode === "alerts");
+        state.filterMode=state.filterMode==="alerts"?"all":"alerts";
+        alertBtn.classList.toggle("active",state.filterMode==="alerts");
+        state.rows=getDisplayRows();
         renderRows();
         return;
       }
 
-      var analyzeBtn = ev.target && ev.target.closest ? ev.target.closest("[data-dvl-scan-analyze]") : null;
-      if(analyzeBtn){
-        analyze(analyzeBtn.getAttribute("data-dvl-scan-analyze"));
+      var filtBtn=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-scan-filter-menu]"):null;
+      if(filtBtn){
+        ev.preventDefault();ev.stopPropagation();
+        var amF=document.getElementById("dvlScan080ApiMenu");if(amF)amF.classList.remove("is-open");
+        var smF=document.getElementById("dvlScan080SortMenu");if(smF)smF.classList.remove("is-open");
+        var fmF=document.getElementById("dvlScan080FilMenu");if(fmF)fmF.classList.toggle("is-open");
         return;
       }
 
-      var inWrap = ev.target && ev.target.closest ? ev.target.closest(".dvlScan080ApiWrap") : null;
-      if(!inWrap){
-        var openMenu = document.getElementById("dvlScan080ApiMenu");
-        if(openMenu && openMenu.classList.contains("is-open")) openMenu.classList.remove("is-open");
+      var applyBtn=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-fil-apply]"):null;
+      if(applyBtn){ev.preventDefault();ev.stopPropagation();applyFiltros();return;}
+
+      var sortOpen=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-scan-sort-open]"):null;
+      if(sortOpen){
+        ev.preventDefault();ev.stopPropagation();
+        var amS=document.getElementById("dvlScan080ApiMenu");if(amS)amS.classList.remove("is-open");
+        var fmS=document.getElementById("dvlScan080FilMenu");if(fmS)fmS.classList.remove("is-open");
+        var smS=document.getElementById("dvlScan080SortMenu");if(smS)smS.classList.toggle("is-open");
+        return;
       }
 
-      var nav = ev.target && ev.target.closest ? ev.target.closest(".bottomNav .navItem") : null;
-      if(nav && nav !== btn) close();
-    }, true);
+      var sortPick=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-sort]"):null;
+      if(sortPick){ev.preventDefault();ev.stopPropagation();pickSort(sortPick.getAttribute("data-dvl-sort"));return;}
 
-    window.addEventListener("resize", resize);
-    window.addEventListener("orientationchange", function(){ setTimeout(resize, 140); });
+      var analyzeBtn=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-scan-analyze]"):null;
+      if(analyzeBtn){analyze(analyzeBtn.getAttribute("data-dvl-scan-analyze"));return;}
+
+      var inApi=ev.target&&ev.target.closest?ev.target.closest(".dvlScan080ApiWrap"):null;
+      var inFil=ev.target&&ev.target.closest?ev.target.closest(".dvlScan080FilWrap"):null;
+      var inSort=ev.target&&ev.target.closest?ev.target.closest(".dvlScan080SortWrap"):null;
+      if(!inApi){ var aM2=document.getElementById("dvlScan080ApiMenu");if(aM2&&aM2.classList.contains("is-open"))aM2.classList.remove("is-open"); }
+      if(!inFil){ var fM2=document.getElementById("dvlScan080FilMenu");if(fM2&&fM2.classList.contains("is-open"))fM2.classList.remove("is-open"); }
+      if(!inSort){ var sM2=document.getElementById("dvlScan080SortMenu");if(sM2&&sM2.classList.contains("is-open"))sM2.classList.remove("is-open"); }
+
+      var nav=ev.target&&ev.target.closest?ev.target.closest(".bottomNav .navItem"):null;
+      if(nav&&nav!==btn) close();
+    },true);
+
+    window.addEventListener("resize",resize);
+    window.addEventListener("orientationchange",function(){setTimeout(resize,140);});
 
     setInterval(function(){
-      var panel = document.getElementById("dvlScannerPanel0780");
-      if(panel && panel.classList.contains("is-open")) refresh();
-    }, REFRESH_MS);
+      var panel=document.getElementById("dvlScannerPanel0780");
+      if(panel&&panel.classList.contains("is-open")) refresh();
+    },REFRESH_MS);
   }
 
-  window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780 = {
-    open: open,
-    close: close,
-    toggle: toggle,
-    refresh: refresh,
-    setExchange: pickExchange,
-    rows: function(){ return state.rows.slice(); }
+  window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780={
+    open:open,close:close,toggle:toggle,refresh:refresh,
+    setExchange:pickExchange,
+    rows:function(){return state.rows.slice();},
+    rawRows:function(){return state.rawRows.slice();}
   };
 
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", bind, {once:true});
+  if(document.readyState==="loading"){
+    document.addEventListener("DOMContentLoaded",bind,{once:true});
   }else{
     bind();
   }
-  setTimeout(bind, 160);
-  setTimeout(bind, 700);
+  setTimeout(bind,160);
+  setTimeout(bind,700);
 })();
 </script>
 </body>
