@@ -19402,7 +19402,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
         </div>
       </div>
       <div class="dvl1b-menuwrap" id="dvl1b_tfDropWrap">
-        <button class="dvl1b-act dvl1b-tfDropBtn" id="dvl1b_tfDropBtn" type="button" aria-label="Selecionar timeframe" aria-haspopup="true" aria-expanded="false" onclick="event.stopPropagation();window.dvlTfDrop0782&&window.dvlTfDrop0782.toggle(event)"><span>TF</span><span class="dvl1b-chev" aria-hidden="true"></span></button>
+        <button class="dvl1b-act dvl1b-tfDropBtn" id="dvl1b_tfDropBtn" type="button" aria-label="Selecionar timeframe" aria-haspopup="true" aria-expanded="false"><span id="dvl1b_tfDropLabel">5m</span><span class="dvl1b-chev" aria-hidden="true"></span></button>
         <div class="dvl1b-menu dvl1b-tfDropMenu" id="dvl1b_tfDropMenu" role="menu" aria-hidden="true"></div>
       </div>
       <span class="dvl1b-sep"></span>
@@ -19588,6 +19588,13 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       if(typeof setChartSettings==="function") setChartSettings(!isOpen);
       else if(window.setChartSettings) window.setChartSettings(!isOpen);
     }catch(_e){}
+  }, false);
+
+  /* ── TF dropdown button (0.782) — calls module toggle at click time ── */
+  var tfDropBtn=document.getElementById("dvl1b_tfDropBtn");
+  if(tfDropBtn) tfDropBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    try{ if(window.dvlTfDrop0782) window.dvlTfDrop0782.toggle(e); }catch(_e){}
   }, false);
 
   /* Console helper: toggle the new UI on/off (also restores old chrome). */
@@ -44749,6 +44756,9 @@ function callApplyTf0782(tf){
     var btns=scroll.querySelectorAll('.dvl1b-tf');
     for(var i=0;i<btns.length;i++){btns[i].classList.toggle('is-active',btns[i].getAttribute('data-tf')===tf);}
   }
+  // update TF button label to show active TF
+  var lbl=document.getElementById('dvl1b_tfDropLabel');
+  if(lbl)lbl.textContent=DVL_TF_LABEL[tf]||tf;
 }
 
 function renderTfHotbarFavorites(){
