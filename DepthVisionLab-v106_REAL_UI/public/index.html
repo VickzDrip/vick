@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.801</title>
+<title>DVL Binance Live — Beta 0.802</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.801';
+window.DVL_APP_VERSION = 'Beta 0.802';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -12557,6 +12557,33 @@ window.DVL_PROJECT_RULES = Object.assign({}, window.DVL_PROJECT_RULES || {}, {
   transform:scale(.94)!important;
   filter:brightness(1.18)!important;
 }
+
+/* Delta Volume TF chip selector */
+.dvl-dv-tf-chips{
+  display:flex!important;
+  flex-wrap:wrap!important;
+  gap:6px!important;
+  margin-top:8px!important;
+}
+.dvl-dv-tf-chip{
+  height:30px!important;
+  min-width:42px!important;
+  padding:0 10px!important;
+  border-radius:7px!important;
+  border:1px solid rgba(120,145,165,.30)!important;
+  background:rgba(15,25,22,.6)!important;
+  color:#8a9e96!important;
+  font-size:13px!important;
+  font-weight:700!important;
+  cursor:pointer!important;
+  transition:all .10s ease!important;
+}
+.dvl-dv-tf-chip.is-sel{
+  border-color:rgba(16,223,119,.50)!important;
+  background:rgba(16,223,119,.15)!important;
+  color:#10df77!important;
+}
+.dvl-dv-tf-chip:active{ transform:scale(.94)!important; }
 </style>
 
 
@@ -20132,11 +20159,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.801";
+const DVL_APP_VERSION = "Beta 0.802";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.801 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
+  { version: DVL_APP_VERSION, note: "Beta 0.802 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
   { version: DVL_APP_VERSION, note: "Beta 0.792 — Scanner: botão 'Api' ao lado de Alertas com menu MEXC / Binance / Bybit (MEXC e Binance ao vivo, Bybit desabilitado 'em breve'). Lista agora é Top 20 pares USDT rankeados por spike de volume na vela de 1h (top ~40 por volume 24h → klines 1h com concorrência limitada a 6 → ranqueia spike → top 20, atualiza por hora). Desenho de volume = volume REAL das 20 velas, sem dados fake: se a API falhar mostra 'Indisponível'. Só a exchange selecionada é usada (sem misturar). Card/painel visuais mantidos." },
   { version: DVL_APP_VERSION, note: "Beta 0.791 — MEXC Volume Spike Scanner portado para o source do repo (footer 'Scanner'). Cada card agora mostra uma linha compacta de metadados abaixo do setup: Vol xN (volume vs média), Flat Xc (candles flat antes do spike) e idade do sinal (Agora / Xm atrás). Mini gráfico de volume + MA20/MA50 e botão Analisar mantidos sem mudança de layout." },
   { version: DVL_APP_VERSION, note: "Beta 0.789 — DVL OB Imbalance Zones correção definitiva: item removido do HTML estático e inserido dinamicamente no boot (mesmo padrão do Spike Zones/Volume Trace/FEB que funciona no mobile). O HTML estático + binding separado impedia o addEventListener de vincular. Toggle e painel agora funcionam." },
@@ -34183,10 +34210,11 @@ drag = {
   "use strict";
 
   const STOR_KEY = "dvlDeltaVol_v1";
-  const DEFAULTS = { on:false, maLen:0 };
+  const DV_TF_LIST = ["chart","1m","3m","5m","15m","30m","1h","4h","1d"];
+  const DEFAULTS = { on:false, maLen:0, tf:"chart" };
 
   let state = Object.assign({}, DEFAULTS);
-  (function(){ try{ const s=JSON.parse(localStorage.getItem(STOR_KEY)||"{}"); Object.assign(state,s); }catch(_){} })();
+  (function(){ try{ const s=JSON.parse(localStorage.getItem(STOR_KEY)||"{}"); Object.assign(state,s); if(DV_TF_LIST.indexOf(state.tf)<0) state.tf="chart"; }catch(_){} })();
   function save(){ try{ localStorage.setItem(STOR_KEY, JSON.stringify(state)); }catch(_){} }
 
   function on(){ return !!state.on; }
@@ -34195,7 +34223,11 @@ drag = {
   const CACHE = { key:null, data:[], fetching:false };
 
   function sym(){ try{ return (window.currentSymbol||"BTCUSDT").toUpperCase(); }catch(_){ return "BTCUSDT"; } }
-  function period(){ try{ return (typeof interval!=="undefined"?interval:null)||"5m"; }catch(_){ return "5m"; } }
+  function period(){
+    if(!state.tf||state.tf==="chart")
+      try{ return (typeof interval!=="undefined"?interval:null)||"5m"; }catch(_){ return "5m"; }
+    return state.tf;
+  }
 
   function periodMs(tf){
     const map={ "1m":60000,"3m":180000,"5m":300000,"15m":900000,"30m":1800000,
@@ -34355,8 +34387,9 @@ drag = {
     const last = visibleData.length ? visibleData[visibleData.length-1] : CACHE.data.at(-1);
     const kind = !last ? "neutral" : last.delta > 0 ? "bull" : last.delta < 0 ? "bear" : "neutral";
 
+    const effTF = state.tf==="chart"?"chart→"+period():period();
     ctx.save();
-    basePanel(ctx, m, "DELTA VOL 1m", last ? fmtDelta(last.delta) : (CACHE.fetching?"LOADING":"NO DATA"), kind);
+    basePanel(ctx, m, "DELTA VOL "+effTF, last ? fmtDelta(last.delta) : (CACHE.fetching?"LOADING":"NO DATA"), kind);
 
     if(!visibleData.length){
       ctx.fillStyle="rgba(120,145,180,.65)"; ctx.font="800 9px system-ui";
@@ -34429,7 +34462,7 @@ drag = {
     panel.className = "dvl-vt-panel";
     panel.innerHTML = `
       <div class="dvl-vt-head">
-        <div class="dvl-vt-title"><b>DVL Delta Volume</b><small>1m klines · buy/sell delta</small></div>
+        <div class="dvl-vt-title"><b>DVL Delta Volume</b><small>buy/sell delta por TF</small></div>
         <div class="dvl-vt-head-actions"><button class="dvl-vt-close" id="dvlDvClose" type="button">×</button></div>
       </div>
       <div class="dvl-vt-body" id="dvlDvBody"></div>
@@ -34445,6 +34478,9 @@ drag = {
   function renderPanel(){
     ensurePanel();
     const body = panel.querySelector("#dvlDvBody");
+    const tfChips = DV_TF_LIST.map(tf =>
+      `<button class="dvl-dv-tf-chip${state.tf===tf?" is-sel":""}" type="button" data-dv-tf="${tf}">${tf}</button>`
+    ).join("");
     body.innerHTML = `
       <div class="dvl-vt-section">
         <div class="dvl-vt-section-title"><span>General</span></div>
@@ -34453,11 +34489,25 @@ drag = {
           <div class="dvl-vt-field"><label>MA Length</label><input id="dvlDvMALen" class="dvl-vt-input" type="number" min="0" max="500" step="1" value="${state.maLen||0}" placeholder="0=off"></div>
         </div>
       </div>
+      <div class="dvl-vt-section">
+        <div class="dvl-vt-section-title"><span>Timeframe</span></div>
+        <div class="dvl-dv-tf-chips">${tfChips}</div>
+        <p style="font-size:11px;color:#6b7d74;margin:6px 0 0;">"chart" usa o mesmo TF do gráfico principal automaticamente</p>
+      </div>
     `;
     const onCb = panel.querySelector("#dvlDvOn");
     if(onCb) onCb.addEventListener("change", ()=>{ state.on=onCb.checked; save(); updateRow(); if(typeof drawSoon==="function") drawSoon(); });
     const maInp = panel.querySelector("#dvlDvMALen");
     if(maInp) maInp.addEventListener("change", ()=>{ const v=Math.max(0,Math.min(500,Math.round(+maInp.value)||0)); maInp.value=v; state.maLen=v; save(); });
+    panel.querySelectorAll("[data-dv-tf]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        state.tf=btn.dataset.dvTf;
+        save();
+        CACHE.key=null; /* force refetch with new TF */
+        panel.querySelectorAll("[data-dv-tf]").forEach(b=>b.classList.toggle("is-sel",b.dataset.dvTf===state.tf));
+        if(typeof drawSoon==="function") drawSoon();
+      });
+    });
   }
 
   // ── Indicator row ─────────────────────────────────────────────────────────
@@ -34476,7 +34526,7 @@ drag = {
       item.className = "indicatorItem";
       item.innerHTML = `
         <span class="indicatorFxMark">DV</span>
-        <span><b>DVL Delta Volume</b><small>1m klines buy/sell delta</small></span>
+        <span><b>DVL Delta Volume</b><small>buy/sell delta · TF selecionável</small></span>
         <i class="dvl-vt-state" id="dvlDeltaVolumeState">ON</i>
       `;
       const after = document.getElementById("dvlLongShortOscItem") || document.getElementById("dvlOpenInterestOscItem");
@@ -47128,6 +47178,14 @@ body.dvlScannerOpen080 #tradeNavBtn{
     try{
       /* Set TF FIRST so selectSymbol's loadAll() already runs at the scanner TF */
       if(typeof window.setIntervalUi==="function") window.setIntervalUi(filterState.scanTF);
+      /* Belt-and-suspenders: force active class on TF hotbar buttons */
+      try{
+        var _tfs=document.querySelectorAll('.tfBtn[data-interval]');
+        for(var _bi=0;_bi<_tfs.length;_bi++)
+          _tfs[_bi].classList.toggle('active',_tfs[_bi].getAttribute('data-interval')===filterState.scanTF);
+        var _atf=document.querySelector('.tfBtn[data-interval="'+filterState.scanTF+'"]');
+        if(_atf) _atf.scrollIntoView({block:'nearest',inline:'center'});
+      }catch(_){}
       /* Audit A1: uses the real asset selector, not just DOM text */
       if(typeof window.selectSymbol==="function") window.selectSymbol(cleanSym);
       window.dispatchEvent(new CustomEvent("dvl-scanner-analyze",{detail:{symbol:cleanSym,source:"volume-spike",exchange:state.exchange,tf:filterState.scanTF}}));
