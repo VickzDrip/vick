@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.788</title>
+<title>DVL Binance Live — Beta 0.789</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.788';
+window.DVL_APP_VERSION = 'Beta 0.789';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -19402,7 +19402,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.788</span>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 0.789</span>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin" aria-hidden="true">&#8383;</span>
@@ -19820,11 +19820,6 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
               <b>Indicators</b>
               <small>futuros módulos DVL</small>
             </div>
-<div class="indicatorItem dvl-vt-indicator-item" id="dvlOBIZItem">
-              <span class="indicatorFxMark">OB</span>
-              <span><b>DVL OB Imbalance Zones</b><small>Order Book · Dados Reais</small></span>
-              <i class="dvl-vt-state" id="dvlOBIZState">OFF</i>
-            </div>
 <div class="indicatorItem is-soon">
               <span class="indicatorFxMark">VP</span>
               <span><b>Volume Profile</b><small>soon</small></span>
@@ -20137,11 +20132,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.788";
+const DVL_APP_VERSION = "Beta 0.789";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.788 — DVL OB Imbalance Zones: voltei o toggle ao padrão click puro idêntico ao Spike Zones (comprovado no mobile) e adicionei feedback visual no canvas quando ligado — mostra 'OB ● conectando…' enquanto busca o order book e 'OB ● sem zonas' quando há dados mas nenhuma zona passa nos filtros. Assim a ativação nunca fica silenciosa: se aparecer texto, o indicador ligou; se não aparecer nada, o toggle não está disparando." },
+  { version: DVL_APP_VERSION, note: "Beta 0.789 — DVL OB Imbalance Zones correção definitiva: item removido do HTML estático e inserido dinamicamente no boot (mesmo padrão do Spike Zones/Volume Trace/FEB que funciona no mobile). O HTML estático + binding separado impedia o addEventListener de vincular. Toggle e painel agora funcionam." },
   { version: "Beta 0.787", note: "Beta 0.787 — DVL OB Imbalance Zones fix: o item não respondia ao toque no mobile ('limbo'). Adicionados handlers touchend+click com dedup de 600ms na linha do indicador e no toggle ON/OFF (mesmo padrão que corrigiu o botão TF), e CSS touch-action:manipulation em #dvlOBIZItem. Tocar no toggle ativa/desativa; tocar na linha abre o painel de configurações." },
   { version: "Beta 0.786", note: "Beta 0.786 — DVL OB Imbalance Zones fix: painel de configurações abria atrás do dropdown de indicadores (z-index:100000 do fxIndicatorWrap vs z-index:99999 do painel); corrigido fechando o dropdown antes de abrir o painel, usando classList.add('is-open'), e adicionando CSS z-index:100002 para todos os painéis dvl-vt-panel quando dvl1b-ind-open está ativo." },
   { version: "Beta 0.785", note: "Beta 0.785 — DVL OB Imbalance Zones fix: painel de configurações agora abre corretamente ao clicar no indicador (display:block em vez de display:'')." },
@@ -45577,21 +45572,32 @@ function _updRow(){
   if(pill){pill.textContent=_s.on?'ON':'OFF';pill.className='dvl-vt-state'+(_s.on?' is-on':'');}
 }
 
-function _toggleOn(){
-  _s.on=!_s.on;_save();
-  if(_s.on)_connect();else _disconnect();
-  _updRow();_dsoon();
-}
 function _insertRow(){
-  // Item está no HTML estático — só vincula eventos.
-  // Padrão idêntico ao DVL Spike Zones (click puro, comprovado no mobile).
-  _rowEl=document.getElementById('dvlOBIZItem');
-  if(!_rowEl||_rowEl.dataset.obizBound)return;
-  _rowEl.dataset.obizBound='1';
-  var pill=document.getElementById('dvlOBIZState');
+  /* Insert item dynamically — same pattern as DVL Spike Zones (proven on mobile).
+     Static HTML + separate binding was unreliable; binding at insertion time is not. */
+  var menu=document.getElementById('indicatorDropdown');
+  if(!menu||document.getElementById('dvlOBIZItem'))return;
+
+  _rowEl=document.createElement('div');
+  _rowEl.id='dvlOBIZItem';
+  _rowEl.className='indicatorItem dvl-vt-indicator-item';
+  _rowEl.innerHTML=
+    '<span class="indicatorFxMark">OB</span>'+
+    '<span><b>DVL OB Imbalance Zones</b><small>Order Book · Dados Reais</small></span>'+
+    '<i class="dvl-vt-state" id="dvlOBIZState"></i>';
+
+  /* Insert after the last real (non-soon) indicator item, or after head */
+  var items=menu.querySelectorAll('.indicatorItem:not(.is-soon)');
+  var ref=items.length?items[items.length-1]:menu.querySelector('.indicatorDropHead');
+  if(ref&&ref.nextSibling)menu.insertBefore(_rowEl,ref.nextSibling);
+  else menu.appendChild(_rowEl);
+
+  var pill=_rowEl.querySelector('#dvlOBIZState');
   if(pill)pill.addEventListener('click',function(ev){
     ev.preventDefault();ev.stopPropagation();
-    _toggleOn();
+    _s.on=!_s.on;_save();
+    if(_s.on)_connect();else _disconnect();
+    _updRow();_dsoon();
   });
   _rowEl.addEventListener('click',function(ev){
     if(pill&&pill.contains(ev.target))return;
