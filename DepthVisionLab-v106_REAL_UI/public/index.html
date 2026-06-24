@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.792</title>
+<title>DVL Binance Live — Beta 0.793</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.792';
+window.DVL_APP_VERSION = 'Beta 0.793';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -20132,10 +20132,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.792";
+const DVL_APP_VERSION = "Beta 0.793";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: DVL_APP_VERSION, note: "Beta 0.793 — Scanner agora vasculha FUTUROS: Binance USDT-M perps (fapi.binance.com) e MEXC Futuros (contract.mexc.com, direto — pode falhar por CORS). Varre os ~120 maiores por volume 24h, busca klines de 1h (concorrência 8) e mostra o Top 20 por spike de volume. Corrige o bug do '1707h atrás'/UTK: símbolos parados/deslistados (última vela > 3h) são descartados. Volume do mini-gráfico = volume real das 20 velas de 1h do perp. Header mostra exchange + FUT." },
   { version: DVL_APP_VERSION, note: "Beta 0.792 — Scanner: botão 'Api' ao lado de Alertas com menu MEXC / Binance / Bybit (MEXC e Binance ao vivo, Bybit desabilitado 'em breve'). Lista agora é Top 20 pares USDT rankeados por spike de volume na vela de 1h (top ~40 por volume 24h → klines 1h com concorrência limitada a 6 → ranqueia spike → top 20, atualiza por hora). Desenho de volume = volume REAL das 20 velas, sem dados fake: se a API falhar mostra 'Indisponível'. Só a exchange selecionada é usada (sem misturar). Card/painel visuais mantidos." },
   { version: DVL_APP_VERSION, note: "Beta 0.791 — MEXC Volume Spike Scanner portado para o source do repo (footer 'Scanner'). Cada card agora mostra uma linha compacta de metadados abaixo do setup: Vol xN (volume vs média), Flat Xc (candles flat antes do spike) e idade do sinal (Agora / Xm atrás). Mini gráfico de volume + MA20/MA50 e botão Analisar mantidos sem mudança de layout." },
   { version: DVL_APP_VERSION, note: "Beta 0.789 — DVL OB Imbalance Zones correção definitiva: item removido do HTML estático e inserido dinamicamente no boot (mesmo padrão do Spike Zones/Volume Trace/FEB que funciona no mobile). O HTML estático + binding separado impedia o addEventListener de vincular. Toggle e painel agora funcionam." },
@@ -46001,30 +46002,84 @@ body.dvlScannerOpen080 #tradeNavBtn{
 
   if(window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780) return;
 
-  /* ── Exchanges ───────────────────────────────────────────────
-     Public spot market-data APIs. MEXC + Binance live (Binance mirrors
-     the same /api/v3 shape MEXC uses). Bybit shown but disabled. */
-  var EXCHANGES = {
-    mexc:    { label:"MEXC",    enabled:true,  base:"https://api.mexc.com" },
-    binance: { label:"Binance", enabled:true,  base:"https://api.binance.com" },
-    bybit:   { label:"Bybit",   enabled:false, base:"" }
-  };
-
-  var TF = "1h";          /* 1-hour candles — "top 20 por hora" */
-  var KLIM = 60;          /* candles per symbol (mini-chart + spike calc) */
-  var CAND = 40;          /* candidate pool: top N by 24h volume */
-  var TOP = 20;           /* final list size */
-  var POOL = 6;           /* max concurrent kline requests (don't overload) */
-  var REFRESH_MS = 3600000; /* hourly auto-refresh while open */
-  var STALE_MS = 300000;  /* re-fetch on open only if data older than 5 min */
+  /* ── Tuning ──────────────────────────────────────────────── */
+  var TF_LABEL = "1h";       /* 1-hour candles — "top 20 por hora" */
+  var KLIM = 60;             /* candles per symbol (mini-chart + spike) */
+  var CAND = 120;            /* candidates scanned by 24h volume (vasculhar fundo, sem pesar) */
+  var TOP = 20;              /* final list size */
+  var POOL = 8;              /* max concurrent kline requests */
+  var REFRESH_MS = 3600000;  /* hourly auto-refresh while open */
+  var STALE_MS = 300000;     /* re-fetch on open only if data older than 5 min */
+  var FRESH_MS = 3 * 3600000;/* drop symbols whose last candle is older than 3h (deslistado/parado) */
   var LS_KEY = "dvlScanExchange0790";
 
   var ICONS = { BTC:"₿", ETH:"◆", LTC:"Ł", BNB:"⬡", XRP:"X", DOGE:"D", AVAX:"A" };
   var KNOWN = {btc:1,eth:1,sol:1,bnb:1,xrp:1,ada:1,doge:1,avax:1,link:1,ltc:1,sui:1};
 
+  /* ── Exchange adapters (FUTURES) ─────────────────────────────
+     Binance USDT-M perps (fapi) speak the same row-array kline shape as spot.
+     MEXC contract API uses columnar arrays and BTC_USDT symbols. */
+  var EX = {
+    binance: {
+      label: "Binance",
+      enabled: true,
+      tickers: async function(){
+        var r = await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr", {cache:"no-store"});
+        if(!r.ok) throw new Error("ticker " + r.status);
+        var d = await r.json();
+        if(!Array.isArray(d)) throw new Error("ticker shape");
+        return d.filter(function(t){
+          var s = t && t.symbol ? t.symbol : "";
+          return /USDT$/.test(s) && s.indexOf("_") < 0 && Number(t.quoteVolume) > 0;
+        }).map(function(t){ return { sym:t.symbol, qv:Number(t.quoteVolume) }; });
+      },
+      klines: async function(sym){
+        var url = "https://fapi.binance.com/fapi/v1/klines?symbol=" + encodeURIComponent(sym) + "&interval=1h&limit=" + KLIM;
+        var r = await fetch(url, {cache:"no-store"});
+        if(!r.ok) throw new Error("kl " + r.status);
+        var d = await r.json();
+        if(!Array.isArray(d) || d.length < 25) throw new Error("kl short");
+        var closes = [], vols = [];
+        for(var i=0;i<d.length;i++){ closes.push(Number(d[i][4])); vols.push(Number(d[i][5])); }
+        return { closes:closes, vols:vols, lastOpen:Number(d[d.length-1][0]) || 0 };
+      },
+      base: function(sym){ return String(sym).replace(/USDT$/,""); }
+    },
+    mexc: {
+      label: "MEXC",
+      enabled: true,
+      tickers: async function(){
+        var r = await fetch("https://contract.mexc.com/api/v1/contract/ticker", {cache:"no-store"});
+        if(!r.ok) throw new Error("ticker " + r.status);
+        var j = await r.json();
+        var d = j && j.data ? j.data : [];
+        if(!Array.isArray(d)) throw new Error("ticker shape");
+        return d.filter(function(t){
+          var s = t && t.symbol ? t.symbol : "";
+          return /_USDT$/.test(s) && Number(t.amount24) > 0;
+        }).map(function(t){ return { sym:t.symbol, qv:Number(t.amount24) }; });
+      },
+      klines: async function(sym){
+        var start = Math.floor(Date.now()/1000) - KLIM * 3600;
+        var url = "https://contract.mexc.com/api/v1/contract/kline/" + encodeURIComponent(sym) + "?interval=Min60&start=" + start;
+        var r = await fetch(url, {cache:"no-store"});
+        if(!r.ok) throw new Error("kl " + r.status);
+        var j = await r.json();
+        var d = j && j.data ? j.data : null;
+        if(!d || !d.close || d.close.length < 25) throw new Error("kl short");
+        var closes = d.close.map(Number);
+        var vols = (d.vol || d.amount || []).map(Number);
+        var times = d.time || [];
+        return { closes:closes, vols:vols, lastOpen:(Number(times[times.length-1]) || 0) * 1000 };
+      },
+      base: function(sym){ return String(sym).replace(/_USDT$/,""); }
+    },
+    bybit: { label:"Bybit", enabled:false }
+  };
+
   function readExchange(){
-    try{ var v = localStorage.getItem(LS_KEY); if(v && EXCHANGES[v] && EXCHANGES[v].enabled) return v; }catch(_){}
-    return "mexc";
+    try{ var v = localStorage.getItem(LS_KEY); if(v && EX[v] && EX[v].enabled) return v; }catch(_){}
+    return "binance";
   }
 
   var state = {
@@ -46081,16 +46136,16 @@ body.dvlScannerOpen080 #tradeNavBtn{
     if(min <= 0) return "Agora";
     if(min < 60) return min + "m atrás";
     var h = Math.floor(min / 60);
-    return h + "h atrás";
+    if(h < 48) return h + "h atrás";
+    return Math.floor(h / 24) + "d atrás";
   }
 
-  function baseFromSymbol(symbol){
-    var b = String(symbol).replace(/USDT$/,"");
+  function baseFromSymbol(b, fullSym){
     var low = b.toLowerCase();
     return {
       coin: KNOWN[low] ? low : "",
       icon: ICONS[b.toUpperCase()] || (b.charAt(0) || "?"),
-      mexc: symbol,
+      mexc: fullSym,
       symbol: b + "/USDT",
       side: "LONG",
       setup: ""
@@ -46160,7 +46215,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
     };
   }
 
-  /* Bounded-concurrency map so we never fire 40 requests at once. */
+  /* Bounded-concurrency map so we never fire all requests at once. */
   async function mapPool(items, limit, fn){
     var out = new Array(items.length);
     var idx = 0;
@@ -46178,33 +46233,9 @@ body.dvlScannerOpen080 #tradeNavBtn{
     return out;
   }
 
-  async function fetchTopSymbols(ex){
-    var res = await fetch(ex.base + "/api/v3/ticker/24hr", {cache:"no-store"});
-    if(!res.ok) throw new Error("ticker " + res.status);
-    var data = await res.json();
-    if(!Array.isArray(data)) throw new Error("ticker shape");
-    var rows = data.filter(function(t){
-      var s = t && t.symbol ? t.symbol : "";
-      if(!/USDT$/.test(s)) return false;
-      if(/(UP|DOWN|BULL|BEAR)USDT$/.test(s)) return false;     /* drop leveraged tokens */
-      return Number(t.quoteVolume) > 0;
-    });
-    rows.sort(function(a,b){ return Number(b.quoteVolume) - Number(a.quoteVolume); });
-    return rows.slice(0, CAND).map(function(t){ return t.symbol; });
-  }
-
-  async function fetchKlines(ex, symbol){
-    var url = ex.base + "/api/v3/klines?symbol=" + encodeURIComponent(symbol) + "&interval=" + TF + "&limit=" + KLIM;
-    var res = await fetch(url, {cache:"no-store"});
-    if(!res.ok) throw new Error("klines " + res.status + " " + symbol);
-    var data = await res.json();
-    if(!Array.isArray(data) || data.length < 25) throw new Error("klines short " + symbol);
-    return data;
-  }
-
   async function refresh(){
     if(state.loading) return;
-    var ex = EXCHANGES[state.exchange];
+    var ex = EX[state.exchange];
     if(!ex || !ex.enabled){ state.rows = []; renderRows(); updateLive("Indisponível"); return; }
 
     state.loading = true;
@@ -46212,20 +46243,22 @@ body.dvlScannerOpen080 #tradeNavBtn{
     renderRows();
 
     try{
-      var syms = await fetchTopSymbols(ex);
-      var klset = await mapPool(syms, POOL, function(s){ return fetchKlines(ex, s); });
+      var cands = await ex.tickers();
+      cands.sort(function(a,b){ return b.qv - a.qv; });
+      cands = cands.slice(0, CAND);
+
+      var kl = await mapPool(cands, POOL, function(c){ return ex.klines(c.sym); });
       var rows = [];
-      for(var i=0;i<syms.length;i++){
-        var d = klset[i];
-        if(!d) continue;
-        var closes = [], vols = [];
-        for(var k=0;k<d.length;k++){ closes.push(Number(d[k][4])); vols.push(Number(d[k][5])); }
-        if(closes.length < 25) continue;
-        var lastOpen = Number(d[d.length-1][0]) || 0;
-        rows.push(computeSignal(baseFromSymbol(syms[i]), closes, vols, lastOpen));
+      var freshCut = Date.now() - FRESH_MS;
+      for(var i=0;i<cands.length;i++){
+        var k = kl[i];
+        if(!k || !k.closes || k.closes.length < 25) continue;
+        if(k.lastOpen && k.lastOpen < freshCut) continue;   /* skip stale/delisted */
+        rows.push(computeSignal(baseFromSymbol(ex.base(cands[i].sym), cands[i].sym), k.closes, k.vols, k.lastOpen));
       }
       rows.sort(function(a,b){ return (b.spike20 || 0) - (a.spike20 || 0); });
       rows = rows.slice(0, TOP);
+
       state.rows = rows;
       state.loaded = true;
       state.lastUpdate = new Date();
@@ -46243,7 +46276,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
   }
 
   function exLabel(){
-    var ex = EXCHANGES[state.exchange];
+    var ex = EX[state.exchange];
     return ex ? ex.label : "—";
   }
 
@@ -46251,7 +46284,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
     var live = document.getElementById("dvlScan080LiveText");
     var time = document.getElementById("dvlScan080LiveTime");
     if(live) live.textContent = label || "Ao vivo";
-    if(time) time.textContent = exLabel() + (state.lastUpdate ? " · " + formatTime(state.lastUpdate) : "");
+    if(time) time.textContent = exLabel() + " · FUT" + (state.lastUpdate ? " · " + formatTime(state.lastUpdate) : "");
   }
 
   function volumeSvg(row){
@@ -46340,9 +46373,9 @@ body.dvlScannerOpen080 #tradeNavBtn{
   }
 
   function apiMenuHTML(){
-    var keys = ["mexc","binance","bybit"];
+    var keys = ["binance","mexc","bybit"];
     return '<div class="dvlScan080ApiMenu" id="dvlScan080ApiMenu">' + keys.map(function(k){
-      var ex = EXCHANGES[k];
+      var ex = EX[k];
       var sel = state.exchange === k;
       var cls = "dvlScan080ApiOpt" + (sel ? " is-sel" : "") + (ex.enabled ? "" : " is-disabled");
       var right = ex.enabled ? (sel ? '<i>●</i>' : '') : '<small>em breve</small>';
@@ -46457,7 +46490,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
   }
 
   function pickExchange(key){
-    var ex = EXCHANGES[key];
+    var ex = EX[key];
     if(!ex || !ex.enabled) return;
     if(state.exchange === key){
       var m = document.getElementById("dvlScan080ApiMenu");
@@ -46519,7 +46552,6 @@ body.dvlScannerOpen080 #tradeNavBtn{
         return;
       }
 
-      /* click outside the Api menu closes it */
       var inWrap = ev.target && ev.target.closest ? ev.target.closest(".dvlScan080ApiWrap") : null;
       if(!inWrap){
         var openMenu = document.getElementById("dvlScan080ApiMenu");
