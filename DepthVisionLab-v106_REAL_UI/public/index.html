@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.789</title>
+<title>DVL Binance Live — Beta 0.791</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.790';
+window.DVL_APP_VERSION = 'Beta 0.791';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -20068,7 +20068,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <nav class="bottomNav" data-dvl-ui="true">
   <div class="navInner">
     <button class="navItem"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></button>
-    <button class="navItem"><svg viewBox="0 0 24 24"><path d="M5 20V9"/><path d="M12 20V4"/><path d="M19 20v-7"/><path d="M16 13h6"/></svg><span>Markets</span></button>
+    <button class="navItem" id="scannerNavBtn" type="button" aria-label="Scanner"><svg class="dvlScannerRadar080" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2.15"/><path d="M12 2.7v2.1M12 19.2v2.1M2.7 12h2.1M19.2 12h2.1M17 7l1.8-1.8"/></g></svg><span>Scanner</span></button>
     <button class="navItem active tradeNavWithPull" id="tradeNavBtn" aria-label="Abrir painel de trade">
       <span class="tradeArrowsGlyph" aria-hidden="true">↑↓</span>
       <span>Trade</span>
@@ -20132,10 +20132,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.790";
+const DVL_APP_VERSION = "Beta 0.791";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: DVL_APP_VERSION, note: "Beta 0.791 — MEXC Volume Spike Scanner portado para o source do repo (footer 'Scanner'). Cada card agora mostra uma linha compacta de metadados abaixo do setup: Vol xN (volume vs média), Flat Xc (candles flat antes do spike) e idade do sinal (Agora / Xm atrás). Mini gráfico de volume + MA20/MA50 e botão Analisar mantidos sem mudança de layout." },
   { version: DVL_APP_VERSION, note: "Beta 0.789 — DVL OB Imbalance Zones correção definitiva: item removido do HTML estático e inserido dinamicamente no boot (mesmo padrão do Spike Zones/Volume Trace/FEB que funciona no mobile). O HTML estático + binding separado impedia o addEventListener de vincular. Toggle e painel agora funcionam." },
   { version: "Beta 0.787", note: "Beta 0.787 — DVL OB Imbalance Zones fix: o item não respondia ao toque no mobile ('limbo'). Adicionados handlers touchend+click com dedup de 600ms na linha do indicador e no toggle ON/OFF (mesmo padrão que corrigiu o botão TF), e CSS touch-action:manipulation em #dvlOBIZItem. Tocar no toggle ativa/desativa; tocar na linha abre o painel de configurações." },
   { version: "Beta 0.786", note: "Beta 0.786 — DVL OB Imbalance Zones fix: painel de configurações abria atrás do dropdown de indicadores (z-index:100000 do fxIndicatorWrap vs z-index:99999 do painel); corrigido fechando o dropdown antes de abrir o painel, usando classList.add('is-open'), e adicionando CSS z-index:100002 para todos os painéis dvl-vt-panel quando dvl1b-ind-open está ativo." },
@@ -42411,7 +42412,7 @@ document.addEventListener("dvl:paper-position-closed",function(){ window.DVL_POS
   var tabLabels = ["Abertas","Pendentes","Histórico"];
 
   var navKeys = ["home","markets","trade","positions","watchlist"];
-  var navLabels = ["Home","Markets","Trade","Positions","Watchlist"];
+  var navLabels = ["Home","Scanner","Trade","Positions","Watchlist"];
 
   var data = {
     open: [],
@@ -45615,6 +45616,750 @@ function _init(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_init,{once:true});
 else _init();
 
+})();
+</script>
+
+<style id="DVL_MEXC_VOLUME_SPIKE_SCANNER_CSS_0780">
+/*
+  DVL — MEXC Volume Spike Scanner (ported into repo source)
+  Cards: last 20 volume columns + Volume MA20/MA50, Filtros/Alertas top bar,
+  Analisar button, plus compact metadata line (Vol xN · Flat Xc · idade).
+*/
+
+.bottomNav .navInner #scannerNavBtn .dvlScannerRadar080,
+.bottomNav .navInner [data-dvl-scanner-nav="true"] .dvlScannerRadar080{
+  width:21px!important;
+  height:21px!important;
+  display:block!important;
+  stroke:currentColor!important;
+  fill:none!important;
+  flex:0 0 auto!important;
+}
+.bottomNav .navInner #scannerNavBtn.active,
+.bottomNav .navInner [data-dvl-scanner-nav="true"].active{
+  color:#10df77!important;
+  border:1px solid rgba(16,223,119,.50)!important;
+  background:radial-gradient(circle at 50% 15%,rgba(16,223,119,.20),rgba(16,223,119,.06) 55%,rgba(5,14,12,.80))!important;
+  box-shadow:0 0 22px rgba(16,223,119,.14)!important;
+  filter:none!important;
+}
+
+#dvlScannerPanel0780{
+  position:fixed!important;
+  left:0!important;
+  right:0!important;
+  top:calc(var(--dvl-header-h,55px) + var(--dvl-assetbar-h,50px) + var(--dvl-chart-toolbar-h,30px) + 4px)!important;
+  bottom:calc(var(--dvl-footer-h,57px) + env(safe-area-inset-bottom))!important;
+  z-index:49!important;
+  display:none!important;
+  overflow:auto!important;
+  background:
+    radial-gradient(520px 240px at 8% 4%, rgba(16,223,119,.07), transparent 76%),
+    linear-gradient(180deg,rgba(2,8,6,.985),rgba(1,5,4,.992))!important;
+  border-top:1px solid rgba(145,175,165,.12)!important;
+  color:#f4f7f4!important;
+  scrollbar-width:none!important;
+}
+#dvlScannerPanel0780::-webkit-scrollbar{display:none!important;}
+#dvlScannerPanel0780.is-open{display:block!important;}
+
+.dvlScan080Sizer{
+  position:relative!important;
+  width:100%!important;
+  min-height:100%!important;
+}
+.dvlScan080Canvas{
+  width:864px!important;
+  min-height:1230px!important;
+  transform:scale(var(--dvl-scan080-scale,1))!important;
+  transform-origin:top left!important;
+  padding:24px 22px 96px!important;
+  box-sizing:border-box!important;
+}
+
+.dvlScan080TitleRow{
+  height:60px!important;
+  display:grid!important;
+  grid-template-columns:1fr 194px!important;
+  gap:16px!important;
+  align-items:start!important;
+  padding-bottom:16px!important;
+  border-bottom:1px solid rgba(145,175,165,.12)!important;
+}
+.dvlScan080Title{
+  font-size:32px!important;
+  line-height:1.05!important;
+  font-weight:950!important;
+  letter-spacing:-.025em!important;
+  color:#f4f7f4!important;
+}
+.dvlScan080Live{
+  height:34px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:9px!important;
+  padding:0 12px!important;
+  border-radius:10px!important;
+  border:1px solid rgba(145,175,165,.14)!important;
+  background:rgba(4,12,10,.72)!important;
+  color:#c1cbc6!important;
+  font-size:17px!important;
+  font-weight:780!important;
+  white-space:nowrap!important;
+}
+.dvlScan080Live i{
+  width:10px!important;
+  height:10px!important;
+  border-radius:50%!important;
+  background:#10df77!important;
+  box-shadow:0 0 12px rgba(16,223,119,.44)!important;
+}
+
+/* New compact top controls */
+.dvlScan080Controls{
+  height:66px!important;
+  display:grid!important;
+  grid-template-columns:156px 156px 1fr 214px!important;
+  gap:14px!important;
+  align-items:center!important;
+  margin-bottom:10px!important;
+}
+.dvlScan080TopBtn,
+.dvlScan080Sort{
+  height:50px!important;
+  border-radius:12px!important;
+  border:1px solid rgba(145,175,165,.14)!important;
+  background:rgba(4,12,10,.62)!important;
+  color:#d9e1dd!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:10px!important;
+  font-size:20px!important;
+  font-weight:780!important;
+  white-space:nowrap!important;
+}
+.dvlScan080TopBtn{
+  color:#10df77!important;
+  border-color:rgba(16,223,119,.42)!important;
+  background:radial-gradient(120px 54px at 50% 0%, rgba(16,223,119,.12), transparent 72%),rgba(5,14,12,.72)!important;
+}
+.dvlScan080TopBtn svg,
+.dvlScan080Sort svg{
+  width:22px!important;
+  height:22px!important;
+  stroke:currentColor!important;
+  fill:none!important;
+  stroke-width:2.2!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+}
+.dvlScan080Sort{
+  grid-column:4!important;
+  justify-content:space-between!important;
+  padding:0 20px!important;
+}
+
+.dvlScan080List{
+  display:grid!important;
+  gap:9px!important;
+}
+
+.dvlScan080Card{
+  height:94px!important;
+  display:grid!important;
+  grid-template-columns:56px 274px 330px 114px!important;
+  gap:0!important;
+  align-items:center!important;
+  padding:0 14px!important;
+  border-radius:11px!important;
+  border:1px solid rgba(16,223,119,.20)!important;
+  background:
+    radial-gradient(160px 90px at 0% 50%, rgba(16,223,119,.07), transparent 76%),
+    linear-gradient(180deg,rgba(6,16,13,.86),rgba(3,10,8,.84))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.012)!important;
+}
+.dvlScan080Card:first-child{
+  border-color:rgba(16,223,119,.38)!important;
+  box-shadow:0 0 18px rgba(16,223,119,.08), inset 0 1px 0 rgba(255,255,255,.015)!important;
+}
+.dvlScan080Coin{
+  width:42px!important;
+  height:42px!important;
+  border-radius:50%!important;
+  display:grid!important;
+  place-items:center!important;
+  color:#fff!important;
+  font-size:24px!important;
+  font-weight:950!important;
+  justify-self:start!important;
+}
+.dvlScan080Coin.btc{background:linear-gradient(180deg,#ffb536,#f08d00)!important;}
+.dvlScan080Coin.eth{background:linear-gradient(180deg,#7e8aff,#566089)!important;}
+.dvlScan080Coin.sol{background:linear-gradient(135deg,#00f0a8,#7d45ff 55%,#050609)!important;}
+.dvlScan080Coin.bnb{background:linear-gradient(180deg,#ffd12d,#e9a900)!important;}
+.dvlScan080Coin.xrp{background:#020403!important;border:1px solid rgba(255,255,255,.20)!important;}
+.dvlScan080Coin.ada{background:#0d4aa5!important;}
+.dvlScan080Coin.doge{background:#c7a93d!important;}
+.dvlScan080Coin.avax{background:#ef4141!important;}
+.dvlScan080Coin.link{background:#2d6fde!important;}
+.dvlScan080Coin.ltc{background:#7486a0!important;}
+.dvlScan080Coin.sui{background:#2eb3ff!important;}
+
+.dvlScan080Main{min-width:0!important;}
+.dvlScan080PairLine{
+  display:flex!important;
+  align-items:center!important;
+  gap:12px!important;
+  min-width:0!important;
+}
+.dvlScan080Pair{
+  font-size:23px!important;
+  line-height:1!important;
+  font-weight:950!important;
+  color:#f4f7f4!important;
+  white-space:nowrap!important;
+}
+.dvlScan080Pair span{
+  font-size:16px!important;
+  color:#a5aaa9!important;
+  font-weight:820!important;
+}
+.dvlScan080Side{
+  height:25px!important;
+  min-width:66px!important;
+  border-radius:7px!important;
+  display:grid!important;
+  place-items:center!important;
+  padding:0 8px!important;
+  font-size:13px!important;
+  line-height:1!important;
+  font-weight:950!important;
+}
+.dvlScan080Side.long{
+  color:#10df77!important;
+  border:1px solid rgba(16,223,119,.22)!important;
+  background:rgba(16,223,119,.10)!important;
+}
+.dvlScan080Side.short{
+  color:#ff5966!important;
+  border:1px solid rgba(255,72,88,.22)!important;
+  background:rgba(255,72,88,.10)!important;
+}
+.dvlScan080Setup{
+  margin-top:9px!important;
+  color:#d0d9d4!important;
+  font-size:17px!important;
+  line-height:1.1!important;
+  font-weight:760!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+
+/* Compact metadata line: Vol xN · Flat Xc · idade do sinal */
+.dvlScan080Meta{
+  margin-top:8px!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:9px!important;
+  min-width:0!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+}
+.dvlScan080Meta span{
+  font-size:14px!important;
+  line-height:1!important;
+  font-weight:820!important;
+}
+.dvlScan080MetaVol{ color:#10df77!important; }
+.dvlScan080MetaFlat{ color:#c3cdc7!important; }
+.dvlScan080MetaAge{ color:#8a958f!important; }
+.dvlScan080MetaDot{
+  width:3px!important;
+  height:3px!important;
+  border-radius:50%!important;
+  background:rgba(160,175,168,.55)!important;
+  flex:0 0 auto!important;
+}
+
+/* Center volume chart */
+.dvlScan080Vol{
+  height:76px!important;
+  min-width:0!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  border-left:1px solid rgba(145,175,165,.12)!important;
+  border-right:1px solid rgba(145,175,165,.12)!important;
+  padding:0 14px!important;
+}
+.dvlScan080Vol svg{
+  width:300px!important;
+  height:74px!important;
+  overflow:visible!important;
+}
+.dvlScan080VolLabel{
+  font-size:10px!important;
+  fill:#b7c3bd!important;
+  font-weight:800!important;
+}
+.dvlScan080VolMeta{
+  font-size:9px!important;
+  fill:#cdd8d2!important;
+}
+.dvlScan080Btn{
+  justify-self:end!important;
+  width:96px!important;
+  height:48px!important;
+  border-radius:9px!important;
+  border:1px solid rgba(16,223,119,.46)!important;
+  background:rgba(16,223,119,.035)!important;
+  color:#10df77!important;
+  display:grid!important;
+  place-items:center!important;
+  font-size:18px!important;
+  font-weight:850!important;
+}
+
+body.dvlScannerOpen080 #tradeNavBtn{
+  color:#6b7d70!important;
+  border-color:transparent!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+</style>
+
+<script id="DVL_MEXC_VOLUME_SPIKE_SCANNER_MODULE_0780">
+(function(){
+  "use strict";
+
+  if(window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780) return;
+
+  var API = "https://api.mexc.com/api/v3/klines";
+  var TIMEFRAME = "5m";
+  var TF_MIN = 5;
+  var LIMIT = 80;
+  var REFRESH_MS = 60000;
+
+  var fallbackRows = [
+    {coin:"btc", icon:"₿", mexc:"BTCUSDT", symbol:"BTC/USDT", side:"LONG", setup:"Flat + Volume Spike"},
+    {coin:"eth", icon:"◆", mexc:"ETHUSDT", symbol:"ETH/USDT", side:"LONG", setup:"MA Flat + Volume"},
+    {coin:"sol", icon:"", mexc:"SOLUSDT", symbol:"SOL/USDT", side:"SHORT", setup:"Rejeição + Spike"},
+    {coin:"bnb", icon:"⬡", mexc:"BNBUSDT", symbol:"BNB/USDT", side:"LONG", setup:"Compressão + Break"},
+    {coin:"xrp", icon:"X", mexc:"XRPUSDT", symbol:"XRP/USDT", side:"SHORT", setup:"Perda + Volume"},
+    {coin:"ada", icon:"", mexc:"ADAUSDT", symbol:"ADA/USDT", side:"LONG", setup:"Flat + Spike"},
+    {coin:"doge", icon:"D", mexc:"DOGEUSDT", symbol:"DOGE/USDT", side:"LONG", setup:"Reversão + Volume"},
+    {coin:"avax", icon:"A", mexc:"AVAXUSDT", symbol:"AVAX/USDT", side:"LONG", setup:"Continuação + Spike"},
+    {coin:"link", icon:"", mexc:"LINKUSDT", symbol:"LINK/USDT", side:"LONG", setup:"Breakout + Reteste"},
+    {coin:"ltc", icon:"Ł", mexc:"LTCUSDT", symbol:"LTC/USDT", side:"LONG", setup:"Flat + Volume"}
+  ];
+
+  var state = {
+    rows: fallbackRows.map(function(r, i){ return makeFallbackSignal(r, i); }),
+    loaded:false,
+    lastUpdate:null,
+    loading:false,
+    filterMode:"all"
+  };
+
+  function radarSVG(){
+    return '<svg class="dvlScannerRadar080" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2.15"/><path d="M12 2.7v2.1M12 19.2v2.1M2.7 12h2.1M19.2 12h2.1M17 7l1.8-1.8"/></g></svg>';
+  }
+
+  function scannerBtn(){
+    return document.getElementById("scannerNavBtn") || document.querySelector(".bottomNav .navInner .navItem:nth-child(2)");
+  }
+
+  function forceButton(){
+    var btn = scannerBtn();
+    if(!btn) return;
+    btn.id = "scannerNavBtn";
+    btn.type = "button";
+    btn.setAttribute("aria-label","Scanner");
+    btn.setAttribute("title","Scanner");
+    btn.setAttribute("data-dvl-scanner-nav","true");
+    if(!btn.querySelector(".dvlScannerRadar080") || !/Scanner/i.test(btn.textContent || "")){
+      btn.innerHTML = radarSVG() + '<span>Scanner</span>';
+    }
+  }
+
+  function sma(values, period, idx){
+    if(idx < period - 1) return null;
+    var sum = 0;
+    for(var i = idx - period + 1; i <= idx; i++) sum += Number(values[i] || 0);
+    return sum / period;
+  }
+
+  function pct(a,b){
+    if(!b) return 0;
+    return ((a - b) / b) * 100;
+  }
+
+  function formatTime(d){
+    try{
+      return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0") + ":" + String(d.getSeconds()).padStart(2,"0");
+    }catch(_){ return "Ao vivo"; }
+  }
+
+  function ageLabel(openMs){
+    if(!openMs) return "Agora";
+    var min = Math.floor((Date.now() - openMs) / 60000);
+    if(min <= 0) return "Agora";
+    if(min < 60) return min + "m atrás";
+    var h = Math.floor(min / 60);
+    return h + "h atrás";
+  }
+
+  function makeFallbackSignal(base, idx){
+    var vols = [];
+    for(var i=0;i<80;i++){
+      var noise = 12 + Math.sin(i/3 + idx) * 3 + ((i * (idx+2)) % 7);
+      if(i > 70) noise += (i - 70) * (idx % 3 === 2 ? 5 : 7);
+      vols.push(Math.max(2, noise));
+    }
+    var closes = vols.map(function(_, i){ return 100 + Math.sin(i/8 + idx) * 1.2 + (i > 70 ? (idx%2?-.15:.16)*(i-70) : 0); });
+    /* stable, varied pseudo-age for offline rows (0..4 candles old within the current TF) */
+    var fakeOpen = Date.now() - (idx % 5) * 60000;
+    return computeSignal(base, closes, vols, true, fakeOpen);
+  }
+
+  function computeSignal(base, closes, vols, offline, lastOpenMs){
+    var len = vols.length;
+    var volMa20 = [];
+    var volMa50 = [];
+    var priceMa20 = [];
+    var priceMa50 = [];
+
+    for(var i=0;i<len;i++){
+      volMa20.push(sma(vols,20,i));
+      volMa50.push(sma(vols,50,i));
+      priceMa20.push(sma(closes,20,i));
+      priceMa50.push(sma(closes,50,i));
+    }
+
+    var lastVol = vols[len-1] || 0;
+    var lastMa20 = volMa20[len-1] || 1;
+    var lastMa50 = volMa50[len-1] || 1;
+    var spike20 = lastVol / Math.max(lastMa20, 1e-9);
+    var spike50 = lastVol / Math.max(lastMa50, 1e-9);
+
+    var ma20Now = priceMa20[len-1] || closes[len-1];
+    var ma20Past = priceMa20[len-11] || priceMa20[len-2] || ma20Now;
+    var ma50Now = priceMa50[len-1] || closes[len-1];
+    var ma50Past = priceMa50[len-11] || priceMa50[len-2] || ma50Now;
+    var slope20 = Math.abs(pct(ma20Now, ma20Past));
+    var slope50 = Math.abs(pct(ma50Now, ma50Past));
+    var flatScore = Math.max(0, 1 - ((slope20 + slope50) / 1.2));
+
+    var lastClose = closes[len-1] || 0;
+    var prevClose = closes[len-2] || lastClose;
+    var side = lastClose >= prevClose ? "LONG" : "SHORT";
+    var score = Math.round(Math.min(99, 35 + Math.min(spike20, 4) * 12 + Math.min(spike50, 4) * 7 + flatScore * 18));
+    var setup = flatScore > .55
+      ? "MAs flat + Volume Spike"
+      : (spike20 > 2 ? "Volume acima da MA20" : base.setup || "Volume scanner");
+
+    /* Metadata field 2 — consecutive flat candles immediately before the spike bar. */
+    var flatTol = 0.18;
+    var flatCandles = 0;
+    for(var j = len - 2; j > 0; j--){
+      if(Math.abs(pct(closes[j], closes[j-1])) <= flatTol) flatCandles++;
+      else break;
+    }
+
+    return {
+      coin: base.coin,
+      icon: base.icon,
+      mexc: base.mexc,
+      symbol: base.symbol,
+      side: side,
+      setup: setup,
+      score: score,
+      spike20: spike20,
+      spike50: spike50,
+      flatScore: flatScore,
+      volX: spike20,
+      flatCandles: flatCandles,
+      ageOpen: lastOpenMs || 0,
+      last20Vols: vols.slice(-20),
+      last20MA20: volMa20.slice(-20),
+      last20MA50: volMa50.slice(-20),
+      offline: !!offline
+    };
+  }
+
+  function klineUrl(symbol){
+    return API + "?symbol=" + encodeURIComponent(symbol) + "&interval=" + encodeURIComponent(TIMEFRAME) + "&limit=" + LIMIT;
+  }
+
+  async function fetchSignal(base){
+    var res = await fetch(klineUrl(base.mexc), {cache:"no-store"});
+    if(!res.ok) throw new Error("MEXC " + res.status + " " + base.mexc);
+    var data = await res.json();
+    if(!Array.isArray(data) || data.length < 55) throw new Error("Sem candles suficientes " + base.mexc);
+    var closes = data.map(function(k){ return Number(k[4]); }).filter(function(v){ return Number.isFinite(v); });
+    var vols = data.map(function(k){ return Number(k[5]); }).filter(function(v){ return Number.isFinite(v); });
+    var lastOpen = Number(data[data.length-1] && data[data.length-1][0]) || 0;
+    return computeSignal(base, closes, vols, false, lastOpen);
+  }
+
+  async function refreshMexc(){
+    if(state.loading) return;
+    state.loading = true;
+    updateLive("Carregando");
+
+    try{
+      var results = await Promise.allSettled(fallbackRows.map(fetchSignal));
+      var good = [];
+      results.forEach(function(r, idx){
+        if(r.status === "fulfilled") good.push(r.value);
+        else good.push(makeFallbackSignal(fallbackRows[idx], idx));
+      });
+      good.sort(function(a,b){
+        var sa = Math.max(a.spike20 || 0, a.spike50 || 0);
+        var sb = Math.max(b.spike20 || 0, b.spike50 || 0);
+        return sb - sa;
+      });
+      state.rows = good;
+      state.loaded = true;
+      state.lastUpdate = new Date();
+      renderRows();
+      updateLive("Ao vivo");
+    }catch(err){
+      console.warn("DVL MEXC scanner fallback", err);
+      state.rows = fallbackRows.map(function(r,i){ return makeFallbackSignal(r,i); });
+      state.lastUpdate = new Date();
+      renderRows();
+      updateLive("Offline");
+    }finally{
+      state.loading = false;
+    }
+  }
+
+  function updateLive(label){
+    var live = document.getElementById("dvlScan080LiveText");
+    var time = document.getElementById("dvlScan080LiveTime");
+    if(live) live.textContent = label || "Ao vivo";
+    if(time) time.textContent = state.lastUpdate ? formatTime(state.lastUpdate) : "MEXC";
+  }
+
+  function volumeSvg(row){
+    var vols = row.last20Vols || [];
+    var ma20 = row.last20MA20 || [];
+    var ma50 = row.last20MA50 || [];
+    var maxVal = Math.max.apply(null, vols.concat(ma20).concat(ma50).filter(function(v){ return Number.isFinite(v) && v > 0; }).concat([1]));
+    var short = row.side === "SHORT";
+    var barColor = short ? "#ff4858" : "#10df77";
+    var w = 300, h = 74, left = 10, top = 14, chartH = 52, gap = 3, barW = 10;
+    var bars = vols.map(function(v, i){
+      var bh = Math.max(2, (v / maxVal) * chartH);
+      var x = left + i * (barW + gap);
+      var y = top + chartH - bh;
+      var isSpike = i >= vols.length - 2;
+      return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW + '" height="' + bh.toFixed(1) + '" rx="1.2" fill="' + barColor + '" opacity="' + (isSpike ? ".95" : ".46") + '"/>';
+    }).join("");
+
+    function line(vals, color){
+      var pts = vals.map(function(v, i){
+        if(!Number.isFinite(v)) return null;
+        var x = left + i * (barW + gap) + barW / 2;
+        var y = top + chartH - (v / maxVal) * chartH;
+        return [x,y];
+      }).filter(Boolean);
+      if(!pts.length) return "";
+      var d = pts.map(function(p,i){ return (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1); }).join(" ");
+      return '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
+    }
+
+    return '<svg viewBox="0 0 300 74" preserveAspectRatio="none">'
+      + '<text x="10" y="10" class="dvlScan080VolLabel">Vol</text>'
+      + '<circle cx="72" cy="7" r="2.2" fill="#10df77"/><text x="79" y="10" class="dvlScan080VolMeta">MA20</text>'
+      + '<circle cx="125" cy="7" r="2.2" fill="#ffd321"/><text x="132" y="10" class="dvlScan080VolMeta">MA50</text>'
+      + bars
+      + line(ma20, "#10df77")
+      + line(ma50, "#ffd321")
+      + '</svg>';
+  }
+
+  function filteredRows(){
+    var rows = state.rows.slice();
+    if(state.filterMode === "alerts") rows = rows.filter(function(r){ return (r.spike20 || 0) >= 1.7 || (r.spike50 || 0) >= 1.5; });
+    return rows;
+  }
+
+  function renderRows(){
+    var list = document.getElementById("dvlScan080List");
+    if(!list) return;
+    var rows = filteredRows();
+    list.innerHTML = rows.map(function(r){
+      var short = r.side === "SHORT";
+      var parts = r.symbol.indexOf("/") > -1 ? r.symbol.split("/") : [r.symbol,""];
+      var volTxt = "Vol x" + (Number(r.volX) || 0).toFixed(1);
+      var flatTxt = "Flat " + (Number(r.flatCandles) || 0) + "c";
+      var ageTxt = ageLabel(r.ageOpen);
+      return '<article class="dvlScan080Card" data-mexc="' + r.mexc + '">'
+        + '<div class="dvlScan080Coin ' + r.coin + '">' + (r.icon || '') + '</div>'
+        + '<div class="dvlScan080Main">'
+        +   '<div class="dvlScan080PairLine"><div class="dvlScan080Pair">' + parts[0] + (parts[1] ? '<span>/' + parts[1] + '</span>' : '') + '</div><span class="dvlScan080Side ' + (short ? 'short' : 'long') + '">' + r.side + '</span></div>'
+        +   '<div class="dvlScan080Setup">' + r.setup + '</div>'
+        +   '<div class="dvlScan080Meta">'
+        +     '<span class="dvlScan080MetaVol">' + volTxt + '</span>'
+        +     '<i class="dvlScan080MetaDot"></i>'
+        +     '<span class="dvlScan080MetaFlat">' + flatTxt + '</span>'
+        +     '<i class="dvlScan080MetaDot"></i>'
+        +     '<span class="dvlScan080MetaAge">' + ageTxt + '</span>'
+        +   '</div>'
+        + '</div>'
+        + '<div class="dvlScan080Vol">' + volumeSvg(r) + '</div>'
+        + '<button class="dvlScan080Btn" type="button" data-dvl-scan-analyze="' + r.symbol + '">Analisar</button>'
+        + '</article>';
+    }).join("");
+  }
+
+  function build(){
+    if(document.getElementById("dvlScannerPanel0780")) return;
+
+    var panel = document.createElement("section");
+    panel.id = "dvlScannerPanel0780";
+    panel.setAttribute("data-dvl-ui","true");
+    panel.innerHTML =
+      '<div class="dvlScan080Sizer"><div class="dvlScan080Canvas">'
+      + '<header class="dvlScan080TitleRow"><div class="dvlScan080Title">Sinais em tempo real</div><div class="dvlScan080Live"><i></i><span id="dvlScan080LiveText">Ao vivo</span><b id="dvlScan080LiveTime">MEXC</b></div></header>'
+      + '<div class="dvlScan080Controls">'
+      + '<button class="dvlScan080TopBtn" type="button" data-dvl-scan-filter-menu><svg viewBox="0 0 24 24"><path d="M4 6h16l-6 7v5l-4 2v-7z"/></svg>Filtros</button>'
+      + '<button class="dvlScan080TopBtn" type="button" data-dvl-scan-alerts><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>Alertas</button>'
+      + '<button class="dvlScan080Sort" type="button"><span>Mais recentes</span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>'
+      + '</div><div class="dvlScan080List" id="dvlScan080List"></div>'
+      + '</div></div>';
+    document.body.appendChild(panel);
+    renderRows();
+    resize();
+  }
+
+  function resize(){
+    var panel = document.getElementById("dvlScannerPanel0780");
+    if(!panel) return;
+    var sizer = panel.querySelector(".dvlScan080Sizer");
+    if(!sizer) return;
+    var scale = Math.max(0.36, Math.min(1, window.innerWidth / 864));
+    document.documentElement.style.setProperty("--dvl-scan080-scale", String(scale));
+    sizer.style.width = Math.ceil(864 * scale) + "px";
+    sizer.style.minHeight = Math.ceil(1230 * scale) + "px";
+  }
+
+  function closeTrade(){
+    try{
+      var d = document.querySelector(".tradeDrawer");
+      var t = document.getElementById("tradeNavBtn");
+      if(d && d.classList.contains("is-open") && t) t.click();
+    }catch(_){}
+  }
+
+  function open(){
+    forceButton();
+    build();
+    closeTrade();
+    var panel = document.getElementById("dvlScannerPanel0780");
+    var btn = scannerBtn();
+    if(panel) panel.classList.add("is-open");
+    if(btn) btn.classList.add("active");
+    var trade = document.getElementById("tradeNavBtn");
+    if(trade) trade.classList.remove("active");
+    document.body.classList.add("dvlScannerOpen080");
+    resize();
+    refreshMexc();
+  }
+
+  function close(){
+    var panel = document.getElementById("dvlScannerPanel0780");
+    var btn = scannerBtn();
+    if(panel) panel.classList.remove("is-open");
+    if(btn) btn.classList.remove("active");
+    document.body.classList.remove("dvlScannerOpen080");
+  }
+
+  function toggle(ev){
+    if(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+    }
+    var panel = document.getElementById("dvlScannerPanel0780");
+    if(panel && panel.classList.contains("is-open")) close();
+    else open();
+  }
+
+  function analyze(symbol){
+    try{
+      var s1 = document.getElementById("dvl1b_symbolText");
+      var s2 = document.getElementById("symbolText");
+      var s3 = document.querySelector(".symText");
+      if(s1) s1.textContent = symbol;
+      if(s2) s2.textContent = symbol;
+      if(s3) s3.textContent = symbol;
+      window.dispatchEvent(new CustomEvent("dvl-scanner-analyze", {detail:{symbol:symbol, source:"mexc-volume-spike"}}));
+    }catch(_){}
+    close();
+  }
+
+  function bind(){
+    forceButton();
+    build();
+
+    if(document.__dvlScan080Bound) return;
+    document.__dvlScan080Bound = true;
+
+    document.addEventListener("click", function(ev){
+      var btn = scannerBtn();
+      if(btn && (ev.target === btn || btn.contains(ev.target))){
+        toggle(ev);
+        return;
+      }
+
+      var alertBtn = ev.target && ev.target.closest ? ev.target.closest("[data-dvl-scan-alerts]") : null;
+      if(alertBtn){
+        state.filterMode = state.filterMode === "alerts" ? "all" : "alerts";
+        alertBtn.classList.toggle("active", state.filterMode === "alerts");
+        renderRows();
+        return;
+      }
+
+      var analyzeBtn = ev.target && ev.target.closest ? ev.target.closest("[data-dvl-scan-analyze]") : null;
+      if(analyzeBtn){
+        analyze(analyzeBtn.getAttribute("data-dvl-scan-analyze"));
+        return;
+      }
+
+      var nav = ev.target && ev.target.closest ? ev.target.closest(".bottomNav .navItem") : null;
+      if(nav && nav !== btn) close();
+    }, true);
+
+    window.addEventListener("resize", resize);
+    window.addEventListener("orientationchange", function(){ setTimeout(resize, 140); });
+
+    setInterval(function(){
+      var panel = document.getElementById("dvlScannerPanel0780");
+      if(panel && panel.classList.contains("is-open")) refreshMexc();
+    }, REFRESH_MS);
+  }
+
+  window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780 = {
+    open: open,
+    close: close,
+    toggle: toggle,
+    refresh: refreshMexc,
+    rows: function(){ return state.rows.slice(); }
+  };
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", bind, {once:true});
+  }else{
+    bind();
+  }
+  setTimeout(bind, 160);
+  setTimeout(bind, 700);
 })();
 </script>
 </body>
