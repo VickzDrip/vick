@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.798</title>
+<title>DVL Binance Live — Beta 0.799</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.798';
+window.DVL_APP_VERSION = 'Beta 0.799';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -20132,11 +20132,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.798";
+const DVL_APP_VERSION = "Beta 0.799";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: DVL_APP_VERSION, note: "Beta 0.798 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
+  { version: DVL_APP_VERSION, note: "Beta 0.799 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
   { version: DVL_APP_VERSION, note: "Beta 0.792 — Scanner: botão 'Api' ao lado de Alertas com menu MEXC / Binance / Bybit (MEXC e Binance ao vivo, Bybit desabilitado 'em breve'). Lista agora é Top 20 pares USDT rankeados por spike de volume na vela de 1h (top ~40 por volume 24h → klines 1h com concorrência limitada a 6 → ranqueia spike → top 20, atualiza por hora). Desenho de volume = volume REAL das 20 velas, sem dados fake: se a API falhar mostra 'Indisponível'. Só a exchange selecionada é usada (sem misturar). Card/painel visuais mantidos." },
   { version: DVL_APP_VERSION, note: "Beta 0.791 — MEXC Volume Spike Scanner portado para o source do repo (footer 'Scanner'). Cada card agora mostra uma linha compacta de metadados abaixo do setup: Vol xN (volume vs média), Flat Xc (candles flat antes do spike) e idade do sinal (Agora / Xm atrás). Mini gráfico de volume + MA20/MA50 e botão Analisar mantidos sem mudança de layout." },
   { version: DVL_APP_VERSION, note: "Beta 0.789 — DVL OB Imbalance Zones correção definitiva: item removido do HTML estático e inserido dinamicamente no boot (mesmo padrão do Spike Zones/Volume Trace/FEB que funciona no mobile). O HTML estático + binding separado impedia o addEventListener de vincular. Toggle e painel agora funcionam." },
@@ -31848,12 +31848,16 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     on:false,
     maOn:true,
     maLength:20,
+    ma2On:true,
+    maLength2:50,
     height:2.0,
     opacity:0.28,
     maOpacity:0.88,
+    ma2Opacity:0.72,
     bullColor:"#10df77",
     bearColor:"#ff3037",
-    maColor:"#10df77"
+    maColor:"#10df77",
+    ma2Color:"#f3c768"
   };
 
   let state = load();
@@ -31881,12 +31885,16 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     out.on = out.on !== false;
     out.maOn = out.maOn !== false;
     out.maLength = clamp(parseInt(out.maLength,10)||20, 1, 2000);
+    out.ma2On = out.ma2On !== false;
+    out.maLength2 = clamp(parseInt(out.maLength2,10)||50, 1, 2000);
     out.height = clamp(Number(out.height)||DEFAULTS.height, 0.25, 5);
     out.opacity = clamp(Number(out.opacity)||DEFAULTS.opacity, .01, 1);
     out.maOpacity = clamp(Number(out.maOpacity)||DEFAULTS.maOpacity, .01, 1);
+    out.ma2Opacity = clamp(Number(out.ma2Opacity)||DEFAULTS.ma2Opacity, .01, 1);
     out.bullColor = hexOk(out.bullColor) ? out.bullColor : DEFAULTS.bullColor;
     out.bearColor = hexOk(out.bearColor) ? out.bearColor : DEFAULTS.bearColor;
     out.maColor = hexOk(out.maColor) ? out.maColor : DEFAULTS.maColor;
+    out.ma2Color = hexOk(out.ma2Color) ? out.ma2Color : DEFAULTS.ma2Color;
     return out;
   }
 
@@ -32033,6 +32041,18 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
             <label>MA Opacity</label>
             <input id="dvlVolMaOpacity" class="dvl-vt-input" type="number" min="0.01" max="1" step="0.01" value="${state.maOpacity}">
           </div>
+          <div class="dvl-vt-field">
+            <label>MA2</label>
+            <label class="dvl-switch"><input id="dvlVolMa2On" type="checkbox" ${state.ma2On ? "checked" : ""}><i></i><b></b></label>
+          </div>
+          <div class="dvl-vt-field">
+            <label>MA2 Len</label>
+            <input id="dvlVolMaLength2" class="dvl-vt-input" type="number" min="1" max="2000" step="1" value="${state.maLength2}">
+          </div>
+          <div class="dvl-vt-field">
+            <label>MA2 Opacity</label>
+            <input id="dvlVolMa2Opacity" class="dvl-vt-input" type="number" min="0.01" max="1" step="0.01" value="${state.ma2Opacity}">
+          </div>
         </div>
       </div>
 
@@ -32042,6 +32062,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
           ${colorCard("bullColor", "Bull Volume")}
           ${colorCard("bearColor", "Bear Volume")}
           ${colorCard("maColor", "MA Line")}
+          ${colorCard("ma2Color", "MA2 Line")}
         </div>
       </div>
     `;
@@ -32062,7 +32083,10 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       dvlVolHeight:["height","num"],
       dvlVolMaOn:["maOn","check"],
       dvlVolMaLength:["maLength","int"],
-      dvlVolMaOpacity:["maOpacity","num"]
+      dvlVolMaOpacity:["maOpacity","num"],
+      dvlVolMa2On:["ma2On","check"],
+      dvlVolMaLength2:["maLength2","int"],
+      dvlVolMa2Opacity:["ma2Opacity","num"]
     };
 
     Object.keys(map).forEach(id=>{
@@ -32159,32 +32183,40 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       ctx.fillRect(cx - cfg.candleW/2, cfg.y1 - vh, cfg.candleW, vh);
     });
 
-    if(state.maOn){
+    if(state.maOn || state.ma2On){
       const vols = allVolumes();
-      const len = clamp(parseInt(state.maLength,10)||20, 1, 2000);
-      const ma = volumeMa(vols, len);
       const start = Math.max(0, Math.floor(cfg.win.start));
-      const end = Math.min(ma.length - 1, Math.ceil(cfg.win.end));
-      const maMax = Math.max(volMax, ...ma.slice(start, end + 1).filter(Number.isFinite), 1);
+      const end = Math.min(vols.length - 1, Math.ceil(cfg.win.end));
 
-      ctx.beginPath();
-      let down = false;
-      for(let gi=start; gi<=end; gi++){
-        const v = ma[gi];
-        if(v == null || !Number.isFinite(v)){ down = false; continue; }
-        const local = gi - cfg.win.start;
-        const px = cfg.x(cfg.slotOffset + local);
-        const py = cfg.y1 - (v / maMax) * volH;
-        if(px < cfg.x0 - 10 || px > cfg.x1 + 10){ down = false; continue; }
-        if(!down){ ctx.moveTo(px, py); down = true; }
-        else ctx.lineTo(px, py);
+      function drawMaLine(maArr, color, opacity){
+        const maMax = Math.max(volMax, ...maArr.slice(start, end + 1).filter(Number.isFinite), 1);
+        ctx.beginPath();
+        let down = false;
+        for(let gi=start; gi<=end; gi++){
+          const v = maArr[gi];
+          if(v == null || !Number.isFinite(v)){ down = false; continue; }
+          const local = gi - cfg.win.start;
+          const px = cfg.x(cfg.slotOffset + local);
+          const py = cfg.y1 - (v / maMax) * volH;
+          if(px < cfg.x0 - 10 || px > cfg.x1 + 10){ down = false; continue; }
+          if(!down){ ctx.moveTo(px, py); down = true; }
+          else ctx.lineTo(px, py);
+        }
+        ctx.lineWidth = 1.35;
+        ctx.strokeStyle = rgba(color, opacity);
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.stroke();
       }
 
-      ctx.lineWidth = 1.35;
-      ctx.strokeStyle = rgba(state.maColor, state.maOpacity);
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
-      ctx.stroke();
+      if(state.ma2On){
+        const len2 = clamp(parseInt(state.maLength2,10)||50, 1, 2000);
+        drawMaLine(volumeMa(vols, len2), state.ma2Color, state.ma2Opacity);
+      }
+      if(state.maOn){
+        const len = clamp(parseInt(state.maLength,10)||20, 1, 2000);
+        drawMaLine(volumeMa(vols, len), state.maColor, state.maOpacity);
+      }
     }
 
     ctx.restore();
@@ -32202,11 +32234,16 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   else boot();
 
   window.DVLVolume = {
-    version:"0.577",
+    version:"0.578",
     get state(){ return state; },
     open:openPanel,
     reset,
-    draw
+    draw,
+    setMaPeriods(p1, p2){
+      if(p1 && Number.isFinite(+p1)) state.maLength = clamp(+p1|0, 1, 2000);
+      if(p2 && Number.isFinite(+p2)) state.maLength2 = clamp(+p2|0, 1, 2000);
+      save();
+    }
   };
   window.DVLVolumeDraw = draw;
 })();
@@ -47009,6 +47046,10 @@ body.dvlScannerOpen080 #tradeNavBtn{
       window.dispatchEvent(new CustomEvent("dvl-scanner-analyze",{detail:{symbol:cleanSym,source:"volume-spike",exchange:state.exchange,tf:filterState.scanTF}}));
       /* setIntervalUi AFTER selectSymbol so TF is applied to the new symbol */
       if(typeof window.setIntervalUi==="function") window.setIntervalUi(filterState.scanTF);
+      /* Sync chart volume MAs to match scanner MA periods */
+      if(window.DVLVolume&&typeof window.DVLVolume.setMaPeriods==="function"){
+        window.DVLVolume.setMaPeriods(filterState.maPeriod1, filterState.maPeriod2);
+      }
     }catch(e){
       console.warn("[DVL Scanner] analyze error",e);
     }
