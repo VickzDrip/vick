@@ -7,6 +7,21 @@
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
 <title>DVL Binance Live — Beta 0.784</title>
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
+   Badge, título e changelog são atualizados automaticamente.
+   ═══════════════════════════════════════════════════════════════ */
+window.DVL_APP_VERSION = 'Beta 0.784';
+document.addEventListener('DOMContentLoaded', function(){
+  var v = window.DVL_APP_VERSION.toUpperCase();
+  document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
+  ['dvl1b_versionBadge','versionBadge'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.textContent = v;
+  });
+}, {once:true});
+</script>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -19799,6 +19814,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
             <div class="indicatorDropHead">
               <b>Indicators</b>
               <small>futuros módulos DVL</small>
+            </div>
+<div class="indicatorItem dvl-vt-indicator-item" id="dvlOBIZItem">
+              <span class="indicatorFxMark">OB</span>
+              <span><b>DVL OB Imbalance Zones</b><small>Order Book · Dados Reais</small></span>
+              <i class="dvl-vt-state" id="dvlOBIZState">OFF</i>
             </div>
 <div class="indicatorItem is-soon">
               <span class="indicatorFxMark">VP</span>
@@ -45532,28 +45552,12 @@ function _updRow(){
 
 function _insertRow(){
   var menu=document.getElementById('indicatorDropdown');
-  if(!menu)return;
-  if(document.getElementById('dvlOBIZItem'))return;
-
-  _rowEl=document.createElement('div');
-  _rowEl.id='dvlOBIZItem';
-  _rowEl.className='indicatorItem dvl-vt-indicator-item';
-  _rowEl.innerHTML=
-    '<span class="indicatorFxMark">OB</span>'+
-    '<span><b>DVL OB Imbalance Zones</b><small>Order Book · Dados Reais</small></span>'+
-    '<i class="dvl-vt-state'+(_s.on?' is-on':'')+'" id="dvlOBIZState">'+(_s.on?'ON':'OFF')+'</i>';
-
-  // Insert before first is-soon placeholder (same position as other live indicators)
-  var firstSoon=menu.querySelector('.indicatorItem.is-soon');
-  if(firstSoon&&firstSoon.parentNode){
-    firstSoon.parentNode.insertBefore(_rowEl,firstSoon);
-  } else {
-    var head=menu.querySelector('.indicatorDropHead');
-    if(head&&head.nextSibling)menu.insertBefore(_rowEl,head.nextSibling);
-    else menu.appendChild(_rowEl);
-  }
-
-  _rowEl.querySelector('#dvlOBIZState').addEventListener('click',function(ev){
+  // Item está no HTML estático — só vincula eventos
+  _rowEl=document.getElementById('dvlOBIZItem');
+  if(!_rowEl||_rowEl.dataset.obizBound)return;
+  _rowEl.dataset.obizBound='1';
+  var pill=document.getElementById('dvlOBIZState');
+  if(pill)pill.addEventListener('click',function(ev){
     ev.preventDefault();ev.stopPropagation();
     _s.on=!_s.on;_save();
     if(_s.on)_connect();else _disconnect();
@@ -45565,9 +45569,10 @@ function _insertRow(){
 /* ─── init ─── */
 function _init(){
   _lastSym=_getSym();
+  _updRow();
   if(_s.on)_connect();
-  if(document.getElementById('indicatorDropdown'))_insertRow();
-  else document.addEventListener('DOMContentLoaded',_insertRow,{once:true});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_insertRow,{once:true});
+  else _insertRow();
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_init,{once:true});
