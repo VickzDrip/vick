@@ -19373,6 +19373,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-tfDropStar{ flex:0 0 auto; padding:calc(4 * var(--px)); opacity:.4; transition:opacity .15s; display:flex; align-items:center; justify-content:center; }
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-tfDropStar.is-fav{ opacity:1; }
 #DVL_UI_OVERLAY_PHASE_1B .dvl1b-tfDropStar svg{ width:calc(18 * var(--px)); height:calc(18 * var(--px)); display:block; }
+#DVL_UI_OVERLAY_PHASE_1B .dvl1b-tfDropGroup{ font-size:calc(11 * var(--px)); font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:rgba(150,180,165,.45); padding:calc(10 * var(--px)) calc(14 * var(--px)) calc(3 * var(--px)); pointer-events:none; }
 </style>
 <div id="DVL_UI_OVERLAY_PHASE_1B" data-dvl-overlay-phase="1B" aria-label="DVL new UI (phase 1B, visual)">
   <div class="dvl1b-card">
@@ -44647,10 +44648,26 @@ else setTimeout(runAudit,3000);
 if(window.DVL_TF_FAVORITES_MODULE_0782)return;
 window.DVL_TF_FAVORITES_MODULE_0782=true;
 
-var DVL_TF_ALL=['1m','3m','5m','15m','30m','1h','2h','4h','1d'];
-var DVL_TF_LABEL={'1m':'1m','3m':'3m','5m':'5m','15m':'15m','30m':'30m','1h':'1H','2h':'2H','4h':'4H','1d':'1D'};
+var DVL_TF_ALL=[
+  '1m','2m','3m','5m','10m','15m','30m','45m',
+  '1h','2h','4h','6h','12h',
+  '1d','3d','5d',
+  '1w','1mo','1y'
+];
+var DVL_TF_LABEL={
+  '1m':'1m','2m':'2m','3m':'3m','5m':'5m','10m':'10m','15m':'15m','30m':'30m','45m':'45m',
+  '1h':'1H','2h':'2H','4h':'4H','6h':'6H','12h':'12H',
+  '1d':'1D','3d':'3D','5d':'5D',
+  '1w':'1S','1mo':'1M','1y':'1A'
+};
+var DVL_TF_GROUPS=[
+  {label:'Minutos', tfs:['1m','2m','3m','5m','10m','15m','30m','45m']},
+  {label:'Horas',   tfs:['1h','2h','4h','6h','12h']},
+  {label:'Dias',    tfs:['1d','3d','5d']},
+  {label:'Outros',  tfs:['1w','1mo','1y']}
+];
 var DVL_TF_FAV_LS='DVL_TF_FAVORITES_STORE';
-var DVL_TF_FAV_DEFAULT=['1m','3m','5m','15m'];
+var DVL_TF_FAV_DEFAULT=['1m','5m','15m','1h'];
 var _STAR_PATH='M12 3.7l2.5 5.1 5.6.8-4 3.9.95 5.5L12 16.4 7.05 19l.95-5.5-4-3.9 5.5-.8L12 3.7z';
 var _tfDropOpen=false;
 
@@ -44658,8 +44675,11 @@ window.DVL_TF_FAVORITES_STORE={version:'0.782',favorites:DVL_TF_FAV_DEFAULT.slic
 
 function normTf0782(tf){
   tf=String(tf||'').trim().toLowerCase();
-  var map={'1s':'1s','5s':'5s','15s':'15s','30s':'30s','1m':'1m','3m':'3m','5m':'5m','15m':'15m','30m':'30m','1h':'1h','2h':'2h','4h':'4h','1d':'1d','1w':'1w'};
-  return map[tf]||'5m';
+  if(DVL_TF_ALL.indexOf(tf)>=0)return tf;
+  // legacy / alias mappings from old app values
+  var alias={'1h':'1h','2h':'2h','4h':'4h','6h':'6h','8h':'4h','12h':'12h',
+    '1d':'1d','3d':'3d','1w':'1w','1mo':'1mo','1m':'1m','5m':'5m','15m':'15m'};
+  return alias[tf]||'5m';
 }
 
 function loadTfFavorites(){
@@ -44762,28 +44782,34 @@ function renderTfDropdown(){
   if(!menu)return;
   var activeTf=getActiveTf0782();
   menu.innerHTML='';
-  for(var i=0;i<DVL_TF_ALL.length;i++){
-    var tf=DVL_TF_ALL[i];
-    var label=DVL_TF_LABEL[tf]||tf;
-    var isFav=isTfFavorite(tf);
-    var isAct=tf===activeTf;
-    var item=document.createElement('button');
-    item.className='dvl1b-tfDropItem'+(isAct?' is-active':'');
-    item.setAttribute('type','button');
-    item.setAttribute('role','menuitem');
-    item.setAttribute('data-tf-drop',tf);
-    var lbl=document.createElement('span');
-    lbl.className='dvl1b-tfDropLabel';
-    lbl.textContent=label;
-    item.appendChild(lbl);
-    var starEl=document.createElement('span');
-    starEl.className='dvl1b-tfDropStar'+(isFav?' is-fav':'');
-    starEl.setAttribute('data-tf-star',tf);
-    starEl.setAttribute('title',isFav?'Remover favorito':'Adicionar favorito');
-    var fillColor=isFav?'#ffd321':'none';
-    starEl.innerHTML='<svg viewBox="0 0 24 24" fill="'+fillColor+'" stroke="#ffd321" stroke-width="1.8" stroke-linejoin="round"><path d="'+_STAR_PATH+'" fill="'+fillColor+'"/></svg>';
-    item.appendChild(starEl);
-    menu.appendChild(item);
+  for(var g=0;g<DVL_TF_GROUPS.length;g++){
+    var grp=DVL_TF_GROUPS[g];
+    var hdr=document.createElement('div');
+    hdr.className='dvl1b-tfDropGroup';
+    hdr.textContent=grp.label;
+    menu.appendChild(hdr);
+    for(var i=0;i<grp.tfs.length;i++){
+      var tf=grp.tfs[i];
+      var label=DVL_TF_LABEL[tf]||tf;
+      var isFav=isTfFavorite(tf);
+      var isAct=tf===activeTf;
+      var item=document.createElement('button');
+      item.className='dvl1b-tfDropItem'+(isAct?' is-active':'');
+      item.setAttribute('type','button');
+      item.setAttribute('role','menuitem');
+      item.setAttribute('data-tf-drop',tf);
+      var lbl=document.createElement('span');
+      lbl.className='dvl1b-tfDropLabel';
+      lbl.textContent=label;
+      item.appendChild(lbl);
+      var starEl=document.createElement('span');
+      starEl.className='dvl1b-tfDropStar'+(isFav?' is-fav':'');
+      starEl.setAttribute('data-tf-star',tf);
+      var fillColor=isFav?'#ffd321':'none';
+      starEl.innerHTML='<svg viewBox="0 0 24 24" fill="'+fillColor+'" stroke="#ffd321" stroke-width="1.8" stroke-linejoin="round"><path d="'+_STAR_PATH+'" fill="'+fillColor+'"/></svg>';
+      item.appendChild(starEl);
+      menu.appendChild(item);
+    }
   }
   if(!menu.__dvlTfDropItemsBound0782){
     menu.__dvlTfDropItemsBound0782=true;
@@ -44794,7 +44820,7 @@ function renderTfDropdown(){
       if(starEl){toggleTfFavorite(starEl.getAttribute('data-tf-star'));return;}
       var itemEl=closestEl(ev.target,'[data-tf-drop]');
       if(itemEl){var tf2=itemEl.getAttribute('data-tf-drop');callApplyTf0782(tf2);window.dvlTfDrop0782.close();renderTfDropdown();}
-    },true); // capture
+    },true);
   }
 }
 window.renderTfDropdown=renderTfDropdown;
