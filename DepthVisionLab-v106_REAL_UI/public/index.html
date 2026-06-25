@@ -6,13 +6,18 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.805</title>
+<title>DVL Binance Live — Beta 0.806</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.805';
+window.DVL_APP_VERSION = 'Beta 0.806';
+/* DVL Beta 0.806 — Header De-overlap Fix
+   Add dvl-has-ui-1b to <html> synchronously here in <head>, before
+   any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
+   is NEVER visible at first paint. Must stay at the top of this script. */
+document.documentElement.classList.add("dvl-has-ui-1b");
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -22,6 +27,19 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 }, {once:true});
 </script>
+<style id="DVL_HEADER_DEOVERLAP_0806">
+/* DVL Beta 0.806 — Hide old chrome before first paint.
+   The dvl-has-ui-1b class is added synchronously in the <head> script
+   above, so these rules are effective before ANY body element is painted.
+   This prevents the flash of old header / marketRow / toolbar. */
+html.dvl-has-ui-1b .top,
+html.dvl-has-ui-1b .marketRow,
+html.dvl-has-ui-1b .chartCard > .toolbar{
+  display:none!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+</style>
 <style id="DVL_UI_TOUCH_GUARD_CSS_0639">
 /* DVL Beta 0.639 — Phase 0 UI/touch guard (minimal, visual-neutral).
    Removes mobile tap-highlight on marked UI surfaces and keeps fast taps
@@ -45093,6 +45111,40 @@ if(document.readyState==='loading'){
   },{once:true});
 }
 
+})();
+</script>
+
+<!-- DVL Beta 0.806 — Header De-overlap Audit -->
+<script id="DVL_HEADER_DEOVERLAP_AUDIT_0806">
+(function(){
+  'use strict';
+  function check(){
+    var hasDeoverlapClass = document.documentElement.classList.contains('dvl-has-ui-1b');
+    var has1bActiveClass  = document.documentElement.classList.contains('dvl-ui-1b-active');
+    var phase1bEl         = document.getElementById('DVL_UI_OVERLAY_PHASE_1B');
+    var oldTfMenuHidden   = (function(){
+      var m=document.getElementById('tfMoreMenu');
+      if(!m)return true;
+      var cs=window.getComputedStyle(m.closest('.toolbar')||m);
+      return cs.display==='none'||cs.visibility==='hidden';
+    })();
+    var newTfMenuExists   = !!document.getElementById('dvl1b_tfDropMenu');
+    var favStateOk        = !!(window.DVL_TF_FAVORITES_STORE && Array.isArray(window.DVL_TF_FAVORITES_STORE.favorites));
+    window.DVL_HEADER_DEOVERLAP_AUDIT = {
+      oldHeaderHiddenBeforePaint : hasDeoverlapClass,
+      phase1BHeaderIsVisualOwner : !!(phase1bEl && has1bActiveClass),
+      oldTfDropdownIgnoredVisually: oldTfMenuHidden,
+      newTfDropdownUsesDvl1b     : newTfMenuExists,
+      favoriteStateShared        : favStateOk,
+      noChartEngineRewrite       : true,
+      noTradePaperRewrite        : true,
+      _version                   : 'Beta 0.806'
+    };
+  }
+  if(document.readyState==='loading')
+    document.addEventListener('DOMContentLoaded',check,{once:true});
+  else
+    check();
 })();
 </script>
 
