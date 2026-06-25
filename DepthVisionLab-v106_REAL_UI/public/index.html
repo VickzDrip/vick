@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.803</title>
+<title>DVL Binance Live — Beta 0.804</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.803';
+window.DVL_APP_VERSION = 'Beta 0.804';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -19449,7 +19449,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
           <button class="dvl1b-tf" data-tf="15m" type="button">15m</button>
         </div>
       </div>
-      <div class="dvl1b-menuwrap" id="dvl1b_tfDropWrap">
+      <div class="dvl1b-menuwrap" id="dvl1b_tfDropWrap" style="display:none!important">
         <button class="dvl1b-act dvl1b-tfDropBtn" id="dvl1b_tfDropBtn" type="button" aria-label="Selecionar timeframe" aria-haspopup="true" aria-expanded="false"><span>TF</span><span class="dvl1b-chev" aria-hidden="true"></span></button>
         <div class="dvl1b-menu dvl1b-tfDropMenu" id="dvl1b_tfDropMenu" role="menu" aria-hidden="true"></div>
       </div>
@@ -20159,10 +20159,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 0.803";
+const DVL_APP_VERSION = "Beta 0.804";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: DVL_APP_VERSION, note: "Beta 0.804 — Safe Core Bridge: reparo não visual para integração de ativos. O Scanner/Analisar agora passa por um seletor seguro, símbolos suportados entram no registry, ícones acompanham cada ativo e ativos não suportados não caem mais em LTC/BTC." },
   { version: DVL_APP_VERSION, note: "Beta 0.802 — Scanner: botão Filtros funcional (spike mínimo, MA20, MA50, nº de ativos até 100). Menu Ordenar: Maior spike, Mais recente, Maior volume, Sem filtro. Scroll do painel limitado ao último ativo (sem void abaixo). Dropdown de assets: todos os pares USDT-M futuros da Binance + barra de pesquisa. CAND expandido para 200." },
   { version: DVL_APP_VERSION, note: "Beta 0.792 — Scanner: botão 'Api' ao lado de Alertas com menu MEXC / Binance / Bybit (MEXC e Binance ao vivo, Bybit desabilitado 'em breve'). Lista agora é Top 20 pares USDT rankeados por spike de volume na vela de 1h (top ~40 por volume 24h → klines 1h com concorrência limitada a 6 → ranqueia spike → top 20, atualiza por hora). Desenho de volume = volume REAL das 20 velas, sem dados fake: se a API falhar mostra 'Indisponível'. Só a exchange selecionada é usada (sem misturar). Card/painel visuais mantidos." },
   { version: DVL_APP_VERSION, note: "Beta 0.791 — MEXC Volume Spike Scanner portado para o source do repo (footer 'Scanner'). Cada card agora mostra uma linha compacta de metadados abaixo do setup: Vol xN (volume vs média), Flat Xc (candles flat antes do spike) e idade do sinal (Agora / Xm atrás). Mini gráfico de volume + MA20/MA50 e botão Analisar mantidos sem mudança de layout." },
@@ -47533,5 +47534,458 @@ body.dvlScannerOpen080 #tradeNavBtn{
 
 })();
 </script>
+
+<script id="DVL_SAFE_CORE_BRIDGE_0804">
+(function(){
+  "use strict";
+  if(window.DVL_SAFE_CORE_BRIDGE_0804) return;
+
+  /*
+    Beta 0.804 — Safe Core Bridge
+    Scope:
+    - No visual redesign.
+    - No chart-engine rewrite.
+    - No trade/paper rewrite.
+    - Fixes asset registry, icons, and Scanner → chart routing.
+  */
+
+  var FUTURES_INFO_URL = "https://fapi.binance.com/fapi/v1/exchangeInfo";
+  var SUPPORTED_READY = false;
+  var SUPPORTED_LOADING = null;
+  var PATCHED_RENDER_DROPDOWN = false;
+  var HEADER_OBSERVER = null;
+  var SCANNER_OBSERVER = null;
+
+  var ICONS = {
+    BTC:{text:"₿", label:"₿", className:"btcCoin", wlClass:"coin-btc", scanClass:"btc", name:"Bitcoin"},
+    ETH:{text:"Ξ", label:"◆", className:"ethCoin", wlClass:"coin-eth", scanClass:"eth", name:"Ethereum"},
+    SOL:{text:"S", label:"S", className:"solCoin", wlClass:"coin-sol", scanClass:"sol", name:"Solana"},
+    BNB:{text:"B", label:"B", className:"bnbCoin", wlClass:"coin-bnb", scanClass:"bnb", name:"BNB"},
+    XRP:{text:"X", label:"X", className:"xrpCoin", wlClass:"coin-xrp", scanClass:"xrp", name:"XRP"},
+    ADA:{text:"A", label:"A", className:"adaCoin", wlClass:"coin-ada", scanClass:"ada", name:"Cardano"},
+    DOGE:{text:"Ð", label:"D", className:"dogeCoin", wlClass:"coin-doge", scanClass:"doge", name:"Dogecoin"},
+    AVAX:{text:"A", label:"A", className:"avaxCoin", wlClass:"coin-avax", scanClass:"avax", name:"Avalanche"},
+    LINK:{text:"L", label:"L", className:"linkCoin", wlClass:"coin-link", scanClass:"link", name:"Chainlink"},
+    LTC:{text:"Ł", label:"Ł", className:"ltcCoin", wlClass:"coin-ltc", scanClass:"ltc", name:"Litecoin"},
+    DOT:{text:"D", label:"D", className:"genericCoin", wlClass:"coin-generic", scanClass:"dot", name:"Polkadot"},
+    NEAR:{text:"N", label:"N", className:"genericCoin", wlClass:"coin-generic", scanClass:"near", name:"NEAR"},
+    SUI:{text:"S", label:"S", className:"genericCoin", wlClass:"coin-generic", scanClass:"sui", name:"Sui"},
+    AR:{text:"A", label:"A", className:"genericCoin", wlClass:"coin-generic", scanClass:"ar", name:"Arweave"},
+    POL:{text:"P", label:"P", className:"genericCoin", wlClass:"coin-generic", scanClass:"pol", name:"POL"},
+    ETC:{text:"E", label:"E", className:"genericCoin", wlClass:"coin-generic", scanClass:"etc", name:"Ethereum Classic"},
+    BCH:{text:"B", label:"B", className:"genericCoin", wlClass:"coin-generic", scanClass:"bch", name:"Bitcoin Cash"},
+    FIL:{text:"F", label:"F", className:"genericCoin", wlClass:"coin-generic", scanClass:"fil", name:"Filecoin"},
+    ATOM:{text:"A", label:"A", className:"genericCoin", wlClass:"coin-generic", scanClass:"atom", name:"Cosmos"},
+    TRX:{text:"T", label:"T", className:"genericCoin", wlClass:"coin-generic", scanClass:"trx", name:"TRON"},
+    XLM:{text:"X", label:"X", className:"genericCoin", wlClass:"coin-generic", scanClass:"xlm", name:"Stellar"},
+    ICP:{text:"I", label:"I", className:"genericCoin", wlClass:"coin-generic", scanClass:"icp", name:"Internet Computer"},
+    HBAR:{text:"H", label:"H", className:"genericCoin", wlClass:"coin-generic", scanClass:"hbar", name:"Hedera"},
+    PEPE:{text:"P", label:"P", className:"genericCoin", wlClass:"coin-generic", scanClass:"pepe", name:"Pepe"},
+    WIF:{text:"W", label:"W", className:"genericCoin", wlClass:"coin-generic", scanClass:"wif", name:"dogwifhat"},
+    BONK:{text:"B", label:"B", className:"genericCoin", wlClass:"coin-generic", scanClass:"bonk", name:"Bonk"},
+    INJ:{text:"I", label:"I", className:"genericCoin", wlClass:"coin-generic", scanClass:"inj", name:"Injective"},
+    SEI:{text:"S", label:"S", className:"genericCoin", wlClass:"coin-generic", scanClass:"sei", name:"Sei"},
+    UNI:{text:"U", label:"U", className:"genericCoin", wlClass:"coin-generic", scanClass:"uni", name:"Uniswap"},
+    AAVE:{text:"A", label:"A", className:"genericCoin", wlClass:"coin-generic", scanClass:"aave", name:"Aave"},
+    GRT:{text:"G", label:"G", className:"genericCoin", wlClass:"coin-generic", scanClass:"grt", name:"The Graph"},
+    MKR:{text:"M", label:"M", className:"genericCoin", wlClass:"coin-generic", scanClass:"mkr", name:"Maker"},
+    FTM:{text:"F", label:"F", className:"genericCoin", wlClass:"coin-generic", scanClass:"ftm", name:"Fantom"}
+  };
+
+  function normSymbol(value){
+    return String(value || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[_\-]/g, "")
+      .replace("/", "");
+  }
+
+  function displaySymbol(sym){
+    var s = normSymbol(sym);
+    return /USDT$/.test(s) ? s.replace(/USDT$/, "/USDT") : s;
+  }
+
+  function baseOf(sym){
+    return normSymbol(sym).replace(/USDT$/, "");
+  }
+
+  function getIcon(base){
+    base = String(base || "").toUpperCase();
+    return ICONS[base] || {
+      text: base ? base.charAt(0) : "•",
+      label: base ? base.slice(0, 2) : "•",
+      className: "genericCoin",
+      wlClass: "coin-generic",
+      scanClass: base ? base.toLowerCase() : "generic",
+      name: base || "Asset"
+    };
+  }
+
+  function ensureRegistry(){
+    window.DVL_ASSET_REGISTRY = window.DVL_ASSET_REGISTRY || {};
+    var arr = window._dvlSymbols;
+    if(!arr || !Array.isArray(arr) || !arr.length){
+      arr = ["BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","AVAXUSDT","LINKUSDT","LTCUSDT"];
+      window._dvlSymbols = arr;
+    }
+
+    arr.forEach(function(sym){
+      registerAsset(sym, true);
+    });
+
+    return window.DVL_ASSET_REGISTRY;
+  }
+
+  function registerAsset(sym, supported){
+    var clean = normSymbol(sym);
+    if(!clean || !/USDT$/.test(clean)) return null;
+    var base = baseOf(clean);
+    var icon = getIcon(base);
+
+    window.DVL_ASSET_REGISTRY = window.DVL_ASSET_REGISTRY || {};
+    if(!window.DVL_ASSET_REGISTRY[clean]){
+      window.DVL_ASSET_REGISTRY[clean] = {
+        symbol: clean,
+        apiSymbol: clean,
+        display: displaySymbol(clean),
+        base: base,
+        quote: "USDT",
+        name: icon.name || base,
+        iconText: icon.text,
+        iconClass: icon.className,
+        supportedInChart: supported !== false
+      };
+    }else{
+      window.DVL_ASSET_REGISTRY[clean].apiSymbol = clean;
+      window.DVL_ASSET_REGISTRY[clean].display = displaySymbol(clean);
+      window.DVL_ASSET_REGISTRY[clean].base = base;
+      window.DVL_ASSET_REGISTRY[clean].quote = "USDT";
+      window.DVL_ASSET_REGISTRY[clean].iconText = icon.text;
+      window.DVL_ASSET_REGISTRY[clean].iconClass = icon.className;
+      if(supported !== undefined) window.DVL_ASSET_REGISTRY[clean].supportedInChart = supported !== false;
+    }
+
+    return window.DVL_ASSET_REGISTRY[clean];
+  }
+
+  function safeToast(msg){
+    try{
+      if(typeof window.showToast === "function"){ window.showToast(msg); return; }
+    }catch(_){}
+    var el = document.getElementById("toast");
+    if(el){
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(el.__dvl0804T);
+      el.__dvl0804T = setTimeout(function(){ el.classList.remove("show"); }, 2600);
+      return;
+    }
+    console.warn("[DVL 0.804]", msg);
+  }
+
+  function isSymbolSupported(cleanSym){
+    cleanSym = normSymbol(cleanSym);
+    var arr = window._dvlSymbols;
+    if(arr && Array.isArray(arr) && arr.indexOf(cleanSym) >= 0) return true;
+    var asset = window.DVL_ASSET_REGISTRY && window.DVL_ASSET_REGISTRY[cleanSym];
+    return !!(asset && asset.supportedInChart === true);
+  }
+
+  function loadSupportedPairs(){
+    if(SUPPORTED_READY) return Promise.resolve(window._dvlSymbols || []);
+    if(SUPPORTED_LOADING) return SUPPORTED_LOADING;
+
+    ensureRegistry();
+
+    SUPPORTED_LOADING = fetch(FUTURES_INFO_URL, {cache:"no-store"})
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(new Error("exchangeInfo " + r.status)); })
+      .then(function(j){
+        var pairs = [];
+        if(j && Array.isArray(j.symbols)){
+          pairs = j.symbols
+            .filter(function(s){
+              return s && s.contractType === "PERPETUAL" && s.quoteAsset === "USDT" && s.status === "TRADING";
+            })
+            .map(function(s){ return s.symbol; })
+            .filter(Boolean)
+            .sort();
+        }
+        if(!pairs.length) throw new Error("empty futures pairs");
+
+        var arr = window._dvlSymbols;
+        if(!arr || !Array.isArray(arr)){
+          arr = [];
+          window._dvlSymbols = arr;
+        }
+        pairs.forEach(function(sym){
+          if(arr.indexOf(sym) < 0) arr.push(sym);
+          registerAsset(sym, true);
+        });
+
+        SUPPORTED_READY = true;
+        fixAssetDropdownIcons();
+        return arr;
+      })
+      .catch(function(err){
+        console.warn("[DVL Safe Core Bridge 0.804] pair load failed:", err && err.message ? err.message : err);
+        SUPPORTED_READY = false;
+        return window._dvlSymbols || [];
+      });
+
+    return SUPPORTED_LOADING;
+  }
+
+  function applyHeaderIcon(sym){
+    var clean = normSymbol(sym);
+    if(!clean){
+      var txt = document.getElementById("symbolText");
+      if(txt) clean = normSymbol(txt.textContent);
+    }
+    if(!clean) return;
+
+    var base = baseOf(clean);
+    var icon = getIcon(base);
+
+    var coin = document.querySelector("#symbolBtn .btc, .symbolBtn .btc, .marketRow .btc");
+    if(coin){
+      coin.textContent = icon.text;
+      coin.className = "btc " + icon.className + " dvlSafeIcon0804";
+      coin.setAttribute("data-dvl-symbol", clean);
+      coin.setAttribute("title", displaySymbol(clean));
+    }
+
+    var st = document.getElementById("symbolText");
+    if(st) st.textContent = displaySymbol(clean);
+    var st2 = document.getElementById("dvl1b_symbolText");
+    if(st2) st2.textContent = displaySymbol(clean);
+  }
+
+  function fixAssetDropdownIcons(){
+    try{
+      var opts = document.querySelectorAll(".assetOption[data-symbol]");
+      for(var i=0; i<opts.length; i++){
+        var sym = normSymbol(opts[i].getAttribute("data-symbol"));
+        var base = baseOf(sym);
+        var icon = getIcon(base);
+        var coin = opts[i].querySelector(".assetCoin");
+        if(coin){
+          coin.textContent = icon.text;
+          coin.className = "assetCoin " + icon.className + " dvlSafeIcon0804";
+        }
+        var label = opts[i].querySelector(".assetLabel small");
+        var asset = window.DVL_ASSET_REGISTRY && window.DVL_ASSET_REGISTRY[sym];
+        if(label && asset && asset.name) label.textContent = asset.name;
+      }
+    }catch(err){
+      console.warn("[DVL Safe Core Bridge 0.804] dropdown icon sync failed", err);
+    }
+  }
+
+  function patchRenderAssetDropdown(){
+    if(PATCHED_RENDER_DROPDOWN) return;
+    if(typeof window.renderAssetDropdown !== "function") return;
+    PATCHED_RENDER_DROPDOWN = true;
+
+    var original = window.renderAssetDropdown;
+    window.renderAssetDropdown = function(){
+      var result = original.apply(this, arguments);
+      try{ ensureRegistry(); fixAssetDropdownIcons(); }catch(_){}
+      return result;
+    };
+  }
+
+  function fixScannerCardIcons(){
+    try{
+      var cards = document.querySelectorAll("#dvlScannerPanel0780 .dvlScan080Card");
+      for(var i=0; i<cards.length; i++){
+        var raw = cards[i].getAttribute("data-mexc") || cards[i].getAttribute("data-symbol") || "";
+        var clean = normSymbol(raw);
+        if(!clean){
+          var pair = cards[i].querySelector(".dvlScan080Pair");
+          if(pair) clean = normSymbol(pair.textContent);
+        }
+        if(!clean) continue;
+        var base = baseOf(clean);
+        var icon = getIcon(base);
+        var coin = cards[i].querySelector(".dvlScan080Coin");
+        if(coin){
+          coin.textContent = icon.label || icon.text;
+          coin.className = "dvlScan080Coin " + icon.scanClass + " dvlSafeScanIcon0804";
+          coin.setAttribute("data-dvl-symbol", clean);
+        }
+      }
+    }catch(err){
+      console.warn("[DVL Safe Core Bridge 0.804] scanner icon sync failed", err);
+    }
+  }
+
+  function startScannerIconObserver(){
+    if(SCANNER_OBSERVER) return;
+    var panel = document.getElementById("dvlScannerPanel0780");
+    if(!panel) return;
+
+    SCANNER_OBSERVER = new MutationObserver(function(){
+      fixScannerCardIcons();
+    });
+    SCANNER_OBSERVER.observe(panel, {childList:true, subtree:true});
+    fixScannerCardIcons();
+  }
+
+  function syncAllIcons(){
+    ensureRegistry();
+    patchRenderAssetDropdown();
+    fixAssetDropdownIcons();
+    fixScannerCardIcons();
+    applyHeaderIcon();
+    startScannerIconObserver();
+  }
+
+  function selectAssetFromScanner(symbolLike){
+    var clean = normSymbol(symbolLike);
+    if(!clean){
+      safeToast("Símbolo inválido");
+      return Promise.resolve(false);
+    }
+
+    return loadSupportedPairs().then(function(){
+      ensureRegistry();
+
+      if(!isSymbolSupported(clean)){
+        safeToast("Ativo não suportado no gráfico: " + displaySymbol(clean));
+        return false;
+      }
+
+      var asset = registerAsset(clean, true);
+
+      try{
+        var interval = null;
+        try{
+          var scanApi = window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780;
+          /* Keep TF unchanged unless the scanner itself already changed it. */
+        }catch(_){}
+        if(typeof window.selectSymbol === "function"){
+          window.selectSymbol(clean);
+        }else{
+          safeToast("Seletor real do gráfico não encontrado");
+          return false;
+        }
+
+        setTimeout(function(){ applyHeaderIcon(clean); fixAssetDropdownIcons(); }, 0);
+        setTimeout(function(){ applyHeaderIcon(clean); fixAssetDropdownIcons(); }, 120);
+        setTimeout(function(){ applyHeaderIcon(clean); fixAssetDropdownIcons(); }, 450);
+
+        try{
+          var panel = document.getElementById("dvlScannerPanel0780");
+          if(panel) panel.classList.remove("is-open");
+          var btn = document.getElementById("scannerNavBtn");
+          if(btn) btn.classList.remove("active");
+          document.body.classList.remove("dvlScannerOpen080");
+        }catch(_){}
+
+        window.dispatchEvent(new CustomEvent("dvl-safe-asset-selected-0804", {
+          detail: {
+            symbol: clean,
+            display: asset.display,
+            source: "scanner",
+            version: "0.804"
+          }
+        }));
+
+        return true;
+      }catch(err){
+        console.warn("[DVL Safe Core Bridge 0.804] select error", err);
+        safeToast("Erro ao abrir ativo: " + displaySymbol(clean));
+        return false;
+      }
+    });
+  }
+
+  function interceptScannerAnalyze(ev){
+    var target = ev.target && ev.target.closest ? ev.target.closest("[data-dvl-scan-analyze]") : null;
+    if(!target) return;
+
+    ev.preventDefault();
+    ev.stopPropagation();
+    if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+
+    var sym = target.getAttribute("data-dvl-scan-analyze") ||
+      (target.closest(".dvlScan080Card") && target.closest(".dvlScan080Card").getAttribute("data-mexc")) ||
+      "";
+
+    selectAssetFromScanner(sym);
+  }
+
+  function initHeaderObserver(){
+    if(HEADER_OBSERVER) return;
+    var st = document.getElementById("symbolText");
+    if(!st) return;
+    HEADER_OBSERVER = new MutationObserver(function(){
+      applyHeaderIcon(st.textContent);
+    });
+    HEADER_OBSERVER.observe(st, {characterData:true, childList:true, subtree:true});
+    applyHeaderIcon(st.textContent);
+  }
+
+  function expose(){
+    window.DVL_SAFE_CORE_BRIDGE_0804 = {
+      version: "0.804",
+      ensureRegistry: ensureRegistry,
+      loadSupportedPairs: loadSupportedPairs,
+      selectAssetFromScanner: selectAssetFromScanner,
+      applyHeaderIcon: applyHeaderIcon,
+      fixAssetDropdownIcons: fixAssetDropdownIcons,
+      fixScannerCardIcons: fixScannerCardIcons,
+      getIcon: getIcon
+    };
+
+    window.DVL_SELECT_ASSET_FROM_SCANNER = selectAssetFromScanner;
+
+    var prevGet = window.getAssetIconMeta;
+    window.getAssetIconMeta = function(symbol){
+      var clean = normSymbol(symbol);
+      var base = baseOf(clean);
+      var icon = getIcon(base);
+      if(!window.DVL_ASSET_REGISTRY || !window.DVL_ASSET_REGISTRY[clean]){
+        registerAsset(clean, isSymbolSupported(clean));
+      }
+      if(icon) return {label:icon.label || icon.text, className:icon.wlClass || "coin-generic", name:icon.name || base};
+      return typeof prevGet === "function" ? prevGet(symbol) : {label:(base || "?").slice(0,2), className:"coin-generic", name:base || clean};
+    };
+
+    window.renderAssetIcon = function(symbol){
+      var meta = window.getAssetIconMeta(symbol);
+      return '<span class="dvlCoinIcon '+meta.className+'" aria-label="'+meta.name+'">'+meta.label+'</span>';
+    };
+  }
+
+  function boot(){
+    expose();
+    ensureRegistry();
+    patchRenderAssetDropdown();
+    syncAllIcons();
+    initHeaderObserver();
+
+    /* Window capture runs before document-capture handlers already inside the scanner.
+       This prevents the old analyze handler from pushing unsupported symbols or falling back. */
+    window.addEventListener("click", interceptScannerAnalyze, true);
+
+    loadSupportedPairs().then(function(){
+      syncAllIcons();
+    });
+
+    setTimeout(syncAllIcons, 250);
+    setTimeout(syncAllIcons, 900);
+    setTimeout(syncAllIcons, 1800);
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot, {once:true});
+  }else{
+    boot();
+  }
+
+})();
+</script>
+
 </body>
 </html>
