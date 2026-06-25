@@ -26403,9 +26403,17 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
         const x=t.clientX-rect.left,y=t.clientY-rect.top;
         const sc=scale(visible().cs,rect.height);
         const hit=hitSaved(x,y,rect.width,rect.height,sc);
-        if(hit){selectRuler(hit.index);S._rulerDragSv={...hit,lastX:t.clientX,lastY:t.clientY,touchId:t.identifier};e.stopImmediatePropagation();e.preventDefault();}
+        /* On touch, only capture on handles (p1/p2) — body is too broad and blocks chart pan */
+        if(hit&&hit.part!=='body'){selectRuler(hit.index);S._rulerDragSv={...hit,lastX:t.clientX,lastY:t.clientY,touchId:t.identifier};e.stopImmediatePropagation();e.preventDefault();}
       }
     },{capture:true,passive:false});
+
+    wrap.addEventListener('touchcancel',function(e){
+      /* Clean up any stuck ruler state so chart pan is never blocked */
+      _rulerTouchId=-1;
+      _rulerTapMoved=false;
+      S._rulerDragSv=null;
+    },{capture:true,passive:true});
 
     wrap.addEventListener('touchmove',function(e){
       if(S.tool==='ruler'){
