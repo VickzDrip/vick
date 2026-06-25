@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 0.804</title>
+<title>DVL Binance Live — Beta 0.805</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 0.804';
+window.DVL_APP_VERSION = 'Beta 0.805';
 document.addEventListener('DOMContentLoaded', function(){
   var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
@@ -46388,16 +46388,19 @@ body.dvlScannerOpen080 #tradeNavBtn{
     try{
       var o=JSON.parse(localStorage.getItem(LS_FIL)||"{}");
       return {
-        spikeMin     : isNaN(parseFloat(o.spikeMin))    ? 0   : Math.max(0,parseFloat(o.spikeMin)),
-        maPeriod1    : Math.min(200,Math.max(2,parseInt(o.maPeriod1)||20)),
-        maPeriod2    : Math.min(500,Math.max(2,parseInt(o.maPeriod2)||50)),
-        flat_x       : isNaN(parseFloat(o.flat_x))      ? 10  : Math.max(0.1,parseFloat(o.flat_x)),
-        minFlatBefore: Math.max(0,parseInt(o.minFlatBefore)||0),
-        maxAssets    : Math.min(100,Math.max(1,parseInt(o.maxAssets)||20)),
-        scanTF       : TF_LIST.indexOf(o.scanTF)>=0 ? o.scanTF : "15m",
-        spikeAbove   : o.spikeAbove==="both"?"both":"ma1"
+        spikeMin       : isNaN(parseFloat(o.spikeMin))       ? 0    : Math.max(0,parseFloat(o.spikeMin)),
+        maPeriod1      : Math.min(200,Math.max(2,parseInt(o.maPeriod1)||20)),
+        maPeriod2      : Math.min(500,Math.max(2,parseInt(o.maPeriod2)||50)),
+        flat_x         : isNaN(parseFloat(o.flat_x))          ? 10   : Math.max(0.1,parseFloat(o.flat_x)),
+        minFlatBefore  : Math.max(0,parseInt(o.minFlatBefore)||0),
+        maxAssets      : Math.min(100,Math.max(1,parseInt(o.maxAssets)||20)),
+        scanTF         : TF_LIST.indexOf(o.scanTF)>=0 ? o.scanTF : "15m",
+        spikeAbove     : o.spikeAbove==="both"?"both":"ma1",
+        maFlatTolerance: isNaN(parseFloat(o.maFlatTolerance)) ? 0.30 : Math.min(2,Math.max(0,parseFloat(o.maFlatTolerance))),
+        maFlatLookback : Math.min(50,Math.max(2,parseInt(o.maFlatLookback)||10)),
+        useMaFlat      : o.useMaFlat===true||o.useMaFlat==="true"
       };
-    }catch(_){ return {spikeMin:0,maPeriod1:20,maPeriod2:50,flat_x:10,minFlatBefore:0,maxAssets:20,scanTF:"15m",spikeAbove:"ma1"}; }
+    }catch(_){ return {spikeMin:0,maPeriod1:20,maPeriod2:50,flat_x:10,minFlatBefore:0,maxAssets:20,scanTF:"15m",spikeAbove:"ma1",maFlatTolerance:0.30,maFlatLookback:10,useMaFlat:false}; }
   })();
 
   /* ── Exchange adapters (FUTURES) ─────────────────────────────── */
@@ -46561,6 +46564,16 @@ body.dvlScannerOpen080 #tradeNavBtn{
       else break;
     }
     var prevVolBelowHalf=len>=2&&lastVol>0&&(vols[len-2]||0)<lastVol*0.5;
+    /* MA flatness: (max-min)/avg of volMA1 over the N candles BEFORE the last */
+    var maFlatLookback=filterState.maFlatLookback||10;
+    var maFlat1Win=volMa1.slice(Math.max(0,len-1-maFlatLookback),len-1).filter(function(v){return v!==null&&Number.isFinite(v)&&v>0;});
+    var maFlatness1=0;
+    if(maFlat1Win.length>1){
+      var _fMin=maFlat1Win[0],_fMax=maFlat1Win[0],_fSum=0;
+      for(var fi=0;fi<maFlat1Win.length;fi++){_fSum+=maFlat1Win[fi];if(maFlat1Win[fi]<_fMin)_fMin=maFlat1Win[fi];if(maFlat1Win[fi]>_fMax)_fMax=maFlat1Win[fi];}
+      var _fAvg=_fSum/maFlat1Win.length;
+      maFlatness1=_fAvg>0?(_fMax-_fMin)/_fAvg:0;
+    }
     return {
       coin:base.coin,icon:base.icon,mexc:base.mexc,symbol:base.symbol,
       side:side,setup:setup,
@@ -46568,7 +46581,8 @@ body.dvlScannerOpen080 #tradeNavBtn{
       volX:spike1,flatCandles:flatCandles,barPct:barPct,
       last20Vols:vols.slice(-20),last20MA1:volMa1.slice(-20),last20MA2:volMa2.slice(-20),
       ma1Period:p1,ma2Period:p2,
-      prevVolBelowHalf:prevVolBelowHalf
+      prevVolBelowHalf:prevVolBelowHalf,
+      maFlatness1:maFlatness1
     };
   }
 
@@ -46585,6 +46599,15 @@ body.dvlScannerOpen080 #tradeNavBtn{
       else break;
     }
     row.flatCandles=count;
+    /* Recompute maFlatness1 from stored last20MA1 */
+    var maFlatLookback=filterState.maFlatLookback||10;
+    var win=ma1.slice(Math.max(0,ma1.length-1-maFlatLookback),ma1.length-1).filter(function(v){return v!==null&&Number.isFinite(v)&&v>0;});
+    if(win.length>1){
+      var fMin=win[0],fMax=win[0],fSum=0;
+      for(var wi=0;wi<win.length;wi++){fSum+=win[wi];if(win[wi]<fMin)fMin=win[wi];if(win[wi]>fMax)fMax=win[wi];}
+      var fAvg=fSum/win.length;
+      row.maFlatness1=fAvg>0?(fMax-fMin)/fAvg:0;
+    } else { row.maFlatness1=0; }
   }
 
   async function mapPool(items,limit,fn){
@@ -46615,6 +46638,8 @@ body.dvlScannerOpen080 #tradeNavBtn{
         rows=rows.filter(function(r){return (r.flatCandles||0)>=filterState.minFlatBefore;});
       if(filterState.spikeAbove==="both")
         rows=rows.filter(function(r){return (r.spike20||0)>1&&(r.spike50||0)>1;});
+      if(filterState.useMaFlat)
+        rows=rows.filter(function(r){return (r.maFlatness1||1)<=filterState.maFlatTolerance;});
     }
     if(sortMode==="spike"){
       rows.sort(function(a,b){return (b.spike20||0)-(a.spike20||0);});
@@ -46933,6 +46958,15 @@ body.dvlScannerOpen080 #tradeNavBtn{
       +'<input class="dvlScan080FilInput" type="number" id="dvlFilFlatX" min="0.1" max="100" step="0.5" value="'+f.flat_x+'"></div>'
       +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Flat mín antes (barras)</label>'
       +'<input class="dvlScan080FilInput" type="number" id="dvlFilFlatN" min="0" max="50" step="1" value="'+f.minFlatBefore+'"></div>'
+      +'<div class="dvlScan080FilSub">MA volume flat antes do spike</div>'
+      +'<div class="dvlScan080TFChips" style="margin-bottom:10px!important">'
+      +'<button class="dvlScan080TFChip'+(f.useMaFlat?'':' is-sel')+'" type="button" data-dvl-maflat-toggle="off">Desativado</button>'
+      +'<button class="dvlScan080TFChip'+(f.useMaFlat?' is-sel':'')+'" type="button" data-dvl-maflat-toggle="on">Ativado</button>'
+      +'</div>'
+      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Variação max MA (0–1)</label>'
+      +'<input class="dvlScan080FilInput" type="number" id="dvlFilMaFlatTol" min="0" max="2" step="0.05" value="'+f.maFlatTolerance.toFixed(2)+'"></div>'
+      +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Janela lookback (barras)</label>'
+      +'<input class="dvlScan080FilInput" type="number" id="dvlFilMaFlatLB" min="2" max="50" step="1" value="'+f.maFlatLookback+'"></div>'
       +'<div class="dvlScan080FilRow"><label class="dvlScan080FilLabel">Nº de ativos (máx 100)</label>'
       +'<input class="dvlScan080FilInput" type="number" id="dvlFilCount" min="1" max="100" step="1" value="'+f.maxAssets+'"></div>'
       +'<button class="dvlScan080FilApply" type="button" data-dvl-fil-apply>Salvar</button>'
@@ -46950,12 +46984,14 @@ body.dvlScannerOpen080 #tradeNavBtn{
     var prevP2=state.lastMaPeriod2;
 
     /* filterState.scanTF is already updated by chip click */
-    filterState.spikeMin     =rdN("dvlFilSpike",0,0,999);
-    filterState.maPeriod1    =Math.round(rdN("dvlFilMa1",20,2,200));
-    filterState.maPeriod2    =Math.round(rdN("dvlFilMa2",50,2,500));
-    filterState.flat_x       =rdN("dvlFilFlatX",10,0.1,100);
-    filterState.minFlatBefore=Math.round(rdN("dvlFilFlatN",0,0,50));
-    filterState.maxAssets    =Math.round(rdN("dvlFilCount",20,1,100));
+    filterState.spikeMin       =rdN("dvlFilSpike",0,0,999);
+    filterState.maPeriod1      =Math.round(rdN("dvlFilMa1",20,2,200));
+    filterState.maPeriod2      =Math.round(rdN("dvlFilMa2",50,2,500));
+    filterState.flat_x         =rdN("dvlFilFlatX",10,0.1,100);
+    filterState.minFlatBefore  =Math.round(rdN("dvlFilFlatN",0,0,50));
+    filterState.maFlatTolerance=rdN("dvlFilMaFlatTol",0.30,0,2);
+    filterState.maFlatLookback =Math.round(rdN("dvlFilMaFlatLB",10,2,50));
+    filterState.maxAssets      =Math.round(rdN("dvlFilCount",20,1,100));
     try{localStorage.setItem(LS_FIL,JSON.stringify(filterState));}catch(_){}
 
     var fm=document.getElementById("dvlScan080FilMenu");
@@ -47317,6 +47353,15 @@ body.dvlScannerOpen080 #tradeNavBtn{
         filterState.spikeAbove=newSA;
         var saChips=document.querySelectorAll("[data-dvl-spike-above]");
         for(var si=0;si<saChips.length;si++) saChips[si].classList.toggle("is-sel",saChips[si].getAttribute("data-dvl-spike-above")===newSA);
+        return;
+      }
+
+      var mafBtn=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-maflat-toggle]"):null;
+      if(mafBtn){
+        ev.preventDefault();ev.stopPropagation();
+        filterState.useMaFlat=mafBtn.getAttribute("data-dvl-maflat-toggle")==="on";
+        var mafBtns=document.querySelectorAll("[data-dvl-maflat-toggle]");
+        for(var mi=0;mi<mafBtns.length;mi++) mafBtns[mi].classList.toggle("is-sel",mafBtns[mi].getAttribute("data-dvl-maflat-toggle")===(filterState.useMaFlat?"on":"off"));
         return;
       }
 
