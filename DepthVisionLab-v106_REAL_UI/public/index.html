@@ -26205,6 +26205,20 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     const wrap=document.getElementById('chartWrap');
     if(!wrap)return;
 
+    /* Block chart pan/crosshair drag while ruler is active.
+       DVL_TOUCH_GUARD.shouldBlockChartPointer() is consulted by _onDown/_onMove
+       before they set up chartDragState/crossDragState. Patching it here ensures
+       pointer events generated from touch on iOS (where touchstart preventDefault
+       is unreliable) never cause the chart to pan during ruler placement or drag. */
+    if(window.DVL_TOUCH_GUARD){
+      var _origBlock=window.DVL_TOUCH_GUARD.shouldBlockChartPointer;
+      window.DVL_TOUCH_GUARD.shouldBlockChartPointer=function(ev){
+        if(S.tool==='ruler'||S._rulerNew||S._rulerDragSv) return true;
+        return _origBlock?_origBlock(ev):false;
+      };
+    }
+
+
     function ensureRulerCtxBar(){
       let bar=document.getElementById('dvlRulerCtxBar');
       if(bar)return bar;
