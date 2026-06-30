@@ -6,7 +6,7 @@
    and emits a change event the server broadcasts over WebSocket. */
 
 const cfg = require("./config");
-const { EXCHANGES, binance, mexc, tfToMs } = require("./exchanges");
+const { EXCHANGES, binance, mexc, bybit, tfToMs } = require("./exchanges");
 const M = require("./metrics");
 
 /* concurrency-limited map (mirrors the in-page mapPool). */
@@ -136,7 +136,18 @@ async function scanExchange(adapter) {
   for (const c of cands) { if (Number.isFinite(Number(c.oi))) reg[c.sym] = Number(c.oi); }
   /* Most recent spike on top (newest spikeAt first); score breaks ties. */
   rows.sort((a, b) => (b.spikeAt - a.spikeAt) || (b.spikeScore - a.spikeScore));
-  return rows.slice(0, cfg.SNAPSHOT_ROWS);
+  const top = rows.slice(0, cfg.SNAPSHOT_ROWS);
+
+  /* Real LSR: pull Bybit account-ratio for the rows we actually ship. Bybit
+     uses plain symbols (APTUSDT). If a symbol isn't on Bybit, keep the
+     derived lsr. Only the shown rows are queried, so this stays cheap. */
+  await mapPool(top, cfg.POOL, async (row) => {
+    try {
+      const r = await bybit.accountRatio(row.symbol, cfg.SCAN_TF);
+      if (r) { row.lsr = r.trend; row.lsrValue = Math.round(r.lsr * 1000) / 1000; }
+    } catch (_) { /* not on Bybit / transient — keep derived lsr */ }
+  });
+  return top;
 }
 
 /* Snapshots, keyed by the exchange the CLIENT asked for. */

@@ -34,6 +34,9 @@ module.exports = {
   /* MEXC timeframe mapping (matches the in-page MEXC_TF). */
   MEXC_TF: { "1m": "Min1", "3m": "Min5", "5m": "Min5", "15m": "Min15", "30m": "Min30", "1h": "Min60" },
 
+  /* Bybit account-ratio period mapping (Bybit's minimum granularity is 5min). */
+  BYBIT_PERIOD: { "1m": "5min", "3m": "5min", "5m": "5min", "15m": "15min", "30m": "30min", "1h": "1h" },
+
   /* Signal-engine parameters — same defaults as the in-page filterState. */
   ENGINE: {
     maPeriod1: 20,

@@ -80,4 +80,35 @@ const mexc = {
   base(sym) { return String(sym).replace(/_USDT$/, ""); }
 };
 
-module.exports = { binance, mexc, tfToMs, EXCHANGES: { binance, mexc } };
+/* Bybit — real per-symbol long/short ACCOUNT ratio. Public + free, and the
+   same source the in-page chart already uses, so it's known to work from
+   this environment. Used only as the LSR data source (not a scan source). */
+const { BYBIT_PERIOD } = require("./config");
+const bybit = {
+  key: "bybit",
+  label: "Bybit",
+  /* Returns { lsr, trend } for symbol (e.g. "APTUSDT") or null if Bybit has
+     no account-ratio for it. trend = direction of the long/short ratio. */
+  async accountRatio(symbol, tf) {
+    const period = (BYBIT_PERIOD && BYBIT_PERIOD[tf]) || "15min";
+    const url = "https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=" +
+      encodeURIComponent(symbol) + "&period=" + period + "&limit=2";
+    const j = await getJSON(url);
+    const list = (j && j.result && Array.isArray(j.result.list)) ? j.result.list : [];
+    const pts = list
+      .map(x => ({ t: Number(x.timestamp), lsr: Number(x.buyRatio) / Math.max(Number(x.sellRatio), 1e-9) }))
+      .filter(p => Number.isFinite(p.t) && Number.isFinite(p.lsr) && p.lsr > 0)
+      .sort((a, b) => a.t - b.t);
+    if (!pts.length) return null;
+    const cur = pts[pts.length - 1].lsr;
+    const prev = pts.length > 1 ? pts[pts.length - 2].lsr : cur;
+    let trend = "flat";
+    if (prev > 0) {
+      const d = (cur - prev) / prev;
+      trend = d > 0.005 ? "up" : (d < -0.005 ? "down" : "flat");
+    }
+    return { lsr: cur, trend };
+  }
+};
+
+module.exports = { binance, mexc, bybit, tfToMs, EXCHANGES: { binance, mexc } };
