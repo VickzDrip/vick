@@ -60524,6 +60524,66 @@ body.dvlScannerOpen080 #tradeNavBtn{
 
 
   /* ── Build / Layout ───────────────────────────────────────────── */
+  /* Beta 1.022 fix: the Scanner Pro remodel removed the legacy filter
+     subsystem (filtrosMenuHTML/tfChipsHTML/applyFiltros) but left one
+     dangling call to filtrosMenuHTML() inside build() below. With the
+     function undefined, build() threw "filtrosMenuHTML is not defined",
+     the panel was never created and the scanner never refreshed/updated.
+     The active filter UI is now the Scanner Pro filter sheet, so this
+     stub returns empty markup — keeping build() intact without
+     reintroducing the deprecated old filter menu. */
+  function filtrosMenuHTML(){ return ""; }
+  /* Beta 1.022 fix: the remodel also left two more dangling calls in this
+     module — norm() (used in card render/search at getDisplayRows/renderRows)
+     and patchDropdown() (called inside bind()). With patchDropdown undefined,
+     bind() threw before registering event handlers and the auto-refresh
+     interval, so the scanner never updated. Restore norm() as the same
+     uppercase-alphanumeric helper the Pro module uses, and stub patchDropdown
+     (its old asset-dropdown search bar was dropped by the Pro remodel). */
+  function norm(s){ return String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,""); }
+  function patchDropdown(){}
+  /* Beta 1.022 fix: more functions the remodel removed while leaving live
+     calls. loadFuturesPairs() is awaited inside refresh() — undefined, it
+     threw and every refresh failed (the core "scanner não atualiza" cause).
+     Restored here (self-contained) together with its registry vars. pickSort
+     is restored (all deps still present). refreshApiMenu/applyFiltros drove
+     the old API/filter menus that the Pro layout replaced, so they are safe
+     no-ops now (their old DOM no longer exists). */
+  var _dvlFutPairs=null,_dvlFutFetching=false;
+  async function loadFuturesPairs(){
+    if(_dvlFutPairs!==null||_dvlFutFetching) return;
+    _dvlFutFetching=true;
+    try{
+      var r=await fetch("https://fapi.binance.com/fapi/v1/exchangeInfo",{cache:"no-store"});
+      var j=await r.json();
+      _dvlFutPairs=(j.symbols||[])
+        .filter(function(s){return s.contractType==="PERPETUAL"&&s.quoteAsset==="USDT"&&s.status==="TRADING";})
+        .map(function(s){return s.symbol;})
+        .sort();
+      var sArr=window._dvlSymbols;
+      if(sArr&&Array.isArray(sArr)){
+        _dvlFutPairs.forEach(function(sym){if(sArr.indexOf(sym)<0) sArr.push(sym);});
+      }
+    }catch(e){ _dvlFutPairs=[]; }
+    _dvlFutFetching=false;
+  }
+  function pickSort(mode){
+    if(!SORT_LABELS[mode]) return;
+    sortMode=mode;
+    try{localStorage.setItem(LS_SORT,mode);}catch(_){}
+    var lbl=document.getElementById("dvlScan080SortLabel");
+    if(lbl) lbl.textContent=SORT_LABELS[mode];
+    var sm=document.getElementById("dvlScan080SortMenu");
+    if(sm){
+      var opts=sm.querySelectorAll(".dvlScan080SortOpt");
+      for(var i=0;i<opts.length;i++) opts[i].classList.toggle("is-sel",opts[i].getAttribute("data-dvl-sort")===mode);
+      sm.classList.remove("is-open");
+    }
+    state.rows=getDisplayRows();
+    renderRows();
+  }
+  function refreshApiMenu(){}
+  function applyFiltros(){}
   function build(){
     if(document.getElementById("dvlScannerPanel0780")) return;
     var panel=document.createElement("section");
