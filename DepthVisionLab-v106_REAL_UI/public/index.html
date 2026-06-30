@@ -23109,6 +23109,13 @@ function buildTickerFromRealKlines(){
 }
 
 async function loadAll(silent=false){
+  /* Stale-load guard: capture the symbol/interval this request is for.
+     loadAll is async; if the user switches asset (or TF) while the fetch is
+     in flight, a late-resolving request for the OLD symbol would otherwise
+     call applyKlineRowsToChart() and replace the chart with the old asset's
+     candles — then the live WS pushes the new asset's price on top, producing
+     the giant bogus candle / broken scale. We re-check below before applying. */
+  const _reqSym = symbol, _reqIv = interval;
   if(!silent) els.loading.classList.remove("hidden");
   const period = intervalToPeriod(interval);
   try{
@@ -23128,6 +23135,9 @@ async function loadAll(silent=false){
       jget(_bbUrl(1)).catch(()=>null),
       jget(_bbUrl(2)).catch(()=>null)
     ]);
+    /* Symbol/TF changed while this request was in flight → discard the stale
+       result so it can never clobber the current asset's chart. */
+    if(symbol !== _reqSym || interval !== _reqIv) return;
     if(!Array.isArray(k) || !k.length){
       throw new Error("Binance klines vazio para " + symbol + " " + interval);
     }
@@ -23191,6 +23201,8 @@ async function loadAll(silent=false){
     let emergency = null;
     if(!klines.length){
       try{ emergency = await fetchEmergencyRealKlines(symbol, interval); }catch(_){}
+      /* Same stale-load guard for the emergency fallback fetch. */
+      if(symbol !== _reqSym || interval !== _reqIv) return;
       if(emergency && applyKlineRowsToChart(emergency.rows)){
         ticker = buildTickerFromRealKlines();
         assetTickerMap[symbol] = ticker;
