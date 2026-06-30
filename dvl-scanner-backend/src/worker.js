@@ -32,6 +32,12 @@ const spikeReg = { binance: {}, mexc: {}, };
    symbol, used to compute a REAL OI up/down/flat trend across cycles. */
 const oiReg = { binance: {}, mexc: {} };
 
+/* Per-exchange PERSISTENT signal registry: once a symbol ignites it lives
+   here (keyed by raw symbol) and is refreshed every cycle until it ages out,
+   leaves the feed, or is pushed past the row limit. This is what makes a
+   detected signal stay on the list instead of vanishing next cycle. */
+const signalReg = { binance: {}, mexc: {} };
+
 function oiTrendFrom(prevOi, curOi) {
   if (!Number.isFinite(curOi) || !Number.isFinite(prevOi) || prevOi <= 0) return null;
   const d = (curOi - prevOi) / prevOi;
@@ -63,13 +69,10 @@ function buildRow(exKey, adapter, t, k, now) {
     extVols[extVols.length - 1] = extVols[extVols.length - 1] / fraction;
   }
   const sig = M.computeSignal(k.closes, extVols, cfg.ENGINE);
-  /* Mandatory criterion — the MEXC early-pump setup: a dead volume base below
-     the MA, then the FIRST cross back above it (even a small one = the start
-     of something). Replaces the old prevVolBelowHalf filter, which required a
-     big abrupt spike and discarded exactly these early ignitions. */
-  if (!sig.isIgnition) return null;
-
-  const spikeAt = trackSpike(exKey, sym, sig.crossStrength, now);
+  /* Build a row for ANY candidate (igniting or not). The signal registry in
+     scanExchange decides what enters/stays: a symbol JOINS when it ignites,
+     then persists and refreshes here every cycle until it's pushed out by the
+     row limit or ages out. */
   const tfOrigin = cfg.SCAN_TF;
   const candles = (k.ohlc || []).slice(-cfg.CANDLES_PER_ROW);
 
@@ -92,13 +95,14 @@ function buildRow(exKey, adapter, t, k, now) {
     volBelowMaBars: sig.volBelowMaBars,
     crossStrength: Math.round(sig.crossStrength * 100) / 100,
     maFlatness1: sig.maFlatness1,
-    isIgnition: true,
+    isIgnition: sig.isIgnition,
 
     /* spikeScore/status are finalized in scanExchange once the real OI trend
-       is known (OI rising is a core part of the ignition score). */
+       is known (OI rising is a core part of the ignition score). spikeAt is
+       set from the registry's detection time. */
     spikeScore: 0,
     status: "",
-    spikeAt: spikeAt,
+    spikeAt: 0,
 
     rsi14: Math.round(sig.rsi14 * 10) / 10,
     /* oi is overwritten with the REAL holdVol trend in scanExchange; this
@@ -118,7 +122,49 @@ function buildRow(exKey, adapter, t, k, now) {
   };
 }
 
-/* Scan one exchange adapter into a row array. Throws on total failure. */
+/* Pure registry merge — kept separate so the persistence behaviour can be
+   tested without the network. Mutates sigReg in place and returns the
+   recency-ordered, capped snapshot rows.
+   - a symbol JOINS when cur[sym].isIgnition and it's not already tracked
+   - tracked entries are refreshed each cycle with cur[sym] (detection time
+     kept); when absent from cur they accrue a "missed" count
+   - entries leave on age, prolonged absence, or when pushed past the cap */
+function mergeRegistry(sigReg, cur, now) {
+  for (const sym in cur) {
+    if (cur[sym].isIgnition && !sigReg[sym]) {
+      sigReg[sym] = Object.assign({}, cur[sym], { _detectedAt: now, _missed: 0 });
+    }
+  }
+  for (const sym in sigReg) {
+    const entry = sigReg[sym];
+    if (cur[sym]) {
+      const detectedAt = entry._detectedAt;
+      Object.assign(entry, cur[sym]);
+      entry._detectedAt = detectedAt;
+      entry._missed = 0;
+    } else {
+      entry._missed = (entry._missed || 0) + 1;
+    }
+    if ((now - entry._detectedAt) > cfg.HIST_MAX_AGE || entry._missed > cfg.MAX_MISSED) {
+      delete sigReg[sym];
+    }
+  }
+  let rows = Object.keys(sigReg).map(sym => { sigReg[sym].spikeAt = sigReg[sym]._detectedAt; return sigReg[sym]; });
+  rows.sort((a, b) => b._detectedAt - a._detectedAt);
+  if (rows.length > cfg.SNAPSHOT_ROWS) {
+    const keep = new Set(rows.slice(0, cfg.SNAPSHOT_ROWS).map(r => r.rawSymbol));
+    for (const sym in sigReg) { if (!keep.has(sym)) delete sigReg[sym]; }
+    rows = rows.slice(0, cfg.SNAPSHOT_ROWS);
+  }
+  return rows;
+}
+
+/* Scan one exchange into a persistent, recency-ordered list of signals.
+   A symbol JOINS the list the moment it ignites; once in, it STAYS and is
+   refreshed with live data every cycle (price, OI, LSR, score, candles) even
+   after the ignition bar has passed — so a detected signal never just
+   vanishes. It only leaves when it ages out, disappears from the feed for a
+   while, or is pushed past the row limit by newer signals. */
 async function scanExchange(adapter) {
   const now = Date.now();
   let cands = await adapter.tickers();
@@ -128,38 +174,35 @@ async function scanExchange(adapter) {
   const kl = await mapPool(cands, cfg.POOL, c => adapter.klines(c.sym, cfg.SCAN_TF));
   const freshCut = now - cfg.FRESH_MS;
   const reg = oiReg[adapter.key] || (oiReg[adapter.key] = {});
-  const rows = [];
+  const sigReg = signalReg[adapter.key] || (signalReg[adapter.key] = {});
+
+  /* 1) Compute current data for every valid candidate (igniting or not). */
+  const cur = {};
   for (let i = 0; i < cands.length; i++) {
     const k = kl[i];
     if (!k || !k.closes || k.closes.length < 25) continue;
     if (k.lastOpen && k.lastOpen < freshCut) continue;
     const row = buildRow(adapter.key, adapter, cands[i], k, now);
-    if (!row) continue;
-    /* Real OI trend: this cycle's holdVol vs the previous cycle's. */
     const realOi = oiTrendFrom(reg[cands[i].sym], Number(cands[i].oi));
     if (realOi) row.oi = realOi;
-    /* Finalize the ignition score now that the real OI trend is set. */
     row.spikeScore = M.ignitionScore(row);
     row.status = M.ignitionStatus(row.spikeScore);
-    rows.push(row);
+    cur[cands[i].sym] = row;
   }
-  /* Remember this cycle's OI for every scanned symbol (not only the ones that
-     passed the filter) so the trend is available the moment they spike. */
+  /* Remember this cycle's OI for every scanned symbol. */
   for (const c of cands) { if (Number.isFinite(Number(c.oi))) reg[c.sym] = Number(c.oi); }
-  /* Most recent spike on top (newest spikeAt first); score breaks ties. */
-  rows.sort((a, b) => (b.spikeAt - a.spikeAt) || (b.spikeScore - a.spikeScore));
-  const top = rows.slice(0, cfg.SNAPSHOT_ROWS);
 
-  /* Real LSR: pull Bybit account-ratio for the rows we actually ship. Bybit
-     uses plain symbols (APTUSDT). If a symbol isn't on Bybit, keep the
-     derived lsr. Only the shown rows are queried, so this stays cheap. */
-  await mapPool(top, cfg.POOL, async (row) => {
+  /* 2-4) Persist/refresh/rank/evict via the registry. */
+  const rows = mergeRegistry(sigReg, cur, now);
+
+  /* 5) Real LSR (Bybit) for the listed signals only. */
+  await mapPool(rows, cfg.POOL, async (row) => {
     try {
       const r = await bybit.accountRatio(row.symbol, cfg.SCAN_TF);
       if (r) { row.lsr = r.trend; row.lsrValue = Math.round(r.lsr * 1000) / 1000; }
     } catch (_) { /* not on Bybit / transient — keep derived lsr */ }
   });
-  return top;
+  return rows;
 }
 
 /* Snapshots, keyed by the exchange the CLIENT asked for. */
@@ -181,9 +224,10 @@ function emptySnapshot(exchange) {
 }
 
 function rowsSignature(rows) {
-  /* Compact signature to detect "something relevant changed". */
+  /* Compact signature to detect "something relevant changed" — includes price
+     so live refreshes of persisted signals are broadcast too. */
   return rows.map(r => r.rawSymbol + ":" + r.spikeScore + ":" + r.status + ":" + r.side +
-    ":" + r.oi + ":" + r.lsr + ":" + Math.round(r.rsi14)).join("|");
+    ":" + r.oi + ":" + r.lsr + ":" + Math.round(r.rsi14) + ":" + r.price).join("|");
 }
 
 let _onChange = () => {};
@@ -236,4 +280,4 @@ async function start() {
 }
 function stop() { if (_timer) { clearInterval(_timer); _timer = null; } }
 
-module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange };
+module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry };

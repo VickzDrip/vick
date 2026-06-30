@@ -20,6 +20,10 @@ module.exports = {
   HIST_MAX_AGE: 86400000,
   HIST_MAX_ROWS: 300,
 
+  /* Evict a tracked signal after this many consecutive cycles missing from
+     the feed (e.g. it dropped out of the top-volume candidates). */
+  MAX_MISSED: 15,
+
   /* How many ranked rows the snapshot ships to the client. */
   SNAPSHOT_ROWS: 120,
 
