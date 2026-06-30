@@ -1,0 +1,22 @@
+[Unit]
+Description=DVL Scanner 24h backend (REST snapshot + WebSocket live feed)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust WorkingDirectory/User to where you cloned the backend on the VPS.
+WorkingDirectory=/opt/dvl-scanner-backend
+ExecStart=/usr/bin/node src/index.js
+Environment=DVL_PORT=8090
+Environment=DVL_REFRESH_MS=60000
+Environment=DVL_SCAN_TF=15m
+Restart=always
+RestartSec=5
+# Read-only service; no special privileges needed.
+User=www-data
+Group=www-data
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

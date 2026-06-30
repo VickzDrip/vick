@@ -69194,6 +69194,140 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   else boot();
 })();
 </script>
+
+<!-- DVL Beta 1.023 — Scanner Live Feed Bridge (server snapshot + WebSocket) -->
+<script id="DVL_SCANNER_LIVE_FEED_BRIDGE_1023_JS">
+(function(){
+  "use strict";
+  if(window.DVL_SCANNER_LIVE_FEED_BRIDGE_1023) return;
+
+  var LS_URL="dvlScannerBackendUrl";
+  var _base=null, _active=false, _rows=[], _meta={}, _ws=null, _reconnect=null, _hooked=false;
+  var _orig={rows:null,rawRows:null,refresh:null};
+
+  function engine(){ return window.__DVL_SCANNER_ORIGINAL_1013 || null; }
+  function pro(){ return window.DVL_SCANNER_PRO_FORCE_OPEN_1013 || null; }
+  function curExchange(){
+    try{ return (window.DVL_SCANNER_EXCHANGE_FILTER_1022 && window.DVL_SCANNER_EXCHANGE_FILTER_1022.state && window.DVL_SCANNER_EXCHANGE_FILTER_1022.state.exchange) || "binance"; }
+    catch(_){ return "binance"; }
+  }
+  function loadUrl(){ try{ return (typeof window.DVL_SCANNER_BACKEND_URL==="string"?window.DVL_SCANNER_BACKEND_URL:null) || localStorage.getItem(LS_URL) || null; }catch(_){ return null; } }
+  function api(path){ var b=_base==null?"":_base; return b.replace(/\/$/,"")+path; }
+  function wsUrl(path){
+    var b=_base; if(b==null||b===""){ b=location.origin; }
+    return b.replace(/^http/,"ws").replace(/\/$/,"")+path;
+  }
+
+  /* Map a server snapshot row to the row shape the in-page Scanner Pro reads.
+     The Pro re-derives score/status/OI/LSR from these via its own (now fixed)
+     score() — same formula + weights as the backend, so the result matches. */
+  function mapRow(r){
+    var sym=String(r.symbol||r.rawSymbol||"");
+    var base=r.base || sym.replace(/\/USDT$/,"").replace(/USDT$/,"");
+    return {
+      symbol: sym.indexOf("/")>=0 ? sym : (base+"/USDT"),
+      mexc: r.rawSymbol || sym,
+      coin: window.dvlAssetLetterClass ? window.dvlAssetLetterClass(sym) : "",
+      icon: window.dvlAssetFirstLetter ? window.dvlAssetFirstLetter(sym) : ((base.charAt(0))||"?"),
+      side: r.side, setup:"",
+      spike20: Number(r.spike20)||0, spike50: Number(r.spike50)||0, volX: Number(r.spike20)||0,
+      flatCandles: Number(r.flatCandles)||0, barPct: Number(r.barPct)||0,
+      prevVolBelowHalf: !!r.prevVolBelowHalf, priceGlueOk: !!r.priceGlueOk,
+      rsi14: Number(r.rsi14)||50, last5Closes: Array.isArray(r.last5Closes)?r.last5Closes:[],
+      lastClose: Number(r.price)||0, price24hPct: Number(r.var24h)||0,
+      spikeAt: r.spikeAt||0, _histAt: r.spikeAt||_meta.updatedAt||Date.now(),
+      _backend:true
+    };
+  }
+
+  function rerender(){ try{ var p=pro(); if(p&&typeof p.render==="function") p.render(); }catch(_){} }
+
+  function installHooks(){
+    var e=engine(); if(!e || _hooked) return false;
+    _orig.rows=e.rows; _orig.rawRows=e.rawRows; _orig.refresh=e.refresh;
+    e.rows=function(){ return _active ? _rows.slice() : (typeof _orig.rows==="function"?_orig.rows.apply(e,arguments):[]); };
+    e.rawRows=function(){ return _active ? _rows.slice() : (typeof _orig.rawRows==="function"?_orig.rawRows.apply(e,arguments):[]); };
+    e.refresh=function(){ if(_active){ pull(); return Promise.resolve(); } return typeof _orig.refresh==="function"?_orig.refresh.apply(e,arguments):Promise.resolve(); };
+    _hooked=true; return true;
+  }
+
+  /* ── Public bridge API ── */
+  function setSnapshot(snap){
+    if(!snap || !Array.isArray(snap.rows)) return;
+    _meta={updatedAt:snap.updatedAt, exchange:snap.exchange, activeSource:snap.activeSource, fallback:!!snap.fallback};
+    _rows=snap.rows.map(mapRow);
+    installHooks();
+    rerender();
+  }
+  function updateRows(rows){ if(Array.isArray(rows)){ _rows=rows.map(mapRow); rerender(); } }
+  function updateAsset(asset){
+    if(!asset) return;
+    var key=asset.rawSymbol||asset.symbol; if(!key) return;
+    var mapped=mapRow(asset), found=false;
+    for(var i=0;i<_rows.length;i++){ if(_rows[i].mexc===mapped.mexc||_rows[i].symbol===mapped.symbol){ _rows[i]=mapped; found=true; break; } }
+    if(!found) _rows.push(mapped);
+    rerender();
+  }
+
+  function pull(){
+    if(_base==null) return Promise.resolve(null);
+    var ex=curExchange();
+    return fetch(api("/api/dvl/scanner/snapshot?exchange="+encodeURIComponent(ex)),{cache:"no-store"})
+      .then(function(r){ if(!r.ok) throw new Error("snapshot "+r.status); return r.json(); })
+      .then(function(snap){ setSnapshot(snap); return snap; })
+      .catch(function(e){ console.warn("[DVL 1023] snapshot pull failed:",e&&e.message); return null; });
+  }
+
+  function connectWS(url){
+    disconnect();
+    var ex=curExchange();
+    var target=url || wsUrl("/ws/dvl/scanner?exchange="+encodeURIComponent(ex));
+    try{
+      _ws=new WebSocket(target);
+      _ws.onmessage=function(ev){
+        try{
+          var msg=JSON.parse(ev.data);
+          if(msg.type==="scanner:update") setSnapshot({rows:msg.rows,updatedAt:msg.updatedAt,exchange:msg.exchange,activeSource:msg.activeSource,fallback:msg.fallback});
+          else if(msg.type==="scanner:asset") updateAsset(msg.asset);
+        }catch(_){}
+      };
+      _ws.onclose=function(){ _ws=null; if(_active){ if(_reconnect) clearTimeout(_reconnect); _reconnect=setTimeout(function(){ if(_active) connectWS(); }, 4000); } };
+      _ws.onerror=function(){ try{_ws.close();}catch(_){}};
+    }catch(e){ console.warn("[DVL 1023] WS connect failed:",e&&e.message); }
+  }
+  function disconnect(){ if(_reconnect){clearTimeout(_reconnect);_reconnect=null;} if(_ws){ try{_ws.onclose=null;_ws.close();}catch(_){} _ws=null; } }
+
+  function enable(url){
+    if(typeof url==="string"){ _base=url; try{ localStorage.setItem(LS_URL,url); }catch(_){} }
+    else if(_base==null){ _base=loadUrl(); }
+    if(_base==null){ console.warn("[DVL 1023] no backend URL set; bridge stays inactive"); return false; }
+    _active=true;
+    installHooks();
+    pull().then(function(snap){ if(snap) connectWS(); });
+    return true;
+  }
+  function disable(){ _active=false; disconnect(); try{ localStorage.removeItem(LS_URL); }catch(_){} _rows=[]; rerender(); }
+
+  /* Re-pull + reconnect when the user switches Binance/MEXC in the filter. */
+  window.addEventListener("dvl:scanner-exchange-change", function(){ if(_active){ pull().then(function(snap){ if(snap) connectWS(); }); } });
+
+  window.DVL_SCANNER_LIVE_FEED_BRIDGE_1023={
+    version:"1.023",
+    enable:enable, disable:disable,
+    setSnapshot:setSnapshot, setFeed:setSnapshot,
+    updateRows:updateRows, updateAsset:updateAsset,
+    connectWS:connectWS, disconnect:disconnect, pull:pull,
+    audit:function(){ return { version:"1.023", active:_active, base:_base, hooked:_hooked, rows:_rows.length, ws:!!(_ws&&_ws.readyState===1), exchange:curExchange(), meta:_meta }; }
+  };
+
+  /* Auto-enable ONLY if a backend URL was already configured. With no URL the
+     bridge is completely inert and the in-browser scanner works as before. */
+  if(loadUrl()){
+    if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", function(){ enable(); }, {once:true});
+    else enable();
+  }
+})();
+</script>
 </body>
 
 
