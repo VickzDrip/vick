@@ -61448,13 +61448,18 @@ body.dvlScannerOpen080 #chartWrap{
     return out+'</span>';
   }
   function trend(r,type){
-    /* Prefer the backend's real OI/LSR direction when the live feed supplies
-       it (r.oi / r.lsr are "up"/"down"/"flat" strings). Falls back to the
+    /* Live-feed rows carry a real OI/LSR reading split into direction and
+       colour: arrow = value vs its MA (↑ above / ↓ below); colour = MA slope
+       × position (green/yellow/red -> up/flat/down classes). Falls back to the
        derived value when scanning in-browser. */
-    var bk = type==="oi" ? r.oi : (type==="lsr" ? r.lsr : null);
-    if(bk==="up")   return {c:"up",t:"↑"};
-    if(bk==="down") return {c:"down",t:"↓"};
-    if(bk==="flat") return {c:"flat",t:"→"};
+    if(r && r._backend){
+      var dir = type==="oi" ? r.oi : (type==="lsr" ? r.lsr : null);
+      var col = type==="oi" ? r.oiColor : (type==="lsr" ? r.lsrColor : null);
+      if(dir==="up"||dir==="down"){
+        var cls = col==="green" ? "up" : (col==="red" ? "down" : "flat");
+        return { c:cls, t: dir==="up" ? "↑" : "↓" };
+      }
+    }
     var side=String(r.side||"").toUpperCase(), bp=Number(r.barPct)||0, sc=score(r);
     if(type==="oi"){
       if(side==="LONG"&&sc>=52) return {c:"up",t:"↑"};
@@ -69254,6 +69259,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       lastClose: Number(r.price)||0, price24hPct: Number(r.var24h)||0,
       spikeAt: r.spikeAt||0, _histAt: r.spikeAt||_meta.updatedAt||Date.now(),
       oi: r.oi, lsr: r.lsr, oiValue: r.oiValue, lsrValue: r.lsrValue,
+      oiColor: r.oiColor, lsrColor: r.lsrColor,
       spikeScore: r.spikeScore, status: r.status,
       volBelowMaBars: r.volBelowMaBars, crossStrength: r.crossStrength,
       _backend:true

@@ -34,23 +34,25 @@ async function mapPool(items, limit, fn) {
    only when a new spike is >=25% stronger (mirrors trackSpike). */
 const spikeReg = { binance: {}, mexc: {}, };
 
-/* Per-exchange open-interest registry: last cycle's OI (holdVol) per
-   symbol, used to compute a REAL OI up/down/flat trend across cycles. */
-const oiReg = { binance: {}, mexc: {} };
+/* Per-exchange open-interest history: a rolling buffer of OI (holdVol) values
+   per symbol (one per cycle) → OI MA for the arrow (value vs MA) and colour
+   (MA slope × position). */
+const oiBufReg = { binance: {}, mexc: {} };
+
+function pushOi(exKey, sym, value) {
+  const reg = oiBufReg[exKey] || (oiBufReg[exKey] = {});
+  if (!Number.isFinite(value)) return reg[sym] || [];
+  const buf = reg[sym] || (reg[sym] = []);
+  buf.push(value);
+  if (buf.length > cfg.OI_MA_LEN) buf.shift();
+  return buf;
+}
 
 /* Per-exchange PERSISTENT signal registry: once a symbol ignites it lives
    here (keyed by raw symbol) and is refreshed every cycle until it ages out,
    leaves the feed, or is pushed past the row limit. This is what makes a
    detected signal stay on the list instead of vanishing next cycle. */
 const signalReg = { binance: {}, mexc: {} };
-
-function oiTrendFrom(prevOi, curOi) {
-  if (!Number.isFinite(curOi) || !Number.isFinite(prevOi) || prevOi <= 0) return null;
-  const d = (curOi - prevOi) / prevOi;
-  if (d > 0.002) return "up";
-  if (d < -0.002) return "down";
-  return "flat";
-}
 
 function trackSpike(exKey, sym, level, now) {
   const reg = spikeReg[exKey] || (spikeReg[exKey] = {});
@@ -179,7 +181,6 @@ async function scanExchange(adapter) {
 
   const kl = await mapPool(cands, cfg.POOL, c => adapter.klines(c.sym, cfg.SCAN_TF));
   const freshCut = now - cfg.FRESH_MS;
-  const reg = oiReg[adapter.key] || (oiReg[adapter.key] = {});
   const sigReg = signalReg[adapter.key] || (signalReg[adapter.key] = {});
 
   /* 1) Compute current data for every valid candidate (igniting or not). */
@@ -189,23 +190,28 @@ async function scanExchange(adapter) {
     if (!k || !k.closes || k.closes.length < 25) continue;
     if (k.lastOpen && k.lastOpen < freshCut) continue;
     const row = buildRow(adapter.key, adapter, cands[i], k, now);
-    const realOi = oiTrendFrom(reg[cands[i].sym], Number(cands[i].oi));
-    if (realOi) row.oi = realOi;
-    row.spikeScore = M.ignitionScore(row);
+    /* OI arrow (value vs its MA) + colour (MA slope × position). */
+    const oiBuf = pushOi(adapter.key, cands[i].sym, Number(cands[i].oi));
+    const oiT = M.trendVsMA(oiBuf);
+    row.oi = oiT.arrow; row.oiColor = oiT.color;
+    row.spikeScore = M.ignitionScore(row);   // uses oiColor
     row.status = M.ignitionStatus(row.spikeScore);
     cur[cands[i].sym] = row;
   }
-  /* Remember this cycle's OI for every scanned symbol. */
-  for (const c of cands) { if (Number.isFinite(Number(c.oi))) reg[c.sym] = Number(c.oi); }
 
   /* 2-4) Persist/refresh/rank/evict via the registry. */
   const rows = mergeRegistry(sigReg, cur, now);
 
-  /* 5) Real LSR (Bybit) for the listed signals only. */
+  /* 5) Real LSR (Bybit) for the listed signals only — arrow vs its MA +
+        colour from the MA slope, same model as OI. */
   await mapPool(rows, cfg.POOL, async (row) => {
     try {
-      const r = await bybit.accountRatio(row.symbol, cfg.SCAN_TF);
-      if (r) { row.lsr = r.trend; row.lsrValue = Math.round(r.lsr * 1000) / 1000; }
+      const r = await bybit.accountRatio(row.symbol, cfg.SCAN_TF, cfg.LSR_MA_LEN);
+      if (r && r.series) {
+        const t = M.trendVsMA(r.series);
+        row.lsr = t.arrow; row.lsrColor = t.color;
+        row.lsrValue = Math.round(r.lsr * 1000) / 1000;
+      }
     } catch (_) { /* not on Bybit / transient — keep derived lsr */ }
   });
   return rows;
@@ -233,7 +239,7 @@ function rowsSignature(rows) {
   /* Compact signature to detect "something relevant changed" — includes price
      so live refreshes of persisted signals are broadcast too. */
   return rows.map(r => r.rawSymbol + ":" + r.spikeScore + ":" + r.status + ":" + r.side +
-    ":" + r.oi + ":" + r.lsr + ":" + Math.round(r.rsi14) + ":" + r.price).join("|");
+    ":" + r.oi + r.oiColor + ":" + r.lsr + r.lsrColor + ":" + Math.round(r.rsi14) + ":" + r.price).join("|");
 }
 
 /* ── Registry persistence ── */

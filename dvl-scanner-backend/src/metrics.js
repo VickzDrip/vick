@@ -150,7 +150,9 @@ function ignitionScore(r, weights) {
   const fBase = clamp((Number(r.volBelowMaBars) || 0) / 15, 0, 1);          // full at 15 dead bars
   const fCross = clamp(((Number(r.crossStrength) || 1) - 1) / 1.5, 0, 1);   // full at ~2.5x MA
   const fFlat = clamp(1 - (Number(r.maFlatness1) || 1) / 0.5, 0, 1);        // flatter = better
-  const oiUp = r.oi === "up" ? 1 : (r.oi === "flat" ? 0.4 : 0);
+  /* OI confirmation from the colour: green (MA rising + above) is the
+     strongest "money entering", red (falling + below) the weakest. */
+  const oiUp = r.oiColor === "green" ? 1 : (r.oiColor === "red" ? 0 : 0.4);
   const glue = r.priceGlueOk ? 1 : 0;
   const wTotal = w.base + w.cross + w.flat + w.oi + w.glue;
   if (wTotal <= 0) return 0;
@@ -222,7 +224,30 @@ function factorsOf(r, sc) {
   };
 }
 
+/* Arrow + colour for OI / LSR from a value series (oldest → newest).
+   - arrow: current value ABOVE its MA → "up" (↑), BELOW → "down" (↓)
+   - colour (MA slope × position):
+       MA rising + above  = green
+       MA rising + below  = yellow
+       MA falling + above = yellow
+       MA falling + below = red */
+function trendVsMA(series) {
+  const s = (series || []).map(Number).filter(v => Number.isFinite(v));
+  if (s.length < 2) return { arrow: "up", color: "yellow" }; // not enough data yet
+  const avg = a => a.reduce((x, y) => x + y, 0) / Math.max(a.length, 1);
+  const ma = avg(s);
+  const cur = s[s.length - 1];
+  const above = cur >= ma;
+  const half = Math.floor(s.length / 2);
+  const maRising = avg(s.slice(half)) >= avg(s.slice(0, half));
+  let color;
+  if (maRising && above) color = "green";
+  else if (!maRising && !above) color = "red";
+  else color = "yellow";
+  return { arrow: above ? "up" : "down", color };
+}
+
 module.exports = {
   sma, pct, priceMaGlueStats, computeSignal,
-  score, ignitionScore, statusOf, ignitionStatus, oiTrend, lsrTrend, factorsOf
+  score, ignitionScore, statusOf, ignitionStatus, oiTrend, lsrTrend, factorsOf, trendVsMA
 };

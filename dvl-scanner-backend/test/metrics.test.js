@@ -62,11 +62,24 @@ fv[fv.length - 1] = 130;
 ok(M.computeSignal(fc, fv).isIgnition === false, "isIgnition false without a dead base below MA");
 
 /* ignitionScore differentiates and respects OI */
-const sNoOi = M.ignitionScore({ volBelowMaBars: 12, crossStrength: 1.6, maFlatness1: 0.1, priceGlueOk: true, oi: "flat" });
-const sOiUp = M.ignitionScore({ volBelowMaBars: 12, crossStrength: 1.6, maFlatness1: 0.1, priceGlueOk: true, oi: "up" });
-ok(sOiUp > sNoOi, "rising OI raises the ignition score (" + sNoOi + " -> " + sOiUp + ")");
+const sNoOi = M.ignitionScore({ volBelowMaBars: 12, crossStrength: 1.6, maFlatness1: 0.1, priceGlueOk: true, oiColor: "yellow" });
+const sOiUp = M.ignitionScore({ volBelowMaBars: 12, crossStrength: 1.6, maFlatness1: 0.1, priceGlueOk: true, oiColor: "green" });
+ok(sOiUp > sNoOi, "green OI raises the ignition score (" + sNoOi + " -> " + sOiUp + ")");
 eq(M.ignitionStatus(80), "Ignição forte", "ignitionStatus strong");
 eq(M.ignitionStatus(45), "Início", "ignitionStatus early");
+
+/* 6) trendVsMA — arrow vs MA + 4-quadrant colour. */
+function mk(n, fn) { return Array.from({ length: n }, (_, i) => fn(i)); }
+let r;
+r = M.trendVsMA(mk(20, i => 100 + i));            // rising MA, value above
+eq(r.arrow + "/" + r.color, "up/green", "rising MA + above = up/green");
+r = M.trendVsMA(mk(20, i => 100 - i));            // falling MA, value below
+eq(r.arrow + "/" + r.color, "down/red", "falling MA + below = down/red");
+r = M.trendVsMA(mk(19, i => 100 + i).concat(105));// rising MA, but value dipped below
+eq(r.arrow + "/" + r.color, "down/yellow", "rising MA + below = down/yellow");
+r = M.trendVsMA(mk(19, i => 100 - i).concat(95)); // falling MA, value popped above
+eq(r.arrow + "/" + r.color, "up/yellow", "falling MA + above = up/yellow");
+ok(M.trendVsMA([5]).color === "yellow", "single sample = neutral yellow");
 
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

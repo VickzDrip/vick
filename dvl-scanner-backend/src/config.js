@@ -41,6 +41,11 @@ module.exports = {
   /* Bybit account-ratio period mapping (Bybit's minimum granularity is 5min). */
   BYBIT_PERIOD: { "1m": "5min", "3m": "5min", "5m": "5min", "15m": "15min", "30m": "30min", "1h": "1h" },
 
+  /* Window lengths for the OI / LSR moving averages used to decide the arrow
+     (value vs its MA) and the colour (MA slope + value position). */
+  OI_MA_LEN: 20,    // OI samples (one per cycle) kept per symbol
+  LSR_MA_LEN: 20,   // Bybit account-ratio points fetched per symbol
+
   /* Signal-engine parameters — same defaults as the in-page filterState. */
   ENGINE: {
     maPeriod1: 20,

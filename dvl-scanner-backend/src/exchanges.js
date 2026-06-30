@@ -87,12 +87,13 @@ const { BYBIT_PERIOD } = require("./config");
 const bybit = {
   key: "bybit",
   label: "Bybit",
-  /* Returns { lsr, trend } for symbol (e.g. "APTUSDT") or null if Bybit has
-     no account-ratio for it. trend = direction of the long/short ratio. */
-  async accountRatio(symbol, tf) {
+  /* Returns { lsr, series } for symbol (e.g. "APTUSDT") or null if Bybit has
+     no account-ratio for it. series = long/short ratio oldest→newest (used to
+     derive the arrow vs its MA and the colour from the MA slope). */
+  async accountRatio(symbol, tf, limit) {
     const period = (BYBIT_PERIOD && BYBIT_PERIOD[tf]) || "15min";
     const url = "https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=" +
-      encodeURIComponent(symbol) + "&period=" + period + "&limit=2";
+      encodeURIComponent(symbol) + "&period=" + period + "&limit=" + (limit || 20);
     const j = await getJSON(url);
     const list = (j && j.result && Array.isArray(j.result.list)) ? j.result.list : [];
     const pts = list
@@ -100,14 +101,8 @@ const bybit = {
       .filter(p => Number.isFinite(p.t) && Number.isFinite(p.lsr) && p.lsr > 0)
       .sort((a, b) => a.t - b.t);
     if (!pts.length) return null;
-    const cur = pts[pts.length - 1].lsr;
-    const prev = pts.length > 1 ? pts[pts.length - 2].lsr : cur;
-    let trend = "flat";
-    if (prev > 0) {
-      const d = (cur - prev) / prev;
-      trend = d > 0.005 ? "up" : (d < -0.005 ? "down" : "flat");
-    }
-    return { lsr: cur, trend };
+    const series = pts.map(p => p.lsr);
+    return { lsr: series[series.length - 1], series };
   }
 };
 
