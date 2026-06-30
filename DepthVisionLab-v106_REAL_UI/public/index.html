@@ -23079,7 +23079,7 @@ async function fetchEmergencyRealKlines(sym, iv){
 
 function applyKlineRowsToChart(rows){
   if(!Array.isArray(rows) || !rows.length) return false;
-  klines = rows.map(x => ({
+  const mapped = rows.map(x => ({
     time:x[0], open:+x[1], high:+x[2], low:+x[3], close:+x[4],
     volume:+x[5], quoteVolume:+x[7], buyVolume:+x[9]
   })).filter(c =>
@@ -23089,7 +23089,12 @@ function applyKlineRowsToChart(rows){
     Number.isFinite(c.low) &&
     Number.isFinite(c.close)
   );
-  return !!klines.length;
+  /* Never blank an already-loaded chart with an empty/garbled response —
+     keep the last good candles instead of wiping them. */
+  if(!mapped.length) return false;
+  klines = mapped;
+  try{ window.DVL_CHART_READY = true; }catch(_){}
+  return true;
 }
 
 function buildTickerFromRealKlines(){
@@ -23117,7 +23122,12 @@ async function loadAll(silent=false){
      candles — then the live WS pushes the new asset's price on top, producing
      the giant bogus candle / broken scale. We re-check below before applying. */
   const _reqSym = symbol, _reqIv = interval;
-  if(!silent) els.loading.classList.remove("hidden");
+  /* Loading overlay is purely a function of "is there anything to show". Once
+     the chart has candles, NO refresh (background or otherwise) may show the
+     "CARREGANDO BINANCE..." overlay or blank the chart — only a genuine empty
+     state (first boot, or a user symbol change that cleared candles) shows it.
+     This prevents the chart from flashing back to loading after it was ready. */
+  if(!silent && !klines.length) els.loading.classList.remove("hidden");
   const period = intervalToPeriod(interval);
   try{
     const _pMs = periodToMs(period), _now = Date.now();
@@ -23137,8 +23147,9 @@ async function loadAll(silent=false){
       jget(_bbUrl(2)).catch(()=>null)
     ]);
     /* Symbol/TF changed while this request was in flight → discard the stale
-       result so it can never clobber the current asset's chart. */
-    if(symbol !== _reqSym || interval !== _reqIv) return;
+       result so it can never clobber the current asset's chart. Hide the
+       overlay first so it can never get stuck. */
+    if(symbol !== _reqSym || interval !== _reqIv){ try{els.loading.classList.add("hidden");}catch(_){} return; }
     if(!Array.isArray(k) || !k.length){
       throw new Error("Binance klines vazio para " + symbol + " " + interval);
     }
@@ -23169,19 +23180,20 @@ async function loadAll(silent=false){
       updatedAt:Date.now()
     };
     refreshAssetTickers(true);
-    { const _s=new Set(); oiHist=[oi0,oi1,oi2].filter(Array.isArray).flatMap(p=>p).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_s.has(k))return false;_s.add(k);return true;}).map(x=>({time:+x.timestamp,value:+x.sumOpenInterestValue,qty:+x.sumOpenInterest})); }
+    { const _s=new Set(); const _oi=[oi0,oi1,oi2].filter(Array.isArray).flatMap(p=>p).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_s.has(k))return false;_s.add(k);return true;}).map(x=>({time:+x.timestamp,value:+x.sumOpenInterestValue,qty:+x.sumOpenInterest})); if(_oi.length) oiHist=_oi; /* keep last OI if the fetch came back empty so the pane doesn't vanish */ }
     {
       const _s=new Set();
       const _bnLS=[ls0,ls1,ls2].filter(Array.isArray).flatMap(p=>p).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_s.has(k))return false;_s.add(k);return true;});
       const _s2=new Set();
       const _bbList=[bb0,bb1,bb2].flatMap(r=>(Array.isArray(r?.result?.list)?r.result.list:[])).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_s2.has(k))return false;_s2.add(k);return true;});
       const _bbMap=new Map(_bbList.map(x=>[+x.timestamp,x]));
-      lsHist=_bnLS.map(x=>{
+      const _ls=_bnLS.map(x=>{
         const bb=_bbMap.get(+x.timestamp);
         if(!bb) return {time:+x.timestamp,ratio:+x.longShortRatio,long:+x.longAccount,short:+x.shortAccount};
         const lng=(+x.longAccount+(+bb.buyRatio))/2, sht=1-lng;
         return {time:+x.timestamp,ratio:lng/Math.max(sht,0.0001),long:lng,short:sht};
       });
+      if(_ls.length) lsHist=_ls; /* keep last LSR if the fetch came back empty so the pane doesn't vanish */
     }
     derivativesDataReal = oiHist.length > 0;
     try{
@@ -23974,6 +23986,9 @@ function draw(){
     if(!_ld || _ld.classList.contains("hidden")) drawEmpty(ctx,w,h);
     return;
   }
+  /* Safety net: with candles present the loading overlay must never linger
+     over a drawn chart (kills any spurious "CARREGANDO BINANCE..." flash). */
+  try{ if(els && els.loading) els.loading.classList.add("hidden"); }catch(_){}
 
   const testOscOn = dvlLowerPanelOn();
   const padL = 0, padR = 55;
