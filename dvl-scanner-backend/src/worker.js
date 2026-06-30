@@ -6,7 +6,7 @@
    and emits a change event the server broadcasts over WebSocket. */
 
 const cfg = require("./config");
-const { EXCHANGES, binance, mexc } = require("./exchanges");
+const { EXCHANGES, binance, mexc, tfToMs } = require("./exchanges");
 const M = require("./metrics");
 
 /* concurrency-limited map (mirrors the in-page mapPool). */
@@ -39,7 +39,18 @@ function trackSpike(exKey, sym, level, now) {
 
 function buildRow(exKey, adapter, t, k, now) {
   const sym = t.sym;
-  const sig = M.computeSignal(k.closes, k.vols, cfg.ENGINE);
+  /* Extrapolate the partial (still-forming) last candle's volume — exactly
+     what the in-page scanner does before computeSignal. Without this the
+     current candle's volume is tiny, every spike/prevVolBelowHalf check
+     fails, and the scan returns 0 rows. */
+  const tfMs = tfToMs(cfg.SCAN_TF);
+  const extVols = k.vols.slice();
+  if (extVols.length > 0 && k.lastOpen && tfMs > 0) {
+    const elapsed = Math.max(5000, now - k.lastOpen);
+    const fraction = Math.min(1, Math.max(0.05, elapsed / tfMs));
+    extVols[extVols.length - 1] = extVols[extVols.length - 1] / fraction;
+  }
+  const sig = M.computeSignal(k.closes, extVols, cfg.ENGINE);
   /* Mandatory criterion (same as the in-page scanner): the bar before the
      spike must be below 50% of the spike's volume. */
   if (!sig.prevVolBelowHalf) return null;
