@@ -69298,7 +69298,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   function disconnect(){ if(_reconnect){clearTimeout(_reconnect);_reconnect=null;} if(_ws){ try{_ws.onclose=null;_ws.close();}catch(_){} _ws=null; } }
 
   function enable(url){
-    if(typeof url==="string"){ _base=url; try{ localStorage.setItem(LS_URL,url); }catch(_){} }
+    if(typeof url==="string"){ _base=url; if(url){ try{ localStorage.setItem(LS_URL,url); }catch(_){} } }
     else if(_base==null){ _base=loadUrl(); }
     if(_base==null){ console.warn("[DVL 1023] no backend URL set; bridge stays inactive"); return false; }
     _active=true;
@@ -69320,12 +69320,20 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     audit:function(){ return { version:"1.023", active:_active, base:_base, hooked:_hooked, rows:_rows.length, ws:!!(_ws&&_ws.readyState===1), exchange:curExchange(), meta:_meta }; }
   };
 
-  /* Auto-enable ONLY if a backend URL was already configured. With no URL the
-     bridge is completely inert and the in-browser scanner works as before. */
-  if(loadUrl()){
-    if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", function(){ enable(); }, {once:true});
-    else enable();
+  /* Auto-start: if a backend URL was saved, use it. Otherwise probe the SAME
+     origin — if the 24h backend answers at /api/dvl/scanner/health, activate
+     automatically (no console needed). If nothing answers, stay completely
+     inert and the in-browser scanner runs exactly as before. */
+  function autoStart(){
+    var saved=loadUrl();
+    if(saved){ enable(saved); return; }
+    fetch("/api/dvl/scanner/health",{cache:"no-store"})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(h){ if(h && h.ok){ enable(""); } })
+      .catch(function(){ /* no backend reachable — stay inert */ });
   }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", autoStart, {once:true});
+  else autoStart();
 })();
 </script>
 </body>
