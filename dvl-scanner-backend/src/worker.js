@@ -5,9 +5,15 @@
    it polls tickers + klines, computes signals, builds a ready snapshot,
    and emits a change event the server broadcasts over WebSocket. */
 
+const fs = require("fs");
+const path = require("path");
 const cfg = require("./config");
 const { EXCHANGES, binance, mexc, bybit, tfToMs } = require("./exchanges");
 const M = require("./metrics");
+
+/* Where the persistent signal registry is mirrored to disk so it survives
+   restarts (deploys/reboots). Untracked by git, so `git pull` won't touch it. */
+const PERSIST_FILE = process.env.DVL_DATA_FILE || path.join(process.cwd(), "data", "signal-registry.json");
 
 /* concurrency-limited map (mirrors the in-page mapPool). */
 async function mapPool(items, limit, fn) {
@@ -230,6 +236,31 @@ function rowsSignature(rows) {
     ":" + r.oi + ":" + r.lsr + ":" + Math.round(r.rsi14) + ":" + r.price).join("|");
 }
 
+/* ── Registry persistence ── */
+function saveRegistry() {
+  try {
+    fs.mkdirSync(path.dirname(PERSIST_FILE), { recursive: true });
+    fs.writeFileSync(PERSIST_FILE, JSON.stringify(signalReg));
+  } catch (_) { /* disk issues are non-fatal */ }
+}
+function loadRegistry() {
+  try {
+    const obj = JSON.parse(fs.readFileSync(PERSIST_FILE, "utf8"));
+    const now = Date.now();
+    for (const ex of ["binance", "mexc"]) {
+      if (obj[ex] && typeof obj[ex] === "object") {
+        for (const sym in obj[ex]) {
+          const e = obj[ex][sym];
+          if (e && e._detectedAt && (now - e._detectedAt) < cfg.HIST_MAX_AGE) {
+            signalReg[ex][sym] = e;
+          }
+        }
+      }
+    }
+    console.log("[DVL worker] restored signal registry from disk");
+  } catch (_) { /* no file yet / unreadable — start fresh */ }
+}
+
 let _onChange = () => {};
 function onChange(fn) { _onChange = typeof fn === "function" ? fn : _onChange; }
 
@@ -250,6 +281,9 @@ async function cycle() {
   } else if (mexcRows) {
     updateSnapshot("binance", { rows: mexcRows, activeSource: "mexc", fallback: true, updatedAt: now });
   }
+
+  /* Mirror the registry to disk so signals survive restarts. */
+  saveRegistry();
 }
 
 function updateSnapshot(exchange, patch) {
@@ -272,6 +306,7 @@ function getSnapshot(exchange) {
 let _timer = null;
 async function start() {
   console.log("[DVL worker] starting 24h scan loop (every " + cfg.REFRESH_MS + "ms)");
+  loadRegistry();   // restore persisted signals so a restart doesn't reset the list
   const run = async () => {
     try { await cycle(); } catch (e) { console.warn("[DVL worker] cycle error:", e && e.message); }
   };
