@@ -61444,6 +61444,13 @@ body.dvlScannerOpen080 #chartWrap{
     return out+'</span>';
   }
   function trend(r,type){
+    /* Prefer the backend's real OI/LSR direction when the live feed supplies
+       it (r.oi / r.lsr are "up"/"down"/"flat" strings). Falls back to the
+       derived value when scanning in-browser. */
+    var bk = type==="oi" ? r.oi : (type==="lsr" ? r.lsr : null);
+    if(bk==="up")   return {c:"up",t:"↑"};
+    if(bk==="down") return {c:"down",t:"↓"};
+    if(bk==="flat") return {c:"flat",t:"→"};
     var side=String(r.side||"").toUpperCase(), bp=Number(r.barPct)||0, sc=score(r);
     if(type==="oi"){
       if(side==="LONG"&&sc>=52) return {c:"up",t:"↑"};
@@ -69236,6 +69243,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       rsi14: Number(r.rsi14)||50, last5Closes: Array.isArray(r.last5Closes)?r.last5Closes:[],
       lastClose: Number(r.price)||0, price24hPct: Number(r.var24h)||0,
       spikeAt: r.spikeAt||0, _histAt: r.spikeAt||_meta.updatedAt||Date.now(),
+      oi: r.oi, lsr: r.lsr, oiValue: r.oiValue,
       _backend:true
     };
   }

@@ -56,7 +56,7 @@ const mexc = {
     return d.filter(t => {
       const s = (t && t.symbol) || "";
       return /_USDT$/.test(s) && Number(t.amount24) > 0;
-    }).map(t => ({ sym: t.symbol, qv: Number(t.amount24) }));
+    }).map(t => ({ sym: t.symbol, qv: Number(t.amount24), oi: Number(t.holdVol) }));
   },
   async klines(sym, tf) {
     const mexcTf = MEXC_TF[tf] || "Min15";

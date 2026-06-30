@@ -28,6 +28,18 @@ async function mapPool(items, limit, fn) {
    only when a new spike is >=25% stronger (mirrors trackSpike). */
 const spikeReg = { binance: {}, mexc: {}, };
 
+/* Per-exchange open-interest registry: last cycle's OI (holdVol) per
+   symbol, used to compute a REAL OI up/down/flat trend across cycles. */
+const oiReg = { binance: {}, mexc: {} };
+
+function oiTrendFrom(prevOi, curOi) {
+  if (!Number.isFinite(curOi) || !Number.isFinite(prevOi) || prevOi <= 0) return null;
+  const d = (curOi - prevOi) / prevOi;
+  if (d > 0.002) return "up";
+  if (d < -0.002) return "down";
+  return "flat";
+}
+
 function trackSpike(exKey, sym, level, now) {
   const reg = spikeReg[exKey] || (spikeReg[exKey] = {});
   const prev = reg[sym];
@@ -80,7 +92,10 @@ function buildRow(exKey, adapter, t, k, now) {
     spikeAt: spikeAt,
 
     rsi14: Math.round(sig.rsi14 * 10) / 10,
+    /* oi is overwritten with the REAL holdVol trend in scanExchange when
+       available; this derived value is only a first-cycle fallback. */
     oi: M.oiTrend(sig, sc),
+    oiValue: Number.isFinite(Number(t.oi)) ? Number(t.oi) : null,
     lsr: M.lsrTrend(sig),
 
     tfOrigin: tfOrigin,
@@ -103,15 +118,24 @@ async function scanExchange(adapter) {
 
   const kl = await mapPool(cands, cfg.POOL, c => adapter.klines(c.sym, cfg.SCAN_TF));
   const freshCut = now - cfg.FRESH_MS;
+  const reg = oiReg[adapter.key] || (oiReg[adapter.key] = {});
   const rows = [];
   for (let i = 0; i < cands.length; i++) {
     const k = kl[i];
     if (!k || !k.closes || k.closes.length < 25) continue;
     if (k.lastOpen && k.lastOpen < freshCut) continue;
     const row = buildRow(adapter.key, adapter, cands[i], k, now);
-    if (row) rows.push(row);
+    if (!row) continue;
+    /* Real OI trend: this cycle's holdVol vs the previous cycle's. */
+    const realOi = oiTrendFrom(reg[cands[i].sym], Number(cands[i].oi));
+    if (realOi) row.oi = realOi;
+    rows.push(row);
   }
-  rows.sort((a, b) => b.spikeScore - a.spikeScore);
+  /* Remember this cycle's OI for every scanned symbol (not only the ones that
+     passed the filter) so the trend is available the moment they spike. */
+  for (const c of cands) { if (Number.isFinite(Number(c.oi))) reg[c.sym] = Number(c.oi); }
+  /* Most recent spike on top (newest spikeAt first); score breaks ties. */
+  rows.sort((a, b) => (b.spikeAt - a.spikeAt) || (b.spikeScore - a.spikeScore));
   return rows.slice(0, cfg.SNAPSHOT_ROWS);
 }
 
