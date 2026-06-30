@@ -82,6 +82,32 @@ function computeSignal(closes, vols, engine) {
   }
   const prevVolBelowHalf = len >= 2 && lastVol > 0 && (vols[len - 2] || 0) < lastVol * 0.5;
 
+  /* MA flatness over the lookback before the last bar — how flat the volume
+     MA was during the base ((max-min)/avg). Lower = flatter = cleaner setup. */
+  const maFlatLookback = engine.maFlatLookback || 10;
+  const maWin = volMa1.slice(Math.max(0, len - 1 - maFlatLookback), len - 1).filter(v => v !== null && Number.isFinite(v) && v > 0);
+  let maFlatness1 = 0;
+  if (maWin.length > 1) {
+    let mn = maWin[0], mx = maWin[0], sum = 0;
+    for (const v of maWin) { sum += v; if (v < mn) mn = v; if (v > mx) mx = v; }
+    const avg = sum / maWin.length;
+    maFlatness1 = avg > 0 ? (mx - mn) / avg : 0;
+  }
+
+  /* ── Ignition: dead volume base (below MA) then the first cross above it ──
+     The bars before the last must be BELOW their MA (the flat/dead base); the
+     current (extrapolated) bar is the first to cross back above the MA. */
+  const minBaseBars = engine.minBaseBars || 6;
+  let volBelowMaBars = 0;
+  for (let bi = len - 2; bi >= 0; bi--) {
+    const mb = volMa1[bi];
+    if (!mb || !Number.isFinite(mb) || mb <= 0) break;
+    if (vols[bi] < mb) volBelowMaBars++; else break;
+  }
+  const crossStrength = lastMa1 > 0 ? lastVol / lastMa1 : 0;
+  const igniteCross = lastVol > lastMa1;
+  const isIgnition = igniteCross && volBelowMaBars >= minBaseBars;
+
   const firstClose24 = closes[0] || lastClose || 0;
   const price24hPct = firstClose24 > 0 ? ((lastClose - firstClose24) / firstClose24) * 100 : 0;
 
@@ -106,8 +132,39 @@ function computeSignal(closes, vols, engine) {
     prevVolBelowHalf,
     priceGlueOk: priceGlue.ok,
     spikePrevVolRatio,
-    spikePrevVolOk: spikePrevVolRatio >= (engine.spikePrevVolMult || 1.5)
+    spikePrevVolOk: spikePrevVolRatio >= (engine.spikePrevVolMult || 1.5),
+    maFlatness1,
+    volBelowMaBars,
+    crossStrength,
+    isIgnition
   };
+}
+
+/* Ignition score — ranks the QUALITY of an early MEXC-pump setup. Rewards a
+   long dead base, rising OI, a clean flat MA and compressed price; the size
+   of the cross matters only a little (the point is to catch it small/early).
+   r must carry oi ("up"/"down"/"flat") set from the real OI trend. */
+function ignitionScore(r, weights) {
+  const w = weights || require("./config").IGNITION_WEIGHTS;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const fBase = clamp((Number(r.volBelowMaBars) || 0) / 15, 0, 1);          // full at 15 dead bars
+  const fCross = clamp(((Number(r.crossStrength) || 1) - 1) / 1.5, 0, 1);   // full at ~2.5x MA
+  const fFlat = clamp(1 - (Number(r.maFlatness1) || 1) / 0.5, 0, 1);        // flatter = better
+  const oiUp = r.oi === "up" ? 1 : (r.oi === "flat" ? 0.4 : 0);
+  const glue = r.priceGlueOk ? 1 : 0;
+  const wTotal = w.base + w.cross + w.flat + w.oi + w.glue;
+  if (wTotal <= 0) return 0;
+  const pts = fBase * w.base + fCross * w.cross + fFlat * w.flat + oiUp * w.oi + glue * w.glue;
+  return Math.max(0, Math.min(99, Math.round(pts / wTotal * 99)));
+}
+
+/* Ignition-context status labels (all shown rows are ignitions; this conveys
+   strength). */
+function ignitionStatus(sc) {
+  if (sc >= 72) return "Ignição forte";
+  if (sc >= 54) return "Ignição";
+  if (sc >= 40) return "Início";
+  return "Fraca";
 }
 
 /* Port of the fixed (range-normalized) in-page score(). */
@@ -167,5 +224,5 @@ function factorsOf(r, sc) {
 
 module.exports = {
   sma, pct, priceMaGlueStats, computeSignal,
-  score, statusOf, oiTrend, lsrTrend, factorsOf
+  score, ignitionScore, statusOf, ignitionStatus, oiTrend, lsrTrend, factorsOf
 };

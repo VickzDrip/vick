@@ -46,7 +46,21 @@ module.exports = {
     priceGlueLookback: 10,
     priceGlueMaxDistPct: 0.25,
     spikePrevVolMult: 1.5,
-    maFlatLookback: 10
+    maFlatLookback: 10,
+    /* Ignition detection (the MEXC early-pump setup): the N bars before the
+       current one must be BELOW the volume MA (a dead/flat base), and the
+       current bar is the FIRST to cross back ABOVE the MA — even a small one. */
+    minBaseBars: 6
+  },
+
+  /* Ignition score weights — reward the QUALITY of the early setup, not the
+     size of the move (the whole point is to catch it small/early). */
+  IGNITION_WEIGHTS: {
+    base: 30,   // longer dead base below the MA = stronger accumulation
+    oi: 25,     // real OI rising = confirmation that it's "the start of something"
+    cross: 18,  // how decisively volume crossed back above the MA
+    glue: 15,   // price was compressed/coiled before the cross
+    flat: 12    // flatter volume MA during the base = cleaner setup
   },
 
   /* Default Spike Score weights — identical to the in-page Filtros defaults. */

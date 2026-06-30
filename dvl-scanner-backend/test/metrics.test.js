@@ -45,5 +45,28 @@ eq(M.statusOf({ flatCandles: 6 }, 80), "Spike pós-flat", "postflat status");
 eq(M.statusOf({ flatCandles: 0 }, 80), "Spike limpo", "clean status");
 eq(M.statusOf({ flatCandles: 0 }, 50), "Monitorar", "monitor status");
 
+/* 5) Ignition: dead volume base below MA, then first cross above it. */
+const ic = [], iv = [];
+for (let i = 0; i < 40; i++) { ic.push(100 + Math.sin(i / 6)); iv.push(300); } // high base → high MA
+for (let i = 0; i < 18; i++) { ic.push(100 + Math.sin(i / 6)); iv.push(50); }  // dead base, below MA
+ic.push(101); iv.push(400);                                                     // first cross above MA
+const isig = M.computeSignal(ic, iv);
+ok(isig.isIgnition === true, "isIgnition true on dead-base + cross (bars below MA=" + isig.volBelowMaBars + ")");
+ok(isig.volBelowMaBars >= 6, "volBelowMaBars >= 6");
+ok(isig.crossStrength > 1, "crossStrength > 1 (crossed above MA)");
+
+/* non-ignition: flat volume, no dead base below MA */
+const fc = [], fv = [];
+for (let i = 0; i < 60; i++) { fc.push(100); fv.push(100); }
+fv[fv.length - 1] = 130;
+ok(M.computeSignal(fc, fv).isIgnition === false, "isIgnition false without a dead base below MA");
+
+/* ignitionScore differentiates and respects OI */
+const sNoOi = M.ignitionScore({ volBelowMaBars: 12, crossStrength: 1.6, maFlatness1: 0.1, priceGlueOk: true, oi: "flat" });
+const sOiUp = M.ignitionScore({ volBelowMaBars: 12, crossStrength: 1.6, maFlatness1: 0.1, priceGlueOk: true, oi: "up" });
+ok(sOiUp > sNoOi, "rising OI raises the ignition score (" + sNoOi + " -> " + sOiUp + ")");
+eq(M.ignitionStatus(80), "Ignição forte", "ignitionStatus strong");
+eq(M.ignitionStatus(45), "Início", "ignitionStatus early");
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

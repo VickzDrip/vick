@@ -63,12 +63,13 @@ function buildRow(exKey, adapter, t, k, now) {
     extVols[extVols.length - 1] = extVols[extVols.length - 1] / fraction;
   }
   const sig = M.computeSignal(k.closes, extVols, cfg.ENGINE);
-  /* Mandatory criterion (same as the in-page scanner): the bar before the
-     spike must be below 50% of the spike's volume. */
-  if (!sig.prevVolBelowHalf) return null;
+  /* Mandatory criterion — the MEXC early-pump setup: a dead volume base below
+     the MA, then the FIRST cross back above it (even a small one = the start
+     of something). Replaces the old prevVolBelowHalf filter, which required a
+     big abrupt spike and discarded exactly these early ignitions. */
+  if (!sig.isIgnition) return null;
 
-  const sc = M.score(sig, cfg.WEIGHTS);
-  const spikeAt = trackSpike(exKey, sym, sig.spike20, now);
+  const spikeAt = trackSpike(exKey, sym, sig.crossStrength, now);
   const tfOrigin = cfg.SCAN_TF;
   const candles = (k.ohlc || []).slice(-cfg.CANDLES_PER_ROW);
 
@@ -87,14 +88,22 @@ function buildRow(exKey, adapter, t, k, now) {
     prevVolBelowHalf: sig.prevVolBelowHalf,
     priceGlueOk: sig.priceGlueOk,
 
-    spikeScore: sc,
-    status: M.statusOf(sig, sc),
+    /* Ignition fields used by the ignition score. */
+    volBelowMaBars: sig.volBelowMaBars,
+    crossStrength: Math.round(sig.crossStrength * 100) / 100,
+    maFlatness1: sig.maFlatness1,
+    isIgnition: true,
+
+    /* spikeScore/status are finalized in scanExchange once the real OI trend
+       is known (OI rising is a core part of the ignition score). */
+    spikeScore: 0,
+    status: "",
     spikeAt: spikeAt,
 
     rsi14: Math.round(sig.rsi14 * 10) / 10,
-    /* oi is overwritten with the REAL holdVol trend in scanExchange when
-       available; this derived value is only a first-cycle fallback. */
-    oi: M.oiTrend(sig, sc),
+    /* oi is overwritten with the REAL holdVol trend in scanExchange; this
+       derived value is only a first-cycle fallback. */
+    oi: M.oiTrend(sig, 50),
     oiValue: Number.isFinite(Number(t.oi)) ? Number(t.oi) : null,
     lsr: M.lsrTrend(sig),
 
@@ -105,7 +114,7 @@ function buildRow(exKey, adapter, t, k, now) {
     candles: candles,                 // real OHLC only; empty if missing
     last5Closes: sig.last5Closes,
 
-    factors: M.factorsOf(sig, sc)
+    factors: M.factorsOf(sig, 50)
   };
 }
 
@@ -129,6 +138,9 @@ async function scanExchange(adapter) {
     /* Real OI trend: this cycle's holdVol vs the previous cycle's. */
     const realOi = oiTrendFrom(reg[cands[i].sym], Number(cands[i].oi));
     if (realOi) row.oi = realOi;
+    /* Finalize the ignition score now that the real OI trend is set. */
+    row.spikeScore = M.ignitionScore(row);
+    row.status = M.ignitionStatus(row.spikeScore);
     rows.push(row);
   }
   /* Remember this cycle's OI for every scanned symbol (not only the ones that

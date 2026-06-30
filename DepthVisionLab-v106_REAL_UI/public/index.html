@@ -61359,6 +61359,10 @@ body.dvlScannerOpen080 #chartWrap{
      weighted sum is divided by the total weight and scaled to 0–99. The
      weights from the Filtros UI keep working as relative importance. */
   function score(r){
+    /* Live-feed rows carry the server's ignition score — use it directly so
+       the ranking/status/bars all reflect the backend's MEXC early-pump
+       detection. In-browser scanning still computes locally below. */
+    if(r && r._backend && Number.isFinite(Number(r.spikeScore))) return Number(r.spikeScore);
     var w=filterState1015.weights||{};
     /* full-saturation scales: metric value that earns full points */
     var f20  = Math.min(1, Math.max(0,Number(r.spike20)||Number(r.volX)||0)/8);   /* 8x vol vs MA20 = full */
@@ -61466,6 +61470,12 @@ body.dvlScannerOpen080 #chartWrap{
     return v>=55?"#10df77":(v<=45?"#ff5966":"#ffd321");
   }
   function status(r){
+    /* Live-feed rows carry the server's ignition-context status label. */
+    if(r && r._backend && r.status){
+      var sc0=score(r);
+      var cls = sc0>=72?"clean":(sc0>=54?"forming":(sc0>=40?"monitor":"none"));
+      return {c:cls, t:String(r.status)};
+    }
     var sc=score(r), setup=norm(r.setup||"");
     if((Number(r.flatCandles)||0)>=4 && sc>=72) return {c:"postflat",t:"Spike pós-flat"};
     if(sc>=72) return {c:"clean",t:"Spike limpo"};
@@ -69244,6 +69254,8 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       lastClose: Number(r.price)||0, price24hPct: Number(r.var24h)||0,
       spikeAt: r.spikeAt||0, _histAt: r.spikeAt||_meta.updatedAt||Date.now(),
       oi: r.oi, lsr: r.lsr, oiValue: r.oiValue, lsrValue: r.lsrValue,
+      spikeScore: r.spikeScore, status: r.status,
+      volBelowMaBars: r.volBelowMaBars, crossStrength: r.crossStrength,
       _backend:true
     };
   }
