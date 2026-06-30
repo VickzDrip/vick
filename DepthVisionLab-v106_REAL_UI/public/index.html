@@ -61338,15 +61338,29 @@ body.dvlScannerOpen080 #chartWrap{
     if(m<60) return "Atualizado há "+m+"m";
     return "Atualizado há "+Math.floor(m/60)+"h";
   }
+  /* Beta 1.022 fix — range-normalized Spike Score.
+     The previous formula multiplied the raw spike ratio (volume/MA, often
+     5–50x for any listed spike) directly by the weight (20), so it hit the
+     99 cap for essentially every row → every asset showed 99 and the score
+     stopped ranking anything. Now each factor is normalized to a 0..1
+     fraction of a target range (the value that earns full points), the
+     weighted sum is divided by the total weight and scaled to 0–99. The
+     weights from the Filtros UI keep working as relative importance. */
   function score(r){
     var w=filterState1015.weights||{};
-    var v=(Number(r.spike20)||Number(r.volX)||0)*Number(w.spike20||0)
-      + (Number(r.spike50)||0)*Number(w.spike50||0)
-      + Math.max(0,Number(r.flatCandles)||0)*Number(w.flatCandles||0)
-      + Math.min(Math.abs(Number(r.barPct)||0),8)*Number(w.barPct||0);
-    if(r.prevVolBelowHalf) v+=Number(w.prevVolBelowHalf||0);
-    if(r.priceGlueOk) v+=Number(w.priceGlueOk||0);
-    return Math.max(0,Math.min(99,Math.round(v)));
+    /* full-saturation scales: metric value that earns full points */
+    var f20  = Math.min(1, Math.max(0,Number(r.spike20)||Number(r.volX)||0)/8);   /* 8x vol vs MA20 = full */
+    var f50  = Math.min(1, Math.max(0,Number(r.spike50)||0)/5);                    /* 5x vol vs MA50 = full */
+    var fFlat= Math.min(1, Math.max(0,Number(r.flatCandles)||0)/10);              /* 10 flat bars = full */
+    var fBar = Math.min(1, Math.min(Math.abs(Number(r.barPct)||0),8)/8);          /* 8% candle = full */
+    var W20=Number(w.spike20||0), W50=Number(w.spike50||0), WF=Number(w.flatCandles||0),
+        WB=Number(w.barPct||0), WP=Number(w.prevVolBelowHalf||0), WG=Number(w.priceGlueOk||0);
+    var wTotal=W20+W50+WF+WB+WP+WG;
+    if(wTotal<=0) return 0;
+    var pts = f20*W20 + f50*W50 + fFlat*WF + fBar*WB
+            + (r.prevVolBelowHalf?WP:0)
+            + (r.priceGlueOk?WG:0);
+    return Math.max(0,Math.min(99,Math.round(pts/wTotal*99)));
   }
 
   function fmtWeight1016(v){
