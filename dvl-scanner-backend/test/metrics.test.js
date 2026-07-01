@@ -1,11 +1,13 @@
 "use strict";
 
 /* Minimal parity / sanity test — runs with `npm test`, no network.
-   Confirms the ported score() spreads like the in-page fix
-   (37/53/73/93/97) and that computeSignal returns coherent fields. */
+   Confirms score() over the 6 pass/fail blocks (spikeAboveAvg, rsiOversold,
+   oiAboveAvg, lsrBelowAvg, flatVolumeBar, prevVolBelowHalf) and that
+   computeSignal returns coherent fields. */
 
 const assert = require("assert");
 const M = require("../src/metrics");
+const cfg = require("../src/config");
 
 let pass = 0, fail = 0;
 function eq(actual, expected, msg) {
@@ -14,18 +16,37 @@ function eq(actual, expected, msg) {
 }
 function ok(cond, msg) { if (cond) pass++; else { fail++; console.error("FAIL: " + msg); } }
 
-/* 1) Score spread matches the in-page range-normalized score(). */
+/* 1) Score = weighted share of the 6 blocks that validated, scaled to 0-99.
+   Defaults: spikeAboveAvg 20, rsiOversold 15, oiAboveAvg 15, lsrBelowAvg 15,
+   flatVolumeBar 12, prevVolBelowHalf 12 (sum 89). */
+const allTrue = { spike20: 2, spike50: 2, rsiOversoldOk: true, oi: "up", lsr: "down", volBelowMaBars: 10, prevVolBelowHalf: true };
+const allFalse = { spike20: 0.5, spike50: 0.5, rsiOversoldOk: false, oi: "down", lsr: "up", volBelowMaBars: 0, prevVolBelowHalf: false };
 const cases = [
-  { spike20: 3, spike50: 1.5, flatCandles: 0, barPct: -0.5, prevVolBelowHalf: true, priceGlueOk: false, want: 37 },
-  { spike20: 5, spike50: 2.5, flatCandles: 1, barPct: 1.4, prevVolBelowHalf: true, priceGlueOk: false, want: 53 },
-  { spike20: 8, spike50: 3, flatCandles: 3, barPct: 2.0, prevVolBelowHalf: true, priceGlueOk: false, want: 73 },
-  { spike20: 12, spike50: 6, flatCandles: 5, barPct: 3.0, prevVolBelowHalf: true, priceGlueOk: true, want: 93 },
-  { spike20: 30, spike50: 15, flatCandles: 9, barPct: 6.0, prevVolBelowHalf: true, priceGlueOk: true, want: 97 }
+  { r: allTrue, want: 99 },
+  { r: allFalse, want: 0 },
+  { r: Object.assign({}, allFalse, { spike20: 2, spike50: 2, prevVolBelowHalf: true }), want: 36 },   // spikeAboveAvg + prevVolBelowHalf only
+  { r: Object.assign({}, allFalse, { rsiOversoldOk: true }), want: 17 },                               // rsiOversold only
+  { r: Object.assign({}, allFalse, { oi: "up", lsr: "down", volBelowMaBars: 10 }), want: 47 }          // oi + lsr + flatVolumeBar only
 ];
-cases.forEach((c, i) => eq(M.score(c), c.want, "score case " + i));
+cases.forEach((c, i) => eq(M.score(c.r), c.want, "score case " + i));
 
-/* 2) Not everything is 99 (the bug we fixed). */
-ok(new Set(cases.map(c => M.score(c))).size > 1, "scores must differentiate, not all 99");
+/* 2) Not everything is 99 (the original range-normalization bug we fixed). */
+ok(new Set(cases.map(c => M.score(c.r))).size > 1, "scores must differentiate, not all 99");
+
+/* 3) spikeAboveAvg block respects the 1-MA / 2-MA toggle. */
+const oneMaRow = { spike20: 2, spike50: 0.5, rsiOversoldOk: false, oi: "down", lsr: "up", volBelowMaBars: 0, prevVolBelowHalf: false };
+ok(M.blocksOf(oneMaRow, Object.assign({}, cfg.ENGINE, { spikeMaMode: "1" })).spikeAboveAvg === true, "spikeMaMode 1 passes on fast MA alone");
+ok(M.blocksOf(oneMaRow, Object.assign({}, cfg.ENGINE, { spikeMaMode: "2" })).spikeAboveAvg === false, "spikeMaMode 2 requires both MAs");
+
+/* 4) rsiOversoldOk — hit within lookback vs never touching the zone. */
+const closesDip = [], volsDip = [];
+for (let i = 0; i < 60; i++) { closesDip.push(100 - i * 0.6); volsDip.push(100); } // steady decline -> RSI drops into oversold
+const sigDip = M.computeSignal(closesDip, volsDip);
+ok(sigDip.rsiOversoldOk === true, "rsiOversoldOk true after a steady decline (rsi14=" + sigDip.rsi14.toFixed(1) + ")");
+const closesFlat = [], volsFlat = [];
+let vf = 100;
+for (let i = 0; i < 60; i++) { vf += (i % 3 === 2) ? -0.3 : 0.5; closesFlat.push(vf); volsFlat.push(100); } // mixed up/down steps, stays mid-range
+ok(M.computeSignal(closesFlat, volsFlat).rsiOversoldOk === false, "rsiOversoldOk false without ever dipping into the zone");
 
 /* 3) computeSignal sanity on a synthetic flat-then-spike series. */
 const closes = [], vols = [];

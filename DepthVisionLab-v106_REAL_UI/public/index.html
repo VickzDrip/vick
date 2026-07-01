@@ -59829,9 +59829,16 @@ body.dvlScannerOpen080 #tradeNavBtn{
         priceGlueLookback : Math.min(80,Math.max(1,parseInt(o.priceGlueLookback)||10)),
         priceGlueMaxDistPct : isNaN(parseFloat(o.priceGlueMaxDistPct)) ? 0.25 : Math.min(10,Math.max(0.01,parseFloat(o.priceGlueMaxDistPct))),
         useSpikePrevVol : o.useSpikePrevVol===true||o.useSpikePrevVol==="true",
-        spikePrevVolMult : isNaN(parseFloat(o.spikePrevVolMult)) ? 1.50 : Math.min(50,Math.max(1.00,parseFloat(o.spikePrevVolMult)))
+        spikePrevVolMult : isNaN(parseFloat(o.spikePrevVolMult)) ? 1.50 : Math.min(50,Math.max(1.00,parseFloat(o.spikePrevVolMult))),
+        /* ── Spike Score blocks (RSI/OI/LSR/flat-volume-bar/spike/prevVol) ── */
+        spikeMaMode        : o.spikeMaMode==="1" ? "1" : "2",
+        flatVolumeBarLen   : Math.min(50,Math.max(1,parseInt(o.flatVolumeBarLen)||5)),
+        rsiOversoldThreshold: Math.min(50,Math.max(1,parseFloat(o.rsiOversoldThreshold)||30)),
+        rsiOversoldLookback : Math.min(100,Math.max(1,parseInt(o.rsiOversoldLookback)||20)),
+        oiMaLen            : Math.min(200,Math.max(2,parseInt(o.oiMaLen)||20)),
+        lsrMaLen           : Math.min(200,Math.max(2,parseInt(o.lsrMaLen)||20))
       };
-    }catch(_){ return {spikeMin:0,maPeriod1:20,maPeriod2:50,flat_x:10,minFlatBefore:0,maxAssets:20,scanTF:"15m",spikeAbove:"ma1",maFlatTolerance:0.30,maFlatLookback:10,useMaFlat:false,usePriceGlue:false,priceGlueMaPeriod:20,priceGlueLookback:10,priceGlueMaxDistPct:0.25,useSpikePrevVol:false,spikePrevVolMult:1.50}; }
+    }catch(_){ return {spikeMin:0,maPeriod1:20,maPeriod2:50,flat_x:10,minFlatBefore:0,maxAssets:20,scanTF:"15m",spikeAbove:"ma1",maFlatTolerance:0.30,maFlatLookback:10,useMaFlat:false,usePriceGlue:false,priceGlueMaPeriod:20,priceGlueLookback:10,priceGlueMaxDistPct:0.25,useSpikePrevVol:false,spikePrevVolMult:1.50,spikeMaMode:"2",flatVolumeBarLen:5,rsiOversoldThreshold:30,rsiOversoldLookback:20,oiMaLen:20,lsrMaLen:20}; }
   })();
 
   /* ── Exchange adapters (FUTURES) ─────────────────────────────── */
@@ -59869,7 +59876,7 @@ body.dvlScannerOpen080 #tradeNavBtn{
         var j=await r.json();
         var d=j&&j.data?j.data:[];
         if(!Array.isArray(d)) throw new Error("ticker shape");
-        return d.filter(function(t){var s=t&&t.symbol?t.symbol:"";return /_USDT$/.test(s)&&Number(t.amount24)>0;}).map(function(t){return{sym:t.symbol,qv:Number(t.amount24)};});
+        return d.filter(function(t){var s=t&&t.symbol?t.symbol:"";return /_USDT$/.test(s)&&Number(t.amount24)>0;}).map(function(t){return{sym:t.symbol,qv:Number(t.amount24),oi:Number(t.holdVol)};});
       },
       klines:async function(sym){
         var tf=filterState.scanTF||"15m";
@@ -59967,6 +59974,53 @@ body.dvlScannerOpen080 #tradeNavBtn{
 
   function pct(a,b){ if(!b) return 0; return((a-b)/b)*100; }
 
+  /* ── OI / LSR blocks (client-side parity with the backend) ──────
+     Arrow + colour for OI / LSR from a value series (oldest → newest).
+     arrow: current value ABOVE its MA → "up", BELOW → "down".
+     colour: MA rising + above = green, MA falling + below = red, else yellow. */
+  function trendVsMA(series){
+    var s=(series||[]).map(Number).filter(function(v){return Number.isFinite(v);});
+    if(s.length<2) return {arrow:"up",color:"yellow"};
+    function avg(a){ var sum=0; for(var i=0;i<a.length;i++) sum+=a[i]; return sum/Math.max(a.length,1); }
+    var ma=avg(s), cur=s[s.length-1], above=cur>=ma;
+    var half=Math.floor(s.length/2);
+    var maRising=avg(s.slice(half))>=avg(s.slice(0,half));
+    var color = (maRising&&above)?"green":(!maRising&&!above)?"red":"yellow";
+    return {arrow:above?"up":"down", color:color};
+  }
+
+  /* Per-symbol OI history (MEXC holdVol only — Binance's ticker has no OI
+     field, same limitation as the backend). One sample is pushed per
+     refresh cycle, capped at filterState.oiMaLen. */
+  var _dvlOiReg={};
+  function pushOiClient(sym,value){
+    if(!Number.isFinite(value)) return _dvlOiReg[sym]||[];
+    var buf=_dvlOiReg[sym]||(_dvlOiReg[sym]=[]);
+    buf.push(value);
+    var cap=filterState.oiMaLen||20;
+    while(buf.length>cap) buf.shift();
+    return buf;
+  }
+
+  /* Bybit account-ratio (long/short) — same public endpoint the backend and
+     the in-page oscillators already use for LSR. */
+  var BYBIT_PERIOD={"1m":"5min","3m":"5min","5m":"5min","15m":"15min","30m":"30min","1h":"1h"};
+  async function fetchLsr(symbol,tf,limit){
+    try{
+      var period=BYBIT_PERIOD[tf]||"15min";
+      var url="https://api.bybit.com/v5/market/account-ratio?category=linear&symbol="+encodeURIComponent(symbol)+"&period="+period+"&limit="+(limit||20);
+      var r=await fetch(url,{cache:"no-store"});
+      if(!r.ok) return null;
+      var j=await r.json();
+      var list=(j&&j.result&&Array.isArray(j.result.list))?j.result.list:[];
+      var pts=list.map(function(x){return {t:Number(x.timestamp),lsr:Number(x.buyRatio)/Math.max(Number(x.sellRatio),1e-9)};})
+        .filter(function(p){return Number.isFinite(p.t)&&Number.isFinite(p.lsr)&&p.lsr>0;})
+        .sort(function(a,b){return a.t-b.t;});
+      if(!pts.length) return null;
+      return pts.map(function(p){return p.lsr;});
+    }catch(_){ return null; }
+  }
+
   function priceMaGlueStats(closes,period,lookback,tolPct){
     var len=closes.length;
     period=Math.min(500,Math.max(2,parseInt(period)||20));
@@ -60046,6 +60100,14 @@ body.dvlScannerOpen080 #tradeNavBtn{
       else break;
     }
     var prevVolBelowHalf=len>=2&&lastVol>0&&(vols[len-2]||0)<lastVol*0.5;
+    /* Flat volume bar block: consecutive prior bars whose volume stayed
+       below its MA (same style as the ignition base-detection). */
+    var volBelowMaBars=0;
+    for(var bi=len-2;bi>=0;bi--){
+      var mb=volMa1[bi];
+      if(!mb||!Number.isFinite(mb)||mb<=0) break;
+      if(vols[bi]<mb) volBelowMaBars++; else break;
+    }
     /* MA flatness: (max-min)/avg of volMA1 over the N candles BEFORE the last */
     var maFlatLookback=filterState.maFlatLookback||10;
     var maFlat1Win=volMa1.slice(Math.max(0,len-1-maFlatLookback),len-1).filter(function(v){return v!==null&&Number.isFinite(v)&&v>0;});
@@ -60074,12 +60136,34 @@ body.dvlScannerOpen080 #tradeNavBtn{
         rsi14=100-(100/(1+rs));
       }
     }
+    /* RSI oversold block: was RSI(14) at/under the configured threshold at
+       any point within the last N candles? Needs the RSI value at every
+       bar in the lookback window, not just the latest. */
+    var rsiPeriod=14;
+    var rsiOversoldLookback=filterState.rsiOversoldLookback||20;
+    var rsiOversoldThreshold=isNaN(filterState.rsiOversoldThreshold)?30:filterState.rsiOversoldThreshold;
+    var rsiOversoldOk=false;
+    if(len>=rsiPeriod+1){
+      var rStart=Math.max(rsiPeriod,len-rsiOversoldLookback);
+      for(var ri2=rStart;ri2<len&&!rsiOversoldOk;ri2++){
+        var g2=0,l2=0,st2=0;
+        for(var gi=ri2-rsiPeriod+1;gi<=ri2;gi++){
+          var d2=(closes[gi]||0)-(closes[gi-1]||0);
+          if(d2>=0) g2+=d2; else l2+=Math.abs(d2);
+          st2++;
+        }
+        var ag2=st2?g2/st2:0, al2=st2?l2/st2:0;
+        var rsiAt=al2<=1e-9?(ag2>0?100:50):100-(100/(1+(ag2/al2)));
+        if(rsiAt<=rsiOversoldThreshold) rsiOversoldOk=true;
+      }
+    }
     return {
       coin:base.coin,icon:base.icon,mexc:base.mexc,symbol:base.symbol,
       side:side,setup:setup,
       lastClose:lastClose,price24hPct:price24hPct,rsi14:rsi14,last5Closes:closes.slice(-5),
       spike20:spike1,spike50:spike2,flatScore:flatScore,
       volX:spike1,flatCandles:flatCandles,barPct:barPct,
+      volBelowMaBars:volBelowMaBars,rsiOversoldOk:rsiOversoldOk,
       last20Vols:vols.slice(-20),last20MA1:volMa1.slice(-20),last20MA2:volMa2.slice(-20),
       ma1Period:p1,ma2Period:p2,
       prevVolBelowHalf:prevVolBelowHalf,
@@ -60280,10 +60364,27 @@ body.dvlScannerOpen080 #tradeNavBtn{
         }
         var _row=computeSignal(baseFromSymbol(ex.base(cands[i].sym),cands[i].sym),k.closes,extVols,k.lastOpen);
         trackSpike(_row);
+        /* OI block: only MEXC's ticker carries holdVol (same limitation as
+           the backend — Binance has no OI field on this endpoint). */
+        if(state.exchange==="mexc"){
+          var _oiBuf=pushOiClient(cands[i].sym,Number(cands[i].oi));
+          var _oiT=trendVsMA(_oiBuf);
+          _row.oi=_oiT.arrow; _row.oiColor=_oiT.color;
+        }
         /* Mandatory criterion: bar before spike must be below 50% of spike volume */
         if(!_row.prevVolBelowHalf) continue;
         allRows.push(_row);
       }
+
+      /* LSR block: real Bybit long/short account-ratio vs its MA, for the
+         rows that made it through (mirrors the backend's post-merge step). */
+      await mapPool(allRows,POOL,async function(_row){
+        var series=await fetchLsr(_row.symbol.replace("/",""),filterState.scanTF,filterState.lsrMaLen);
+        if(series){
+          var _lsrT=trendVsMA(series);
+          _row.lsr=_lsrT.arrow; _row.lsrColor=_lsrT.color;
+        }
+      });
 
       state.rawRows=mergeWithHistory(allRows);
       state.rows=getDisplayRows();
@@ -60981,9 +61082,21 @@ body.dvlScannerOpen080 #tradeNavBtn{
     },REFRESH_MS);
   }
 
+  /* Real settings setter — the Filtros dropdown (Scanner Pro 1013/1015) calls
+     this to push TF / MA periods / block inputs down into the engine that
+     actually fetches and computes rows, then triggers a refresh. */
+  function setFilterConfig(patch){
+    if(!patch||typeof patch!=="object") return refresh();
+    Object.keys(patch).forEach(function(k){ filterState[k]=patch[k]; });
+    try{ localStorage.setItem(LS_FIL,JSON.stringify(filterState)); }catch(_){}
+    return refresh();
+  }
+
   window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780={
     open:open,close:close,toggle:toggle,refresh:refresh,
     setExchange:pickExchange,
+    setFilterConfig:setFilterConfig,
+    getFilterConfig:function(){return Object.assign({},filterState);},
     rows:function(){return state.rows.slice();},
     rawRows:function(){return state.rawRows.slice();}
   };
@@ -61198,6 +61311,14 @@ body.dvlScannerOpen080 #tradeNavBtn{
 #dvlScannerPanel0780 .dvlScan1013Bars i.g{background:#10df77!important;}
 #dvlScannerPanel0780 .dvlScan1013Bars i.y{background:#ffd321!important;}
 #dvlScannerPanel0780 .dvlScan1013Bars i.r{background:#ff5966!important;}
+#dvlScannerPanel0780 .dvlScan1013Blocks{display:flex!important;gap:2px!important;margin-top:4px!important;flex-wrap:wrap!important;}
+#dvlScannerPanel0780 .dvlScan1013Blocks i{
+  width:14px!important;height:14px!important;border-radius:3px!important;
+  font:700 8px/14px system-ui,sans-serif!important;text-align:center!important;font-style:normal!important;
+  color:rgba(244,247,244,.55)!important;background:rgba(145,175,165,.12)!important;
+}
+#dvlScannerPanel0780 .dvlScan1013Blocks i.on{background:rgba(16,223,119,.22)!important;color:#10df77!important;}
+#dvlScannerPanel0780 .dvlScan1013Blocks i.off{opacity:.5!important;}
 #dvlScannerPanel0780 .dvlScan1013Status{
   min-height:34px!important;padding:0 11px!important;border-radius:11px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;
   font-size:12px!important;font-weight:900!important;white-space:nowrap!important;border:1px solid rgba(145,175,165,.18)!important;background:rgba(255,255,255,.03)!important;color:#eef3ef!important;
@@ -61427,7 +61548,62 @@ body.dvlScannerOpen080 #chartWrap{
   var panelId = "dvlScannerPanel0780";
   var rawApi = null;
   var searchQuery = "";
-  var filterState1015 = { preset:"all", tf:"15m", minScore:0, maxRows:20, weights:{spike20:20,spike50:7,flatCandles:2.4,barPct:2.2,prevVolBelowHalf:6,priceGlueOk:5} };
+  var LS_1015 = "dvlScan1015Filters";
+  var FILTER1015_DEFAULTS = {
+    preset:"all", tf:"15m", minScore:0, maxRows:20,
+    maPeriod1:20, maPeriod2:50, spikeMaMode:"2", flatVolumeBarLen:5,
+    rsiOversoldThreshold:30, rsiOversoldLookback:20, oiMaLen:20, lsrMaLen:20,
+    weights:{ spikeAboveAvg:20, rsiOversold:15, oiAboveAvg:15, lsrBelowAvg:15, flatVolumeBar:12, prevVolBelowHalf:12 }
+  };
+  function loadFilterState1015(){
+    try{
+      var saved=JSON.parse(localStorage.getItem(LS_1015)||"{}");
+      return Object.assign({}, FILTER1015_DEFAULTS, saved, { weights: Object.assign({}, FILTER1015_DEFAULTS.weights, saved.weights||{}) });
+    }catch(_){ return Object.assign({}, FILTER1015_DEFAULTS, { weights: Object.assign({}, FILTER1015_DEFAULTS.weights) }); }
+  }
+  function saveFilterState1015(){
+    try{ localStorage.setItem(LS_1015, JSON.stringify(filterState1015)); }catch(_){}
+  }
+  var filterState1015 = loadFilterState1015();
+
+  /* Push MA periods / block inputs down into the engine that actually fetches
+     and computes rows (client-side engine + best-effort to the Node backend
+     if the live-feed bridge is active), so the Filtros inputs really change
+     how the scanner scans — not just how it's scored/displayed. */
+  function pushEngineConfig1015(){
+    try{
+      var api=rawApi || window.__DVL_SCANNER_ORIGINAL_1013 || window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780;
+      if(api && typeof api.setFilterConfig==="function"){
+        api.setFilterConfig({
+          maPeriod1:filterState1015.maPeriod1, maPeriod2:filterState1015.maPeriod2,
+          spikeMaMode:filterState1015.spikeMaMode, flatVolumeBarLen:filterState1015.flatVolumeBarLen,
+          rsiOversoldThreshold:filterState1015.rsiOversoldThreshold, rsiOversoldLookback:filterState1015.rsiOversoldLookback,
+          oiMaLen:filterState1015.oiMaLen, lsrMaLen:filterState1015.lsrMaLen
+        });
+      }
+    }catch(_){}
+    try{
+      window.dispatchEvent(new CustomEvent("dvl:scanner-config-change",{detail:{
+        weights: filterState1015.weights,
+        engine: {
+          maPeriod1: filterState1015.maPeriod1, maPeriod2: filterState1015.maPeriod2,
+          spikeMaMode: filterState1015.spikeMaMode, flatVolumeBarLen: filterState1015.flatVolumeBarLen,
+          rsiOversoldThreshold: filterState1015.rsiOversoldThreshold, rsiOversoldLookback: filterState1015.rsiOversoldLookback
+        },
+        oiMaLen: filterState1015.oiMaLen, lsrMaLen: filterState1015.lsrMaLen
+      }}));
+    }catch(_){}
+  }
+  /* Real TF switch: refetches client-side at the new TF, and asks the live
+     backend bridge (if active) to re-pull its pre-computed snapshot for the
+     same TF — instant either way. */
+  function applyTf1015(tf){
+    try{
+      var api=rawApi || window.__DVL_SCANNER_ORIGINAL_1013 || window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780;
+      if(api && typeof api.setFilterConfig==="function") api.setFilterConfig({scanTF:tf});
+    }catch(_){}
+    try{ window.dispatchEvent(new CustomEvent("dvl:scanner-tf-change",{detail:{tf:tf}})); }catch(_){}
+  }
 
   function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
   function norm(s){return String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");}
@@ -61474,32 +61650,37 @@ body.dvlScannerOpen080 #chartWrap{
     if(m<60) return "Atualizado há "+m+"m";
     return "Atualizado há "+Math.floor(m/60)+"h";
   }
-  /* Beta 1.022 fix — range-normalized Spike Score.
-     The previous formula multiplied the raw spike ratio (volume/MA, often
-     5–50x for any listed spike) directly by the weight (20), so it hit the
-     99 cap for essentially every row → every asset showed 99 and the score
-     stopped ranking anything. Now each factor is normalized to a 0..1
-     fraction of a target range (the value that earns full points), the
-     weighted sum is divided by the total weight and scaled to 0–99. The
-     weights from the Filtros UI keep working as relative importance. */
+  /* ── Spike Score blocks ──────────────────────────────────────────
+     6 pass/fail checks, no priority between them — they only feed the
+     scanner (which assets show up) and, weighted, the 0-99 score. Same
+     score mechanism as before (weighted sum -> 0-99), just a different
+     set of factors, all boolean now instead of continuous ranges. */
+  function blocksOf(r){
+    var mode=filterState1015.spikeMaMode||"2";
+    var spike20=Number(r.spike20)||Number(r.volX)||0;
+    var spike50=Number(r.spike50)||0;
+    var spikeAboveAvg = mode==="1" ? spike20>1 : (spike20>1 && spike50>1);
+    var flatLen=filterState1015.flatVolumeBarLen||5;
+    return {
+      spikeAboveAvg: spikeAboveAvg,
+      rsiOversold: !!r.rsiOversoldOk,
+      oiAboveAvg: r.oi==="up",
+      lsrBelowAvg: r.lsr==="down",
+      flatVolumeBar: (Number(r.volBelowMaBars)||0) >= flatLen,
+      prevVolBelowHalf: !!r.prevVolBelowHalf
+    };
+  }
   function score(r){
-    /* Live-feed rows carry the server's ignition score — use it directly so
-       the ranking/status/bars all reflect the backend's MEXC early-pump
-       detection. In-browser scanning still computes locally below. */
-    if(r && r._backend && Number.isFinite(Number(r.spikeScore))) return Number(r.spikeScore);
-    var w=filterState1015.weights||{};
-    /* full-saturation scales: metric value that earns full points */
-    var f20  = Math.min(1, Math.max(0,Number(r.spike20)||Number(r.volX)||0)/8);   /* 8x vol vs MA20 = full */
-    var f50  = Math.min(1, Math.max(0,Number(r.spike50)||0)/5);                    /* 5x vol vs MA50 = full */
-    var fFlat= Math.min(1, Math.max(0,Number(r.flatCandles)||0)/10);              /* 10 flat bars = full */
-    var fBar = Math.min(1, Math.min(Math.abs(Number(r.barPct)||0),8)/8);          /* 8% candle = full */
-    var W20=Number(w.spike20||0), W50=Number(w.spike50||0), WF=Number(w.flatCandles||0),
-        WB=Number(w.barPct||0), WP=Number(w.prevVolBelowHalf||0), WG=Number(w.priceGlueOk||0);
-    var wTotal=W20+W50+WF+WB+WP+WG;
+    var b=blocksOf(r), w=filterState1015.weights||{};
+    var W={
+      spikeAboveAvg:Number(w.spikeAboveAvg||0), rsiOversold:Number(w.rsiOversold||0),
+      oiAboveAvg:Number(w.oiAboveAvg||0), lsrBelowAvg:Number(w.lsrBelowAvg||0),
+      flatVolumeBar:Number(w.flatVolumeBar||0), prevVolBelowHalf:Number(w.prevVolBelowHalf||0)
+    };
+    var wTotal=W.spikeAboveAvg+W.rsiOversold+W.oiAboveAvg+W.lsrBelowAvg+W.flatVolumeBar+W.prevVolBelowHalf;
     if(wTotal<=0) return 0;
-    var pts = f20*W20 + f50*W50 + fFlat*WF + fBar*WB
-            + (r.prevVolBelowHalf?WP:0)
-            + (r.priceGlueOk?WG:0);
+    var pts=(b.spikeAboveAvg?W.spikeAboveAvg:0)+(b.rsiOversold?W.rsiOversold:0)+(b.oiAboveAvg?W.oiAboveAvg:0)
+          +(b.lsrBelowAvg?W.lsrBelowAvg:0)+(b.flatVolumeBar?W.flatVolumeBar:0)+(b.prevVolBelowHalf?W.prevVolBelowHalf:0);
     return Math.max(0,Math.min(99,Math.round(pts/wTotal*99)));
   }
 
@@ -61510,38 +61691,27 @@ body.dvlScannerOpen080 #chartWrap{
   }
   function metricLabel1016(key){
     return ({
-      spike20:"Spike20",
-      spike50:"Spike50",
-      flatCandles:"Flat candles",
-      barPct:"Bar %",
-      prevVolBelowHalf:"Pré-volume baixo",
-      priceGlueOk:"Price glue"
+      spikeAboveAvg:"Spike acima da média",
+      rsiOversold:"RSI sobrevenda",
+      oiAboveAvg:"OI acima da média",
+      lsrBelowAvg:"LSR abaixo da média",
+      flatVolumeBar:"Flat volume bar",
+      prevVolBelowHalf:"Pré-volume baixo"
     })[key] || key;
   }
   function metricSub1016(key){
     return ({
-      spike20:"volume atual vs MA20",
-      spike50:"volume atual vs MA50",
-      flatCandles:"consolidação antes do spike",
-      barPct:"força do candle do spike",
-      prevVolBelowHalf:"bônus se volume anterior estava baixo",
-      priceGlueOk:"bônus se preço estava comprimido"
+      spikeAboveAvg:"volume atual acima da(s) MA configurada(s)",
+      rsiOversold:"RSI esteve em sobrevenda dentro do lookback",
+      oiAboveAvg:"open interest acima da própria média",
+      lsrBelowAvg:"long/short ratio abaixo da própria média",
+      flatVolumeBar:"volume ficou abaixo da média antes do spike",
+      prevVolBelowHalf:"bônus se volume anterior estava baixo"
     })[key] || "";
   }
-  function metricStep1016(key){
-    if(key==="flatCandles"||key==="barPct") return .2;
-    if(key==="spike50") return 1;
-    return 1;
-  }
+  function metricStep1016(key){ return 1; }
   function metricMin1016(key){ return 0; }
-  function metricMax1016(key){
-    if(key==="spike20") return 40;
-    if(key==="spike50") return 25;
-    if(key==="flatCandles") return 8;
-    if(key==="barPct") return 8;
-    if(key==="prevVolBelowHalf"||key==="priceGlueOk") return 20;
-    return 99;
-  }
+  function metricMax1016(key){ return 40; }
   function setMetric1016(key,delta){
     var w=filterState1015.weights || (filterState1015.weights={});
     var cur=Number(w[key]||0);
@@ -61549,9 +61719,9 @@ body.dvlScannerOpen080 #chartWrap{
     next=Math.max(metricMin1016(key),Math.min(metricMax1016(key),next));
     w[key]=Math.round(next*10)/10;
   }
+  var BLOCK_KEYS_1016=["spikeAboveAvg","rsiOversold","oiAboveAvg","lsrBelowAvg","flatVolumeBar","prevVolBelowHalf"];
   function metricRows1016(){
-    var keys=["spike20","spike50","flatCandles","barPct","prevVolBelowHalf","priceGlueOk"];
-    return keys.map(function(k){
+    return BLOCK_KEYS_1016.map(function(k){
       return '<div class="dvlScan1016MetricRow" data-dvl-scan1016-row="'+k+'">'
         +'<div class="dvlScan1016MetricInfo"><b>'+metricLabel1016(k)+'</b><small>'+metricSub1016(k)+'</small></div>'
         +'<div class="dvlScan1016Stepper">'
@@ -61563,6 +61733,52 @@ body.dvlScannerOpen080 #chartWrap{
     }).join("");
   }
 
+  /* ── Numeric engine inputs (MA periods, RSI zone/lookback, OI/LSR MA, flat
+     volume bar length) — same DVL stepper widget, but these push down into
+     the engine (pushEngineConfig1015) instead of only affecting local score
+     weighting. */
+  function numLabel1018(key){
+    return ({
+      maPeriod1:"MA rápida", maPeriod2:"MA lenta", flatVolumeBarLen:"Flat volume bar (candles)",
+      rsiOversoldThreshold:"RSI zona sobrevenda", rsiOversoldLookback:"RSI lookback (candles)",
+      oiMaLen:"Média OI (amostras)", lsrMaLen:"Média LSR (amostras)"
+    })[key] || key;
+  }
+  function numSub1018(key){
+    return ({
+      maPeriod1:"período da MA rápida do spike", maPeriod2:"período da MA lenta do spike",
+      flatVolumeBarLen:"nº de candles com volume abaixo da média antes do spike",
+      rsiOversoldThreshold:"RSI ≤ este valor conta como sobrevenda",
+      rsiOversoldLookback:"procura sobrevenda dentro dos últimos N candles",
+      oiMaLen:"nº de amostras usadas na média de OI", lsrMaLen:"nº de amostras usadas na média de LSR"
+    })[key] || "";
+  }
+  function numMin1018(key){ return key==="rsiOversoldThreshold" ? 5 : 2; }
+  function numMax1018(key){
+    if(key==="maPeriod1"||key==="maPeriod2"||key==="oiMaLen"||key==="lsrMaLen") return 200;
+    if(key==="flatVolumeBarLen") return 50;
+    if(key==="rsiOversoldThreshold") return 50;
+    if(key==="rsiOversoldLookback") return 100;
+    return 999;
+  }
+  function setNum1018(key,delta){
+    var cur=Number(filterState1015[key]||0);
+    var next=Math.max(numMin1018(key),Math.min(numMax1018(key),cur+Number(delta||0)));
+    filterState1015[key]=next;
+  }
+  var NUM_KEYS_1018=["maPeriod1","maPeriod2","flatVolumeBarLen","rsiOversoldThreshold","rsiOversoldLookback","oiMaLen","lsrMaLen"];
+  function numRows1018(){
+    return NUM_KEYS_1018.map(function(k){
+      return '<div class="dvlScan1016MetricRow" data-dvl-scan1015-num-row="'+k+'">'
+        +'<div class="dvlScan1016MetricInfo"><b>'+numLabel1018(k)+'</b><small>'+numSub1018(k)+'</small></div>'
+        +'<div class="dvlScan1016Stepper">'
+          +'<button type="button" data-dvl-scan1015-num="'+k+'" data-dvl-scan1015-numdir="-1">−</button>'
+          +'<span data-dvl-scan1015-numval="'+k+'">'+Number(filterState1015[k]||0)+'</span>'
+          +'<button type="button" data-dvl-scan1015-num="'+k+'" data-dvl-scan1015-numdir="1">+</button>'
+        +'</div>'
+      +'</div>';
+    }).join("");
+  }
 
   function bars(scoreVal){
     var total=6, on=Math.max(1,Math.min(total,Math.round(scoreVal/16)));
@@ -61571,18 +61787,29 @@ body.dvlScannerOpen080 #chartWrap{
     for(var i=0;i<total;i++) out+='<i class="'+(i<on?key:"")+'"></i>';
     return out+'</span>';
   }
+  /* Per-row checklist of the 6 blocks — purely a reading aid, no priority
+     between them (order shown is fixed but meaningless). */
+  var BLOCK_BADGE_ORDER=[["S","spikeAboveAvg","Spike acima da média"],["R","rsiOversold","RSI sobrevenda"],
+    ["O","oiAboveAvg","OI acima da média"],["L","lsrBelowAvg","LSR abaixo da média"],
+    ["F","flatVolumeBar","Flat volume bar"],["P","prevVolBelowHalf","Pré-volume baixo"]];
+  function blockBadges(r){
+    var b=blocksOf(r);
+    return '<span class="dvlScan1013Blocks">'+BLOCK_BADGE_ORDER.map(function(o){
+      var okv=!!b[o[1]];
+      return '<i class="'+(okv?"on":"off")+'" title="'+esc(o[2])+(okv?" ✓":" ✗")+'">'+o[0]+'</i>';
+    }).join("")+'</span>';
+  }
   function trend(r,type){
-    /* Live-feed rows carry a real OI/LSR reading split into direction and
-       colour: arrow = value vs its MA (↑ above / ↓ below); colour = MA slope
-       × position (green/yellow/red -> up/flat/down classes). Falls back to the
-       derived value when scanning in-browser. */
-    if(r && r._backend){
-      var dir = type==="oi" ? r.oi : (type==="lsr" ? r.lsr : null);
-      var col = type==="oi" ? r.oiColor : (type==="lsr" ? r.lsrColor : null);
-      if(dir==="up"||dir==="down"){
-        var cls = col==="green" ? "up" : (col==="red" ? "down" : "flat");
-        return { c:cls, t: dir==="up" ? "↑" : "↓" };
-      }
+    /* Both the client engine and the backend rows carry a real OI/LSR
+       reading split into direction and colour: arrow = value vs its MA
+       (↑ above / ↓ below); colour = MA slope × position. Falls back to a
+       derived value only when neither is available (e.g. cached rows saved
+       before this field existed, or Binance which has no real OI feed). */
+    var dir = type==="oi" ? r.oi : (type==="lsr" ? r.lsr : null);
+    var col = type==="oi" ? r.oiColor : (type==="lsr" ? r.lsrColor : null);
+    if(dir==="up"||dir==="down"){
+      var cls = col==="green" ? "up" : (col==="red" ? "down" : "flat");
+      return { c:cls, t: dir==="up" ? "↑" : "↓" };
     }
     var side=String(r.side||"").toUpperCase(), bp=Number(r.barPct)||0, sc=score(r);
     if(type==="oi"){
@@ -61599,13 +61826,7 @@ body.dvlScannerOpen080 #chartWrap{
     return v>=55?"#10df77":(v<=45?"#ff5966":"#ffd321");
   }
   function status(r){
-    /* Live-feed rows carry the server's ignition-context status label. */
-    if(r && r._backend && r.status){
-      var sc0=score(r);
-      var cls = sc0>=72?"clean":(sc0>=54?"forming":(sc0>=40?"monitor":"none"));
-      return {c:cls, t:String(r.status)};
-    }
-    var sc=score(r), setup=norm(r.setup||"");
+    var sc=score(r);
     if((Number(r.flatCandles)||0)>=4 && sc>=72) return {c:"postflat",t:"Spike pós-flat"};
     if(sc>=72) return {c:"clean",t:"Spike limpo"};
     if(sc>=54) return {c:"forming",t:"Em formação"};
@@ -61700,7 +61921,12 @@ body.dvlScannerOpen080 #chartWrap{
         +'<button class="is-on" type="button" data-dvl-scan1015-max="20">20</button>'
         +'<button type="button" data-dvl-scan1015-max="50">50</button>'
       +'</div></div>'
-      +'<div class="dvlScan1015FilterBlock dvlScan1016Metrics"><div class="dvlScan1016MetricHead"><label>Métricas do Spike Score</label><button type="button" data-dvl-scan1016-reset>Reset</button></div>'+metricRows1016()+'</div>'
+      +'<div class="dvlScan1015FilterBlock"><label>Spike acima da média</label><div class="dvlScan1013FilterChips" data-dvl-scan1015-group="spikeMaMode">'
+        +'<button type="button" data-dvl-scan1015-spikemode="1">1 MA (rápida)</button>'
+        +'<button class="is-on" type="button" data-dvl-scan1015-spikemode="2">2 MAs (rápida+lenta)</button>'
+      +'</div></div>'
+      +'<div class="dvlScan1015FilterBlock dvlScan1016Metrics"><div class="dvlScan1016MetricHead"><label>Entradas do motor</label></div>'+numRows1018()+'</div>'
+      +'<div class="dvlScan1015FilterBlock dvlScan1016Metrics"><div class="dvlScan1016MetricHead"><label>Pesos dos blocos do Spike Score</label><button type="button" data-dvl-scan1016-reset>Reset</button></div>'+metricRows1016()+'</div>'
       +'<div class="dvlScan1015FilterFoot">Tudo em chips DVL. Sem dropdown nativo.</div>'
       +'</div>';
   }
@@ -61712,20 +61938,15 @@ body.dvlScannerOpen080 #chartWrap{
     root.querySelectorAll("[data-dvl-scan1015-tf]").forEach(function(b){ b.classList.toggle("is-on", b.getAttribute("data-dvl-scan1015-tf")===filterState1015.tf); });
     root.querySelectorAll("[data-dvl-scan1015-min]").forEach(function(b){ b.classList.toggle("is-on", Number(b.getAttribute("data-dvl-scan1015-min"))===Number(filterState1015.minScore)); });
     root.querySelectorAll("[data-dvl-scan1015-max]").forEach(function(b){ b.classList.toggle("is-on", Number(b.getAttribute("data-dvl-scan1015-max"))===Number(filterState1015.maxRows)); });
+    root.querySelectorAll("[data-dvl-scan1015-spikemode]").forEach(function(b){ b.classList.toggle("is-on", b.getAttribute("data-dvl-scan1015-spikemode")===String(filterState1015.spikeMaMode)); });
     root.querySelectorAll("[data-dvl-scan1016-value]").forEach(function(el){
       var key=el.getAttribute("data-dvl-scan1016-value");
       el.textContent=fmtWeight1016((filterState1015.weights||{})[key]);
     });
-  }
-
-  function applyTfToOriginal1015(tf){
-    try{
-      var api=rawApi || window.__DVL_SCANNER_ORIGINAL_1013;
-      if(api && typeof api.setTF==="function") api.setTF(tf);
-      if(api && typeof api.setTimeframe==="function") api.setTimeframe(tf);
-      if(api && typeof api.setFilter==="function") api.setFilter({scanTF:tf});
-      window.dispatchEvent(new CustomEvent("dvl:scanner-filter-change",{detail:{tf:tf,source:"scanner-1015"}}));
-    }catch(_){}
+    root.querySelectorAll("[data-dvl-scan1015-numval]").forEach(function(el){
+      var key=el.getAttribute("data-dvl-scan1015-numval");
+      el.textContent=Number(filterState1015[key]||0);
+    });
   }
 
   function build(){
@@ -61753,39 +61974,53 @@ body.dvlScannerOpen080 #chartWrap{
       input.addEventListener("click",function(e){e.stopPropagation();},false);
       input.addEventListener("keydown",function(e){e.stopPropagation();},false);
     }
+    function commit(){ saveFilterState1015(); syncFilterButtons1015(p); render(); }
     p.addEventListener("click",function(ev){
       var preset=ev.target.closest && ev.target.closest("[data-dvl-scan1015-preset]");
       if(preset){
         ev.preventDefault();ev.stopPropagation();
         filterState1015.preset=preset.getAttribute("data-dvl-scan1015-preset")||"all";
-        syncFilterButtons1015(p);
-        render();
+        commit();
         return;
       }
       var tf=ev.target.closest && ev.target.closest("[data-dvl-scan1015-tf]");
       if(tf){
         ev.preventDefault();ev.stopPropagation();
         filterState1015.tf=tf.getAttribute("data-dvl-scan1015-tf")||"15m";
-        syncFilterButtons1015(p);
-        applyTfToOriginal1015(filterState1015.tf);
-        callOriginalRefresh();
-        render();
+        applyTf1015(filterState1015.tf);
+        commit();
         return;
       }
       var min=ev.target.closest && ev.target.closest("[data-dvl-scan1015-min]");
       if(min){
         ev.preventDefault();ev.stopPropagation();
         filterState1015.minScore=Number(min.getAttribute("data-dvl-scan1015-min")||0);
-        syncFilterButtons1015(p);
-        render();
+        commit();
         return;
       }
       var max=ev.target.closest && ev.target.closest("[data-dvl-scan1015-max]");
       if(max){
         ev.preventDefault();ev.stopPropagation();
         filterState1015.maxRows=Number(max.getAttribute("data-dvl-scan1015-max")||20);
-        syncFilterButtons1015(p);
-        render();
+        commit();
+        return;
+      }
+      var spikemode=ev.target.closest && ev.target.closest("[data-dvl-scan1015-spikemode]");
+      if(spikemode){
+        ev.preventDefault();ev.stopPropagation();
+        filterState1015.spikeMaMode=spikemode.getAttribute("data-dvl-scan1015-spikemode")==="1"?"1":"2";
+        pushEngineConfig1015();
+        commit();
+        return;
+      }
+      var numBtn=ev.target.closest && ev.target.closest("[data-dvl-scan1015-num]");
+      if(numBtn){
+        ev.preventDefault();ev.stopPropagation();
+        var numKey=numBtn.getAttribute("data-dvl-scan1015-num");
+        var numDir=Number(numBtn.getAttribute("data-dvl-scan1015-numdir")||0);
+        setNum1018(numKey, numDir);
+        pushEngineConfig1015();
+        commit();
         return;
       }
       var metric=ev.target.closest && ev.target.closest("[data-dvl-scan1016-metric]");
@@ -61794,16 +62029,16 @@ body.dvlScannerOpen080 #chartWrap{
         var key=metric.getAttribute("data-dvl-scan1016-metric");
         var dir=Number(metric.getAttribute("data-dvl-scan1016-dir")||0);
         setMetric1016(key, dir*metricStep1016(key));
-        syncFilterButtons1015(p);
-        render();
+        pushEngineConfig1015();
+        commit();
         return;
       }
       var reset=ev.target.closest && ev.target.closest("[data-dvl-scan1016-reset]");
       if(reset){
         ev.preventDefault();ev.stopPropagation();
-        filterState1015.weights={spike20:20,spike50:7,flatCandles:2.4,barPct:2.2,prevVolBelowHalf:6,priceGlueOk:5};
-        syncFilterButtons1015(p);
-        render();
+        filterState1015.weights=Object.assign({},FILTER1015_DEFAULTS.weights);
+        pushEngineConfig1015();
+        commit();
         return;
       }
       var btn=ev.target.closest && ev.target.closest("[data-dvl-scan1013-filters]");
@@ -61848,7 +62083,7 @@ body.dvlScannerOpen080 #chartWrap{
         +'<div class="dvlScan1013Trend '+oi.c+'">'+oi.t+'</div>'
         +'<div class="dvlScan1013Trend '+ls.c+'">'+ls.t+'</div>'
         +'<div style="color:'+rsiColor(rsi)+'">'+rsi.toFixed(1)+'</div>'
-        +'<div class="dvlScan1013Score"><b>'+sc+'</b>'+bars(sc)+'</div>'
+        +'<div class="dvlScan1013Score"><b>'+sc+'</b>'+bars(sc)+blockBadges(r)+'</div>'
         +'<div><span class="dvlScan1013Status '+st.c+'">'+esc(st.t)+'</span></div>'
         +'<div class="dvlScan1013Ago">'+esc(ago(r.spikeAt||r._histAt))+'</div>'
         +'<div>'+mini(r.last5Closes)+'</div>'
@@ -69464,6 +69699,18 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     try{ return (window.DVL_SCANNER_EXCHANGE_FILTER_1022 && window.DVL_SCANNER_EXCHANGE_FILTER_1022.state && window.DVL_SCANNER_EXCHANGE_FILTER_1022.state.exchange) || "binance"; }
     catch(_){ return "binance"; }
   }
+  /* TF the Filtros dropdown (Scanner Pro 1013/1015) currently has selected —
+     the backend keeps every TF pre-computed, so switching this is instant. */
+  function curTf(){
+    try{
+      var api=window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780;
+      if(api && typeof api.getFilterConfig==="function"){
+        var fc=api.getFilterConfig();
+        if(fc && fc.scanTF) return fc.scanTF;
+      }
+    }catch(_){}
+    return "15m";
+  }
   function loadUrl(){ try{ return (typeof window.DVL_SCANNER_BACKEND_URL==="string"?window.DVL_SCANNER_BACKEND_URL:null) || localStorage.getItem(LS_URL) || null; }catch(_){ return null; } }
   function api(path){ var b=_base==null?"":_base; return b.replace(/\/$/,"")+path; }
   function wsUrl(path){
@@ -69472,8 +69719,9 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   }
 
   /* Map a server snapshot row to the row shape the in-page Scanner Pro reads.
-     The Pro re-derives score/status/OI/LSR from these via its own (now fixed)
-     score() — same formula + weights as the backend, so the result matches. */
+     The Pro always re-derives score/status/blocks locally from these raw
+     fields via its own score()/blocksOf() — so the Filtros weight/engine
+     inputs affect backend-fed rows exactly the same as client-scanned ones. */
   function mapRow(r){
     var sym=String(r.symbol||r.rawSymbol||"");
     var base=r.base || sym.replace(/\/USDT$/,"").replace(/USDT$/,"");
@@ -69486,13 +69734,15 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       spike20: Number(r.spike20)||0, spike50: Number(r.spike50)||0, volX: Number(r.spike20)||0,
       flatCandles: Number(r.flatCandles)||0, barPct: Number(r.barPct)||0,
       prevVolBelowHalf: !!r.prevVolBelowHalf, priceGlueOk: !!r.priceGlueOk,
+      rsiOversoldOk: !!r.rsiOversoldOk,
       rsi14: Number(r.rsi14)||50, last5Closes: Array.isArray(r.last5Closes)?r.last5Closes:[],
       lastClose: Number(r.price)||0, price24hPct: Number(r.var24h)||0,
       spikeAt: r.spikeAt||0, _histAt: r.spikeAt||_meta.updatedAt||Date.now(),
       oi: r.oi, lsr: r.lsr, oiValue: r.oiValue, lsrValue: r.lsrValue,
       oiColor: r.oiColor, lsrColor: r.lsrColor,
-      spikeScore: r.spikeScore, status: r.status,
+      spikeScore: r.spikeScore, status: r.status, blocks: r.blocks,
       volBelowMaBars: r.volBelowMaBars, crossStrength: r.crossStrength,
+      tfOrigin: r.tfOrigin,
       _backend:true
     };
   }
@@ -69528,17 +69778,26 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 
   function pull(){
     if(_base==null) return Promise.resolve(null);
-    var ex=curExchange();
-    return fetch(api("/api/dvl/scanner/snapshot?exchange="+encodeURIComponent(ex)),{cache:"no-store"})
+    var ex=curExchange(), tf=curTf();
+    return fetch(api("/api/dvl/scanner/snapshot?exchange="+encodeURIComponent(ex)+"&tf="+encodeURIComponent(tf)),{cache:"no-store"})
       .then(function(r){ if(!r.ok) throw new Error("snapshot "+r.status); return r.json(); })
       .then(function(snap){ setSnapshot(snap); return snap; })
       .catch(function(e){ console.warn("[DVL 1023] snapshot pull failed:",e&&e.message); return null; });
   }
 
+  function pushConfig(patch){
+    if(_base==null || !patch) return Promise.resolve(null);
+    return fetch(api("/api/dvl/scanner/config"),{
+      method:"POST", cache:"no-store",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(patch)
+    }).catch(function(e){ console.warn("[DVL 1023] config push failed:",e&&e.message); return null; });
+  }
+
   function connectWS(url){
     disconnect();
-    var ex=curExchange();
-    var target=url || wsUrl("/ws/dvl/scanner?exchange="+encodeURIComponent(ex));
+    var ex=curExchange(), tf=curTf();
+    var target=url || wsUrl("/ws/dvl/scanner?exchange="+encodeURIComponent(ex)+"&tf="+encodeURIComponent(tf));
     try{
       _ws=new WebSocket(target);
       _ws.onmessage=function(ev){
@@ -69567,14 +69826,22 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 
   /* Re-pull + reconnect when the user switches Binance/MEXC in the filter. */
   window.addEventListener("dvl:scanner-exchange-change", function(){ if(_active){ pull().then(function(snap){ if(snap) connectWS(); }); } });
+  /* Re-pull + reconnect at the newly-selected TF — the backend keeps every
+     TF pre-computed, so this is just a re-fetch, not a fresh scan. */
+  window.addEventListener("dvl:scanner-tf-change", function(){ if(_active){ pull().then(function(snap){ if(snap) connectWS(); }); } });
+  /* Push Filtros weight/engine changes (MA periods, RSI zone/lookback, OI/LSR
+     MA length, block weights) down to the backend so its own spikeScore/
+     blocks stay consistent with what's shown locally. Best-effort: the local
+     recompute in score()/blocksOf() is what's actually displayed either way. */
+  window.addEventListener("dvl:scanner-config-change", function(ev){ if(_active) pushConfig(ev && ev.detail); });
 
   window.DVL_SCANNER_LIVE_FEED_BRIDGE_1023={
     version:"1.023",
     enable:enable, disable:disable,
     setSnapshot:setSnapshot, setFeed:setSnapshot,
     updateRows:updateRows, updateAsset:updateAsset,
-    connectWS:connectWS, disconnect:disconnect, pull:pull,
-    audit:function(){ return { version:"1.023", active:_active, base:_base, hooked:_hooked, rows:_rows.length, ws:!!(_ws&&_ws.readyState===1), exchange:curExchange(), meta:_meta }; }
+    connectWS:connectWS, disconnect:disconnect, pull:pull, pushConfig:pushConfig,
+    audit:function(){ return { version:"1.023", active:_active, base:_base, hooked:_hooked, rows:_rows.length, ws:!!(_ws&&_ws.readyState===1), exchange:curExchange(), tf:curTf(), meta:_meta }; }
   };
 
   /* Auto-start: if a backend URL was saved, use it. Otherwise probe the SAME

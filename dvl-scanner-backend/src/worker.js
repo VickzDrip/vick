@@ -2,8 +2,12 @@
 
 /* ── DVL 24h Scanner worker ─────────────────────────────────────────
    Runs forever, independent of any connected client. For each exchange
-   it polls tickers + klines, computes signals, builds a ready snapshot,
-   and emits a change event the server broadcasts over WebSocket. */
+   it polls tickers once per cycle (candidates + OI), then scans EVERY
+   timeframe in cfg.TF_LIST against that candidate list, computes
+   signals, builds a ready snapshot per (exchange, tf), and emits a
+   change event the server broadcasts over WebSocket. Keeping every TF
+   pre-computed means switching the Filtros "TF detecção" chip on the
+   client is instant — no fetch delay. */
 
 const fs = require("fs");
 const path = require("path");
@@ -31,12 +35,24 @@ async function mapPool(items, limit, fn) {
 }
 
 /* Per-exchange spike-age registry: first-seen time per symbol, reset
-   only when a new spike is >=25% stronger (mirrors trackSpike). */
-const spikeReg = { binance: {}, mexc: {}, };
+   only when a new spike is >=25% stronger (mirrors trackSpike). Currently
+   unused by buildRow (spikeAt comes from the signal registry's detection
+   time instead) — kept for parity with the in-page tracker. */
+const spikeReg = { binance: {}, mexc: {} };
+
+function trackSpike(exKey, sym, level, now) {
+  const reg = spikeReg[exKey] || (spikeReg[exKey] = {});
+  const prev = reg[sym];
+  if (!prev || !prev.at || level > (prev.level || 0) * 1.25) {
+    reg[sym] = { at: now, level };
+  }
+  return reg[sym].at;
+}
 
 /* Per-exchange open-interest history: a rolling buffer of OI (holdVol) values
    per symbol (one per cycle) → OI MA for the arrow (value vs MA) and colour
-   (MA slope × position). */
+   (MA slope × position). OI is TF-agnostic (one ticker snapshot per cycle),
+   so this is tracked once per exchange, not per timeframe. */
 const oiBufReg = { binance: {}, mexc: {} };
 
 function pushOi(exKey, sym, value) {
@@ -48,28 +64,25 @@ function pushOi(exKey, sym, value) {
   return buf;
 }
 
-/* Per-exchange PERSISTENT signal registry: once a symbol ignites it lives
-   here (keyed by raw symbol) and is refreshed every cycle until it ages out,
-   leaves the feed, or is pushed past the row limit. This is what makes a
-   detected signal stay on the list instead of vanishing next cycle. */
+/* Per-exchange, per-TF PERSISTENT signal registry: once a symbol ignites on
+   a given timeframe it lives here (keyed by raw symbol) and is refreshed
+   every cycle until it ages out, leaves the feed, or is pushed past the row
+   limit. This is what makes a detected signal stay on the list instead of
+   vanishing next cycle. */
 const signalReg = { binance: {}, mexc: {} };
 
-function trackSpike(exKey, sym, level, now) {
-  const reg = spikeReg[exKey] || (spikeReg[exKey] = {});
-  const prev = reg[sym];
-  if (!prev || !prev.at || level > (prev.level || 0) * 1.25) {
-    reg[sym] = { at: now, level };
-  }
-  return reg[sym].at;
+function getSigReg(exKey, tf) {
+  const byEx = signalReg[exKey] || (signalReg[exKey] = {});
+  return byEx[tf] || (byEx[tf] = {});
 }
 
-function buildRow(exKey, adapter, t, k, now) {
+function buildRow(exKey, adapter, t, k, now, tf) {
   const sym = t.sym;
   /* Extrapolate the partial (still-forming) last candle's volume — exactly
      what the in-page scanner does before computeSignal. Without this the
      current candle's volume is tiny, every spike/prevVolBelowHalf check
      fails, and the scan returns 0 rows. */
-  const tfMs = tfToMs(cfg.SCAN_TF);
+  const tfMs = tfToMs(tf);
   const extVols = k.vols.slice();
   if (extVols.length > 0 && k.lastOpen && tfMs > 0) {
     const elapsed = Math.max(5000, now - k.lastOpen);
@@ -81,7 +94,6 @@ function buildRow(exKey, adapter, t, k, now) {
      scanExchange decides what enters/stays: a symbol JOINS when it ignites,
      then persists and refreshes here every cycle until it's pushed out by the
      row limit or ages out. */
-  const tfOrigin = cfg.SCAN_TF;
   const candles = (k.ohlc || []).slice(-cfg.CANDLES_PER_ROW);
 
   return {
@@ -98,30 +110,33 @@ function buildRow(exKey, adapter, t, k, now) {
     barPct: sig.barPct,
     prevVolBelowHalf: sig.prevVolBelowHalf,
     priceGlueOk: sig.priceGlueOk,
+    rsiOversoldOk: sig.rsiOversoldOk,
 
-    /* Ignition fields used by the ignition score. */
+    /* Ignition fields — kept for the (separate, unused-by-score) ignition
+       quality metric and the registry join gate (isIgnition). */
     volBelowMaBars: sig.volBelowMaBars,
     crossStrength: Math.round(sig.crossStrength * 100) / 100,
     maFlatness1: sig.maFlatness1,
     isIgnition: sig.isIgnition,
 
-    /* spikeScore/status are finalized in scanExchange once the real OI trend
-       is known (OI rising is a core part of the ignition score). spikeAt is
-       set from the registry's detection time. */
+    /* spikeScore/status/blocks are finalized in scanExchange once the real
+       OI/LSR trend is known. spikeAt is set from the registry's detection
+       time. */
     spikeScore: 0,
     status: "",
+    blocks: null,
     spikeAt: 0,
 
     rsi14: Math.round(sig.rsi14 * 10) / 10,
-    /* oi is overwritten with the REAL holdVol trend in scanExchange; this
-       derived value is only a first-cycle fallback. */
+    /* oi is overwritten with the REAL holdVol trend right after buildRow();
+       this derived value is only a first-cycle fallback. */
     oi: M.oiTrend(sig, 50),
     oiValue: Number.isFinite(Number(t.oi)) ? Number(t.oi) : null,
     lsr: M.lsrTrend(sig),
 
-    tfOrigin: tfOrigin,
-    tfConfirm: cfg.TF_CONFIRM[tfOrigin] || tfOrigin,
-    contextTf: cfg.TF_CONTEXT[tfOrigin] || tfOrigin,
+    tfOrigin: tf,
+    tfConfirm: cfg.TF_CONFIRM[tf] || tf,
+    contextTf: cfg.TF_CONTEXT[tf] || tf,
 
     candles: candles,                 // real OHLC only; empty if missing
     last5Closes: sig.last5Closes,
@@ -167,21 +182,33 @@ function mergeRegistry(sigReg, cur, now) {
   return rows;
 }
 
-/* Scan one exchange into a persistent, recency-ordered list of signals.
-   A symbol JOINS the list the moment it ignites; once in, it STAYS and is
-   refreshed with live data every cycle (price, OI, LSR, score, candles) even
-   after the ignition bar has passed — so a detected signal never just
-   vanishes. It only leaves when it ages out, disappears from the feed for a
-   while, or is pushed past the row limit by newer signals. */
-async function scanExchange(adapter) {
-  const now = Date.now();
+/* Once per exchange per cycle: fetch tickers, pick the top-N candidates by
+   24h quote volume, and feed the OI rolling buffer (OI is TF-agnostic, so
+   this must NOT be repeated per timeframe — that would push the same
+   snapshot value up to |TF_LIST| times and skew the MA). */
+async function scanCandidatesAndOi(adapter) {
   let cands = await adapter.tickers();
   cands.sort((a, b) => b.qv - a.qv);
   cands = cands.slice(0, cfg.CAND);
+  const oiTrends = {};
+  for (const c of cands) {
+    const buf = pushOi(adapter.key, c.sym, Number(c.oi));
+    oiTrends[c.sym] = M.trendVsMA(buf);
+  }
+  return { cands, oiTrends };
+}
 
-  const kl = await mapPool(cands, cfg.POOL, c => adapter.klines(c.sym, cfg.SCAN_TF));
+/* Scan one exchange, one timeframe, into a persistent, recency-ordered list
+   of signals. A symbol JOINS the list the moment it ignites; once in, it
+   STAYS and is refreshed with live data every cycle (price, OI, LSR, score,
+   candles) even after the ignition bar has passed — so a detected signal
+   never just vanishes. It only leaves when it ages out, disappears from the
+   feed for a while, or is pushed past the row limit by newer signals. */
+async function scanExchange(adapter, tf, cands, oiTrends) {
+  const now = Date.now();
+  const kl = await mapPool(cands, cfg.POOL, c => adapter.klines(c.sym, tf));
   const freshCut = now - cfg.FRESH_MS;
-  const sigReg = signalReg[adapter.key] || (signalReg[adapter.key] = {});
+  const sigReg = getSigReg(adapter.key, tf);
 
   /* 1) Compute current data for every valid candidate (igniting or not). */
   const cur = {};
@@ -189,13 +216,9 @@ async function scanExchange(adapter) {
     const k = kl[i];
     if (!k || !k.closes || k.closes.length < 25) continue;
     if (k.lastOpen && k.lastOpen < freshCut) continue;
-    const row = buildRow(adapter.key, adapter, cands[i], k, now);
-    /* OI arrow (value vs its MA) + colour (MA slope × position). */
-    const oiBuf = pushOi(adapter.key, cands[i].sym, Number(cands[i].oi));
-    const oiT = M.trendVsMA(oiBuf);
+    const row = buildRow(adapter.key, adapter, cands[i], k, now, tf);
+    const oiT = oiTrends[cands[i].sym] || { arrow: "up", color: "yellow" };
     row.oi = oiT.arrow; row.oiColor = oiT.color;
-    row.spikeScore = M.ignitionScore(row);   // uses oiColor
-    row.status = M.ignitionStatus(row.spikeScore);
     cur[cands[i].sym] = row;
   }
 
@@ -203,30 +226,32 @@ async function scanExchange(adapter) {
   const rows = mergeRegistry(sigReg, cur, now);
 
   /* 5) Real LSR (Bybit) for the listed signals only — arrow vs its MA +
-        colour from the MA slope, same model as OI. */
+        colour from the MA slope, same model as OI. Then finalize the
+        Spike Score / status / block checklist now that oi + lsr are known. */
   await mapPool(rows, cfg.POOL, async (row) => {
     try {
-      const r = await bybit.accountRatio(row.symbol, cfg.SCAN_TF, cfg.LSR_MA_LEN);
+      const r = await bybit.accountRatio(row.symbol, tf, cfg.LSR_MA_LEN);
       if (r && r.series) {
         const t = M.trendVsMA(r.series);
         row.lsr = t.arrow; row.lsrColor = t.color;
         row.lsrValue = Math.round(r.lsr * 1000) / 1000;
       }
     } catch (_) { /* not on Bybit / transient — keep derived lsr */ }
+    row.spikeScore = M.score(row, cfg.WEIGHTS, cfg.ENGINE);
+    row.status = M.statusOf(row, row.spikeScore);
+    row.blocks = M.blocksOf(row, cfg.ENGINE);
   });
   return rows;
 }
 
-/* Snapshots, keyed by the exchange the CLIENT asked for. */
-const snapshots = {
-  binance: emptySnapshot("binance"),
-  mexc: emptySnapshot("mexc")
-};
+/* Snapshots, keyed by [exchange][tf]. */
+const snapshots = { binance: {}, mexc: {} };
 
-function emptySnapshot(exchange) {
+function emptySnapshot(exchange, tf) {
   return {
     version: "1.0",
     exchange,
+    tf: tf || cfg.SCAN_TF,
     activeSource: exchange,
     fallback: false,
     updatedAt: 0,
@@ -234,6 +259,8 @@ function emptySnapshot(exchange) {
     rows: []
   };
 }
+
+function normTf(tf) { return cfg.TF_LIST.indexOf(tf) >= 0 ? tf : cfg.SCAN_TF; }
 
 function rowsSignature(rows) {
   /* Compact signature to detect "something relevant changed" — includes price
@@ -254,11 +281,13 @@ function loadRegistry() {
     const obj = JSON.parse(fs.readFileSync(PERSIST_FILE, "utf8"));
     const now = Date.now();
     for (const ex of ["binance", "mexc"]) {
-      if (obj[ex] && typeof obj[ex] === "object") {
-        for (const sym in obj[ex]) {
-          const e = obj[ex][sym];
+      if (!obj[ex] || typeof obj[ex] !== "object") continue;
+      for (const tf of cfg.TF_LIST) {
+        if (!obj[ex][tf] || typeof obj[ex][tf] !== "object") continue;
+        for (const sym in obj[ex][tf]) {
+          const e = obj[ex][tf][sym];
           if (e && e._detectedAt && (now - e._detectedAt) < cfg.HIST_MAX_AGE) {
-            signalReg[ex][sym] = e;
+            getSigReg(ex, tf)[sym] = e;
           }
         }
       }
@@ -271,54 +300,82 @@ let _onChange = () => {};
 function onChange(fn) { _onChange = typeof fn === "function" ? fn : _onChange; }
 
 async function cycle() {
-  /* Scan MEXC (always reachable) and Binance (may be geo/region blocked). */
-  let mexcRows = null, binRows = null;
-  try { mexcRows = await scanExchange(mexc); } catch (e) { logErr("mexc", e); }
-  try { binRows = await scanExchange(binance); } catch (e) { logErr("binance", e); }
+  /* 1) Tickers + OI once per exchange (TF-agnostic). */
+  let mexcData = null, binData = null;
+  try { mexcData = await scanCandidatesAndOi(mexc); } catch (e) { logErr("mexc", e); }
+  try { binData = await scanCandidatesAndOi(binance); } catch (e) { logErr("binance", e); }
 
-  const now = Date.now();
+  /* 2) Scan every timeframe against that candidate list. Sequential (not
+     Promise.all across TFs) to keep peak network concurrency bounded to
+     cfg.POOL regardless of how many timeframes are configured. */
+  for (const tf of cfg.TF_LIST) {
+    let mexcRows = null, binRows = null;
+    try { if (mexcData) mexcRows = await scanExchange(mexc, tf, mexcData.cands, mexcData.oiTrends); } catch (e) { logErr("mexc:" + tf, e); }
+    try { if (binData) binRows = await scanExchange(binance, tf, binData.cands, binData.oiTrends); } catch (e) { logErr("binance:" + tf, e); }
 
-  /* MEXC snapshot */
-  if (mexcRows) updateSnapshot("mexc", { rows: mexcRows, activeSource: "mexc", fallback: false, updatedAt: now });
-
-  /* Binance snapshot — fall back to MEXC data if Binance is unavailable. */
-  if (binRows) {
-    updateSnapshot("binance", { rows: binRows, activeSource: "binance", fallback: false, updatedAt: now });
-  } else if (mexcRows) {
-    updateSnapshot("binance", { rows: mexcRows, activeSource: "mexc", fallback: true, updatedAt: now });
+    const now = Date.now();
+    if (mexcRows) updateSnapshot("mexc", tf, { rows: mexcRows, activeSource: "mexc", fallback: false, updatedAt: now });
+    if (binRows) {
+      updateSnapshot("binance", tf, { rows: binRows, activeSource: "binance", fallback: false, updatedAt: now });
+    } else if (mexcRows) {
+      updateSnapshot("binance", tf, { rows: mexcRows, activeSource: "mexc", fallback: true, updatedAt: now });
+    }
   }
 
   /* Mirror the registry to disk so signals survive restarts. */
   saveRegistry();
 }
 
-function updateSnapshot(exchange, patch) {
-  const prev = snapshots[exchange];
-  const next = Object.assign(emptySnapshot(exchange), patch, { exchange });
+function updateSnapshot(exchange, tf, patch) {
+  const prev = getSnapshot(exchange, tf);
+  const next = Object.assign(emptySnapshot(exchange, tf), patch, { exchange, tf });
   const changed = rowsSignature(prev.rows) !== rowsSignature(next.rows) ||
     prev.activeSource !== next.activeSource || prev.fallback !== next.fallback;
-  snapshots[exchange] = next;
-  if (changed) _onChange(exchange, next);
+  const byEx = snapshots[exchange] || (snapshots[exchange] = {});
+  byEx[tf] = next;
+  if (changed) _onChange(exchange, tf, next);
 }
 
 function logErr(ex, e) {
   console.warn("[DVL worker] " + ex + " scan failed:", (e && e.message) || e);
 }
 
-function getSnapshot(exchange) {
-  return snapshots[exchange === "mexc" ? "mexc" : "binance"];
+function getSnapshot(exchange, tf) {
+  const ex = exchange === "mexc" ? "mexc" : "binance";
+  const t = normTf(tf);
+  const byEx = snapshots[ex] || (snapshots[ex] = {});
+  return byEx[t] || (byEx[t] = emptySnapshot(ex, t));
+}
+
+/* Apply a runtime Filtros config patch (weights / engine params / OI-LSR MA
+   lengths) — takes effect from the NEXT scan cycle onward. This backend
+   serves a single user, so "last write wins" globally is an intentional
+   simplification rather than per-connection state. */
+function setEngineConfig(patch) {
+  if (!patch || typeof patch !== "object") return;
+  if (patch.engine && typeof patch.engine === "object") Object.assign(cfg.ENGINE, patch.engine);
+  if (patch.weights && typeof patch.weights === "object") Object.assign(cfg.WEIGHTS, patch.weights);
+  if (Number.isFinite(patch.oiMaLen)) cfg.OI_MA_LEN = Math.max(2, Math.min(200, Math.round(patch.oiMaLen)));
+  if (Number.isFinite(patch.lsrMaLen)) cfg.LSR_MA_LEN = Math.max(2, Math.min(200, Math.round(patch.lsrMaLen)));
 }
 
 let _timer = null;
+let _running = false;
 async function start() {
-  console.log("[DVL worker] starting 24h scan loop (every " + cfg.REFRESH_MS + "ms)");
+  console.log("[DVL worker] starting 24h scan loop (every " + cfg.REFRESH_MS + "ms, " + cfg.TF_LIST.length + " timeframes)");
   loadRegistry();   // restore persisted signals so a restart doesn't reset the list
-  const run = async () => {
-    try { await cycle(); } catch (e) { console.warn("[DVL worker] cycle error:", e && e.message); }
+  _running = true;
+  const loop = async () => {
+    while (_running) {
+      const t0 = Date.now();
+      try { await cycle(); } catch (e) { console.warn("[DVL worker] cycle error:", e && e.message); }
+      if (!_running) break;
+      const wait = Math.max(1000, cfg.REFRESH_MS - (Date.now() - t0));
+      await new Promise(resolve => { _timer = setTimeout(resolve, wait); });
+    }
   };
-  await run();
-  _timer = setInterval(run, cfg.REFRESH_MS);
+  loop();
 }
-function stop() { if (_timer) { clearInterval(_timer); _timer = null; } }
+function stop() { _running = false; if (_timer) { clearTimeout(_timer); _timer = null; } }
 
-module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry };
+module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig };

@@ -35,6 +35,11 @@ module.exports = {
   TF_CONFIRM: { "1m": "5m", "3m": "15m", "5m": "15m", "15m": "1h", "30m": "1h", "1h": "4h" },
   TF_CONTEXT: { "1m": "15m", "3m": "1h", "5m": "1h", "15m": "4h", "30m": "4h", "1h": "1d" },
 
+  /* All timeframes the scanner keeps pre-computed in the background so
+     switching the Filtros "TF detecção" chip is instant (mirrors the
+     frontend's TF_LIST). */
+  TF_LIST: ["1m", "3m", "5m", "15m", "30m", "1h"],
+
   /* MEXC timeframe mapping (matches the in-page MEXC_TF). */
   MEXC_TF: { "1m": "Min1", "3m": "Min5", "5m": "Min5", "15m": "Min15", "30m": "Min30", "1h": "Min60" },
 
@@ -59,7 +64,20 @@ module.exports = {
     /* Ignition detection (the MEXC early-pump setup): the N bars before the
        current one must be BELOW the volume MA (a dead/flat base), and the
        current bar is the FIRST to cross back ABOVE the MA — even a small one. */
-    minBaseBars: 6
+    minBaseBars: 6,
+
+    /* ── Spike Score block inputs (Beta scanner-blocks redesign) ──
+       spikeMaMode: "1" checks only the fast MA (maPeriod1); "2" requires
+       both the fast and slow MA (maPeriod1 + maPeriod2). */
+    spikeMaMode: "2",
+    /* "Flat volume bar" block: bars immediately before the spike whose
+       volume stayed below its MA (reuses volBelowMaBars), gated by this
+       length. */
+    flatVolumeBarLen: 5,
+    /* RSI oversold block: validated if RSI was at/under this value at any
+       point within the last N candles. */
+    rsiOversoldThreshold: 30,
+    rsiOversoldLookback: 20
   },
 
   /* Ignition score weights — reward the QUALITY of the early setup, not the
@@ -72,19 +90,19 @@ module.exports = {
     flat: 12    // flatter volume MA during the base = cleaner setup
   },
 
-  /* Default Spike Score weights — identical to the in-page Filtros defaults. */
+  /* Default Spike Score weights — identical to the in-page Filtros defaults.
+     Each factor is a pass/fail block (no continuous ranges anymore): the
+     score is the weighted share of blocks that validated, scaled to 0-99.
+     Blocks carry no priority between them — this is just each one's relative
+     contribution to the score. */
   WEIGHTS: {
-    spike20: 20,
-    spike50: 7,
-    flatCandles: 2.4,
-    barPct: 2.2,
-    prevVolBelowHalf: 6,
-    priceGlueOk: 5
+    spikeAboveAvg: 20,
+    rsiOversold: 15,
+    oiAboveAvg: 15,
+    lsrBelowAvg: 15,
+    flatVolumeBar: 12,
+    prevVolBelowHalf: 12
   },
-
-  /* Range-normalization scales used by the Spike Score (mirror the fixed
-     in-page score(): the metric value that earns full points). */
-  SCORE_FULL: { spike20: 8, spike50: 5, flatCandles: 10, barPct: 8 },
 
   /* ── Hard safety locks — this backend is READ-ONLY. It never trades. ──
      Mirrored here so the contract is explicit and auditable. */

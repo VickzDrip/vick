@@ -6,7 +6,7 @@
    matching functions in public/index.html so the backend output is
    identical to what the client renders. */
 
-const { ENGINE, WEIGHTS, SCORE_FULL } = require("./config");
+const { ENGINE, WEIGHTS } = require("./config");
 
 function sma(values, period, idx) {
   if (idx < period - 1) return null;
@@ -124,6 +124,28 @@ function computeSignal(closes, vols, engine) {
     else rsi14 = 100 - (100 / (1 + (avgGain / avgLoss)));
   }
 
+  /* RSI oversold block: was RSI(14) at/under the configured threshold at any
+     point within the last N candles? Needs the full RSI series (not just the
+     latest value), computed the same simple way as rsi14 above. */
+  const rsiPeriod = 14;
+  const rsiOversoldLookback = engine.rsiOversoldLookback || 20;
+  const rsiOversoldThreshold = Number.isFinite(engine.rsiOversoldThreshold) ? engine.rsiOversoldThreshold : 30;
+  let rsiOversoldOk = false;
+  if (len >= rsiPeriod + 1) {
+    const start = Math.max(rsiPeriod, len - rsiOversoldLookback);
+    for (let ri = start; ri < len && !rsiOversoldOk; ri++) {
+      let gain = 0, loss = 0, steps = 0;
+      for (let gi = ri - rsiPeriod + 1; gi <= ri; gi++) {
+        const delta = (closes[gi] || 0) - (closes[gi - 1] || 0);
+        if (delta >= 0) gain += delta; else loss += Math.abs(delta);
+        steps++;
+      }
+      const avgGain = steps ? gain / steps : 0, avgLoss = steps ? loss / steps : 0;
+      const rsiAt = avgLoss <= 1e-9 ? (avgGain > 0 ? 100 : 50) : 100 - (100 / (1 + (avgGain / avgLoss)));
+      if (rsiAt <= rsiOversoldThreshold) rsiOversoldOk = true;
+    }
+  }
+
   return {
     side, lastClose, price24hPct, rsi14,
     last5Closes: closes.slice(-5),
@@ -136,7 +158,8 @@ function computeSignal(closes, vols, engine) {
     maFlatness1,
     volBelowMaBars,
     crossStrength,
-    isIgnition
+    isIgnition,
+    rsiOversoldOk
   };
 }
 
@@ -169,20 +192,50 @@ function ignitionStatus(sc) {
   return "Fraca";
 }
 
-/* Port of the fixed (range-normalized) in-page score(). */
-function score(r, weights) {
+/* Each of the 6 Spike Score blocks as a pass/fail check. `r` must already
+   carry the real oi/lsr arrows (set from trendVsMA) when available — falls
+   back to false (not validated) when absent (e.g. no OI data for the
+   exchange). Blocks carry no priority/order between them; this is only used
+   to compute the weighted score and to render the per-row checklist. */
+function blocksOf(r, engine) {
+  engine = engine || ENGINE;
+  const spikeMaMode = String(engine.spikeMaMode || "2");
+  const spike20 = Number(r.spike20) || Number(r.volX) || 0;
+  const spike50 = Number(r.spike50) || 0;
+  const spikeAboveAvg = spikeMaMode === "1" ? spike20 > 1 : (spike20 > 1 && spike50 > 1);
+  const flatVolumeBarLen = engine.flatVolumeBarLen || 5;
+  return {
+    spikeAboveAvg,
+    rsiOversold: !!r.rsiOversoldOk,
+    oiAboveAvg: r.oi === "up",
+    lsrBelowAvg: r.lsr === "down",
+    flatVolumeBar: (Number(r.volBelowMaBars) || 0) >= flatVolumeBarLen,
+    prevVolBelowHalf: !!r.prevVolBelowHalf
+  };
+}
+
+/* Spike Score — weighted share of the 6 blocks above that validated,
+   scaled to 0-99. Each block is a straight pass/fail (no continuous
+   ranges); the weights only set each block's relative contribution. */
+function score(r, weights, engine) {
   const w = weights || WEIGHTS;
-  const f20 = Math.min(1, Math.max(0, Number(r.spike20) || Number(r.volX) || 0) / SCORE_FULL.spike20);
-  const f50 = Math.min(1, Math.max(0, Number(r.spike50) || 0) / SCORE_FULL.spike50);
-  const fFlat = Math.min(1, Math.max(0, Number(r.flatCandles) || 0) / SCORE_FULL.flatCandles);
-  const fBar = Math.min(1, Math.min(Math.abs(Number(r.barPct) || 0), 8) / SCORE_FULL.barPct);
-  const W20 = Number(w.spike20 || 0), W50 = Number(w.spike50 || 0), WF = Number(w.flatCandles || 0),
-    WB = Number(w.barPct || 0), WP = Number(w.prevVolBelowHalf || 0), WG = Number(w.priceGlueOk || 0);
-  const wTotal = W20 + W50 + WF + WB + WP + WG;
+  const b = blocksOf(r, engine);
+  const W = {
+    spikeAboveAvg: Number(w.spikeAboveAvg || 0),
+    rsiOversold: Number(w.rsiOversold || 0),
+    oiAboveAvg: Number(w.oiAboveAvg || 0),
+    lsrBelowAvg: Number(w.lsrBelowAvg || 0),
+    flatVolumeBar: Number(w.flatVolumeBar || 0),
+    prevVolBelowHalf: Number(w.prevVolBelowHalf || 0)
+  };
+  const wTotal = W.spikeAboveAvg + W.rsiOversold + W.oiAboveAvg + W.lsrBelowAvg + W.flatVolumeBar + W.prevVolBelowHalf;
   if (wTotal <= 0) return 0;
-  const pts = f20 * W20 + f50 * W50 + fFlat * WF + fBar * WB
-    + (r.prevVolBelowHalf ? WP : 0)
-    + (r.priceGlueOk ? WG : 0);
+  const pts = (b.spikeAboveAvg ? W.spikeAboveAvg : 0)
+    + (b.rsiOversold ? W.rsiOversold : 0)
+    + (b.oiAboveAvg ? W.oiAboveAvg : 0)
+    + (b.lsrBelowAvg ? W.lsrBelowAvg : 0)
+    + (b.flatVolumeBar ? W.flatVolumeBar : 0)
+    + (b.prevVolBelowHalf ? W.prevVolBelowHalf : 0);
   return Math.max(0, Math.min(99, Math.round(pts / wTotal * 99)));
 }
 
@@ -249,5 +302,5 @@ function trendVsMA(series) {
 
 module.exports = {
   sma, pct, priceMaGlueStats, computeSignal,
-  score, ignitionScore, statusOf, ignitionStatus, oiTrend, lsrTrend, factorsOf, trendVsMA
+  score, blocksOf, ignitionScore, statusOf, ignitionStatus, oiTrend, lsrTrend, factorsOf, trendVsMA
 };
