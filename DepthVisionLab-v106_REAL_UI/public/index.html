@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.037</title>
+<title>DVL Binance Live — Beta 1.038</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.037';
+window.DVL_APP_VERSION = 'Beta 1.038';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -19672,7 +19672,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 1.037</span><script>/* Sync the badge to the real version synchronously, before this region is painted, so a stale hardcoded number never flashes on reload. */try{var _vb1b=document.getElementById('dvl1b_versionBadge');if(_vb1b&&window.DVL_APP_VERSION)_vb1b.textContent=String(window.DVL_APP_VERSION).toUpperCase();}catch(_){}</script>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 1.038</span><script>/* Sync the badge to the real version synchronously, before this region is painted, so a stale hardcoded number never flashes on reload. */try{var _vb1b=document.getElementById('dvl1b_versionBadge');if(_vb1b&&window.DVL_APP_VERSION)_vb1b.textContent=String(window.DVL_APP_VERSION).toUpperCase();}catch(_){}</script>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin dvlAssetLetterIcon dvlLetterBTC" aria-hidden="true" data-dvl-symbol="BTCUSDT">B</span>
@@ -19959,7 +19959,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 </script>
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 1.037</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 1.038</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -20426,10 +20426,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.037";
+const DVL_APP_VERSION = "Beta 1.038";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.038", note: "Positions — corrige Histórico dividido por ativo: o motor de paper trading só troca os dados em memória para o ativo novo quando certas interações disparam render() (clique, arraste, resize ou timer com ordens abertas). Abrir o Histórico logo após trocar de moeda podia ler dados antigos em memória e, por assumir que eles já cobriam o ativo atual, pulava a leitura real do localStorage do ativo novo — some trade sumia ou aparecia trocado. getAllOrders() agora sempre lê todos os slots persistidos por símbolo e só sobrepõe com a memória por id, então o Histórico é sempre um único histórico global, sem depender de qual ativo está aberto no momento." },
   { version: "Beta 1.037", note: "RSI Multi-TF — corrige segmentos que ultrapassam a zona sem colorir: a cor de cada trecho da linha era decidida pela média dos dois pontos, então um pico que cruzava a zona de sobrecompra/sobrevenda podia sair cinza se a média com o ponto vizinho caísse dentro da faixa neutra. Agora colore pelo extremo do segmento (se qualquer ponta cruza a zona, o trecho inteiro conta)." },
   { version: "Beta 1.036", note: "RSI Multi-TF — Volume MA e Volume Spike × agora têm efeito real: o peso do pico de volume na exaustão era (0.6+0.4×volSpike), limitando a faixa a 60%–100% do valor base (efeito quase imperceptível no RSI final). Trocado para (0.15+0.85×volSpike), então sem pico de volume o score cai perto de zero e com pico forte vai a 100% — os dois inputs agora mudam visivelmente a linha." },
   { version: "Beta 1.035", note: "Rodapé — ícone do Trade unificado: trocado o glifo de texto '↑↓' por um SVG no mesmo estilo de traço dos ícones de Home/Scanner/Positions/Watchlist, removendo a inconsistência visual entre os botões do rodapé." },
@@ -40236,7 +40237,37 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function key(){return 'dvl_paper_v2_pro_0695_'+rawSym();}
   function save(){try{var _a=[],_h=[];for(var _i=0;_i<state.orders.length;_i++){var _o=state.orders[_i];if(!_o)continue;if(_o.status==='closed')_h.push(_o);else if(_o.status!=='draft')_a.push(_o);}if(_h.length>100)_h=_h.slice(-100);var _dr=state.orders.filter(function(_o){return _o&&_o.status==='draft';});state.orders=_dr.concat(_a).concat(_h);localStorage.setItem(key(),JSON.stringify(_a.concat(_h)));}catch(_){} try{var _rk='dvl_paper_v2_pro_0695_symbols';var _rs=JSON.parse(localStorage.getItem(_rk)||'[]');var _cs=rawSym();if(_cs&&_rs.indexOf(_cs)===-1){_rs.push(_cs);localStorage.setItem(_rk,JSON.stringify(_rs));}}catch(_){}}
   function load(){try{var a=JSON.parse(localStorage.getItem(key())||'[]'); state.orders=Array.isArray(a)?a.filter(function(o){return o&&o.id&&o.status!=='draft';}).map(sanitizeOrder):[];}catch(_){state.orders=[];}}
-  function getAllOrders(){var _all=state.orders.filter(function(o){return o&&o.id&&o.status!=='draft';}); var _cur=rawSym(); var _pfx='dvl_paper_v2_pro_0695_'; var _rk=_pfx+'symbols'; try{for(var _k=0;_k<localStorage.length;_k++){var _lkey=localStorage.key(_k); if(!_lkey||_lkey.indexOf(_pfx)!==0||_lkey===_rk)continue; var _ls=_lkey.slice(_pfx.length); if(_ls===_cur)continue; try{var _la=JSON.parse(localStorage.getItem(_lkey)||'[]'); if(Array.isArray(_la))_all=_all.concat(_la.filter(function(o){return o&&o.id&&o.status!=='draft';}));}catch(_){}}}catch(_){} return _all;}
+  function getAllOrders(){
+    /* Global aggregation across every symbol's persisted slot, keyed by order id.
+       Previously this trusted state.orders to already hold the CURRENT symbol's
+       data and skipped re-reading that symbol's localStorage slot — but state.orders
+       only gets swapped to the new symbol when render() runs (click/drag/resize/timer),
+       which doesn't happen synchronously on a symbol switch. Opening Positions right
+       after switching assets could read stale in-memory orders from the PREVIOUS
+       symbol while silently skipping the new symbol's real persisted history,
+       making history look like it was split per asset. Now every persisted slot is
+       always read, and state.orders (which may be more current, e.g. mid-edit) is
+       merged on top by id instead of gating the scan on which symbol is "current". */
+    var _pfx='dvl_paper_v2_pro_0695_', _rk=_pfx+'symbols', _seen={}, _all=[];
+    try{
+      for(var _k=0;_k<localStorage.length;_k++){
+        var _lkey=localStorage.key(_k);
+        if(!_lkey||_lkey.indexOf(_pfx)!==0||_lkey===_rk)continue;
+        try{
+          var _la=JSON.parse(localStorage.getItem(_lkey)||'[]');
+          if(Array.isArray(_la))_la.forEach(function(o){
+            if(o&&o.id&&o.status!=='draft'&&!_seen[o.id]){_seen[o.id]=true;_all.push(o);}
+          });
+        }catch(_){}
+      }
+    }catch(_){}
+    state.orders.forEach(function(o){
+      if(!o||!o.id||o.status==='draft')return;
+      if(_seen[o.id]){for(var i=0;i<_all.length;i++){if(_all[i].id===o.id){_all[i]=o;break;}}}
+      else{_seen[o.id]=true;_all.push(o);}
+    });
+    return _all;
+  }
   function toast(msg){try{if(typeof showToast==='function'){showToast(msg);return;}}catch(_){} var t=$('toast'); if(t){t.textContent=msg;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(function(){t.classList.remove('show');},1500);} else console.warn('[DVL Paper V2 Pro]', msg);}
   function syncLegacy(){try{if(typeof __dvlSyncLegacyState==='function') __dvlSyncLegacyState();}catch(_){}}
   function area(H){syncLegacy();try{if(typeof __dvlLegacyPriceArea==='function') return __dvlLegacyPriceArea(H);}catch(_){} return {y0:4,y1:Math.max(40,H-24)};}
