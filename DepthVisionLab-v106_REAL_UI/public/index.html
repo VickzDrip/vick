@@ -6,25 +6,33 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.023</title>
+<title>DVL Binance Live — Beta 1.024</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.023';
+window.DVL_APP_VERSION = 'Beta 1.024';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
    is NEVER visible at first paint. Must stay at the top of this script. */
 document.documentElement.classList.add("dvl-has-ui-1b");
+/* Central version-badge sync — single source (window.DVL_APP_VERSION). Call it
+   any time (boot, or after a header rebuild) and it updates every badge in one
+   place. Idempotent: only writes when the text actually differs. */
+window.DVL_syncVersionBadge = function(){
+  try{
+    var v = String(window.DVL_APP_VERSION || '').toUpperCase();
+    if(!v) return;
+    document.querySelectorAll('#dvl1b_versionBadge, #versionBadge, [data-dvl-version], .dvlVersionBadge').forEach(function(el){
+      if(el.textContent !== v) el.textContent = v;
+    });
+  }catch(_){}
+};
 document.addEventListener('DOMContentLoaded', function(){
-  var v = window.DVL_APP_VERSION.toUpperCase();
   document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
-  ['dvl1b_versionBadge','versionBadge'].forEach(function(id){
-    var el = document.getElementById(id);
-    if(el) el.textContent = v;
-  });
+  window.DVL_syncVersionBadge();
 }, {once:true});
 </script>
 <style id="DVL_HEADER_DEOVERLAP_0806">
@@ -19280,7 +19288,7 @@ window.DVL_PAPER_LIMIT_PLACEMENT_RESET_AUDIT = {
   function hash(v){v=baseOf(v)||"DVL";var h=0;for(var i=0;i<v.length;i++)h=((h<<5)-h+v.charCodeAt(i))|0;return Math.abs(h);}
   function cls(v){var b=baseOf(v);var map={BTC:"dvlLetterBTC",ETH:"dvlLetterETH",SOL:"dvlLetterSOL",BNB:"dvlLetterBNB",XRP:"dvlLetterXRP",ADA:"dvlLetterADA",DOGE:"dvlLetterDOGE",AVAX:"dvlLetterAVAX",LINK:"dvlLetterLINK",LTC:"dvlLetterLTC",DOT:"dvlLetterDOT",NEAR:"dvlLetterNEAR",SUI:"dvlLetterSUI",AR:"dvlLetterAR",POL:"dvlLetterPOL",ETC:"dvlLetterETC",BCH:"dvlLetterBCH",FIL:"dvlLetterFIL",ATOM:"dvlLetterATOM",TRX:"dvlLetterTRX",XLM:"dvlLetterXLM",ICP:"dvlLetterICP",HBAR:"dvlLetterHBAR",PEPE:"dvlLetterPEPE",WIF:"dvlLetterWIF",BONK:"dvlLetterBONK",INJ:"dvlLetterINJ",SEI:"dvlLetterSEI",UNI:"dvlLetterUNI",AAVE:"dvlLetterAAVE",GRT:"dvlLetterGRT",MKR:"dvlLetterMKR",FTM:"dvlLetterFTM"};return map[b]||("dvlLetterAuto"+(hash(b)%24));}
   function current(){try{if(typeof symbol!=="undefined"&&symbol)return norm(symbol);}catch(_){}var e=document.getElementById("dvl1b_symbolText")||document.getElementById("symbolText");return e?norm(e.textContent):"BTCUSDT";}
-  function paint(el,s){if(!el)return;var clean=norm(s)||current();el.textContent=firstLetter(clean);el.classList.remove("btcCoin","ethCoin","solCoin","bnbCoin","xrpCoin","adaCoin","dogeCoin","avaxCoin","linkCoin","ltcCoin","genericCoin","coin-btc","coin-eth","coin-sol","coin-bnb","coin-xrp","coin-ada","coin-doge","coin-avax","coin-link","coin-ltc","coin-generic");el.classList.add(cls(clean),"dvlAssetLetterIcon");el.setAttribute("data-dvl-symbol",clean);}
+  function paint(el,s){if(!el)return;var clean=norm(s)||current();/* Idempotent: if this icon is already painted for the same symbol, do NOT touch the DOM — rewriting text/classes on every click/refresh is what makes the asset logo flick. */if(el.getAttribute("data-dvl-symbol")===clean&&el.classList.contains("dvlAssetLetterIcon"))return;el.textContent=firstLetter(clean);el.classList.remove("btcCoin","ethCoin","solCoin","bnbCoin","xrpCoin","adaCoin","dogeCoin","avaxCoin","linkCoin","ltcCoin","genericCoin","coin-btc","coin-eth","coin-sol","coin-bnb","coin-xrp","coin-ada","coin-doge","coin-avax","coin-link","coin-ltc","coin-generic");el.classList.add(cls(clean),"dvlAssetLetterIcon");el.setAttribute("data-dvl-symbol",clean);}
   window.dvlNormalizeAssetSymbol=norm;window.dvlAssetBaseSymbol=baseOf;window.dvlAssetFirstLetter=firstLetter;window.dvlAssetLetterClass=cls;window.dvlPaintAssetLetterIcon=paint;
 })();
 </script>
@@ -19664,7 +19672,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
       <div class="dvl1b-brand">
         <span class="dvl1b-logo" aria-hidden="true"></span>
         <span class="dvl1b-logoText">DVL</span>
-        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 1.023</span><script>/* Sync the badge to the real version synchronously, before this region is painted, so a stale hardcoded number never flashes on reload. */try{var _vb1b=document.getElementById('dvl1b_versionBadge');if(_vb1b&&window.DVL_APP_VERSION)_vb1b.textContent=String(window.DVL_APP_VERSION).toUpperCase();}catch(_){}</script>
+        <span class="dvl1b-badge" id="dvl1b_versionBadge">BETA 1.024</span><script>/* Sync the badge to the real version synchronously, before this region is painted, so a stale hardcoded number never flashes on reload. */try{var _vb1b=document.getElementById('dvl1b_versionBadge');if(_vb1b&&window.DVL_APP_VERSION)_vb1b.textContent=String(window.DVL_APP_VERSION).toUpperCase();}catch(_){}</script>
       </div>
       <button class="dvl1b-btn dvl1b-symbol" id="dvl1b_symbolBtn" type="button" aria-label="Selecionar ativo">
         <span class="dvl1b-coin dvlAssetLetterIcon dvlLetterBTC" aria-hidden="true" data-dvl-symbol="BTCUSDT">B</span>
@@ -19935,7 +19943,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 </script>
   <header class="top">
     <div class="topLeftSpacer" aria-hidden="true"></div>
-    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 1.023</div></div>
+    <div class="brand"><div class="logoMark"></div><div class="logoText">DVL</div><div class="beta" id="versionBadge" style="cursor:pointer" title="Tap to reload" onclick="window.location.href=window.location.origin+window.location.pathname+'?_r='+Date.now()">BETA 1.024</div></div>
     <div class="topIcons">
       <button class="iconBtn profileSaveBtn" id="profileSaveBtn" type="button" aria-label="Salvar perfil e alterações">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -20402,10 +20410,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.023";
+const DVL_APP_VERSION = "Beta 1.024";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.024", note: "Asset Logo Flick Fix + Version Badge Sync: o ícone/logo do ativo no cabeçalho não é mais repintado em cada click/refresh (guard idempotente — só recria quando o ativo realmente muda), e a versão passou a ter um sync central de badge (window.DVL_syncVersionBadge). Chart, Scanner, Copilot, OI/LSR e bot intocados." },
   { version: "Beta 1.023", note: "Scanner 24h backend + early-pump engine: scanner servidor 24h (snapshot REST + WebSocket), detecção de ignição (volume morto abaixo da média → primeiro cruzamento), sinais persistentes que atualizam até o limite, OI real (MEXC) e LSR real (Bybit) com seta=posição vs média e cor=inclinação da média, mais recente no topo. Corrige sobreposição 'Sem dados ainda / Carregando' no gráfico." },
   { version: "Beta 1.012", note: "Scanner Pro Remodel: refaz a aba Scanner para o layout Scanner Pro com hero de leitura de mercado, busca, filtros concentrados no menu Filtros e tabela completa Spike Flow em escala próxima da referência." },
   { version: "Beta 1.013", note: "Scanner Pro Force Open Fix: corrige abertura real da aba Scanner, força overlay próprio do Scanner Pro, cobre o gráfico/cabeçalho, mantém rodapé, corrige cálculo runtime do spike e renderiza a tabela mesmo enquanto os dados carregam." },
@@ -23351,6 +23360,9 @@ function syncCurrentAssetLetterIcon(sym){
   var letter = assetIconText(clean);
   var cls = coinClass(clean);
   document.querySelectorAll("#symbolBtn .btc, .symbolBtn .btc, .marketRow .btc, #DVL_UI_OVERLAY_PHASE_1B .dvl1b-coin").forEach(function(coin){
+    /* Idempotent: skip if the icon already shows this symbol (prevents the
+       header logo from flicking on every refresh when the asset didn't change). */
+    if(coin.getAttribute("data-dvl-symbol")===clean && coin.classList.contains("dvlAssetLetterIcon")) return;
     coin.textContent = letter;
     coin.classList.remove("btcCoin","ethCoin","solCoin","bnbCoin","xrpCoin","adaCoin","dogeCoin","avaxCoin","linkCoin","ltcCoin","genericCoin","coin-btc","coin-eth","coin-sol","coin-bnb","coin-xrp","coin-ada","coin-doge","coin-avax","coin-link","coin-ltc","coin-generic");
     coin.classList.add(cls,"dvlAssetLetterIcon");
@@ -62784,6 +62796,13 @@ body.dvlScannerOpen080 #chartWrap{
     var clean = normSymbol(sym);
     if(!clean){var txt=document.getElementById("symbolText")||document.getElementById("dvl1b_symbolText"); if(txt) clean=normSymbol(txt.textContent);}
     if(!clean) return;
+    /* Idempotent guard — CRITICAL: this runs from a MutationObserver on
+       #symbolText, and the body below writes #symbolText + rewrites the icon
+       className. Without this guard each write re-triggers the observer, which
+       loops and repaints the logo forever (the flick). If the header already
+       shows this symbol, do nothing so the observer settles. */
+    var _firstCoin=document.querySelector("#DVL_UI_OVERLAY_PHASE_1B .dvl1b-coin, #symbolBtn .btc, .symbolBtn .btc, .marketRow .btc");
+    if(_firstCoin && _firstCoin.getAttribute("data-dvl-symbol")===clean && _firstCoin.classList.contains("dvlAssetLetterIcon")) return;
     var base=baseOf(clean), icon=getIcon(base), letter=icon.text||icon.label||(window.dvlAssetFirstLetter?window.dvlAssetFirstLetter(clean):base.charAt(0)), c=icon.className||(window.dvlAssetLetterClass?window.dvlAssetLetterClass(clean):"dvlLetterGeneric");
     var coins=document.querySelectorAll("#symbolBtn .btc, .symbolBtn .btc, .marketRow .btc, #DVL_UI_OVERLAY_PHASE_1B .dvl1b-coin");
     for(var i=0;i<coins.length;i++){var coin=coins[i];coin.textContent=letter;coin.className=(coin.classList.contains("dvl1b-coin")?"dvl1b-coin ":"btc ")+c+" dvlAssetLetterIcon dvlSafeIcon0804";coin.setAttribute("data-dvl-symbol",clean);coin.setAttribute("title",displaySymbol(clean));}
