@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.042</title>
+<title>DVL Binance Live — Beta 1.043</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.042';
+window.DVL_APP_VERSION = 'Beta 1.043';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20426,10 +20426,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.042";
+const DVL_APP_VERSION = "Beta 1.043";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.043", note: "Performance — ao clicar um ativo no Scanner, o app disparava DOIS lotes completos de requisições (um pro TF novo no ativo antigo, outro pro ativo novo) quase ao mesmo tempo; agora dispara só um. Também corrige o oscilador RSI Multi-TF, que continuava misturando dados do ativo anterior por alguns instantes após trocar de ativo (cache não conferia se os dados eram do símbolo atual) — hoje ele fica em branco até os dados corretos chegarem, em vez de mostrar valores errados." },
   { version: "Beta 1.042", note: "Scanner — corrige a polaridade de cor do LSR: o bloco 'LSR abaixo da média' é o lado favorável dessa métrica (oposto do OI, que é favorável acima da média), então a seta de LSR agora fica verde quando está abaixo da média (e aponta pra baixo) e vermelha quando acima — antes usava a mesma regra do OI (verde só quando subindo/acima), o que mostrava seta verde pra cima mesmo quando o LSR favorável estava caindo." },
   { version: "Beta 1.041", note: "Scanner — alerta de Confluência total: novo chip nos Filtros mostra só os ativos com os 6 bloquinhos validados ao mesmo tempo; linhas em confluência total ganham destaque (borda dourada + etiqueta 6/6); o sininho de alertas (antes decorativo) acende e lista os últimos ativos que entraram em confluência, com notificação do navegador opcional." },
   { version: "Beta 1.040", note: "Scanner — refaz o Spike Score em 6 bloquinhos configuráveis (RSI sobrevenda, OI acima da média, LSR abaixo da média, flat volume bar, spike acima da(s) média(s) com toggle 1/2 MAs, pré-volume baixo), cada um exibido como checklist por ativo. Filtros ganha inputs reais para períodos de MA, zona/lookback do RSI e médias de OI/LSR. TF de detecção no Filtros agora funciona de verdade (antes só mudava o chip visualmente); o backend passa a manter todos os TFs pré-calculados." },
@@ -23618,7 +23619,7 @@ function updateHeader(){
   els.sellPriceBtn.textContent = orderType;
   syncTradePanel();
 }
-function setIntervalUi(iv){
+function setIntervalUi(iv, skipLoad){
   interval = iv;
   chartOffsetCandles = -24;
   priceViewCenter = null;
@@ -23628,7 +23629,10 @@ function setIntervalUi(iv){
   renderTimeframeMoreMenu();
   scrollActiveTfIntoView();
   closeTfMore();
-  loadAll();
+  /* skipLoad: caller is about to switch symbol right after (e.g. Scanner's
+     analyze()) and will trigger its own loadAll() — firing one here too
+     would just fetch the OLD symbol's data at the new TF and throw it away. */
+  if(!skipLoad) loadAll();
 }
 function timeframeSortValue(tf){
   const m = String(tf || "").trim().toLowerCase().match(/^(\d+)(s|m|h|d|w)$/);
@@ -60722,8 +60726,15 @@ body.dvlScannerOpen080 #tradeNavBtn{
     var reg=window._dvlSymbols;
     if(reg&&Array.isArray(reg)&&reg.indexOf(cleanSym)<0) reg.push(cleanSym);
     try{
-      /* Set TF FIRST so selectSymbol's loadAll() already runs at the scanner TF */
-      if(typeof window.setIntervalUi==="function") window.setIntervalUi(filterState.scanTF);
+      /* Is the scanner row's asset already the one on screen? selectSymbol()
+         no-ops (no reload) when the symbol doesn't change, so in that case
+         this call must be the one that reloads (at the new TF). Otherwise,
+         skip this load — selectSymbol()'s own loadAll() right below is the
+         only fetch batch we need. */
+      var _curSymEl=document.getElementById("symbolText");
+      var _curSym=_curSymEl?String(_curSymEl.textContent||"").replace(/\//g,"").toUpperCase():"";
+      var _sameSymbol = !!_curSym && _curSym===cleanSym.toUpperCase();
+      if(typeof window.setIntervalUi==="function") window.setIntervalUi(filterState.scanTF, !_sameSymbol);
       /* Belt-and-suspenders: force active class on TF hotbar buttons */
       try{
         var _tfs=document.querySelectorAll('.tfBtn[data-interval]');
@@ -65642,7 +65653,14 @@ body.dvlScannerOpen080 #chartWrap{
       try{ return normalizeRows(klines || [], chartTf()); }catch(_){ return []; }
     }
     fetchTf(false);
-    if(Array.isArray(cache.data) && cache.data.length) return cache.data;
+    /* Only consume the cache if it actually belongs to the CURRENT
+       symbol+TF — right after switching assets the fetch above is already
+       in flight but hasn't landed yet, and the cache still holds the
+       PREVIOUS symbol's candles. Returning those would silently blend a
+       different asset's data into this one's reading until the fetch
+       resolves (looks like the oscillator is slow/wrong to adapt). */
+    var expectedKey = sym() + "|" + tfApi(tf) + "|900";
+    if(cache.key === expectedKey && Array.isArray(cache.data) && cache.data.length) return cache.data;
     return [];
   }
 
@@ -65730,7 +65748,9 @@ body.dvlScannerOpen080 #chartWrap{
     var base = mtfRsi(closes, rsiLen);
     try{
       fetch1m(false);
-      var one = (oneMinCache.data && oneMinCache.data.length) ? oneMinCache.data : null;
+      /* Same stale-symbol guard as sourceCandles(): only use the 1m cache
+         once it's confirmed to belong to the symbol we're computing for. */
+      var one = (oneMinCache.sym===sym() && oneMinCache.data && oneMinCache.data.length) ? oneMinCache.data : null;
       var curMin = Math.max(1, Math.round(tfMs(state.calculationTF)/60000));
       var tfs = mtfLadder(curMin);
       var tfData = null;
