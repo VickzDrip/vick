@@ -108,13 +108,26 @@ keeps working exactly as before.
 }
 ```
 
+## Outcome logging (ML groundwork)
+`src/outcomes.js` records, for every symbol that freshly enters the signal
+registry (a real detection, not a refresh), a feature snapshot — the 6 Spike
+Score blocks, the score, side and entry price. As time passes it fills in
+what price actually did (`r15m`/`r1h`/`r4h`/`r24h` % return), and once the
+24h horizon is filled the labeled example is appended to an append-only
+`data/outcomes-log.jsonl` (one JSON object per line). Pending entries persist
+to `data/outcomes-pending.json` across restarts, and `GET
+/api/dvl/scanner/health` reports `{ outcomes: { pending, resolved } }`.
+
+This only **records** — nothing trains or predicts on it yet. The point is
+to start accumulating a labeled dataset (features → real outcome) so that,
+once there's enough of it, a simple model (e.g. logistic regression over the
+6 blocks) can learn weights from actual results instead of hand-tuned ones,
+while staying explainable.
+
 ## Notes / next steps
-- `oi`, `lsr` and `factors` are **derived** from the same metrics the in-page
-  Pro table already derives them from (so the columns match today). Wiring
-  *real* per-symbol Open-Interest / Long-Short-Ratio endpoints is a clean
-  next step: extend `scanExchange()` to also pull
-  `fapi/v1/openInterest` + `futures/data/globalLongShortAccountRatio` per
-  ranked symbol and replace `oiTrend`/`lsrTrend`.
 - Spike-age (`spikeAt`) is held in memory; a process restart resets it.
   Persist `spikeReg` to a JSON file if you need ages to survive restarts.
 - Tune cadence/size via env: `DVL_REFRESH_MS`, `DVL_SCAN_TF`, `DVL_PORT`.
+- Outcome log paths are overridable via `DVL_OUTCOMES_PENDING_FILE` /
+  `DVL_OUTCOMES_LOG_FILE`; horizons/thresholds are constants at the top of
+  `src/outcomes.js`.

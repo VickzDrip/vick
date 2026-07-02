@@ -46,7 +46,8 @@ function createServer() {
       safety: cfg.SAFETY,                 // bot execution stays disabled
       tfList: cfg.TF_LIST,
       binance: { rows: b.rows.length, updatedAt: b.updatedAt, fallback: b.fallback, activeSource: b.activeSource },
-      mexc: { rows: m.rows.length, updatedAt: m.updatedAt }
+      mexc: { rows: m.rows.length, updatedAt: m.updatedAt },
+      outcomes: worker.getOutcomesStats()  // ML groundwork: pending/resolved labeled signals
     });
   });
 

@@ -14,6 +14,7 @@ const path = require("path");
 const cfg = require("./config");
 const { EXCHANGES, binance, mexc, bybit, tfToMs } = require("./exchanges");
 const M = require("./metrics");
+const outcomes = require("./outcomes");
 
 /* Where the persistent signal registry is mirrored to disk so it survives
    restarts (deploys/reboots). Untracked by git, so `git pull` won't touch it. */
@@ -204,7 +205,7 @@ async function scanCandidatesAndOi(adapter) {
    candles) even after the ignition bar has passed — so a detected signal
    never just vanishes. It only leaves when it ages out, disappears from the
    feed for a while, or is pushed past the row limit by newer signals. */
-async function scanExchange(adapter, tf, cands, oiTrends) {
+async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
   const now = Date.now();
   const kl = await mapPool(cands, cfg.POOL, c => adapter.klines(c.sym, tf));
   const freshCut = now - cfg.FRESH_MS;
@@ -220,6 +221,15 @@ async function scanExchange(adapter, tf, cands, oiTrends) {
     const oiT = oiTrends[cands[i].sym] || { arrow: "up", color: "yellow" };
     row.oi = oiT.arrow; row.oiColor = oiT.color;
     cur[cands[i].sym] = row;
+    if (priceMap) priceMap[cands[i].sym] = row.price;
+  }
+
+  /* Symbols about to freshly JOIN the registry this cycle — captured before
+     mergeRegistry mutates sigReg, so this mirrors its own join condition
+     exactly (a real detection, not a refresh of an already-tracked row). */
+  const freshJoins = [];
+  for (const sym in cur) {
+    if (cur[sym].isIgnition && !sigReg[sym]) freshJoins.push(sym);
   }
 
   /* 2-4) Persist/refresh/rank/evict via the registry. */
@@ -241,6 +251,19 @@ async function scanExchange(adapter, tf, cands, oiTrends) {
     row.status = M.statusOf(row, row.spikeScore);
     row.blocks = M.blocksOf(row, cfg.ENGINE);
   });
+
+  /* Log the feature snapshot for freshly-joined signals only (ML outcome
+     groundwork) — uses the finalized row (real score/blocks, not the
+     placeholder set before step 5). */
+  if (freshJoins.length) {
+    const bySym = {};
+    for (const row of rows) bySym[row.rawSymbol] = row;
+    for (const sym of freshJoins) {
+      const row = bySym[sym];
+      if (row) outcomes.recordSignal(adapter.key, tf, row, now);
+    }
+  }
+
   return rows;
 }
 
@@ -305,13 +328,19 @@ async function cycle() {
   try { mexcData = await scanCandidatesAndOi(mexc); } catch (e) { logErr("mexc", e); }
   try { binData = await scanCandidatesAndOi(binance); } catch (e) { logErr("binance", e); }
 
+  /* Latest known price per symbol this cycle, aggregated across every TF
+     scanned (a later TF's price for the same symbol just overwrites the
+     earlier one — negligible drift within one cycle). Feeds the outcome
+     logger below so it can resolve pending signals' return horizons. */
+  const mexcPriceMap = {}, binPriceMap = {};
+
   /* 2) Scan every timeframe against that candidate list. Sequential (not
      Promise.all across TFs) to keep peak network concurrency bounded to
      cfg.POOL regardless of how many timeframes are configured. */
   for (const tf of cfg.TF_LIST) {
     let mexcRows = null, binRows = null;
-    try { if (mexcData) mexcRows = await scanExchange(mexc, tf, mexcData.cands, mexcData.oiTrends); } catch (e) { logErr("mexc:" + tf, e); }
-    try { if (binData) binRows = await scanExchange(binance, tf, binData.cands, binData.oiTrends); } catch (e) { logErr("binance:" + tf, e); }
+    try { if (mexcData) mexcRows = await scanExchange(mexc, tf, mexcData.cands, mexcData.oiTrends, mexcPriceMap); } catch (e) { logErr("mexc:" + tf, e); }
+    try { if (binData) binRows = await scanExchange(binance, tf, binData.cands, binData.oiTrends, binPriceMap); } catch (e) { logErr("binance:" + tf, e); }
 
     const now = Date.now();
     if (mexcRows) updateSnapshot("mexc", tf, { rows: mexcRows, activeSource: "mexc", fallback: false, updatedAt: now });
@@ -321,6 +350,12 @@ async function cycle() {
       updateSnapshot("binance", tf, { rows: mexcRows, activeSource: "mexc", fallback: true, updatedAt: now });
     }
   }
+
+  /* Resolve any pending outcome-log entries whose return horizons elapsed
+     (ML groundwork — see outcomes.js). */
+  const resolveNow = Date.now();
+  outcomes.checkOutcomes("mexc", mexcPriceMap, resolveNow);
+  outcomes.checkOutcomes("binance", binPriceMap, resolveNow);
 
   /* Mirror the registry to disk so signals survive restarts. */
   saveRegistry();
@@ -363,7 +398,8 @@ let _timer = null;
 let _running = false;
 async function start() {
   console.log("[DVL worker] starting 24h scan loop (every " + cfg.REFRESH_MS + "ms, " + cfg.TF_LIST.length + " timeframes)");
-  loadRegistry();   // restore persisted signals so a restart doesn't reset the list
+  loadRegistry();     // restore persisted signals so a restart doesn't reset the list
+  outcomes.loadPending(); // restore pending outcome-log entries (ML groundwork)
   _running = true;
   const loop = async () => {
     while (_running) {
@@ -378,4 +414,6 @@ async function start() {
 }
 function stop() { _running = false; if (_timer) { clearTimeout(_timer); _timer = null; } }
 
-module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig };
+function getOutcomesStats() { return outcomes.loadStats(); }
+
+module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats };
