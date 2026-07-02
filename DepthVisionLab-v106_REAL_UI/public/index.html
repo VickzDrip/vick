@@ -61182,6 +61182,20 @@ body.dvlScannerOpen080 #tradeNavBtn{
 }
 #dvlScannerPanel0780 .dvlScan1013IconBtn.has-dot:after{
   content:"";position:absolute!important;right:12px!important;top:10px!important;width:11px!important;height:11px!important;border-radius:50%!important;background:#10df77!important;border:2px solid #06110e!important;
+  box-shadow:0 0 8px rgba(16,223,119,.8)!important;
+}
+#dvlScannerPanel0780 .dvlScan1013AlertRow{
+  display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;
+  padding:9px 4px!important;border-bottom:1px solid rgba(145,175,165,.12)!important;color:#f4f7f4!important;font-size:13px!important;font-weight:800!important;
+}
+#dvlScannerPanel0780 .dvlScan1013AlertRow:last-child{border-bottom:none!important;}
+#dvlScannerPanel0780 .dvlScan1013AlertRow span{color:#9aa6a1!important;font-size:12px!important;font-weight:700!important;}
+#dvlScannerPanel0780 .dvlScan1013Row.confluence{
+  box-shadow:inset 0 0 0 1.5px rgba(255,175,0,.55)!important;background:rgba(255,175,0,.045)!important;
+}
+#dvlScannerPanel0780 .dvlScan1013ConfluenceTag{
+  display:inline-block!important;margin-top:2px!important;font-style:normal!important;font-size:10px!important;font-weight:900!important;
+  color:#ffb020!important;background:rgba(255,176,32,.14)!important;border:1px solid rgba(255,176,32,.4)!important;border-radius:999px!important;padding:1px 7px!important;
 }
 #dvlScannerPanel0780 .dvlScan1013Hero{
   display:grid!important;
@@ -61671,6 +61685,65 @@ body.dvlScannerOpen080 #chartWrap{
       prevVolBelowHalf: !!r.prevVolBelowHalf
     };
   }
+  function allBlocksTrue(r){
+    var b=blocksOf(r);
+    return b.spikeAboveAvg && b.rsiOversold && b.oiAboveAvg && b.lsrBelowAvg && b.flatVolumeBar && b.prevVolBelowHalf;
+  }
+
+  /* ── Confluência total alerts — fires once per symbol on the FALSE→TRUE
+     transition (not every render), so a symbol sitting in full confluence
+     for many cycles doesn't spam. Bell icon lights up + best-effort browser
+     Notification; the dropdown lists the recent hits. */
+  var confluenceActive = {};   // symbol -> currently 6/6 (bool)
+  var confluenceLog = [];      // [{symbol, at}] newest first, capped
+  var confluenceUnread = 0;
+  var notifyPermAsked = false;
+
+  function notifyConfluence(sym){
+    try{
+      if(typeof Notification!=="undefined" && Notification.permission==="granted"){
+        new Notification("DVL Scanner — Confluência total", { body: sym+" bateu os 6 bloquinhos (RSI, OI, LSR, flat vol, spike, prev vol).", tag:"dvl-confluence-"+sym });
+      }
+    }catch(_){}
+  }
+  function scanConfluence(){
+    var rows=getRowsRaw();
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i], sym=r.symbol||r.mexc; if(!sym) continue;
+      var full=allBlocksTrue(r);
+      if(full && !confluenceActive[sym]){
+        confluenceActive[sym]=true;
+        confluenceLog.unshift({symbol:sym, at:now()});
+        if(confluenceLog.length>30) confluenceLog.length=30;
+        confluenceUnread++;
+        notifyConfluence(sym);
+      } else if(!full && confluenceActive[sym]){
+        confluenceActive[sym]=false;
+      }
+    }
+  }
+  function alertMenu(){
+    return '<div class="dvlScan1013FilterMenu dvlScan1015FilterMenu" id="dvlScan1013AlertMenu">'
+      +'<h3>Alertas — Confluência total</h3>'
+      +'<div class="dvlScan1015FilterFoot" id="dvlScan1013AlertList">Nenhum alerta ainda. Avisamos aqui (e por notificação do navegador, se permitida) assim que um ativo bater os 6 bloquinhos ao mesmo tempo.</div>'
+      +'</div>';
+  }
+  function renderAlertMenu(root){
+    root = root || document.getElementById(panelId);
+    if(!root) return;
+    var list=root.querySelector("#dvlScan1013AlertList");
+    if(list){
+      if(!confluenceLog.length){
+        list.textContent="Nenhum alerta ainda. Avisamos aqui (e por notificação do navegador, se permitida) assim que um ativo bater os 6 bloquinhos ao mesmo tempo.";
+      } else {
+        list.innerHTML=confluenceLog.map(function(e){
+          return '<div class="dvlScan1013AlertRow"><b>'+esc(e.symbol)+'</b><span>'+esc(ago(e.at))+'</span></div>';
+        }).join("");
+      }
+    }
+    var btn=root.querySelector("#dvlScan1013AlertBtn");
+    if(btn) btn.classList.toggle("has-dot", confluenceUnread>0);
+  }
   function score(r){
     var b=blocksOf(r), w=filterState1015.weights||{};
     var W={
@@ -61877,6 +61950,7 @@ body.dvlScannerOpen080 #chartWrap{
       if(filterState1015.preset==="high" && sc<70) return false;
       if(filterState1015.preset==="clean" && !(st.c==="clean" || st.c==="postflat")) return false;
       if(filterState1015.preset==="oi" && oi.c!=="up") return false;
+      if(filterState1015.preset==="confluence" && !allBlocksTrue(r)) return false;
       return true;
     });
     return rows.slice(0, Number(filterState1015.maxRows||20));
@@ -61902,6 +61976,7 @@ body.dvlScannerOpen080 #chartWrap{
         +'<button type="button" data-dvl-scan1015-preset="high">Alta convicção</button>'
         +'<button type="button" data-dvl-scan1015-preset="clean">Spike limpo</button>'
         +'<button type="button" data-dvl-scan1015-preset="oi">OI crescente</button>'
+        +'<button type="button" data-dvl-scan1015-preset="confluence">🔥 Confluência total</button>'
       +'</div></div>'
       +'<div class="dvlScan1015FilterBlock"><label>TF detecção</label><div class="dvlScan1013FilterChips dvlScan1015TfChips" data-dvl-scan1015-group="tf">'
         +'<button type="button" data-dvl-scan1015-tf="1m">1m</button>'
@@ -61962,9 +62037,9 @@ body.dvlScannerOpen080 #chartWrap{
     p.setAttribute("data-dvl-scanner-pro","1013");
     p.innerHTML =
       '<div class="dvlScan1013Sizer"><div class="dvlScan1013Canvas">'
-      +'<header class="dvlScan1013Header"><div class="dvlScan1013Logo">'+radarSVG()+'</div><div class="dvlScan1013Title"><b>DVL <span>SCANNER PRO</span></b><small>Scanner ao vivo <i></i> futuros</small></div><div class="dvlScan1013Actions"><button class="dvlScan1013IconBtn has-dot" type="button" aria-label="Alertas"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg></button><button class="dvlScan1013IconBtn" type="button" data-dvl-scan1013-filters aria-label="Configurações"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M16.9 16.9l2.2 2.2M2 12h3M19 12h3M4.9 19.1l2.1-2.1M16.9 7.1l2.2-2.2"></path></svg></button></div></header>'
+      +'<header class="dvlScan1013Header"><div class="dvlScan1013Logo">'+radarSVG()+'</div><div class="dvlScan1013Title"><b>DVL <span>SCANNER PRO</span></b><small>Scanner ao vivo <i></i> futuros</small></div><div class="dvlScan1013Actions"><div class="dvlScan1013FilterWrap"><button class="dvlScan1013IconBtn" type="button" id="dvlScan1013AlertBtn" aria-label="Alertas"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg></button>'+alertMenu()+'</div><button class="dvlScan1013IconBtn" type="button" data-dvl-scan1013-filters aria-label="Configurações"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M16.9 16.9l2.2 2.2M2 12h3M19 12h3M4.9 19.1l2.1-2.1M16.9 7.1l2.2-2.2"></path></svg></button></div></header>'
       +'<section class="dvlScan1013Hero"><div class="dvlScan1013Radar"><div class="dvlScan1013RadarCore">'+radarSVG()+'</div><span class="dvlScan1013Dot a"></span><span class="dvlScan1013Dot b"></span><span class="dvlScan1013Dot c"></span></div><div class="dvlScan1013HeroText"><div class="dvlScan1013HeroTop"><b>Leitura de mercado</b><span class="dvlScan1013Badge" id="dvlScan1013Badge">CARREGANDO</span></div><div class="dvlScan1013HeroDesc" id="dvlScan1013HeroDesc">Scanner preparado.</div></div></section>'
-      +'<div class="dvlScan1013Toolbar"><div class="dvlScan1013Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><input id="dvlScan1013Search" type="search" placeholder="Buscar ativo..." autocomplete="off" spellcheck="false"></div><div class="dvlScan1013FilterWrap"><button class="dvlScan1013FilterBtn" type="button" data-dvl-scan1013-filters><svg viewBox="0 0 24 24"><path d="M3 5h18"></path><path d="M6 12h12"></path><path d="M10 19h4"></path></svg>Filtros</button>'+filterMenu()+'</div></div>'
+      +'<div class="dvlScan1013Toolbar"><div class="dvlScan1013Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><input id="dvlScan1013Search" type="search" placeholder="Buscar ativo..." autocomplete="off" spellcheck="false"></div><div class="dvlScan1013FilterWrap dvlScan1013ToolbarFilterWrap"><button class="dvlScan1013FilterBtn" type="button" data-dvl-scan1013-filters><svg viewBox="0 0 24 24"><path d="M3 5h18"></path><path d="M6 12h12"></path><path d="M10 19h4"></path></svg>Filtros</button>'+filterMenu()+'</div></div>'
       +'<section class="dvlScan1013Table"><div class="dvlScan1013TableTop"><b>SCANNER COMPLETO — SPIKE FLOW</b><span class="dvlScan1013Updated" id="dvlScan1013Updated">Atualizado agora <i></i></span></div><div class="dvlScan1013Head"><div>#</div><div>Ativo / preço</div><div>Var. 24h</div><div>OI</div><div>LSR</div><div>RSI (14)</div><div>Spike score</div><div>Status</div><div>Spike há</div><div>5 candles</div></div><div id="dvlScan1013Body"></div></section>'
       +'<div class="dvlScan1013Foot"><span><i>i</i><span><b>SPIKE HÁ:</b> tempo decorrido desde que o spike ocorreu. Use para evitar entradas tardias.</span></span><span><i>i</i><span>Spike Score: pontuação interna DVL que mede a qualidade do spike com base em volume, flat, momentum e estrutura.</span></span><span><i>i</i><span><b>Spike pós-flat:</b> spike detectado após período de consolidação.</span></span><span><i>i</i><span><b>Bloquinhos (S R O L F P):</b> S = Spike acima da média · R = RSI em sobrevenda · O = OI acima da média · L = LSR abaixo da média · F = Flat volume bar · P = Pré-volume baixo. Verde = validado, cinza = não. Sem prioridade entre eles.</span></span></div>'
       +'</div></div>';
@@ -62042,6 +62117,19 @@ body.dvlScannerOpen080 #chartWrap{
         commit();
         return;
       }
+      var alertBtn=ev.target.closest && ev.target.closest("#dvlScan1013AlertBtn");
+      if(alertBtn){
+        ev.preventDefault();ev.stopPropagation();
+        var am=document.getElementById("dvlScan1013AlertMenu");
+        if(am) am.classList.toggle("is-open");
+        confluenceUnread=0;
+        renderAlertMenu(p);
+        if(!notifyPermAsked && typeof Notification!=="undefined" && Notification.permission==="default"){
+          notifyPermAsked=true;
+          try{ Notification.requestPermission(); }catch(_){}
+        }
+        return;
+      }
       var btn=ev.target.closest && ev.target.closest("[data-dvl-scan1013-filters]");
       if(btn){
         ev.preventDefault();ev.stopPropagation();
@@ -62050,8 +62138,10 @@ body.dvlScannerOpen080 #chartWrap{
         syncFilterButtons1015(p);
         return;
       }
-      var inside=ev.target.closest && ev.target.closest(".dvlScan1013FilterWrap");
+      var inside=ev.target.closest && ev.target.closest(".dvlScan1013FilterWrap.dvlScan1013ToolbarFilterWrap");
       if(!inside){ var mm=document.getElementById("dvlScan1013FilterMenu"); if(mm) mm.classList.remove("is-open"); }
+      var insideAlert=ev.target.closest && ev.target.closest("#dvlScan1013AlertBtn, #dvlScan1013AlertMenu");
+      if(!insideAlert){ var amm=document.getElementById("dvlScan1013AlertMenu"); if(amm) amm.classList.remove("is-open"); }
     },true);
     render();
     syncFilterButtons1015(p);
@@ -62062,6 +62152,8 @@ body.dvlScannerOpen080 #chartWrap{
   function render(){
     var p=document.getElementById(panelId);
     if(!p || p.getAttribute("data-dvl-scanner-pro")!=="1013") return;
+    scanConfluence();
+    renderAlertMenu(p);
     var rows=getRows();
     var h=hero(rows);
     var badge=p.querySelector("#dvlScan1013Badge"), desc=p.querySelector("#dvlScan1013HeroDesc"), upd=p.querySelector("#dvlScan1013Updated");
@@ -62077,9 +62169,10 @@ body.dvlScannerOpen080 #chartWrap{
     body.innerHTML=rows.map(function(r,i){
       var sc=score(r), st=status(r), oi=trend(r,"oi"), ls=trend(r,"lsr"), p24=Number(r.price24hPct||r.barPct||0), rsi=Number(r.rsi14||50);
       var varCls=p24>0.001?"pos":(p24<-0.001?"neg":"flat");
-      return '<div class="dvlScan1013Row" data-dvl-scan-analyze="'+esc(r.mexc||r.symbol||"")+'">'
+      var full=allBlocksTrue(r);
+      return '<div class="dvlScan1013Row'+(full?" confluence":"")+'" data-dvl-scan-analyze="'+esc(r.mexc||r.symbol||"")+'">'
         +'<div class="dvlScan1013Rank">'+(i+1)+'</div>'
-        +'<div class="dvlScan1013Asset"><b>'+esc(r.symbol||r.mexc||"—")+'</b><span>'+esc(fmtPrice(r.lastClose))+'</span></div>'
+        +'<div class="dvlScan1013Asset"><b>'+esc(r.symbol||r.mexc||"—")+'</b><span>'+esc(fmtPrice(r.lastClose))+'</span>'+(full?'<i class="dvlScan1013ConfluenceTag">🔥 6/6</i>':'')+'</div>'
         +'<div class="dvlScan1013Var '+varCls+'">'+(p24>=0?"+":"")+p24.toFixed(2)+'%</div>'
         +'<div class="dvlScan1013Trend '+oi.c+'">'+oi.t+'</div>'
         +'<div class="dvlScan1013Trend '+ls.c+'">'+ls.t+'</div>'
