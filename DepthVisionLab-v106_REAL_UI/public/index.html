@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.041</title>
+<title>DVL Binance Live — Beta 1.042</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.041';
+window.DVL_APP_VERSION = 'Beta 1.042';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20426,10 +20426,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.041";
+const DVL_APP_VERSION = "Beta 1.042";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.042", note: "Scanner — corrige a polaridade de cor do LSR: o bloco 'LSR abaixo da média' é o lado favorável dessa métrica (oposto do OI, que é favorável acima da média), então a seta de LSR agora fica verde quando está abaixo da média (e aponta pra baixo) e vermelha quando acima — antes usava a mesma regra do OI (verde só quando subindo/acima), o que mostrava seta verde pra cima mesmo quando o LSR favorável estava caindo." },
   { version: "Beta 1.041", note: "Scanner — alerta de Confluência total: novo chip nos Filtros mostra só os ativos com os 6 bloquinhos validados ao mesmo tempo; linhas em confluência total ganham destaque (borda dourada + etiqueta 6/6); o sininho de alertas (antes decorativo) acende e lista os últimos ativos que entraram em confluência, com notificação do navegador opcional." },
   { version: "Beta 1.040", note: "Scanner — refaz o Spike Score em 6 bloquinhos configuráveis (RSI sobrevenda, OI acima da média, LSR abaixo da média, flat volume bar, spike acima da(s) média(s) com toggle 1/2 MAs, pré-volume baixo), cada um exibido como checklist por ativo. Filtros ganha inputs reais para períodos de MA, zona/lookback do RSI e médias de OI/LSR. TF de detecção no Filtros agora funciona de verdade (antes só mudava o chip visualmente); o backend passa a manter todos os TFs pré-calculados." },
   { version: "Beta 1.039", note: "Positions — corrige detalhe do trade mostrando valores errados: um trade fechado por TP/SL em segundo plano (enquanto outro ativo estava na tela) é removido dos dados ao vivo e some da lista de 'abertos', mas o cache DVL_PAPER_TRADE_STORE.openPositions só se atualiza reativamente e podia manter uma cópia 'aberta' desatualizada. O card do Histórico usava a fonte correta (mostrava o PnL final real), mas ao tocar nele o popup de detalhe consultava esse cache antes de tudo e abria a gestão ao vivo com números antigos — parecendo que o trade fechou sozinho sem motivo. getPaperPositionById() agora consulta a fonte viva (getAllOrders(), sempre recalculada) primeiro, então detalhe e lista sempre batem." },
@@ -61877,13 +61878,19 @@ body.dvlScannerOpen080 #chartWrap{
   function trend(r,type){
     /* Both the client engine and the backend rows carry a real OI/LSR
        reading split into direction and colour: arrow = value vs its MA
-       (↑ above / ↓ below); colour = MA slope × position. Falls back to a
-       derived value only when neither is available (e.g. cached rows saved
-       before this field existed, or Binance which has no real OI feed). */
+       (↑ above / ↓ below) — always literal, never flipped. Colour means
+       "favorable for this app's blocks", and the two metrics have OPPOSITE
+       polarity: the OI block wants ABOVE its average (green = above), the
+       LSR block wants BELOW its average (green = below) — so green/red are
+       swapped for LSR relative to OI. Falls back to a derived value only
+       when neither is available (e.g. cached rows saved before this field
+       existed, or Binance which has no real OI feed). */
     var dir = type==="oi" ? r.oi : (type==="lsr" ? r.lsr : null);
     var col = type==="oi" ? r.oiColor : (type==="lsr" ? r.lsrColor : null);
     if(dir==="up"||dir==="down"){
-      var cls = col==="green" ? "up" : (col==="red" ? "down" : "flat");
+      var cls = type==="lsr"
+        ? (col==="green" ? "down" : (col==="red" ? "up" : "flat"))
+        : (col==="green" ? "up" : (col==="red" ? "down" : "flat"));
       return { c:cls, t: dir==="up" ? "↑" : "↓" };
     }
     var side=String(r.side||"").toUpperCase(), bp=Number(r.barPct)||0, sc=score(r);
