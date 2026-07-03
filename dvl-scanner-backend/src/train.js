@@ -27,6 +27,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const outcomes = require("./outcomes");
 
 const LOG_FILE = process.env.DVL_OUTCOMES_LOG_FILE || path.join(process.cwd(), "data", "outcomes-log.jsonl");
 const MODEL_FILE = process.env.DVL_MODEL_FILE || path.join(process.cwd(), "data", "learned-weights.json");
@@ -37,10 +38,6 @@ const BLOCK_KEYS = ["spikeAboveAvg", "rsiOversold", "oiAboveAvg", "lsrBelowAvg",
 const CONT_KEYS = ["spike20n", "spike50n", "rsi14n", "volBelowMaBarsN", "barPctN", "flatCandlesN", "oiRatioN", "lsrRatioN", "crossStrengthN"];
 const FEATURE_KEYS = BLOCK_KEYS.concat(CONT_KEYS);
 
-/* Which return horizon defines "the signal worked". 4h is a reasonable
-   middle ground for a volume-spike setup — long enough to filter noise,
-   short enough to stay relevant to the signal that triggered it. */
-const LABEL_HORIZON = "r4h";
 /* Don't train (or retrain) on too little data — with ~15 features, too few
    examples risks fitting noise convincingly. L2 regularization and the
    temporal test split help catch that if it happens; testAccuracy is what
@@ -79,7 +76,11 @@ function normalizeContinuous(f) {
 }
 
 /* Examples come back in the log's natural (chronological resolution)
-   order — the caller relies on that for the temporal train/test split. */
+   order — the caller relies on that for the temporal train/test split.
+   `label` comes straight from outcomes.js's triple-barrier resolution
+   (already side-adjusted there), not derived from a fixed-horizon return
+   here — a signal that hits its target/stop in 20 minutes is exactly as
+   valid a labeled example as one that takes the full timeout to resolve. */
 function loadExamples() {
   let raw;
   try { raw = fs.readFileSync(LOG_FILE, "utf8"); } catch (_) { return []; }
@@ -88,13 +89,10 @@ function loadExamples() {
     if (!line) continue;
     let e;
     try { e = JSON.parse(line); } catch (_) { continue; }
-    if (!e || !e.blocks || !e.returns || !Number.isFinite(e.returns[LABEL_HORIZON])) continue;
-    const ret = e.returns[LABEL_HORIZON];
-    const isShort = String(e.side || "").toUpperCase() === "SHORT";
-    const favorable = isShort ? -ret > 0 : ret > 0;
+    if (!e || !e.blocks || (e.label !== 0 && e.label !== 1)) continue;
     const boolFeatures = BLOCK_KEYS.map(k => (e.blocks[k] ? 1 : 0));
     const contFeatures = normalizeContinuous(e.features);
-    out.push({ features: boolFeatures.concat(contFeatures), label: favorable ? 1 : 0, at: e.at || 0 });
+    out.push({ features: boolFeatures.concat(contFeatures), label: e.label, at: e.at || 0 });
   }
   return out;
 }
@@ -202,7 +200,12 @@ function maybeTrain() {
     samples: examples.length,
     trainSamples: trainSet.length,
     testSamples: testSet.length,
-    horizon: LABEL_HORIZON,
+    /* Labels come from outcomes.js's triple-barrier resolution, not a
+       fixed horizon — surfaced here so the model stays self-describing. */
+    labelMethod: "triple-barrier",
+    profitTargetPct: outcomes.PROFIT_TARGET_PCT,
+    stopLossPct: outcomes.STOP_LOSS_PCT,
+    maxHorizonMs: outcomes.MAX_HORIZON_MS,
     /* `accuracy` kept as the headline field for backward compatibility —
        it's the HONEST held-out (test) accuracy, never in-sample. */
     accuracy: testAccuracy,
@@ -218,7 +221,7 @@ function maybeTrain() {
 
 module.exports = {
   loadExamples, splitTemporal, fit, evaluate, toWeights, loadModel, saveModel, maybeTrain,
-  BLOCK_KEYS, CONT_KEYS, FEATURE_KEYS, LABEL_HORIZON, MIN_SAMPLES, MIN_NEW_SAMPLES, TEST_FRACTION
+  BLOCK_KEYS, CONT_KEYS, FEATURE_KEYS, MIN_SAMPLES, MIN_NEW_SAMPLES, TEST_FRACTION
 };
 
 /* Runnable directly: `node src/train.js` (or `npm run train`). */

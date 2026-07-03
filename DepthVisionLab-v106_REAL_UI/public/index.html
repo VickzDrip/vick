@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.046</title>
+<title>DVL Binance Live — Beta 1.047</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.046';
+window.DVL_APP_VERSION = 'Beta 1.047';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20426,10 +20426,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.046";
+const DVL_APP_VERSION = "Beta 1.047";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.047", note: "ML — troca a espera fixa de 24h por monitoramento direto: agora cada sinal é acompanhado a cada ciclo e resolve assim que o preço bater +2% a favor (funcionou) ou -1% contra (falhou), com um teto de segurança de 4h caso não bata nenhum dos dois. Um spike que sobe e reverte em 20 minutos já vira amostra de treino em 20 minutos, não precisa esperar um dia inteiro." },
   { version: "Beta 1.046", note: "ML — volta o mínimo de amostras pra treinar de 300 para 200, a pedido: começa a treinar mais cedo. Com mais variáveis e menos amostra o risco de 'decorar' é um pouco maior, mas a acurácia real (medida em dado nunca visto) no card do Copilot deixa isso visível." },
   { version: "Beta 1.045", note: "ML híbrido — o modelo de aprendizado agora enxerga os valores reais por trás dos 6 bloquinhos (RSI exato, força do OI/LSR vs a média, intensidade do volume), não só sim/não, então aprende os próprios limiares em vez de ficar preso a 'RSI < 30'. Também troca a forma de medir acurácia: agora mede em dados que o modelo nunca viu no treino (antes media nos mesmos dados usados pra treinar, o que sempre parecia bom mas não dizia nada de real). Card do Copilot atualizado pra mostrar essa acurácia real separada da acurácia de treino." },
   { version: "Beta 1.044", note: "Copilot — novo card 'Aprendizado (ML)' mostrando o progresso do treino automático do scanner (quantos sinais estão em aberto/resolvidos, quantas amostras faltam pro treino, e assim que treinar, os pesos que o modelo aprendeu por bloquinho e a acurácia). Só leitura — não muda o score que você ajusta em Filtros." },
@@ -72137,7 +72138,7 @@ function bodyHtml(){
   var oc=_lastHealth.outcomes||{pending:0,resolved:0,model:{trained:false,samples:0,needed:200}};
   var model=oc.model||{trained:false,samples:0,needed:200};
   var out='<div class="dvlCp1024Body">';
-  out+='<div class="dvlCp1024Stat"><span>Sinais em aberto (aguardando 24h)</span><b>'+esc(oc.pending||0)+'</b></div>';
+  out+='<div class="dvlCp1024Stat"><span>Sinais em aberto (monitorando alvo/stop)</span><b>'+esc(oc.pending||0)+'</b></div>';
   out+='<div class="dvlCp1024Stat"><span>Amostras resolvidas</span><b>'+esc(oc.resolved||0)+'</b></div>';
   if(!model.trained){
     var have=Number(model.samples||0), need=Number(model.needed||200);

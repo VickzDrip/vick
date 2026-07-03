@@ -114,18 +114,34 @@ registry (a real detection, not a refresh), a feature snapshot — the 6 Spike
 Score blocks (booleans), the CONTINUOUS raw values behind them (exact RSI,
 spike20/spike50 ratios, OI/LSR distance from their own moving average,
 volume-below-MA bar count, candle strength, cross strength), the score,
-side and entry price. As time passes it fills in what price actually did
-(`r15m`/`r1h`/`r4h`/`r24h` % return), and once the 24h horizon is filled the
-labeled example is appended to an append-only `data/outcomes-log.jsonl` (one
-JSON object per line). Pending entries persist to
-`data/outcomes-pending.json` across restarts, and `GET
-/api/dvl/scanner/health` reports `{ outcomes: { pending, resolved } }`.
+side and entry price.
+
+**Resolution is event-driven (a "triple barrier"), not a fixed clock wait.**
+Every cycle, each pending signal's current price is checked against its
+entry price (side-adjusted: up is favorable for LONG, down for SHORT), and
+it resolves the moment either:
+- price moves `PROFIT_TARGET_PCT` (2%) in its favor → label **1** ("target")
+- price moves `STOP_LOSS_PCT` (1%) against it → label **0** ("stop")
+- `MAX_HORIZON_MS` (4h) elapses without hitting either → label from
+  whichever side of zero the return sits on ("timeout")
+
+A spike that pumps and reverses in 20 minutes gets labeled correctly in 20
+minutes, not a day later — most examples resolve in minutes-to-hours. The
+older fixed `r15m`/`r1h`/`r4h` snapshots are still recorded alongside the
+label purely for informational/diagnostic purposes; they don't determine
+it. Once resolved, the labeled example is appended to an append-only
+`data/outcomes-log.jsonl` (one JSON object per line, with `label`,
+`outcome`, `resolvedAfterMs` and `finalReturnPct` fields). Pending entries
+persist to `data/outcomes-pending.json` across restarts (dropped as stale,
+without logging, if a symbol never gets a fresh price again for 24h), and
+`GET /api/dvl/scanner/health` reports `{ outcomes: { pending, resolved } }`.
 
 ## Learned weights — hybrid model (ML — trains automatically, not wired to the live score yet)
 `src/train.js` reads `outcomes-log.jsonl` and fits a plain logistic
 regression (no external ML dependency — ~15 features, batch gradient
 descent with L2 regularization) predicting whether a signal was "favorable"
-(price moved in the signal's direction by the `r4h` horizon).
+— using the `label` outcomes.js already resolved via the triple barrier
+above, not a fixed-horizon return computed here.
 
 It's **hybrid** on purpose: the model sees both the 6 blocks as booleans
 *and* the continuous values behind them (normalized), so it can find its

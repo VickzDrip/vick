@@ -3,12 +3,24 @@
 /* ── Outcome logging — groundwork for a future learned score ─────────
    Every time a symbol freshly enters the signal registry (a real
    detection, not a re-refresh), we snapshot its feature set (the 6 Spike
-   Score blocks + score + side + entry price). As time passes we fill in
-   how price actually moved (15m/1h/4h/24h returns). Once fully resolved,
-   the labeled example is appended to an append-only JSONL log — a
-   training set for a future model to learn block weights from real
-   outcomes instead of hand-tuned ones. This module only records; it does
-   not train or predict anything (yet). */
+   Score blocks + continuous raw values + score + side + entry price).
+
+   Resolution is event-driven (a "triple barrier"), not a fixed clock wait:
+   every cycle we check the symbol's current price against the entry price
+   and resolve — right then, whenever it happens — the moment either:
+     - price moves PROFIT_TARGET_PCT in the signal's favor  -> label 1 ("target")
+     - price moves STOP_LOSS_PCT against it                  -> label 0 ("stop")
+     - MAX_HORIZON_MS elapses without hitting either          -> label from
+       whichever side of zero the return is at that point ("timeout")
+   This means most examples resolve in minutes-to-hours instead of waiting
+   a fixed 24h regardless of what the price already did — a spike that
+   pumps and reverses within 20 minutes doesn't have to sit around for a
+   day to be labeled correctly.
+
+   Once resolved, the labeled example is appended to an append-only JSONL
+   log — a training set for a future model to learn block weights from
+   real outcomes instead of hand-tuned ones. This module only records; it
+   does not train or predict anything (see train.js for that, separately). */
 
 const fs = require("fs");
 const path = require("path");
@@ -16,20 +28,27 @@ const path = require("path");
 const PENDING_FILE = process.env.DVL_OUTCOMES_PENDING_FILE || path.join(process.cwd(), "data", "outcomes-pending.json");
 const LOG_FILE = process.env.DVL_OUTCOMES_LOG_FILE || path.join(process.cwd(), "data", "outcomes-log.jsonl");
 
-/* How long after the signal we check price, and the point past which an
-   entry is considered fully resolved and gets appended to the log. */
-const HORIZONS_MS = { r15m: 15 * 60000, r1h: 60 * 60000, r4h: 4 * 3600000, r24h: 24 * 3600000 };
-const RESOLVE_KEY = "r24h";
-const MAX_HORIZON_MS = HORIZONS_MS[RESOLVE_KEY];
-/* Drop stale entries that never see a fresh price again (delisted / fell
-   out of the top-volume candidates) instead of holding them forever. */
-const STALE_MS = MAX_HORIZON_MS * 2;
+/* Triple-barrier thresholds — side-adjusted (favorable = price moving in
+   the signal's own direction: up for LONG, down for SHORT). */
+const PROFIT_TARGET_PCT = 2;   // hit this in favor -> resolves "it worked"
+const STOP_LOSS_PCT = 1;       // hit this against  -> resolves "it failed"
+/* Safety time limit: resolves on whichever side of zero the return sits,
+   even if neither barrier was cleanly hit. Bounds the worst-case wait. */
+const MAX_HORIZON_MS = 4 * 3600000;
+/* Informational-only snapshots kept alongside the label (not used to
+   compute it) so the log stays useful for diagnostics/analysis. */
+const INFO_HORIZONS_MS = { r15m: 15 * 60000, r1h: 60 * 60000, r4h: 4 * 3600000 };
+/* Drop entries that never see a fresh price again (delisted / fell out of
+   the top-volume candidates) instead of holding them forever — distinct
+   from MAX_HORIZON_MS, which resolves using whatever price WAS seen. */
+const STALE_MS = 24 * 3600000;
 /* Safety cap so a runaway signal rate can't grow pending state unbounded. */
 const MAX_PENDING = 5000;
 
 let pending = {}; // key -> entry
 
 function keyOf(exchange, tf, symbol, at) { return exchange + "|" + tf + "|" + symbol + "|" + at; }
+function round3(x) { return Math.round(x * 1000) / 1000; }
 
 function loadPending() {
   try {
@@ -89,28 +108,42 @@ function recordSignal(exchange, tf, row, now) {
   };
 }
 
+function resolve(key, label, reason, favorableRetPct, now) {
+  const e = pending[key];
+  e.label = label;
+  e.outcome = reason;
+  e.resolvedAt = now;
+  e.resolvedAfterMs = now - e.at;
+  e.finalReturnPct = round3(favorableRetPct);
+  appendLog(e);
+  delete pending[key];
+}
+
 /* Call once per exchange per cycle with the latest known price per symbol
-   (from that cycle's scans). Fills in any return horizons that have
-   elapsed, appends fully-resolved entries to the log, and drops stale ones
-   that never got a fresh price again. */
+   (from that cycle's scans). Resolves any pending entry whose price has
+   crossed a barrier (or timed out), fills in informational return
+   snapshots along the way, and drops stale entries that never got a fresh
+   price again. */
 function checkOutcomes(exchange, priceBySymbol, now) {
   for (const key in pending) {
     const e = pending[key];
     if (e.exchange !== exchange) continue;
     const elapsed = now - e.at;
     const price = priceBySymbol[e.symbol];
+
     if (Number.isFinite(price) && price > 0) {
-      for (const h in HORIZONS_MS) {
-        if (e.returns[h] === undefined && elapsed >= HORIZONS_MS[h]) {
-          e.returns[h] = e.entryPrice > 0 ? ((price - e.entryPrice) / e.entryPrice) * 100 : 0;
-        }
+      const rawRetPct = e.entryPrice > 0 ? ((price - e.entryPrice) / e.entryPrice) * 100 : 0;
+      const favorableRetPct = String(e.side).toUpperCase() === "SHORT" ? -rawRetPct : rawRetPct;
+
+      for (const h in INFO_HORIZONS_MS) {
+        if (e.returns[h] === undefined && elapsed >= INFO_HORIZONS_MS[h]) e.returns[h] = round3(rawRetPct);
       }
-    }
-    if (e.returns[RESOLVE_KEY] !== undefined) {
-      appendLog(e);
-      delete pending[key];
+
+      if (favorableRetPct >= PROFIT_TARGET_PCT) { resolve(key, 1, "target", favorableRetPct, now); continue; }
+      if (favorableRetPct <= -STOP_LOSS_PCT) { resolve(key, 0, "stop", favorableRetPct, now); continue; }
+      if (elapsed >= MAX_HORIZON_MS) { resolve(key, favorableRetPct > 0 ? 1 : 0, "timeout", favorableRetPct, now); continue; }
     } else if (elapsed >= STALE_MS) {
-      delete pending[key];
+      delete pending[key]; // never saw a fresh price again — drop without logging
     }
   }
   savePending();
@@ -125,4 +158,7 @@ function loadStats() {
   return { pending: Object.keys(pending).length, resolved };
 }
 
-module.exports = { recordSignal, checkOutcomes, loadPending, savePending, loadStats, HORIZONS_MS, RESOLVE_KEY };
+module.exports = {
+  recordSignal, checkOutcomes, loadPending, savePending, loadStats,
+  PROFIT_TARGET_PCT, STOP_LOSS_PCT, MAX_HORIZON_MS, INFO_HORIZONS_MS
+};

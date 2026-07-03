@@ -2,8 +2,12 @@
 
 /* Offline test for the outcome-logging groundwork (ML prerequisite) — no
    network, no real timers: checkOutcomes() takes `now` explicitly so we can
-   simulate elapsed time directly. Uses temp files so it never touches the
-   real data/ directory. */
+   simulate elapsed time and price paths directly. Uses temp files so it
+   never touches the real data/ directory.
+
+   Resolution is a "triple barrier": whichever comes first — a profit
+   target, a stop loss, or a max-time safety timeout — decided by checking
+   price every call, not by waiting for a fixed clock horizon. */
 
 const assert = require("assert");
 const fs = require("fs");
@@ -22,57 +26,81 @@ function eq(actual, expected, msg) {
   if (actual === expected) pass++;
   else { fail++; console.error("FAIL: " + msg + " (got " + actual + ", want " + expected + ")"); }
 }
+function readLog() {
+  try { return fs.readFileSync(process.env.DVL_OUTCOMES_LOG_FILE, "utf8").trim().split("\n").filter(Boolean).map(l => JSON.parse(l)); }
+  catch (_) { return []; }
+}
 
 const T0 = 1000000000000; // arbitrary base timestamp (ms)
-const HOUR = 3600000;
+const MIN = 60000, HOUR = 3600000;
 
-/* 1) A fresh signal starts pending with no returns yet. */
-const row = { rawSymbol: "BTC_USDT", side: "LONG", price: 100, spikeScore: 82, blocks: { spikeAboveAvg: true, rsiOversold: true, oiAboveAvg: true, lsrBelowAvg: true, flatVolumeBar: true, prevVolBelowHalf: true } };
-outcomes.recordSignal("mexc", "15m", row, T0);
+/* 1) A fresh signal starts pending with no label yet. */
+const rowLong = { rawSymbol: "BTC_USDT", side: "LONG", price: 100, spikeScore: 82, blocks: { spikeAboveAvg: true, rsiOversold: true, oiAboveAvg: true, lsrBelowAvg: true, flatVolumeBar: true, prevVolBelowHalf: true } };
+outcomes.recordSignal("mexc", "15m", rowLong, T0);
 eq(outcomes.loadStats().pending, 1, "one entry pending after recordSignal");
 
 /* Recording the exact same (exchange, tf, symbol, at) again is a no-op. */
-outcomes.recordSignal("mexc", "15m", row, T0);
+outcomes.recordSignal("mexc", "15m", rowLong, T0);
 eq(outcomes.loadStats().pending, 1, "duplicate recordSignal does not add a second entry");
 
-/* 2) Before 15m elapsed, checkOutcomes should not resolve or drop it. */
-outcomes.checkOutcomes("mexc", { BTC_USDT: 105 }, T0 + 5 * 60000);
-eq(outcomes.loadStats().pending, 1, "still pending before the 15m horizon");
+/* 2) A small move that hits neither barrier keeps it pending, but fills in
+   the informational return snapshots as time passes. */
+outcomes.checkOutcomes("mexc", { BTC_USDT: 100.5 }, T0 + 20 * MIN);
+eq(outcomes.loadStats().pending, 1, "still pending — no barrier hit yet");
 eq(outcomes.loadStats().resolved, 0, "nothing resolved yet");
 
-/* 3) Past 15m but well before 24h: partial fill, still pending, not logged. */
-outcomes.checkOutcomes("mexc", { BTC_USDT: 110 }, T0 + 20 * 60000);
-eq(outcomes.loadStats().pending, 1, "still pending between 15m and 24h");
-eq(outcomes.loadStats().resolved, 0, "not logged before the resolve horizon (24h)");
-
-/* 4) Past 24h with a fresh price: fully resolved, appended to the log, and
-   removed from pending. +20% at 24h. */
-outcomes.checkOutcomes("mexc", { BTC_USDT: 120 }, T0 + 24 * HOUR + 60000);
-eq(outcomes.loadStats().pending, 0, "resolved entry leaves pending");
+/* 3) Price hits the +2% profit target well before the 4h timeout — resolves
+   immediately (event-driven), not on a fixed clock. */
+outcomes.checkOutcomes("mexc", { BTC_USDT: 102.5 }, T0 + 35 * MIN);
+eq(outcomes.loadStats().pending, 0, "resolves as soon as the target is hit");
 eq(outcomes.loadStats().resolved, 1, "resolved entry is appended to the log");
-
-const logged = fs.readFileSync(process.env.DVL_OUTCOMES_LOG_FILE, "utf8").trim().split("\n").map(l => JSON.parse(l));
+let logged = readLog();
 eq(logged.length, 1, "log has exactly one line");
-const e = logged[0];
-eq(e.symbol, "BTC_USDT", "logged entry has the right symbol");
-eq(e.entryPrice, 100, "logged entry keeps the entry price");
-ok(Math.abs(e.returns.r15m - 10) < 0.01, "r15m ~= +10% (got " + e.returns.r15m + ")");
-ok(Math.abs(e.returns.r24h - 20) < 0.01, "r24h ~= +20% (got " + e.returns.r24h + ")");
-ok(e.blocks && e.blocks.rsiOversold === true, "block snapshot is preserved on the logged entry");
+eq(logged[0].label, 1, "hitting the profit target labels the example favorable (1)");
+eq(logged[0].outcome, "target", "records WHY it resolved");
+ok(Math.abs(logged[0].finalReturnPct - 2.5) < 0.01, "records the actual return at resolution (~+2.5%, got " + logged[0].finalReturnPct + ")");
+ok(logged[0].returns.r15m !== undefined, "informational r15m snapshot was filled in along the way");
+ok(logged[0].blocks && logged[0].blocks.rsiOversold === true, "block snapshot is preserved on the logged entry");
+ok(logged[0].features && logged[0].features.spike20 !== undefined, "continuous feature snapshot is preserved on the logged entry");
 
-/* 5) A signal that never sees a fresh price again gets dropped as stale,
+/* 4) A stop-loss hit resolves unfavorably (label 0), just as fast. */
+outcomes.recordSignal("mexc", "15m", Object.assign({}, rowLong, { rawSymbol: "ETH_USDT" }), T0);
+outcomes.checkOutcomes("mexc", { ETH_USDT: 99 }, T0 + 10 * MIN); // -1% hits the stop
+logged = readLog();
+eq(logged.length, 2, "second entry logged after hitting its stop");
+eq(logged[1].label, 0, "hitting the stop loss labels the example unfavorable (0)");
+eq(logged[1].outcome, "stop", "records the stop-loss reason");
+
+/* 5) SHORT side inverts direction: price going DOWN is favorable. */
+outcomes.recordSignal("mexc", "15m", { rawSymbol: "SOL_USDT", side: "SHORT", price: 50, spikeScore: 70, blocks: {} }, T0);
+outcomes.checkOutcomes("mexc", { SOL_USDT: 49 }, T0 + 10 * MIN); // price -2% -> +2% favorable for a short
+logged = readLog();
+eq(logged.length, 3, "short entry resolves too");
+eq(logged[2].label, 1, "a downward move hits the SHORT's profit target, not its stop");
+eq(logged[2].outcome, "target", "confirms it resolved via the target, side-adjusted");
+
+/* 6) Neither barrier hit within MAX_HORIZON_MS: resolves via "timeout",
+   labeled by whichever side of zero the return sits on. */
+outcomes.recordSignal("mexc", "15m", Object.assign({}, rowLong, { rawSymbol: "XRP_USDT" }), T0);
+outcomes.checkOutcomes("mexc", { XRP_USDT: 100.3 }, T0 + outcomes.MAX_HORIZON_MS + MIN); // +0.3%, hits neither barrier
+logged = readLog();
+eq(logged.length, 4, "timed-out entry still resolves (doesn't hang forever)");
+eq(logged[3].outcome, "timeout", "records the timeout reason");
+eq(logged[3].label, 1, "a small positive return at timeout labels favorable (1)");
+
+/* 7) A symbol that never sees a fresh price again gets dropped as stale,
    without ever being appended to the log. */
-outcomes.recordSignal("mexc", "15m", { rawSymbol: "DEAD_USDT", side: "LONG", price: 50, spikeScore: 60, blocks: {} }, T0);
+outcomes.recordSignal("mexc", "15m", Object.assign({}, rowLong, { rawSymbol: "DEAD_USDT" }), T0);
 eq(outcomes.loadStats().pending, 1, "the stale-candidate entry is pending");
-outcomes.checkOutcomes("mexc", {}, T0 + 49 * HOUR); // way past STALE_MS (48h), no price ever supplied
+outcomes.checkOutcomes("mexc", {}, T0 + 25 * HOUR); // way past STALE_MS (24h), no price ever supplied
 eq(outcomes.loadStats().pending, 0, "stale entry with no fresh price is dropped");
-eq(outcomes.loadStats().resolved, 1, "stale entry never gets appended to the log");
+eq(outcomes.loadStats().resolved, 4, "stale entry never gets appended to the log");
 
-/* 6) checkOutcomes only touches entries for the given exchange. */
-outcomes.recordSignal("binance", "1h", { rawSymbol: "ETH_USDT", side: "SHORT", price: 200, spikeScore: 70, blocks: {} }, T0);
-outcomes.checkOutcomes("mexc", { ETH_USDT: 999 }, T0 + 25 * HOUR); // wrong exchange — must not resolve it
+/* 8) checkOutcomes only touches entries for the given exchange. */
+outcomes.recordSignal("binance", "1h", { rawSymbol: "ADA_USDT", side: "LONG", price: 10, spikeScore: 60, blocks: {} }, T0);
+outcomes.checkOutcomes("mexc", { ADA_USDT: 999 }, T0 + 30 * MIN); // wrong exchange — must not resolve it
 eq(outcomes.loadStats().pending, 1, "binance entry untouched by a mexc checkOutcomes call");
-outcomes.checkOutcomes("binance", { ETH_USDT: 190 }, T0 + 25 * HOUR);
+outcomes.checkOutcomes("binance", { ADA_USDT: 10.3 }, T0 + 30 * MIN); // +3% hits the target on its own exchange
 eq(outcomes.loadStats().pending, 0, "binance entry resolves on its own exchange's checkOutcomes call");
 
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");

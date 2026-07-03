@@ -37,7 +37,7 @@ function features(overrides) {
 }
 
 /* 1) Below MIN_SAMPLES: reports what's missing, does not write a model. */
-writeLog([{ at: 1, side: "LONG", blocks: blocks({ rsiOversold: true }), features: features({ rsi14: 20 }), returns: { r4h: 5 } }]);
+writeLog([{ at: 1, side: "LONG", blocks: blocks({ rsiOversold: true }), features: features({ rsi14: 20 }), label: 1 }]);
 const under = train.maybeTrain();
 eq(under.trained, false, "not enough samples yet");
 eq(under.samples, 1, "reports the actual sample count");
@@ -55,15 +55,15 @@ for (let i = 0; i < N; i++) {
   const rsiVal = rsiOk ? 20 : 70;           // predictive (continuous) — matches the boolean here on purpose
   const noise1 = i % 3 === 0;               // uncorrelated with outcome
   const noise2 = i % 4 === 0;               // uncorrelated with outcome
-  // Favorable (positive r4h) whenever rsiOk is true, unfavorable otherwise —
-  // a bit of label noise keeps it realistic (not perfectly separable).
+  // Favorable whenever rsiOk is true, unfavorable otherwise — a bit of
+  // label noise keeps it realistic (not perfectly separable).
   const favorable = rsiOk ? (i % 11 !== 0) : (i % 13 === 0);
   examples.push({
     at: i + 2,
     side: "LONG",
     blocks: blocks({ rsiOversold: rsiOk, spikeAboveAvg: noise1, oiAboveAvg: noise2 }),
     features: features({ rsi14: rsiVal, spike20: noise1 ? 5 : 1, oiRatio: noise2 ? 0.3 : 0 }),
-    returns: { r4h: favorable ? 3.2 : -1.8 }
+    label: favorable ? 1 : 0
   });
 }
 writeLog(examples);
