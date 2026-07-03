@@ -191,6 +191,27 @@ held-out accuracy. Nothing about outcome logging or training changes based
 on this toggle — it only affects which weights compute the score you see.
 Run training manually any time with `npm run train`.
 
+## Confluence diagnostic (`npm run analyze`)
+`src/analyze.js` answers a narrower, model-free question: does having MORE
+of the 6 blocks true at once (confluence) beat any single block alone?
+`train.js`'s logistic regression scores each block independently — a
+block's learned coefficient reflects its *average* showing across every
+example it appeared in, whether alone or stacked with others. If, in
+reality, a block only helps when several others also confirm at the same
+time, that effect can get averaged away in a small dataset dominated by
+single-block examples, even though the pattern is real.
+
+`analyze.js` reads the same `outcomes-log.jsonl`, buckets every resolved
+example by how many of the 6 blocks were true (0 through 6), and reports
+the plain win rate per bucket — no regression, no weighting, just counts.
+Run it with `npm run analyze`. If confluence genuinely matters, the win
+rate should climb as the bucket count goes up; if it's flat or noisy
+across buckets, the data doesn't support that yet (small buckets,
+especially 5/6 and 6/6, need to be read with the sample size in mind — a
+handful of examples can swing a win rate a lot). This is read-only and
+separate from `train.js` — it doesn't feed the learned weights or the live
+score, it's a lens to sanity-check them against.
+
 ## Notes / next steps
 - Spike-age (`spikeAt`) is held in memory; a process restart resets it.
   Persist `spikeReg` to a JSON file if you need ages to survive restarts.
