@@ -180,12 +180,16 @@ trainSamples, testSamples, needed, accuracy, trainAccuracy, testAccuracy,
 trainedAt, weights, coefficients }`, and shown in the app's Copilot tab
 ("Aprendizado (ML)" card).
 
-**This is deliberately NOT wired into the live Spike Score yet.** The score
-you tune by hand in Filtros keeps working exactly as before; the learned
-model trains in the background so you can watch its (honest) accuracy and
-weights build confidence over time, before anyone decides to actually
-switch the live score over to it (or blend the two). Run it manually any
-time with `npm run train`.
+**Wiring into the live score is opt-in.** Filtros has a "Pesos do score"
+toggle — Manual (default) or 🤖 Aprendido (ML). Manual keeps using the
+weights you tune by hand, exactly as before. Switching to ML makes
+`score()` read the trained model's `weights` instead (via a small
+`effectiveWeights()` helper that falls back to manual weights if the model
+isn't trained yet), and the metrics panel shows either the training
+progress or, once trained, the learned per-block weights and the honest
+held-out accuracy. Nothing about outcome logging or training changes based
+on this toggle — it only affects which weights compute the score you see.
+Run training manually any time with `npm run train`.
 
 ## Notes / next steps
 - Spike-age (`spikeAt`) is held in memory; a process restart resets it.
