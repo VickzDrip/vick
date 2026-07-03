@@ -214,6 +214,19 @@ trainSamples, testSamples, needed, accuracy, trainAccuracy, testAccuracy,
 trainedAt, weights, coefficients }`, and shown in the app's Copilot tab
 ("Aprendizado (ML)" card).
 
+**Resetting the training data (`npm run reset-training-data`).** If
+something upstream of the logged features changes in a way that makes old
+and new samples not comparable anymore — e.g. switching the LSR/OI data
+source, so `lsrRatio`/`oiRatio` would mean two different things depending
+on when a sample was recorded — mixing old and new samples in the same
+training set silently contaminates it. This archives (never deletes)
+`outcomes-log.jsonl`, `outcomes-pending.json` and `learned-weights.json`
+into a timestamped `data/archive-<date>/` folder and leaves the live paths
+empty, so pending/resolved/trained counts all start over from zero. **Stop
+the worker first** (`systemctl stop dvl-scanner`) — it reads/writes these
+same files, and moving them out from under a running process risks a lost
+update mid-cycle. Restart it after.
+
 **Wiring into the live score is opt-in.** Filtros has a "Pesos do score"
 toggle — Manual (default) or 🤖 Aprendido (ML). Manual keeps using the
 weights you tune by hand, exactly as before. Switching to ML makes
