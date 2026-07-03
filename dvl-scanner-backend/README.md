@@ -118,11 +118,30 @@ what price actually did (`r15m`/`r1h`/`r4h`/`r24h` % return), and once the
 to `data/outcomes-pending.json` across restarts, and `GET
 /api/dvl/scanner/health` reports `{ outcomes: { pending, resolved } }`.
 
-This only **records** — nothing trains or predicts on it yet. The point is
-to start accumulating a labeled dataset (features → real outcome) so that,
-once there's enough of it, a simple model (e.g. logistic regression over the
-6 blocks) can learn weights from actual results instead of hand-tuned ones,
-while staying explainable.
+## Learned weights (ML — trains automatically, not wired to the live score yet)
+`src/train.js` reads `outcomes-log.jsonl` and fits a plain logistic
+regression (no external ML dependency — 6 features, batch gradient descent
+with L2 regularization) predicting whether a signal was "favorable" (price
+moved in the signal's direction by the `r4h` horizon). Coefficients are
+converted to the same 0-40 weight scale `cfg.WEIGHTS` uses, so the result
+drops straight into `M.score()` if/when it's adopted. A block the model
+finds NOT predictive gets weight 0, never a negative weight — a block
+should stop contributing, not actively penalize the score.
+
+The worker calls `train.maybeTrain()` once per cycle (self-throttled to at
+most once/hour). It's a no-op — cheap, just re-reads the log to count
+lines — until there are at least `MIN_SAMPLES` (200) resolved examples, and
+only re-fits after `MIN_NEW_SAMPLES` (20) more arrive since the last run.
+The result is saved to `data/learned-weights.json` and surfaced read-only at
+`GET /api/dvl/scanner/health` as `outcomes.model: { trained, samples,
+needed, accuracy, trainedAt, weights }`.
+
+**This is deliberately NOT wired into the live Spike Score yet.** The score
+you tune by hand in Filtros keeps working exactly as before; the learned
+model trains in the background so you can watch its accuracy/weights build
+confidence over time via `/health`, before anyone decides to actually switch
+the live score over to it (or blend the two). Run it manually any time with
+`npm run train`.
 
 ## Notes / next steps
 - Spike-age (`spikeAt`) is held in memory; a process restart resets it.
@@ -130,4 +149,6 @@ while staying explainable.
 - Tune cadence/size via env: `DVL_REFRESH_MS`, `DVL_SCAN_TF`, `DVL_PORT`.
 - Outcome log paths are overridable via `DVL_OUTCOMES_PENDING_FILE` /
   `DVL_OUTCOMES_LOG_FILE`; horizons/thresholds are constants at the top of
-  `src/outcomes.js`.
+  `src/outcomes.js`. The model file path is overridable via
+  `DVL_MODEL_FILE`; training constants (horizon, MIN_SAMPLES, learning
+  rate/iterations) are at the top of `src/train.js`.

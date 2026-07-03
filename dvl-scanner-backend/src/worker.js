@@ -15,10 +15,17 @@ const cfg = require("./config");
 const { EXCHANGES, binance, mexc, bybit, tfToMs } = require("./exchanges");
 const M = require("./metrics");
 const outcomes = require("./outcomes");
+const train = require("./train");
 
 /* Where the persistent signal registry is mirrored to disk so it survives
    restarts (deploys/reboots). Untracked by git, so `git pull` won't touch it. */
 const PERSIST_FILE = process.env.DVL_DATA_FILE || path.join(process.cwd(), "data", "signal-registry.json");
+
+/* ML groundwork: attempt (re)training at most once/hour; cheap while below
+   train.MIN_SAMPLES (just re-reads the log to count lines). */
+const TRAIN_INTERVAL_MS = 3600000;
+let _lastTrainAttempt = 0;
+let _modelStatus = { trained: false, samples: 0, needed: train.MIN_SAMPLES };
 
 /* concurrency-limited map (mirrors the in-page mapPool). */
 async function mapPool(items, limit, fn) {
@@ -357,6 +364,14 @@ async function cycle() {
   outcomes.checkOutcomes("mexc", mexcPriceMap, resolveNow);
   outcomes.checkOutcomes("binance", binPriceMap, resolveNow);
 
+  /* Attempt to (re)train the learned-weights model — cheap no-op below
+     MIN_SAMPLES, and self-throttled to at most once/hour otherwise so a
+     multi-TF cycle isn't slowed down re-fitting on an unchanged dataset. */
+  if (resolveNow - _lastTrainAttempt > TRAIN_INTERVAL_MS) {
+    _lastTrainAttempt = resolveNow;
+    try { _modelStatus = train.maybeTrain(); } catch (e) { logErr("train", e); }
+  }
+
   /* Mirror the registry to disk so signals survive restarts. */
   saveRegistry();
 }
@@ -400,6 +415,8 @@ async function start() {
   console.log("[DVL worker] starting 24h scan loop (every " + cfg.REFRESH_MS + "ms, " + cfg.TF_LIST.length + " timeframes)");
   loadRegistry();     // restore persisted signals so a restart doesn't reset the list
   outcomes.loadPending(); // restore pending outcome-log entries (ML groundwork)
+  const existingModel = train.loadModel();
+  if (existingModel) _modelStatus = existingModel;
   _running = true;
   const loop = async () => {
     while (_running) {
@@ -414,6 +431,10 @@ async function start() {
 }
 function stop() { _running = false; if (_timer) { clearTimeout(_timer); _timer = null; } }
 
-function getOutcomesStats() { return outcomes.loadStats(); }
+function getOutcomesStats() {
+  const stats = outcomes.loadStats();
+  stats.model = _modelStatus;
+  return stats;
+}
 
 module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats };
