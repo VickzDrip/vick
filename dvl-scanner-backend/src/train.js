@@ -42,8 +42,10 @@ const FEATURE_KEYS = BLOCK_KEYS.concat(CONT_KEYS);
    short enough to stay relevant to the signal that triggered it. */
 const LABEL_HORIZON = "r4h";
 /* Don't train (or retrain) on too little data — with ~15 features, too few
-   examples risks fitting noise convincingly. */
-const MIN_SAMPLES = 300;
+   examples risks fitting noise convincingly. L2 regularization and the
+   temporal test split help catch that if it happens; testAccuracy is what
+   to watch. */
+const MIN_SAMPLES = 200;
 /* Once trained, don't bother re-fitting until there's meaningfully more
    data than last time. */
 const MIN_NEW_SAMPLES = 30;

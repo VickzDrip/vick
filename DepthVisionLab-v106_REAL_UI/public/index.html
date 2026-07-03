@@ -6,13 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.045</title>
+<title>DVL Binance Live — Beta 1.046</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.045';
+window.DVL_APP_VERSION = 'Beta 1.046';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20426,10 +20426,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.045";
+const DVL_APP_VERSION = "Beta 1.046";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.046", note: "ML — volta o mínimo de amostras pra treinar de 300 para 200, a pedido: começa a treinar mais cedo. Com mais variáveis e menos amostra o risco de 'decorar' é um pouco maior, mas a acurácia real (medida em dado nunca visto) no card do Copilot deixa isso visível." },
   { version: "Beta 1.045", note: "ML híbrido — o modelo de aprendizado agora enxerga os valores reais por trás dos 6 bloquinhos (RSI exato, força do OI/LSR vs a média, intensidade do volume), não só sim/não, então aprende os próprios limiares em vez de ficar preso a 'RSI < 30'. Também troca a forma de medir acurácia: agora mede em dados que o modelo nunca viu no treino (antes media nos mesmos dados usados pra treinar, o que sempre parecia bom mas não dizia nada de real). Card do Copilot atualizado pra mostrar essa acurácia real separada da acurácia de treino." },
   { version: "Beta 1.044", note: "Copilot — novo card 'Aprendizado (ML)' mostrando o progresso do treino automático do scanner (quantos sinais estão em aberto/resolvidos, quantas amostras faltam pro treino, e assim que treinar, os pesos que o modelo aprendeu por bloquinho e a acurácia). Só leitura — não muda o score que você ajusta em Filtros." },
   { version: "Beta 1.043", note: "Performance — ao clicar um ativo no Scanner, o app disparava DOIS lotes completos de requisições (um pro TF novo no ativo antigo, outro pro ativo novo) quase ao mesmo tempo; agora dispara só um. Também corrige o oscilador RSI Multi-TF, que continuava misturando dados do ativo anterior por alguns instantes após trocar de ativo (cache não conferia se os dados eram do símbolo atual) — hoje ele fica em branco até os dados corretos chegarem, em vez de mostrar valores errados." },
@@ -72139,7 +72140,7 @@ function bodyHtml(){
   out+='<div class="dvlCp1024Stat"><span>Sinais em aberto (aguardando 24h)</span><b>'+esc(oc.pending||0)+'</b></div>';
   out+='<div class="dvlCp1024Stat"><span>Amostras resolvidas</span><b>'+esc(oc.resolved||0)+'</b></div>';
   if(!model.trained){
-    var have=Number(model.samples||0), need=Number(model.needed||300);
+    var have=Number(model.samples||0), need=Number(model.needed||200);
     var pct=Math.max(2,Math.min(100,Math.round(have/Math.max(1,need)*100)));
     out+='<div class="dvlCp1024Bar"><div class="dvlCp1024BarFill" style="width:'+pct+'%"></div></div>';
     out+='<div class="dvlCp1024Stat"><span>Treino automático</span><b>'+have+'/'+need+' amostras</b></div>';

@@ -151,10 +151,13 @@ signals it hasn't seen yet.
 
 The worker calls `train.maybeTrain()` once per cycle (self-throttled to at
 most once/hour). It's a no-op — cheap, just re-reads the log to count
-lines — until there are at least `MIN_SAMPLES` (300, raised from the
-original 200 now that there are ~15 features instead of 6, to keep enough
-examples per feature) resolved examples, and only re-fits after
-`MIN_NEW_SAMPLES` (30) more arrive since the last run. The result is saved
+lines — until there are at least `MIN_SAMPLES` (200) resolved examples, and
+only re-fits after `MIN_NEW_SAMPLES` (30) more arrive since the last run.
+With ~15 features and only 200 examples there's more room for the model to
+fit noise than with the original 6-boolean version — L2 regularization
+and, especially, `testAccuracy` (the honest held-out number) are what
+catch that if it happens; raise `MIN_SAMPLES` back up if `testAccuracy`
+looks unstable or noticeably worse than `trainAccuracy` early on. The result is saved
 to `data/learned-weights.json` and surfaced read-only at `GET
 /api/dvl/scanner/health` as `outcomes.model: { trained, samples,
 trainSamples, testSamples, needed, accuracy, trainAccuracy, testAccuracy,
