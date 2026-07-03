@@ -116,5 +116,38 @@ eq(sfp.combo, "S+F+P", "sanity: found the right row");
 /* Rows come back sorted by sample count, most-seen combination first. */
 ok(byCombo.rows[0].samples >= byCombo.rows[byCombo.rows.length - 1].samples, "rows are sorted with the most common combination first");
 
+/* lettersToKeys parses free-form letter strings, de-duplicated and
+   order-independent, ignoring separators/junk characters. */
+assert.deepStrictEqual(analyze.lettersToKeys("R,O,L").sort(), ["lsrBelowAvg", "oiAboveAvg", "rsiOversold"].sort(), "comma-separated letters parse to the right keys");
+assert.deepStrictEqual(analyze.lettersToKeys("ROL").sort(), ["lsrBelowAvg", "oiAboveAvg", "rsiOversold"].sort(), "letters with no separator parse the same way");
+assert.deepStrictEqual(analyze.lettersToKeys("rol").sort(), ["lsrBelowAvg", "oiAboveAvg", "rsiOversold"].sort(), "lowercase input is accepted");
+assert.deepStrictEqual(analyze.lettersToKeys("R+O+R+O+L").sort(), ["lsrBelowAvg", "oiAboveAvg", "rsiOversold"].sort(), "repeated letters are de-duplicated");
+eq(analyze.lettersToKeys("xyz123").length, 0, "unknown characters contribute nothing");
+
+/* analyzeSubset("R,O,L") is a SUPERSET match — it must find every example
+   that has R, O AND L true, regardless of whatever else (S/F/P) is also
+   true, since F/P show up in almost every real logged signal and an exact
+   match would mostly come back empty even when R+O+L together are common. */
+const subsetExamples = [
+  { blocks: blocks({ rsiOversold: true, oiAboveAvg: true, lsrBelowAvg: true }), label: 1, finalReturnPct: 2, maxDrawdownPct: 0.1 }, // exact R+O+L
+  { blocks: blocks({ rsiOversold: true, oiAboveAvg: true, lsrBelowAvg: true, flatVolumeBar: true, prevVolBelowHalf: true }), label: 0, finalReturnPct: -1 }, // R+O+L plus F+P tagging along
+  { blocks: blocks({ rsiOversold: true, oiAboveAvg: true }), label: 1, finalReturnPct: 2 }, // missing L -> must NOT match
+  { blocks: blocks({ spikeAboveAvg: true }), label: 0, finalReturnPct: -1 } // unrelated -> must NOT match
+];
+const subset = analyze.analyzeSubset("R,O,L", subsetExamples);
+eq(subset.requested, "R+O+L", "requested combo formats with the canonical letter order");
+eq(subset.samples, 2, "pools both examples that have R+O+L true, regardless of F/P tagging along");
+eq(subset.wins, 1, "1 of the 2 matching examples won");
+eq(subset.winRate, 50, "win rate is computed only over the matching subset");
+ok(Math.abs(subset.avgReturnPct - 0.5) < 0.01, "average return is (2 + -1) / 2 = 0.5");
+ok(subset.breakdown.some(r => r.combo === "R+O+L"), "breakdown includes the bare R+O+L combination");
+ok(subset.breakdown.some(r => r.combo === "R+O+L+F+P"), "breakdown separately lists R+O+L+F+P as its own exact combination");
+
+/* A combination that never occurred reports zero samples, not a crash. */
+const noMatch = analyze.analyzeSubset("R,O,L", [{ blocks: blocks({ spikeAboveAvg: true }), label: 1, finalReturnPct: 2 }]);
+eq(noMatch.samples, 0, "a combination with no matching examples reports 0 samples");
+eq(noMatch.winRate, null, "win rate is null (not NaN/0) when there's nothing to compute it from");
+eq(noMatch.breakdown.length, 0, "breakdown is empty when nothing matches");
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

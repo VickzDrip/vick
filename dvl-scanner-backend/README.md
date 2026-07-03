@@ -242,6 +242,17 @@ sample count — e.g. `O+L`, `S+F+P`, `R+O+L` each get their own row with
 their own win rate/return/drawdown. Combinations with fewer than 3 samples
 are counted but hidden from the printed table (too little data to read).
 
+**Looking up one specific combination directly.** Since `flatVolumeBar`
+and `prevVolBelowHalf` show up true in almost every logged signal in
+practice, an EXACT combination like `R+O+L` alone (with nothing else true)
+can be rare or nonexistent even when RSI+OI+LSR together are actually
+common — it's just that F/P are usually tagging along too, landing it in a
+different exact row like `R+O+L+F+P`. `npm run analyze -- --combo=ROL`
+(letters in any order/case, separators optional) answers the more useful
+question directly: every resolved signal where R, O AND L were ALL true,
+regardless of what else also was, pooled together, plus a breakdown of the
+exact combinations (with or without F/P attached) that contributed.
+
 ## Notes / next steps
 - Spike-age (`spikeAt`) is held in memory; a process restart resets it.
   Persist `spikeReg` to a JSON file if you need ages to survive restarts.

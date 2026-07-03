@@ -122,7 +122,46 @@ function analyzeByCombination(examples) {
   return { total: examples.length, rows };
 }
 
-module.exports = { analyzeConfluence, analyzeByCombination, comboKey, confluenceCount, loadResolved, BLOCK_KEYS, BLOCK_LABELS };
+/* Converts a free-form string like "R,O,L" / "ROL" / "R+O+L" into the block
+   keys it refers to, ignoring separators and unknown characters. */
+function lettersToKeys(input) {
+  const inverse = {};
+  for (const k in BLOCK_LABELS) inverse[BLOCK_LABELS[k]] = k;
+  const chars = String(input || "").toUpperCase().split("").filter(ch => inverse[ch]);
+  return [...new Set(chars)].map(ch => inverse[ch]);
+}
+
+/* Answers "how do signals with AT LEAST these blocks true perform?",
+   pooling every example where all the requested blocks were true
+   regardless of what else was also true (F/P show up in almost every
+   logged signal, so an EXACT match on "R+O+L" alone would mostly come back
+   empty even when RSI+OI+LSR together are common — this is a superset
+   match instead). `breakdown` lists the exact combinations that
+   contributed, so you can see what tagged along. */
+function analyzeSubset(letters, examples) {
+  examples = examples || loadResolved();
+  const keys = lettersToKeys(letters);
+  const matches = examples.filter(e => e.blocks && keys.every(k => e.blocks[k]));
+  const agg = { count: 0, wins: 0, retSum: 0, ddSum: 0, ddCount: 0 };
+  for (const e of matches) {
+    agg.count++;
+    if (e.label === 1) agg.wins++;
+    if (Number.isFinite(e.finalReturnPct)) agg.retSum += e.finalReturnPct;
+    if (Number.isFinite(e.maxDrawdownPct)) { agg.ddSum += e.maxDrawdownPct; agg.ddCount++; }
+  }
+  return {
+    requested: keys.map(k => BLOCK_LABELS[k]).join("+") || "(nenhum)",
+    samples: agg.count,
+    wins: agg.wins,
+    winRate: agg.count ? round1((agg.wins / agg.count) * 100) : null,
+    avgReturnPct: agg.count ? round1(agg.retSum / agg.count) : null,
+    avgDrawdownPct: agg.ddCount ? round1(agg.ddSum / agg.ddCount) : null,
+    drawdownSamples: agg.ddCount,
+    breakdown: analyzeByCombination(matches).rows
+  };
+}
+
+module.exports = { analyzeConfluence, analyzeByCombination, analyzeSubset, comboKey, lettersToKeys, confluenceCount, loadResolved, BLOCK_KEYS, BLOCK_LABELS };
 
 function printTable(header, rows, minSamples) {
   console.log(header);
@@ -141,17 +180,43 @@ function printTable(header, rows, minSamples) {
   }
 }
 
-/* Runnable directly: `node src/analyze.js` (or `npm run analyze`). */
+/* Runnable directly: `node src/analyze.js` (or `npm run analyze`).
+   `--combo=R,O,L` (or `--combo=ROL`) looks up one specific set of blocks
+   directly — a superset match (any signal with AT LEAST those blocks true,
+   whatever else also happened to be true) plus a breakdown of the exact
+   combinations that contributed, since the default tables only print
+   combos with >= 3 samples and can hide small/rare ones entirely. */
 if (require.main === module) {
-  const byCount = analyzeConfluence();
-  console.log("Total de amostras resolvidas: " + byCount.total);
-  console.log("");
-  printTable("=== Por quantidade de bloquinhos (0-6) ===\nCombo          | Amostras | Vitórias | Taxa acerto | Retorno médio | Drawdown médio", byCount.rows.filter(r => r.samples > 0));
+  const comboArg = process.argv.find(a => a.startsWith("--combo="));
+  if (comboArg) {
+    const result = analyzeSubset(comboArg.slice("--combo=".length));
+    console.log("Sinais com pelo menos " + result.requested + " verdadeiro(s) (outros bloquinhos podem ou não estar presentes junto):");
+    console.log(
+      "Amostras: " + result.samples +
+      " | Vitórias: " + result.wins +
+      " | Taxa de acerto: " + (result.winRate === null ? "n/d" : result.winRate + "%") +
+      " | Retorno médio: " + (result.avgReturnPct === null ? "n/d" : (result.avgReturnPct >= 0 ? "+" : "") + result.avgReturnPct + "%") +
+      " | Drawdown médio: " + (result.avgDrawdownPct === null ? "n/d" : result.avgDrawdownPct + "% (n=" + result.drawdownSamples + ")")
+    );
+    if (result.breakdown.length) {
+      console.log("");
+      printTable("Combinações exatas que contribuíram (o que mais aparece junto):\nCombo          | Amostras | Vitórias | Taxa acerto | Retorno médio | Drawdown médio", result.breakdown);
+    } else {
+      console.log("Nenhum sinal resolvido teve essa combinação até agora.");
+    }
+  } else {
+    const byCount = analyzeConfluence();
+    console.log("Total de amostras resolvidas: " + byCount.total);
+    console.log("");
+    printTable("=== Por quantidade de bloquinhos (0-6) ===\nCombo          | Amostras | Vitórias | Taxa acerto | Retorno médio | Drawdown médio", byCount.rows.filter(r => r.samples > 0));
 
-  console.log("");
-  const byCombo = analyzeByCombination();
-  const shown = byCombo.rows.filter(r => r.samples >= MIN_COMBO_SAMPLES_TO_PRINT);
-  const hidden = byCombo.rows.length - shown.length;
-  printTable("=== Por combinação exata de bloquinhos (S=Spike R=RSI O=OI L=LSR F=FlatVol P=PreVol) ===\nCombo          | Amostras | Vitórias | Taxa acerto | Retorno médio | Drawdown médio", shown);
-  if (hidden > 0) console.log("(+ " + hidden + " combinações com menos de " + MIN_COMBO_SAMPLES_TO_PRINT + " amostras, escondidas por serem pouco confiáveis)");
+    console.log("");
+    const byCombo = analyzeByCombination();
+    const shown = byCombo.rows.filter(r => r.samples >= MIN_COMBO_SAMPLES_TO_PRINT);
+    const hidden = byCombo.rows.length - shown.length;
+    printTable("=== Por combinação exata de bloquinhos (S=Spike R=RSI O=OI L=LSR F=FlatVol P=PreVol) ===\nCombo          | Amostras | Vitórias | Taxa acerto | Retorno médio | Drawdown médio", shown);
+    if (hidden > 0) console.log("(+ " + hidden + " combinações com menos de " + MIN_COMBO_SAMPLES_TO_PRINT + " amostras, escondidas por serem pouco confiáveis)");
+    console.log("");
+    console.log("Dica: `node src/analyze.js --combo=ROL` mostra estatísticas agregadas só pra sinais com RSI+OI+LSR verdadeiros (com ou sem os outros).");
+  }
 }
