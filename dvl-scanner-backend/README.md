@@ -14,6 +14,23 @@ The signal math (`sma`, `priceMaGlueStats`, `computeSignal`, `score`,
 `statusOf`, OI/LSR derivation) is a faithful port of the in-page scanner in
 `public/index.html`, so the backend output matches what the client renders.
 
+**LSR/OI data sources match the in-page chart exactly, on purpose.** LSR
+comes from Binance's top-trader long/short ACCOUNT ratio
+(`futures/data/topLongShortAccountRatio`, see `binanceLsr` in
+`exchanges.js`) — the same source the chart's Long/Short panel uses by
+default ("BINANCE TOP"). An earlier version of this file used Bybit's
+account-ratio instead; it worked, but it's a different metric from a
+different exchange than what the chart (and the outcome log's ML features)
+were meant to reflect, so it was switched. OI works the same way per
+exchange: MEXC's own ticker payload already carries it (`holdVol`), but
+Binance's doesn't — its candidates get one `openInterest` call each,
+pooled the same way klines are (`scanCandidatesAndOi` in `worker.js`).
+Skipping that call (as an earlier version did) doesn't error; it just
+silently leaves every Binance signal's OI arrow/ratio/slope at a neutral
+placeholder forever, which is a real, easy-to-miss correctness bug rather
+than a stylistic choice — worth remembering if OI/LSR-derived
+signals/features ever look off again.
+
 > **Read-only.** This process never places or routes trades.
 > `DVL_BOT_EXECUTION_ALLOWED / DVL_AI_AUTO_TRADE_ALLOWED /
 > DVL_COPILOT_AUTO_ORDER_ALLOWED` are hard-locked to `false`; the process

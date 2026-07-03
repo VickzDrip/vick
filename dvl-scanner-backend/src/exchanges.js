@@ -43,6 +43,18 @@ const binance = {
     }
     return { closes, vols, ohlc, lastOpen: Number(d[d.length - 1][0]) || 0 };
   },
+  /* Current open interest for one symbol. Unlike MEXC (whose ticker payload
+     already carries holdVol), Binance's 24hr ticker has no OI field — this
+     needs its own call per symbol, unavoidably (Binance has no bulk/all-
+     symbols OI endpoint). Returns null (not 0) on any miss so callers can
+     tell "no data" apart from "genuinely zero". */
+  async openInterest(sym) {
+    try {
+      const d = await getJSON("https://fapi.binance.com/fapi/v1/openInterest?symbol=" + encodeURIComponent(sym));
+      const v = Number(d && d.openInterest);
+      return Number.isFinite(v) ? v : null;
+    } catch (_) { return null; }
+  },
   base(sym) { return String(sym).replace(/USDT$/, ""); }
 };
 
@@ -80,24 +92,26 @@ const mexc = {
   base(sym) { return String(sym).replace(/_USDT$/, ""); }
 };
 
-/* Bybit — real per-symbol long/short ACCOUNT ratio. Public + free, and the
-   same source the in-page chart already uses, so it's known to work from
-   this environment. Used only as the LSR data source (not a scan source). */
-const { BYBIT_PERIOD } = require("./config");
-const bybit = {
-  key: "bybit",
-  label: "Bybit",
-  /* Returns { lsr, series } for symbol (e.g. "APTUSDT") or null if Bybit has
-     no account-ratio for it. series = long/short ratio oldest→newest (used to
-     derive the arrow vs its MA and the colour from the MA slope). */
+/* Binance Top Trader Long/Short ACCOUNT ratio — this is what the in-page
+   chart's Long/Short panel actually uses by default ("BINANCE TOP" in its
+   own label), not Bybit. Used only as the LSR data source (applied to every
+   scanned row regardless of which exchange it was detected on, same as the
+   Bybit-based version this replaces), never a scan source itself. */
+const { BINANCE_LSR_PERIOD } = require("./config");
+const binanceLsr = {
+  key: "binanceLsr",
+  label: "Binance Top",
+  /* Returns { lsr, series } for symbol (e.g. "BTCUSDT") or null if Binance
+     has no top-trader ratio for it. series = long/short ratio oldest→newest
+     (used to derive the arrow vs its MA and the colour from the MA slope). */
   async accountRatio(symbol, tf, limit) {
-    const period = (BYBIT_PERIOD && BYBIT_PERIOD[tf]) || "15min";
-    const url = "https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=" +
+    const period = (BINANCE_LSR_PERIOD && BINANCE_LSR_PERIOD[tf]) || "15m";
+    const url = "https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=" +
       encodeURIComponent(symbol) + "&period=" + period + "&limit=" + (limit || 20);
-    const j = await getJSON(url);
-    const list = (j && j.result && Array.isArray(j.result.list)) ? j.result.list : [];
-    const pts = list
-      .map(x => ({ t: Number(x.timestamp), lsr: Number(x.buyRatio) / Math.max(Number(x.sellRatio), 1e-9) }))
+    const d = await getJSON(url);
+    if (!Array.isArray(d)) return null;
+    const pts = d
+      .map(x => ({ t: Number(x.timestamp), lsr: Number(x.longShortRatio) }))
       .filter(p => Number.isFinite(p.t) && Number.isFinite(p.lsr) && p.lsr > 0)
       .sort((a, b) => a.t - b.t);
     if (!pts.length) return null;
@@ -106,4 +120,4 @@ const bybit = {
   }
 };
 
-module.exports = { binance, mexc, bybit, tfToMs, EXCHANGES: { binance, mexc } };
+module.exports = { binance, mexc, binanceLsr, tfToMs, EXCHANGES: { binance, mexc } };

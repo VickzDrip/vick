@@ -12,7 +12,7 @@
 const fs = require("fs");
 const path = require("path");
 const cfg = require("./config");
-const { EXCHANGES, binance, mexc, bybit, tfToMs } = require("./exchanges");
+const { EXCHANGES, binance, mexc, binanceLsr, tfToMs } = require("./exchanges");
 const M = require("./metrics");
 const outcomes = require("./outcomes");
 const train = require("./train");
@@ -194,11 +194,21 @@ function mergeRegistry(sigReg, cur, now) {
 /* Once per exchange per cycle: fetch tickers, pick the top-N candidates by
    24h quote volume, and feed the OI rolling buffer (OI is TF-agnostic, so
    this must NOT be repeated per timeframe — that would push the same
-   snapshot value up to |TF_LIST| times and skew the MA). */
+   snapshot value up to |TF_LIST| times and skew the MA).
+   MEXC's ticker payload already carries OI (holdVol); Binance's doesn't, so
+   its candidates need one OI call per symbol, pooled the same way klines
+   already are. Without this, pushOi() silently no-ops on every Binance
+   candidate (NaN never gets pushed) and every Binance signal's OI arrow/
+   ratio/slope is a permanently neutral placeholder — a real gap, not just
+   a different data source. */
 async function scanCandidatesAndOi(adapter) {
   let cands = await adapter.tickers();
   cands.sort((a, b) => b.qv - a.qv);
   cands = cands.slice(0, cfg.CAND);
+  if (adapter.key === "binance" && typeof adapter.openInterest === "function") {
+    const ois = await mapPool(cands, cfg.POOL, c => adapter.openInterest(c.sym));
+    for (let i = 0; i < cands.length; i++) cands[i].oi = ois[i];
+  }
   const oiTrends = {};
   for (const c of cands) {
     const buf = pushOi(adapter.key, c.sym, Number(c.oi));
@@ -243,18 +253,20 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
   /* 2-4) Persist/refresh/rank/evict via the registry. */
   const rows = mergeRegistry(sigReg, cur, now);
 
-  /* 5) Real LSR (Bybit) for the listed signals only — arrow vs its MA +
-        colour from the MA slope, same model as OI. Then finalize the
-        Spike Score / status / block checklist now that oi + lsr are known. */
+  /* 5) Real LSR (Binance top-trader ratio — same source the in-page chart's
+        Long/Short panel uses by default) for the listed signals only —
+        arrow vs its MA + colour from the MA slope, same model as OI. Then
+        finalize the Spike Score / status / block checklist now that oi +
+        lsr are known. */
   await mapPool(rows, cfg.POOL, async (row) => {
     try {
-      const r = await bybit.accountRatio(row.symbol, tf, cfg.LSR_MA_LEN);
+      const r = await binanceLsr.accountRatio(row.symbol, tf, cfg.LSR_MA_LEN);
       if (r && r.series) {
         const t = M.trendVsMA(r.series);
         row.lsr = t.arrow; row.lsrColor = t.color; row.lsrRatio = t.ratio || 0; row.lsrSlope = t.slope || 0;
         row.lsrValue = Math.round(r.lsr * 1000) / 1000;
       }
-    } catch (_) { /* not on Bybit / transient — keep derived lsr */ }
+    } catch (_) { /* not on Binance / transient — keep derived lsr */ }
     row.spikeScore = M.score(row, cfg.WEIGHTS, cfg.ENGINE);
     row.status = M.statusOf(row, row.spikeScore);
     row.blocks = M.blocksOf(row, cfg.ENGINE);
