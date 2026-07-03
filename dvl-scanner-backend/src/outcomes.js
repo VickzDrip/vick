@@ -89,6 +89,10 @@ function recordSignal(exchange, tf, row, now) {
     exchange, tf, symbol: row.rawSymbol, side: row.side,
     at: now, entryPrice: Number(row.price) || 0,
     score: row.spikeScore, blocks: row.blocks || null,
+    /* Worst adverse excursion seen while pending, side-adjusted and never
+       negative (0 if price never moved against the signal at all) — how
+       deep the drawdown got before resolution, whichever way it resolved. */
+    maxDrawdownPct: 0,
     /* Continuous raw values behind the 6 blocks — the hybrid ML model
        trains on these (real magnitude) as well as the booleans, so it can
        learn its own thresholds instead of being capped by the hand-picked
@@ -134,6 +138,7 @@ function checkOutcomes(exchange, priceBySymbol, now) {
     if (Number.isFinite(price) && price > 0) {
       const rawRetPct = e.entryPrice > 0 ? ((price - e.entryPrice) / e.entryPrice) * 100 : 0;
       const favorableRetPct = String(e.side).toUpperCase() === "SHORT" ? -rawRetPct : rawRetPct;
+      e.maxDrawdownPct = round3(Math.max(e.maxDrawdownPct || 0, -favorableRetPct));
 
       for (const h in INFO_HORIZONS_MS) {
         if (e.returns[h] === undefined && elapsed >= INFO_HORIZONS_MS[h]) e.returns[h] = round3(rawRetPct);

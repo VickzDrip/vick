@@ -96,7 +96,29 @@ outcomes.checkOutcomes("mexc", {}, T0 + 25 * HOUR); // way past STALE_MS (24h), 
 eq(outcomes.loadStats().pending, 0, "stale entry with no fresh price is dropped");
 eq(outcomes.loadStats().resolved, 4, "stale entry never gets appended to the log");
 
-/* 8) checkOutcomes only touches entries for the given exchange. */
+/* 8) maxDrawdownPct tracks the worst adverse excursion seen before
+   resolution, side-adjusted, even if the signal ultimately resolves in its
+   favor — a dip against the position on the way to the target still shows
+   up as a drawdown. */
+outcomes.recordSignal("mexc", "15m", Object.assign({}, rowLong, { rawSymbol: "DOGE_USDT" }), T0);
+outcomes.checkOutcomes("mexc", { DOGE_USDT: 99.4 }, T0 + 5 * MIN);  // -0.6% dip against the LONG
+outcomes.checkOutcomes("mexc", { DOGE_USDT: 99.7 }, T0 + 10 * MIN); // recovers a bit, still not a new worst
+outcomes.checkOutcomes("mexc", { DOGE_USDT: 102.1 }, T0 + 20 * MIN); // +2.1% hits the target
+logged = readLog();
+const dogeEntry = logged.find(e => e.symbol === "DOGE_USDT");
+ok(dogeEntry.label === 1, "still resolves favorably despite the earlier dip");
+ok(Math.abs(dogeEntry.maxDrawdownPct - 0.6) < 0.01, "maxDrawdownPct records the deepest adverse dip seen (~0.6%, got " + dogeEntry.maxDrawdownPct + ")");
+
+/* A signal that never moves against the position at all logs a drawdown of
+   exactly 0, not undefined/missing. */
+outcomes.recordSignal("mexc", "15m", Object.assign({}, rowLong, { rawSymbol: "SHIB_USDT" }), T0);
+outcomes.checkOutcomes("mexc", { SHIB_USDT: 100.8 }, T0 + 5 * MIN);
+outcomes.checkOutcomes("mexc", { SHIB_USDT: 102.2 }, T0 + 15 * MIN); // straight up to the target, no dip
+logged = readLog();
+const shibEntry = logged.find(e => e.symbol === "SHIB_USDT");
+eq(shibEntry.maxDrawdownPct, 0, "no adverse move at all logs a drawdown of exactly 0");
+
+/* 9) checkOutcomes only touches entries for the given exchange. */
 outcomes.recordSignal("binance", "1h", { rawSymbol: "ADA_USDT", side: "LONG", price: 10, spikeScore: 60, blocks: {} }, T0);
 outcomes.checkOutcomes("mexc", { ADA_USDT: 999 }, T0 + 30 * MIN); // wrong exchange — must not resolve it
 eq(outcomes.loadStats().pending, 1, "binance entry untouched by a mexc checkOutcomes call");

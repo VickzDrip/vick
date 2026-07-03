@@ -203,14 +203,32 @@ single-block examples, even though the pattern is real.
 
 `analyze.js` reads the same `outcomes-log.jsonl`, buckets every resolved
 example by how many of the 6 blocks were true (0 through 6), and reports
-the plain win rate per bucket — no regression, no weighting, just counts.
+per bucket:
+- **win rate** — no regression, no weighting, just counts
+- **average return** (`finalReturnPct`, side-adjusted, signed) — a negative
+  average means the bucket lost money on average at resolution, even if
+  some individual examples won
+- **average drawdown** (`maxDrawdownPct`) — how deep the worst adverse dip
+  got, side-adjusted, before the signal resolved, whichever way it
+  resolved. Tracked live by `outcomes.js` on every `checkOutcomes()` call
+  (the running worst point seen), so only entries logged after this field
+  existed carry it — its sample count (`n=`) can be smaller than the
+  bucket's total and is shown alongside the average for that reason.
+
 Run it with `npm run analyze`. If confluence genuinely matters, the win
 rate should climb as the bucket count goes up; if it's flat or noisy
 across buckets, the data doesn't support that yet (small buckets,
 especially 5/6 and 6/6, need to be read with the sample size in mind — a
-handful of examples can swing a win rate a lot). This is read-only and
-separate from `train.js` — it doesn't feed the learned weights or the live
-score, it's a lens to sanity-check them against.
+handful of examples can swing a win rate a lot). The drawdown column is
+useful for telling apart two different failure modes that look identical
+in the win rate alone: a bucket with a low win rate AND a small average
+drawdown suggests the direction call itself was often wrong, while a low
+win rate with a LARGE average drawdown suggests the fixed barriers
+(2% target / 1% stop) may be a poor fit for that bucket's volatility —
+e.g. bigger, more violent spikes getting stopped out by ordinary price
+noise before ever reaching the target. This is read-only and separate
+from `train.js` — it doesn't feed the learned weights or the live score,
+it's a lens to sanity-check them against.
 
 ## Notes / next steps
 - Spike-age (`spikeAt`) is held in memory; a process restart resets it.
