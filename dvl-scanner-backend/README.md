@@ -149,6 +149,22 @@ lookback window (0 if it's still falling / hasn't bottomed out yet). All
 three are hybrid features like the rest — real, continuous values the
 learned model can weigh on its own, not new booleans.
 
+**Manual trades count too.** The outcome log used to only ever see what the
+automated ignition check flagged — a user's own discretionary entry (opened
+by hand in the app's Trade tab, based on their own reading of the chart) was
+invisible to it. `POST /api/dvl/scanner/manual-trade` (called by the
+in-page app whenever a Market position is opened, via
+`worker.recordManualTrade`) logs one of these too: it computes the exact
+same feature snapshot fresh, on demand (the symbol may not be one the
+worker happens to be polling as a scan candidate, so there's no cached row
+to reuse), always against Binance — the same source the chart's own OI/LSR
+panels use, regardless of which exchange the trade nominally runs on, so
+the logged features match what the user actually looked at. These are
+tagged `source: "manual"` in the log (scanner detections are `"auto"`) but
+resolve through the exact same triple-barrier logic below — no special
+treatment, so manual and auto-detected examples stay comparable in the same
+training set.
+
 **Resolution is event-driven (a "triple barrier"), not a fixed clock wait.**
 Every cycle, each pending signal's current price is checked against its
 entry price (side-adjusted: up is favorable for LONG, down for SHORT), and

@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.049</title>
+<title>DVL Binance Live — Beta 1.050</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.049';
+window.DVL_APP_VERSION = 'Beta 1.050';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.049";
+const DVL_APP_VERSION = "Beta 1.050";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.050", note: "ML — todo trade que você abre na aba Trade (ordem a Mercado) agora também vira amostra de treino, não só os sinais que o scanner detecta sozinho. Antes, sua entrada manual (baseada na sua leitura de RSI/OI/LSR) era invisível pro aprendizado; agora ela é registrada com o mesmo snapshot de dados e resolvida pelas mesmas regras de sempre (alvo/stop/tempo), só marcada como 'manual' pra diferenciar de detecção automática." },
   { version: "Beta 1.049", note: "Backend/ML — corrige a fonte de LSR (agora Binance Top Long/Short, igual ao gráfico, não mais Bybit) e um bug real: o OI da Binance nunca era buscado de verdade, ficava sempre num valor neutro/falso — agora busca certo. Como os dados antigos usavam as fontes erradas, o histórico de treino do ML foi zerado (arquivado, não apagado) pra não misturar dado velho com o novo, correto. Card 'Aprendizado (ML)' do Copilot volta a contar do zero." },
   { version: "Beta 1.048", note: "Scanner — novo toggle nos Filtros: 'Pesos do score' agora pode usar Manual (o que você ajusta em Filtros) ou 🤖 Aprendido (ML), os pesos que o modelo de machine learning aprendeu com os resultados reais dos sinais. Desligado por padrão; ao ativar, mostra o progresso do treino ou, já treinado, os pesos aprendidos por bloquinho e a acurácia real (medida em dado nunca visto). Só o score que você vê muda — o registro de sinais para o treino continua igual." },
   { version: "Beta 1.047", note: "ML — troca a espera fixa de 24h por monitoramento direto: agora cada sinal é acompanhado a cada ciclo e resolve assim que o preço bater +2% a favor (funcionou) ou -1% contra (falhou), com um teto de segurança de 4h caso não bata nenhum dos dois. Um spike que sobe e reverte em 20 minutos já vira amostra de treino em 20 minutos, não precisa esperar um dia inteiro." },
@@ -72305,6 +72306,62 @@ window.DVL_COPILOT_ML_STATUS_1024={
   version:"1.024", render:render, fetchHealth:fetchHealth,
   audit:function(){ var p=page(), panel=p?p.querySelector("[data-dvl-cp-section='ml-status']"):null; return {version:"1.024", panelFound:!!panel, lastHealth:_lastHealth, lastErr:_lastErr}; }
 };
+})();
+</script>
+
+<script id="DVL_MANUAL_TRADE_ML_LOGGER_1025_JS">
+/* Every position the user opens by hand (paper "Buy"/"Sell" Market orders
+   in Trade → Positions) gets logged to the backend as an ML training
+   example too — the outcome log used to only ever see what the automated
+   scanner flagged, never the user's own discretionary entries. Best-effort
+   and fire-and-forget: never touches the trading flow itself, never blocks
+   or throws into it, and stays silent on failure (the backend may be
+   offline/unreachable, which must never surface as a trading-UI error). */
+(function(){
+  "use strict";
+  if(window.DVL_MANUAL_TRADE_ML_LOGGER_1025) return;
+
+  var LS_URL="dvlScannerBackendUrl";
+  var _sentAt=0;
+
+  function baseUrl(){
+    try{ return (typeof window.DVL_SCANNER_BACKEND_URL==="string"?window.DVL_SCANNER_BACKEND_URL:null) || localStorage.getItem(LS_URL) || ""; }
+    catch(_){ return ""; }
+  }
+
+  function send(pos){
+    try{
+      if(!pos || pos.status!=="open") return;          // only fully-filled Market entries, not drafts/pending
+      if(!(Number(pos.entry) > 0) || !pos.symbol) return;
+      var base=baseUrl().replace(/\/$/,"");
+      var url=(base||"")+"/api/dvl/scanner/manual-trade";
+      fetch(url,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          symbol: pos.symbol,
+          side: pos.side==="sell" ? "SHORT" : "LONG",
+          entryPrice: Number(pos.entry),
+          at: pos.createdAt || Date.now()
+        }),
+        keepalive:true
+      }).catch(function(){ /* backend offline/unreachable — silent, never surfaces to the trading UI */ });
+    }catch(_){}
+  }
+
+  window.addEventListener("dvl:paper-position", function(ev){
+    try{
+      var pos=ev && ev.detail;
+      if(!pos) return;
+      _sentAt=Date.now();
+      send(pos);
+    }catch(_){}
+  });
+
+  window.DVL_MANUAL_TRADE_ML_LOGGER_1025={
+    version:"1.025",
+    audit:function(){ return {version:"1.025", lastSentAt:_sentAt, base:baseUrl()}; }
+  };
 })();
 </script>
 

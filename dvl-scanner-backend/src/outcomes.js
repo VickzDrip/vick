@@ -72,10 +72,15 @@ function appendLog(entry) {
 }
 
 /* Call when a symbol FRESHLY enters the signal registry (real detection,
-   not a refresh of an already-tracked row). Captures the feature snapshot
-   at signal time; a no-op if this exact (exchange, tf, symbol, at) key is
-   already pending. */
-function recordSignal(exchange, tf, row, now) {
+   not a refresh of an already-tracked row) — or when the user opens a
+   manual trade (source="manual") that isn't tied to a scanner detection at
+   all. Captures the feature snapshot at signal time; a no-op if this exact
+   (exchange, tf, symbol, at) key is already pending. `source` ("auto" by
+   default) is recorded but never affects the triple-barrier resolution —
+   every example is labeled the same way regardless of where it came from,
+   so manual and auto-detected signals stay comparable in the same
+   training set. */
+function recordSignal(exchange, tf, row, now, source) {
   if (!row || !row.rawSymbol) return;
   const key = keyOf(exchange, tf, row.rawSymbol, now);
   if (pending[key]) return;
@@ -88,6 +93,7 @@ function recordSignal(exchange, tf, row, now) {
   pending[key] = {
     exchange, tf, symbol: row.rawSymbol, side: row.side,
     at: now, entryPrice: Number(row.price) || 0,
+    source: source === "manual" ? "manual" : "auto",
     score: row.spikeScore, blocks: row.blocks || null,
     /* Worst adverse excursion seen while pending, side-adjusted and never
        negative (0 if price never moved against the signal at all) — how

@@ -63,6 +63,7 @@ ok(logged[0].returns.r15m !== undefined, "informational r15m snapshot was filled
 ok(logged[0].blocks && logged[0].blocks.rsiOversold === true, "block snapshot is preserved on the logged entry");
 ok(logged[0].features && logged[0].features.spike20 !== undefined, "continuous feature snapshot is preserved on the logged entry");
 eq(logged[0].features.oiSlope, 0.12, "TREND features (OI slope) are captured alongside the snapshot ratio");
+eq(logged[0].source, "auto", "no source argument defaults to \"auto\" (a scanner detection)");
 eq(logged[0].features.lsrSlope, -0.08, "LSR slope is captured");
 eq(logged[0].features.rsiRecoveryFromLow, 7.5, "the RSI 'V' recovery magnitude is captured");
 
@@ -120,6 +121,17 @@ outcomes.checkOutcomes("mexc", { SHIB_USDT: 102.2 }, T0 + 15 * MIN); // straight
 logged = readLog();
 const shibEntry = logged.find(e => e.symbol === "SHIB_USDT");
 eq(shibEntry.maxDrawdownPct, 0, "no adverse move at all logs a drawdown of exactly 0");
+
+/* A manual trade (the user opening a position by hand, not a scanner
+   detection) is tagged source="manual" but resolves through the exact same
+   triple-barrier logic — no special-casing, so manual and auto-detected
+   examples stay comparable in the same training set. */
+outcomes.recordSignal("binance", "15m", Object.assign({}, rowLong, { rawSymbol: "TLM_USDT" }), T0, "manual");
+outcomes.checkOutcomes("binance", { TLM_USDT: 102 }, T0 + 10 * MIN);
+logged = readLog();
+const manualEntry = logged.find(e => e.symbol === "TLM_USDT");
+eq(manualEntry.source, "manual", "manual trades are tagged source=\"manual\"");
+eq(manualEntry.label, 1, "resolves via the same +2%/-1%/4h triple barrier as any other signal, no special treatment");
 
 /* 9) checkOutcomes only touches entries for the given exchange. */
 outcomes.recordSignal("binance", "1h", { rawSymbol: "ADA_USDT", side: "LONG", price: 10, spikeScore: 60, blocks: {} }, T0);

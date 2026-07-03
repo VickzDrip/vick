@@ -55,6 +55,20 @@ const binance = {
       return Number.isFinite(v) ? v : null;
     } catch (_) { return null; }
   },
+  /* Historical OI series (oldest→newest) for one symbol, on demand — used
+     for the manual-trade logger (outcomes.js), which can't rely on the
+     worker's own rolling OI buffer (that only accumulates for symbols the
+     scanner is already actively polling as a candidate). Same endpoint the
+     in-page chart's OI panel uses by default. Returns [] on any miss. */
+  async openInterestHist(sym, period, limit) {
+    try {
+      const url = "https://fapi.binance.com/futures/data/openInterestHist?symbol=" +
+        encodeURIComponent(sym) + "&period=" + encodeURIComponent(period || "15m") + "&limit=" + (limit || 20);
+      const d = await getJSON(url);
+      if (!Array.isArray(d)) return [];
+      return d.map(x => Number(x.sumOpenInterest)).filter(Number.isFinite);
+    } catch (_) { return []; }
+  },
   base(sym) { return String(sym).replace(/USDT$/, ""); }
 };
 

@@ -287,6 +287,44 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
   return rows;
 }
 
+/* Manual trades (the user opening a position by hand in the app, not a
+   scanner detection) — logged as ML training examples too, so the outcome
+   log isn't limited to what the automated ignition check happens to flag.
+   Computed fresh, on demand, since a manually-traded symbol may not be one
+   the worker is currently polling as a scan candidate (no cached row to
+   reuse). Always against Binance — the same source the in-page chart's own
+   OI/LSR panels use, regardless of which exchange the trade nominally runs
+   on, so the logged features match what the user actually looked at when
+   deciding to enter. Side-effecting only (logs via outcomes.recordSignal);
+   returns nothing worth reporting back beyond success/failure. */
+async function recordManualTrade(symbol, side, entryPrice, at) {
+  const tf = cfg.SCAN_TF || "15m";
+  const k = await binance.klines(symbol, tf);
+  const sig = M.computeSignal(k.closes, k.vols, cfg.ENGINE);
+
+  const [oiSeries, lsrData] = await Promise.all([
+    binance.openInterestHist(symbol, tf, cfg.OI_MA_LEN).catch(() => []),
+    binanceLsr.accountRatio(symbol, tf, cfg.LSR_MA_LEN).catch(() => null)
+  ]);
+  const oiT = M.trendVsMA(oiSeries);
+  const lsrT = (lsrData && lsrData.series) ? M.trendVsMA(lsrData.series) : { arrow: "up", color: "yellow", ratio: 0, slope: 0 };
+
+  const row = {
+    rawSymbol: symbol, symbol: binance.base(symbol) + "USDT", side,
+    price: entryPrice,
+    spike20: sig.spike20, spike50: sig.spike50, flatCandles: sig.flatCandles, barPct: sig.barPct,
+    prevVolBelowHalf: sig.prevVolBelowHalf, rsiOversoldOk: sig.rsiOversoldOk, rsiRecoveryFromLow: sig.rsiRecoveryFromLow,
+    volBelowMaBars: sig.volBelowMaBars, crossStrength: sig.crossStrength, rsi14: sig.rsi14,
+    oi: oiT.arrow, oiColor: oiT.color, oiRatio: oiT.ratio || 0, oiSlope: oiT.slope || 0,
+    lsr: lsrT.arrow, lsrColor: lsrT.color, lsrRatio: lsrT.ratio || 0, lsrSlope: lsrT.slope || 0
+  };
+  row.spikeScore = M.score(row, cfg.WEIGHTS, cfg.ENGINE);
+  row.status = M.statusOf(row, row.spikeScore);
+  row.blocks = M.blocksOf(row, cfg.ENGINE);
+
+  outcomes.recordSignal("binance", tf, row, at, "manual");
+}
+
 /* Snapshots, keyed by [exchange][tf]. */
 const snapshots = { binance: {}, mexc: {} };
 
@@ -450,4 +488,4 @@ function getOutcomesStats() {
   return stats;
 }
 
-module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats };
+module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade };

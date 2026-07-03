@@ -4,8 +4,11 @@
    GET  /api/dvl/scanner/snapshot?exchange=binance|mexc&tf=1m|3m|5m|15m|30m|1h
    WS   /ws/dvl/scanner?exchange=binance|mexc&tf=...
    GET  /api/dvl/scanner/health
-   POST /api/dvl/scanner/config   (Filtros: weights / engine params / OI-LSR MA lengths)
-   This server is READ-ONLY re: trading: it never places or routes trades. */
+   POST /api/dvl/scanner/config        (Filtros: weights / engine params / OI-LSR MA lengths)
+   POST /api/dvl/scanner/manual-trade  (log a user-opened position as an ML training example)
+   This server is READ-ONLY re: trading: it never places or routes trades —
+   manual-trade only LOGS a position the user already opened elsewhere in
+   the app; it doesn't open, close, or touch anything itself. */
 
 const http = require("http");
 const express = require("express");
@@ -37,6 +40,22 @@ function createServer() {
   app.post("/api/dvl/scanner/config", (req, res) => {
     worker.setEngineConfig(req.body || {});
     res.json({ ok: true, engine: cfg.ENGINE, weights: cfg.WEIGHTS, oiMaLen: cfg.OI_MA_LEN, lsrMaLen: cfg.LSR_MA_LEN });
+  });
+
+  /* Manual trades (opened by hand in the app's Trade tab, not a scanner
+     detection) become ML training examples too — see worker.recordManualTrade.
+     Best-effort: always 200s so a slow/unreachable backend never surfaces as
+     an error in the trading UI; failures are logged server-side only. */
+  app.post("/api/dvl/scanner/manual-trade", (req, res) => {
+    const body = req.body || {};
+    const symbol = String(body.symbol || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const side = body.side === "SHORT" ? "SHORT" : "LONG";
+    const entryPrice = Number(body.entryPrice);
+    const at = Number(body.at) || Date.now();
+    if (!symbol || !(entryPrice > 0)) { res.json({ ok: false, error: "missing symbol/entryPrice" }); return; }
+    worker.recordManualTrade(symbol, side, entryPrice, at)
+      .then(() => res.json({ ok: true }))
+      .catch(e => { console.error("[manual-trade]", symbol, e.message); res.json({ ok: false, error: e.message }); });
   });
 
   app.get("/api/dvl/scanner/health", (req, res) => {
