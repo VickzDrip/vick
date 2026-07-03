@@ -6,13 +6,21 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.048</title>
+<title>DVL Binance Live — Beta 1.049</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
    Badge, título e changelog são atualizados automaticamente.
+
+   REGRA FIXA (não pule isso): TODA mudança que afeta o que o usuário vê
+   ou percebe no app exige um bump de versão + entrada no changelog —
+   inclusive mudanças SÓ NO BACKEND (dvl-scanner-backend/) que mudam o
+   comportamento/dado que aparece no app (ex.: card "Aprendizado (ML)" do
+   Copilot, contadores zerando, fonte de OI/LSR mudando). Só pula o bump
+   quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
+   teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.048';
+window.DVL_APP_VERSION = 'Beta 1.049';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20426,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.048";
+const DVL_APP_VERSION = "Beta 1.049";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.049", note: "Backend/ML — corrige a fonte de LSR (agora Binance Top Long/Short, igual ao gráfico, não mais Bybit) e um bug real: o OI da Binance nunca era buscado de verdade, ficava sempre num valor neutro/falso — agora busca certo. Como os dados antigos usavam as fontes erradas, o histórico de treino do ML foi zerado (arquivado, não apagado) pra não misturar dado velho com o novo, correto. Card 'Aprendizado (ML)' do Copilot volta a contar do zero." },
   { version: "Beta 1.048", note: "Scanner — novo toggle nos Filtros: 'Pesos do score' agora pode usar Manual (o que você ajusta em Filtros) ou 🤖 Aprendido (ML), os pesos que o modelo de machine learning aprendeu com os resultados reais dos sinais. Desligado por padrão; ao ativar, mostra o progresso do treino ou, já treinado, os pesos aprendidos por bloquinho e a acurácia real (medida em dado nunca visto). Só o score que você vê muda — o registro de sinais para o treino continua igual." },
   { version: "Beta 1.047", note: "ML — troca a espera fixa de 24h por monitoramento direto: agora cada sinal é acompanhado a cada ciclo e resolve assim que o preço bater +2% a favor (funcionou) ou -1% contra (falhou), com um teto de segurança de 4h caso não bata nenhum dos dois. Um spike que sobe e reverte em 20 minutos já vira amostra de treino em 20 minutos, não precisa esperar um dia inteiro." },
   { version: "Beta 1.046", note: "ML — volta o mínimo de amostras pra treinar de 300 para 200, a pedido: começa a treinar mais cedo. Com mais variáveis e menos amostra o risco de 'decorar' é um pouco maior, mas a acurácia real (medida em dado nunca visto) no card do Copilot deixa isso visível." },
