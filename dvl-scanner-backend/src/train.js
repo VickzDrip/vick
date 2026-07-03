@@ -34,8 +34,12 @@ const MODEL_FILE = process.env.DVL_MODEL_FILE || path.join(process.cwd(), "data"
 
 const BLOCK_KEYS = ["spikeAboveAvg", "rsiOversold", "oiAboveAvg", "lsrBelowAvg", "flatVolumeBar", "prevVolBelowHalf"];
 /* Continuous features behind the blocks above (same order intent, not a
-   strict 1:1 — e.g. spike20n/spike50n both feed "spikeAboveAvg"). */
-const CONT_KEYS = ["spike20n", "spike50n", "rsi14n", "volBelowMaBarsN", "barPctN", "flatCandlesN", "oiRatioN", "lsrRatioN", "crossStrengthN"];
+   strict 1:1 — e.g. spike20n/spike50n both feed "spikeAboveAvg"). oiSlopeN/
+   lsrSlopeN/rsiRecoveryN are TREND features (is OI rising, is LSR falling,
+   has RSI already bounced off a recent low), distinct from the snapshot
+   ratio/level the block booleans check — see metrics.js's trendVsMA and
+   rsiRecoveryFromLow. */
+const CONT_KEYS = ["spike20n", "spike50n", "rsi14n", "volBelowMaBarsN", "barPctN", "flatCandlesN", "oiRatioN", "lsrRatioN", "crossStrengthN", "oiSlopeN", "lsrSlopeN", "rsiRecoveryN"];
 const FEATURE_KEYS = BLOCK_KEYS.concat(CONT_KEYS);
 
 /* Don't train (or retrain) on too little data — with ~15 features, too few
@@ -71,7 +75,10 @@ function normalizeContinuous(f) {
     clamp((Number(f.flatCandles) || 0) / 10, 0, 1),
     clamp(Number(f.oiRatio) || 0, -1, 1),
     clamp(Number(f.lsrRatio) || 0, -1, 1),
-    clamp((Number(f.crossStrength) || 0) / 3, 0, 1)
+    clamp((Number(f.crossStrength) || 0) / 3, 0, 1),
+    clamp(Number(f.oiSlope) || 0, -1, 1),
+    clamp(Number(f.lsrSlope) || 0, -1, 1),
+    clamp((Number(f.rsiRecoveryFromLow) || 0) / 30, 0, 1)
   ];
 }
 

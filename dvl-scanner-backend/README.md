@@ -116,6 +116,22 @@ spike20/spike50 ratios, OI/LSR distance from their own moving average,
 volume-below-MA bar count, candle strength, cross strength), the score,
 side and entry price.
 
+**Trend, not just snapshot.** `oiRatio`/`lsrRatio` (and the OI/LSR blocks
+themselves) are a snapshot — where OI/LSR sit relative to their own average
+RIGHT NOW. That's not the same thing as "OI subindo" / "LSR caindo" (rising
+/ falling) a trader actually reads off the chart — a value can sit above its
+own average while already rolling over from a peak. `metrics.js`'s
+`trendVsMA()` now also returns `slope` (second half of the window vs the
+first half, so it captures direction/rate independently of the current
+snapshot position), captured as `features.oiSlope` / `features.lsrSlope`.
+Similarly, the RSI oversold block is a one-time "did it dip below 30 at
+some point" check — it can't tell a signal that's still falling apart from
+one that bottomed out and is recovering (a "V"). `features.rsiRecoveryFromLow`
+is how far RSI has already climbed back up from its lowest point within the
+lookback window (0 if it's still falling / hasn't bottomed out yet). All
+three are hybrid features like the rest — real, continuous values the
+learned model can weigh on its own, not new booleans.
+
 **Resolution is event-driven (a "triple barrier"), not a fixed clock wait.**
 Every cycle, each pending signal's current price is checked against its
 entry price (side-adjusted: up is favorable for LONG, down for SHORT), and
@@ -138,7 +154,7 @@ without logging, if a symbol never gets a fresh price again for 24h), and
 
 ## Learned weights — hybrid model (ML — trains automatically, not wired to the live score yet)
 `src/train.js` reads `outcomes-log.jsonl` and fits a plain logistic
-regression (no external ML dependency — ~15 features, batch gradient
+regression (no external ML dependency — ~18 features, batch gradient
 descent with L2 regularization) predicting whether a signal was "favorable"
 — using the `label` outcomes.js already resolved via the triple barrier
 above, not a fixed-horizon return computed here.
@@ -169,7 +185,7 @@ The worker calls `train.maybeTrain()` once per cycle (self-throttled to at
 most once/hour). It's a no-op — cheap, just re-reads the log to count
 lines — until there are at least `MIN_SAMPLES` (200) resolved examples, and
 only re-fits after `MIN_NEW_SAMPLES` (30) more arrive since the last run.
-With ~15 features and only 200 examples there's more room for the model to
+With ~18 features and only 200 examples there's more room for the model to
 fit noise than with the original 6-boolean version — L2 regularization
 and, especially, `testAccuracy` (the honest held-out number) are what
 catch that if it happens; raise `MIN_SAMPLES` back up if `testAccuracy`

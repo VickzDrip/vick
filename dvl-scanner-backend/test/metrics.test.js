@@ -101,6 +101,37 @@ eq(r.arrow + "/" + r.color, "down/yellow", "rising MA + below = down/yellow");
 r = M.trendVsMA(mk(19, i => 100 - i).concat(95)); // falling MA, value popped above
 eq(r.arrow + "/" + r.color, "up/yellow", "falling MA + above = up/yellow");
 ok(M.trendVsMA([5]).color === "yellow", "single sample = neutral yellow");
+ok(M.trendVsMA([5]).slope === 0, "single sample reports slope 0, not NaN/undefined");
+
+/* trendVsMA's slope is the TREND (second half vs first half of the window),
+   distinct from ratio (current value vs the whole window's average) — a
+   value can sit above its own average (ratio > 0) while the second half is
+   already falling relative to the first (slope < 0), e.g. a peak rolling
+   over. This is what "OI subindo" / "LSR caindo" actually means on the
+   chart, not just "is it above its MA right now". */
+const risingSeries = M.trendVsMA(mk(20, i => 100 + i * 2));   // steadily climbing throughout
+ok(risingSeries.slope > 0, "a steadily rising series has a positive slope (got " + risingSeries.slope + ")");
+const fallingSeries = M.trendVsMA(mk(20, i => 140 - i * 2));  // steadily falling throughout
+ok(fallingSeries.slope < 0, "a steadily falling series has a negative slope (got " + fallingSeries.slope + ")");
+/* Rolling over from a peak: the second half averages LOWER than the first
+   (slope < 0) even though the very last tick is still above the OVERALL
+   average (ratio > 0) — a value can sit above its own MA while already
+   rolling over, which is exactly why slope is tracked separately from
+   ratio instead of being inferred from it. */
+const rollingOver = M.trendVsMA(mk(10, () => 100).concat(mk(9, () => 80)).concat([95]));
+ok(rollingOver.ratio > 0, "sanity: the rolled-over series' last tick still sits above the overall average");
+ok(rollingOver.slope < 0, "but its slope correctly reads negative (rolling over from a peak), unlike ratio (got slope=" + rollingOver.slope + ")");
+
+/* rsiRecoveryFromLow — the "V": how far RSI has already bounced back up
+   from its lowest point within the lookback, not just whether it dipped. */
+eq(sigDip.rsiRecoveryFromLow, 0, "a still-declining series (RSI at its own recent low right now) has zero recovery");
+const closesV = [];
+for (let i = 0; i < 40; i++) closesV.push(100 - i * 0.8);   // decline into oversold...
+for (let i = 0; i < 15; i++) closesV.push(closesV[closesV.length - 1] + i * 0.6); // ...then a clean bounce
+const volsV = closesV.map(() => 100);
+const sigV = M.computeSignal(closesV, volsV);
+ok(sigV.rsiRecoveryFromLow > 0, "a decline followed by a bounce (a 'V') shows positive recovery (got " + sigV.rsiRecoveryFromLow + ", rsi14=" + sigV.rsi14.toFixed(1) + ")");
+ok(M.computeSignal(closesFlat, volsFlat).rsiRecoveryFromLow === 0, "a flat series that never dipped has zero recovery too");
 
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

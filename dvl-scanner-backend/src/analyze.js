@@ -164,7 +164,7 @@ function analyzeSubset(letters, examples) {
 /* Raw continuous values behind the blocks (outcomes.js's `features`
    snapshot) — the actual RSI, how far OI/LSR sit from their own average,
    spike intensity, etc, not just the sim/não the blocks reduce them to. */
-const CONT_FEATURE_KEYS = ["spike20", "spike50", "rsi14", "volBelowMaBars", "barPct", "flatCandles", "oiRatio", "lsrRatio", "crossStrength"];
+const CONT_FEATURE_KEYS = ["spike20", "spike50", "rsi14", "volBelowMaBars", "barPct", "flatCandles", "oiRatio", "lsrRatio", "crossStrength", "oiSlope", "lsrSlope", "rsiRecoveryFromLow"];
 
 function round4(x) { return Math.round(x * 10000) / 10000; }
 

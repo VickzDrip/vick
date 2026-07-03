@@ -170,6 +170,11 @@ const featureExamplesWithGaps = featureExamples.concat([
   { label: 0, finalReturnPct: -1 }
 ]);
 
+/* The trend features (OI slope, LSR slope, RSI recovery from its recent
+   low — the "V") are analyzable the same way as any other continuous
+   feature, not a special case. */
+ok(["oiSlope", "lsrSlope", "rsiRecoveryFromLow"].every(k => analyze.CONT_FEATURE_KEYS.includes(k)), "the trend features are registered as analyzable continuous features");
+
 const bins = analyze.analyzeByFeatureBins("rsi14", featureExamplesWithGaps, 5);
 eq(bins.feature, "rsi14", "reports which feature was analyzed");
 eq(bins.total, 20, "gap entries (missing features/feature key) are excluded from the total");

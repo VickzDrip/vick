@@ -35,7 +35,7 @@ const T0 = 1000000000000; // arbitrary base timestamp (ms)
 const MIN = 60000, HOUR = 3600000;
 
 /* 1) A fresh signal starts pending with no label yet. */
-const rowLong = { rawSymbol: "BTC_USDT", side: "LONG", price: 100, spikeScore: 82, blocks: { spikeAboveAvg: true, rsiOversold: true, oiAboveAvg: true, lsrBelowAvg: true, flatVolumeBar: true, prevVolBelowHalf: true } };
+const rowLong = { rawSymbol: "BTC_USDT", side: "LONG", price: 100, spikeScore: 82, blocks: { spikeAboveAvg: true, rsiOversold: true, oiAboveAvg: true, lsrBelowAvg: true, flatVolumeBar: true, prevVolBelowHalf: true }, oiSlope: 0.12, lsrSlope: -0.08, rsiRecoveryFromLow: 7.5 };
 outcomes.recordSignal("mexc", "15m", rowLong, T0);
 eq(outcomes.loadStats().pending, 1, "one entry pending after recordSignal");
 
@@ -62,6 +62,9 @@ ok(Math.abs(logged[0].finalReturnPct - 2.5) < 0.01, "records the actual return a
 ok(logged[0].returns.r15m !== undefined, "informational r15m snapshot was filled in along the way");
 ok(logged[0].blocks && logged[0].blocks.rsiOversold === true, "block snapshot is preserved on the logged entry");
 ok(logged[0].features && logged[0].features.spike20 !== undefined, "continuous feature snapshot is preserved on the logged entry");
+eq(logged[0].features.oiSlope, 0.12, "TREND features (OI slope) are captured alongside the snapshot ratio");
+eq(logged[0].features.lsrSlope, -0.08, "LSR slope is captured");
+eq(logged[0].features.rsiRecoveryFromLow, 7.5, "the RSI 'V' recovery magnitude is captured");
 
 /* 4) A stop-loss hit resolves unfavorably (label 0), just as fast. */
 outcomes.recordSignal("mexc", "15m", Object.assign({}, rowLong, { rawSymbol: "ETH_USDT" }), T0);

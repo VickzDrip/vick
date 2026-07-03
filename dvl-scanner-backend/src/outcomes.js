@@ -106,7 +106,17 @@ function recordSignal(exchange, tf, row, now) {
       flatCandles: Number(row.flatCandles) || 0,
       oiRatio: Number(row.oiRatio) || 0,
       lsrRatio: Number(row.lsrRatio) || 0,
-      crossStrength: Number(row.crossStrength) || 0
+      crossStrength: Number(row.crossStrength) || 0,
+      /* TREND, not snapshot — "OI subindo" / "LSR caindo" is the direction a
+         trader actually watches, which oiRatio/lsrRatio (distance from the
+         MA right now) can't tell apart from "above its MA but already
+         rolling over from a peak". See metrics.js's trendVsMA. */
+      oiSlope: Number(row.oiSlope) || 0,
+      lsrSlope: Number(row.lsrSlope) || 0,
+      /* The "V": how far RSI has already climbed back up from its recent
+         low — 0 if it's still falling (no low behind it yet), positive once
+         it's bottomed out and started recovering. See metrics.js. */
+      rsiRecoveryFromLow: Number(row.rsiRecoveryFromLow) || 0
     },
     returns: {}
   };

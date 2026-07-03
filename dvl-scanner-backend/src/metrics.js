@@ -131,9 +131,14 @@ function computeSignal(closes, vols, engine) {
   const rsiOversoldLookback = engine.rsiOversoldLookback || 20;
   const rsiOversoldThreshold = Number.isFinite(engine.rsiOversoldThreshold) ? engine.rsiOversoldThreshold : 30;
   let rsiOversoldOk = false;
+  /* Lowest RSI(14) reached within the lookback — reused below to measure how
+     much RSI has ALREADY recovered from that low, not just whether it dipped
+     at some point. Starts at the current rsi14 so a still-falling RSI (no
+     low behind it yet within the window) correctly reports zero recovery. */
+  let rsiMinRecent = rsi14;
   if (len >= rsiPeriod + 1) {
     const start = Math.max(rsiPeriod, len - rsiOversoldLookback);
-    for (let ri = start; ri < len && !rsiOversoldOk; ri++) {
+    for (let ri = start; ri < len; ri++) {
       let gain = 0, loss = 0, steps = 0;
       for (let gi = ri - rsiPeriod + 1; gi <= ri; gi++) {
         const delta = (closes[gi] || 0) - (closes[gi - 1] || 0);
@@ -143,8 +148,13 @@ function computeSignal(closes, vols, engine) {
       const avgGain = steps ? gain / steps : 0, avgLoss = steps ? loss / steps : 0;
       const rsiAt = avgLoss <= 1e-9 ? (avgGain > 0 ? 100 : 50) : 100 - (100 / (1 + (avgGain / avgLoss)));
       if (rsiAt <= rsiOversoldThreshold) rsiOversoldOk = true;
+      if (rsiAt < rsiMinRecent) rsiMinRecent = rsiAt;
     }
   }
+  /* The "V" shape: how far RSI has already climbed back up from its recent
+     low, not just whether it ever dipped — a boolean oversold check treats a
+     signal still falling the same as one bottoming out and recovering. */
+  const rsiRecoveryFromLow = Math.max(0, rsi14 - rsiMinRecent);
 
   return {
     side, lastClose, price24hPct, rsi14,
@@ -159,7 +169,8 @@ function computeSignal(closes, vols, engine) {
     volBelowMaBars,
     crossStrength,
     isIgnition,
-    rsiOversoldOk
+    rsiOversoldOk,
+    rsiRecoveryFromLow
   };
 }
 
@@ -286,13 +297,15 @@ function factorsOf(r, sc) {
        MA falling + below = red */
 function trendVsMA(series) {
   const s = (series || []).map(Number).filter(v => Number.isFinite(v));
-  if (s.length < 2) return { arrow: "up", color: "yellow", ratio: 0 }; // not enough data yet
+  if (s.length < 2) return { arrow: "up", color: "yellow", ratio: 0, slope: 0 }; // not enough data yet
   const avg = a => a.reduce((x, y) => x + y, 0) / Math.max(a.length, 1);
   const ma = avg(s);
   const cur = s[s.length - 1];
   const above = cur >= ma;
   const half = Math.floor(s.length / 2);
-  const maRising = avg(s.slice(half)) >= avg(s.slice(0, half));
+  const firstHalfAvg = avg(s.slice(0, half));
+  const secondHalfAvg = avg(s.slice(half));
+  const maRising = secondHalfAvg >= firstHalfAvg;
   let color;
   if (maRising && above) color = "green";
   else if (!maRising && !above) color = "red";
@@ -301,7 +314,13 @@ function trendVsMA(series) {
      needs the arrow (above/below), but the ML groundwork wants the actual
      magnitude so it can learn its own thresholds instead of a fixed cutoff. */
   const ratio = ma !== 0 ? (cur - ma) / Math.abs(ma) : 0;
-  return { arrow: above ? "up" : "down", color, ratio };
+  /* Continuous TREND (not just current position): how much the second half
+     of the window moved relative to the first half. "OI acima da média" is
+     a snapshot; "OI subindo" is this — the direction/rate a trader actually
+     watches on the chart, which the boolean arrow/ratio above don't capture
+     (a value can sit above its MA while already falling from a peak). */
+  const slope = firstHalfAvg !== 0 ? (secondHalfAvg - firstHalfAvg) / Math.abs(firstHalfAvg) : 0;
+  return { arrow: above ? "up" : "down", color, ratio, slope };
 }
 
 module.exports = {

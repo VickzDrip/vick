@@ -32,7 +32,7 @@ function blocks(overrides) {
   return Object.assign(b, overrides);
 }
 function features(overrides) {
-  const f = { spike20: 1, spike50: 1, rsi14: 50, volBelowMaBars: 0, barPct: 0, flatCandles: 0, oiRatio: 0, lsrRatio: 0, crossStrength: 1 };
+  const f = { spike20: 1, spike50: 1, rsi14: 50, volBelowMaBars: 0, barPct: 0, flatCandles: 0, oiRatio: 0, lsrRatio: 0, crossStrength: 1, oiSlope: 0, lsrSlope: 0, rsiRecoveryFromLow: 0 };
   return Object.assign(f, overrides);
 }
 
@@ -86,8 +86,10 @@ eq(model.accuracy, model.testAccuracy, "`accuracy` is an alias for the honest he
 ok(model.trainAccuracy > 0.6, "reasonable train accuracy on a near-separable dataset (got " + model.trainAccuracy + ")");
 ok(model.testAccuracy >= 0 && model.testAccuracy <= 1, "testAccuracy is a valid probability-like fraction (got " + model.testAccuracy + ")");
 
-/* All 15 hybrid features (6 blocks + 9 continuous) are present in coefficients. */
+/* All 18 hybrid features (6 blocks + 12 continuous, including the 3 trend
+   features: oiSlope/lsrSlope/rsiRecoveryFromLow) are present in coefficients. */
 eq(Object.keys(model.coefficients).length, train.FEATURE_KEYS.length, "coefficients cover every hybrid feature");
+ok(["oiSlopeN", "lsrSlopeN", "rsiRecoveryN"].every(k => train.CONT_KEYS.includes(k)), "the trend features (OI slope, LSR slope, RSI recovery) are part of CONT_KEYS");
 ok(fs.existsSync(process.env.DVL_MODEL_FILE), "model file is persisted once trained");
 
 /* 3) Re-running immediately (no new examples) returns the SAME model
