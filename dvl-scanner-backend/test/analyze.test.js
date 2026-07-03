@@ -149,5 +149,51 @@ eq(noMatch.samples, 0, "a combination with no matching examples reports 0 sample
 eq(noMatch.winRate, null, "win rate is null (not NaN/0) when there's nothing to compute it from");
 eq(noMatch.breakdown.length, 0, "breakdown is empty when nothing matches");
 
+/* analyzeByFeatureBins buckets by the RAW value of a continuous feature
+   into quantile bins (not fixed-width), so each bin gets a similar sample
+   count — this answers "at what actual value does this start working,"
+   not just "does the boolean help." Built here so rsi14 cleanly predicts
+   the label (low RSI wins, high RSI loses), giving an exact staircase of
+   win rates per bin to check against. */
+const featureExamples = [];
+for (let i = 0; i < 20; i++) {
+  const rsi14 = i * 5;
+  const label = i < 10 ? 1 : 0;
+  const entry = { features: { rsi14 }, label, finalReturnPct: label ? 2 : -1 };
+  if (i < 10) entry.maxDrawdownPct = 0.5; // only half carry a drawdown value, like older log rows missing the field
+  featureExamples.push(entry);
+}
+/* A few examples missing the feature entirely (legacy rows / no features
+   object at all) must be excluded from the total, not crash or count as 0. */
+const featureExamplesWithGaps = featureExamples.concat([
+  { features: {}, label: 1, finalReturnPct: 2 },
+  { label: 0, finalReturnPct: -1 }
+]);
+
+const bins = analyze.analyzeByFeatureBins("rsi14", featureExamplesWithGaps, 5);
+eq(bins.feature, "rsi14", "reports which feature was analyzed");
+eq(bins.total, 20, "gap entries (missing features/feature key) are excluded from the total");
+eq(bins.rows.length, 5, "splits into the requested number of bins");
+eq(bins.rows[0].rangeMin, 0, "bin 0 starts at the lowest rsi14 value");
+eq(bins.rows[0].rangeMax, 15, "bin 0 ends where the quantile split falls");
+eq(bins.rows[0].winRate, 100, "bin 0 (lowest RSI) is a clean 100% win rate by construction");
+eq(bins.rows[1].winRate, 100, "bin 1 is still entirely winners");
+eq(bins.rows[2].winRate, 50, "bin 2 straddles the win/loss boundary at 50%");
+eq(bins.rows[3].winRate, 0, "bin 3 (higher RSI) is a clean 0% by construction");
+eq(bins.rows[4].winRate, 0, "bin 4 (highest RSI) is also a clean 0%");
+eq(bins.rows[4].rangeMin, 80, "bin 4 starts at 80");
+eq(bins.rows[4].rangeMax, 95, "bin 4 ends at the highest rsi14 value in the dataset");
+
+/* Drawdown is only averaged over samples that logged it, same convention
+   as the other tables — bin 0 (indices 0-3) all have it, bin 2 (indices
+   8-11) only half do (8,9 do; 10,11 don't). */
+eq(bins.rows[0].drawdownSamples, 4, "bin 0's drawdown average covers all 4 of its samples (all logged it)");
+eq(bins.rows[2].drawdownSamples, 2, "bin 2 only averages drawdown over the 2 samples that logged it, not all 4");
+
+/* Unknown feature name / no data at all returns an empty result, not a crash. */
+const emptyBins = analyze.analyzeByFeatureBins("rsi14", [], 5);
+eq(emptyBins.total, 0, "no examples at all -> total 0");
+eq(emptyBins.rows.length, 0, "no rows when there's nothing to bucket");
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

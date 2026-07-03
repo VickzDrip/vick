@@ -253,6 +253,22 @@ question directly: every resolved signal where R, O AND L were ALL true,
 regardless of what else also was, pooled together, plus a breakdown of the
 exact combinations (with or without F/P attached) that contributed.
 
+**Which actual VALUES work, not just which booleans.** The blocks reduce
+everything to yes/no (RSI < 30, OI above its own average, etc) at a
+hand-picked cutoff — but the real question is often "at what RSI does it
+actually start working, 22? 28?", not "does the RSI block help." Every
+resolved signal already carries the raw value behind each block
+(`features.rsi14`, `features.oiRatio`, `features.lsrRatio`, `spike20`,
+`spike50`, `barPct`, `flatCandles`, `volBelowMaBars`, `crossStrength`).
+`npm run analyze -- --feature=rsi14` (or `--feature=all` for every
+continuous feature at once) splits resolved examples into 5 quantile bins
+by that feature's actual value and reports win rate/return/drawdown per
+bin — so instead of a single fixed cutoff, you see the real trend across
+the whole range and can read off where it actually turns favorable. Bins
+are quantile-sized (roughly equal sample counts), not fixed-width, so
+skewed distributions don't leave a bin with 2 examples and another with
+200.
+
 ## Notes / next steps
 - Spike-age (`spikeAt`) is held in memory; a process restart resets it.
   Persist `spikeReg` to a JSON file if you need ages to survive restarts.

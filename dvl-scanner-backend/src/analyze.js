@@ -161,7 +161,54 @@ function analyzeSubset(letters, examples) {
   };
 }
 
-module.exports = { analyzeConfluence, analyzeByCombination, analyzeSubset, comboKey, lettersToKeys, confluenceCount, loadResolved, BLOCK_KEYS, BLOCK_LABELS };
+/* Raw continuous values behind the blocks (outcomes.js's `features`
+   snapshot) — the actual RSI, how far OI/LSR sit from their own average,
+   spike intensity, etc, not just the sim/não the blocks reduce them to. */
+const CONT_FEATURE_KEYS = ["spike20", "spike50", "rsi14", "volBelowMaBars", "barPct", "flatCandles", "oiRatio", "lsrRatio", "crossStrength"];
+
+function round4(x) { return Math.round(x * 10000) / 10000; }
+
+/* Splits resolved examples into `numBins` equal-SIZE groups (quantiles) by
+   the raw value of one continuous feature, and reports win rate / average
+   return / average drawdown per group — this answers "at what actual VALUE
+   does this start working," not just "does this boolean help." Quantile
+   (not fixed-width) bins so each group has a similar sample count even
+   when the value distribution is skewed. */
+function analyzeByFeatureBins(featureKey, examples, numBins) {
+  examples = (examples || loadResolved()).filter(e => e.features && Number.isFinite(e.features[featureKey]));
+  numBins = numBins || 5;
+  const total = examples.length;
+  if (!total) return { feature: featureKey, total: 0, rows: [] };
+
+  const sorted = examples.slice().sort((a, b) => a.features[featureKey] - b.features[featureKey]);
+  const rows = [];
+  for (let i = 0; i < numBins; i++) {
+    const start = Math.floor((i * total) / numBins);
+    const end = Math.floor(((i + 1) * total) / numBins);
+    const slice = sorted.slice(start, end);
+    if (!slice.length) continue;
+    const wins = slice.filter(e => e.label === 1).length;
+    const retSum = slice.reduce((s, e) => s + (Number.isFinite(e.finalReturnPct) ? e.finalReturnPct : 0), 0);
+    const ddVals = slice.filter(e => Number.isFinite(e.maxDrawdownPct)).map(e => e.maxDrawdownPct);
+    rows.push({
+      rangeMin: round4(slice[0].features[featureKey]),
+      rangeMax: round4(slice[slice.length - 1].features[featureKey]),
+      samples: slice.length,
+      wins,
+      winRate: round1((wins / slice.length) * 100),
+      avgReturnPct: round1(retSum / slice.length),
+      avgDrawdownPct: ddVals.length ? round1(ddVals.reduce((a, b) => a + b, 0) / ddVals.length) : null,
+      drawdownSamples: ddVals.length
+    });
+  }
+  return { feature: featureKey, total, rows };
+}
+
+module.exports = {
+  analyzeConfluence, analyzeByCombination, analyzeSubset, analyzeByFeatureBins,
+  comboKey, lettersToKeys, confluenceCount, loadResolved,
+  BLOCK_KEYS, BLOCK_LABELS, CONT_FEATURE_KEYS
+};
 
 function printTable(header, rows, minSamples) {
   console.log(header);
@@ -180,6 +227,25 @@ function printTable(header, rows, minSamples) {
   }
 }
 
+function printFeatureBins(featureKey) {
+  const result = analyzeByFeatureBins(featureKey);
+  console.log("=== " + featureKey + " (valor real, " + result.total + " amostras com esse dado) ===");
+  if (!result.rows.length) { console.log("Sem dados ainda."); return; }
+  console.log("Faixa de valor           | Amostras | Vitórias | Taxa acerto | Retorno médio | Drawdown médio");
+  for (const r of result.rows) {
+    const dd = r.avgDrawdownPct === null ? "n/d" : (r.avgDrawdownPct + "% (n=" + r.drawdownSamples + ")");
+    const range = (r.rangeMin + " a " + r.rangeMax).padEnd(24);
+    console.log(
+      range +
+      " | " + String(r.samples).padStart(8) +
+      " | " + String(r.wins).padStart(8) +
+      " | " + String(r.winRate + "%").padStart(11) +
+      " | " + String((r.avgReturnPct >= 0 ? "+" : "") + r.avgReturnPct + "%").padStart(13) +
+      " | " + dd
+    );
+  }
+}
+
 /* Runnable directly: `node src/analyze.js` (or `npm run analyze`).
    `--combo=R,O,L` (or `--combo=ROL`) looks up one specific set of blocks
    directly — a superset match (any signal with AT LEAST those blocks true,
@@ -187,8 +253,17 @@ function printTable(header, rows, minSamples) {
    combinations that contributed, since the default tables only print
    combos with >= 3 samples and can hide small/rare ones entirely. */
 if (require.main === module) {
+  const featureArg = process.argv.find(a => a.startsWith("--feature="));
   const comboArg = process.argv.find(a => a.startsWith("--combo="));
-  if (comboArg) {
+  if (featureArg) {
+    const requested = featureArg.slice("--feature=".length);
+    const keys = requested === "all" ? CONT_FEATURE_KEYS : [requested];
+    for (const k of keys) {
+      if (!CONT_FEATURE_KEYS.includes(k)) { console.log("Feature desconhecida: " + k + " (opções: " + CONT_FEATURE_KEYS.join(", ") + ", all)"); continue; }
+      printFeatureBins(k);
+      console.log("");
+    }
+  } else if (comboArg) {
     const result = analyzeSubset(comboArg.slice("--combo=".length));
     console.log("Sinais com pelo menos " + result.requested + " verdadeiro(s) (outros bloquinhos podem ou não estar presentes junto):");
     console.log(
@@ -218,5 +293,6 @@ if (require.main === module) {
     if (hidden > 0) console.log("(+ " + hidden + " combinações com menos de " + MIN_COMBO_SAMPLES_TO_PRINT + " amostras, escondidas por serem pouco confiáveis)");
     console.log("");
     console.log("Dica: `node src/analyze.js --combo=ROL` mostra estatísticas agregadas só pra sinais com RSI+OI+LSR verdadeiros (com ou sem os outros).");
+    console.log("Dica: `node src/analyze.js --feature=rsi14` (ou --feature=all) mostra o valor REAL de cada critério dividido em faixas, com a taxa de acerto de cada faixa.");
   }
 }
