@@ -230,6 +230,18 @@ noise before ever reaching the target. This is read-only and separate
 from `train.js` — it doesn't feed the learned weights or the live score,
 it's a lens to sanity-check them against.
 
+**Count alone can hide what actually matters.** Two examples with the same
+number of true blocks can be completely different signals — "OI acima da
+média + LSR abaixo da média" (2 blocks) is not the same kind of setup as
+"Spike + Flat volume bar + Pré-volume baixo" (3 blocks, the old scanner's
+own spike-pós-flat pattern) just because both happen to have 2-3 blocks
+true. `analyzeByCombination()` (also printed by `npm run analyze`, right
+below the count table) groups by the EXACT set of blocks instead, using the
+same single-letter badges the Scanner UI shows (S/R/O/L/F/P), sorted by
+sample count — e.g. `O+L`, `S+F+P`, `R+O+L` each get their own row with
+their own win rate/return/drawdown. Combinations with fewer than 3 samples
+are counted but hidden from the printed table (too little data to read).
+
 ## Notes / next steps
 - Spike-age (`spikeAt`) is held in memory; a process restart resets it.
   Persist `spikeReg` to a JSON file if you need ages to survive restarts.

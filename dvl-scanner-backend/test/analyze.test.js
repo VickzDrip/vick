@@ -82,5 +82,39 @@ eq(fromDisk.total, 70, "reads the same total straight from the log file, ignorin
 
 ok(withNoise.length > examples.length, "sanity: the noise array actually has extra entries (guards against a no-op edit above)");
 
+/* comboKey formats the EXACT set of true blocks as single-letter badges
+   (same letters the Scanner UI already shows), not just a count — "O+L"
+   and "S+F+P" are different signal types even when both have 2-3 blocks
+   true, and confluence-count buckets alone can't tell them apart. */
+eq(analyze.comboKey(blocks()), "(nenhum)", "no blocks true formats as (nenhum), not an empty string");
+eq(analyze.comboKey(blocks({ oiAboveAvg: true, lsrBelowAvg: true })), "O+L", "OI+LSR formats as O+L");
+eq(analyze.comboKey(blocks({ spikeAboveAvg: true, flatVolumeBar: true, prevVolBelowHalf: true })), "S+F+P", "spike pos-flat's three blocks format as S+F+P");
+eq(analyze.comboKey(blocks({ rsiOversold: true, oiAboveAvg: true, lsrBelowAvg: true })), "R+O+L", "letter order always follows BLOCK_KEYS order, not insertion order");
+
+/* analyzeByCombination groups by the EXACT combination, so two examples
+   with the same count but different blocks land in different rows. */
+const comboExamples = [
+  { blocks: blocks({ oiAboveAvg: true, lsrBelowAvg: true }), label: 1, finalReturnPct: 2, maxDrawdownPct: 0.2 },
+  { blocks: blocks({ oiAboveAvg: true, lsrBelowAvg: true }), label: 1, finalReturnPct: 2, maxDrawdownPct: 0.4 },
+  { blocks: blocks({ oiAboveAvg: true, lsrBelowAvg: true }), label: 0, finalReturnPct: -1 }, // no maxDrawdownPct on this one
+  { blocks: blocks({ spikeAboveAvg: true, flatVolumeBar: true, prevVolBelowHalf: true }), label: 0, finalReturnPct: -1, maxDrawdownPct: 1 }
+];
+const byCombo = analyze.analyzeByCombination(comboExamples);
+eq(byCombo.total, 4, "analyzeByCombination counts every example");
+const ol = byCombo.rows.find(r => r.combo === "O+L");
+const sfp = byCombo.rows.find(r => r.combo === "S+F+P");
+ok(!!ol && !!sfp, "both distinct combinations show up as separate rows even though O+L has 2 blocks and S+F+P has 3");
+eq(ol.samples, 3, "O+L aggregates all 3 examples that share that exact combination");
+eq(ol.wins, 2, "O+L has 2 wins out of 3");
+ok(Math.abs(ol.winRate - 66.7) < 0.1, "O+L win rate reads back as ~66.7%");
+ok(Math.abs(ol.avgReturnPct - 1) < 0.01, "O+L average return is (2+2-1)/3 = 1");
+eq(ol.drawdownSamples, 2, "O+L only averages drawdown over the 2 examples that logged it, not all 3");
+ok(Math.abs(ol.avgDrawdownPct - 0.3) < 0.01, "O+L average drawdown is (0.2+0.4)/2 = 0.3");
+eq(sfp.samples, 1, "S+F+P is a separate row with its own single example");
+eq(sfp.combo, "S+F+P", "sanity: found the right row");
+
+/* Rows come back sorted by sample count, most-seen combination first. */
+ok(byCombo.rows[0].samples >= byCombo.rows[byCombo.rows.length - 1].samples, "rows are sorted with the most common combination first");
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

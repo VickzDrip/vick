@@ -24,6 +24,13 @@ const path = require("path");
 
 const LOG_FILE = process.env.DVL_OUTCOMES_LOG_FILE || path.join(process.cwd(), "data", "outcomes-log.jsonl");
 const BLOCK_KEYS = ["spikeAboveAvg", "rsiOversold", "oiAboveAvg", "lsrBelowAvg", "flatVolumeBar", "prevVolBelowHalf"];
+/* Same single-letter badges the Scanner UI already shows per block, so a
+   combo like "O+L" reads the same way here as it does on the app. */
+const BLOCK_LABELS = { spikeAboveAvg: "S", rsiOversold: "R", oiAboveAvg: "O", lsrBelowAvg: "L", flatVolumeBar: "F", prevVolBelowHalf: "P" };
+/* Combos with fewer samples than this are still computed/returned, just
+   hidden from the CLI table by default — a handful of examples makes the
+   average too noisy to read. */
+const MIN_COMBO_SAMPLES_TO_PRINT = 3;
 
 function loadResolved() {
   let raw;
@@ -77,19 +84,54 @@ function analyzeConfluence(examples) {
   return { total: examples.length, rows };
 }
 
-module.exports = { analyzeConfluence, confluenceCount, loadResolved, BLOCK_KEYS };
+/* Which EXACT combination of blocks was true, not just how many — "O+L"
+   (OI acima da média + LSR abaixo da média) and "S+F+P" (spike pós-flat, the
+   old scanner's own signal) can land in the same confluence-count bucket
+   while meaning completely different things. Sorted by sample count
+   (most-seen combos first) so the reliable rows surface at the top. */
+function comboKey(blocks) {
+  const letters = BLOCK_KEYS.filter(k => blocks[k]).map(k => BLOCK_LABELS[k]);
+  return letters.length ? letters.join("+") : "(nenhum)";
+}
 
-/* Runnable directly: `node src/analyze.js` (or `npm run analyze`). */
-if (require.main === module) {
-  const result = analyzeConfluence();
-  console.log("Total de amostras resolvidas: " + result.total);
-  console.log("");
-  console.log("Bloq. | Amostras | Vitórias | Taxa acerto | Retorno médio | Drawdown médio");
-  for (const r of result.rows) {
-    if (r.samples === 0) continue;
+function analyzeByCombination(examples) {
+  examples = examples || loadResolved();
+  const combos = {};
+  for (const e of examples) {
+    const key = comboKey(e.blocks);
+    if (!combos[key]) combos[key] = { count: 0, wins: 0, retSum: 0, ddSum: 0, ddCount: 0 };
+    const c = combos[key];
+    c.count++;
+    if (e.label === 1) c.wins++;
+    if (Number.isFinite(e.finalReturnPct)) c.retSum += e.finalReturnPct;
+    if (Number.isFinite(e.maxDrawdownPct)) { c.ddSum += e.maxDrawdownPct; c.ddCount++; }
+  }
+  const rows = Object.keys(combos).map(combo => {
+    const c = combos[combo];
+    return {
+      combo,
+      samples: c.count,
+      wins: c.wins,
+      winRate: round1((c.wins / c.count) * 100),
+      avgReturnPct: round1(c.retSum / c.count),
+      avgDrawdownPct: c.ddCount ? round1(c.ddSum / c.ddCount) : null,
+      drawdownSamples: c.ddCount
+    };
+  });
+  rows.sort((a, b) => b.samples - a.samples);
+  return { total: examples.length, rows };
+}
+
+module.exports = { analyzeConfluence, analyzeByCombination, comboKey, confluenceCount, loadResolved, BLOCK_KEYS, BLOCK_LABELS };
+
+function printTable(header, rows, minSamples) {
+  console.log(header);
+  for (const r of rows) {
+    if (r.samples < (minSamples || 0)) continue;
     const dd = r.avgDrawdownPct === null ? "n/d" : (r.avgDrawdownPct + "% (n=" + r.drawdownSamples + ")");
+    const label = r.combo !== undefined ? r.combo.padEnd(14) : (r.blocksTrue + "/6").padEnd(14);
     console.log(
-      (r.blocksTrue + "/6").padEnd(5) +
+      label +
       " | " + String(r.samples).padStart(8) +
       " | " + String(r.wins).padStart(8) +
       " | " + String(r.winRate + "%").padStart(11) +
@@ -97,4 +139,19 @@ if (require.main === module) {
       " | " + dd
     );
   }
+}
+
+/* Runnable directly: `node src/analyze.js` (or `npm run analyze`). */
+if (require.main === module) {
+  const byCount = analyzeConfluence();
+  console.log("Total de amostras resolvidas: " + byCount.total);
+  console.log("");
+  printTable("=== Por quantidade de bloquinhos (0-6) ===\nCombo          | Amostras | Vitórias | Taxa acerto | Retorno médio | Drawdown médio", byCount.rows.filter(r => r.samples > 0));
+
+  console.log("");
+  const byCombo = analyzeByCombination();
+  const shown = byCombo.rows.filter(r => r.samples >= MIN_COMBO_SAMPLES_TO_PRINT);
+  const hidden = byCombo.rows.length - shown.length;
+  printTable("=== Por combinação exata de bloquinhos (S=Spike R=RSI O=OI L=LSR F=FlatVol P=PreVol) ===\nCombo          | Amostras | Vitórias | Taxa acerto | Retorno médio | Drawdown médio", shown);
+  if (hidden > 0) console.log("(+ " + hidden + " combinações com menos de " + MIN_COMBO_SAMPLES_TO_PRINT + " amostras, escondidas por serem pouco confiáveis)");
 }
