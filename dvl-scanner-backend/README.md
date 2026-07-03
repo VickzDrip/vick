@@ -111,37 +111,62 @@ keeps working exactly as before.
 ## Outcome logging (ML groundwork)
 `src/outcomes.js` records, for every symbol that freshly enters the signal
 registry (a real detection, not a refresh), a feature snapshot — the 6 Spike
-Score blocks, the score, side and entry price. As time passes it fills in
-what price actually did (`r15m`/`r1h`/`r4h`/`r24h` % return), and once the
-24h horizon is filled the labeled example is appended to an append-only
-`data/outcomes-log.jsonl` (one JSON object per line). Pending entries persist
-to `data/outcomes-pending.json` across restarts, and `GET
+Score blocks (booleans), the CONTINUOUS raw values behind them (exact RSI,
+spike20/spike50 ratios, OI/LSR distance from their own moving average,
+volume-below-MA bar count, candle strength, cross strength), the score,
+side and entry price. As time passes it fills in what price actually did
+(`r15m`/`r1h`/`r4h`/`r24h` % return), and once the 24h horizon is filled the
+labeled example is appended to an append-only `data/outcomes-log.jsonl` (one
+JSON object per line). Pending entries persist to
+`data/outcomes-pending.json` across restarts, and `GET
 /api/dvl/scanner/health` reports `{ outcomes: { pending, resolved } }`.
 
-## Learned weights (ML — trains automatically, not wired to the live score yet)
+## Learned weights — hybrid model (ML — trains automatically, not wired to the live score yet)
 `src/train.js` reads `outcomes-log.jsonl` and fits a plain logistic
-regression (no external ML dependency — 6 features, batch gradient descent
-with L2 regularization) predicting whether a signal was "favorable" (price
-moved in the signal's direction by the `r4h` horizon). Coefficients are
-converted to the same 0-40 weight scale `cfg.WEIGHTS` uses, so the result
-drops straight into `M.score()` if/when it's adopted. A block the model
-finds NOT predictive gets weight 0, never a negative weight — a block
-should stop contributing, not actively penalize the score.
+regression (no external ML dependency — ~15 features, batch gradient
+descent with L2 regularization) predicting whether a signal was "favorable"
+(price moved in the signal's direction by the `r4h` horizon).
+
+It's **hybrid** on purpose: the model sees both the 6 blocks as booleans
+*and* the continuous values behind them (normalized), so it can find its
+own thresholds (e.g. "RSI 22 is a much stronger signal than RSI 29") instead
+of being capped at the hand-picked cutoffs the blocks use for display and
+filtering (RSI < 30, etc.). The block coefficients are additionally
+converted to the same 0-40 weight scale `cfg.WEIGHTS` uses (`model.weights`)
+— a simplified view for the existing display / a future `M.score()`
+plug-in. A block the model finds NOT predictive gets weight 0, never a
+negative weight — a block should stop contributing, not actively penalize
+the score. The full feature list (booleans + continuous) and their learned
+coefficients are in `model.coefficients`.
+
+**Evaluation is a temporal holdout, not in-sample.** The model trains on the
+chronologically OLDEST ~80% of resolved examples and is scored on the
+newest ~20%, which it never saw while fitting — `model.testAccuracy` (also
+exposed as `model.accuracy` for backward compatibility) is that honest,
+held-out number; `model.trainAccuracy` is shown alongside only as a
+reference (a big gap between the two is a sign of overfitting). Measuring
+accuracy on the model's own training data, as a v1 of this did, always
+looks good and tells you almost nothing about whether it actually works on
+signals it hasn't seen yet.
 
 The worker calls `train.maybeTrain()` once per cycle (self-throttled to at
 most once/hour). It's a no-op — cheap, just re-reads the log to count
-lines — until there are at least `MIN_SAMPLES` (200) resolved examples, and
-only re-fits after `MIN_NEW_SAMPLES` (20) more arrive since the last run.
-The result is saved to `data/learned-weights.json` and surfaced read-only at
-`GET /api/dvl/scanner/health` as `outcomes.model: { trained, samples,
-needed, accuracy, trainedAt, weights }`.
+lines — until there are at least `MIN_SAMPLES` (300, raised from the
+original 200 now that there are ~15 features instead of 6, to keep enough
+examples per feature) resolved examples, and only re-fits after
+`MIN_NEW_SAMPLES` (30) more arrive since the last run. The result is saved
+to `data/learned-weights.json` and surfaced read-only at `GET
+/api/dvl/scanner/health` as `outcomes.model: { trained, samples,
+trainSamples, testSamples, needed, accuracy, trainAccuracy, testAccuracy,
+trainedAt, weights, coefficients }`, and shown in the app's Copilot tab
+("Aprendizado (ML)" card).
 
 **This is deliberately NOT wired into the live Spike Score yet.** The score
 you tune by hand in Filtros keeps working exactly as before; the learned
-model trains in the background so you can watch its accuracy/weights build
-confidence over time via `/health`, before anyone decides to actually switch
-the live score over to it (or blend the two). Run it manually any time with
-`npm run train`.
+model trains in the background so you can watch its (honest) accuracy and
+weights build confidence over time, before anyone decides to actually
+switch the live score over to it (or blend the two). Run it manually any
+time with `npm run train`.
 
 ## Notes / next steps
 - Spike-age (`spikeAt`) is held in memory; a process restart resets it.
@@ -150,5 +175,8 @@ the live score over to it (or blend the two). Run it manually any time with
 - Outcome log paths are overridable via `DVL_OUTCOMES_PENDING_FILE` /
   `DVL_OUTCOMES_LOG_FILE`; horizons/thresholds are constants at the top of
   `src/outcomes.js`. The model file path is overridable via
-  `DVL_MODEL_FILE`; training constants (horizon, MIN_SAMPLES, learning
-  rate/iterations) are at the top of `src/train.js`.
+  `DVL_MODEL_FILE`; training constants (horizon, MIN_SAMPLES,
+  TEST_FRACTION, learning rate/iterations) are at the top of `src/train.js`.
+- Possible next steps beyond this: predicting the expected return magnitude
+  (regression) instead of just favorable/unfavorable (classification), and
+  eventually an opt-in toggle to actually use the learned weights live.

@@ -286,7 +286,7 @@ function factorsOf(r, sc) {
        MA falling + below = red */
 function trendVsMA(series) {
   const s = (series || []).map(Number).filter(v => Number.isFinite(v));
-  if (s.length < 2) return { arrow: "up", color: "yellow" }; // not enough data yet
+  if (s.length < 2) return { arrow: "up", color: "yellow", ratio: 0 }; // not enough data yet
   const avg = a => a.reduce((x, y) => x + y, 0) / Math.max(a.length, 1);
   const ma = avg(s);
   const cur = s[s.length - 1];
@@ -297,7 +297,11 @@ function trendVsMA(series) {
   if (maRising && above) color = "green";
   else if (!maRising && !above) color = "red";
   else color = "yellow";
-  return { arrow: above ? "up" : "down", color };
+  /* Continuous "how far above/below its own MA" — the block system only
+     needs the arrow (above/below), but the ML groundwork wants the actual
+     magnitude so it can learn its own thresholds instead of a fixed cutoff. */
+  const ratio = ma !== 0 ? (cur - ma) / Math.abs(ma) : 0;
+  return { arrow: above ? "up" : "down", color, ratio };
 }
 
 module.exports = {

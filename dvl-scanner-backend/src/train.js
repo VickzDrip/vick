@@ -1,13 +1,25 @@
 "use strict";
 
-/* ── Learns Spike Score block weights from real outcomes ──────────────
+/* ── Learns a hybrid Spike Score model from real outcomes ──────────────
    Reads the labeled dataset outcomes.js has been accumulating
-   (outcomes-log.jsonl: 6 blocks + entry price at signal time, plus what
-   price actually did afterward) and fits a plain logistic regression —
-   no external ML dependency, appropriate for 6 features and a modest
-   dataset size. The result is converted into the same weight scale
-   cfg.WEIGHTS already uses, so it can drop straight into M.score() without
-   changing that function's shape.
+   (outcomes-log.jsonl: the 6 blocks' booleans AND the continuous raw
+   values behind them, at signal time, plus what price actually did
+   afterward) and fits a plain logistic regression — no external ML
+   dependency, appropriate for ~15 features and a modest dataset size.
+
+   It's "hybrid" on purpose: the 6 blocks stay as interpretable yes/no
+   checks (and their learned coefficients convert to the same 0-40 weight
+   scale cfg.WEIGHTS already uses, for backward compatibility with the
+   existing display), but the model ALSO sees the continuous magnitude
+   behind each one (exact RSI, how far OI/LSR sit from their own average,
+   volume-spike strength, etc.) — so it can find its own thresholds
+   instead of being capped at the hand-picked ones (RSI < 30, etc.).
+
+   Evaluation is a TEMPORAL holdout, not random or in-sample: the model
+   trains on the oldest ~80% of resolved examples and is scored on the
+   newest ~20%, which it never saw during training — this is the accuracy
+   that actually means something (in-sample accuracy on a model's own
+   training data is close to meaningless).
 
    This module only trains and persists a candidate model; nothing wires
    it into the live score yet (see worker.js / server.js `health.outcomes`)
@@ -20,17 +32,52 @@ const LOG_FILE = process.env.DVL_OUTCOMES_LOG_FILE || path.join(process.cwd(), "
 const MODEL_FILE = process.env.DVL_MODEL_FILE || path.join(process.cwd(), "data", "learned-weights.json");
 
 const BLOCK_KEYS = ["spikeAboveAvg", "rsiOversold", "oiAboveAvg", "lsrBelowAvg", "flatVolumeBar", "prevVolBelowHalf"];
+/* Continuous features behind the blocks above (same order intent, not a
+   strict 1:1 — e.g. spike20n/spike50n both feed "spikeAboveAvg"). */
+const CONT_KEYS = ["spike20n", "spike50n", "rsi14n", "volBelowMaBarsN", "barPctN", "flatCandlesN", "oiRatioN", "lsrRatioN", "crossStrengthN"];
+const FEATURE_KEYS = BLOCK_KEYS.concat(CONT_KEYS);
+
 /* Which return horizon defines "the signal worked". 4h is a reasonable
    middle ground for a volume-spike setup — long enough to filter noise,
    short enough to stay relevant to the signal that triggered it. */
 const LABEL_HORIZON = "r4h";
-/* Don't train (or retrain) on too little data — a handful of examples would
-   just fit noise and could look confidently wrong. */
-const MIN_SAMPLES = 200;
+/* Don't train (or retrain) on too little data — with ~15 features, too few
+   examples risks fitting noise convincingly. */
+const MIN_SAMPLES = 300;
 /* Once trained, don't bother re-fitting until there's meaningfully more
    data than last time. */
-const MIN_NEW_SAMPLES = 20;
+const MIN_NEW_SAMPLES = 30;
+/* Fraction of examples (the CHRONOLOGICALLY NEWEST ones) held out for
+   evaluation — never used to fit the model. */
+const TEST_FRACTION = 0.2;
 
+function round3(x) { return Math.round(x * 1000) / 1000; }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+/* Normalizes the continuous raw values to roughly [-1,1] / [0,1] ranges so
+   gradient descent doesn't have to fight wildly different feature scales
+   (an unnormalized RSI of ~50 vs a spike ratio of ~2 would otherwise dwarf
+   each other's gradients). Missing/legacy values (rows logged before this
+   feature set existed) default to a neutral 0, except RSI which defaults
+   to 50 (neutral) before normalizing. */
+function normalizeContinuous(f) {
+  f = f || {};
+  const rsi = Number.isFinite(f.rsi14) ? f.rsi14 : 50;
+  return [
+    clamp((Number(f.spike20) || 0) / 8, 0, 1),
+    clamp((Number(f.spike50) || 0) / 5, 0, 1),
+    clamp((rsi - 50) / 50, -1, 1),
+    clamp((Number(f.volBelowMaBars) || 0) / 20, 0, 1),
+    clamp((Number(f.barPct) || 0) / 8, -1, 1),
+    clamp((Number(f.flatCandles) || 0) / 10, 0, 1),
+    clamp(Number(f.oiRatio) || 0, -1, 1),
+    clamp(Number(f.lsrRatio) || 0, -1, 1),
+    clamp((Number(f.crossStrength) || 0) / 3, 0, 1)
+  ];
+}
+
+/* Examples come back in the log's natural (chronological resolution)
+   order — the caller relies on that for the temporal train/test split. */
 function loadExamples() {
   let raw;
   try { raw = fs.readFileSync(LOG_FILE, "utf8"); } catch (_) { return []; }
@@ -43,22 +90,36 @@ function loadExamples() {
     const ret = e.returns[LABEL_HORIZON];
     const isShort = String(e.side || "").toUpperCase() === "SHORT";
     const favorable = isShort ? -ret > 0 : ret > 0;
-    const features = BLOCK_KEYS.map(k => (e.blocks[k] ? 1 : 0));
-    out.push({ features, label: favorable ? 1 : 0 });
+    const boolFeatures = BLOCK_KEYS.map(k => (e.blocks[k] ? 1 : 0));
+    const contFeatures = normalizeContinuous(e.features);
+    out.push({ features: boolFeatures.concat(contFeatures), label: favorable ? 1 : 0, at: e.at || 0 });
   }
   return out;
+}
+
+/* Oldest examples train the model, newest ones evaluate it — a random
+   split would leak future information into training (the market regime
+   the test set is drawn from would already be represented in training),
+   overstating how well this generalizes to signals that haven't happened
+   yet. Assumes `examples` is already in chronological (resolution) order,
+   which loadExamples()'s append-only log naturally is. */
+function splitTemporal(examples, testFraction) {
+  const n = examples.length;
+  const testSize = Math.max(1, Math.round(n * testFraction));
+  const trainSize = Math.max(1, n - testSize);
+  return { train: examples.slice(0, trainSize), test: examples.slice(trainSize) };
 }
 
 function sigmoid(z) { return 1 / (1 + Math.exp(-z)); }
 
 /* Batch gradient descent with L2 regularization. Deterministic (no random
-   init), fine for 6 features and a dataset in the hundreds-to-low-thousands. */
+   init), fine for ~15 features and a dataset in the hundreds-to-low-thousands. */
 function fit(examples, opts) {
   opts = opts || {};
   const lr = opts.lr || 0.15;
   const iters = opts.iters || 2000;
-  const l2 = opts.l2 || 0.02;
-  const n = BLOCK_KEYS.length;
+  const l2 = opts.l2 || 0.05;
+  const n = examples.length ? examples[0].features.length : FEATURE_KEYS.length;
   const m = examples.length || 1;
   let w = new Array(n).fill(0);
   let b = 0;
@@ -90,14 +151,14 @@ function evaluate(examples, w, b) {
   return correct / examples.length;
 }
 
-/* Converts learned coefficients to the same positive 0-40ish scale
-   cfg.WEIGHTS uses. A block the model finds NOT predictive (coefficient
-   <= 0) gets weight 0 rather than a negative weight — a block should
-   never actively subtract from the score, only stop contributing to it,
-   so the on/off checklist display stays intuitive (green is always
-   neutral-or-good, never penalized). */
-function toWeights(w) {
-  const positive = w.map(x => Math.max(0, x));
+/* Converts the BLOCK coefficients (first BLOCK_KEYS.length of w) to the
+   same positive 0-40 scale cfg.WEIGHTS uses, for backward compatibility
+   with the existing block-weight display / a future M.score() plug-in. A
+   block the model finds NOT predictive (coefficient <= 0) gets weight 0
+   rather than a negative weight — a block should never actively subtract
+   from the score, only stop contributing to it. */
+function toWeights(blockCoeffs) {
+  const positive = blockCoeffs.map(x => Math.max(0, x));
   const maxW = Math.max.apply(null, positive.concat([1e-9]));
   const weights = {};
   BLOCK_KEYS.forEach((k, i) => { weights[k] = Math.round((positive[i] / maxW) * 40 * 10) / 10; });
@@ -115,34 +176,48 @@ function saveModel(model) {
   } catch (_) { /* disk issues are non-fatal */ }
 }
 
-/* Retrains only when there's enough data and enough NEW data since the last
-   run. Returns { trained:false, samples, needed } while below MIN_SAMPLES,
-   otherwise the model object (freshly trained, or the existing one if not
-   enough new examples arrived yet). */
+/* Retrains only when there's enough data and enough NEW data since the
+   last run. Returns { trained:false, samples, needed } while below
+   MIN_SAMPLES, otherwise the model object (freshly trained, or the
+   existing one if not enough new examples arrived yet). */
 function maybeTrain() {
   const examples = loadExamples();
   if (examples.length < MIN_SAMPLES) return { trained: false, samples: examples.length, needed: MIN_SAMPLES };
   const prev = loadModel();
   if (prev && prev.trained && (examples.length - prev.samples) < MIN_NEW_SAMPLES) return prev;
-  const { w, b } = fit(examples);
-  const accuracy = Math.round(evaluate(examples, w, b) * 1000) / 1000;
+
+  const { train: trainSet, test: testSet } = splitTemporal(examples, TEST_FRACTION);
+  const { w, b } = fit(trainSet);
+  const trainAccuracy = round3(evaluate(trainSet, w, b));
+  const testAccuracy = round3(evaluate(testSet, w, b));
+
   const coefficients = {};
-  BLOCK_KEYS.forEach((k, i) => { coefficients[k] = Math.round(w[i] * 1000) / 1000; });
+  FEATURE_KEYS.forEach((k, i) => { coefficients[k] = round3(w[i]); });
+
   const model = {
     trained: true,
     trainedAt: Date.now(),
     samples: examples.length,
+    trainSamples: trainSet.length,
+    testSamples: testSet.length,
     horizon: LABEL_HORIZON,
-    accuracy,
+    /* `accuracy` kept as the headline field for backward compatibility —
+       it's the HONEST held-out (test) accuracy, never in-sample. */
+    accuracy: testAccuracy,
+    trainAccuracy,
+    testAccuracy,
     coefficients,
-    bias: Math.round(b * 1000) / 1000,
-    weights: toWeights(w)
+    bias: round3(b),
+    weights: toWeights(w.slice(0, BLOCK_KEYS.length))
   };
   saveModel(model);
   return model;
 }
 
-module.exports = { loadExamples, fit, evaluate, toWeights, loadModel, saveModel, maybeTrain, BLOCK_KEYS, LABEL_HORIZON, MIN_SAMPLES, MIN_NEW_SAMPLES };
+module.exports = {
+  loadExamples, splitTemporal, fit, evaluate, toWeights, loadModel, saveModel, maybeTrain,
+  BLOCK_KEYS, CONT_KEYS, FEATURE_KEYS, LABEL_HORIZON, MIN_SAMPLES, MIN_NEW_SAMPLES, TEST_FRACTION
+};
 
 /* Runnable directly: `node src/train.js` (or `npm run train`). */
 if (require.main === module) {

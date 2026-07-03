@@ -225,8 +225,8 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
     if (!k || !k.closes || k.closes.length < 25) continue;
     if (k.lastOpen && k.lastOpen < freshCut) continue;
     const row = buildRow(adapter.key, adapter, cands[i], k, now, tf);
-    const oiT = oiTrends[cands[i].sym] || { arrow: "up", color: "yellow" };
-    row.oi = oiT.arrow; row.oiColor = oiT.color;
+    const oiT = oiTrends[cands[i].sym] || { arrow: "up", color: "yellow", ratio: 0 };
+    row.oi = oiT.arrow; row.oiColor = oiT.color; row.oiRatio = oiT.ratio || 0;
     cur[cands[i].sym] = row;
     if (priceMap) priceMap[cands[i].sym] = row.price;
   }
@@ -250,7 +250,7 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
       const r = await bybit.accountRatio(row.symbol, tf, cfg.LSR_MA_LEN);
       if (r && r.series) {
         const t = M.trendVsMA(r.series);
-        row.lsr = t.arrow; row.lsrColor = t.color;
+        row.lsr = t.arrow; row.lsrColor = t.color; row.lsrRatio = t.ratio || 0;
         row.lsrValue = Math.round(r.lsr * 1000) / 1000;
       }
     } catch (_) { /* not on Bybit / transient — keep derived lsr */ }

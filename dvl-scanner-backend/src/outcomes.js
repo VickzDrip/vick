@@ -70,6 +70,21 @@ function recordSignal(exchange, tf, row, now) {
     exchange, tf, symbol: row.rawSymbol, side: row.side,
     at: now, entryPrice: Number(row.price) || 0,
     score: row.spikeScore, blocks: row.blocks || null,
+    /* Continuous raw values behind the 6 blocks — the hybrid ML model
+       trains on these (real magnitude) as well as the booleans, so it can
+       learn its own thresholds instead of being capped by the hand-picked
+       ones (RSI < 30, etc.) the blocks use for display/filtering. */
+    features: {
+      spike20: Number(row.spike20) || 0,
+      spike50: Number(row.spike50) || 0,
+      rsi14: Number.isFinite(Number(row.rsi14)) ? Number(row.rsi14) : 50,
+      volBelowMaBars: Number(row.volBelowMaBars) || 0,
+      barPct: Number(row.barPct) || 0,
+      flatCandles: Number(row.flatCandles) || 0,
+      oiRatio: Number(row.oiRatio) || 0,
+      lsrRatio: Number(row.lsrRatio) || 0,
+      crossStrength: Number(row.crossStrength) || 0
+    },
     returns: {}
   };
 }
