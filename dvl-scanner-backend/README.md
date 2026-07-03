@@ -184,7 +184,8 @@ signals it hasn't seen yet.
 The worker calls `train.maybeTrain()` once per cycle (self-throttled to at
 most once/hour). It's a no-op — cheap, just re-reads the log to count
 lines — until there are at least `MIN_SAMPLES` (200) resolved examples, and
-only re-fits after `MIN_NEW_SAMPLES` (30) more arrive since the last run.
+only re-fits after `MIN_NEW_SAMPLES` (7, roughly an hour's worth of new
+resolutions at the scanner's typical pace) more arrive since the last run.
 With ~18 features and only 200 examples there's more room for the model to
 fit noise than with the original 6-boolean version — L2 regularization
 and, especially, `testAccuracy` (the honest held-out number) are what

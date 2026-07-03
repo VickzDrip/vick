@@ -48,8 +48,10 @@ const FEATURE_KEYS = BLOCK_KEYS.concat(CONT_KEYS);
    to watch. */
 const MIN_SAMPLES = 200;
 /* Once trained, don't bother re-fitting until there's meaningfully more
-   data than last time. */
-const MIN_NEW_SAMPLES = 30;
+   data than last time — 7 matches the scanner's own resolution pace
+   (~7 signals/hour), so the model refreshes roughly every cycle worth of
+   new data instead of waiting several hours for a bigger batch to build up. */
+const MIN_NEW_SAMPLES = 7;
 /* Fraction of examples (the CHRONOLOGICALLY NEWEST ones) held out for
    evaluation — never used to fit the model. */
 const TEST_FRACTION = 0.2;
