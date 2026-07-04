@@ -140,5 +140,28 @@ eq(outcomes.loadStats().pending, 1, "binance entry untouched by a mexc checkOutc
 outcomes.checkOutcomes("binance", { ADA_USDT: 10.3 }, T0 + 30 * MIN); // +3% hits the target on its own exchange
 eq(outcomes.loadStats().pending, 0, "binance entry resolves on its own exchange's checkOutcomes call");
 
+/* 10) historyForSymbol — the raw material for plotting markers on a
+   symbol's own chart: every resolved AND still-pending signal for that
+   symbol, oldest first, regardless of exchange/source. */
+outcomes.recordSignal("mexc", "15m", Object.assign({}, rowLong, { rawSymbol: "HIST_USDT" }), T0);
+outcomes.checkOutcomes("mexc", { HIST_USDT: 102.5 }, T0 + 10 * MIN); // resolves via target
+outcomes.recordSignal("mexc", "15m", Object.assign({}, rowLong, { rawSymbol: "HIST_USDT" }), T0 + HOUR, "manual");
+// leave the second one pending (no matching checkOutcomes call for it yet)
+
+const hist = outcomes.historyForSymbol("HIST_USDT");
+eq(hist.length, 2, "returns both the resolved and the still-pending entry for this symbol");
+eq(hist[0].at, T0, "oldest entry comes first");
+eq(hist[0].status, "resolved", "the first (older) entry already resolved");
+eq(hist[0].outcome, "target", "resolved entry carries its outcome");
+eq(hist[0].source, "auto", "the first entry defaults to source \"auto\"");
+eq(hist[1].at, T0 + HOUR, "second (newer) entry comes after");
+eq(hist[1].status, "pending", "the second entry is still pending");
+eq(hist[1].source, "manual", "the second entry keeps its manual tag");
+ok(hist[1].blocks && hist[1].blocks.rsiOversold === true, "pending entries also carry their block snapshot");
+
+eq(outcomes.historyForSymbol("NOBODY_USDT").length, 0, "a symbol with no history at all returns an empty array, not undefined/throw");
+eq(outcomes.historyForSymbol("").length, 0, "an empty/missing symbol returns an empty array rather than matching everything");
+eq(outcomes.historyForSymbol("hist_usdt").length, 2, "symbol matching is case-insensitive");
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

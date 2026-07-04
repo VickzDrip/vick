@@ -165,6 +165,19 @@ resolve through the exact same triple-barrier logic below — no special
 treatment, so manual and auto-detected examples stay comparable in the same
 training set.
 
+**Seeing it on the chart, not just in a terminal.** `outcomes.historyForSymbol(symbol)`
+(exposed at `GET /api/dvl/scanner/history?symbol=X`) returns every recorded
+signal — resolved and still-pending, auto and manual — for one symbol,
+oldest first, each with a `combo` field (e.g. `"O+P"`, via the same
+`analyze.comboKey()` `--combo` already uses). The in-page app plots these as
+small colored markers directly on that symbol's own price chart (green =
+hit target, red = hit stop, yellow = still pending) at the exact candle
+each signal fired on, with a letter-combo label and a tap-to-filter chip
+row (S/R/O/L/F/P) — so a pattern's real history is something you look at on
+the chart the same way you already read RSI/OI/LSR, not something you have
+to go read as numbers in a terminal separately. Off by default; read-only
+(fetches history, never writes anything).
+
 **Resolution is event-driven (a "triple barrier"), not a fixed clock wait.**
 Every cycle, each pending signal's current price is checked against its
 entry price (side-adjusted: up is favorable for LONG, down for SHORT), and

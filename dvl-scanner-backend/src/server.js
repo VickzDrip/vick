@@ -6,6 +6,7 @@
    GET  /api/dvl/scanner/health
    POST /api/dvl/scanner/config        (Filtros: weights / engine params / OI-LSR MA lengths)
    POST /api/dvl/scanner/manual-trade  (log a user-opened position as an ML training example)
+   GET  /api/dvl/scanner/history?symbol=X  (every recorded signal for one symbol, for chart markers)
    This server is READ-ONLY re: trading: it never places or routes trades —
    manual-trade only LOGS a position the user already opened elsewhere in
    the app; it doesn't open, close, or touch anything itself. */
@@ -15,6 +16,7 @@ const express = require("express");
 const { WebSocketServer } = require("ws");
 const cfg = require("./config");
 const worker = require("./worker");
+const analyze = require("./analyze");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -56,6 +58,18 @@ function createServer() {
     worker.recordManualTrade(symbol, side, entryPrice, at)
       .then(() => res.json({ ok: true }))
       .catch(e => { console.error("[manual-trade]", symbol, e.message); res.json({ ok: false, error: e.message }); });
+  });
+
+  /* Every recorded signal (resolved + still-pending, auto-detected and
+     manual) for one symbol — the raw material for plotting markers on that
+     symbol's own chart. `combo` (e.g. "O+P") is added here, computed from
+     the same BLOCK_LABELS analyze.js's --combo CLI flag uses, so a chart
+     filter chip can match this field directly against the same letters. */
+  app.get("/api/dvl/scanner/history", (req, res) => {
+    const symbol = String(req.query.symbol || "").toUpperCase().replace(/[^A-Z0-9_]/g, "");
+    if (!symbol) { res.json({ ok: false, error: "missing symbol", rows: [] }); return; }
+    const rows = worker.getSymbolHistory(symbol).map(e => Object.assign({ combo: e.blocks ? analyze.comboKey(e.blocks) : null }, e));
+    res.json({ ok: true, symbol, rows });
   });
 
   app.get("/api/dvl/scanner/health", (req, res) => {

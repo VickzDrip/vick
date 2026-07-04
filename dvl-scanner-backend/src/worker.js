@@ -488,4 +488,8 @@ function getOutcomesStats() {
   return stats;
 }
 
-module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade };
+function getSymbolHistory(symbol) {
+  return outcomes.historyForSymbol(symbol);
+}
+
+module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory };

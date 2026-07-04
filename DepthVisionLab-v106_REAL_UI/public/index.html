@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.050</title>
+<title>DVL Binance Live — Beta 1.051</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.050';
+window.DVL_APP_VERSION = 'Beta 1.051';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.050";
+const DVL_APP_VERSION = "Beta 1.051";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.051", note: "ML — novo botão 'ML' flutuante no gráfico: liga marcadores mostrando exatamente onde cada sinal registrado (automático ou manual) apareceu naquele ativo, coloridos pelo resultado (verde = bateu alvo, vermelho = bateu stop, amarelo = ainda em aberto), com a combinação de bloquinhos (S/R/O/L/F/P) ao lado. Dá pra filtrar tocando nas letras — ex: só OI+Pré-volume. Desligado por padrão, só leitura." },
   { version: "Beta 1.050", note: "ML — todo trade que você abre na aba Trade (ordem a Mercado) agora também vira amostra de treino, não só os sinais que o scanner detecta sozinho. Antes, sua entrada manual (baseada na sua leitura de RSI/OI/LSR) era invisível pro aprendizado; agora ela é registrada com o mesmo snapshot de dados e resolvida pelas mesmas regras de sempre (alvo/stop/tempo), só marcada como 'manual' pra diferenciar de detecção automática." },
   { version: "Beta 1.049", note: "Backend/ML — corrige a fonte de LSR (agora Binance Top Long/Short, igual ao gráfico, não mais Bybit) e um bug real: o OI da Binance nunca era buscado de verdade, ficava sempre num valor neutro/falso — agora busca certo. Como os dados antigos usavam as fontes erradas, o histórico de treino do ML foi zerado (arquivado, não apagado) pra não misturar dado velho com o novo, correto. Card 'Aprendizado (ML)' do Copilot volta a contar do zero." },
   { version: "Beta 1.048", note: "Scanner — novo toggle nos Filtros: 'Pesos do score' agora pode usar Manual (o que você ajusta em Filtros) ou 🤖 Aprendido (ML), os pesos que o modelo de machine learning aprendeu com os resultados reais dos sinais. Desligado por padrão; ao ativar, mostra o progresso do treino ou, já treinado, os pesos aprendidos por bloquinho e a acurácia real (medida em dado nunca visto). Só o score que você vê muda — o registro de sinais para o treino continua igual." },
@@ -24549,6 +24550,11 @@ if(window.DVLMovingAveragesDraw){
 
   if(window.DVLVolumeProfileDraw){
     window.DVLVolumeProfileDraw(ctx, {
+      view, win, x, y, x0, x1, y0, y1, slotOffset, candleW, min, max, symbol
+    });
+  }
+  if(window.DVLMLHistoryDraw){
+    window.DVLMLHistoryDraw(ctx, {
       view, win, x, y, x0, x1, y0, y1, slotOffset, candleW, min, max, symbol
     });
   }
@@ -72361,6 +72367,210 @@ window.DVL_COPILOT_ML_STATUS_1024={
   window.DVL_MANUAL_TRADE_ML_LOGGER_1025={
     version:"1.025",
     audit:function(){ return {version:"1.025", lastSentAt:_sentAt, base:baseUrl()}; }
+  };
+})();
+</script>
+
+<style id="DVL_ML_HISTORY_MARKERS_1026_CSS">
+.dvlMlh1026Toggle{
+  position:fixed; z-index:640; right:10px; bottom:150px;
+  width:34px; height:34px; border-radius:50%;
+  background:rgba(4,14,10,.88); border:1px solid rgba(16,223,119,.55);
+  color:#10df77; font:800 10px system-ui; display:flex; align-items:center; justify-content:center;
+  box-shadow:0 2px 10px rgba(0,0,0,.35);
+}
+.dvlMlh1026Toggle.is-on{ background:#10df77; color:#02120b; }
+.dvlMlh1026Panel{
+  position:fixed; z-index:641; right:10px; bottom:190px;
+  width:200px; max-width:calc(100vw - 20px);
+  background:rgba(4,14,10,.96); border:1px solid rgba(16,223,119,.35); border-radius:10px;
+  padding:10px; font:600 11px system-ui; color:#d7ded9;
+  display:none; box-shadow:0 4px 16px rgba(0,0,0,.4);
+}
+.dvlMlh1026Panel.is-open{ display:block; }
+.dvlMlh1026Panel b{ color:#fff; display:block; margin-bottom:6px; font-size:11.5px; }
+.dvlMlh1026Row{ display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; }
+.dvlMlh1026Chip{
+  border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.04); color:#c7cdca;
+  border-radius:6px; padding:3px 7px; font:800 10px system-ui; line-height:1.3;
+}
+.dvlMlh1026Chip.is-on{ background:#10df77; color:#02120b; border-color:#10df77; }
+.dvlMlh1026Foot{ color:#8a9490; font:600 9.5px system-ui; line-height:1.35; }
+.dvlMlh1026Legend{ display:flex; gap:8px; margin-top:6px; font:600 9.5px system-ui; color:#aab2af; }
+.dvlMlh1026Dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:3px; vertical-align:middle; }
+</style>
+<script id="DVL_ML_HISTORY_MARKERS_1026_JS">
+/* Plots a small marker on the price chart at every candle where a signal
+   was registered for the CURRENTLY VIEWED symbol (auto-detected by the
+   scanner OR a manual trade), color-coded by outcome, with a letter combo
+   label (S/R/O/L/F/P) — the "which blocks fired, and did it work" view the
+   user asked for directly on the chart, instead of only reading it as
+   numbers in a terminal. Read-only: fetches from the backend's
+   /api/dvl/scanner/history, never writes anything. Off by default. */
+(function(){
+  "use strict";
+  if(window.DVLMLHistoryDraw) return;
+
+  var LS_URL="dvlScannerBackendUrl";
+  var ALL_LETTERS=["S","R","O","L","F","P"];
+  var state={ on:false, symbol:"", rows:[], loading:false, filter:[], lastErr:"" };
+
+  function baseUrl(){
+    try{ return (typeof window.DVL_SCANNER_BACKEND_URL==="string"?window.DVL_SCANNER_BACKEND_URL:null) || localStorage.getItem(LS_URL) || ""; }
+    catch(_){ return ""; }
+  }
+  function drawSoonSafe(){ try{ if(typeof window.drawSoon==="function") window.drawSoon(); }catch(_){} }
+  function curSymbolRaw(){
+    try{
+      var el=document.getElementById("symbolText");
+      return el ? String(el.textContent||"").trim().replace("/","").toUpperCase() : "";
+    }catch(_){ return ""; }
+  }
+
+  function fetchHistory(){
+    var sym=curSymbolRaw();
+    if(!sym || state.loading) return;
+    state.loading=true;
+    var base=baseUrl().replace(/\/$/,"");
+    fetch(base+"/api/dvl/scanner/history?symbol="+encodeURIComponent(sym),{cache:"no-store"})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        state.loading=false;
+        if(j && j.ok && String(j.symbol||"").toUpperCase()===sym){
+          state.symbol=sym; state.rows=Array.isArray(j.rows)?j.rows:[]; state.lastErr="";
+          drawSoonSafe(); renderPanel();
+        }
+      })
+      .catch(function(e){ state.loading=false; state.lastErr=String(e&&e.message||"erro"); renderPanel(); });
+  }
+
+  /* Binary-search the currently-drawn candle array for the nearest index to
+     a signal's timestamp — same recipe DVLSpikeZonesDraw's findChartIndexByTime
+     already uses against its own local candles, applied here to cfg.view
+     (the same array every draw hook already receives). */
+  function findIndexByTime(view, ts){
+    if(!view || !view.length) return -1;
+    var first=Number(view[0].time), last=Number(view[view.length-1].time);
+    if(ts < first) return -1;
+    if(ts > last) return view.length;
+    var lo=0, hi=view.length-1;
+    while(lo<hi){ var m=(lo+hi)>>1; if(Number(view[m].time)<ts) lo=m+1; else hi=m; }
+    return lo;
+  }
+
+  function matchesFilter(combo){
+    if(!state.filter.length) return true;
+    var have=String(combo||"").split("+");
+    for(var i=0;i<state.filter.length;i++){ if(have.indexOf(state.filter[i])<0) return false; }
+    return true;
+  }
+
+  function colorFor(row){
+    if(row.status==="pending") return "#f2c94c";
+    if(row.label===1) return "#10df77";
+    if(row.label===0) return "#ff3037";
+    return "#9aa0a6";
+  }
+
+  function draw(ctx, cfg){
+    if(!state.on || !cfg || !cfg.win || !state.rows.length) return;
+    if(state.symbol !== curSymbolRaw()) return;
+    var visibleStart=cfg.win.start, visibleEnd=cfg.win.end;
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(cfg.x0, cfg.y0, cfg.x1-cfg.x0, Math.max(1,cfg.y1-cfg.y0)); ctx.clip();
+    for(var i=0;i<state.rows.length;i++){
+      var row=state.rows[i];
+      if(!matchesFilter(row.combo)) continue;
+      var idx=findIndexByTime(cfg.view, row.at);
+      if(idx<visibleStart-2 || idx>visibleEnd+2) continue;
+      var px=cfg.x(cfg.slotOffset+(idx-visibleStart));
+      var py=cfg.y(row.entryPrice);
+      if(!(px>=cfg.x0 && px<=cfg.x1) || py<cfg.y0-20 || py>cfg.y1+20) continue;
+
+      var color=colorFor(row);
+      ctx.beginPath(); ctx.arc(px,py,3.6,0,Math.PI*2);
+      ctx.fillStyle=color; ctx.fill();
+      ctx.lineWidth=1; ctx.strokeStyle="rgba(2,18,11,.65)"; ctx.stroke();
+
+      if(row.combo){
+        ctx.font="800 8px system-ui"; ctx.textAlign="center"; ctx.textBaseline="bottom";
+        ctx.fillStyle=color; ctx.fillText(row.combo, px, py-6);
+      }
+    }
+    ctx.restore();
+  }
+  window.DVLMLHistoryDraw=draw;
+
+  /* ── Minimal floating toggle + filter panel ── */
+  function ensureUi(){
+    if(document.getElementById("dvlMlh1026Toggle")) return;
+    var btn=document.createElement("button");
+    btn.id="dvlMlh1026Toggle"; btn.className="dvlMlh1026Toggle"; btn.type="button";
+    btn.textContent="ML"; btn.title="Marcadores de sinais registrados (ML)";
+    document.body.appendChild(btn);
+
+    var panel=document.createElement("div");
+    panel.id="dvlMlh1026Panel"; panel.className="dvlMlh1026Panel";
+    panel.innerHTML=
+      '<b>Marcadores no gráfico</b>'+
+      '<div class="dvlMlh1026Row" data-dvl-mlh-chips>'+
+        ALL_LETTERS.map(function(l){ return '<button type="button" class="dvlMlh1026Chip" data-dvl-mlh-letter="'+l+'">'+l+'</button>'; }).join("")+
+      '</div>'+
+      '<div class="dvlMlh1026Legend">'+
+        '<span><i class="dvlMlh1026Dot" style="background:#10df77"></i>alvo</span>'+
+        '<span><i class="dvlMlh1026Dot" style="background:#ff3037"></i>stop</span>'+
+        '<span><i class="dvlMlh1026Dot" style="background:#f2c94c"></i>aberto</span>'+
+      '</div>'+
+      '<div class="dvlMlh1026Foot" data-dvl-mlh-foot>Toque nas letras pra filtrar (S=Spike R=RSI O=OI L=LSR F=FlatVol P=PreVol). Vazio = mostra tudo.</div>';
+    document.body.appendChild(panel);
+
+    btn.addEventListener("click", function(){
+      state.on=!state.on;
+      btn.classList.toggle("is-on", state.on);
+      panel.classList.toggle("is-open", state.on);
+      if(state.on) fetchHistory();
+      drawSoonSafe();
+    });
+
+    panel.querySelectorAll("[data-dvl-mlh-letter]").forEach(function(chip){
+      chip.addEventListener("click", function(){
+        var l=chip.getAttribute("data-dvl-mlh-letter");
+        var idx=state.filter.indexOf(l);
+        if(idx>=0) state.filter.splice(idx,1); else state.filter.push(l);
+        chip.classList.toggle("is-on", idx<0);
+        drawSoonSafe();
+      });
+    });
+  }
+
+  function renderPanel(){
+    var foot=document.querySelector("[data-dvl-mlh-foot]");
+    if(!foot) return;
+    if(state.lastErr){ foot.textContent="Backend indisponível — sem marcadores por enquanto."; return; }
+    if(!state.rows.length){ foot.textContent="Nenhum sinal registrado ainda para "+(state.symbol||"este ativo")+"."; return; }
+    foot.textContent=state.rows.length+" sinal(is) registrado(s) para "+state.symbol+".";
+  }
+
+  function boot(){
+    ensureUi();
+    try{
+      var st=document.getElementById("symbolText");
+      if(st){
+        var mo=new MutationObserver(function(){ if(state.on) fetchHistory(); });
+        mo.observe(st,{childList:true,characterData:true,subtree:true});
+      }
+    }catch(_){}
+    setInterval(function(){ if(state.on) fetchHistory(); }, 30000);
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot, {once:true});
+  else boot();
+
+  window.DVL_ML_HISTORY_MARKERS_1026={
+    version:"1.026",
+    toggle:function(on){ state.on=(on!==undefined)?!!on:!state.on; if(state.on) fetchHistory(); drawSoonSafe(); return state.on; },
+    setFilter:function(letters){ state.filter=Array.isArray(letters)?letters.slice():[]; drawSoonSafe(); },
+    audit:function(){ return { version:"1.026", on:state.on, symbol:state.symbol, count:state.rows.length, filter:state.filter.slice(), lastErr:state.lastErr }; }
   };
 })();
 </script>

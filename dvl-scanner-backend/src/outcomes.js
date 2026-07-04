@@ -179,7 +179,47 @@ function loadStats() {
   return { pending: Object.keys(pending).length, resolved };
 }
 
+/* Every recorded signal (resolved + still-pending) for one symbol, oldest
+   first — the raw material for plotting markers on that symbol's own
+   chart, so the user can see where a pattern fired historically instead of
+   only reading it as a number in a terminal. `symbol` must match the raw
+   exchange symbol (e.g. "TLMUSDT", "BTC_USDT" for MEXC) used elsewhere in
+   this module — case-insensitive, since callers may not know which
+   convention a given exchange uses. */
+function historyForSymbol(symbol) {
+  const want = String(symbol || "").toUpperCase();
+  if (!want) return [];
+  const out = [];
+
+  let raw;
+  try { raw = fs.readFileSync(LOG_FILE, "utf8"); } catch (_) { raw = ""; }
+  for (const line of raw.split("\n")) {
+    if (!line) continue;
+    let e;
+    try { e = JSON.parse(line); } catch (_) { continue; }
+    if (!e || String(e.symbol).toUpperCase() !== want) continue;
+    out.push({
+      at: e.at, status: "resolved", side: e.side, entryPrice: e.entryPrice,
+      score: e.score, blocks: e.blocks, source: e.source || "auto",
+      outcome: e.outcome, label: e.label, finalReturnPct: e.finalReturnPct,
+      maxDrawdownPct: e.maxDrawdownPct, resolvedAt: e.resolvedAt
+    });
+  }
+
+  for (const key in pending) {
+    const e = pending[key];
+    if (String(e.symbol).toUpperCase() !== want) continue;
+    out.push({
+      at: e.at, status: "pending", side: e.side, entryPrice: e.entryPrice,
+      score: e.score, blocks: e.blocks, source: e.source || "auto"
+    });
+  }
+
+  out.sort((a, b) => a.at - b.at);
+  return out;
+}
+
 module.exports = {
-  recordSignal, checkOutcomes, loadPending, savePending, loadStats,
+  recordSignal, checkOutcomes, loadPending, savePending, loadStats, historyForSymbol,
   PROFIT_TARGET_PCT, STOP_LOSS_PCT, MAX_HORIZON_MS, INFO_HORIZONS_MS
 };
