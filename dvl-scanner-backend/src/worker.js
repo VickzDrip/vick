@@ -331,6 +331,18 @@ async function recordManualTrade(symbol, side, entryPrice, at) {
   outcomes.recordSignal("binance", tf, row, at, "manual");
 }
 
+/* Short-lived cache for computeLiveReading, keyed by "symbol|tf" — the
+   in-page app polls this on a timer AND on every symbol change, and each
+   call fires 3 fresh Binance requests (klines/OI hist/LSR) with no
+   throttling of its own. Multiple open tabs/devices polling the same
+   handful of popular symbols at once is exactly the kind of extra load
+   that can push the VPS's IP over Binance's rate limit (HTTP 418 = an
+   auto-ban, not a bug) on top of what the scanner's own cycle already
+   uses. A short TTL keeps the reading "live enough" while collapsing
+   near-simultaneous requests for the same symbol into one Binance call. */
+const _liveReadingCache = {}; // "symbol|tf" -> { at, promise }
+const LIVE_READING_CACHE_MS = 20000;
+
 /* Read-only "how does this look RIGHT NOW" reading for whatever symbol is
    currently open in the app — not gated by the scanner ever having flagged
    it as a signal, and never logged anywhere. This is what powers the
@@ -338,7 +350,17 @@ async function recordManualTrade(symbol, side, entryPrice, at) {
    recuperando, spike pós-flat) for ANY asset, matching the same reading the
    user already does by eye. */
 async function computeLiveReading(symbol, tf) {
-  return computeFreshRow(symbol, tf || cfg.SCAN_TF || "15m");
+  tf = tf || cfg.SCAN_TF || "15m";
+  const key = symbol + "|" + tf;
+  const cached = _liveReadingCache[key];
+  if (cached && (Date.now() - cached.at) < LIVE_READING_CACHE_MS) return cached.promise;
+
+  const promise = computeFreshRow(symbol, tf).catch(e => {
+    delete _liveReadingCache[key]; // don't cache a failure — let the next call retry Binance
+    throw e;
+  });
+  _liveReadingCache[key] = { at: Date.now(), promise };
+  return promise;
 }
 
 /* Snapshots, keyed by [exchange][tf]. */

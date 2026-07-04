@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.053</title>
+<title>DVL Binance Live — Beta 1.054</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.053';
+window.DVL_APP_VERSION = 'Beta 1.054';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.053";
+const DVL_APP_VERSION = "Beta 1.054";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.054", note: "Backend — corrige o motivo da leitura ao vivo ficar 'indisponível': o excesso de chamadas (a cada 30s, de cada aba aberta) estava batendo no limite de taxa da Binance e derrubando o acesso temporariamente (erro 418). Agora o backend guarda a leitura de cada ativo por 20s antes de buscar de novo, e o app só atualiza a cada 90s (ou quando você troca de ativo), bem mais leve." },
   { version: "Beta 1.053", note: "ML — simplifica a leitura ao vivo: tira o botão/painel/filtros de antes e deixa só uma caixinha pequena e fixa no canto do gráfico, sempre visível, mostrando direto se OI/LSR estão subindo ou caindo e se o RSI tá recuperando (V) — sem precisar tocar em nada." },
   { version: "Beta 1.052", note: "ML — o botão 'ML' do gráfico agora também mostra uma 'Leitura ao vivo': pra QUALQUER ativo que você abrir (não só os que já viraram sinal), mostra na hora se o OI está subindo ou caindo, o LSR subindo ou caindo, se o RSI está recuperando de uma mínima (o 'V'), e se tem spike pós-flat — igual as anotações que você mesmo faz nos prints, só que automático e ao vivo." },
   { version: "Beta 1.051", note: "ML — novo botão 'ML' flutuante no gráfico: liga marcadores mostrando exatamente onde cada sinal registrado (automático ou manual) apareceu naquele ativo, coloridos pelo resultado (verde = bateu alvo, vermelho = bateu stop, amarelo = ainda em aberto), com a combinação de bloquinhos (S/R/O/L/F/P) ao lado. Dá pra filtrar tocando nas letras — ex: só OI+Pré-volume. Desligado por padrão, só leitura." },
@@ -72458,17 +72459,31 @@ window.DVL_COPILOT_ML_STATUS_1024={
       .catch(function(e){ state.loading=false; state.err=String(e&&e.message||"erro"); render(); });
   }
 
+  /* Debounced — #symbolText can mutate more than once in quick succession
+     while the header re-renders, and each call to fetchLive() is a real
+     Binance request server-side (klines + OI hist + LSR). Without this, a
+     single symbol switch could fire several fetches instead of one. */
+  var _debounceT=null;
+  function fetchLiveDebounced(){
+    clearTimeout(_debounceT);
+    _debounceT=setTimeout(fetchLive, 400);
+  }
+
   function boot(){
     ensureBox();
     fetchLive();
     try{
       var st=document.getElementById("symbolText");
       if(st){
-        var mo=new MutationObserver(fetchLive);
+        var mo=new MutationObserver(fetchLiveDebounced);
         mo.observe(st,{childList:true,characterData:true,subtree:true});
       }
     }catch(_){}
-    setInterval(fetchLive, 30000);
+    /* 90s, not 30s — this is a "how does it look right now" readout, not a
+       live ticker; the backend also caches for 20s on its side. Every open
+       tab polling this adds real Binance request load, and that load is
+       shared with the scanner's own already-heavy scan cycle. */
+    setInterval(fetchLive, 90000);
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot, {once:true});
   else boot();

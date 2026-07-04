@@ -198,6 +198,23 @@ button with letter-combo filter chips — removed for being more complexity
 than the ask needed; the `/history` endpoint itself is untouched and still
 usable directly if that view is worth revisiting later.
 
+**Rate-limit safety.** `computeFreshRow()` (shared by `recordManualTrade`
+and `computeLiveReading`) fires 3 fresh Binance requests every time it
+runs, with no throttling of its own — and the in-page live-reading readout
+polls on a timer *and* on every symbol change. Multiple open tabs/devices
+polling the same handful of popular symbols is exactly the kind of extra
+load that can push the VPS's IP into a Binance rate-limit ban (HTTP 418 —
+this actually happened once already), stacked on top of whatever the
+scanner's own scan cycle is already using. `computeLiveReading()` caches
+its result per `symbol|tf` for `LIVE_READING_CACHE_MS` (20s) — concurrent/
+rapid requests for the same symbol collapse into a single Binance call
+instead of one each. The in-page poll interval was also relaxed to 90s
+(a "how does it look right now" readout doesn't need to update every
+30s), and the symbol-change observer is debounced (400ms) since
+`#symbolText` can mutate more than once in quick succession while the
+header re-renders. `recordManualTrade` is NOT cached (a real trade should
+always read fresh data at the moment it's opened).
+
 **Resolution is event-driven (a "triple barrier"), not a fixed clock wait.**
 Every cycle, each pending signal's current price is checked against its
 entry price (side-adjusted: up is favorable for LONG, down for SHORT), and
