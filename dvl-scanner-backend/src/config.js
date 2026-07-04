@@ -7,14 +7,22 @@
 module.exports = {
   PORT: Number(process.env.DVL_PORT || 8090),
 
-  /* Scan window / sizing — mirrors the in-page scanner module. */
+  /* Scan window / sizing — mirrors the in-page scanner module.
+     CAND/REFRESH_MS were cut from 200/60000 after a Binance IP rate-limit
+     ban (HTTP 418): 200 candidates × 6 timeframes of klines, plus a fresh
+     OI call per candidate and an LSR call per tracked signal per TF, every
+     60s, added up to 2000+ requests/min against Binance — already close to
+     its limit before the live-reading feature's extra polling tipped it
+     over. This is ~5x less request volume (0.4x candidates × 0.5x
+     frequency); raise back cautiously, and only while watching for 418s,
+     if the smaller scan turns out to miss signals that matter. */
   KLIM: 80,          // candles fetched per symbol
-  CAND: 200,         // scan top-N symbols by 24h quote volume
+  CAND: 80,          // scan top-N symbols by 24h quote volume
   POOL: 8,           // concurrent kline fetches
   FRESH_MS: 3 * 3600000, // a symbol's last candle must be newer than this
 
   /* How often the 24h worker re-scans each exchange (ms). */
-  REFRESH_MS: Number(process.env.DVL_REFRESH_MS || 60000),
+  REFRESH_MS: Number(process.env.DVL_REFRESH_MS || 120000),
 
   /* How long a detected signal stays in the rolling history (ms). */
   HIST_MAX_AGE: 86400000,

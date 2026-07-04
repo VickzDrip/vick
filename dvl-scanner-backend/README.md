@@ -386,6 +386,17 @@ skewed distributions don't leave a bin with 2 examples and another with
 - Spike-age (`spikeAt`) is held in memory; a process restart resets it.
   Persist `spikeReg` to a JSON file if you need ages to survive restarts.
 - Tune cadence/size via env: `DVL_REFRESH_MS`, `DVL_SCAN_TF`, `DVL_PORT`.
+- **`CAND` (candidates scanned) and `REFRESH_MS` (scan cadence) were cut
+  from 200/60s to 80/120s after a Binance IP rate-limit ban (HTTP 418)** —
+  200 candidates × 6 timeframes of klines, plus a fresh OI call per
+  candidate and an LSR call per tracked signal per TF, every 60s, added up
+  to 2000+ requests/min against Binance on their own, before the
+  live-reading feature's polling tipped it over the edge. If you raise
+  these back up, do it gradually and watch the logs / `npm run analyze`
+  output for renewed 418s — and remember that repeatedly hitting Binance
+  *while already banned* can extend the ban instead of letting it expire,
+  so a ban always calls for stopping the service for a real cooldown, not
+  just waiting with it still running.
 - Outcome log paths are overridable via `DVL_OUTCOMES_PENDING_FILE` /
   `DVL_OUTCOMES_LOG_FILE`; horizons/thresholds are constants at the top of
   `src/outcomes.js`. The model file path is overridable via
