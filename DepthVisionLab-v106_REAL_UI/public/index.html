@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.056</title>
+<title>DVL Binance Live — Beta 1.057</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.056';
+window.DVL_APP_VERSION = 'Beta 1.057';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.056";
+const DVL_APP_VERSION = "Beta 1.057";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.057", note: "Labels de OI/LSR/RSI movidos pro canto inferior direito de cada painel. Novo: candles com \"spike pós-flat\" (volume estourando depois de uma base parada) agora ficam pintados de amarelo direto no gráfico principal, fácil de identificar — e o indicador de Volume ganhou um switch \"Destacar\" (ativo por padrão) que também realça essas barras de volume no próprio painel. Tudo calculado em cima da mesma MA de volume já usada no indicador, sem chamada de rede." },
   { version: "Beta 1.056", note: "A \"leitura ao vivo\" (OI subindo/caindo, LSR subindo/caindo, RSI recuperando) parou de depender do backend/Binance: agora os labels são plotados direto em cima dos próprios painéis de OI, LSR e RSI, lendo só os dados que esses indicadores já têm carregados na tela. Sem chamada de rede nenhuma — some de vez o \"Leitura ao vivo indisponível\" e qualquer risco de contribuir pro banimento 418 da Binance." },
   { version: "Beta 1.055", note: "Backend — o banimento da Binance (erro 418) continuava porque o próprio ciclo do scanner (200 ativos × 6 timeframes + OI + LSR a cada 60s) já usava um volume de chamadas quase no limite, mesmo sem a leitura ao vivo. Reduz temporariamente pra 80 ativos e ciclo a cada 120s (~5x menos chamadas) até confirmar estabilidade. Menos ativos escaneados e atualização um pouco mais lenta, mas evita cair no limite de novo." },
   { version: "Beta 1.054", note: "Backend — corrige o motivo da leitura ao vivo ficar 'indisponível': o excesso de chamadas (a cada 30s, de cada aba aberta) estava batendo no limite de taxa da Binance e derrubando o acesso temporariamente (erro 418). Agora o backend guarda a leitura de cada ativo por 20s antes de buscar de novo, e o app só atualiza a cada 90s (ou quando você troca de ativo), bem mais leve." },
@@ -24463,7 +24464,11 @@ if(window.DVLSpikeZonesDraw){
   drawView.forEach((d,i)=>{
     const cx = x(slotOffset + i);
     const up = d.close >= d.open;
-    const col = up ? candleBullColor : candleBearColor;
+    let col = up ? candleBullColor : candleBearColor;
+    if(window.DVLVolume && typeof window.DVLVolume.spikeFlatColorFor === "function"){
+      const _spikeCol = window.DVLVolume.spikeFlatColorFor(d.time);
+      if(_spikeCol) col = _spikeCol;
+    }
     const yo = y(d.open), yc = y(d.close);
     const topv = Math.min(yo,yc);
     const bottom = Math.max(yo,yc);
@@ -33868,7 +33873,9 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     bullColor:"#10df77",
     bearColor:"#ff3037",
     maColor:"#10df77",
-    ma2Color:"#f3c768"
+    ma2Color:"#f3c768",
+    highlightSpikeFlat:true,
+    spikeFlatColor:"#ffd321"
   };
 
   let state = load();
@@ -33906,6 +33913,8 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     out.bearColor = hexOk(out.bearColor) ? out.bearColor : DEFAULTS.bearColor;
     out.maColor = hexOk(out.maColor) ? out.maColor : DEFAULTS.maColor;
     out.ma2Color = hexOk(out.ma2Color) ? out.ma2Color : DEFAULTS.ma2Color;
+    out.highlightSpikeFlat = out.highlightSpikeFlat !== false;
+    out.spikeFlatColor = hexOk(out.spikeFlatColor) ? out.spikeFlatColor : DEFAULTS.spikeFlatColor;
     return out;
   }
 
@@ -34068,12 +34077,23 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       </div>
 
       <div class="dvl-vt-section">
+        <div class="dvl-vt-section-title"><span>Spike pós-flat</span></div>
+        <div class="dvl-vt-grid">
+          <div class="dvl-vt-field">
+            <label>Destacar</label>
+            <label class="dvl-switch"><input id="dvlVolSpikeFlatOn" type="checkbox" ${state.highlightSpikeFlat ? "checked" : ""}><i></i><b></b></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="dvl-vt-section">
         <div class="dvl-vt-section-title"><span>Colors</span></div>
         <div class="dvl-vol-color-grid">
           ${colorCard("bullColor", "Bull Volume")}
           ${colorCard("bearColor", "Bear Volume")}
           ${colorCard("maColor", "MA Line")}
           ${colorCard("ma2Color", "MA2 Line")}
+          ${colorCard("spikeFlatColor", "Spike pós-flat")}
         </div>
       </div>
     `;
@@ -34097,7 +34117,8 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       dvlVolMaOpacity:["maOpacity","num"],
       dvlVolMa2On:["ma2On","check"],
       dvlVolMaLength2:["maLength2","int"],
-      dvlVolMa2Opacity:["ma2Opacity","num"]
+      dvlVolMa2Opacity:["ma2Opacity","num"],
+      dvlVolSpikeFlatOn:["highlightSpikeFlat","check"]
     };
 
     Object.keys(map).forEach(id=>{
@@ -34174,6 +34195,48 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     return out;
   }
 
+  /* "Spike pós-flat": SPIKE_BASE_BARS bars right before this one all sat
+     below the volume MA (a dead/flat base), and this bar is the first to
+     cross back above it — same "ignition" pattern the backend's
+     ENGINE.minBaseBars uses, computed here client-side against the same MA
+     already drawn on this panel (state.maLength) so the highlight always
+     matches what's on screen. Memoized per frame since draw() calls it once
+     per visible bar. */
+  const SPIKE_BASE_BARS = 6;
+  let _spikeCache = null;
+
+  function computeSpikeFlatTimes(){
+    try{
+      const src = Array.isArray(klines) ? klines : [];
+      if(src.length < SPIKE_BASE_BARS + 2) return new Set();
+      const vols = src.map(k => Number(k.volume) || 0);
+      const len = clamp(parseInt(state.maLength,10)||20, 1, 2000);
+      const ma = volumeMa(vols, len);
+      const flagged = new Set();
+      for(let i=SPIKE_BASE_BARS; i<vols.length; i++){
+        if(ma[i] == null || !(vols[i] > ma[i])) continue;
+        let flatBase = true;
+        for(let j=i-SPIKE_BASE_BARS; j<i; j++){
+          if(ma[j] == null || !(vols[j] < ma[j])){ flatBase=false; break; }
+        }
+        if(flatBase) flagged.add(src[i].time);
+      }
+      return flagged;
+    }catch(_){ return new Set(); }
+  }
+
+  function isSpikeFlatTime(time){
+    try{
+      const n = Array.isArray(klines) ? klines.length : 0;
+      const lastT = n ? klines[n-1].time : 0;
+      const key = n + "|" + lastT + "|" + state.maLength;
+      if(!_spikeCache || _spikeCache.key !== key){
+        _spikeCache = { key, set: computeSpikeFlatTimes() };
+      }
+      return _spikeCache.set.has(time);
+    }catch(_){ return false; }
+  }
+
   function draw(ctx, cfg){
     if(!state.on || !cfg || !cfg.view || !cfg.view.length) return;
 
@@ -34188,9 +34251,11 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     view.forEach((d,i)=>{
       const cx = cfg.x(cfg.slotOffset + i);
       const up = Number(d.close) >= Number(d.open);
-      const color = up ? state.bullColor : state.bearColor;
+      const spikeFlat = state.highlightSpikeFlat && isSpikeFlatTime(d.time);
+      const color = spikeFlat ? state.spikeFlatColor : (up ? state.bullColor : state.bearColor);
+      const barOpacity = spikeFlat ? Math.max(state.opacity, 0.85) : state.opacity;
       const vh = (Number(d.volume) || 0) / volMax * volH;
-      ctx.fillStyle = rgba(color, state.opacity);
+      ctx.fillStyle = rgba(color, barOpacity);
       ctx.fillRect(cx - cfg.candleW/2, cfg.y1 - vh, cfg.candleW, vh);
     });
 
@@ -34254,6 +34319,9 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       if(p1 && Number.isFinite(+p1)) state.maLength = clamp(+p1|0, 1, 2000);
       if(p2 && Number.isFinite(+p2)) state.maLength2 = clamp(+p2|0, 1, 2000);
       save();
+    },
+    spikeFlatColorFor(time){
+      return (state.highlightSpikeFlat && isSpikeFlatTime(time)) ? state.spikeFlatColor : null;
     }
   };
   window.DVLVolumeDraw = draw;
