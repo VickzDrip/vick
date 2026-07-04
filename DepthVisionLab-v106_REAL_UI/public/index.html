@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.055</title>
+<title>DVL Binance Live — Beta 1.056</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.055';
+window.DVL_APP_VERSION = 'Beta 1.056';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.055";
+const DVL_APP_VERSION = "Beta 1.056";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.056", note: "A \"leitura ao vivo\" (OI subindo/caindo, LSR subindo/caindo, RSI recuperando) parou de depender do backend/Binance: agora os labels são plotados direto em cima dos próprios painéis de OI, LSR e RSI, lendo só os dados que esses indicadores já têm carregados na tela. Sem chamada de rede nenhuma — some de vez o \"Leitura ao vivo indisponível\" e qualquer risco de contribuir pro banimento 418 da Binance." },
   { version: "Beta 1.055", note: "Backend — o banimento da Binance (erro 418) continuava porque o próprio ciclo do scanner (200 ativos × 6 timeframes + OI + LSR a cada 60s) já usava um volume de chamadas quase no limite, mesmo sem a leitura ao vivo. Reduz temporariamente pra 80 ativos e ciclo a cada 120s (~5x menos chamadas) até confirmar estabilidade. Menos ativos escaneados e atualização um pouco mais lenta, mas evita cair no limite de novo." },
   { version: "Beta 1.054", note: "Backend — corrige o motivo da leitura ao vivo ficar 'indisponível': o excesso de chamadas (a cada 30s, de cada aba aberta) estava batendo no limite de taxa da Binance e derrubando o acesso temporariamente (erro 418). Agora o backend guarda a leitura de cada ativo por 20s antes de buscar de novo, e o app só atualiza a cada 90s (ou quando você troca de ativo), bem mais leve." },
   { version: "Beta 1.053", note: "ML — simplifica a leitura ao vivo: tira o botão/painel/filtros de antes e deixa só uma caixinha pequena e fixa no canto do gráfico, sempre visível, mostrando direto se OI/LSR estão subindo ou caindo e se o RSI tá recuperando (V) — sem precisar tocar em nada." },
@@ -24141,6 +24142,12 @@ function draw(){
       panelTop += panelHeight;
     });
   }
+
+  try{
+    if(window.DVL_LIVE_READING_LABELS_1027 && typeof window.DVL_LIVE_READING_LABELS_1027.drawLabels === "function"){
+      window.DVL_LIVE_READING_LABELS_1027.drawLabels(ctx, padL);
+    }
+  }catch(_){}
 
   window.__dvlLastOscillatorDrawState = {
     version:"0.941",
@@ -72370,129 +72377,124 @@ window.DVL_COPILOT_ML_STATUS_1024={
 })();
 </script>
 
-<style id="DVL_LIVE_READING_LABELS_1027_CSS">
-.dvlLive1027Box{
-  position:fixed; z-index:640; left:8px; bottom:150px;
-  max-width:150px; background:rgba(4,14,10,.82); border:1px solid rgba(16,223,119,.35);
-  border-radius:8px; padding:6px 8px; font:700 10px system-ui; line-height:1.6; color:#d7ded9;
-  pointer-events:none;
-}
-</style>
 <script id="DVL_LIVE_READING_LABELS_1027_JS">
-/* A small, always-visible readout showing the same reading the user
-   already does by eye on any chart — OI subindo/caindo, LSR subindo/caindo,
-   RSI recuperando (o "V"), spike pós-flat — for whatever symbol is
-   currently open. Deliberately simple: no button, no panel, no filters, no
-   chart markers, nothing to click. Read-only; if the backend is down the
-   box just says so and nothing else on the page is affected. */
+/* Plots the same read-at-a-glance labels the user already reads by eye —
+   OI subindo/caindo, LSR subindo/caindo, RSI recuperando (o "V") — directly
+   on top of each indicator's OWN panel (OI / LSR / Exhaustion RSI), for
+   whatever symbol/panel is currently open and visible. 100% client-side:
+   reads only the data each oscillator already has in memory
+   (window.DVLOpenInterestOscillator / DVLLongShortOscillator /
+   DVLExhaustionRSI — their .cache/.computeValues(), gated by their own
+   .on() state), so this makes ZERO network requests of its own and adds
+   no Binance load at all. Hooked once from the main oscillator draw loop
+   (drawLabels(ctx, padL), called every frame after the panels render),
+   reading fresh panel coordinates from window.__dvlOscillatorPanelBounds. */
 (function(){
   "use strict";
   if(window.DVL_LIVE_READING_LABELS_1027) return;
 
-  var LS_URL="dvlScannerBackendUrl";
-  var SLOPE_EPS=0.002; // below this magnitude, call a trend "estável" rather than up/down noise
-  var state={ symbol:"", live:null, loading:false, err:"" };
+  var SLOPE_TH = .035; // % move between first/second-half averages before calling it up/down (same threshold as the existing trend() helper elsewhere in the app)
 
-  function baseUrl(){
-    try{ return (typeof window.DVL_SCANNER_BACKEND_URL==="string"?window.DVL_SCANNER_BACKEND_URL:null) || localStorage.getItem(LS_URL) || ""; }
-    catch(_){ return ""; }
+  function val(o,keys){
+    for(var i=0;i<keys.length;i++){ var k=keys[i]; if(o && o[k]!=null){ var n=+o[k]; if(isFinite(n)) return n; } }
+    return NaN;
   }
-  function curSymbolRaw(){
+  function trend(arr,keys){
+    if(!Array.isArray(arr) || arr.length<6) return {dir:"unknown"};
+    var vals=arr.map(function(x){ return val(x,keys); }).filter(function(v){ return isFinite(v)&&v>0; }).slice(-12);
+    if(vals.length<6) return {dir:"unknown"};
+    var half=Math.max(3,Math.floor(vals.length/2)), a=vals.slice(0,half), b=vals.slice(half);
+    function avg(x){ return x.reduce(function(s,v){ return s+v; },0)/Math.max(1,x.length); }
+    var avga=avg(a), avgb=avg(b), pct = avga ? ((avgb-avga)/avga)*100 : 0;
+    return { dir: pct>SLOPE_TH ? "up" : (pct<-SLOPE_TH ? "down" : "flat") };
+  }
+
+  function oiReading(){
     try{
-      var el=document.getElementById("symbolText");
-      return el ? String(el.textContent||"").trim().replace("/","").toUpperCase() : "";
-    }catch(_){ return ""; }
+      var osc=window.DVLOpenInterestOscillator;
+      if(!osc || typeof osc.on!=="function" || !osc.on()) return null;
+      var t=trend((osc.cache && osc.cache.data) || [], ["close","value"]);
+      if(t.dir==="unknown") return null;
+      if(t.dir==="up") return { text:"OI subindo", color:"#10df77" };
+      if(t.dir==="down") return { text:"OI caindo", color:"#ff3037" };
+      return { text:"OI estável", color:"#9aa0a6" };
+    }catch(_){ return null; }
   }
-  /* favorableDir: "up" (OI — rising is the favorable side) or "down" (LSR —
-     falling is the favorable side, matches the LSR arrow-colour fix from
-     earlier this session). Green always marks the favorable direction. */
-  function trendLabel(slope, upWord, downWord, flatWord, favorableDir){
-    var v=Number(slope)||0;
-    var favorUp = favorableDir !== "down";
-    if(v > SLOPE_EPS) return { text:upWord, color: favorUp ? "#10df77" : "#ff3037" };
-    if(v < -SLOPE_EPS) return { text:downWord, color: favorUp ? "#ff3037" : "#10df77" };
-    return { text:flatWord, color:"#9aa0a6" };
-  }
-
-  function ensureBox(){
-    var box=document.getElementById("dvlLive1027Box");
-    if(box) return box;
-    box=document.createElement("div");
-    box.id="dvlLive1027Box"; box.className="dvlLive1027Box";
-    box.textContent="Carregando…";
-    document.body.appendChild(box);
-    return box;
-  }
-
-  function render(){
-    var box=ensureBox();
-    if(state.err){ box.textContent="Leitura ao vivo indisponível."; return; }
-    var d=state.live;
-    if(!d){ box.textContent="Carregando…"; return; }
-
-    var oi=trendLabel(d.oiSlope, "OI subindo", "OI caindo", "OI estável", "up");
-    var lsr=trendLabel(d.lsrSlope, "LSR subindo", "LSR caindo", "LSR estável", "down");
-    var rsiRec=Number(d.rsiRecoveryFromLow)||0;
-    var rsiLbl = rsiRec > 5
-      ? { text:"RSI recuperando (V)", color:"#10df77" }
-      : (d.rsiOversoldOk ? { text:"RSI sobrevenda, sem V", color:"#f2c94c" } : { text:"RSI neutro", color:"#9aa0a6" });
-    var spikeFlat = d.blocks && d.blocks.spikeAboveAvg && (d.blocks.flatVolumeBar || d.blocks.prevVolBelowHalf);
-    var spikeLbl = spikeFlat ? { text:"Spike pós-flat", color:"#10df77" } : { text:"Sem spike pós-flat", color:"#9aa0a6" };
-
-    box.innerHTML=[oi,lsr,rsiLbl,spikeLbl].map(function(r){
-      return '<div style="color:'+r.color+'">● '+r.text+'</div>';
-    }).join("");
-  }
-
-  function fetchLive(){
-    var sym=curSymbolRaw();
-    if(!sym || state.loading) return;
-    state.loading=true;
-    var base=baseUrl().replace(/\/$/,"");
-    fetch(base+"/api/dvl/scanner/live-reading?symbol="+encodeURIComponent(sym),{cache:"no-store"})
-      .then(function(r){ return r.json(); })
-      .then(function(j){
-        state.loading=false;
-        if(j && j.ok && String(j.symbol||"").toUpperCase()===sym){ state.symbol=sym; state.live=j; state.err=""; }
-        else { state.err=(j&&j.error)||"sem leitura"; }
-        render();
-      })
-      .catch(function(e){ state.loading=false; state.err=String(e&&e.message||"erro"); render(); });
-  }
-
-  /* Debounced — #symbolText can mutate more than once in quick succession
-     while the header re-renders, and each call to fetchLive() is a real
-     Binance request server-side (klines + OI hist + LSR). Without this, a
-     single symbol switch could fire several fetches instead of one. */
-  var _debounceT=null;
-  function fetchLiveDebounced(){
-    clearTimeout(_debounceT);
-    _debounceT=setTimeout(fetchLive, 400);
-  }
-
-  function boot(){
-    ensureBox();
-    fetchLive();
+  function lsrReading(){
     try{
-      var st=document.getElementById("symbolText");
-      if(st){
-        var mo=new MutationObserver(fetchLiveDebounced);
-        mo.observe(st,{childList:true,characterData:true,subtree:true});
+      var osc=window.DVLLongShortOscillator;
+      if(!osc || typeof osc.on!=="function" || !osc.on()) return null;
+      var t=trend((osc.cache && osc.cache.data) || [], ["ratio"]);
+      if(t.dir==="unknown") return null;
+      /* LSR falling is the favourable side (matches the LSR arrow-colour
+         convention fixed earlier this session) — green marks THAT
+         direction, not "up". */
+      if(t.dir==="down") return { text:"LSR caindo", color:"#10df77" };
+      if(t.dir==="up") return { text:"LSR subindo", color:"#ff3037" };
+      return { text:"LSR estável", color:"#9aa0a6" };
+    }catch(_){ return null; }
+  }
+  function rsiReading(){
+    try{
+      var osc=window.DVLExhaustionRSI;
+      if(!osc || typeof osc.on!=="function" || !osc.on() || typeof osc.computeValues!=="function") return null;
+      var recent=(osc.computeValues()||[]).slice(-20);
+      if(recent.length<6) return null;
+      var minV=Infinity, minIdx=-1;
+      recent.forEach(function(v,i){ var n=Number(v&&v.value); if(isFinite(n)&&n<minV){ minV=n; minIdx=i; } });
+      var lastV=Number(recent[recent.length-1] && recent[recent.length-1].value);
+      if(!isFinite(minV) || !isFinite(lastV)) return null;
+      /* "The V": the low was oversold-ish and the line has since climbed
+         back off it (not still sitting on the bottom). */
+      if(minIdx>=0 && minIdx<recent.length-1 && minV<=35 && (lastV-minV)>=5) return { text:"RSI recuperando (V)", color:"#10df77" };
+      if(lastV<=30) return { text:"RSI sobrevenda", color:"#f2c94c" };
+      return { text:"RSI neutro", color:"#9aa0a6" };
+    }catch(_){ return null; }
+  }
+
+  function drawTag(ctx, x, yBottom, r){
+    ctx.save();
+    ctx.font="800 9px system-ui";
+    var label="● "+r.text;
+    var tw=ctx.measureText(label).width;
+    var boxH=15, boxY=yBottom-boxH;
+    ctx.fillStyle="rgba(4,14,10,.75)";
+    ctx.fillRect(x-5, boxY, tw+10, boxH);
+    ctx.strokeStyle="rgba(255,255,255,.06)";
+    ctx.lineWidth=1;
+    ctx.strokeRect(x-5, boxY, tw+10, boxH);
+    ctx.textAlign="left";
+    ctx.textBaseline="middle";
+    ctx.fillStyle=r.color;
+    ctx.fillText(label, x, boxY+boxH/2);
+    ctx.restore();
+  }
+
+  function drawLabels(ctx, padL){
+    try{
+      var bounds=window.__dvlOscillatorPanelBounds || {};
+      var oi=bounds.openInterest, ls=bounds.longShort, rsi=bounds.DVLExhaustionRSI;
+      var x=padL+8;
+
+      if(oi && isFinite(oi.top) && isFinite(oi.h)){
+        var r1=oiReading();
+        if(r1) drawTag(ctx, x, oi.top+oi.h-6, r1);
+      }
+      if(ls && isFinite(ls.top) && isFinite(ls.h)){
+        var r2=lsrReading();
+        if(r2) drawTag(ctx, x, ls.top+ls.h-6, r2);
+      }
+      if(rsi && isFinite(rsi.top) && isFinite(rsi.bottom)){
+        var r3=rsiReading();
+        if(r3) drawTag(ctx, x, rsi.bottom-6, r3);
       }
     }catch(_){}
-    /* 90s, not 30s — this is a "how does it look right now" readout, not a
-       live ticker; the backend also caches for 20s on its side. Every open
-       tab polling this adds real Binance request load, and that load is
-       shared with the scanner's own already-heavy scan cycle. */
-    setInterval(fetchLive, 90000);
   }
-  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot, {once:true});
-  else boot();
 
   window.DVL_LIVE_READING_LABELS_1027={
-    version:"1.027",
-    refresh:fetchLive,
-    audit:function(){ return { version:"1.027", symbol:state.symbol, hasData:!!state.live, err:state.err }; }
+    version:"2.0",
+    drawLabels:drawLabels,
+    audit:function(){ return { oi:oiReading(), lsr:lsrReading(), rsi:rsiReading(), bounds:window.__dvlOscillatorPanelBounds||null }; }
   };
 })();
 </script>
