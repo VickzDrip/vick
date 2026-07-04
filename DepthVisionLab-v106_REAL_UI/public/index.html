@@ -24145,7 +24145,7 @@ function draw(){
 
   try{
     if(window.DVL_LIVE_READING_LABELS_1027 && typeof window.DVL_LIVE_READING_LABELS_1027.drawLabels === "function"){
-      window.DVL_LIVE_READING_LABELS_1027.drawLabels(ctx, padL);
+      window.DVL_LIVE_READING_LABELS_1027.drawLabels(ctx, padL, padR, w);
     }
   }catch(_){}
 
@@ -72452,41 +72452,42 @@ window.DVL_COPILOT_ML_STATUS_1024={
     }catch(_){ return null; }
   }
 
-  function drawTag(ctx, x, yBottom, r){
+  function drawTag(ctx, xRight, yBottom, r){
     ctx.save();
     ctx.font="800 9px system-ui";
     var label="● "+r.text;
     var tw=ctx.measureText(label).width;
-    var boxH=15, boxY=yBottom-boxH;
+    var boxH=15, boxW=tw+10;
+    var boxX=xRight-boxW, boxY=yBottom-boxH;
     ctx.fillStyle="rgba(4,14,10,.75)";
-    ctx.fillRect(x-5, boxY, tw+10, boxH);
+    ctx.fillRect(boxX, boxY, boxW, boxH);
     ctx.strokeStyle="rgba(255,255,255,.06)";
     ctx.lineWidth=1;
-    ctx.strokeRect(x-5, boxY, tw+10, boxH);
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
     ctx.textAlign="left";
     ctx.textBaseline="middle";
     ctx.fillStyle=r.color;
-    ctx.fillText(label, x, boxY+boxH/2);
+    ctx.fillText(label, boxX+5, boxY+boxH/2);
     ctx.restore();
   }
 
-  function drawLabels(ctx, padL){
+  function drawLabels(ctx, padL, padR, w){
     try{
       var bounds=window.__dvlOscillatorPanelBounds || {};
       var oi=bounds.openInterest, ls=bounds.longShort, rsi=bounds.DVLExhaustionRSI;
-      var x=padL+8;
+      var xRight=(Number(w)||0)-(Number(padR)||0)-8;
 
       if(oi && isFinite(oi.top) && isFinite(oi.h)){
         var r1=oiReading();
-        if(r1) drawTag(ctx, x, oi.top+oi.h-6, r1);
+        if(r1) drawTag(ctx, xRight, oi.top+oi.h-6, r1);
       }
       if(ls && isFinite(ls.top) && isFinite(ls.h)){
         var r2=lsrReading();
-        if(r2) drawTag(ctx, x, ls.top+ls.h-6, r2);
+        if(r2) drawTag(ctx, xRight, ls.top+ls.h-6, r2);
       }
       if(rsi && isFinite(rsi.top) && isFinite(rsi.bottom)){
         var r3=rsiReading();
-        if(r3) drawTag(ctx, x, rsi.bottom-6, r3);
+        if(r3) drawTag(ctx, xRight, rsi.bottom-6, r3);
       }
     }catch(_){}
   }
