@@ -242,6 +242,18 @@ descent with L2 regularization) predicting whether a signal was "favorable"
 — using the `label` outcomes.js already resolved via the triple barrier
 above, not a fixed-horizon return computed here.
 
+**LONG and SHORT train as two entirely separate models.** The 6 blocks
+(spike above avg, RSI oversold, OI rising, LSR falling, ...) all encode a
+bullish "ignition" thesis; a resolved example's `side` is still just
+whichever way the last candle closed (`metrics.js`), not a validated short
+setup. Fitting one blended model on both would have it try to correlate a
+bearish outcome with bullish features, silently polluting what LONG
+actually learns from real, on-thesis data. `train.maybeTrain()` now returns
+`{ LONG: model, SHORT: model }`, each with its own independent `MIN_SAMPLES`
+gate — SHORT simply stays untrained until it has both a real thesis behind
+it and enough of its own resolved examples, without holding LONG back or
+being held back by it.
+
 It's **hybrid** on purpose: the model sees both the 6 blocks as booleans
 *and* the continuous values behind them (normalized), so it can find its
 own thresholds (e.g. "RSI 22 is a much stronger signal than RSI 29") instead
@@ -265,20 +277,22 @@ looks good and tells you almost nothing about whether it actually works on
 signals it hasn't seen yet.
 
 The worker calls `train.maybeTrain()` once per cycle (self-throttled to at
-most once/hour). It's a no-op — cheap, just re-reads the log to count
-lines — until there are at least `MIN_SAMPLES` (200) resolved examples, and
-only re-fits after `MIN_NEW_SAMPLES` (7, roughly an hour's worth of new
-resolutions at the scanner's typical pace) more arrive since the last run.
+most once/hour), training LONG and SHORT independently via the same
+`trainSide(side, prevModel)` pipeline. Each side is a no-op — cheap, just
+re-reads the log to count matching lines — until it has at least
+`MIN_SAMPLES` (200) resolved examples of its OWN side, and only re-fits
+after `MIN_NEW_SAMPLES` (7) more of that side arrive since its last run.
 With ~18 features and only 200 examples there's more room for the model to
 fit noise than with the original 6-boolean version — L2 regularization
 and, especially, `testAccuracy` (the honest held-out number) are what
 catch that if it happens; raise `MIN_SAMPLES` back up if `testAccuracy`
-looks unstable or noticeably worse than `trainAccuracy` early on. The result is saved
-to `data/learned-weights.json` and surfaced read-only at `GET
-/api/dvl/scanner/health` as `outcomes.model: { trained, samples,
+looks unstable or noticeably worse than `trainAccuracy` early on. The
+result is saved to `data/learned-weights.json` as `{ LONG, SHORT }` and
+surfaced read-only at `GET /api/dvl/scanner/health` as `outcomes.model: {
+LONG: {...}, SHORT: {...} }`, each side shaped `{ trained, side, samples,
 trainSamples, testSamples, needed, accuracy, trainAccuracy, testAccuracy,
-trainedAt, weights, coefficients }`, and shown in the app's Copilot tab
-("Aprendizado (ML)" card).
+trainedAt, weights, coefficients }`, and shown side-by-side in the app's
+Copilot tab ("Aprendizado (ML)" card).
 
 **Resetting the training data (`npm run reset-training-data`).** If
 something upstream of the logged features changes in a way that makes old
@@ -296,13 +310,17 @@ update mid-cycle. Restart it after.
 **Wiring into the live score is opt-in.** Filtros has a "Pesos do score"
 toggle — Manual (default) or 🤖 Aprendido (ML). Manual keeps using the
 weights you tune by hand, exactly as before. Switching to ML makes
-`score()` read the trained model's `weights` instead (via a small
-`effectiveWeights()` helper that falls back to manual weights if the model
-isn't trained yet), and the metrics panel shows either the training
-progress or, once trained, the learned per-block weights and the honest
-held-out accuracy. Nothing about outcome logging or training changes based
-on this toggle — it only affects which weights compute the score you see.
-Run training manually any time with `npm run train`.
+`score(r)` read the trained model's `weights` instead, matched to that
+row's own `side` — a LONG row uses the LONG model's weights, a SHORT row
+the SHORT model's, via `effectiveWeights(side)` / `learnedModelFor(side)`,
+falling back to the manual weights whenever that particular side's model
+isn't trained yet (which today means SHORT always falls back, until it has
+its own thesis and enough data). The read-only metrics panel in Filtros
+shows the LONG model specifically (it's the side with a validated thesis
+behind it); the Copilot "Aprendizado (ML)" card shows both sides side by
+side. Nothing about outcome logging or training changes based on this
+toggle — it only affects which weights compute the score you see. Run
+training manually any time with `npm run train`.
 
 ## Confluence diagnostic (`npm run analyze`)
 `src/analyze.js` answers a narrower, model-free question: does having MORE

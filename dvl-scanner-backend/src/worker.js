@@ -25,7 +25,13 @@ const PERSIST_FILE = process.env.DVL_DATA_FILE || path.join(process.cwd(), "data
    train.MIN_SAMPLES (just re-reads the log to count lines). */
 const TRAIN_INTERVAL_MS = 3600000;
 let _lastTrainAttempt = 0;
-let _modelStatus = { trained: false, samples: 0, needed: train.MIN_SAMPLES };
+function emptyModelStatus() {
+  return {
+    LONG: { trained: false, side: "LONG", samples: 0, needed: train.MIN_SAMPLES },
+    SHORT: { trained: false, side: "SHORT", samples: 0, needed: train.MIN_SAMPLES }
+  };
+}
+let _modelStatus = emptyModelStatus();
 
 /* concurrency-limited map (mirrors the in-page mapPool). */
 async function mapPool(items, limit, fn) {
@@ -505,7 +511,10 @@ async function start() {
   loadRegistry();     // restore persisted signals so a restart doesn't reset the list
   outcomes.loadPending(); // restore pending outcome-log entries (ML groundwork)
   const existingModel = train.loadModel();
-  if (existingModel) _modelStatus = existingModel;
+  // Ignore a pre-LONG/SHORT-split model file (flat shape) — it has neither
+  // key, so falling through to emptyModelStatus() just retrains from
+  // scratch on the next cycle instead of crashing on the old shape.
+  if (existingModel && (existingModel.LONG || existingModel.SHORT)) _modelStatus = existingModel;
   _running = true;
   const loop = async () => {
     while (_running) {

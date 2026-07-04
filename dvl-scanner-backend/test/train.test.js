@@ -4,7 +4,12 @@
    groundwork) — no network. Uses temp files so it never touches the real
    data/ directory, and a synthetic dataset with one clearly-predictive
    boolean block AND one clearly-predictive continuous feature so we can
-   check the model actually learns the right things, not just that it runs. */
+   check the model actually learns the right things, not just that it runs.
+
+   LONG and SHORT train as two fully separate models (maybeTrain() returns
+   { LONG, SHORT }) — see the comment at the top of src/train.js for why:
+   the 6 blocks only encode a bullish thesis, so mixing SHORT-labeled
+   examples into the same fit would pollute what LONG actually learns. */
 
 const assert = require("assert");
 const fs = require("fs");
@@ -35,41 +40,52 @@ function features(overrides) {
   const f = { spike20: 1, spike50: 1, rsi14: 50, volBelowMaBars: 0, barPct: 0, flatCandles: 0, oiRatio: 0, lsrRatio: 0, crossStrength: 1, oiSlope: 0, lsrSlope: 0, rsiRecoveryFromLow: 0 };
   return Object.assign(f, overrides);
 }
+function longExamples(n, atOffset) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const rsiOk = i % 2 === 0;                // predictive (boolean)
+    const rsiVal = rsiOk ? 20 : 70;           // predictive (continuous) — matches the boolean here on purpose
+    const noise1 = i % 3 === 0;               // uncorrelated with outcome
+    const noise2 = i % 4 === 0;               // uncorrelated with outcome
+    // Favorable whenever rsiOk is true, unfavorable otherwise — a bit of
+    // label noise keeps it realistic (not perfectly separable).
+    const favorable = rsiOk ? (i % 11 !== 0) : (i % 13 === 0);
+    out.push({
+      at: (atOffset || 0) + i + 2,
+      side: "LONG",
+      blocks: blocks({ rsiOversold: rsiOk, spikeAboveAvg: noise1, oiAboveAvg: noise2 }),
+      features: features({ rsi14: rsiVal, spike20: noise1 ? 5 : 1, oiRatio: noise2 ? 0.3 : 0 }),
+      label: favorable ? 1 : 0
+    });
+  }
+  return out;
+}
 
-/* 1) Below MIN_SAMPLES: reports what's missing, does not write a model. */
+/* 1) Below MIN_SAMPLES on both sides: reports what's missing per side,
+   does not write a model. */
 writeLog([{ at: 1, side: "LONG", blocks: blocks({ rsiOversold: true }), features: features({ rsi14: 20 }), label: 1 }]);
 const under = train.maybeTrain();
-eq(under.trained, false, "not enough samples yet");
-eq(under.samples, 1, "reports the actual sample count");
-eq(under.needed, train.MIN_SAMPLES, "reports how many are needed");
-ok(!fs.existsSync(process.env.DVL_MODEL_FILE), "no model file written below MIN_SAMPLES");
+eq(under.LONG.trained, false, "LONG not enough samples yet");
+eq(under.LONG.samples, 1, "LONG reports the actual sample count");
+eq(under.LONG.needed, train.MIN_SAMPLES, "LONG reports how many are needed");
+eq(under.SHORT.trained, false, "SHORT not enough samples yet (no short examples logged at all)");
+eq(under.SHORT.samples, 0, "SHORT sample count is 0 with no short-labeled examples");
+ok(!fs.existsSync(process.env.DVL_MODEL_FILE), "no model file written while both sides are below MIN_SAMPLES");
 
-/* 2) Enough samples. rsiOversold (boolean) AND a low rsi14 (continuous) are
-   both genuinely predictive of a favorable move; spikeAboveAvg/oiAboveAvg
-   are uncorrelated noise. The model should learn to weight rsi-related
-   features highest on both the boolean and continuous sides. */
+/* 2) Enough LONG samples, still nothing for SHORT. rsiOversold (boolean)
+   AND a low rsi14 (continuous) are both genuinely predictive of a
+   favorable move; spikeAboveAvg/oiAboveAvg are uncorrelated noise. The
+   LONG model should learn to weight rsi-related features highest on both
+   the boolean and continuous sides — SHORT must stay untrained. */
 const N = train.MIN_SAMPLES + 100;
-const examples = [];
-for (let i = 0; i < N; i++) {
-  const rsiOk = i % 2 === 0;                // predictive (boolean)
-  const rsiVal = rsiOk ? 20 : 70;           // predictive (continuous) — matches the boolean here on purpose
-  const noise1 = i % 3 === 0;               // uncorrelated with outcome
-  const noise2 = i % 4 === 0;               // uncorrelated with outcome
-  // Favorable whenever rsiOk is true, unfavorable otherwise — a bit of
-  // label noise keeps it realistic (not perfectly separable).
-  const favorable = rsiOk ? (i % 11 !== 0) : (i % 13 === 0);
-  examples.push({
-    at: i + 2,
-    side: "LONG",
-    blocks: blocks({ rsiOversold: rsiOk, spikeAboveAvg: noise1, oiAboveAvg: noise2 }),
-    features: features({ rsi14: rsiVal, spike20: noise1 ? 5 : 1, oiRatio: noise2 ? 0.3 : 0 }),
-    label: favorable ? 1 : 0
-  });
-}
+const examples = longExamples(N);
 writeLog(examples);
-const model = train.maybeTrain();
-eq(model.trained, true, "trains once enough samples exist");
-eq(model.samples, N, "records the total sample count");
+const trained = train.maybeTrain();
+const model = trained.LONG;
+eq(model.trained, true, "LONG trains once enough samples exist");
+eq(model.side, "LONG", "LONG model is tagged with its own side");
+eq(model.samples, N, "records the total LONG sample count");
+eq(trained.SHORT.trained, false, "SHORT stays untrained — no short examples in the log");
 
 /* Temporal split: test set is the newest ~20%, and train+test cover everything. */
 eq(model.trainSamples + model.testSamples, model.samples, "train+test sizes add up to the full dataset");
@@ -90,19 +106,19 @@ ok(model.testAccuracy >= 0 && model.testAccuracy <= 1, "testAccuracy is a valid 
    features: oiSlope/lsrSlope/rsiRecoveryFromLow) are present in coefficients. */
 eq(Object.keys(model.coefficients).length, train.FEATURE_KEYS.length, "coefficients cover every hybrid feature");
 ok(["oiSlopeN", "lsrSlopeN", "rsiRecoveryN"].every(k => train.CONT_KEYS.includes(k)), "the trend features (OI slope, LSR slope, RSI recovery) are part of CONT_KEYS");
-ok(fs.existsSync(process.env.DVL_MODEL_FILE), "model file is persisted once trained");
+ok(fs.existsSync(process.env.DVL_MODEL_FILE), "model file is persisted once at least one side trains");
 
-/* 3) Re-running immediately (no new examples) returns the SAME model
+/* 3) Re-running immediately (no new examples) returns the SAME LONG model
    instead of re-fitting on an unchanged dataset. */
 const again = train.maybeTrain();
-eq(again.trainedAt, model.trainedAt, "does not retrain without enough new examples");
+eq(again.LONG.trainedAt, model.trainedAt, "does not retrain LONG without enough new examples");
 
-/* 4) Adding MIN_NEW_SAMPLES more examples triggers a fresh fit. */
+/* 4) Adding MIN_NEW_SAMPLES more LONG examples triggers a fresh LONG fit. */
 const more = examples.slice(0, train.MIN_NEW_SAMPLES + 5);
 writeLog(examples.concat(more));
 const retrained = train.maybeTrain();
-ok(retrained.trainedAt >= model.trainedAt, "retrains once enough new examples accumulate");
-eq(retrained.samples, N + more.length, "picks up the larger dataset");
+ok(retrained.LONG.trainedAt >= model.trainedAt, "retrains LONG once enough new examples accumulate");
+eq(retrained.LONG.samples, N + more.length, "picks up the larger LONG dataset");
 
 /* 5) toWeights clips negative coefficients to 0 (a block should never
    actively penalize the score — only stop contributing to it). */
@@ -123,6 +139,27 @@ eq(split.train.length, 8, "80% goes to train");
 eq(split.test.length, 2, "20% goes to test");
 eq(split.test[0].at, 9, "test set starts right after the train set ends (oldest-first order preserved)");
 eq(split.test[1].at, 10, "test set ends with the chronologically newest example");
+
+/* 7) SHORT-labeled examples never leak into the LONG training set (and
+   vice versa) — loadExamples(side) filters strictly. Reuses the LONG
+   dataset above but relabels a copy as SHORT with the OPPOSITE outcome
+   pattern; if the two datasets were blended, LONG's learned coefficients
+   would shift. They must not. */
+const shortExamples = longExamples(N, N * 10).map(e => Object.assign({}, e, {
+  side: "SHORT",
+  blocks: blocks(Object.assign({}, e.blocks, { rsiOversold: !e.blocks.rsiOversold })),
+  label: 1 - e.label
+}));
+writeLog(examples.concat(more).concat(shortExamples));
+const separated = train.maybeTrain();
+eq(separated.LONG.samples, N + more.length, "LONG sample count unchanged by adding SHORT examples");
+eq(separated.SHORT.samples, shortExamples.length, "SHORT gets its own independent sample count");
+ok(separated.SHORT.trained === true, "SHORT trains on its own once it clears MIN_SAMPLES");
+ok(separated.SHORT.weights.rsiOversold !== undefined, "SHORT model produces its own weights");
+const longOnly = train.loadExamples("LONG");
+ok(longOnly.every((_, i) => true) && longOnly.length === N + more.length, "loadExamples('LONG') excludes SHORT rows");
+const shortOnly = train.loadExamples("SHORT");
+eq(shortOnly.length, shortExamples.length, "loadExamples('SHORT') excludes LONG rows");
 
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

@@ -21,6 +21,17 @@
    that actually means something (in-sample accuracy on a model's own
    training data is close to meaningless).
 
+   LONG and SHORT are trained as two entirely separate models (see
+   maybeTrain/trainSide below), each with its own MIN_SAMPLES gate. The 6
+   blocks all encode a bullish thesis (RSI oversold, OI rising, LSR
+   falling, ...) that was designed and validated for LONG only — `side` on
+   a resolved example is still just "did the last candle close red or
+   green" (metrics.js), not a real short setup, so blending SHORT examples
+   into the same fit would have the model correlate a bearish outcome
+   against bullish features, polluting the LONG weights with noise. SHORT
+   simply won't train until there's a real short thesis behind it and
+   enough resolved examples of its own.
+
    This module only trains and persists a candidate model; nothing wires
    it into the live score yet (see worker.js / server.js `health.outcomes`)
    — that's a deliberate separate decision once there's confidence in it. */
@@ -84,13 +95,27 @@ function normalizeContinuous(f) {
   ];
 }
 
+/* LONG and SHORT get independently trained models (see maybeTrain below) —
+   the 6 blocks/continuous features (RSI oversold, OI rising, LSR falling,
+   ...) all encode a bullish "ignition" thesis, so blending SHORT-labeled
+   examples (currently just "did the last candle close red") into the same
+   fit would have the model try to correlate a bearish outcome with bullish
+   features, polluting what the LONG model actually learns. Separating them
+   costs nothing — SHORT simply won't train until it has its own MIN_SAMPLES
+   worth of resolved examples, same gate as LONG. */
+const SIDES = ["LONG", "SHORT"];
+function normSide(s) { return String(s || "").toUpperCase() === "SHORT" ? "SHORT" : "LONG"; }
+
 /* Examples come back in the log's natural (chronological resolution)
    order — the caller relies on that for the temporal train/test split.
    `label` comes straight from outcomes.js's triple-barrier resolution
    (already side-adjusted there), not derived from a fixed-horizon return
    here — a signal that hits its target/stop in 20 minutes is exactly as
-   valid a labeled example as one that takes the full timeout to resolve. */
-function loadExamples() {
+   valid a labeled example as one that takes the full timeout to resolve.
+   `side` filters to just "LONG" or "SHORT" examples; omit it to load
+   everything regardless of side (used only for diagnostics/tests, never by
+   maybeTrain itself). */
+function loadExamples(side) {
   let raw;
   try { raw = fs.readFileSync(LOG_FILE, "utf8"); } catch (_) { return []; }
   const out = [];
@@ -99,6 +124,7 @@ function loadExamples() {
     let e;
     try { e = JSON.parse(line); } catch (_) { continue; }
     if (!e || !e.blocks || (e.label !== 0 && e.label !== 1)) continue;
+    if (side && normSide(e.side) !== side) continue;
     const boolFeatures = BLOCK_KEYS.map(k => (e.blocks[k] ? 1 : 0));
     const contFeatures = normalizeContinuous(e.features);
     out.push({ features: boolFeatures.concat(contFeatures), label: e.label, at: e.at || 0 });
@@ -185,14 +211,14 @@ function saveModel(model) {
   } catch (_) { /* disk issues are non-fatal */ }
 }
 
-/* Retrains only when there's enough data and enough NEW data since the
-   last run. Returns { trained:false, samples, needed } while below
-   MIN_SAMPLES, otherwise the model object (freshly trained, or the
-   existing one if not enough new examples arrived yet). */
-function maybeTrain() {
-  const examples = loadExamples();
-  if (examples.length < MIN_SAMPLES) return { trained: false, samples: examples.length, needed: MIN_SAMPLES };
-  const prev = loadModel();
+/* Trains (or reuses) one side's model in isolation — same fit/evaluate
+   pipeline as before the LONG/SHORT split, just scoped to that side's own
+   examples and its own prior model for the "enough NEW data" check, so
+   LONG and SHORT progress independently. Returns { trained:false, side,
+   samples, needed } while below MIN_SAMPLES for that side. */
+function trainSide(side, prev) {
+  const examples = loadExamples(side);
+  if (examples.length < MIN_SAMPLES) return { trained: false, side, samples: examples.length, needed: MIN_SAMPLES };
   if (prev && prev.trained && (examples.length - prev.samples) < MIN_NEW_SAMPLES) return prev;
 
   const { train: trainSet, test: testSet } = splitTemporal(examples, TEST_FRACTION);
@@ -203,8 +229,9 @@ function maybeTrain() {
   const coefficients = {};
   FEATURE_KEYS.forEach((k, i) => { coefficients[k] = round3(w[i]); });
 
-  const model = {
+  return {
     trained: true,
+    side,
     trainedAt: Date.now(),
     samples: examples.length,
     trainSamples: trainSet.length,
@@ -224,13 +251,29 @@ function maybeTrain() {
     bias: round3(b),
     weights: toWeights(w.slice(0, BLOCK_KEYS.length))
   };
-  saveModel(model);
-  return model;
+}
+
+/* Retrains LONG and SHORT independently (see the comment above loadExamples
+   for why they can't share a fit) and persists both together. Returns
+   { LONG: {...}, SHORT: {...} }, each either { trained:false, samples,
+   needed } or a full trained model. A model file from before this split
+   (flat shape, no .LONG/.SHORT) is treated as "no prior model" for both
+   sides rather than crashing — they simply retrain from the full log. */
+function maybeTrain() {
+  const prevFile = loadModel();
+  const prevLong = prevFile && prevFile.LONG;
+  const prevShort = prevFile && prevFile.SHORT;
+
+  const LONG = trainSide("LONG", prevLong);
+  const SHORT = trainSide("SHORT", prevShort);
+  const combined = { LONG, SHORT };
+  if (LONG.trained || SHORT.trained) saveModel(combined);
+  return combined;
 }
 
 module.exports = {
-  loadExamples, splitTemporal, fit, evaluate, toWeights, loadModel, saveModel, maybeTrain,
-  BLOCK_KEYS, CONT_KEYS, FEATURE_KEYS, MIN_SAMPLES, MIN_NEW_SAMPLES, TEST_FRACTION
+  loadExamples, splitTemporal, fit, evaluate, toWeights, loadModel, saveModel, trainSide, maybeTrain,
+  BLOCK_KEYS, CONT_KEYS, FEATURE_KEYS, SIDES, MIN_SAMPLES, MIN_NEW_SAMPLES, TEST_FRACTION
 };
 
 /* Runnable directly: `node src/train.js` (or `npm run train`). */
