@@ -178,6 +178,22 @@ the chart the same way you already read RSI/OI/LSR, not something you have
 to go read as numbers in a terminal separately. Off by default; read-only
 (fetches history, never writes anything).
 
+**Any asset, not just ones the scanner has flagged.** The history/markers
+feature above only has data for symbols that already ignited or were
+manually traded. `worker.computeLiveReading(symbol, tf)` (exposed at
+`GET /api/dvl/scanner/live-reading?symbol=X&tf=Y`) is different: it computes
+a full fresh row for literally ANY symbol, right now, whether or not the
+scanner has ever flagged it — same computation `recordManualTrade` uses
+(`computeFreshRow`, shared by both), just read-only and never logged. The
+in-page app shows this as plain-language labels next to the "ML" chart
+toggle — "OI subindo"/"OI caindo", "LSR subindo"/"LSR caindo" (colored by
+which direction is actually favorable for each — OI rising, LSR falling —
+not just green-for-up), "RSI recuperando (V)" when `rsiRecoveryFromLow` is
+meaningfully positive, "Spike pós-flat" when those blocks line up, plus all
+6 blocks as tags. This automates exactly the reading the user already does
+by eye on any chart, for any asset, instead of only surfacing it after the
+fact for symbols the automated ignition check happened to catch.
+
 **Resolution is event-driven (a "triple barrier"), not a fixed clock wait.**
 Every cycle, each pending signal's current price is checked against its
 entry price (side-adjusted: up is favorable for LONG, down for SHORT), and

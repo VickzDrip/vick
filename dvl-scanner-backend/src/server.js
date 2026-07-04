@@ -7,6 +7,7 @@
    POST /api/dvl/scanner/config        (Filtros: weights / engine params / OI-LSR MA lengths)
    POST /api/dvl/scanner/manual-trade  (log a user-opened position as an ML training example)
    GET  /api/dvl/scanner/history?symbol=X  (every recorded signal for one symbol, for chart markers)
+   GET  /api/dvl/scanner/live-reading?symbol=X&tf=Y  (current OI/LSR/RSI/spike reading for ANY symbol)
    This server is READ-ONLY re: trading: it never places or routes trades —
    manual-trade only LOGS a position the user already opened elsewhere in
    the app; it doesn't open, close, or touch anything itself. */
@@ -70,6 +71,27 @@ function createServer() {
     if (!symbol) { res.json({ ok: false, error: "missing symbol", rows: [] }); return; }
     const rows = worker.getSymbolHistory(symbol).map(e => Object.assign({ combo: e.blocks ? analyze.comboKey(e.blocks) : null }, e));
     res.json({ ok: true, symbol, rows });
+  });
+
+  /* Read-only "how does this look RIGHT NOW" reading for ANY symbol — not
+     gated by the scanner ever having flagged it, never logged anywhere.
+     Powers the on-chart live labels (OI subindo/caindo, LSR subindo/caindo,
+     RSI recuperando, spike pós-flat) for whatever asset is currently open,
+     mirroring the same reading the user already does by eye. */
+  app.get("/api/dvl/scanner/live-reading", (req, res) => {
+    const symbol = String(req.query.symbol || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const tf = normTf(req.query.tf);
+    if (!symbol) { res.json({ ok: false, error: "missing symbol" }); return; }
+    worker.computeLiveReading(symbol, tf)
+      .then(row => res.json({
+        ok: true, symbol, tf,
+        side: row.side, price: row.price, score: row.spikeScore, status: row.status, blocks: row.blocks,
+        oi: row.oi, oiColor: row.oiColor, oiSlope: row.oiSlope,
+        lsr: row.lsr, lsrColor: row.lsrColor, lsrSlope: row.lsrSlope,
+        rsi14: row.rsi14, rsiRecoveryFromLow: row.rsiRecoveryFromLow, rsiOversoldOk: row.rsiOversoldOk,
+        flatCandles: row.flatCandles, prevVolBelowHalf: row.prevVolBelowHalf, spike20: row.spike20, spike50: row.spike50
+      }))
+      .catch(e => { console.error("[live-reading]", symbol, e.message); res.json({ ok: false, error: e.message }); });
   });
 
   app.get("/api/dvl/scanner/health", (req, res) => {

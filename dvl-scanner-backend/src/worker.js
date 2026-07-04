@@ -287,18 +287,14 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
   return rows;
 }
 
-/* Manual trades (the user opening a position by hand in the app, not a
-   scanner detection) — logged as ML training examples too, so the outcome
-   log isn't limited to what the automated ignition check happens to flag.
-   Computed fresh, on demand, since a manually-traded symbol may not be one
-   the worker is currently polling as a scan candidate (no cached row to
-   reuse). Always against Binance — the same source the in-page chart's own
-   OI/LSR panels use, regardless of which exchange the trade nominally runs
-   on, so the logged features match what the user actually looked at when
-   deciding to enter. Side-effecting only (logs via outcomes.recordSignal);
-   returns nothing worth reporting back beyond success/failure. */
-async function recordManualTrade(symbol, side, entryPrice, at) {
-  const tf = cfg.SCAN_TF || "15m";
+/* Computes a full row (same shape buildRow/scanExchange produce) fresh, on
+   demand, for ANY symbol — not just one the worker is already polling as a
+   scan candidate. Always against Binance — the same source the in-page
+   chart's own OI/LSR panels use — so results match what the user actually
+   looked at. Shared by recordManualTrade (which logs it) and
+   computeLiveReading (which just returns it, read-only). `side`/`entryPrice`
+   default to the symbol's own current side/last close when not given. */
+async function computeFreshRow(symbol, tf, side, entryPrice) {
   const k = await binance.klines(symbol, tf);
   const sig = M.computeSignal(k.closes, k.vols, cfg.ENGINE);
 
@@ -310,8 +306,8 @@ async function recordManualTrade(symbol, side, entryPrice, at) {
   const lsrT = (lsrData && lsrData.series) ? M.trendVsMA(lsrData.series) : { arrow: "up", color: "yellow", ratio: 0, slope: 0 };
 
   const row = {
-    rawSymbol: symbol, symbol: binance.base(symbol) + "USDT", side,
-    price: entryPrice,
+    rawSymbol: symbol, symbol: binance.base(symbol) + "USDT", side: side || sig.side,
+    price: Number.isFinite(entryPrice) ? entryPrice : sig.lastClose,
     spike20: sig.spike20, spike50: sig.spike50, flatCandles: sig.flatCandles, barPct: sig.barPct,
     prevVolBelowHalf: sig.prevVolBelowHalf, rsiOversoldOk: sig.rsiOversoldOk, rsiRecoveryFromLow: sig.rsiRecoveryFromLow,
     volBelowMaBars: sig.volBelowMaBars, crossStrength: sig.crossStrength, rsi14: sig.rsi14,
@@ -321,8 +317,28 @@ async function recordManualTrade(symbol, side, entryPrice, at) {
   row.spikeScore = M.score(row, cfg.WEIGHTS, cfg.ENGINE);
   row.status = M.statusOf(row, row.spikeScore);
   row.blocks = M.blocksOf(row, cfg.ENGINE);
+  return row;
+}
 
+/* Manual trades (the user opening a position by hand in the app, not a
+   scanner detection) — logged as ML training examples too, so the outcome
+   log isn't limited to what the automated ignition check happens to flag.
+   Side-effecting only (logs via outcomes.recordSignal); returns nothing
+   worth reporting back beyond success/failure. */
+async function recordManualTrade(symbol, side, entryPrice, at) {
+  const tf = cfg.SCAN_TF || "15m";
+  const row = await computeFreshRow(symbol, tf, side, entryPrice);
   outcomes.recordSignal("binance", tf, row, at, "manual");
+}
+
+/* Read-only "how does this look RIGHT NOW" reading for whatever symbol is
+   currently open in the app — not gated by the scanner ever having flagged
+   it as a signal, and never logged anywhere. This is what powers the
+   on-chart live labels (OI subindo/caindo, LSR subindo/caindo, RSI
+   recuperando, spike pós-flat) for ANY asset, matching the same reading the
+   user already does by eye. */
+async function computeLiveReading(symbol, tf) {
+  return computeFreshRow(symbol, tf || cfg.SCAN_TF || "15m");
 }
 
 /* Snapshots, keyed by [exchange][tf]. */
@@ -492,4 +508,4 @@ function getSymbolHistory(symbol) {
   return outcomes.historyForSymbol(symbol);
 }
 
-module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory };
+module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading };
