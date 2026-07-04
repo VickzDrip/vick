@@ -178,21 +178,25 @@ the chart the same way you already read RSI/OI/LSR, not something you have
 to go read as numbers in a terminal separately. Off by default; read-only
 (fetches history, never writes anything).
 
-**Any asset, not just ones the scanner has flagged.** The history/markers
-feature above only has data for symbols that already ignited or were
-manually traded. `worker.computeLiveReading(symbol, tf)` (exposed at
+**Any asset, not just ones the scanner has flagged.** `GET /api/dvl/scanner/history?symbol=X`
+above only has data for symbols that already ignited or were manually
+traded. `worker.computeLiveReading(symbol, tf)` (exposed at
 `GET /api/dvl/scanner/live-reading?symbol=X&tf=Y`) is different: it computes
 a full fresh row for literally ANY symbol, right now, whether or not the
 scanner has ever flagged it — same computation `recordManualTrade` uses
-(`computeFreshRow`, shared by both), just read-only and never logged. The
-in-page app shows this as plain-language labels next to the "ML" chart
-toggle — "OI subindo"/"OI caindo", "LSR subindo"/"LSR caindo" (colored by
-which direction is actually favorable for each — OI rising, LSR falling —
-not just green-for-up), "RSI recuperando (V)" when `rsiRecoveryFromLow` is
-meaningfully positive, "Spike pós-flat" when those blocks line up, plus all
-6 blocks as tags. This automates exactly the reading the user already does
-by eye on any chart, for any asset, instead of only surfacing it after the
-fact for symbols the automated ignition check happened to catch.
+(`computeFreshRow`, shared by both), just read-only and never logged.
+
+The in-page app deliberately keeps this simple: a single small always-on
+readout in the corner of the chart, no button/panel/filters to interact
+with, showing "OI subindo"/"OI caindo", "LSR subindo"/"LSR caindo" (colored
+by which direction is actually favorable for each — OI rising, LSR falling
+— not just green-for-up), and "RSI recuperando (V)" when
+`rsiRecoveryFromLow` is meaningfully positive, or "Spike pós-flat" when
+those blocks line up. An earlier version of this also drew historical
+marker dots on the chart (from the `/history` endpoint) behind a toggle
+button with letter-combo filter chips — removed for being more complexity
+than the ask needed; the `/history` endpoint itself is untouched and still
+usable directly if that view is worth revisiting later.
 
 **Resolution is event-driven (a "triple barrier"), not a fixed clock wait.**
 Every cycle, each pending signal's current price is checked against its
