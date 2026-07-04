@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.059</title>
+<title>DVL Binance Live — Beta 1.060</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.059';
+window.DVL_APP_VERSION = 'Beta 1.060';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.059";
+const DVL_APP_VERSION = "Beta 1.060";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.060", note: "Corrige o bug de painéis cortados com 4+ indicadores ativos ao mesmo tempo (OI, LSR, Net Short, Net Delta…): os painéis agora se ajustam pra caber todos na tela, achatando de forma mais inteligente em vez de cortar/travar. Também corrige o Net Short/Net Delta não aparecerem se ligados sozinhos, sem OI/LSR junto." },
   { version: "Beta 1.059", note: "Dois indicadores novos no menu Indicadores: DVL Net Short e DVL Net Delta, iguais aos que você vê na CoinGlass — aproximados via Binance (posição long/short dos top traders × Open Interest, já que não temos chave paga da CoinGlass). Cada um com sua própria média móvel configurável (padrão 20 candles, dá pra mudar no painel de cada um)." },
   { version: "Beta 1.058", note: "Backend + ML — LONG e SHORT agora treinam como dois modelos separados: os 6 blocos (RSI sobrevenda, OI subindo, LSR caindo…) foram pensados só pro seu setup de compra, então misturar os dois no mesmo treino estava contaminando o que o modelo aprende. O card 'Aprendizado (ML)' no Copilot agora mostra LONG e SHORT lado a lado, cada um com seu próprio progresso/acurácia/pesos. Quando ligar 'Pesos do score aprendido' em Filtros, cada sinal usa o modelo do seu próprio lado (LONG usa peso LONG, SHORT usa peso SHORT) — SHORT continua caindo pros pesos manuais até ter dado e padrão próprio suficiente." },
   { version: "Beta 1.057", note: "Labels de OI/LSR/RSI movidos pro canto inferior direito de cada painel. Novo: candles com \"spike pós-flat\" (volume estourando depois de uma base parada) agora ficam pintados de amarelo direto no gráfico principal, fácil de identificar — e o indicador de Volume ganhou um switch \"Destacar\" (ativo por padrão) que também realça essas barras de volume no próprio painel. Tudo calculado em cima da mesma MA de volume já usada no indicador, sem chamada de rede." },
@@ -22277,7 +22278,9 @@ function dvlLowerPanelOn(){
     const dv = !!(window.DVLDeltaVolume && typeof window.DVLDeltaVolume.on === "function" && window.DVLDeltaVolume.on());
     const tv = !!(window.DVLTickVolume && typeof window.DVLTickVolume.on === "function" && window.DVLTickVolume.on());
     const exr = !!(window.DVLExhaustionRSI && typeof window.DVLExhaustionRSI.on === "function" && window.DVLExhaustionRSI.on());
-    return !!(oi || ls || t1 || t2 || dv || tv || exr);
+    const ns = !!(window.DVLNetShortOscillator && typeof window.DVLNetShortOscillator.on === "function" && window.DVLNetShortOscillator.on());
+    const nd = !!(window.DVLNetDeltaOscillator && typeof window.DVLNetDeltaOscillator.on === "function" && window.DVLNetDeltaOscillator.on());
+    return !!(oi || ls || t1 || t2 || dv || tv || exr || ns || nd);
   }catch(_){
     return false;
   }
@@ -22294,7 +22297,7 @@ function dvlPricePanelHeight(totalH){
         return window.DVLTestOscillator.splitHeight(totalH);
       }
     }catch(_){}
-    return Math.max(250, totalH * .62);
+    return Math.max(140, totalH * .62);
   }
   return totalH;
 }
@@ -24095,24 +24098,45 @@ function draw(){
     const lowerH = Math.max(90, h - priceH);
     let heights = [];
 
-    if(window.__dvlOscRatios && Array.isArray(window.__dvlOscRatios) && window.__dvlOscRatios.length === activeOscillators.length){
-      heights = window.__dvlOscRatios.map(r => Math.max(60, lowerH * r));
-    } else if(activeOscillators.length === 1){
+    /* With few oscillators (or a tall screen) each panel keeps its ideal
+       60px+ height, unchanged from before. With MANY active at once (Net
+       Short/Net Delta on top of OI/LSR/RSI/etc.) an unconditional 60px
+       floor per panel could add up to more than lowerH and force an
+       overflow/cutoff — this shrinks the floor toward an equal split as
+       needed. Hard floor is 50, not lower: DVLExhaustionRSI silently draws
+       nothing under a 50px panel height, so anything smaller would look
+       like a blank/broken panel instead of just compact. */
+    const N = activeOscillators.length;
+    const minPanel = Math.max(50, Math.min(60, lowerH / N));
+
+    if(window.__dvlOscRatios && Array.isArray(window.__dvlOscRatios) && window.__dvlOscRatios.length === N){
+      heights = window.__dvlOscRatios.map(r => Math.max(minPanel, lowerH * r));
+      const sum0 = heights.reduce((a,b)=>a+b,0);
+      if(sum0 > lowerH) heights = heights.map(hh => hh * (lowerH / sum0));
+    } else if(N === 1){
       heights = [lowerH];
+    }else if(minPanel * N >= lowerH){
+      /* Not enough room for every panel to clear even the reduced floor
+         (an extreme case — many oscillators on a very short screen) —
+         split what's left equally rather than letting only the middle
+         panels shrink below it while first/last stay artificially taller. */
+      heights = new Array(N).fill(lowerH / N);
     }else{
       const ratio = (
         window.DVLTestOscillator && typeof window.DVLTestOscillator.stackSplitRatio === "function"
       ) ? window.DVLTestOscillator.stackSplitRatio() : 0.5;
 
-      const minPanel = 60;
-      const firstH = Math.max(minPanel, Math.min(lowerH - minPanel * (activeOscillators.length - 1), lowerH * ratio));
-      const restH = Math.max(minPanel, lowerH - firstH);
-      const eachRest = restH / Math.max(1, activeOscillators.length - 1);
+      /* Every panel gets minPanel guaranteed; only the space LEFT OVER
+         beyond that floor gets split by `ratio` (first panel) vs evenly
+         (the rest) — this is what actually keeps middle panels from
+         dropping below minPanel, which the old first/last-only clamping
+         didn't. */
+      const extra = lowerH - minPanel * N;
+      const firstExtra = extra * ratio;
+      const restExtraEach = (extra - firstExtra) / (N - 1);
 
-      heights = [firstH];
-      for(let i = 1; i < activeOscillators.length; i++){
-        heights.push(i === activeOscillators.length - 1 ? Math.max(minPanel, lowerH - heights.reduce((a,b)=>a+b,0)) : eachRest);
-      }
+      heights = [minPanel + firstExtra];
+      for(let i = 1; i < N; i++) heights.push(minPanel + restExtraEach);
     }
 
     window.__dvlDividerYPositions = [];
@@ -63548,8 +63572,16 @@ body.dvlScannerOpen080 #chartWrap{
   'use strict';
 
   var LS_KEY     = 'dvlDivRatios0803';
-  var MIN_OSC_PX = 60;
-  var MIN_PRC_PX = 250;
+  /* Lowered from 60/250 — with 4+ oscillators active at once (OI, LSR, Net
+     Short, Net Delta, ...) the old floors could add up to more than the
+     screen has room for, cutting panels off. Smaller floors let the user
+     drag everything flatter to fit it all; the auto-split logic in the
+     main draw loop shrinks its own per-panel minimum the same way.
+     MIN_OSC_PX can't go below 50 — DVLExhaustionRSI silently draws nothing
+     under a 50px panel height (its own internal guard), so anything
+     smaller would look like a blank/broken panel instead of just compact. */
+  var MIN_OSC_PX = 50;
+  var MIN_PRC_PX = 140;
   var SNAP_PX    = 14;
 
   function loadRatios(){ try{ return JSON.parse(localStorage.getItem(LS_KEY))||{}; }catch(_){ return {}; } }
