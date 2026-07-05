@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.066</title>
+<title>DVL Binance Live — Beta 1.067</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.066';
+window.DVL_APP_VERSION = 'Beta 1.067';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.066";
+const DVL_APP_VERSION = "Beta 1.067";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.067", note: "Bot Demo agora consulta o modelo aprendido antes de abrir posição: além do score do Scanner (≥72), só entra se o modelo daquele lado (regressão ou árvore, o que testar melhor) também não descartar o sinal. Entradas que o modelo aprovou ganham uma marquinha 🤖. Enquanto um lado não tem dados treinados suficientes, continua abrindo só pelo score, como antes." },
   { version: "Beta 1.066", note: "Novo card no Copilot: Backtest financeiro. O card 'Aprendizado (ML)' já mostrava a acurácia (acertou a direção?); este mostra quanto cada abordagem teria RENDIDO no mesmo conjunto de teste nunca visto no treino — taxa de acerto e retorno médio/total comparando negociar todo sinal vs. só o que a regressão chamou de favorável vs. só o que a árvore de decisão chamou de favorável. Só leitura, não abre posição nenhuma." },
   { version: "Beta 1.065", note: "ML — Net Long/Short/Delta agora entram na equação do modelo aprendido, calculados no backend (a mesma aproximação via Binance dos osciladores, só que agora alimentando o treino também). Captado só no momento em que um sinal novo aparece (não a cada ciclo, pra não sobrecarregar a Binance de novo). Não virou um bloco novo — é o combo do jeito que a árvore de decisão já sabe fazer sozinha, sem eu precisar montar a combinação na mão: ela já pode juntar 'Net Delta subindo' com qualquer outro bloco/combinação sozinha." },
   { version: "Beta 1.064", note: "Novo indicador no menu Indicadores: DVL Net Long — completa o trio junto do Net Short e Net Delta, mesma aproximação via Binance (posição × Open Interest). Média móvel configurável, padrão 20." },
@@ -73065,6 +73066,7 @@ window.DVL_COPILOT_ML_STATUS_1024={
 #dvlCopilotPage0974 .dvlBd1030PosRow b.pos,#dvlCopilotPage0974 .dvlBd1030HistRow b.pos{color:#10df77!important;}
 #dvlCopilotPage0974 .dvlBd1030PosRow b.neg,#dvlCopilotPage0974 .dvlBd1030HistRow b.neg{color:#ff4a61!important;}
 #dvlCopilotPage0974 .dvlBd1030HistRow i{font-style:normal!important;color:#70827c!important;font-size:8.5px!important;font-weight:700!important;text-transform:uppercase!important;white-space:nowrap!important;}
+#dvlCopilotPage0974 .dvlBd1030PosRow .dvlBd1030MlTag,#dvlCopilotPage0974 .dvlBd1030HistRow .dvlBd1030MlTag{font-style:normal!important;font-size:11px!important;line-height:1!important;flex:0 0 auto!important;text-transform:none!important;}
 #dvlCopilotPage0974 .dvlBd1030Reset{margin-top:8px!important;width:100%!important;padding:7px!important;border-radius:9px!important;border:1px solid rgba(145,175,165,.18)!important;background:rgba(255,255,255,.03)!important;color:#9aa6a1!important;font-size:9.5px!important;font-weight:800!important;cursor:pointer!important;}
 </style>
 
@@ -73077,10 +73079,16 @@ window.DVL_COPILOT_ML_STATUS_1024={
    localStorage keys. LONG and SHORT run as two entirely separate wallets
    (same reasoning as the ML LONG/SHORT split: mixing them would blur which
    side is actually working). Entry gate mirrors the "Spike limpo" status
-   threshold (score >= 72) already meaningful elsewhere in the app; TP/SL/
-   horizon mirror outcomes.js's own triple-barrier definition (2%/1%/4h) so
-   the demo's win rate is directly comparable to what the ML's testAccuracy
-   already measures — same rules, just watched live instead of backtested. */
+   threshold (score >= 72) already meaningful elsewhere in the app, PLUS a
+   second gate on r.mlFavorable (worker.js's train.predictFavorable, run
+   against that row's own side model — whichever of logistic/tree tests
+   better for it): only `=== false` (the model actively disagrees) blocks
+   an entry; `null` (that side isn't trained yet) leaves the score-only
+   gate to decide alone, same fallback convention as everywhere else ML
+   touches this app. TP/SL/horizon mirror outcomes.js's own triple-barrier
+   definition (2%/1%/4h) so the demo's win rate is directly comparable to
+   what the ML's testAccuracy/backtest.js already measure — same rules,
+   just watched live instead of backtested. */
 (function(){
   "use strict";
   if(window.DVL_BOTDEMO_1030) return;
@@ -73132,7 +73140,7 @@ window.DVL_COPILOT_ML_STATUS_1024={
 
   function hasOpen(side,symbol){ return wallet(side).positions.some(function(p){ return p.symbol===symbol; }); }
 
-  function tryOpen(symbol,side,score,price){
+  function tryOpen(symbol,side,score,price,mlFavorable,mlBestModel){
     if(!(price>0) || !symbol) return;
     var w=wallet(side);
     if(hasOpen(side,symbol)) return;
@@ -73141,7 +73149,7 @@ window.DVL_COPILOT_ML_STATUS_1024={
     var qty=size/price;
     var tp=side==="SHORT" ? price*(1-PROFIT_TARGET_PCT/100) : price*(1+PROFIT_TARGET_PCT/100);
     var sl=side==="SHORT" ? price*(1+STOP_LOSS_PCT/100) : price*(1-STOP_LOSS_PCT/100);
-    w.positions.push({ id:"bd_"+Date.now()+"_"+Math.random().toString(36).slice(2,7), symbol:symbol, side:side, entry:price, qty:qty, size:size, tp:tp, sl:sl, score:score, openedAt:Date.now() });
+    w.positions.push({ id:"bd_"+Date.now()+"_"+Math.random().toString(36).slice(2,7), symbol:symbol, side:side, entry:price, qty:qty, size:size, tp:tp, sl:sl, score:score, mlFavorable:(mlFavorable===true), mlBestModel:mlBestModel||null, openedAt:Date.now() });
     w.balance-=size;
     persist(side);
     render();
@@ -73154,7 +73162,7 @@ window.DVL_COPILOT_ML_STATUS_1024={
     w.positions.splice(idx,1);
     var pnl=side==="SHORT" ? (pos.entry-price)*pos.qty : (price-pos.entry)*pos.qty;
     w.balance+=pos.size+pnl;
-    w.history.unshift({ symbol:pos.symbol, side:side, entry:pos.entry, exit:price, pnl:pnl, pnlPct:(pnl/pos.size)*100, reason:reason, score:pos.score, openedAt:pos.openedAt, closedAt:Date.now() });
+    w.history.unshift({ symbol:pos.symbol, side:side, entry:pos.entry, exit:price, pnl:pnl, pnlPct:(pnl/pos.size)*100, reason:reason, score:pos.score, mlFavorable:pos.mlFavorable, mlBestModel:pos.mlBestModel, openedAt:pos.openedAt, closedAt:Date.now() });
     if(w.history.length>MAX_HISTORY) w.history.length=MAX_HISTORY;
     persist(side);
   }
@@ -73179,7 +73187,16 @@ window.DVL_COPILOT_ML_STATUS_1024={
 
   /* Reads the SAME snapshot the Scanner tab does — no separate detection
      logic, just reacting to what's already been found. score threshold
-     matches the "Spike limpo" bar (metrics.js's statusOf, sc>=72). */
+     matches the "Spike limpo" bar (metrics.js's statusOf, sc>=72).
+
+     Second gate, on top of the score: r.mlFavorable (worker.js's
+     train.predictFavorable, run against that row's OWN side model —
+     whichever of logistic/tree tests better for it). `=== false` is the
+     ONLY value that blocks an entry — `true` opens as normal, and `null`
+     (that side hasn't cleared MIN_SAMPLES yet, no opinion to give) also
+     lets the score-only gate decide, same "no model yet -> fall back to
+     the existing behavior" convention the rest of the app already uses
+     for the ML toggle in Filtros. */
   async function scanSignals(){
     var base=baseUrl().replace(/\/$/,"");
     if(!base) return;
@@ -73189,10 +73206,11 @@ window.DVL_COPILOT_ML_STATUS_1024={
       rows.forEach(function(r){
         var score=Number(r.spikeScore)||0;
         if(score<SCORE_THRESHOLD) return;
+        if(r.mlFavorable===false) return; // that side's own model actively disagrees — skip this one
         var side=String(r.side||"").toUpperCase()==="SHORT" ? "SHORT" : "LONG";
         var symbol=String(r.rawSymbol||r.symbol||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
         var price=Number(r.price)||0;
-        tryOpen(symbol,side,score,price);
+        tryOpen(symbol,side,score,price,r.mlFavorable,r.mlBestModel);
       });
     }catch(_){ /* stay silent — retried on the next poll */ }
   }
@@ -73247,12 +73265,14 @@ window.DVL_COPILOT_ML_STATUS_1024={
         var price=_lastPriceMap[p.symbol];
         var pnl=price>0 ? (side==="SHORT"?(p.entry-price)*p.qty:(price-p.entry)*p.qty) : 0;
         var pnlPct=price>0 ? (pnl/p.size)*100 : 0;
-        return '<div class="dvlBd1030PosRow"><span>'+esc(p.symbol)+'</span><b class="'+(pnl>=0?"pos":"neg")+'">'+esc(fmtPct(pnlPct))+'</b></div>';
+        var mlTag=p.mlFavorable ? '<i class="dvlBd1030MlTag" title="Modelo ('+esc(p.mlBestModel||"")+') concordou na entrada">🤖</i>' : '';
+        return '<div class="dvlBd1030PosRow"><span>'+esc(p.symbol)+'</span>'+mlTag+'<b class="'+(pnl>=0?"pos":"neg")+'">'+esc(fmtPct(pnlPct))+'</b></div>';
       }).join("")+'</div>';
     }
     if(closed.length){
       out+='<div class="dvlBd1030History">'+closed.slice(0,5).map(function(h){
-        return '<div class="dvlBd1030HistRow"><span>'+esc(h.symbol)+'</span><b class="'+(h.pnl>=0?"pos":"neg")+'">'+esc(fmtPct(h.pnlPct))+'</b><i>'+esc(REASON_LABEL[h.reason]||h.reason)+'</i></div>';
+        var mlTag=h.mlFavorable ? '<i class="dvlBd1030MlTag" title="Modelo ('+esc(h.mlBestModel||"")+') concordou na entrada">🤖</i>' : '';
+        return '<div class="dvlBd1030HistRow"><span>'+esc(h.symbol)+'</span>'+mlTag+'<b class="'+(h.pnl>=0?"pos":"neg")+'">'+esc(fmtPct(h.pnlPct))+'</b><i>'+esc(REASON_LABEL[h.reason]||h.reason)+'</i></div>';
       }).join("")+'</div>';
     }
     out+='<button type="button" class="dvlBd1030Reset" data-bd-reset="'+side+'">Reiniciar carteira '+side+'</button>';
@@ -73262,7 +73282,7 @@ window.DVL_COPILOT_ML_STATUS_1024={
 
   function bodyHtml(){
     var out='<div class="dvlBd1030Body">';
-    out+='<div class="dvlBd1030Note">100% simulado — carteira virtual, não envia ordem nenhuma pra exchange nem usa dinheiro real. Abre quando um ativo bate score alto no Scanner (≥'+SCORE_THRESHOLD+'), fecha no alvo/stop ou depois de 4h — os mesmos critérios que já rotulam os dados do ML. LONG e SHORT rodam em carteiras separadas, cada uma começando com '+esc(fmtMoney(START_BALANCE))+'.</div>';
+    out+='<div class="dvlBd1030Note">100% simulado — carteira virtual, não envia ordem nenhuma pra exchange nem usa dinheiro real. Abre quando um ativo bate score alto no Scanner (≥'+SCORE_THRESHOLD+') <b>e</b> o modelo aprendido daquele lado não descarta o sinal (🤖 marca as entradas que o modelo também aprovou); fecha no alvo/stop ou depois de 4h — os mesmos critérios que já rotulam os dados do ML. LONG e SHORT rodam em carteiras separadas, cada uma começando com '+esc(fmtMoney(START_BALANCE))+'.</div>';
     out+=walletHtml("LONG");
     out+=walletHtml("SHORT");
     out+='</div>';

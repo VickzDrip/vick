@@ -277,6 +277,17 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
     row.spikeScore = M.score(row, cfg.WEIGHTS, cfg.ENGINE);
     row.status = M.statusOf(row, row.spikeScore);
     row.blocks = M.blocksOf(row, cfg.ENGINE);
+    /* Advisory only — does the row's OWN side's trained model (whichever
+       of logistic/tree tests better for it) call this favorable RIGHT NOW?
+       null (not false) until that side clears MIN_SAMPLES, same "no
+       opinion yet" convention train.predictFavorable documents. Consumed
+       by the Bot Demo (index.html) as an extra entry gate alongside the
+       existing score threshold — never affects spikeScore/status/blocks
+       themselves. */
+    const mlPred = train.predictFavorable(_modelStatus[row.side === "SHORT" ? "SHORT" : "LONG"], row);
+    row.mlFavorable = mlPred.favorable;
+    row.mlProb = mlPred.prob;
+    row.mlBestModel = mlPred.bestModel;
   });
 
   /* Log the feature snapshot for freshly-joined signals only (ML outcome

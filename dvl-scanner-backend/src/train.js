@@ -236,6 +236,49 @@ function evaluate(examples, w, b) {
   return correct / examples.length;
 }
 
+/* Scores ANY live row (same shape worker.js's buildRow/computeFreshRow
+   produce — row.blocks plus the continuous fields normalizeContinuous
+   reads directly off the row) against an already-trained side model,
+   using whichever of logistic/tree that side's own trainSide() found to
+   test better (model.bestModel) — the same comparison already surfaced in
+   the Copilot "Aprendizado (ML)" card, just applied live instead of only
+   reported after the fact. Falls back to the logistic model whenever the
+   tree isn't actually available to run (older persisted models saved
+   before `tree.root` existed) so this never throws on a stale model file.
+   Returns `{ favorable: null, ... }` (not false!) when `model` itself isn't
+   trained yet — callers should treat null as "no opinion yet", not "no",
+   matching how the rest of the app falls back to manual behavior until a
+   side has enough data. */
+function predictFavorable(model, row) {
+  if (!model || !model.trained) return { favorable: null, prob: null, bestModel: null, logisticProb: null, treeProb: null };
+
+  const blocks = row.blocks || {};
+  const boolFeatures = BLOCK_KEYS.map(k => (blocks[k] ? 1 : 0));
+  const contFeatures = normalizeContinuous(row);
+  const pairFeatures = computePairFeatures(blocks);
+  const featureVec = boolFeatures.concat(contFeatures).concat(pairFeatures);
+
+  const coeffs = model.coefficients || {};
+  let z = Number(model.bias) || 0;
+  FEATURE_KEYS.forEach((k, i) => { z += (Number(coeffs[k]) || 0) * featureVec[i]; });
+  const logisticProb = sigmoid(z);
+
+  let treeProb = null;
+  if (model.tree && model.tree.root) {
+    try { treeProb = tree.predictProb(model.tree.root, featureVec); } catch (_) { treeProb = null; }
+  }
+
+  const useTree = model.bestModel === "tree" && treeProb != null;
+  const prob = useTree ? treeProb : logisticProb;
+  return {
+    favorable: prob >= 0.5,
+    prob: round3(prob),
+    bestModel: useTree ? "tree" : "logistic",
+    logisticProb: round3(logisticProb),
+    treeProb: treeProb != null ? round3(treeProb) : null
+  };
+}
+
 /* Converts the BLOCK coefficients (first BLOCK_KEYS.length of w) to the
    same positive 0-40 scale cfg.WEIGHTS uses, for backward compatibility
    with the existing block-weight display / a future M.score() plug-in. A
@@ -313,6 +356,12 @@ function trainSide(side, prev) {
     trainAccuracy: treeTrainAccuracy,
     testAccuracy: treeTestAccuracy,
     maxDepth: treeOpts.maxDepth,
+    /* The actual tree structure, persisted (not just its summary stats)
+       so predictFavorable() below can run it against a LIVE row later —
+       without this, only the logistic model could ever score a row
+       outside of training/backtesting. Small: capped at maxDepth 4, so at
+       most ~15 nodes. */
+    root: treeModel.root,
     importance: tree.featureImportance(treeModel, trainSet.length),
     /* Top 8 root-to-leaf rules by confidence*support — the tree's version
        of pairWeights: what it actually found, inspectable instead of a
@@ -376,7 +425,7 @@ function maybeTrain() {
 }
 
 module.exports = {
-  loadExamples, splitTemporal, fit, evaluate, toWeights, toPairWeights, computePairFeatures, loadModel, saveModel, trainSide, maybeTrain,
+  loadExamples, splitTemporal, fit, evaluate, toWeights, toPairWeights, computePairFeatures, predictFavorable, loadModel, saveModel, trainSide, maybeTrain,
   BLOCK_KEYS, CONT_KEYS, PAIR_KEYS, BLOCK_PAIRS, FEATURE_KEYS, SIDES, MIN_SAMPLES, MIN_NEW_SAMPLES, TEST_FRACTION
 };
 

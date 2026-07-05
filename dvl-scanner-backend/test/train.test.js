@@ -211,6 +211,28 @@ ok(Array.isArray(confluenceModel.tree.rules) && confluenceModel.tree.rules.lengt
 ok(confluenceModel.tree.importance && typeof confluenceModel.tree.importance === "object", "tree result carries feature importance");
 ok(confluenceModel.bestModel === "logistic" || confluenceModel.bestModel === "tree", "bestModel names one of the two actual model types (got " + confluenceModel.bestModel + ")");
 
+/* predictFavorable: scores a LIVE row (worker.js's buildRow shape — blocks
+   plus continuous fields directly on the row, not a training example) —
+   this is the exact path worker.js wires into the Bot Demo's entry gate.
+   Reuses the confluence model above (favorable only when lsrBelowAvg AND
+   flatVolumeBar are both true) to confirm it actually distinguishes a
+   favorable-shaped row from an unfavorable one, not just that it runs. */
+const untrainedSide = train.maybeTrain().SHORT;
+const bothTrueRow = Object.assign({ blocks: blocks({ lsrBelowAvg: true, flatVolumeBar: true }) }, features({}));
+const neitherRow = Object.assign({ blocks: blocks({}) }, features({}));
+
+const untrainedPred = train.predictFavorable(untrainedSide, bothTrueRow);
+eq(untrainedPred.favorable, null, "predictFavorable returns null (not false) for an untrained model — 'no opinion yet', not 'no'");
+eq(untrainedPred.prob, null, "no probability either, for an untrained model");
+
+const bothTruePred = train.predictFavorable(confluenceModel, bothTrueRow);
+const neitherPred = train.predictFavorable(confluenceModel, neitherRow);
+eq(bothTruePred.favorable, true, "predictFavorable calls the trained AND-pattern favorable when both its blocks are true (got " + JSON.stringify(bothTruePred) + ")");
+eq(neitherPred.favorable, false, "predictFavorable calls it unfavorable when neither block is true (got " + JSON.stringify(neitherPred) + ")");
+ok(bothTruePred.prob > neitherPred.prob, "the favorable-shaped row scores a strictly higher probability than the unfavorable one (" + bothTruePred.prob + " vs " + neitherPred.prob + ")");
+ok(bothTruePred.bestModel === "logistic" || bothTruePred.bestModel === "tree", "predictFavorable names which model it actually used (got " + bothTruePred.bestModel + ")");
+ok(confluenceModel.tree && confluenceModel.tree.root && typeof confluenceModel.tree.root === "object", "the tree's actual root node is persisted on the model (needed for predictFavorable to ever use it)");
+
 /* computePairFeatures produces one bit per pair, in BLOCK_PAIRS order,
    1 only when both blocks in that pair are true. */
 const pf = train.computePairFeatures({ lsrBelowAvg: true, flatVolumeBar: true, spikeAboveAvg: false });

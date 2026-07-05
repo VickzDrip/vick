@@ -404,6 +404,40 @@ included. Nothing about outcome logging or training changes based on this
 toggle — it only affects which weights compute the score you see. Run
 training manually any time with `npm run train`.
 
+## Live ML gate for the Bot Demo (`train.predictFavorable`)
+Everything above (`trainSide`, `backtest.js`) scores the model against
+already-resolved, historical examples. `predictFavorable(model, row)` is the
+live counterpart: given any current row (the same shape `worker.js`'s
+`buildRow`/`computeFreshRow` already produce — `row.blocks` plus the
+continuous fields read directly off the row), it builds the identical
+feature vector `loadExamples` would (blocks + normalized continuous +
+pairs), runs it through that side's already-trained model, and returns
+whether the model calls this row favorable RIGHT NOW — using whichever of
+logistic/tree that side's own `trainSide()` found to test better
+(`model.bestModel`), the exact same comparison already shown in the
+Copilot "Aprendizado (ML)" card. Returns
+`{ favorable, prob, bestModel, logisticProb, treeProb }`, or
+`{ favorable: null, prob: null, ... }` — **null, not false** — for a side
+that hasn't cleared `MIN_SAMPLES` yet, so callers can tell "no opinion yet"
+apart from "the model says no".
+
+The tree's actual `root` node structure is persisted on `model.tree.root`
+specifically so this can run it later — without that, only the logistic
+model could ever score a row outside of training. It's small (capped at
+`maxDepth: 4`, so at most ~15 nodes), so persisting it costs nothing.
+
+`worker.js` calls this every scan cycle inside `scanExchange()`'s
+finalization step (right after `row.blocks`/`row.spikeScore` are set),
+writing `row.mlFavorable` / `row.mlProb` / `row.mlBestModel` onto every
+snapshot row — advisory fields only, never affecting `spikeScore`/`status`/
+`blocks` themselves. The app's Bot Demo (index.html) reads these as a
+SECOND gate on top of its existing score threshold: it only skips opening a
+position when `mlFavorable === false` (the model actively disagrees);
+`true` opens as usual, and `null` (no trained model for that side yet)
+leaves the score-only gate to decide alone — same "fall back until there's
+enough data" convention as the ML toggle in Filtros. Positions/history
+opened with the model's agreement carry a small 🤖 tag in the Bot Demo UI.
+
 ## Financial backtest (`src/backtest.js`)
 `trainSide()`'s `testAccuracy` answers "did the predicted direction match
 the outcome?" — it says nothing about magnitude. A model that's right 55%
