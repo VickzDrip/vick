@@ -280,10 +280,34 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
 
   /* Log the feature snapshot for freshly-joined signals only (ML outcome
      groundwork) — uses the finalized row (real score/blocks, not the
-     placeholder set before step 5). */
+     placeholder set before step 5). Net Long/Short/Delta (metrics.js's
+     netFlowTrend) are fetched HERE, per fresh join only — not every cycle
+     for every already-tracked row like oi/lsr trend are — because a fresh
+     join is rare (a handful of new detections/hour across every TF), while
+     tracked rows refresh every cycle; doing this per-cycle-per-row would
+     reintroduce the exact Binance rate-limit pressure CAND/REFRESH_MS were
+     cut to escape (see config.js). These stay a snapshot captured AT
+     DETECTION TIME for the ML pipeline only — they don't feed the live
+     score/blocks checklist the user sees, same deliberate-separate-
+     decision stance as the rest of the ML groundwork. */
   if (freshJoins.length) {
     const bySym = {};
     for (const row of rows) bySym[row.rawSymbol] = row;
+    await mapPool(freshJoins, cfg.POOL, async (sym) => {
+      const row = bySym[sym];
+      if (!row) return;
+      try {
+        const [oiSeries, posData] = await Promise.all([
+          binance.openInterestHist(sym, tf, cfg.OI_MA_LEN),
+          binanceLsr.positionRatio(sym, tf, cfg.OI_MA_LEN)
+        ]);
+        const netT = M.netFlowTrend(oiSeries, posData && posData.series);
+        row.netLongRatio = netT.netLong.ratio || 0;
+        row.netShortRatio = netT.netShort.ratio || 0;
+        row.netDeltaRatio = netT.netDelta.ratio || 0;
+        row.netDeltaSlope = netT.netDelta.slope || 0;
+      } catch (_) { /* leave unset — outcomes.js/train.js default to neutral */ }
+    });
     for (const sym of freshJoins) {
       const row = bySym[sym];
       if (row) outcomes.recordSignal(adapter.key, tf, row, now);
@@ -304,12 +328,14 @@ async function computeFreshRow(symbol, tf, side, entryPrice) {
   const k = await binance.klines(symbol, tf);
   const sig = M.computeSignal(k.closes, k.vols, cfg.ENGINE);
 
-  const [oiSeries, lsrData] = await Promise.all([
+  const [oiSeries, lsrData, posData] = await Promise.all([
     binance.openInterestHist(symbol, tf, cfg.OI_MA_LEN).catch(() => []),
-    binanceLsr.accountRatio(symbol, tf, cfg.LSR_MA_LEN).catch(() => null)
+    binanceLsr.accountRatio(symbol, tf, cfg.LSR_MA_LEN).catch(() => null),
+    binanceLsr.positionRatio(symbol, tf, cfg.OI_MA_LEN).catch(() => null)
   ]);
   const oiT = M.trendVsMA(oiSeries);
   const lsrT = (lsrData && lsrData.series) ? M.trendVsMA(lsrData.series) : { arrow: "up", color: "yellow", ratio: 0, slope: 0 };
+  const netT = M.netFlowTrend(oiSeries, posData && posData.series);
 
   const row = {
     rawSymbol: symbol, symbol: binance.base(symbol) + "USDT", side: side || sig.side,
@@ -318,7 +344,9 @@ async function computeFreshRow(symbol, tf, side, entryPrice) {
     prevVolBelowHalf: sig.prevVolBelowHalf, rsiOversoldOk: sig.rsiOversoldOk, rsiRecoveryFromLow: sig.rsiRecoveryFromLow,
     volBelowMaBars: sig.volBelowMaBars, crossStrength: sig.crossStrength, rsi14: sig.rsi14,
     oi: oiT.arrow, oiColor: oiT.color, oiRatio: oiT.ratio || 0, oiSlope: oiT.slope || 0,
-    lsr: lsrT.arrow, lsrColor: lsrT.color, lsrRatio: lsrT.ratio || 0, lsrSlope: lsrT.slope || 0
+    lsr: lsrT.arrow, lsrColor: lsrT.color, lsrRatio: lsrT.ratio || 0, lsrSlope: lsrT.slope || 0,
+    netLongRatio: netT.netLong.ratio || 0, netShortRatio: netT.netShort.ratio || 0,
+    netDeltaRatio: netT.netDelta.ratio || 0, netDeltaSlope: netT.netDelta.slope || 0
   };
   row.spikeScore = M.score(row, cfg.WEIGHTS, cfg.ENGINE);
   row.status = M.statusOf(row, row.spikeScore);

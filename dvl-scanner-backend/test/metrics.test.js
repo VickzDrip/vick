@@ -133,5 +133,30 @@ const sigV = M.computeSignal(closesV, volsV);
 ok(sigV.rsiRecoveryFromLow > 0, "a decline followed by a bounce (a 'V') shows positive recovery (got " + sigV.rsiRecoveryFromLow + ", rsi14=" + sigV.rsi14.toFixed(1) + ")");
 ok(M.computeSignal(closesFlat, volsFlat).rsiRecoveryFromLow === 0, "a flat series that never dipped has zero recovery too");
 
+/* netFlowTrend — Net Long/Short/Delta approximation (position-ratio x OI,
+   see exchanges.js's positionRatio / this function's own doc-comment).
+   netLong grows while netShort stays flat -> netDelta should rise (the
+   "buy side winning" case the ML pipeline actually cares about). */
+const oiFlat = mk(20, () => 1000000); // constant OI, isolates the position-ratio side of the calc
+const posGrowingLong = mk(20, i => ({ long: 0.5 + i * 0.02, short: 0.5 - i * 0.02 }));
+const flow1 = M.netFlowTrend(oiFlat, posGrowingLong);
+ok(flow1.netLong.slope > 0, "netLong slope is positive when the long fraction climbs steadily (got " + flow1.netLong.slope + ")");
+ok(flow1.netShort.slope < 0, "netShort slope is negative as the short fraction shrinks (got " + flow1.netShort.slope + ")");
+ok(flow1.netDelta.slope > 0, "netDelta slope is positive (buy side pulling ahead) when long grows and short shrinks (got " + flow1.netDelta.slope + ")");
+
+/* The opposite case: short growing faster than long (a squeeze-the-other-
+   way pattern) should show netDelta falling, not rising. */
+const posGrowingShort = mk(20, i => ({ long: 0.5 - i * 0.01, short: 0.5 + i * 0.03 }));
+const flow2 = M.netFlowTrend(oiFlat, posGrowingShort);
+ok(flow2.netDelta.slope < 0, "netDelta slope is negative when short grows faster than long shrinks (got " + flow2.netDelta.slope + ")");
+
+/* Not enough overlap between the OI series and the position-ratio series
+   (e.g. one fetch failed) -> neutral defaults, never a crash/NaN. */
+const flowEmpty = M.netFlowTrend([], null);
+eq(flowEmpty.netLong.slope, 0, "empty input yields a neutral netLong (no crash)");
+eq(flowEmpty.netDelta.color, "yellow", "empty input yields the same neutral yellow trendVsMA already uses elsewhere");
+const flowShort = M.netFlowTrend([1000000], [{ long: 0.6, short: 0.4 }]);
+eq(flowShort.netDelta.slope, 0, "a single overlapping point also yields a neutral result (not enough data for a trend)");
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

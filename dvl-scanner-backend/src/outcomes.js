@@ -122,7 +122,18 @@ function recordSignal(exchange, tf, row, now, source) {
       /* The "V": how far RSI has already climbed back up from its recent
          low — 0 if it's still falling (no low behind it yet), positive once
          it's bottomed out and started recovering. See metrics.js. */
-      rsiRecoveryFromLow: Number(row.rsiRecoveryFromLow) || 0
+      rsiRecoveryFromLow: Number(row.rsiRecoveryFromLow) || 0,
+      /* Net Long / Net Short / Net Delta — top-trader POSITION-size split
+         (not account count, like lsrRatio/lsrSlope above) times Open
+         Interest, same approximation the in-page DVL Net Long/Short/Delta
+         oscillators use client-side. See metrics.js's netFlowTrend. Only
+         captured at fresh-signal-detection time (worker.js), so may be
+         absent (defaults to 0, a neutral "no trend detected") on rows
+         logged before this existed or where the extra fetch failed. */
+      netLongRatio: Number(row.netLongRatio) || 0,
+      netShortRatio: Number(row.netShortRatio) || 0,
+      netDeltaRatio: Number(row.netDeltaRatio) || 0,
+      netDeltaSlope: Number(row.netDeltaSlope) || 0
     },
     returns: {}
   };

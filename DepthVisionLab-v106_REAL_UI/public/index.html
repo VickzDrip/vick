@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.064</title>
+<title>DVL Binance Live — Beta 1.065</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.064';
+window.DVL_APP_VERSION = 'Beta 1.065';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.064";
+const DVL_APP_VERSION = "Beta 1.065";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.065", note: "ML — Net Long/Short/Delta agora entram na equação do modelo aprendido, calculados no backend (a mesma aproximação via Binance dos osciladores, só que agora alimentando o treino também). Captado só no momento em que um sinal novo aparece (não a cada ciclo, pra não sobrecarregar a Binance de novo). Não virou um bloco novo — é o combo do jeito que a árvore de decisão já sabe fazer sozinha, sem eu precisar montar a combinação na mão: ela já pode juntar 'Net Delta subindo' com qualquer outro bloco/combinação sozinha." },
   { version: "Beta 1.064", note: "Novo indicador no menu Indicadores: DVL Net Long — completa o trio junto do Net Short e Net Delta, mesma aproximação via Binance (posição × Open Interest). Média móvel configurável, padrão 20." },
   { version: "Beta 1.063", note: "Novo: Bot Demo no Copilot — opera sozinho os sinais do Scanner numa carteira virtual (100% simulado, sem ordem real nenhuma), com LONG e SHORT em carteiras separadas de $10.000 cada. Abre posição quando um ativo bate score alto (≥72), fecha no alvo/stop ou depois de 4h — os mesmos critérios que já rotulam os dados do ML. Mostra patrimônio, retorno, posições abertas e histórico de trades pra cada lado, com botão pra reiniciar cada carteira quando quiser." },
   { version: "Beta 1.062", note: "ML — adicionei uma árvore de decisão de verdade (do zero, sem depender de lib externa) treinada junto com o modelo de regressão, nos mesmos dados. Diferente das combinações de 2 blocos, a árvore acha combos de 3+ blocos sozinha, sem eu precisar nomear cada combinação na mão. O card 'Aprendizado (ML)' agora mostra a acurácia da árvore ao lado da regressão e as regras que ela encontrou em português (ex: 'OI subindo + LSR caindo + RSI baixo → 86% favorável'), e avisa qual dos dois modelos venceu. Ainda não substitui o score do Scanner — é só leitura/comparação por enquanto." },
@@ -72863,7 +72864,9 @@ var CONT_LABELS={
   volBelowMaBarsN:"Barras de volume abaixo da média", barPctN:"Variação do candle",
   flatCandlesN:"Candles flat seguidos", oiRatioN:"Distância do OI da média",
   lsrRatioN:"Distância do LSR da média", crossStrengthN:"Força do cruzamento de volume",
-  oiSlopeN:"Tendência do OI", lsrSlopeN:"Tendência do LSR", rsiRecoveryN:"Recuperação do RSI (V)"
+  oiSlopeN:"Tendência do OI", lsrSlopeN:"Tendência do LSR", rsiRecoveryN:"Recuperação do RSI (V)",
+  netLongRatioN:"Net Long vs média", netShortRatioN:"Net Short vs média",
+  netDeltaRatioN:"Net Delta vs média", netDeltaSlopeN:"Tendência do Net Delta"
 };
 function featureLabel(name){
   if(BLOCK_LABELS[name]) return BLOCK_LABELS[name];

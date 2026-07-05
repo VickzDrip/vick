@@ -323,7 +323,35 @@ function trendVsMA(series) {
   return { arrow: above ? "up" : "down", color, ratio, slope };
 }
 
+/* Approximates CoinGlass's Net Long / Net Short / Net Delta panels using
+   only Binance's public API (no paid CoinGlass key) — same principle the
+   in-page DVL Net Long/Net Short/Net Delta oscillators already use
+   client-side: a top-trader position-ratio fraction (long/short split BY
+   POSITION SIZE, exchanges.js's positionRatio) times the Open Interest
+   already fetched for OI's own trend. netDelta = netLong - netShort;
+   Net Delta rising = buy side (new longs or short-covering) winning, a
+   different signal from lsrSlope (which is ACCOUNT-count-weighted, not
+   position-size-weighted) even though both describe long/short skew.
+   `oiSeries`/`posSeries` are aligned by INDEX, not timestamp — see
+   exchanges.js's positionRatio doc-comment for why that's an acceptable
+   approximation here. Returns trendVsMA()'s neutral default for all three
+   if there isn't enough overlap between the two series. */
+function netFlowTrend(oiSeries, posSeries) {
+  const neutral = { arrow: "up", color: "yellow", ratio: 0, slope: 0 };
+  const n = Math.min((oiSeries || []).length, (posSeries || []).length);
+  if (n < 2) return { netLong: neutral, netShort: neutral, netDelta: neutral };
+  const netLong = [], netShort = [], netDelta = [];
+  for (let i = 0; i < n; i++) {
+    const oi = Number(oiSeries[i]);
+    const p = posSeries[i];
+    if (!Number.isFinite(oi) || !p) continue;
+    const l = oi * Number(p.long), s = oi * Number(p.short);
+    netLong.push(l); netShort.push(s); netDelta.push(l - s);
+  }
+  return { netLong: trendVsMA(netLong), netShort: trendVsMA(netShort), netDelta: trendVsMA(netDelta) };
+}
+
 module.exports = {
   sma, pct, priceMaGlueStats, computeSignal,
-  score, blocksOf, ignitionScore, statusOf, ignitionStatus, oiTrend, lsrTrend, factorsOf, trendVsMA
+  score, blocksOf, ignitionScore, statusOf, ignitionStatus, oiTrend, lsrTrend, factorsOf, trendVsMA, netFlowTrend
 };

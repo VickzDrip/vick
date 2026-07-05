@@ -5,7 +5,8 @@
    (outcomes-log.jsonl: the 6 blocks' booleans AND the continuous raw
    values behind them, at signal time, plus what price actually did
    afterward) and fits a plain logistic regression — no external ML
-   dependency, appropriate for ~15 features and a modest dataset size.
+   dependency, appropriate for a few dozen features and a modest dataset
+   size (see FEATURE_KEYS.length for the current count).
 
    It's "hybrid" on purpose: the 6 blocks stay as interpretable yes/no
    checks (and their learned coefficients convert to the same 0-40 weight
@@ -61,7 +62,16 @@ const BLOCK_KEYS = ["spikeAboveAvg", "rsiOversold", "oiAboveAvg", "lsrBelowAvg",
    has RSI already bounced off a recent low), distinct from the snapshot
    ratio/level the block booleans check — see metrics.js's trendVsMA and
    rsiRecoveryFromLow. */
-const CONT_KEYS = ["spike20n", "spike50n", "rsi14n", "volBelowMaBarsN", "barPctN", "flatCandlesN", "oiRatioN", "lsrRatioN", "crossStrengthN", "oiSlopeN", "lsrSlopeN", "rsiRecoveryN"];
+const CONT_KEYS = [
+  "spike20n", "spike50n", "rsi14n", "volBelowMaBarsN", "barPctN", "flatCandlesN", "oiRatioN", "lsrRatioN", "crossStrengthN", "oiSlopeN", "lsrSlopeN", "rsiRecoveryN",
+  /* Net Long/Short/Delta (metrics.js's netFlowTrend — top-trader POSITION-
+     size split x Open Interest, a different weighting than lsrRatio/
+     lsrSlope's ACCOUNT-count split, so real incremental info rather than a
+     duplicate). netDeltaSlopeN in particular is the one the tree/pairs
+     can't get any other way: "buy side actively winning right now", not
+     just "OI is up" or "LSR is down" separately. */
+  "netLongRatioN", "netShortRatioN", "netDeltaRatioN", "netDeltaSlopeN"
+];
 
 /* Every 2-of-6 combination of the blocks (15 pairs) — see the module
    doc-comment above for why plain logistic regression needs these spelled
@@ -78,8 +88,8 @@ function computePairFeatures(blocks) {
   return BLOCK_PAIRS.map(([a, b]) => (blocks[a] && blocks[b]) ? 1 : 0);
 }
 
-/* Don't train (or retrain) on too little data — with 18 blocks/continuous
-   features PLUS 15 pair-interaction features (33 total), too few examples
+/* Don't train (or retrain) on too little data — with 22 blocks/continuous
+   features PLUS 15 pair-interaction features (37 total), too few examples
    risks fitting noise convincingly. Raised from 200 now that the feature
    count nearly doubled; L2 regularization and the temporal test split
    still help catch it if it happens — testAccuracy is what to watch. */
@@ -117,7 +127,11 @@ function normalizeContinuous(f) {
     clamp((Number(f.crossStrength) || 0) / 3, 0, 1),
     clamp(Number(f.oiSlope) || 0, -1, 1),
     clamp(Number(f.lsrSlope) || 0, -1, 1),
-    clamp((Number(f.rsiRecoveryFromLow) || 0) / 30, 0, 1)
+    clamp((Number(f.rsiRecoveryFromLow) || 0) / 30, 0, 1),
+    clamp(Number(f.netLongRatio) || 0, -1, 1),
+    clamp(Number(f.netShortRatio) || 0, -1, 1),
+    clamp(Number(f.netDeltaRatio) || 0, -1, 1),
+    clamp(Number(f.netDeltaSlope) || 0, -1, 1)
   ];
 }
 
@@ -175,7 +189,7 @@ function splitTemporal(examples, testFraction) {
 function sigmoid(z) { return 1 / (1 + Math.exp(-z)); }
 
 /* Batch gradient descent with L2 regularization. Deterministic (no random
-   init), fine for ~15 features and a dataset in the hundreds-to-low-thousands. */
+   init), fine for a few dozen features and a dataset in the hundreds-to-low-thousands. */
 function fit(examples, opts) {
   opts = opts || {};
   const lr = opts.lr || 0.15;

@@ -102,10 +102,13 @@ eq(model.accuracy, model.testAccuracy, "`accuracy` is an alias for the honest he
 ok(model.trainAccuracy > 0.6, "reasonable train accuracy on a near-separable dataset (got " + model.trainAccuracy + ")");
 ok(model.testAccuracy >= 0 && model.testAccuracy <= 1, "testAccuracy is a valid probability-like fraction (got " + model.testAccuracy + ")");
 
-/* All 18 hybrid features (6 blocks + 12 continuous, including the 3 trend
-   features: oiSlope/lsrSlope/rsiRecoveryFromLow) are present in coefficients. */
+/* All hybrid features (6 blocks + continuous, including the trend features
+   oiSlope/lsrSlope/rsiRecoveryFromLow/netDeltaSlope, plus the 15 pairs) are
+   present in coefficients. */
 eq(Object.keys(model.coefficients).length, train.FEATURE_KEYS.length, "coefficients cover every hybrid feature");
 ok(["oiSlopeN", "lsrSlopeN", "rsiRecoveryN"].every(k => train.CONT_KEYS.includes(k)), "the trend features (OI slope, LSR slope, RSI recovery) are part of CONT_KEYS");
+ok(["netLongRatioN", "netShortRatioN", "netDeltaRatioN", "netDeltaSlopeN"].every(k => train.CONT_KEYS.includes(k)), "the Net Long/Short/Delta features are part of CONT_KEYS");
+eq(train.FEATURE_KEYS.length, train.BLOCK_KEYS.length + train.CONT_KEYS.length + train.PAIR_KEYS.length, "FEATURE_KEYS is exactly blocks + continuous + pairs, nothing missing or duplicated");
 ok(fs.existsSync(process.env.DVL_MODEL_FILE), "model file is persisted once at least one side trains");
 
 /* 3) Re-running immediately (no new examples) returns the SAME LONG model

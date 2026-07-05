@@ -131,6 +131,30 @@ const binanceLsr = {
     if (!pts.length) return null;
     const series = pts.map(p => p.lsr);
     return { lsr: series[series.length - 1], series };
+  },
+  /* Top-trader long/short split BY POSITION SIZE (not account count, see
+     accountRatio above) — same field names Binance reuses across all 3
+     long/short ratio endpoints. Only used server-side to approximate Net
+     Long / Net Short / Net Delta for the ML pipeline (metrics.js's
+     netFlowTrend), the same principle the in-page DVL Net Long/Short/Delta
+     oscillators already use client-side: this fraction × Open Interest.
+     series is oldest→newest, aligned by INDEX (not timestamp) against an
+     openInterestHist() call made with the same period/limit — a same-
+     period, same-count pull from both endpoints lines up closely enough
+     for a trend/ratio approximation without a real join. */
+  async positionRatio(symbol, tf, limit) {
+    const period = (BINANCE_LSR_PERIOD && BINANCE_LSR_PERIOD[tf]) || "15m";
+    const url = "https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=" +
+      encodeURIComponent(symbol) + "&period=" + period + "&limit=" + (limit || 20);
+    const d = await getJSON(url);
+    if (!Array.isArray(d)) return null;
+    const pts = d
+      .map(x => ({ t: Number(x.timestamp), long: Number(x.longAccount), short: Number(x.shortAccount) }))
+      .filter(p => Number.isFinite(p.t) && Number.isFinite(p.long) && Number.isFinite(p.short) && p.long > 0)
+      .sort((a, b) => a.t - b.t);
+    if (!pts.length) return null;
+    const last = pts[pts.length - 1];
+    return { long: last.long, short: last.short, series: pts };
   }
 };
 

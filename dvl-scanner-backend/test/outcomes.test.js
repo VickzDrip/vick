@@ -35,7 +35,7 @@ const T0 = 1000000000000; // arbitrary base timestamp (ms)
 const MIN = 60000, HOUR = 3600000;
 
 /* 1) A fresh signal starts pending with no label yet. */
-const rowLong = { rawSymbol: "BTC_USDT", side: "LONG", price: 100, spikeScore: 82, blocks: { spikeAboveAvg: true, rsiOversold: true, oiAboveAvg: true, lsrBelowAvg: true, flatVolumeBar: true, prevVolBelowHalf: true }, oiSlope: 0.12, lsrSlope: -0.08, rsiRecoveryFromLow: 7.5 };
+const rowLong = { rawSymbol: "BTC_USDT", side: "LONG", price: 100, spikeScore: 82, blocks: { spikeAboveAvg: true, rsiOversold: true, oiAboveAvg: true, lsrBelowAvg: true, flatVolumeBar: true, prevVolBelowHalf: true }, oiSlope: 0.12, lsrSlope: -0.08, rsiRecoveryFromLow: 7.5, netLongRatio: 0.22, netShortRatio: -0.15, netDeltaRatio: 0.31, netDeltaSlope: 0.19 };
 outcomes.recordSignal("mexc", "15m", rowLong, T0);
 eq(outcomes.loadStats().pending, 1, "one entry pending after recordSignal");
 
@@ -66,6 +66,10 @@ eq(logged[0].features.oiSlope, 0.12, "TREND features (OI slope) are captured alo
 eq(logged[0].source, "auto", "no source argument defaults to \"auto\" (a scanner detection)");
 eq(logged[0].features.lsrSlope, -0.08, "LSR slope is captured");
 eq(logged[0].features.rsiRecoveryFromLow, 7.5, "the RSI 'V' recovery magnitude is captured");
+eq(logged[0].features.netLongRatio, 0.22, "Net Long ratio is captured");
+eq(logged[0].features.netShortRatio, -0.15, "Net Short ratio is captured");
+eq(logged[0].features.netDeltaRatio, 0.31, "Net Delta ratio is captured");
+eq(logged[0].features.netDeltaSlope, 0.19, "Net Delta slope is captured");
 
 /* 4) A stop-loss hit resolves unfavorably (label 0), just as fast. */
 outcomes.recordSignal("mexc", "15m", Object.assign({}, rowLong, { rawSymbol: "ETH_USDT" }), T0);
@@ -162,6 +166,19 @@ ok(hist[1].blocks && hist[1].blocks.rsiOversold === true, "pending entries also 
 eq(outcomes.historyForSymbol("NOBODY_USDT").length, 0, "a symbol with no history at all returns an empty array, not undefined/throw");
 eq(outcomes.historyForSymbol("").length, 0, "an empty/missing symbol returns an empty array rather than matching everything");
 eq(outcomes.historyForSymbol("hist_usdt").length, 2, "symbol matching is case-insensitive");
+
+/* Rows logged before Net Long/Short/Delta existed (or where the extra
+   server-side fetch failed) lack these fields entirely — must default to
+   a neutral 0, never crash/NaN, so old and new samples stay minglable in
+   the same training set (see train.js's normalizeContinuous). Appended at
+   the very end so it doesn't shift indices any earlier sequential test
+   relies on. */
+outcomes.recordSignal("binance", "15m", Object.assign({}, rowLong, { rawSymbol: "NONET_USDT", netLongRatio: undefined, netShortRatio: undefined, netDeltaRatio: undefined, netDeltaSlope: undefined }), T0 + 2 * HOUR);
+outcomes.checkOutcomes("binance", { NONET_USDT: 102.5 }, T0 + 2 * HOUR + 10 * MIN);
+const loggedNoNet = readLog().find(e => e.symbol === "NONET_USDT");
+ok(!!loggedNoNet, "the no-net-flow-data entry did get logged");
+eq(loggedNoNet.features.netLongRatio, 0, "missing Net Long ratio defaults to neutral 0, not undefined/NaN");
+eq(loggedNoNet.features.netDeltaSlope, 0, "missing Net Delta slope defaults to neutral 0, not undefined/NaN");
 
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

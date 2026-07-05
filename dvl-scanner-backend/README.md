@@ -237,10 +237,36 @@ without logging, if a symbol never gets a fresh price again for 24h), and
 
 ## Learned weights — hybrid model (ML — trains automatically, not wired to the live score yet)
 `src/train.js` reads `outcomes-log.jsonl` and fits a plain logistic
-regression (no external ML dependency — 33 features, batch gradient
+regression (no external ML dependency — 37 features, batch gradient
 descent with L2 regularization) predicting whether a signal was "favorable"
 — using the `label` outcomes.js already resolved via the triple barrier
 above, not a fixed-horizon return computed here.
+
+**Net Long / Net Short / Net Delta features.** `metrics.js`'s
+`netFlowTrend(oiSeries, posSeries)` approximates CoinGlass's Net Long/Net
+Short/Net Delta panels server-side, same principle the in-page DVL Net
+Long/Short/Delta oscillators already use client-side: a top-trader
+POSITION-size long/short split (`exchanges.js`'s `positionRatio`, Binance's
+`topLongShortPositionRatio`) times the Open Interest already fetched for
+OI's own trend. This is a genuinely different weighting than `lsrRatio`/
+`lsrSlope` (which come from the ACCOUNT-count split, `accountRatio`), not
+a duplicate — a few whales going short reads very differently by position
+size than by account count. Captured ONLY at fresh-signal-detection time
+(`worker.js`'s `scanExchange`, alongside `outcomes.recordSignal`) via one
+extra pair of Binance calls per NEW detection — deliberately NOT fetched
+every cycle for every already-tracked row like OI/LSR trend are, since that
+would reintroduce the exact rate-limit pressure `CAND`/`REFRESH_MS` were
+cut to escape (see the Scanner section above). `netLongRatio`,
+`netShortRatio`, `netDeltaRatio`, `netDeltaSlope` are captured on
+`computeFreshRow` too (manual trades, live-reading). They feed the model as
+4 more continuous features (`netLongRatioN`/`netShortRatioN`/
+`netDeltaRatioN`/`netDeltaSlopeN`) — no new boolean block, so `BLOCK_PAIRS`
+stays at 15; the decision tree below can already split on continuous
+features directly, so it can discover combos involving Net Delta on its
+own without needing a hand-picked threshold turned into a block first.
+Rows logged before this existed (or where the extra fetch failed) simply
+lack these fields — `normalizeContinuous` defaults them to a neutral 0,
+same as every other optional feature.
 
 **Confluence (combos), not just independent blocks.** Plain logistic
 regression is additive — `z = bias + sum(w_i * x_i)` — so a block's
@@ -329,7 +355,7 @@ re-reads the log to count matching lines — until it has at least
 `MIN_SAMPLES` (300 — raised from 200 once the pair features nearly doubled
 the feature count) resolved examples of its OWN side, and only re-fits
 after `MIN_NEW_SAMPLES` (7) more of that side arrive since its last run.
-With 33 features, there's even more room for the model to fit noise than
+With 37 features, there's even more room for the model to fit noise than
 the original 6-boolean version had — L2 regularization and, especially,
 `testAccuracy` (the honest held-out number) are what catch that if it
 happens; raise `MIN_SAMPLES` further if `testAccuracy` looks unstable or
