@@ -49,6 +49,7 @@
 const fs = require("fs");
 const path = require("path");
 const outcomes = require("./outcomes");
+const tree = require("./tree");
 
 const LOG_FILE = process.env.DVL_OUTCOMES_LOG_FILE || path.join(process.cwd(), "data", "outcomes-log.jsonl");
 const MODEL_FILE = process.env.DVL_MODEL_FILE || path.join(process.cwd(), "data", "learned-weights.json");
@@ -269,6 +270,39 @@ function trainSide(side, prev) {
   const coefficients = {};
   FEATURE_KEYS.forEach((k, i) => { coefficients[k] = round3(w[i]); });
 
+  /* Same trainSet/testSet split, fed to the CART tree instead of the
+     logistic fit — an honest side-by-side comparison (both trained on
+     identical data) instead of two numbers from different runs. Depth and
+     leaf-size floors scale with how much train data there actually is, so
+     early on (just past MIN_SAMPLES) it doesn't over-split a small set,
+     and later (thousands of examples) it isn't needlessly shallow. See
+     tree.js's doc-comment for why this exists: it can find N-way combos
+     on its own, not just the pairs train.js hand-built. */
+  const treeOpts = {
+    maxDepth: 4,
+    minSamplesSplit: Math.max(20, Math.round(trainSet.length * 0.03)),
+    minSamplesLeaf: Math.max(10, Math.round(trainSet.length * 0.015))
+  };
+  const treeModel = tree.fit(trainSet, FEATURE_KEYS, treeOpts);
+  const treeTrainAccuracy = round3(tree.evaluate(treeModel, trainSet));
+  const treeTestAccuracy = round3(tree.evaluate(treeModel, testSet));
+  const treeResult = {
+    trainAccuracy: treeTrainAccuracy,
+    testAccuracy: treeTestAccuracy,
+    maxDepth: treeOpts.maxDepth,
+    importance: tree.featureImportance(treeModel, trainSet.length),
+    /* Top 8 root-to-leaf rules by confidence*support — the tree's version
+       of pairWeights: what it actually found, inspectable instead of a
+       black box. `conditions[].name` is a raw FEATURE_KEYS key; the
+       caller maps it to a display label (same split as pairWeights'
+       a/b — backend stays presentation-agnostic). */
+    rules: tree.extractRules(treeModel).slice(0, 8).map(r => ({
+      conditions: r.conditions.map(c => ({ name: c.name, dir: c.dir, text: c.text })),
+      prob: r.prob,
+      n: r.n
+    }))
+  };
+
   return {
     trained: true,
     side,
@@ -283,14 +317,20 @@ function trainSide(side, prev) {
     stopLossPct: outcomes.STOP_LOSS_PCT,
     maxHorizonMs: outcomes.MAX_HORIZON_MS,
     /* `accuracy` kept as the headline field for backward compatibility —
-       it's the HONEST held-out (test) accuracy, never in-sample. */
+       it's the HONEST held-out (test) accuracy, never in-sample. Always
+       the LOGISTIC model's — `bestModel` says which of the two actually
+       tests better, informationally; nothing switches what score()/
+       weights use based on it yet, that's a deliberate separate decision
+       once there's confidence the tree consistently wins. */
     accuracy: testAccuracy,
     trainAccuracy,
     testAccuracy,
     coefficients,
     bias: round3(b),
     weights: toWeights(w.slice(0, BLOCK_KEYS.length)),
-    pairWeights: toPairWeights(w.slice(BLOCK_KEYS.length + CONT_KEYS.length))
+    pairWeights: toPairWeights(w.slice(BLOCK_KEYS.length + CONT_KEYS.length)),
+    tree: treeResult,
+    bestModel: treeResult.testAccuracy > testAccuracy ? "tree" : "logistic"
   };
 }
 

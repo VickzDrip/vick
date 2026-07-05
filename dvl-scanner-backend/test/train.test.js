@@ -198,6 +198,16 @@ ok(
 eq(topPair.weight, 40, "the strongest pair scales to the max of the 0-40 display range");
 ok(confluenceModel.testAccuracy > 0.75, "held-out accuracy is strong on a pure confluence pattern once the interaction term is available (got " + confluenceModel.testAccuracy + ")");
 
+/* trainSide also fits src/tree.js's CART tree on the exact same
+   train/test split and reports it alongside the logistic model — this is
+   the integration point, not a re-test of tree.js's own logic (see
+   test/tree.test.js for that). */
+ok(confluenceModel.tree && typeof confluenceModel.tree === "object", "trainSide attaches a tree result object");
+ok(typeof confluenceModel.tree.testAccuracy === "number", "tree result carries its own held-out accuracy");
+ok(Array.isArray(confluenceModel.tree.rules) && confluenceModel.tree.rules.length > 0, "tree result carries at least one extracted rule");
+ok(confluenceModel.tree.importance && typeof confluenceModel.tree.importance === "object", "tree result carries feature importance");
+ok(confluenceModel.bestModel === "logistic" || confluenceModel.bestModel === "tree", "bestModel names one of the two actual model types (got " + confluenceModel.bestModel + ")");
+
 /* computePairFeatures produces one bit per pair, in BLOCK_PAIRS order,
    1 only when both blocks in that pair are true. */
 const pf = train.computePairFeatures({ lsrBelowAvg: true, flatVolumeBar: true, spikeAboveAvg: false });

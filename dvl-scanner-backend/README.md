@@ -260,6 +260,34 @@ achievable by any linear combination of independent weights) gets solved
 with >75% held-out accuracy once the pair feature is available, and that
 exact pair ranks #1 out of all 15.
 
+**`src/tree.js` — a decision tree, for combos beyond just pairs.** Even
+with the 15 pair features, the logistic model only ever sees 2-way
+interactions someone had to name in advance — a genuine 3+-way effect
+("only favorable when A, B, AND C are all true") needs its own hand-built
+feature to be visible at all, and hand-building every N-way combination
+explodes combinatorially (57 more features beyond pairs alone). A CART-
+style decision tree sidesteps this: every split can condition on a
+different feature than the one above it, so a root-to-leaf path IS an
+arbitrary-depth interaction, discovered on its own instead of named in
+advance. `trainSide()` fits this on the EXACT SAME train/test split as the
+logistic model (an honest side-by-side, not two numbers from different
+runs) and attaches it as `model.tree: { testAccuracy, trainAccuracy,
+maxDepth, importance, rules }` — `rules` is the tree's equivalent of
+`pairWeights`: the top 8 root-to-leaf paths by confidence×support, each a
+human-inspectable condition list (`{conditions, prob, n}`), not a black
+box. `model.bestModel` ("logistic" or "tree") names whichever actually
+tests better — informational only; nothing switches what `score()`/
+`weights` use based on it yet, same deliberate-separate-decision stance as
+the rest of this section. A synthetic pure-3-way-AND test
+(`test/tree.test.js`) confirms the tree finds an effect that's invisible
+to both the plain blocks AND the pairwise features (no 2-of-3 pairing
+alone predicts it), and that a genuinely independent-noise dataset stays
+near chance on held-out data instead of confidently overfitting.
+Depth/leaf-size floors (`maxDepth: 4`, `minSamplesSplit`/`minSamplesLeaf`
+scaled to ~3%/1.5% of the train set) exist for the same reason L2
+regularization exists on the logistic side — with only hundreds to low
+thousands of examples, an unconstrained tree would just memorize them.
+
 **LONG and SHORT train as two entirely separate models.** The 6 blocks
 (spike above avg, RSI oversold, OI rising, LSR falling, ...) all encode a
 bullish "ignition" thesis; a resolved example's `side` is still just
@@ -310,9 +338,11 @@ noticeably worse than `trainAccuracy`. The result is saved to
 `GET /api/dvl/scanner/health` as `outcomes.model: { LONG: {...}, SHORT:
 {...} }`, each side shaped `{ trained, side, samples, trainSamples,
 testSamples, needed, accuracy, trainAccuracy, testAccuracy, trainedAt,
-weights, pairWeights, coefficients }`, and shown side-by-side in the app's
-Copilot tab ("Aprendizado (ML)" card, including a "Combinações que mais
-pesam" section listing the top pairs with a non-zero weight).
+weights, pairWeights, coefficients, tree, bestModel }`, and shown
+side-by-side in the app's Copilot tab ("Aprendizado (ML)" card, including
+a "Combinações que mais pesam" section for the pairs and an "Árvore de
+decisão" section for the tree's own accuracy + top rules, flagging
+whichever of the two `bestModel` currently names).
 
 **Resetting the training data (`npm run reset-training-data`).** If
 something upstream of the logged features changes in a way that makes old

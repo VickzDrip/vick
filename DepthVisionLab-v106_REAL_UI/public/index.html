@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.061</title>
+<title>DVL Binance Live — Beta 1.062</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.061';
+window.DVL_APP_VERSION = 'Beta 1.062';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.061";
+const DVL_APP_VERSION = "Beta 1.062";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.062", note: "ML — adicionei uma árvore de decisão de verdade (do zero, sem depender de lib externa) treinada junto com o modelo de regressão, nos mesmos dados. Diferente das combinações de 2 blocos, a árvore acha combos de 3+ blocos sozinha, sem eu precisar nomear cada combinação na mão. O card 'Aprendizado (ML)' agora mostra a acurácia da árvore ao lado da regressão e as regras que ela encontrou em português (ex: 'OI subindo + LSR caindo + RSI baixo → 86% favorável'), e avisa qual dos dois modelos venceu. Ainda não substitui o score do Scanner — é só leitura/comparação por enquanto." },
   { version: "Beta 1.061", note: "ML — o modelo aprendido agora enxerga COMBINAÇÕES de blocos, não só cada um isolado: antes ele só somava pesos independentes (uma regressão pura não sabe que 'OI subindo + LSR caindo juntos' vale mais que a soma das partes). Agora cada uma das 15 combinações possíveis dos 6 blocos ganha seu próprio peso aprendido — o card 'Aprendizado (ML)' no Copilot mostra as combinações que mais pesaram pra cada lado, e o score de Filtros (quando 'Pesos aprendido' tá ligado) já soma esse bônus de combo, não só os blocos sozinhos." },
   { version: "Beta 1.060", note: "Corrige o bug de painéis cortados com 4+ indicadores ativos ao mesmo tempo (OI, LSR, Net Short, Net Delta…): os painéis agora se ajustam pra caber todos na tela, achatando de forma mais inteligente em vez de cortar/travar. Também corrige o Net Short/Net Delta não aparecerem se ligados sozinhos, sem OI/LSR junto." },
   { version: "Beta 1.059", note: "Dois indicadores novos no menu Indicadores: DVL Net Short e DVL Net Delta, iguais aos que você vê na CoinGlass — aproximados via Binance (posição long/short dos top traders × Open Interest, já que não temos chave paga da CoinGlass). Cada um com sua própria média móvel configurável (padrão 20 candles, dá pra mudar no painel de cada um)." },
@@ -72804,6 +72805,11 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 #dvlCopilotPage0974 .dvlCp1024SideTitle.short{color:#ff9f43!important;}
 #dvlCopilotPage0974 .dvlCp1024ComboTitle{margin-top:10px!important;font-size:9.5px!important;font-weight:900!important;letter-spacing:.3px!important;color:#9aa6a1!important;text-transform:uppercase!important;}
 #dvlCopilotPage0974 .dvlCp1024ComboEmpty{margin-top:4px!important;color:#70827c!important;font-size:9.5px!important;font-weight:700!important;line-height:1.35!important;}
+#dvlCopilotPage0974 .dvlCp1024Winner{color:#10df77!important;text-transform:none!important;font-weight:800!important;}
+#dvlCopilotPage0974 .dvlCp1024Rules{display:flex!important;flex-direction:column!important;gap:5px!important;margin-top:6px!important;}
+#dvlCopilotPage0974 .dvlCp1024RuleRow{font-size:9.5px!important;font-weight:750!important;color:#cdd5d0!important;line-height:1.4!important;padding:6px 8px!important;border-radius:8px!important;background:rgba(145,175,165,.07)!important;}
+#dvlCopilotPage0974 .dvlCp1024RuleRow b{color:#10df77!important;}
+#dvlCopilotPage0974 .dvlCp1024RuleRow span{color:#70827c!important;font-weight:700!important;}
 </style>
 
 <script id="DVL_COPILOT_ML_STATUS_1024_JS">
@@ -72821,6 +72827,37 @@ var BLOCK_LABELS={
   prevVolBelowHalf:"Pré-volume baixo"
 };
 var BLOCK_ORDER=["spikeAboveAvg","rsiOversold","oiAboveAvg","lsrBelowAvg","flatVolumeBar","prevVolBelowHalf"];
+
+/* Friendly labels for the 12 continuous features (train.js's CONT_KEYS) —
+   only used to name a decision-tree rule's condition, never an exact
+   value (they're normalized to roughly [-1,1]/[0,1] server-side, so a
+   raw number like "-0.05" means nothing to a human; "alto"/"baixo" off
+   the split direction is what's actually readable). */
+var CONT_LABELS={
+  spike20n:"Spike vs MA(20)", spike50n:"Spike vs MA(50)", rsi14n:"RSI (valor exato)",
+  volBelowMaBarsN:"Barras de volume abaixo da média", barPctN:"Variação do candle",
+  flatCandlesN:"Candles flat seguidos", oiRatioN:"Distância do OI da média",
+  lsrRatioN:"Distância do LSR da média", crossStrengthN:"Força do cruzamento de volume",
+  oiSlopeN:"Tendência do OI", lsrSlopeN:"Tendência do LSR", rsiRecoveryN:"Recuperação do RSI (V)"
+};
+function featureLabel(name){
+  if(BLOCK_LABELS[name]) return BLOCK_LABELS[name];
+  if(CONT_LABELS[name]) return CONT_LABELS[name];
+  if(name && name.indexOf("__")>=0){
+    var parts=name.split("__");
+    return (BLOCK_LABELS[parts[0]]||parts[0])+" + "+(BLOCK_LABELS[parts[1]]||parts[1]);
+  }
+  return name;
+}
+/* A tree condition is either on a strictly-boolean feature (block or
+   pair, always 0 or 1 — "right" of the 0.5 split literally means true)
+   or a continuous one (no clean true/false, just relatively high/low). */
+function conditionText(c){
+  var isBoolLike=!!BLOCK_LABELS[c.name]||(c.name&&c.name.indexOf("__")>=0);
+  var label=featureLabel(c.name);
+  if(isBoolLike) return c.dir==="right" ? label : ("não "+label);
+  return label+(c.dir==="right"?" alto":" baixo");
+}
 
 var _lastHealth=null, _lastErr=false;
 
@@ -72871,6 +72908,28 @@ function sideBlockHtml(side, model){
         var label=(BLOCK_LABELS[p.a]||p.a)+' + '+(BLOCK_LABELS[p.b]||p.b);
         return '<div class="dvlCp1024WRow"><span>'+esc(label)+'</span><div class="dvlCp1024WBar"><i style="width:'+pctW+'%"></i></div><b style="text-align:right">'+p.weight+'</b></div>';
       }).join("")+'</div>';
+    }
+
+    /* Árvore de decisão: trained on the exact same data/split as the
+       logistic model above (train.js's trainSide), but a tree can chain
+       an arbitrary number of conditions per rule — not just 2 blocks at
+       a time like pairWeights — so it can surface combos nobody had to
+       name in advance. bestModel says, informationally, which of the two
+       actually tests better; nothing switches live scoring based on it. */
+    var t=model.tree;
+    if(t){
+      var treeWon=model.bestModel==="tree";
+      out+='<div class="dvlCp1024ComboTitle">Árvore de decisão'+(treeWon?' <span class="dvlCp1024Winner">(venceu a regressão)</span>':'')+'</div>';
+      out+='<div class="dvlCp1024Stat"><span>Acurácia real (árvore)</span><b>'+Math.round((t.testAccuracy||0)*100)+'%</b></div>';
+      var rules=(Array.isArray(t.rules)?t.rules:[]).slice(0,3);
+      if(!rules.length){
+        out+='<div class="dvlCp1024ComboEmpty">A árvore não achou uma regra forte ainda.</div>';
+      }else{
+        out+='<div class="dvlCp1024Rules">'+rules.map(function(r){
+          var txt=(r.conditions||[]).map(conditionText).join(" + ");
+          return '<div class="dvlCp1024RuleRow">'+esc(txt)+' → <b>'+Math.round((r.prob||0)*100)+'%</b> favorável <span>('+esc(r.n)+' casos)</span></div>';
+        }).join("")+'</div>';
+      }
     }
   }
   out+='</div>';
