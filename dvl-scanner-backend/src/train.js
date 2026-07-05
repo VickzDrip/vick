@@ -15,6 +15,16 @@
    volume-spike strength, etc.) — so it can find its own thresholds
    instead of being capped at the hand-picked ones (RSI < 30, etc.).
 
+   Plain logistic regression is additive: each feature's contribution to
+   the score is independent of every other (z = bias + sum(w_i * x_i)),
+   so it can't tell you "these two blocks together predict a lot better
+   than either alone" — that kind of confluence effect gets averaged into
+   each block's own weight instead of standing out. To let the model
+   actually learn combos, every PAIR of the 6 blocks also gets its own
+   boolean feature ("both true at once") — see BLOCK_PAIRS/PAIR_KEYS below
+   — with its own learned coefficient, exposed as `model.pairWeights`
+   alongside the existing single-block `model.weights`.
+
    Evaluation is a TEMPORAL holdout, not random or in-sample: the model
    trains on the oldest ~80% of resolved examples and is scored on the
    newest ~20%, which it never saw during training — this is the accuracy
@@ -51,13 +61,28 @@ const BLOCK_KEYS = ["spikeAboveAvg", "rsiOversold", "oiAboveAvg", "lsrBelowAvg",
    ratio/level the block booleans check — see metrics.js's trendVsMA and
    rsiRecoveryFromLow. */
 const CONT_KEYS = ["spike20n", "spike50n", "rsi14n", "volBelowMaBarsN", "barPctN", "flatCandlesN", "oiRatioN", "lsrRatioN", "crossStrengthN", "oiSlopeN", "lsrSlopeN", "rsiRecoveryN"];
-const FEATURE_KEYS = BLOCK_KEYS.concat(CONT_KEYS);
 
-/* Don't train (or retrain) on too little data — with ~15 features, too few
-   examples risks fitting noise convincingly. L2 regularization and the
-   temporal test split help catch that if it happens; testAccuracy is what
-   to watch. */
-const MIN_SAMPLES = 200;
+/* Every 2-of-6 combination of the blocks (15 pairs) — see the module
+   doc-comment above for why plain logistic regression needs these spelled
+   out as their own features to learn confluence effects at all. */
+const BLOCK_PAIRS = [];
+for (let i = 0; i < BLOCK_KEYS.length; i++) {
+  for (let j = i + 1; j < BLOCK_KEYS.length; j++) BLOCK_PAIRS.push([BLOCK_KEYS[i], BLOCK_KEYS[j]]);
+}
+const PAIR_KEYS = BLOCK_PAIRS.map(([a, b]) => a + "__" + b);
+
+const FEATURE_KEYS = BLOCK_KEYS.concat(CONT_KEYS).concat(PAIR_KEYS);
+
+function computePairFeatures(blocks) {
+  return BLOCK_PAIRS.map(([a, b]) => (blocks[a] && blocks[b]) ? 1 : 0);
+}
+
+/* Don't train (or retrain) on too little data — with 18 blocks/continuous
+   features PLUS 15 pair-interaction features (33 total), too few examples
+   risks fitting noise convincingly. Raised from 200 now that the feature
+   count nearly doubled; L2 regularization and the temporal test split
+   still help catch it if it happens — testAccuracy is what to watch. */
+const MIN_SAMPLES = 300;
 /* Once trained, don't bother re-fitting until there's meaningfully more
    data than last time — 7 matches the scanner's own resolution pace
    (~7 signals/hour), so the model refreshes roughly every cycle worth of
@@ -127,7 +152,8 @@ function loadExamples(side) {
     if (side && normSide(e.side) !== side) continue;
     const boolFeatures = BLOCK_KEYS.map(k => (e.blocks[k] ? 1 : 0));
     const contFeatures = normalizeContinuous(e.features);
-    out.push({ features: boolFeatures.concat(contFeatures), label: e.label, at: e.at || 0 });
+    const pairFeatures = computePairFeatures(e.blocks);
+    out.push({ features: boolFeatures.concat(contFeatures).concat(pairFeatures), label: e.label, at: e.at || 0 });
   }
   return out;
 }
@@ -200,6 +226,20 @@ function toWeights(blockCoeffs) {
   return weights;
 }
 
+/* Same conversion as toWeights, but for the 15 pair-interaction
+   coefficients — same reasoning (never negative, scaled 0-40, a pair that
+   isn't predictive gets 0 rather than penalizing the score). Returned as
+   an array (not an object keyed by the raw "a__b" feature name) so the
+   UI can render human labels via BLOCK_LABELS[a] + BLOCK_LABELS[b]
+   without needing to parse the key back apart. */
+function toPairWeights(pairCoeffs) {
+  const positive = pairCoeffs.map(x => Math.max(0, x));
+  const maxW = Math.max.apply(null, positive.concat([1e-9]));
+  return BLOCK_PAIRS
+    .map(([a, b], i) => ({ a, b, weight: Math.round((positive[i] / maxW) * 40 * 10) / 10 }))
+    .sort((x, y) => y.weight - x.weight);
+}
+
 function loadModel() {
   try { return JSON.parse(fs.readFileSync(MODEL_FILE, "utf8")); } catch (_) { return null; }
 }
@@ -249,7 +289,8 @@ function trainSide(side, prev) {
     testAccuracy,
     coefficients,
     bias: round3(b),
-    weights: toWeights(w.slice(0, BLOCK_KEYS.length))
+    weights: toWeights(w.slice(0, BLOCK_KEYS.length)),
+    pairWeights: toPairWeights(w.slice(BLOCK_KEYS.length + CONT_KEYS.length))
   };
 }
 
@@ -272,8 +313,8 @@ function maybeTrain() {
 }
 
 module.exports = {
-  loadExamples, splitTemporal, fit, evaluate, toWeights, loadModel, saveModel, trainSide, maybeTrain,
-  BLOCK_KEYS, CONT_KEYS, FEATURE_KEYS, SIDES, MIN_SAMPLES, MIN_NEW_SAMPLES, TEST_FRACTION
+  loadExamples, splitTemporal, fit, evaluate, toWeights, toPairWeights, computePairFeatures, loadModel, saveModel, trainSide, maybeTrain,
+  BLOCK_KEYS, CONT_KEYS, PAIR_KEYS, BLOCK_PAIRS, FEATURE_KEYS, SIDES, MIN_SAMPLES, MIN_NEW_SAMPLES, TEST_FRACTION
 };
 
 /* Runnable directly: `node src/train.js` (or `npm run train`). */

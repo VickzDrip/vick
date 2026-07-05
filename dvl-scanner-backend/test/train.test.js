@@ -161,5 +161,49 @@ ok(longOnly.every((_, i) => true) && longOnly.length === N + more.length, "loadE
 const shortOnly = train.loadExamples("SHORT");
 eq(shortOnly.length, shortExamples.length, "loadExamples('SHORT') excludes LONG rows");
 
+/* 8) Pair-interaction features: a plain additive model (single-block
+   weights only) structurally cannot represent "favorable ONLY when BOTH
+   A and B are true, unfavorable otherwise" — that's an AND/confluence
+   pattern, not a linear combination. Build a dataset where the outcome
+   depends purely on lsrBelowAvg AND flatVolumeBar together (all 4
+   combinations of the two represented evenly, a bit of label noise to
+   stay realistic) and confirm the model (a) still trains, (b) surfaces
+   that exact pair at the top of pairWeights with a strong weight, and
+   (c) generalizes well on held-out data — proof the interaction term is
+   actually doing the job, not just padding the feature vector. */
+const N2 = train.MIN_SAMPLES + 150;
+const confluenceExamples = [];
+for (let i = 0; i < N2; i++) {
+  const a = i % 4 === 1 || i % 4 === 3; // lsrBelowAvg
+  const b = i % 4 === 2 || i % 4 === 3; // flatVolumeBar
+  const bothTrue = a && b;
+  const favorable = bothTrue ? (i % 9 !== 0) : (i % 11 === 0);
+  confluenceExamples.push({
+    at: i + 1,
+    side: "LONG",
+    blocks: blocks({ lsrBelowAvg: a, flatVolumeBar: b }),
+    features: features({}),
+    label: favorable ? 1 : 0
+  });
+}
+writeLog(confluenceExamples);
+const confluenceModel = train.maybeTrain().LONG;
+eq(confluenceModel.trained, true, "confluence dataset trains once it clears MIN_SAMPLES");
+ok(Array.isArray(confluenceModel.pairWeights) && confluenceModel.pairWeights.length === train.PAIR_KEYS.length, "pairWeights covers all 15 block pairs");
+const topPair = confluenceModel.pairWeights[0];
+ok(
+  (topPair.a === "lsrBelowAvg" && topPair.b === "flatVolumeBar"),
+  "the lsrBelowAvg+flatVolumeBar pair (the actual AND pattern in this data) ranks #1 among all 15 pairs (got " + JSON.stringify(topPair) + ")"
+);
+eq(topPair.weight, 40, "the strongest pair scales to the max of the 0-40 display range");
+ok(confluenceModel.testAccuracy > 0.75, "held-out accuracy is strong on a pure confluence pattern once the interaction term is available (got " + confluenceModel.testAccuracy + ")");
+
+/* computePairFeatures produces one bit per pair, in BLOCK_PAIRS order,
+   1 only when both blocks in that pair are true. */
+const pf = train.computePairFeatures({ lsrBelowAvg: true, flatVolumeBar: true, spikeAboveAvg: false });
+eq(pf.length, train.PAIR_KEYS.length, "computePairFeatures returns one value per pair");
+const lsrFlatIdx = train.BLOCK_PAIRS.findIndex(([x, y]) => (x === "lsrBelowAvg" && y === "flatVolumeBar") || (x === "flatVolumeBar" && y === "lsrBelowAvg"));
+eq(pf[lsrFlatIdx], 1, "the pair bit is 1 when both its blocks are true");
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

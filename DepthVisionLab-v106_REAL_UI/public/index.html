@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.060</title>
+<title>DVL Binance Live — Beta 1.061</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.060';
+window.DVL_APP_VERSION = 'Beta 1.061';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.060";
+const DVL_APP_VERSION = "Beta 1.061";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.061", note: "ML — o modelo aprendido agora enxerga COMBINAÇÕES de blocos, não só cada um isolado: antes ele só somava pesos independentes (uma regressão pura não sabe que 'OI subindo + LSR caindo juntos' vale mais que a soma das partes). Agora cada uma das 15 combinações possíveis dos 6 blocos ganha seu próprio peso aprendido — o card 'Aprendizado (ML)' no Copilot mostra as combinações que mais pesaram pra cada lado, e o score de Filtros (quando 'Pesos aprendido' tá ligado) já soma esse bônus de combo, não só os blocos sozinhos." },
   { version: "Beta 1.060", note: "Corrige o bug de painéis cortados com 4+ indicadores ativos ao mesmo tempo (OI, LSR, Net Short, Net Delta…): os painéis agora se ajustam pra caber todos na tela, achatando de forma mais inteligente em vez de cortar/travar. Também corrige o Net Short/Net Delta não aparecerem se ligados sozinhos, sem OI/LSR junto." },
   { version: "Beta 1.059", note: "Dois indicadores novos no menu Indicadores: DVL Net Short e DVL Net Delta, iguais aos que você vê na CoinGlass — aproximados via Binance (posição long/short dos top traders × Open Interest, já que não temos chave paga da CoinGlass). Cada um com sua própria média móvel configurável (padrão 20 candles, dá pra mudar no painel de cada um)." },
   { version: "Beta 1.058", note: "Backend + ML — LONG e SHORT agora treinam como dois modelos separados: os 6 blocos (RSI sobrevenda, OI subindo, LSR caindo…) foram pensados só pro seu setup de compra, então misturar os dois no mesmo treino estava contaminando o que o modelo aprende. O card 'Aprendizado (ML)' no Copilot agora mostra LONG e SHORT lado a lado, cada um com seu próprio progresso/acurácia/pesos. Quando ligar 'Pesos do score aprendido' em Filtros, cada sinal usa o modelo do seu próprio lado (LONG usa peso LONG, SHORT usa peso SHORT) — SHORT continua caindo pros pesos manuais até ter dado e padrão próprio suficiente." },
@@ -62374,10 +62375,30 @@ body.dvlScannerOpen080 #chartWrap{
       flatVolumeBar:Number(w.flatVolumeBar||0), prevVolBelowHalf:Number(w.prevVolBelowHalf||0)
     };
     var wTotal=W.spikeAboveAvg+W.rsiOversold+W.oiAboveAvg+W.lsrBelowAvg+W.flatVolumeBar+W.prevVolBelowHalf;
-    if(wTotal<=0) return 0;
+
+    /* Pesos do score aprendido, quando ligado, também soma o "bônus" das
+       combinações de 2 blocos que o modelo achou relevantes (train.js's
+       pairWeights) — uma regressão logística pura só soma pesos isolados,
+       então sem isso "OI subindo + LSR caindo juntos" nunca pontuaria
+       diferente da soma dos dois sozinhos. Manual (pesos na mão) não tem
+       esse conceito, então fica de fora nesse modo — só entra quando o
+       modelo aprendido do lado certo (LONG/SHORT) está de fato sendo usado. */
+    var pairBonus=0, pairTotal=0;
+    var m=learnedModelFor(r&&r.side);
+    if(filterState1015.useLearnedWeights && m && m.trained && Array.isArray(m.pairWeights)){
+      m.pairWeights.forEach(function(p){
+        var pw=Number(p.weight)||0;
+        pairTotal+=pw;
+        if(b[p.a] && b[p.b]) pairBonus+=pw;
+      });
+    }
+
+    var denom=wTotal+pairTotal;
+    if(denom<=0) return 0;
     var pts=(b.spikeAboveAvg?W.spikeAboveAvg:0)+(b.rsiOversold?W.rsiOversold:0)+(b.oiAboveAvg?W.oiAboveAvg:0)
-          +(b.lsrBelowAvg?W.lsrBelowAvg:0)+(b.flatVolumeBar?W.flatVolumeBar:0)+(b.prevVolBelowHalf?W.prevVolBelowHalf:0);
-    return Math.max(0,Math.min(99,Math.round(pts/wTotal*99)));
+          +(b.lsrBelowAvg?W.lsrBelowAvg:0)+(b.flatVolumeBar?W.flatVolumeBar:0)+(b.prevVolBelowHalf?W.prevVolBelowHalf:0)
+          +pairBonus;
+    return Math.max(0,Math.min(99,Math.round(pts/denom*99)));
   }
 
   function fmtWeight1016(v){
@@ -72781,6 +72802,8 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 #dvlCopilotPage0974 .dvlCp1024Side:first-of-type{margin-top:2px!important;}
 #dvlCopilotPage0974 .dvlCp1024SideTitle{font-size:10.5px!important;font-weight:900!important;letter-spacing:.4px!important;color:#e9efeb!important;margin-bottom:4px!important;}
 #dvlCopilotPage0974 .dvlCp1024SideTitle.short{color:#ff9f43!important;}
+#dvlCopilotPage0974 .dvlCp1024ComboTitle{margin-top:10px!important;font-size:9.5px!important;font-weight:900!important;letter-spacing:.3px!important;color:#9aa6a1!important;text-transform:uppercase!important;}
+#dvlCopilotPage0974 .dvlCp1024ComboEmpty{margin-top:4px!important;color:#70827c!important;font-size:9.5px!important;font-weight:700!important;line-height:1.35!important;}
 </style>
 
 <script id="DVL_COPILOT_ML_STATUS_1024_JS">
@@ -72832,6 +72855,23 @@ function sideBlockHtml(side, model){
       var w=Number((model.weights||{})[k]||0), pctW=Math.max(0,Math.min(100,Math.round(w/40*100)));
       return '<div class="dvlCp1024WRow"><span>'+esc(BLOCK_LABELS[k])+'</span><div class="dvlCp1024WBar"><i style="width:'+pctW+'%"></i></div><b style="text-align:right">'+w+'</b></div>';
     }).join("")+'</div>';
+
+    /* Combos: pairWeights are what let the model learn "these two blocks
+       together predict a lot better than either alone" — a plain additive
+       score can't represent that, see train.js's doc-comment. Only the
+       top few with a real (>0) weight are worth showing; if none stood
+       out, say so instead of listing 15 rows of zero. */
+    var pairs=(Array.isArray(model.pairWeights)?model.pairWeights:[]).filter(function(p){ return Number(p.weight)>0; }).slice(0,5);
+    out+='<div class="dvlCp1024ComboTitle">Combinações que mais pesam</div>';
+    if(!pairs.length){
+      out+='<div class="dvlCp1024ComboEmpty">Nenhuma combinação de 2 blocos se destacou sozinha ainda — os pesos acima (blocos isolados) seguem sendo o principal.</div>';
+    }else{
+      out+='<div class="dvlCp1024Weights">'+pairs.map(function(p){
+        var pctW=Math.max(0,Math.min(100,Math.round(Number(p.weight)/40*100)));
+        var label=(BLOCK_LABELS[p.a]||p.a)+' + '+(BLOCK_LABELS[p.b]||p.b);
+        return '<div class="dvlCp1024WRow"><span>'+esc(label)+'</span><div class="dvlCp1024WBar"><i style="width:'+pctW+'%"></i></div><b style="text-align:right">'+p.weight+'</b></div>';
+      }).join("")+'</div>';
+    }
   }
   out+='</div>';
   return out;

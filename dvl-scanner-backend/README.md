@@ -237,10 +237,28 @@ without logging, if a symbol never gets a fresh price again for 24h), and
 
 ## Learned weights — hybrid model (ML — trains automatically, not wired to the live score yet)
 `src/train.js` reads `outcomes-log.jsonl` and fits a plain logistic
-regression (no external ML dependency — ~18 features, batch gradient
+regression (no external ML dependency — 33 features, batch gradient
 descent with L2 regularization) predicting whether a signal was "favorable"
 — using the `label` outcomes.js already resolved via the triple barrier
 above, not a fixed-horizon return computed here.
+
+**Confluence (combos), not just independent blocks.** Plain logistic
+regression is additive — `z = bias + sum(w_i * x_i)` — so a block's
+contribution to the score never depends on any other block; "OI rising and
+LSR falling together predict a lot better than either alone" is exactly
+the kind of effect that gets averaged into each block's own weight instead
+of standing out, since the model has no feature that represents "both at
+once." Every 2-of-6 combination of the blocks (15 pairs — `BLOCK_PAIRS`/
+`PAIR_KEYS`) also gets its own boolean feature ("both true at the same
+time"), with its own learned coefficient. Converted the same way as the
+single-block weights (never negative, scaled 0-40), these come back as
+`model.pairWeights` — an array of `{ a, b, weight }` sorted by weight
+descending — alongside the existing `model.weights`. A synthetic pure-AND
+test (`test/train.test.js`) confirms the model actually uses this: a
+pattern that's only favorable when two specific blocks are BOTH true (not
+achievable by any linear combination of independent weights) gets solved
+with >75% held-out accuracy once the pair feature is available, and that
+exact pair ranks #1 out of all 15.
 
 **LONG and SHORT train as two entirely separate models.** The 6 blocks
 (spike above avg, RSI oversold, OI rising, LSR falling, ...) all encode a
@@ -280,19 +298,21 @@ The worker calls `train.maybeTrain()` once per cycle (self-throttled to at
 most once/hour), training LONG and SHORT independently via the same
 `trainSide(side, prevModel)` pipeline. Each side is a no-op — cheap, just
 re-reads the log to count matching lines — until it has at least
-`MIN_SAMPLES` (200) resolved examples of its OWN side, and only re-fits
+`MIN_SAMPLES` (300 — raised from 200 once the pair features nearly doubled
+the feature count) resolved examples of its OWN side, and only re-fits
 after `MIN_NEW_SAMPLES` (7) more of that side arrive since its last run.
-With ~18 features and only 200 examples there's more room for the model to
-fit noise than with the original 6-boolean version — L2 regularization
-and, especially, `testAccuracy` (the honest held-out number) are what
-catch that if it happens; raise `MIN_SAMPLES` back up if `testAccuracy`
-looks unstable or noticeably worse than `trainAccuracy` early on. The
-result is saved to `data/learned-weights.json` as `{ LONG, SHORT }` and
-surfaced read-only at `GET /api/dvl/scanner/health` as `outcomes.model: {
-LONG: {...}, SHORT: {...} }`, each side shaped `{ trained, side, samples,
-trainSamples, testSamples, needed, accuracy, trainAccuracy, testAccuracy,
-trainedAt, weights, coefficients }`, and shown side-by-side in the app's
-Copilot tab ("Aprendizado (ML)" card).
+With 33 features, there's even more room for the model to fit noise than
+the original 6-boolean version had — L2 regularization and, especially,
+`testAccuracy` (the honest held-out number) are what catch that if it
+happens; raise `MIN_SAMPLES` further if `testAccuracy` looks unstable or
+noticeably worse than `trainAccuracy`. The result is saved to
+`data/learned-weights.json` as `{ LONG, SHORT }` and surfaced read-only at
+`GET /api/dvl/scanner/health` as `outcomes.model: { LONG: {...}, SHORT:
+{...} }`, each side shaped `{ trained, side, samples, trainSamples,
+testSamples, needed, accuracy, trainAccuracy, testAccuracy, trainedAt,
+weights, pairWeights, coefficients }`, and shown side-by-side in the app's
+Copilot tab ("Aprendizado (ML)" card, including a "Combinações que mais
+pesam" section listing the top pairs with a non-zero weight).
 
 **Resetting the training data (`npm run reset-training-data`).** If
 something upstream of the logged features changes in a way that makes old
@@ -315,10 +335,14 @@ row's own `side` — a LONG row uses the LONG model's weights, a SHORT row
 the SHORT model's, via `effectiveWeights(side)` / `learnedModelFor(side)`,
 falling back to the manual weights whenever that particular side's model
 isn't trained yet (which today means SHORT always falls back, until it has
-its own thesis and enough data). The read-only metrics panel in Filtros
-shows the LONG model specifically (it's the side with a validated thesis
-behind it); the Copilot "Aprendizado (ML)" card shows both sides side by
-side. Nothing about outcome logging or training changes based on this
+its own thesis and enough data). When the learned model IS in use, `score(r)`
+also adds each pair's weight whenever both of its blocks are true for that
+row (and folds `pairTotal` into the denominator alongside the 6 single-block
+weights) — manual mode has no concept of pairs, so this only ever applies
+in ML mode. The read-only metrics panel in Filtros shows the LONG model
+specifically (it's the side with a validated thesis behind it); the
+Copilot "Aprendizado (ML)" card shows both sides side by side, combos
+included. Nothing about outcome logging or training changes based on this
 toggle — it only affects which weights compute the score you see. Run
 training manually any time with `npm run train`.
 
