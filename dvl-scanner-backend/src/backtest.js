@@ -88,8 +88,11 @@ function backtestSide(side) {
   };
 }
 
+/* LONG only — see train.js's doc-comment for why SHORT was removed from
+   training entirely (its own backtest numbers were part of what confirmed
+   the thesis mismatch: SHORT signals lost money on average). */
 function backtest() {
-  return { LONG: backtestSide("LONG"), SHORT: backtestSide("SHORT") };
+  return { LONG: backtestSide("LONG") };
 }
 
 module.exports = { statsFor, backtestSide, backtest };

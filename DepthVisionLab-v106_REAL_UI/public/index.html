@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.067</title>
+<title>DVL Binance Live — Beta 1.068</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.067';
+window.DVL_APP_VERSION = 'Beta 1.068';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.067";
+const DVL_APP_VERSION = "Beta 1.068";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.068", note: "Removi o SHORT do sistema inteiro: Scanner, Machine Learning e Bot Demo. Os 6 bloquinhos (RSI sobrevenda, OI subindo, LSR caindo...) só validam um setup de compra — SHORT nunca foi um setup de venda de verdade, só 'o candle fechou vermelho' pontuado com a mesma régua de compra, e o backtest financeiro confirmou que vinha perdendo dinheiro. Agora o Scanner só detecta LONG, o modelo aprendido treina só LONG, e o Bot Demo roda só uma carteira (a carteira LONG que você já tinha continua com o mesmo progresso — só a SHORT foi removida)." },
   { version: "Beta 1.067", note: "Bot Demo agora consulta o modelo aprendido antes de abrir posição: além do score do Scanner (≥72), só entra se o modelo daquele lado (regressão ou árvore, o que testar melhor) também não descartar o sinal. Entradas que o modelo aprovou ganham uma marquinha 🤖. Enquanto um lado não tem dados treinados suficientes, continua abrindo só pelo score, como antes." },
   { version: "Beta 1.066", note: "Novo card no Copilot: Backtest financeiro. O card 'Aprendizado (ML)' já mostrava a acurácia (acertou a direção?); este mostra quanto cada abordagem teria RENDIDO no mesmo conjunto de teste nunca visto no treino — taxa de acerto e retorno médio/total comparando negociar todo sinal vs. só o que a regressão chamou de favorável vs. só o que a árvore de decisão chamou de favorável. Só leitura, não abre posição nenhuma." },
   { version: "Beta 1.065", note: "ML — Net Long/Short/Delta agora entram na equação do modelo aprendido, calculados no backend (a mesma aproximação via Binance dos osciladores, só que agora alimentando o treino também). Captado só no momento em que um sinal novo aparece (não a cada ciclo, pra não sobrecarregar a Binance de novo). Não virou um bloco novo — é o combo do jeito que a árvore de decisão já sabe fazer sozinha, sem eu precisar montar a combinação na mão: ela já pode juntar 'Net Delta subindo' com qualquer outro bloco/combinação sozinha." },
@@ -62247,10 +62248,12 @@ body.dvlScannerOpen080 #chartWrap{
      actually trained; otherwise it silently falls back to the manual
      (hand-tuned) weights, same as before this existed.
 
-     LONG and SHORT are two separate models on the backend (src/train.js) —
-     the 6 blocks only encode a bullish thesis, so a row's SHORT-side score
-     must use the SHORT model's own weights (once it has one), never LONG's,
-     and vice versa. _learnedModel is now { LONG:{...}, SHORT:{...} }. */
+     LONG-only on the backend (src/train.js) — SHORT was removed from
+     training entirely (the 6 blocks only encode a bullish thesis, and the
+     financial backtest confirmed SHORT signals lost money on average), so
+     _learnedModel is just { LONG:{...} }; learnedModelFor(side) still
+     normalizes `side` since the scanner rows themselves also carry one,
+     but there's only ever a LONG model to look up now. */
   var _learnedModel = null;
   function fetchLearnedModel(){
     fetch("/api/dvl/scanner/health",{cache:"no-store"})
@@ -62480,9 +62483,9 @@ body.dvlScannerOpen080 #chartWrap{
 
   /* Read-only view of the ML-learned weights (no steppers — you don't hand-
      tune a learned model, you retrain it with more data). Shows the LONG
-     model specifically — this panel isn't scanner-row-scoped, and LONG is
-     the side with a real, validated thesis behind its blocks; SHORT trains
-     separately (see the Copilot "Aprendizado (ML)" card for both sides). */
+     model — the only one there is now (SHORT was removed from training
+     entirely, see train.js's doc-comment; the scanner itself no longer
+     detects SHORT signals either). */
   function metricRowsML1016(){
     var lm=learnedModelFor("LONG");
     var w=(lm && lm.weights) || {};
@@ -62496,9 +62499,9 @@ body.dvlScannerOpen080 #chartWrap{
   function mlStatusLine1015(){
     var lm=learnedModelFor("LONG");
     if(!_learnedModel) return '<div class="dvlScan1015FilterFoot">Carregando status do modelo…</div>';
-    if(!lm || !lm.trained) return '<div class="dvlScan1015FilterFoot">Modelo LONG ainda não treinado ('+esc((lm&&lm.samples)||0)+'/'+esc((lm&&lm.needed)||200)+' amostras) — usando pesos manuais por enquanto. SHORT treina separado (ver Copilot).</div>';
+    if(!lm || !lm.trained) return '<div class="dvlScan1015FilterFoot">Modelo LONG ainda não treinado ('+esc((lm&&lm.samples)||0)+'/'+esc((lm&&lm.needed)||200)+' amostras) — usando pesos manuais por enquanto.</div>';
     var acc=Math.round((lm.testAccuracy!=null?lm.testAccuracy:lm.accuracy||0)*100);
-    return '<div class="dvlScan1015FilterFoot">LONG treinado com '+esc(lm.samples)+' amostras · acurácia real '+acc+'%. SHORT treina separado (ver Copilot).</div>';
+    return '<div class="dvlScan1015FilterFoot">LONG treinado com '+esc(lm.samples)+' amostras · acurácia real '+acc+'%.</div>';
   }
   /* Swaps the metrics block between "manual steppers" and "read-only ML
      weights" — called on toggle click and whenever a fresh model arrives
@@ -72830,7 +72833,6 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 #dvlCopilotPage0974 .dvlCp1024Side{margin-top:10px!important;padding-top:10px!important;border-top:1px solid rgba(145,175,165,.14)!important;}
 #dvlCopilotPage0974 .dvlCp1024Side:first-of-type{margin-top:2px!important;}
 #dvlCopilotPage0974 .dvlCp1024SideTitle{font-size:10.5px!important;font-weight:900!important;letter-spacing:.4px!important;color:#e9efeb!important;margin-bottom:4px!important;}
-#dvlCopilotPage0974 .dvlCp1024SideTitle.short{color:#ff9f43!important;}
 #dvlCopilotPage0974 .dvlCp1024ComboTitle{margin-top:10px!important;font-size:9.5px!important;font-weight:900!important;letter-spacing:.3px!important;color:#9aa6a1!important;text-transform:uppercase!important;}
 #dvlCopilotPage0974 .dvlCp1024ComboEmpty{margin-top:4px!important;color:#70827c!important;font-size:9.5px!important;font-weight:700!important;line-height:1.35!important;}
 #dvlCopilotPage0974 .dvlCp1024Winner{color:#10df77!important;text-transform:none!important;font-weight:800!important;}
@@ -72899,14 +72901,16 @@ function fmtAgo(ts){
   return Math.floor(h/24)+"d atrás";
 }
 
-/* LONG and SHORT are two entirely separate models (backend src/train.js) —
-   the 6 blocks (RSI sobrevenda, OI subindo, LSR caindo, ...) all encode the
-   bullish "ignição" thesis, so blending SHORT-labeled examples (still just
-   "did the last candle close red") into the same fit would pollute what
-   LONG actually learns. Each side gets its own progress bar / weights. */
+/* LONG-only (backend src/train.js) — SHORT was removed entirely, not just
+   left untrained: the 6 blocks (RSI sobrevenda, OI subindo, LSR caindo,
+   ...) all encode a bullish thesis, a SHORT signal was never a real short
+   setup ("the last candle closed red" scored against that same bullish
+   checklist), and the financial backtest confirmed it lost money on
+   average. `side` stays a parameter (not hardcoded "LONG" inline) only
+   because this function itself is otherwise generic. */
 function sideBlockHtml(side, model){
   model = model || { trained:false, samples:0, needed:200 };
-  var titleCls = side === "SHORT" ? "dvlCp1024SideTitle short" : "dvlCp1024SideTitle";
+  var titleCls = "dvlCp1024SideTitle";
   var out = '<div class="dvlCp1024Side"><div class="'+titleCls+'">'+esc(side)+'</div>';
   if(!model.trained){
     var have=Number(model.samples||0), need=Number(model.needed||200);
@@ -72971,15 +72975,13 @@ function bodyHtml(){
     return '<div class="dvlCp1024Body">Backend do scanner não respondeu agora. O registro de dados continua rodando no servidor mesmo assim — isso aqui é só a leitura, não afeta o funcionamento.</div>';
   }
   var emptyModel={trained:false,samples:0,needed:200};
-  var oc=_lastHealth.outcomes||{pending:0,resolved:0,model:{LONG:emptyModel,SHORT:emptyModel}};
+  var oc=_lastHealth.outcomes||{pending:0,resolved:0,model:{LONG:emptyModel}};
   var models=oc.model||{};
   var out='<div class="dvlCp1024Body">';
   out+='<div class="dvlCp1024Stat"><span>Sinais em aberto (monitorando alvo/stop)</span><b>'+esc(oc.pending||0)+'</b></div>';
-  out+='<div class="dvlCp1024Stat"><span>Amostras resolvidas (LONG + SHORT)</span><b>'+esc(oc.resolved||0)+'</b></div>';
-  out+='<div class="dvlCp1024Note">LONG e SHORT treinam separados — misturar os dois estragaria o que os blocos (pensados pro setup de compra) aprendem.</div>';
+  out+='<div class="dvlCp1024Stat"><span>Amostras resolvidas</span><b>'+esc(oc.resolved||0)+'</b></div>';
   out+=sideBlockHtml("LONG", models.LONG);
-  out+=sideBlockHtml("SHORT", models.SHORT);
-  out+='<div class="dvlCp1024Foot">Modelo híbrido: aprende dos valores exatos por trás de cada bloquinho (RSI, força do OI/LSR, volume), não só sim/não — os pesos acima são a versão simplificada pra leitura. A acurácia real é medida em amostras que o modelo nunca viu no treino. Ainda <b>não substitui</b> o score do Scanner, que continua sendo o que você ajusta na mão em Filtros.</div>';
+  out+='<div class="dvlCp1024Foot">Modelo híbrido: aprende dos valores exatos por trás de cada bloquinho (RSI, força do OI/LSR, volume), não só sim/não — os pesos acima são a versão simplificada pra leitura. A acurácia real é medida em amostras que o modelo nunca viu no treino. Ainda <b>não substitui</b> o score do Scanner, que continua sendo o que você ajusta na mão em Filtros. SHORT foi removido do sistema (Scanner, ML e Bot Demo): os 6 bloquinhos só validam um setup de compra, e o backtest confirmou que SHORT vinha perdendo dinheiro.</div>';
   out+='</div>';
   return out;
 }
@@ -73053,8 +73055,6 @@ window.DVL_COPILOT_ML_STATUS_1024={
 #dvlCopilotPage0974 .dvlBd1030Note{margin-bottom:8px!important;padding:7px 8px!important;border-radius:9px!important;background:rgba(16,223,119,.06)!important;border:1px solid rgba(16,223,119,.16)!important;color:#9aa6a1!important;font-size:9.5px!important;font-weight:700!important;line-height:1.4!important;}
 #dvlCopilotPage0974 .dvlBd1030Wallet{margin-top:10px!important;padding-top:10px!important;border-top:1px solid rgba(145,175,165,.14)!important;}
 #dvlCopilotPage0974 .dvlBd1030Wallet:first-of-type{margin-top:0!important;padding-top:0!important;border-top:none!important;}
-#dvlCopilotPage0974 .dvlBd1030Title{font-size:10.5px!important;font-weight:900!important;letter-spacing:.4px!important;color:#e9efeb!important;margin-bottom:4px!important;}
-#dvlCopilotPage0974 .dvlBd1030Title.short{color:#ff9f43!important;}
 #dvlCopilotPage0974 .dvlBd1030Stat{display:flex!important;justify-content:space-between!important;gap:8px!important;font-size:10.5px!important;color:#9aa6a1!important;font-weight:750!important;padding:2px 0!important;}
 #dvlCopilotPage0974 .dvlBd1030Stat b{color:#f4f7f4!important;white-space:nowrap!important;}
 #dvlCopilotPage0974 .dvlBd1030Stat b.pos{color:#10df77!important;}
@@ -73076,19 +73076,23 @@ window.DVL_COPILOT_ML_STATUS_1024={
    wallet. 100% simulated: never sends an order anywhere, never touches an
    API key, never touches the user's real paper-trading wallet/positions
    (DVL_DEMO_WALLET / DVL_PAPER_TRADE_STORE) — its own isolated state, own
-   localStorage keys. LONG and SHORT run as two entirely separate wallets
-   (same reasoning as the ML LONG/SHORT split: mixing them would blur which
-   side is actually working). Entry gate mirrors the "Spike limpo" status
-   threshold (score >= 72) already meaningful elsewhere in the app, PLUS a
-   second gate on r.mlFavorable (worker.js's train.predictFavorable, run
-   against that row's own side model — whichever of logistic/tree tests
-   better for it): only `=== false` (the model actively disagrees) blocks
-   an entry; `null` (that side isn't trained yet) leaves the score-only
-   gate to decide alone, same fallback convention as everywhere else ML
-   touches this app. TP/SL/horizon mirror outcomes.js's own triple-barrier
-   definition (2%/1%/4h) so the demo's win rate is directly comparable to
-   what the ML's testAccuracy/backtest.js already measure — same rules,
-   just watched live instead of backtested. */
+   localStorage key. LONG-only: a SHORT wallet ran here for a while as its
+   own separate side, but the 6 blocks (RSI oversold, OI rising, LSR
+   falling, ...) all encode a bullish thesis, a SHORT "signal" was never a
+   real short setup (just "the last candle closed red" scored against that
+   same bullish checklist), and the financial backtest confirmed it lost
+   money on average — removed entirely, same decision as the Scanner
+   (worker.js's mergeRegistry) and the ML pipeline (train.js), not just
+   hidden here. Entry gate mirrors the "Spike limpo" status threshold
+   (score >= 72) already meaningful elsewhere in the app, PLUS a second
+   gate on r.mlFavorable (worker.js's train.predictFavorable, run against
+   the LONG model — whichever of logistic/tree tests better): only
+   `=== false` (the model actively disagrees) blocks an entry; `null` (not
+   trained yet) leaves the score-only gate to decide alone, same fallback
+   convention as everywhere else ML touches this app. TP/SL/horizon mirror
+   outcomes.js's own triple-barrier definition (2%/1%/4h) so the demo's win
+   rate is directly comparable to what the ML's testAccuracy/backtest.js
+   already measure — same rules, just watched live instead of backtested. */
 (function(){
   "use strict";
   if(window.DVL_BOTDEMO_1030) return;
@@ -73102,8 +73106,7 @@ window.DVL_COPILOT_ML_STATUS_1024={
   var SIGNAL_POLL_MS=60000;
   var PRICE_POLL_MS=30000;
   var MAX_HISTORY=30;
-  var LS_LONG="dvl_botdemo_wallet_long_v1";
-  var LS_SHORT="dvl_botdemo_wallet_short_v1";
+  var LS_WALLET="dvl_botdemo_wallet_long_v1"; // unchanged key — keeps any existing LONG wallet progress intact across this change
   var REASON_LABEL={target:"alvo", stop:"stop", timeout:"tempo"};
 
   function esc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
@@ -73112,19 +73115,17 @@ window.DVL_COPILOT_ML_STATUS_1024={
   function fmtPct(v){ v=Number(v)||0; return (v>=0?"+":"")+v.toFixed(2)+"%"; }
 
   function defaultWallet(){ return { balance:START_BALANCE, positions:[], history:[], startedAt:Date.now() }; }
-  function loadWallet(key){
+  function loadWallet(){
     try{
-      var w=JSON.parse(localStorage.getItem(key)||"null");
+      var w=JSON.parse(localStorage.getItem(LS_WALLET)||"null");
       if(w && typeof w.balance==="number" && Array.isArray(w.positions) && Array.isArray(w.history)) return w;
     }catch(_){}
     return defaultWallet();
   }
-  function saveWallet(key,w){ try{ localStorage.setItem(key, JSON.stringify(w)); }catch(_){} }
+  function saveWallet(w){ try{ localStorage.setItem(LS_WALLET, JSON.stringify(w)); }catch(_){} }
 
-  var wallets={ LONG:loadWallet(LS_LONG), SHORT:loadWallet(LS_SHORT) };
-  function keyFor(side){ return side==="SHORT" ? LS_SHORT : LS_LONG; }
-  function wallet(side){ return side==="SHORT" ? wallets.SHORT : wallets.LONG; }
-  function persist(side){ saveWallet(keyFor(side), wallet(side)); }
+  var wallet=loadWallet();
+  function persist(){ saveWallet(wallet); }
 
   function baseUrl(){
     try{ return (typeof window.DVL_SCANNER_BACKEND_URL==="string"?window.DVL_SCANNER_BACKEND_URL:null) || localStorage.getItem("dvlScannerBackendUrl") || ""; }
@@ -73138,43 +73139,41 @@ window.DVL_COPILOT_ML_STATUS_1024={
     return "15m";
   }
 
-  function hasOpen(side,symbol){ return wallet(side).positions.some(function(p){ return p.symbol===symbol; }); }
+  function hasOpen(symbol){ return wallet.positions.some(function(p){ return p.symbol===symbol; }); }
 
-  function tryOpen(symbol,side,score,price,mlFavorable,mlBestModel){
+  function tryOpen(symbol,score,price,mlFavorable,mlBestModel){
     if(!(price>0) || !symbol) return;
-    var w=wallet(side);
-    if(hasOpen(side,symbol)) return;
-    var size=w.balance*POSITION_PCT;
+    if(hasOpen(symbol)) return;
+    var size=wallet.balance*POSITION_PCT;
     if(size<5) return; // wallet too depleted to open a meaningful position
     var qty=size/price;
-    var tp=side==="SHORT" ? price*(1-PROFIT_TARGET_PCT/100) : price*(1+PROFIT_TARGET_PCT/100);
-    var sl=side==="SHORT" ? price*(1+STOP_LOSS_PCT/100) : price*(1-STOP_LOSS_PCT/100);
-    w.positions.push({ id:"bd_"+Date.now()+"_"+Math.random().toString(36).slice(2,7), symbol:symbol, side:side, entry:price, qty:qty, size:size, tp:tp, sl:sl, score:score, mlFavorable:(mlFavorable===true), mlBestModel:mlBestModel||null, openedAt:Date.now() });
-    w.balance-=size;
-    persist(side);
+    var tp=price*(1+PROFIT_TARGET_PCT/100);
+    var sl=price*(1-STOP_LOSS_PCT/100);
+    wallet.positions.push({ id:"bd_"+Date.now()+"_"+Math.random().toString(36).slice(2,7), symbol:symbol, entry:price, qty:qty, size:size, tp:tp, sl:sl, score:score, mlFavorable:(mlFavorable===true), mlBestModel:mlBestModel||null, openedAt:Date.now() });
+    wallet.balance-=size;
+    persist();
     render();
   }
 
-  function closePosition(side,pos,price,reason){
-    var w=wallet(side);
-    var idx=w.positions.indexOf(pos);
+  function closePosition(pos,price,reason){
+    var idx=wallet.positions.indexOf(pos);
     if(idx<0) return;
-    w.positions.splice(idx,1);
-    var pnl=side==="SHORT" ? (pos.entry-price)*pos.qty : (price-pos.entry)*pos.qty;
-    w.balance+=pos.size+pnl;
-    w.history.unshift({ symbol:pos.symbol, side:side, entry:pos.entry, exit:price, pnl:pnl, pnlPct:(pnl/pos.size)*100, reason:reason, score:pos.score, mlFavorable:pos.mlFavorable, mlBestModel:pos.mlBestModel, openedAt:pos.openedAt, closedAt:Date.now() });
-    if(w.history.length>MAX_HISTORY) w.history.length=MAX_HISTORY;
-    persist(side);
+    wallet.positions.splice(idx,1);
+    var pnl=(price-pos.entry)*pos.qty;
+    wallet.balance+=pos.size+pnl;
+    wallet.history.unshift({ symbol:pos.symbol, entry:pos.entry, exit:price, pnl:pnl, pnlPct:(pnl/pos.size)*100, reason:reason, score:pos.score, mlFavorable:pos.mlFavorable, mlBestModel:pos.mlBestModel, openedAt:pos.openedAt, closedAt:Date.now() });
+    if(wallet.history.length>MAX_HISTORY) wallet.history.length=MAX_HISTORY;
+    persist();
   }
 
   var _lastPriceMap={};
 
-  function unrealizedFor(side){
-    var w=wallet(side), sum=0;
-    w.positions.forEach(function(p){
+  function unrealized(){
+    var sum=0;
+    wallet.positions.forEach(function(p){
       var price=_lastPriceMap[p.symbol];
       if(!(price>0)) return;
-      sum += side==="SHORT" ? (p.entry-price)*p.qty : (price-p.entry)*p.qty;
+      sum += (price-p.entry)*p.qty;
     });
     return sum;
   }
@@ -73187,13 +73186,15 @@ window.DVL_COPILOT_ML_STATUS_1024={
 
   /* Reads the SAME snapshot the Scanner tab does — no separate detection
      logic, just reacting to what's already been found. score threshold
-     matches the "Spike limpo" bar (metrics.js's statusOf, sc>=72).
+     matches the "Spike limpo" bar (metrics.js's statusOf, sc>=72). Every
+     row in the snapshot is already LONG-only (worker.js's mergeRegistry
+     never lets a SHORT row become a tracked signal), but the side check
+     stays as a defensive filter rather than assuming the backend contract.
 
      Second gate, on top of the score: r.mlFavorable (worker.js's
-     train.predictFavorable, run against that row's OWN side model —
-     whichever of logistic/tree tests better for it). `=== false` is the
-     ONLY value that blocks an entry — `true` opens as normal, and `null`
-     (that side hasn't cleared MIN_SAMPLES yet, no opinion to give) also
+     train.predictFavorable, run against the LONG model — whichever of
+     logistic/tree tests better). `=== false` is the ONLY value that blocks
+     an entry — `true` opens as normal, and `null` (not trained yet) also
      lets the score-only gate decide, same "no model yet -> fall back to
      the existing behavior" convention the rest of the app already uses
      for the ML toggle in Filtros. */
@@ -73204,13 +73205,13 @@ window.DVL_COPILOT_ML_STATUS_1024={
       var snap=await fetchJson(base+"/api/dvl/scanner/snapshot?exchange=binance&tf="+encodeURIComponent(curTf()));
       var rows=Array.isArray(snap&&snap.rows) ? snap.rows : [];
       rows.forEach(function(r){
+        if(String(r.side||"").toUpperCase()==="SHORT") return; // defensive — the backend shouldn't ever send one
         var score=Number(r.spikeScore)||0;
         if(score<SCORE_THRESHOLD) return;
-        if(r.mlFavorable===false) return; // that side's own model actively disagrees — skip this one
-        var side=String(r.side||"").toUpperCase()==="SHORT" ? "SHORT" : "LONG";
+        if(r.mlFavorable===false) return; // the model actively disagrees — skip this one
         var symbol=String(r.rawSymbol||r.symbol||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
         var price=Number(r.price)||0;
-        tryOpen(symbol,side,score,price,r.mlFavorable,r.mlBestModel);
+        tryOpen(symbol,score,price,r.mlFavorable,r.mlBestModel);
       });
     }catch(_){ /* stay silent — retried on the next poll */ }
   }
@@ -73220,50 +73221,43 @@ window.DVL_COPILOT_ML_STATUS_1024={
      regardless of how many positions are open, this is always exactly one
      lightweight request, never one per position. */
   async function checkPositions(){
-    var symbols={};
-    wallets.LONG.positions.forEach(function(p){ symbols[p.symbol]=1; });
-    wallets.SHORT.positions.forEach(function(p){ symbols[p.symbol]=1; });
-    if(!Object.keys(symbols).length) return;
+    if(!wallet.positions.length) return;
     try{
       var arr=await fetchJson("https://fapi.binance.com/fapi/v1/ticker/price");
       var map={};
       (Array.isArray(arr)?arr:[]).forEach(function(t){ map[t.symbol]=Number(t.price); });
       _lastPriceMap=map;
       var now=Date.now();
-      ["LONG","SHORT"].forEach(function(side){
-        wallet(side).positions.slice().forEach(function(pos){
-          var price=map[pos.symbol];
-          if(!(price>0)) return;
-          var hitTp=side==="SHORT" ? price<=pos.tp : price>=pos.tp;
-          var hitSl=side==="SHORT" ? price>=pos.sl : price<=pos.sl;
-          var timedOut=(now-pos.openedAt)>=MAX_HORIZON_MS;
-          if(hitTp) closePosition(side,pos,price,"target");
-          else if(hitSl) closePosition(side,pos,price,"stop");
-          else if(timedOut) closePosition(side,pos,price,"timeout");
-        });
+      wallet.positions.slice().forEach(function(pos){
+        var price=map[pos.symbol];
+        if(!(price>0)) return;
+        var hitTp=price>=pos.tp;
+        var hitSl=price<=pos.sl;
+        var timedOut=(now-pos.openedAt)>=MAX_HORIZON_MS;
+        if(hitTp) closePosition(pos,price,"target");
+        else if(hitSl) closePosition(pos,price,"stop");
+        else if(timedOut) closePosition(pos,price,"timeout");
       });
       render();
     }catch(_){}
   }
 
-  function walletHtml(side){
-    var w=wallet(side);
-    var unreal=unrealizedFor(side);
-    var equity=w.balance+unreal;
+  function walletHtml(){
+    var unreal=unrealized();
+    var equity=wallet.balance+unreal;
     var retPct=((equity-START_BALANCE)/START_BALANCE)*100;
-    var closed=w.history;
+    var closed=wallet.history;
     var wins=closed.filter(function(h){ return h.pnl>0; }).length;
     var winRate=closed.length ? Math.round(wins/closed.length*100) : null;
-    var titleCls=side==="SHORT" ? "dvlBd1030Title short" : "dvlBd1030Title";
-    var out='<div class="dvlBd1030Wallet"><div class="'+titleCls+'">'+esc(side)+'</div>';
+    var out='<div class="dvlBd1030Wallet">';
     out+='<div class="dvlBd1030Stat"><span>Patrimônio</span><b>'+esc(fmtMoney(equity))+'</b></div>';
     out+='<div class="dvlBd1030Stat"><span>Retorno desde o início</span><b class="'+(retPct>=0?"pos":"neg")+'">'+esc(fmtPct(retPct))+'</b></div>';
-    out+='<div class="dvlBd1030Stat"><span>Posições abertas</span><b>'+w.positions.length+'</b></div>';
+    out+='<div class="dvlBd1030Stat"><span>Posições abertas</span><b>'+wallet.positions.length+'</b></div>';
     out+='<div class="dvlBd1030Stat"><span>Taxa de acerto</span><b>'+(winRate==null?"—":winRate+"% ("+closed.length+" trades)")+'</b></div>';
-    if(w.positions.length){
-      out+='<div class="dvlBd1030Positions">'+w.positions.slice(0,5).map(function(p){
+    if(wallet.positions.length){
+      out+='<div class="dvlBd1030Positions">'+wallet.positions.slice(0,5).map(function(p){
         var price=_lastPriceMap[p.symbol];
-        var pnl=price>0 ? (side==="SHORT"?(p.entry-price)*p.qty:(price-p.entry)*p.qty) : 0;
+        var pnl=price>0 ? (price-p.entry)*p.qty : 0;
         var pnlPct=price>0 ? (pnl/p.size)*100 : 0;
         var mlTag=p.mlFavorable ? '<i class="dvlBd1030MlTag" title="Modelo ('+esc(p.mlBestModel||"")+') concordou na entrada">🤖</i>' : '';
         return '<div class="dvlBd1030PosRow"><span>'+esc(p.symbol)+'</span>'+mlTag+'<b class="'+(pnl>=0?"pos":"neg")+'">'+esc(fmtPct(pnlPct))+'</b></div>';
@@ -73275,16 +73269,15 @@ window.DVL_COPILOT_ML_STATUS_1024={
         return '<div class="dvlBd1030HistRow"><span>'+esc(h.symbol)+'</span>'+mlTag+'<b class="'+(h.pnl>=0?"pos":"neg")+'">'+esc(fmtPct(h.pnlPct))+'</b><i>'+esc(REASON_LABEL[h.reason]||h.reason)+'</i></div>';
       }).join("")+'</div>';
     }
-    out+='<button type="button" class="dvlBd1030Reset" data-bd-reset="'+side+'">Reiniciar carteira '+side+'</button>';
+    out+='<button type="button" class="dvlBd1030Reset" data-bd-reset="1">Reiniciar carteira</button>';
     out+='</div>';
     return out;
   }
 
   function bodyHtml(){
     var out='<div class="dvlBd1030Body">';
-    out+='<div class="dvlBd1030Note">100% simulado — carteira virtual, não envia ordem nenhuma pra exchange nem usa dinheiro real. Abre quando um ativo bate score alto no Scanner (≥'+SCORE_THRESHOLD+') <b>e</b> o modelo aprendido daquele lado não descarta o sinal (🤖 marca as entradas que o modelo também aprovou); fecha no alvo/stop ou depois de 4h — os mesmos critérios que já rotulam os dados do ML. LONG e SHORT rodam em carteiras separadas, cada uma começando com '+esc(fmtMoney(START_BALANCE))+'.</div>';
-    out+=walletHtml("LONG");
-    out+=walletHtml("SHORT");
+    out+='<div class="dvlBd1030Note">100% simulado — carteira virtual, não envia ordem nenhuma pra exchange nem usa dinheiro real. Abre quando um ativo bate score alto no Scanner (≥'+SCORE_THRESHOLD+') <b>e</b> o modelo aprendido não descarta o sinal (🤖 marca as entradas que o modelo também aprovou); fecha no alvo/stop ou depois de 4h — os mesmos critérios que já rotulam os dados do ML. Só LONG: SHORT foi removido do sistema inteiro (Scanner, ML e aqui), o backtest confirmou que vinha perdendo dinheiro. Começa com '+esc(fmtMoney(START_BALANCE))+'.</div>';
+    out+=walletHtml();
     out+='</div>';
     return out;
   }
@@ -73303,9 +73296,8 @@ window.DVL_COPILOT_ML_STATUS_1024={
       if(btn.dataset.bdBound) return;
       btn.dataset.bdBound="1";
       btn.addEventListener("click", function(){
-        var side=btn.getAttribute("data-bd-reset")==="SHORT" ? "SHORT" : "LONG";
-        wallets[side]=defaultWallet();
-        persist(side);
+        wallet=defaultWallet();
+        persist();
         render();
       });
     });
@@ -73349,9 +73341,9 @@ window.DVL_COPILOT_ML_STATUS_1024={
     render:render,
     scanSignals:scanSignals,
     checkPositions:checkPositions,
-    resetWallet:function(side){ side=side==="SHORT"?"SHORT":"LONG"; wallets[side]=defaultWallet(); persist(side); render(); },
-    get wallets(){ return { LONG:clone(wallets.LONG), SHORT:clone(wallets.SHORT) }; },
-    audit:function(){ var p=document.getElementById("dvlCopilotPage0974"); return { version:"1.030", panelFound:!!(p&&p.querySelector("[data-dvl-cp-section='bot-demo']")), LONG:wallets.LONG, SHORT:wallets.SHORT }; }
+    resetWallet:function(){ wallet=defaultWallet(); persist(); render(); },
+    get wallets(){ return { LONG:clone(wallet) }; },
+    audit:function(){ var p=document.getElementById("dvlCopilotPage0974"); return { version:"1.030", panelFound:!!(p&&p.querySelector("[data-dvl-cp-section='bot-demo']")), LONG:wallet }; }
   };
 })();
 </script>
@@ -73368,7 +73360,6 @@ window.DVL_COPILOT_ML_STATUS_1024={
 #dvlCopilotPage0974 .dvlBt1040Side{margin-top:10px!important;padding-top:10px!important;border-top:1px solid rgba(145,175,165,.14)!important;}
 #dvlCopilotPage0974 .dvlBt1040Side:first-of-type{margin-top:0!important;padding-top:0!important;border-top:none!important;}
 #dvlCopilotPage0974 .dvlBt1040SideTitle{font-size:10.5px!important;font-weight:900!important;letter-spacing:.4px!important;color:#e9efeb!important;margin-bottom:4px!important;}
-#dvlCopilotPage0974 .dvlBt1040SideTitle.short{color:#ff9f43!important;}
 #dvlCopilotPage0974 .dvlBt1040Bar{height:8px!important;border-radius:999px!important;background:rgba(145,175,165,.14)!important;overflow:hidden!important;margin:8px 0!important;}
 #dvlCopilotPage0974 .dvlBt1040BarFill{height:100%!important;background:linear-gradient(90deg,#0cb363,#10df77)!important;border-radius:999px!important;}
 #dvlCopilotPage0974 .dvlBt1040Stat{display:flex!important;justify-content:space-between!important;gap:8px!important;font-size:10.5px!important;color:#9aa6a1!important;font-weight:750!important;padding:2px 0!important;}
@@ -73428,12 +73419,11 @@ function bucketRowHtml(key, stats){
     +'</div>';
 }
 
-/* LONG/SHORT are two independent backtests (same reasoning as the ML card:
-   the models themselves are trained separately, so their test sets and
-   results are separate too — never blended). */
+/* LONG-only (same reasoning as the ML card: SHORT was removed from
+   training entirely, not just left unready — see train.js's doc-comment). */
 function sideBacktestHtml(side, result){
   result = result || {ready:false, samples:0, needed:300};
-  var titleCls = side==="SHORT" ? "dvlBt1040SideTitle short" : "dvlBt1040SideTitle";
+  var titleCls = "dvlBt1040SideTitle";
   var out='<div class="dvlBt1040Side"><div class="'+titleCls+'">'+esc(side)+'</div>';
   if(!result.ready){
     var have=Number(result.samples||0), need=Number(result.needed||300);
@@ -73455,8 +73445,7 @@ function bodyHtml(){
   var out='<div class="dvlBt1040Body">';
   out+='<div class="dvlBt1040Note">Diferente da acurácia do card "Aprendizado (ML)" (que só mede se acertou a direção), isto mede quanto cada abordagem teria RENDIDO — mesmo conjunto de teste, nunca usado pra treinar, sem olhar o futuro.</div>';
   out+=sideBacktestHtml("LONG", _last.LONG);
-  out+=sideBacktestHtml("SHORT", _last.SHORT);
-  out+='<div class="dvlBt1040Foot">Retorno já ajustado pro lado do sinal (favorável = positivo, tanto pra LONG quanto pra SHORT). Ainda <b>não substitui</b> o score do Scanner nem abre posição nenhuma — só compara, pra você decidir se vale ligar "Pesos aprendido" em Filtros.</div>';
+  out+='<div class="dvlBt1040Foot">Retorno já ajustado pro lado do sinal (favorável = positivo). Ainda <b>não substitui</b> o score do Scanner nem abre posição nenhuma — só compara, pra você decidir se vale ligar "Pesos aprendido" em Filtros. SHORT foi removido (Scanner, ML e Bot Demo): o backtest confirmou que vinha perdendo dinheiro.</div>';
   out+='</div>';
   return out;
 }

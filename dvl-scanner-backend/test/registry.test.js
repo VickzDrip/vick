@@ -1,7 +1,13 @@
 "use strict";
 
 /* Persistence test for the signal registry: a detected signal must STAY on
-   the list and refresh, not vanish next cycle. Runs offline. */
+   the list and refresh, not vanish next cycle. Runs offline.
+
+   Every row defaults to side "LONG" — mergeRegistry only lets LONG signals
+   join at all (SHORT was removed entirely, see worker.js's doc-comment),
+   so a SHORT row here would never join and these tests would be exercising
+   the wrong gate. A dedicated SHORT-specific test below covers that gate
+   directly instead. */
 
 const assert = require("assert");
 const { mergeRegistry } = require("../src/worker");
@@ -10,8 +16,8 @@ const cfg = require("../src/config");
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error("FAIL: " + m); } }
 
-function row(sym, igniting, price) {
-  return { rawSymbol: sym, symbol: sym + "USDT", isIgnition: !!igniting, price: price || 1, spikeScore: 50 };
+function row(sym, igniting, price, side) {
+  return { rawSymbol: sym, symbol: sym + "USDT", side: side || "LONG", isIgnition: !!igniting, price: price || 1, spikeScore: 50 };
 }
 const reg = {};
 let t = 1000000;
@@ -59,6 +65,17 @@ for (let i = 0; i < cfg.SNAPSHOT_ROWS + 5; i++) {
 ok(Object.keys(reg2).length === cfg.SNAPSHOT_ROWS, "registry capped at SNAPSHOT_ROWS (oldest dropped)");
 const survivors = Object.keys(reg2);
 ok(!survivors.includes("S0") && survivors.includes("S" + (cfg.SNAPSHOT_ROWS + 4)), "oldest pushed out, newest kept");
+
+/* SHORT never joins, even while igniting, even if it was already tracked
+   from a persisted registry file saved before this gate existed (loaded
+   straight into sigReg, bypassing the join check entirely). */
+const reg3 = {};
+let rows3 = mergeRegistry(reg3, { C: row("C", true, 1, "SHORT") }, 9000000);
+ok(!reg3.C && rows3.length === 0, "an igniting SHORT row never joins the registry");
+
+const reg4 = { D: { rawSymbol: "D", symbol: "DUSDT", side: "SHORT", isIgnition: true, price: 1, spikeScore: 50, _detectedAt: 8999000, _missed: 0 } };
+let rows4 = mergeRegistry(reg4, { D: row("D", true, 1, "SHORT") }, 9000000);
+ok(!reg4.D && rows4.length === 0, "a pre-existing SHORT entry (e.g. from an old persisted registry file) is purged immediately, not left to age out");
 
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

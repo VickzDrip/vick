@@ -32,16 +32,20 @@
    that actually means something (in-sample accuracy on a model's own
    training data is close to meaningless).
 
-   LONG and SHORT are trained as two entirely separate models (see
-   maybeTrain/trainSide below), each with its own MIN_SAMPLES gate. The 6
-   blocks all encode a bullish thesis (RSI oversold, OI rising, LSR
-   falling, ...) that was designed and validated for LONG only — `side` on
-   a resolved example is still just "did the last candle close red or
-   green" (metrics.js), not a real short setup, so blending SHORT examples
-   into the same fit would have the model correlate a bearish outcome
-   against bullish features, polluting the LONG weights with noise. SHORT
-   simply won't train until there's a real short thesis behind it and
-   enough resolved examples of its own.
+   LONG-only. The 6 blocks (RSI oversold, OI rising, LSR falling, ...) all
+   encode a bullish thesis — a resolved SHORT example's `side` was never a
+   real short setup, just "the last candle closed red" (metrics.js) scored
+   against that same bullish checklist. A SHORT model was trained here for
+   a while as its own separate side; the financial backtest (src/backtest.js)
+   confirmed what the thesis mismatch predicted — SHORT signals lost money
+   on average (see the README's "Financial backtest" section for the
+   numbers) rather than just being unvalidated. Removed entirely rather
+   than kept around producing a model nobody should trust: worker.js's
+   scanner registry (mergeRegistry) never lets a SHORT row become a
+   tracked signal in the first place, so no new SHORT examples get logged
+   either. `loadExamples`/`trainSide` still accept an arbitrary `side`
+   string (useful for `analyze-combos.js`'s historical mining and for
+   tests), but `maybeTrain()` only ever calls `trainSide("LONG", ...)`.
 
    This module only trains and persists a candidate model; nothing wires
    it into the live score yet (see worker.js / server.js `health.outcomes`)
@@ -135,15 +139,12 @@ function normalizeContinuous(f) {
   ];
 }
 
-/* LONG and SHORT get independently trained models (see maybeTrain below) —
-   the 6 blocks/continuous features (RSI oversold, OI rising, LSR falling,
-   ...) all encode a bullish "ignition" thesis, so blending SHORT-labeled
-   examples (currently just "did the last candle close red") into the same
-   fit would have the model try to correlate a bearish outcome with bullish
-   features, polluting what the LONG model actually learns. Separating them
-   costs nothing — SHORT simply won't train until it has its own MIN_SAMPLES
-   worth of resolved examples, same gate as LONG. */
-const SIDES = ["LONG", "SHORT"];
+/* Only LONG actually trains (see maybeTrain below and the module
+   doc-comment for why SHORT was removed, not just left untrained).
+   `normSide` stays a real normalizer (not a hardcoded "LONG") because
+   `loadExamples`/`trainSide` remain generic over `side` — still used
+   that way by analyze-combos.js and by tests. */
+const SIDES = ["LONG"];
 function normSide(s) { return String(s || "").toUpperCase() === "SHORT" ? "SHORT" : "LONG"; }
 
 /* Examples come back in the log's natural (chronological resolution)
@@ -406,21 +407,18 @@ function trainSide(side, prev) {
   };
 }
 
-/* Retrains LONG and SHORT independently (see the comment above loadExamples
-   for why they can't share a fit) and persists both together. Returns
-   { LONG: {...}, SHORT: {...} }, each either { trained:false, samples,
-   needed } or a full trained model. A model file from before this split
-   (flat shape, no .LONG/.SHORT) is treated as "no prior model" for both
-   sides rather than crashing — they simply retrain from the full log. */
+/* Retrains LONG only (see the module doc-comment for why SHORT was removed
+   entirely). Returns `{ LONG: {...} }` — no `SHORT` key at all, so callers
+   (worker.js, the Copilot cards) never see one. A model file saved before
+   this change may still have its own stale `.SHORT` key on disk; it's
+   simply never read again and gets overwritten the next time this saves. */
 function maybeTrain() {
   const prevFile = loadModel();
   const prevLong = prevFile && prevFile.LONG;
-  const prevShort = prevFile && prevFile.SHORT;
 
   const LONG = trainSide("LONG", prevLong);
-  const SHORT = trainSide("SHORT", prevShort);
-  const combined = { LONG, SHORT };
-  if (LONG.trained || SHORT.trained) saveModel(combined);
+  const combined = { LONG };
+  if (LONG.trained) saveModel(combined);
   return combined;
 }
 

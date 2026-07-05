@@ -316,17 +316,23 @@ scaled to ~3%/1.5% of the train set) exist for the same reason L2
 regularization exists on the logistic side — with only hundreds to low
 thousands of examples, an unconstrained tree would just memorize them.
 
-**LONG and SHORT train as two entirely separate models.** The 6 blocks
-(spike above avg, RSI oversold, OI rising, LSR falling, ...) all encode a
-bullish "ignition" thesis; a resolved example's `side` is still just
-whichever way the last candle closed (`metrics.js`), not a validated short
-setup. Fitting one blended model on both would have it try to correlate a
-bearish outcome with bullish features, silently polluting what LONG
-actually learns from real, on-thesis data. `train.maybeTrain()` now returns
-`{ LONG: model, SHORT: model }`, each with its own independent `MIN_SAMPLES`
-gate — SHORT simply stays untrained until it has both a real thesis behind
-it and enough of its own resolved examples, without holding LONG back or
-being held back by it.
+**LONG-only — SHORT was removed entirely, not just left untrained.** The 6
+blocks (spike above avg, RSI oversold, OI rising, LSR falling, ...) all
+encode a bullish "ignition" thesis; a resolved example's `side` was never a
+validated short setup, just whichever way the last candle closed
+(`metrics.js`). A SHORT model was trained here for a while as its own
+separate side (see git history / the changelog around Beta 1.058-1.067),
+gated the same way LONG is. The financial backtest (`src/backtest.js`)
+confirmed what the thesis mismatch predicted: SHORT signals lost money on
+average, not just "unvalidated" — see the "Financial backtest" section
+below for the actual numbers. Removed across the whole pipeline rather than
+left producing a model nobody should trust: the scanner's registry
+(`worker.js`'s `mergeRegistry`) no longer lets a SHORT row become a tracked
+signal at all, so no new SHORT examples get logged either, and
+`train.maybeTrain()` now returns `{ LONG: model }` — no `SHORT` key at all.
+`loadExamples`/`trainSide` still accept an arbitrary `side` string (used by
+`analyze-combos.js`'s historical mining and by tests), but nothing in the
+live pipeline calls them with `"SHORT"` anymore.
 
 It's **hybrid** on purpose: the model sees both the 6 blocks as booleans
 *and* the continuous values behind them (normalized), so it can find its
@@ -351,26 +357,24 @@ looks good and tells you almost nothing about whether it actually works on
 signals it hasn't seen yet.
 
 The worker calls `train.maybeTrain()` once per cycle (self-throttled to at
-most once/hour), training LONG and SHORT independently via the same
-`trainSide(side, prevModel)` pipeline. Each side is a no-op — cheap, just
-re-reads the log to count matching lines — until it has at least
-`MIN_SAMPLES` (300 — raised from 200 once the pair features nearly doubled
-the feature count) resolved examples of its OWN side, and only re-fits
-after `MIN_NEW_SAMPLES` (7) more of that side arrive since its last run.
-With 37 features, there's even more room for the model to fit noise than
-the original 6-boolean version had — L2 regularization and, especially,
-`testAccuracy` (the honest held-out number) are what catch that if it
-happens; raise `MIN_SAMPLES` further if `testAccuracy` looks unstable or
-noticeably worse than `trainAccuracy`. The result is saved to
-`data/learned-weights.json` as `{ LONG, SHORT }` and surfaced read-only at
-`GET /api/dvl/scanner/health` as `outcomes.model: { LONG: {...}, SHORT:
-{...} }`, each side shaped `{ trained, side, samples, trainSamples,
-testSamples, needed, accuracy, trainAccuracy, testAccuracy, trainedAt,
-weights, pairWeights, coefficients, tree, bestModel }`, and shown
-side-by-side in the app's Copilot tab ("Aprendizado (ML)" card, including
-a "Combinações que mais pesam" section for the pairs and an "Árvore de
-decisão" section for the tree's own accuracy + top rules, flagging
-whichever of the two `bestModel` currently names).
+most once/hour), training LONG via `trainSide(side, prevModel)`. It's a
+no-op — cheap, just re-reads the log to count matching lines — until it has
+at least `MIN_SAMPLES` (300 — raised from 200 once the pair features nearly
+doubled the feature count) resolved examples, and only re-fits after
+`MIN_NEW_SAMPLES` (7) more arrive since its last run. With 37 features,
+there's even more room for the model to fit noise than the original
+6-boolean version had — L2 regularization and, especially, `testAccuracy`
+(the honest held-out number) are what catch that if it happens; raise
+`MIN_SAMPLES` further if `testAccuracy` looks unstable or noticeably worse
+than `trainAccuracy`. The result is saved to `data/learned-weights.json` as
+`{ LONG }` and surfaced read-only at `GET /api/dvl/scanner/health` as
+`outcomes.model: { LONG: {...} }`, shaped `{ trained, side, samples,
+trainSamples, testSamples, needed, accuracy, trainAccuracy, testAccuracy,
+trainedAt, weights, pairWeights, coefficients, tree, bestModel }`, and
+shown in the app's Copilot tab ("Aprendizado (ML)" card, including a
+"Combinações que mais pesam" section for the pairs and an "Árvore de
+decisão" section for the tree's own accuracy + top rules, flagging whichever
+of the two `bestModel` currently names).
 
 **Resetting the training data (`npm run reset-training-data`).** If
 something upstream of the logged features changes in a way that makes old
@@ -388,12 +392,11 @@ update mid-cycle. Restart it after.
 **Wiring into the live score is opt-in.** Filtros has a "Pesos do score"
 toggle — Manual (default) or 🤖 Aprendido (ML). Manual keeps using the
 weights you tune by hand, exactly as before. Switching to ML makes
-`score(r)` read the trained model's `weights` instead, matched to that
-row's own `side` — a LONG row uses the LONG model's weights, a SHORT row
-the SHORT model's, via `effectiveWeights(side)` / `learnedModelFor(side)`,
-falling back to the manual weights whenever that particular side's model
-isn't trained yet (which today means SHORT always falls back, until it has
-its own thesis and enough data). When the learned model IS in use, `score(r)`
+`score(r)` read the trained LONG model's `weights` instead, via
+`effectiveWeights(side)` / `learnedModelFor(side)` (still `side`-parameterized
+frontend-side since a row itself carries one), falling back to the manual
+weights whenever the model isn't trained yet. When the learned model IS in
+use, `score(r)`
 also adds each pair's weight whenever both of its blocks are true for that
 row (and folds `pairTotal` into the denominator alongside the 6 single-block
 weights) — manual mode has no concept of pairs, so this only ever applies
@@ -457,8 +460,9 @@ average/total return have been for three groups —
 Each group is reduced to `{ count, winRate, avgReturnPct, totalReturnPct }`
 via `statsFor()`, using the same side-adjusted `finalReturnPct` per example
 that `outcomes.js`'s triple-barrier resolution already computes (favorable
-= positive, for both LONG and SHORT) — a plain average is directly
-comparable across sides without extra sign-flipping.
+= positive) — this LONG-only backtest's own numbers were part of what
+confirmed SHORT should be removed (see "LONG-only" above): SHORT signals
+lost money on average across every group, not just the unfiltered baseline.
 
 **Deliberately re-fits instead of reusing `learned-weights.json`.** That
 file only updates once per `MIN_NEW_SAMPLES`-sized batch and could be
@@ -473,8 +477,8 @@ writes `learned-weights.json` or otherwise touches the model `trainSide()`/
 and returns `{ ready: false, side, samples, needed }` below it, or
 `{ ready: true, side, samples, trainSamples, testSamples, labelMethod,
 allSignals, logisticModel, treeModel }` once trained. `backtest()` returns
-`{ LONG: backtestSide("LONG"), SHORT: backtestSide("SHORT") }`, exposed
-read-only at `GET /api/dvl/scanner/backtest`, cached for 5 minutes
+`{ LONG: backtestSide("LONG") }` — no `SHORT` key, same as `train.maybeTrain()`
+— exposed read-only at `GET /api/dvl/scanner/backtest`, cached for 5 minutes
 server-side (`worker.getBacktestStats()`) so a page polling it repeatedly
 doesn't re-fit on every single request. Shown in the app's Copilot tab as
 the "Backtest financeiro" card, right below "Aprendizado (ML)" — bars for

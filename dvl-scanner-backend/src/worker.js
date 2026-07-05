@@ -28,8 +28,7 @@ const TRAIN_INTERVAL_MS = 3600000;
 let _lastTrainAttempt = 0;
 function emptyModelStatus() {
   return {
-    LONG: { trained: false, side: "LONG", samples: 0, needed: train.MIN_SAMPLES },
-    SHORT: { trained: false, side: "SHORT", samples: 0, needed: train.MIN_SAMPLES }
+    LONG: { trained: false, side: "LONG", samples: 0, needed: train.MIN_SAMPLES }
   };
 }
 let _modelStatus = emptyModelStatus();
@@ -164,18 +163,26 @@ function buildRow(exKey, adapter, t, k, now, tf) {
 /* Pure registry merge — kept separate so the persistence behaviour can be
    tested without the network. Mutates sigReg in place and returns the
    recency-ordered, capped snapshot rows.
-   - a symbol JOINS when cur[sym].isIgnition and it's not already tracked
+   - a symbol JOINS when cur[sym].isIgnition, its side is LONG, and it's not
+     already tracked — SHORT never joins: the 6 blocks (RSI oversold, OI
+     rising, LSR falling...) all encode a bullish thesis, "SHORT" was only
+     ever "the last candle closed red" scored against that SAME bullish
+     checklist, and the financial backtest confirmed it loses money (see
+     src/backtest.js's README section) rather than just being unvalidated.
    - tracked entries are refreshed each cycle with cur[sym] (detection time
-     kept); when absent from cur they accrue a "missed" count
+     kept); when absent from cur they accrue a "missed" count. Any SHORT
+     entry already sitting in a persisted registry (saved to disk before
+     this) is purged immediately rather than left to age out naturally.
    - entries leave on age, prolonged absence, or when pushed past the cap */
 function mergeRegistry(sigReg, cur, now) {
   for (const sym in cur) {
-    if (cur[sym].isIgnition && !sigReg[sym]) {
+    if (cur[sym].isIgnition && cur[sym].side === "LONG" && !sigReg[sym]) {
       sigReg[sym] = Object.assign({}, cur[sym], { _detectedAt: now, _missed: 0 });
     }
   }
   for (const sym in sigReg) {
     const entry = sigReg[sym];
+    if (entry.side !== "LONG") { delete sigReg[sym]; continue; }
     if (cur[sym]) {
       const detectedAt = entry._detectedAt;
       Object.assign(entry, cur[sym]);
@@ -254,7 +261,7 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
      exactly (a real detection, not a refresh of an already-tracked row). */
   const freshJoins = [];
   for (const sym in cur) {
-    if (cur[sym].isIgnition && !sigReg[sym]) freshJoins.push(sym);
+    if (cur[sym].isIgnition && cur[sym].side === "LONG" && !sigReg[sym]) freshJoins.push(sym);
   }
 
   /* 2-4) Persist/refresh/rank/evict via the registry. */
@@ -277,14 +284,15 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
     row.spikeScore = M.score(row, cfg.WEIGHTS, cfg.ENGINE);
     row.status = M.statusOf(row, row.spikeScore);
     row.blocks = M.blocksOf(row, cfg.ENGINE);
-    /* Advisory only — does the row's OWN side's trained model (whichever
-       of logistic/tree tests better for it) call this favorable RIGHT NOW?
-       null (not false) until that side clears MIN_SAMPLES, same "no
-       opinion yet" convention train.predictFavorable documents. Consumed
-       by the Bot Demo (index.html) as an extra entry gate alongside the
-       existing score threshold — never affects spikeScore/status/blocks
-       themselves. */
-    const mlPred = train.predictFavorable(_modelStatus[row.side === "SHORT" ? "SHORT" : "LONG"], row);
+    /* Advisory only — does the LONG model (whichever of logistic/tree tests
+       better) call this favorable RIGHT NOW? null (not false) until it
+       clears MIN_SAMPLES, same "no opinion yet" convention
+       train.predictFavorable documents. Consumed by the Bot Demo
+       (index.html) as an extra entry gate alongside the existing score
+       threshold — never affects spikeScore/status/blocks themselves.
+       Every tracked row is LONG (mergeRegistry never lets SHORT join), so
+       there's only ever one model to check. */
+    const mlPred = train.predictFavorable(_modelStatus.LONG, row);
     row.mlFavorable = mlPred.favorable;
     row.mlProb = mlPred.prob;
     row.mlBestModel = mlPred.bestModel;

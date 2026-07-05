@@ -110,10 +110,11 @@ eq(empty.count, 0, "statsFor handles an empty bucket without dividing by zero");
 eq(empty.winRate, 0, "empty bucket has a 0 winRate, not NaN");
 eq(empty.avgReturnPct, 0, "empty bucket has a 0 avgReturnPct, not NaN");
 
-/* 4) backtest() top-level wraps both sides. */
+/* 4) backtest() is LONG-only — no SHORT key at all (SHORT was removed
+   from training entirely, see train.js's doc-comment). */
 const both = backtest.backtest();
 ok(both.LONG && both.LONG.ready === true, "backtest() includes a ready LONG side");
-ok(both.SHORT && both.SHORT.ready === false, "backtest() includes SHORT, not ready (no short-labeled examples logged)");
+ok(!("SHORT" in both), "backtest() never returns a SHORT key — SHORT was removed, not just unready");
 
 /* 5) loadExamples() actually carries finalReturnPct through, since
    backtest.js depends on it being present per example (train.js/tree.js
