@@ -16,6 +16,7 @@ const { EXCHANGES, binance, mexc, binanceLsr, tfToMs } = require("./exchanges");
 const M = require("./metrics");
 const outcomes = require("./outcomes");
 const train = require("./train");
+const backtest = require("./backtest");
 
 /* Where the persistent signal registry is mirrored to disk so it survives
    restarts (deploys/reboots). Untracked by git, so `git pull` won't touch it. */
@@ -567,4 +568,19 @@ function getSymbolHistory(symbol) {
   return outcomes.historyForSymbol(symbol);
 }
 
-module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading };
+/* Refitting logistic + tree on the whole log is pure in-memory CPU (no
+   network calls), sub-second even at a few thousand examples — but the
+   Copilot page polls its status periodically, so a short cache still
+   saves refitting on every single poll for an answer that can't have
+   changed since the last resolved signal a few minutes ago. */
+const BACKTEST_CACHE_MS = 5 * 60000;
+let _backtestCache = null; // { at, result }
+function getBacktestStats() {
+  const now = Date.now();
+  if (_backtestCache && (now - _backtestCache.at) < BACKTEST_CACHE_MS) return _backtestCache.result;
+  const result = backtest.backtest();
+  _backtestCache = { at: now, result };
+  return result;
+}
+
+module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading, getBacktestStats };

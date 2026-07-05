@@ -8,6 +8,7 @@
    POST /api/dvl/scanner/manual-trade  (log a user-opened position as an ML training example)
    GET  /api/dvl/scanner/history?symbol=X  (every recorded signal for one symbol, for chart markers)
    GET  /api/dvl/scanner/live-reading?symbol=X&tf=Y  (current OI/LSR/RSI/spike reading for ANY symbol)
+   GET  /api/dvl/scanner/backtest      (financial backtest: win rate / avg return, all signals vs model-favorable)
    This server is READ-ONLY re: trading: it never places or routes trades —
    manual-trade only LOGS a position the user already opened elsewhere in
    the app; it doesn't open, close, or touch anything itself. */
@@ -92,6 +93,15 @@ function createServer() {
         flatCandles: row.flatCandles, prevVolBelowHalf: row.prevVolBelowHalf, spike20: row.spike20, spike50: row.spike50
       }))
       .catch(e => { console.error("[live-reading]", symbol, e.message); res.json({ ok: false, error: e.message }); });
+  });
+
+  /* Financial backtest — how the model's calls would have actually paid
+     off (win rate / avg / total return), not just accuracy — on the SAME
+     temporal test split trainSide() already reports accuracy for. See
+     backtest.js's doc-comment for why it re-fits instead of reusing the
+     persisted learned-weights.json. */
+  app.get("/api/dvl/scanner/backtest", (req, res) => {
+    res.json({ ok: true, ...worker.getBacktestStats() });
   });
 
   app.get("/api/dvl/scanner/health", (req, res) => {

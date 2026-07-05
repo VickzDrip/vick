@@ -168,7 +168,16 @@ function loadExamples(side) {
     const boolFeatures = BLOCK_KEYS.map(k => (e.blocks[k] ? 1 : 0));
     const contFeatures = normalizeContinuous(e.features);
     const pairFeatures = computePairFeatures(e.blocks);
-    out.push({ features: boolFeatures.concat(contFeatures).concat(pairFeatures), label: e.label, at: e.at || 0 });
+    out.push({
+      features: boolFeatures.concat(contFeatures).concat(pairFeatures),
+      label: e.label, at: e.at || 0,
+      /* Side-adjusted return actually realized when this example resolved
+         (target/stop/timeout) — not used by fit()/predictProb() at all, only
+         by backtest.js to turn a bucket of examples into win-rate/avg-return
+         numbers alongside the accuracy-only metrics trainSide() already
+         reports. */
+      finalReturnPct: Number(e.finalReturnPct) || 0
+    });
   }
   return out;
 }

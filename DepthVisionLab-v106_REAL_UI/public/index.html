@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.065</title>
+<title>DVL Binance Live — Beta 1.066</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.065';
+window.DVL_APP_VERSION = 'Beta 1.066';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.065";
+const DVL_APP_VERSION = "Beta 1.066";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.066", note: "Novo card no Copilot: Backtest financeiro. O card 'Aprendizado (ML)' já mostrava a acurácia (acertou a direção?); este mostra quanto cada abordagem teria RENDIDO no mesmo conjunto de teste nunca visto no treino — taxa de acerto e retorno médio/total comparando negociar todo sinal vs. só o que a regressão chamou de favorável vs. só o que a árvore de decisão chamou de favorável. Só leitura, não abre posição nenhuma." },
   { version: "Beta 1.065", note: "ML — Net Long/Short/Delta agora entram na equação do modelo aprendido, calculados no backend (a mesma aproximação via Binance dos osciladores, só que agora alimentando o treino também). Captado só no momento em que um sinal novo aparece (não a cada ciclo, pra não sobrecarregar a Binance de novo). Não virou um bloco novo — é o combo do jeito que a árvore de decisão já sabe fazer sozinha, sem eu precisar montar a combinação na mão: ela já pode juntar 'Net Delta subindo' com qualquer outro bloco/combinação sozinha." },
   { version: "Beta 1.064", note: "Novo indicador no menu Indicadores: DVL Net Long — completa o trio junto do Net Short e Net Delta, mesma aproximação via Binance (posição × Open Interest). Média móvel configurável, padrão 20." },
   { version: "Beta 1.063", note: "Novo: Bot Demo no Copilot — opera sozinho os sinais do Scanner numa carteira virtual (100% simulado, sem ordem real nenhuma), com LONG e SHORT em carteiras separadas de $10.000 cada. Abre posição quando um ativo bate score alto (≥72), fecha no alvo/stop ou depois de 4h — os mesmos critérios que já rotulam os dados do ML. Mostra patrimônio, retorno, posições abertas e histórico de trades pra cada lado, com botão pra reiniciar cada carteira quando quiser." },
@@ -73332,6 +73333,166 @@ window.DVL_COPILOT_ML_STATUS_1024={
     get wallets(){ return { LONG:clone(wallets.LONG), SHORT:clone(wallets.SHORT) }; },
     audit:function(){ var p=document.getElementById("dvlCopilotPage0974"); return { version:"1.030", panelFound:!!(p&&p.querySelector("[data-dvl-cp-section='bot-demo']")), LONG:wallets.LONG, SHORT:wallets.SHORT }; }
   };
+})();
+</script>
+
+<style id="DVL_COPILOT_BACKTEST_1040_CSS">
+#dvlCopilotPage0974 .dvlBt1040Panel{margin-top:12px!important;}
+#dvlCopilotPage0974 .dvlBt1040Head{display:flex!important;align-items:center!important;gap:10px!important;margin-bottom:8px!important;}
+#dvlCopilotPage0974 .dvlBt1040Icon{width:34px!important;height:34px!important;border-radius:11px!important;display:grid!important;place-items:center!important;background:rgba(16,223,119,.10)!important;border:1px solid rgba(16,223,119,.25)!important;font-size:16px!important;flex:0 0 auto!important;}
+#dvlCopilotPage0974 .dvlBt1040HeadTitle{display:flex!important;flex-direction:column!important;min-width:0!important;}
+#dvlCopilotPage0974 .dvlBt1040HeadTitle b{color:#f4f7f4!important;font-size:13px!important;font-weight:900!important;}
+#dvlCopilotPage0974 .dvlBt1040HeadTitle span{color:#9aa6a1!important;font-size:10px!important;font-weight:700!important;}
+#dvlCopilotPage0974 .dvlBt1040Body{color:#cdd5d0!important;font-size:11.5px!important;font-weight:750!important;line-height:1.4!important;}
+#dvlCopilotPage0974 .dvlBt1040Note{margin-bottom:8px!important;padding:7px 8px!important;border-radius:9px!important;background:rgba(16,223,119,.06)!important;border:1px solid rgba(16,223,119,.16)!important;color:#9aa6a1!important;font-size:9.5px!important;font-weight:700!important;line-height:1.4!important;}
+#dvlCopilotPage0974 .dvlBt1040Side{margin-top:10px!important;padding-top:10px!important;border-top:1px solid rgba(145,175,165,.14)!important;}
+#dvlCopilotPage0974 .dvlBt1040Side:first-of-type{margin-top:0!important;padding-top:0!important;border-top:none!important;}
+#dvlCopilotPage0974 .dvlBt1040SideTitle{font-size:10.5px!important;font-weight:900!important;letter-spacing:.4px!important;color:#e9efeb!important;margin-bottom:4px!important;}
+#dvlCopilotPage0974 .dvlBt1040SideTitle.short{color:#ff9f43!important;}
+#dvlCopilotPage0974 .dvlBt1040Bar{height:8px!important;border-radius:999px!important;background:rgba(145,175,165,.14)!important;overflow:hidden!important;margin:8px 0!important;}
+#dvlCopilotPage0974 .dvlBt1040BarFill{height:100%!important;background:linear-gradient(90deg,#0cb363,#10df77)!important;border-radius:999px!important;}
+#dvlCopilotPage0974 .dvlBt1040Stat{display:flex!important;justify-content:space-between!important;gap:8px!important;font-size:10.5px!important;color:#9aa6a1!important;font-weight:750!important;padding:2px 0!important;}
+#dvlCopilotPage0974 .dvlBt1040Stat b{color:#f4f7f4!important;white-space:nowrap!important;}
+#dvlCopilotPage0974 .dvlBt1040Compare{display:flex!important;flex-direction:column!important;gap:8px!important;margin-top:8px!important;}
+#dvlCopilotPage0974 .dvlBt1040Row{padding:6px 8px!important;border-radius:9px!important;background:rgba(145,175,165,.06)!important;}
+#dvlCopilotPage0974 .dvlBt1040RowLabel{font-size:9.5px!important;font-weight:800!important;color:#e9efeb!important;margin-bottom:3px!important;}
+#dvlCopilotPage0974 .dvlBt1040RowStats{display:flex!important;flex-wrap:wrap!important;gap:8px!important;font-size:9.5px!important;color:#9aa6a1!important;font-weight:750!important;}
+#dvlCopilotPage0974 .dvlBt1040RowStats b.pos{color:#10df77!important;}
+#dvlCopilotPage0974 .dvlBt1040RowStats b.neg{color:#ff4a61!important;}
+#dvlCopilotPage0974 .dvlBt1040ReturnBar{height:6px!important;border-radius:999px!important;background:rgba(145,175,165,.14)!important;overflow:hidden!important;margin-top:5px!important;}
+#dvlCopilotPage0974 .dvlBt1040ReturnBar i{display:block!important;height:100%!important;border-radius:999px!important;}
+#dvlCopilotPage0974 .dvlBt1040ReturnBar i.pos{background:#10df77!important;}
+#dvlCopilotPage0974 .dvlBt1040ReturnBar i.neg{background:#ff4a61!important;}
+#dvlCopilotPage0974 .dvlBt1040Foot{margin-top:8px!important;padding-top:8px!important;border-top:1px solid rgba(145,175,165,.12)!important;color:#70827c!important;font-size:9.5px!important;font-weight:700!important;line-height:1.35!important;}
+#dvlCopilotPage0974 .dvlBt1040Foot b{color:#10df77!important;}
+</style>
+
+<script id="DVL_COPILOT_BACKTEST_1040_JS">
+/* Backtest financeiro — complementa a acurácia do card "Aprendizado (ML)"
+   (aquele mede só "acertou a direção?"; este mede "quanto teria rendido?").
+   Lê GET /api/dvl/scanner/backtest (src/backtest.js no backend), que refaz
+   o MESMO split temporal treino/teste do trainSide() e compara, no
+   conjunto de teste (nunca visto no treino), 3 grupos: negociar TODO sinal,
+   negociar só o que a regressão logística chamou de favorável, e só o que
+   a árvore de decisão chamou de favorável — taxa de acerto e retorno
+   médio/total de cada um, lado a lado. Só leitura: não abre posição
+   nenhuma, não afeta o score do Scanner nem o Bot Demo. */
+(function(){"use strict";if(window.DVL_COPILOT_BACKTEST_1040)return;
+
+function page(){return document.getElementById("dvlCopilotPage0974");}
+function esc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+function fmtPct(v){ v=Number(v)||0; return (v>=0?"+":"")+v.toFixed(2)+"%"; }
+
+var BUCKET_LABELS={
+  allSignals:"Todo sinal (sem filtro do modelo)",
+  logisticModel:"Só o que a regressão chamou de favorável",
+  treeModel:"Só o que a árvore de decisão chamou de favorável"
+};
+var BUCKET_ORDER=["allSignals","logisticModel","treeModel"];
+
+var _last=null, _lastErr=false;
+
+function bucketRowHtml(key, stats){
+  var s=stats || {count:0,winRate:0,avgReturnPct:0,totalReturnPct:0};
+  var cls=(Number(s.avgReturnPct)||0) >= 0 ? "pos" : "neg";
+  var barPct=Math.max(0,Math.min(100,Math.round(Math.abs(Number(s.avgReturnPct)||0)/2*100)));
+  return '<div class="dvlBt1040Row">'
+    +'<div class="dvlBt1040RowLabel">'+esc(BUCKET_LABELS[key]||key)+'</div>'
+    +'<div class="dvlBt1040RowStats">'
+      +'<span>'+esc(s.count)+' sinais</span>'
+      +'<span>'+Math.round((s.winRate||0)*100)+'% acerto</span>'
+      +'<b class="'+cls+'">'+fmtPct(s.avgReturnPct)+' médio</b>'
+      +'<span>'+fmtPct(s.totalReturnPct)+' total</span>'
+    +'</div>'
+    +'<div class="dvlBt1040ReturnBar"><i class="'+cls+'" style="width:'+barPct+'%"></i></div>'
+    +'</div>';
+}
+
+/* LONG/SHORT are two independent backtests (same reasoning as the ML card:
+   the models themselves are trained separately, so their test sets and
+   results are separate too — never blended). */
+function sideBacktestHtml(side, result){
+  result = result || {ready:false, samples:0, needed:300};
+  var titleCls = side==="SHORT" ? "dvlBt1040SideTitle short" : "dvlBt1040SideTitle";
+  var out='<div class="dvlBt1040Side"><div class="'+titleCls+'">'+esc(side)+'</div>';
+  if(!result.ready){
+    var have=Number(result.samples||0), need=Number(result.needed||300);
+    var pct=Math.max(2,Math.min(100,Math.round(have/Math.max(1,need)*100)));
+    out+='<div class="dvlBt1040Bar"><div class="dvlBt1040BarFill" style="width:'+pct+'%"></div></div>';
+    out+='<div class="dvlBt1040Stat"><span>Aguardando amostras suficientes</span><b>'+have+'/'+need+'</b></div>';
+  }else{
+    out+='<div class="dvlBt1040Stat"><span>Testado em (nunca visto no treino)</span><b>'+esc(result.testSamples)+' sinais</b></div>';
+    out+='<div class="dvlBt1040Compare">'+BUCKET_ORDER.map(function(k){ return bucketRowHtml(k, result[k]); }).join("")+'</div>';
+  }
+  out+='</div>';
+  return out;
+}
+
+function bodyHtml(){
+  if(_lastErr || !_last){
+    return '<div class="dvlBt1040Body">Backend do scanner não respondeu agora. Isso aqui é só leitura — não afeta o Scanner nem o Bot Demo.</div>';
+  }
+  var out='<div class="dvlBt1040Body">';
+  out+='<div class="dvlBt1040Note">Diferente da acurácia do card "Aprendizado (ML)" (que só mede se acertou a direção), isto mede quanto cada abordagem teria RENDIDO — mesmo conjunto de teste, nunca usado pra treinar, sem olhar o futuro.</div>';
+  out+=sideBacktestHtml("LONG", _last.LONG);
+  out+=sideBacktestHtml("SHORT", _last.SHORT);
+  out+='<div class="dvlBt1040Foot">Retorno já ajustado pro lado do sinal (favorável = positivo, tanto pra LONG quanto pra SHORT). Ainda <b>não substitui</b> o score do Scanner nem abre posição nenhuma — só compara, pra você decidir se vale ligar "Pesos aprendido" em Filtros.</div>';
+  out+='</div>';
+  return out;
+}
+
+function html(){
+  return '<section class="dvlCp0976Panel dvlBt1040Panel" data-dvl-cp-section="backtest" data-dvl-cp-section-version="1040">'
+    +'<div class="dvlBt1040Head"><i class="dvlBt1040Icon">📈</i>'
+    +'<div class="dvlBt1040HeadTitle"><b>Backtest financeiro</b><span>Não é só acerto — quanto teria rendido</span></div></div>'
+    +bodyHtml()
+    +'</section>';
+}
+
+function render(){
+  var p=page();
+  if(!p) return false;
+  var panel=p.querySelector("[data-dvl-cp-section='backtest'][data-dvl-cp-section-version='1040']");
+  if(!panel){
+    var botDemo=p.querySelector("[data-dvl-cp-section='bot-demo']");
+    var mlStatus=p.querySelector("[data-dvl-cp-section='ml-status']");
+    var bot=p.querySelector("[data-dvl-cp-section='bot-soon']");
+    var chat=p.querySelector("[data-dvl-cp-section='ai-chat']");
+    if(botDemo) botDemo.insertAdjacentHTML("afterend", html());
+    else if(mlStatus) mlStatus.insertAdjacentHTML("afterend", html());
+    else if(bot) bot.insertAdjacentHTML("beforebegin", html());
+    else if(chat) chat.insertAdjacentHTML("afterend", html());
+    else p.insertAdjacentHTML("beforeend", html());
+    panel=p.querySelector("[data-dvl-cp-section='backtest'][data-dvl-cp-section-version='1040']");
+  }else{
+    var body=panel.querySelector(".dvlBt1040Body");
+    if(body) body.outerHTML=bodyHtml();
+  }
+  return !!panel;
+}
+
+var _timer=null;
+function fetchBacktest(){
+  fetch("/api/dvl/scanner/backtest",{cache:"no-store"})
+    .then(function(r){ if(!r.ok) throw new Error("backtest "+r.status); return r.json(); })
+    .then(function(j){ _last=j; _lastErr=false; render(); })
+    .catch(function(){ _lastErr=true; render(); });
+}
+
+function boot(){
+  render();
+  fetchBacktest();
+  [300,900,1500,2500,4000,6000,9000].forEach(function(ms){ setTimeout(render,ms); });
+  if(_timer) clearInterval(_timer);
+  _timer=setInterval(fetchBacktest, 60000);
+}
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true});
+else boot();
+
+window.DVL_COPILOT_BACKTEST_1040={
+  version:"1.040", render:render, fetchBacktest:fetchBacktest,
+  audit:function(){ var p=page(), panel=p?p.querySelector("[data-dvl-cp-section='backtest']"):null; return {version:"1.040", panelFound:!!panel, last:_last, lastErr:_lastErr}; }
+};
 })();
 </script>
 

@@ -45,6 +45,8 @@ ops overhead with no benefit at this scale.
 ## Endpoints
 - `GET /api/dvl/scanner/snapshot?exchange=binance|mexc` → snapshot JSON
 - `GET /api/dvl/scanner/health` → row counts, freshness, safety flags
+- `GET /api/dvl/scanner/backtest` → financial backtest (win rate / avg
+  return, all signals vs. model-favorable) — see "Financial backtest" below
 - `WS  /ws/dvl/scanner?exchange=binance|mexc` → sends the snapshot on
   connect, then `{type:"scanner:update", exchange, updatedAt, fallback,
   activeSource, rows}` whenever the ranking/score/status/side/OI/LSR/RSI
@@ -401,6 +403,54 @@ Copilot "Aprendizado (ML)" card shows both sides side by side, combos
 included. Nothing about outcome logging or training changes based on this
 toggle — it only affects which weights compute the score you see. Run
 training manually any time with `npm run train`.
+
+## Financial backtest (`src/backtest.js`)
+`trainSide()`'s `testAccuracy` answers "did the predicted direction match
+the outcome?" — it says nothing about magnitude. A model that's right 55%
+of the time on trades that lose big when wrong can be worse than one that's
+right 50% of the time on trades with a tight stop and a generous target.
+`src/backtest.js` answers the money question instead: on the exact same
+temporal test split (oldest ~80% trains, newest ~20% evaluates, same
+`splitTemporal`/`TEST_FRACTION` as `trainSide`), what would the win rate and
+average/total return have been for three groups —
+- **`allSignals`** — every test-set example, unfiltered (the "trade
+  everything" baseline).
+- **`logisticModel`** — only the test examples a freshly-fit logistic
+  regression calls favorable (probability ≥ 0.5).
+- **`treeModel`** — only the test examples a freshly-fit decision tree
+  (`src/tree.js`) calls favorable.
+
+Each group is reduced to `{ count, winRate, avgReturnPct, totalReturnPct }`
+via `statsFor()`, using the same side-adjusted `finalReturnPct` per example
+that `outcomes.js`'s triple-barrier resolution already computes (favorable
+= positive, for both LONG and SHORT) — a plain average is directly
+comparable across sides without extra sign-flipping.
+
+**Deliberately re-fits instead of reusing `learned-weights.json`.** That
+file only updates once per `MIN_NEW_SAMPLES`-sized batch and could be
+stale relative to what's in the log right now; re-fitting fresh (the same
+sub-second in-memory operation `trainSide()` already does every cycle) costs
+nothing and guarantees the backtest is never comparing against an outdated
+model. `backtest.js` only reads the log and fits in memory — it never
+writes `learned-weights.json` or otherwise touches the model `trainSide()`/
+`maybeTrain()` persist.
+
+`backtestSide(side)` gates on the same `train.MIN_SAMPLES` as `trainSide()`
+and returns `{ ready: false, side, samples, needed }` below it, or
+`{ ready: true, side, samples, trainSamples, testSamples, labelMethod,
+allSignals, logisticModel, treeModel }` once trained. `backtest()` returns
+`{ LONG: backtestSide("LONG"), SHORT: backtestSide("SHORT") }`, exposed
+read-only at `GET /api/dvl/scanner/backtest`, cached for 5 minutes
+server-side (`worker.getBacktestStats()`) so a page polling it repeatedly
+doesn't re-fit on every single request. Shown in the app's Copilot tab as
+the "Backtest financeiro" card, right below "Aprendizado (ML)" — bars for
+win rate and average return per group, color-coded green/red by sign. Read
+directly with `node src/backtest.js`.
+
+**Still just a comparison, never wired into anything live.** Nothing about
+`backtest.js` affects the Scanner's score, the ML toggle in Filtros, or the
+Bot Demo — it's a second, complementary lens (money, not just direction) on
+the exact same held-out data `trainSide()` already reports accuracy for.
 
 ## Confluence diagnostic (`npm run analyze`)
 `src/analyze.js` answers a narrower, model-free question: does having MORE
