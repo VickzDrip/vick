@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.063</title>
+<title>DVL Binance Live — Beta 1.064</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.063';
+window.DVL_APP_VERSION = 'Beta 1.064';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.063";
+const DVL_APP_VERSION = "Beta 1.064";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.064", note: "Novo indicador no menu Indicadores: DVL Net Long — completa o trio junto do Net Short e Net Delta, mesma aproximação via Binance (posição × Open Interest). Média móvel configurável, padrão 20." },
   { version: "Beta 1.063", note: "Novo: Bot Demo no Copilot — opera sozinho os sinais do Scanner numa carteira virtual (100% simulado, sem ordem real nenhuma), com LONG e SHORT em carteiras separadas de $10.000 cada. Abre posição quando um ativo bate score alto (≥72), fecha no alvo/stop ou depois de 4h — os mesmos critérios que já rotulam os dados do ML. Mostra patrimônio, retorno, posições abertas e histórico de trades pra cada lado, com botão pra reiniciar cada carteira quando quiser." },
   { version: "Beta 1.062", note: "ML — adicionei uma árvore de decisão de verdade (do zero, sem depender de lib externa) treinada junto com o modelo de regressão, nos mesmos dados. Diferente das combinações de 2 blocos, a árvore acha combos de 3+ blocos sozinha, sem eu precisar nomear cada combinação na mão. O card 'Aprendizado (ML)' agora mostra a acurácia da árvore ao lado da regressão e as regras que ela encontrou em português (ex: 'OI subindo + LSR caindo + RSI baixo → 86% favorável'), e avisa qual dos dois modelos venceu. Ainda não substitui o score do Scanner — é só leitura/comparação por enquanto." },
   { version: "Beta 1.061", note: "ML — o modelo aprendido agora enxerga COMBINAÇÕES de blocos, não só cada um isolado: antes ele só somava pesos independentes (uma regressão pura não sabe que 'OI subindo + LSR caindo juntos' vale mais que a soma das partes). Agora cada uma das 15 combinações possíveis dos 6 blocos ganha seu próprio peso aprendido — o card 'Aprendizado (ML)' no Copilot mostra as combinações que mais pesaram pra cada lado, e o score de Filtros (quando 'Pesos aprendido' tá ligado) já soma esse bônus de combo, não só os blocos sozinhos." },
@@ -23982,6 +23983,7 @@ function __dvlOscillatorName(osc){
   try{
     if(osc === window.DVLOpenInterestOscillator) return "Open Interest";
     if(osc === window.DVLLongShortOscillator) return "Long/Short";
+    if(osc === window.DVLNetLongOscillator) return "Net Long";
     if(osc === window.DVLNetShortOscillator) return "Net Short";
     if(osc === window.DVLNetDeltaOscillator) return "Net Delta";
     if(osc === window.DVLDeltaVolume) return "Delta Volume";
@@ -24049,6 +24051,7 @@ function __dvlCollectActiveOscillators(){
 
   add("Open Interest", window.DVLOpenInterestOscillator);
   add("Long/Short", window.DVLLongShortOscillator);
+  add("Net Long", window.DVLNetLongOscillator);
   add("Net Short", window.DVLNetShortOscillator);
   add("Net Delta", window.DVLNetDeltaOscillator);
   add("Delta Volume", window.DVLDeltaVolume);
@@ -36706,6 +36709,25 @@ drag = {
     };
   }
 
+  window.DVLNetLongOscillator = buildOscillator({
+    storageKey:"dvl_netlong_oscillator_v1",
+    boundsKey:"netLong",
+    field:"netLong",
+    title:"DVL Net Long",
+    sub:"aprox. via Binance (posição × OI)",
+    mark:"NL",
+    lineColor:"#13dc8d",
+    zeroLine:false,
+    upKind:"bull",   // net long rising = more long conviction building
+    downKind:"bear", // net long falling = longs leaving/covering
+    rowId:"dvlNetLongItem",
+    stateId:"dvlNetLongState",
+    panelId:"dvlNetLongPanel",
+    itemClass:"dvl-netlong-indicator-item",
+    onCheckboxId:"dvlNetLongOn",
+    afterRowId:"dvlLongShortOscItem"
+  });
+
   window.DVLNetShortOscillator = buildOscillator({
     storageKey:"dvl_netshort_oscillator_v1",
     boundsKey:"netShort",
@@ -36722,7 +36744,7 @@ drag = {
     panelId:"dvlNetShortPanel",
     itemClass:"dvl-netshort-indicator-item",
     onCheckboxId:"dvlNetShortOn",
-    afterRowId:"dvlLongShortOscItem"
+    afterRowId:"dvlNetLongItem"
   });
 
   window.DVLNetDeltaOscillator = buildOscillator({
@@ -51409,6 +51431,7 @@ function drawWick(ctx, g, payload, color){
   var OSCS = [
     { key:"oi",  label:"Open Interest", api:"DVLOpenInterestOscillator", row:"dvlOpenInterestOscItem", pill:"dvlOpenInterestOscState" },
     { key:"ls",  label:"Long/Short",    api:"DVLLongShortOscillator",   row:"dvlLongShortOscItem",    pill:"dvlLongShortOscState" },
+    { key:"netlong", label:"Net Long", api:"DVLNetLongOscillator",     row:"dvlNetLongItem",         pill:"dvlNetLongState" },
     { key:"netshort", label:"Net Short", api:"DVLNetShortOscillator",   row:"dvlNetShortItem",        pill:"dvlNetShortState" },
     { key:"netdelta", label:"Net Delta", api:"DVLNetDeltaOscillator",   row:"dvlNetDeltaItem",        pill:"dvlNetDeltaState" },
     { key:"dv",  label:"Delta Volume",  api:"DVLDeltaVolume",           row:"dvlDeltaVolumeItem",     pill:"dvlDeltaVolumeState" },
@@ -51445,7 +51468,7 @@ function drawWick(ctx, g, payload, color){
     document.addEventListener("click", function(ev){
       var t = ev.target;
       if(!t || !t.closest) return;
-      var hit = t.closest("[data-ind-toggle], #dvlOpenInterestOscState, #dvlLongShortOscState, #dvlNetShortState, #dvlNetDeltaState, #dvlDeltaVolumeState, #dvlExhaustionRSIState");
+      var hit = t.closest("[data-ind-toggle], #dvlOpenInterestOscState, #dvlLongShortOscState, #dvlNetLongState, #dvlNetShortState, #dvlNetDeltaState, #dvlDeltaVolumeState, #dvlExhaustionRSIState");
       if(!hit) return;
       setTimeout(refreshActive, 90);
       setTimeout(function(){
@@ -65229,7 +65252,7 @@ body.dvlScannerOpen080 #chartWrap{
 
   function catFor(m){
     if(m.missing) return "soon";
-    if(m.key==="oi"||m.key==="ls"||m.key==="netshort"||m.key==="netdelta"||m.key==="dv"||m.key==="exr"||m.key==="tv") return "osc";
+    if(m.key==="oi"||m.key==="ls"||m.key==="netlong"||m.key==="netshort"||m.key==="netdelta"||m.key==="dv"||m.key==="exr"||m.key==="tv") return "osc";
     if(m.key==="ma"||m.key==="bookmap") return "overlay";
     return "flow";
   }
@@ -65239,6 +65262,7 @@ body.dvlScannerOpen080 #chartWrap{
       {key:"vol",mark:"VOL",title:"DVL Volume",sub:"overlay",api:"DVLVolume",pill:"dvlVolState",row:"dvlVolumeItem"},
       {key:"oi",mark:"OI",title:"DVL Open Interest",sub:"AGG OI candles · real data",api:"DVLOpenInterestOscillator",pill:"dvlOpenInterestOscState",row:"dvlOpenInterestOscItem"},
       {key:"ls",mark:"LS",title:"DVL Long/Short Ratio",sub:"CoinGlass-style line · real data",api:"DVLLongShortOscillator",pill:"dvlLongShortOscState",row:"dvlLongShortOscItem"},
+      {key:"netlong",mark:"NL",title:"DVL Net Long",sub:"aprox. via Binance (posição × OI)",api:"DVLNetLongOscillator",pill:"dvlNetLongState",row:"dvlNetLongItem"},
       {key:"netshort",mark:"NS",title:"DVL Net Short",sub:"aprox. via Binance (posição × OI)",api:"DVLNetShortOscillator",pill:"dvlNetShortState",row:"dvlNetShortItem"},
       {key:"netdelta",mark:"ND",title:"DVL Net Delta",sub:"aprox. via Binance (long − short × OI)",api:"DVLNetDeltaOscillator",pill:"dvlNetDeltaState",row:"dvlNetDeltaItem"},
       {key:"dv",mark:"DV",title:"DVL Delta Volume",sub:"buy/sell delta · TF selecionável",api:"DVLDeltaVolume",pill:"dvlDeltaVolumeState",row:"dvlDeltaVolumeItem"},
