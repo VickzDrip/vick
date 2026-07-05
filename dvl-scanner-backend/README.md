@@ -486,6 +486,22 @@ directly with `node src/backtest.js`.
 Bot Demo — it's a second, complementary lens (money, not just direction) on
 the exact same held-out data `trainSide()` already reports accuracy for.
 
+## Advanced combo mining (`npm run analyze:combos`)
+`src/analyze-combos.js` goes beyond `analyze.js`'s count-buckets: it mines
+every 1-, 2- and 3-block subset (41 total, superset match) per side and
+ranks them by the **Wilson lower bound** of the win rate — the pessimistic
+end of a 95% confidence interval, so a lucky 3/3 combo (raw 100%, bound
+~44%) can't outrank a proven 52/80 one (raw 65%, bound ~54%). Each combo
+also reports **lift** vs its side's baseline win rate, financial
+expectancy (avg/total `finalReturnPct`), a **temporal stability** verdict
+(first-half vs second-half win rate — "piorando" flags a pattern that
+stopped working instead of averaging it into a respectable-looking
+number), and a **Net Delta conditioning** split (win rate with
+`netDeltaSlope` rising vs falling, when both sides have enough samples).
+Flags: `--side=LONG|SHORT`, `--min=N` (min samples to rank, default 15),
+`--top=N`. Read-only diagnostic — feeds nothing back into training or the
+live score.
+
 ## Confluence diagnostic (`npm run analyze`)
 `src/analyze.js` answers a narrower, model-free question: does having MORE
 of the 6 blocks true at once (confluence) beat any single block alone?
