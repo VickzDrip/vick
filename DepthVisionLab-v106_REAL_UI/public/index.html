@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.062</title>
+<title>DVL Binance Live — Beta 1.063</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.062';
+window.DVL_APP_VERSION = 'Beta 1.063';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.062";
+const DVL_APP_VERSION = "Beta 1.063";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.063", note: "Novo: Bot Demo no Copilot — opera sozinho os sinais do Scanner numa carteira virtual (100% simulado, sem ordem real nenhuma), com LONG e SHORT em carteiras separadas de $10.000 cada. Abre posição quando um ativo bate score alto (≥72), fecha no alvo/stop ou depois de 4h — os mesmos critérios que já rotulam os dados do ML. Mostra patrimônio, retorno, posições abertas e histórico de trades pra cada lado, com botão pra reiniciar cada carteira quando quiser." },
   { version: "Beta 1.062", note: "ML — adicionei uma árvore de decisão de verdade (do zero, sem depender de lib externa) treinada junto com o modelo de regressão, nos mesmos dados. Diferente das combinações de 2 blocos, a árvore acha combos de 3+ blocos sozinha, sem eu precisar nomear cada combinação na mão. O card 'Aprendizado (ML)' agora mostra a acurácia da árvore ao lado da regressão e as regras que ela encontrou em português (ex: 'OI subindo + LSR caindo + RSI baixo → 86% favorável'), e avisa qual dos dois modelos venceu. Ainda não substitui o score do Scanner — é só leitura/comparação por enquanto." },
   { version: "Beta 1.061", note: "ML — o modelo aprendido agora enxerga COMBINAÇÕES de blocos, não só cada um isolado: antes ele só somava pesos independentes (uma regressão pura não sabe que 'OI subindo + LSR caindo juntos' vale mais que a soma das partes). Agora cada uma das 15 combinações possíveis dos 6 blocos ganha seu próprio peso aprendido — o card 'Aprendizado (ML)' no Copilot mostra as combinações que mais pesaram pra cada lado, e o score de Filtros (quando 'Pesos aprendido' tá ligado) já soma esse bônus de combo, não só os blocos sozinhos." },
   { version: "Beta 1.060", note: "Corrige o bug de painéis cortados com 4+ indicadores ativos ao mesmo tempo (OI, LSR, Net Short, Net Delta…): os painéis agora se ajustam pra caber todos na tela, achatando de forma mais inteligente em vez de cortar/travar. Também corrige o Net Short/Net Delta não aparecerem se ligados sozinhos, sem OI/LSR junto." },
@@ -73009,6 +73010,301 @@ window.DVL_COPILOT_ML_STATUS_1024={
   version:"1.024", render:render, fetchHealth:fetchHealth,
   audit:function(){ var p=page(), panel=p?p.querySelector("[data-dvl-cp-section='ml-status']"):null; return {version:"1.024", panelFound:!!panel, lastHealth:_lastHealth, lastErr:_lastErr}; }
 };
+})();
+</script>
+
+<style id="DVL_BOTDEMO_1030_CSS">
+#dvlCopilotPage0974 .dvlBd1030Panel{margin-top:12px!important;}
+#dvlCopilotPage0974 .dvlBd1030Head{display:flex!important;align-items:center!important;gap:10px!important;margin-bottom:8px!important;}
+#dvlCopilotPage0974 .dvlBd1030Icon{width:34px!important;height:34px!important;border-radius:11px!important;display:grid!important;place-items:center!important;background:rgba(16,223,119,.10)!important;border:1px solid rgba(16,223,119,.25)!important;font-size:16px!important;flex:0 0 auto!important;}
+#dvlCopilotPage0974 .dvlBd1030HeadTitle{display:flex!important;flex-direction:column!important;min-width:0!important;}
+#dvlCopilotPage0974 .dvlBd1030HeadTitle b{color:#f4f7f4!important;font-size:13px!important;font-weight:900!important;}
+#dvlCopilotPage0974 .dvlBd1030HeadTitle span{color:#9aa6a1!important;font-size:10px!important;font-weight:700!important;}
+#dvlCopilotPage0974 .dvlBd1030Body{color:#cdd5d0!important;font-size:11.5px!important;font-weight:750!important;line-height:1.4!important;}
+#dvlCopilotPage0974 .dvlBd1030Note{margin-bottom:8px!important;padding:7px 8px!important;border-radius:9px!important;background:rgba(16,223,119,.06)!important;border:1px solid rgba(16,223,119,.16)!important;color:#9aa6a1!important;font-size:9.5px!important;font-weight:700!important;line-height:1.4!important;}
+#dvlCopilotPage0974 .dvlBd1030Wallet{margin-top:10px!important;padding-top:10px!important;border-top:1px solid rgba(145,175,165,.14)!important;}
+#dvlCopilotPage0974 .dvlBd1030Wallet:first-of-type{margin-top:0!important;padding-top:0!important;border-top:none!important;}
+#dvlCopilotPage0974 .dvlBd1030Title{font-size:10.5px!important;font-weight:900!important;letter-spacing:.4px!important;color:#e9efeb!important;margin-bottom:4px!important;}
+#dvlCopilotPage0974 .dvlBd1030Title.short{color:#ff9f43!important;}
+#dvlCopilotPage0974 .dvlBd1030Stat{display:flex!important;justify-content:space-between!important;gap:8px!important;font-size:10.5px!important;color:#9aa6a1!important;font-weight:750!important;padding:2px 0!important;}
+#dvlCopilotPage0974 .dvlBd1030Stat b{color:#f4f7f4!important;white-space:nowrap!important;}
+#dvlCopilotPage0974 .dvlBd1030Stat b.pos{color:#10df77!important;}
+#dvlCopilotPage0974 .dvlBd1030Stat b.neg{color:#ff4a61!important;}
+#dvlCopilotPage0974 .dvlBd1030Positions,#dvlCopilotPage0974 .dvlBd1030History{display:flex!important;flex-direction:column!important;gap:4px!important;margin-top:6px!important;}
+#dvlCopilotPage0974 .dvlBd1030PosRow,#dvlCopilotPage0974 .dvlBd1030HistRow{display:flex!important;align-items:center!important;gap:8px!important;font-size:10px!important;color:#b8c7c1!important;font-weight:750!important;padding:4px 6px!important;border-radius:7px!important;background:rgba(145,175,165,.06)!important;}
+#dvlCopilotPage0974 .dvlBd1030PosRow span,#dvlCopilotPage0974 .dvlBd1030HistRow span{flex:1!important;color:#e9efeb!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
+#dvlCopilotPage0974 .dvlBd1030PosRow b,#dvlCopilotPage0974 .dvlBd1030HistRow b{white-space:nowrap!important;}
+#dvlCopilotPage0974 .dvlBd1030PosRow b.pos,#dvlCopilotPage0974 .dvlBd1030HistRow b.pos{color:#10df77!important;}
+#dvlCopilotPage0974 .dvlBd1030PosRow b.neg,#dvlCopilotPage0974 .dvlBd1030HistRow b.neg{color:#ff4a61!important;}
+#dvlCopilotPage0974 .dvlBd1030HistRow i{font-style:normal!important;color:#70827c!important;font-size:8.5px!important;font-weight:700!important;text-transform:uppercase!important;white-space:nowrap!important;}
+#dvlCopilotPage0974 .dvlBd1030Reset{margin-top:8px!important;width:100%!important;padding:7px!important;border-radius:9px!important;border:1px solid rgba(145,175,165,.18)!important;background:rgba(255,255,255,.03)!important;color:#9aa6a1!important;font-size:9.5px!important;font-weight:800!important;cursor:pointer!important;}
+</style>
+
+<script id="DVL_BOTDEMO_1030_JS">
+/* Bot Demo — auto-trades the scanner's OWN signals (same backend snapshot
+   the Scanner tab reads, GET /api/dvl/scanner/snapshot) into a virtual
+   wallet. 100% simulated: never sends an order anywhere, never touches an
+   API key, never touches the user's real paper-trading wallet/positions
+   (DVL_DEMO_WALLET / DVL_PAPER_TRADE_STORE) — its own isolated state, own
+   localStorage keys. LONG and SHORT run as two entirely separate wallets
+   (same reasoning as the ML LONG/SHORT split: mixing them would blur which
+   side is actually working). Entry gate mirrors the "Spike limpo" status
+   threshold (score >= 72) already meaningful elsewhere in the app; TP/SL/
+   horizon mirror outcomes.js's own triple-barrier definition (2%/1%/4h) so
+   the demo's win rate is directly comparable to what the ML's testAccuracy
+   already measures — same rules, just watched live instead of backtested. */
+(function(){
+  "use strict";
+  if(window.DVL_BOTDEMO_1030) return;
+
+  var START_BALANCE=10000;
+  var POSITION_PCT=0.05;
+  var SCORE_THRESHOLD=72;
+  var PROFIT_TARGET_PCT=2;
+  var STOP_LOSS_PCT=1;
+  var MAX_HORIZON_MS=4*3600000;
+  var SIGNAL_POLL_MS=60000;
+  var PRICE_POLL_MS=30000;
+  var MAX_HISTORY=30;
+  var LS_LONG="dvl_botdemo_wallet_long_v1";
+  var LS_SHORT="dvl_botdemo_wallet_short_v1";
+  var REASON_LABEL={target:"alvo", stop:"stop", timeout:"tempo"};
+
+  function esc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+  function clone(v){return JSON.parse(JSON.stringify(v));}
+  function fmtMoney(v){ v=Number(v)||0; return (v<0?"-":"")+"$"+Math.abs(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function fmtPct(v){ v=Number(v)||0; return (v>=0?"+":"")+v.toFixed(2)+"%"; }
+
+  function defaultWallet(){ return { balance:START_BALANCE, positions:[], history:[], startedAt:Date.now() }; }
+  function loadWallet(key){
+    try{
+      var w=JSON.parse(localStorage.getItem(key)||"null");
+      if(w && typeof w.balance==="number" && Array.isArray(w.positions) && Array.isArray(w.history)) return w;
+    }catch(_){}
+    return defaultWallet();
+  }
+  function saveWallet(key,w){ try{ localStorage.setItem(key, JSON.stringify(w)); }catch(_){} }
+
+  var wallets={ LONG:loadWallet(LS_LONG), SHORT:loadWallet(LS_SHORT) };
+  function keyFor(side){ return side==="SHORT" ? LS_SHORT : LS_LONG; }
+  function wallet(side){ return side==="SHORT" ? wallets.SHORT : wallets.LONG; }
+  function persist(side){ saveWallet(keyFor(side), wallet(side)); }
+
+  function baseUrl(){
+    try{ return (typeof window.DVL_SCANNER_BACKEND_URL==="string"?window.DVL_SCANNER_BACKEND_URL:null) || localStorage.getItem("dvlScannerBackendUrl") || ""; }
+    catch(_){ return ""; }
+  }
+  function curTf(){
+    try{
+      var api=window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780;
+      if(api && typeof api.getFilterConfig==="function"){ var fc=api.getFilterConfig(); if(fc && fc.scanTF) return fc.scanTF; }
+    }catch(_){}
+    return "15m";
+  }
+
+  function hasOpen(side,symbol){ return wallet(side).positions.some(function(p){ return p.symbol===symbol; }); }
+
+  function tryOpen(symbol,side,score,price){
+    if(!(price>0) || !symbol) return;
+    var w=wallet(side);
+    if(hasOpen(side,symbol)) return;
+    var size=w.balance*POSITION_PCT;
+    if(size<5) return; // wallet too depleted to open a meaningful position
+    var qty=size/price;
+    var tp=side==="SHORT" ? price*(1-PROFIT_TARGET_PCT/100) : price*(1+PROFIT_TARGET_PCT/100);
+    var sl=side==="SHORT" ? price*(1+STOP_LOSS_PCT/100) : price*(1-STOP_LOSS_PCT/100);
+    w.positions.push({ id:"bd_"+Date.now()+"_"+Math.random().toString(36).slice(2,7), symbol:symbol, side:side, entry:price, qty:qty, size:size, tp:tp, sl:sl, score:score, openedAt:Date.now() });
+    w.balance-=size;
+    persist(side);
+    render();
+  }
+
+  function closePosition(side,pos,price,reason){
+    var w=wallet(side);
+    var idx=w.positions.indexOf(pos);
+    if(idx<0) return;
+    w.positions.splice(idx,1);
+    var pnl=side==="SHORT" ? (pos.entry-price)*pos.qty : (price-pos.entry)*pos.qty;
+    w.balance+=pos.size+pnl;
+    w.history.unshift({ symbol:pos.symbol, side:side, entry:pos.entry, exit:price, pnl:pnl, pnlPct:(pnl/pos.size)*100, reason:reason, score:pos.score, openedAt:pos.openedAt, closedAt:Date.now() });
+    if(w.history.length>MAX_HISTORY) w.history.length=MAX_HISTORY;
+    persist(side);
+  }
+
+  var _lastPriceMap={};
+
+  function unrealizedFor(side){
+    var w=wallet(side), sum=0;
+    w.positions.forEach(function(p){
+      var price=_lastPriceMap[p.symbol];
+      if(!(price>0)) return;
+      sum += side==="SHORT" ? (p.entry-price)*p.qty : (price-p.entry)*p.qty;
+    });
+    return sum;
+  }
+
+  async function fetchJson(url){
+    var r=await fetch(url,{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    return await r.json();
+  }
+
+  /* Reads the SAME snapshot the Scanner tab does — no separate detection
+     logic, just reacting to what's already been found. score threshold
+     matches the "Spike limpo" bar (metrics.js's statusOf, sc>=72). */
+  async function scanSignals(){
+    var base=baseUrl().replace(/\/$/,"");
+    if(!base) return;
+    try{
+      var snap=await fetchJson(base+"/api/dvl/scanner/snapshot?exchange=binance&tf="+encodeURIComponent(curTf()));
+      var rows=Array.isArray(snap&&snap.rows) ? snap.rows : [];
+      rows.forEach(function(r){
+        var score=Number(r.spikeScore)||0;
+        if(score<SCORE_THRESHOLD) return;
+        var side=String(r.side||"").toUpperCase()==="SHORT" ? "SHORT" : "LONG";
+        var symbol=String(r.rawSymbol||r.symbol||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+        var price=Number(r.price)||0;
+        tryOpen(symbol,side,score,price);
+      });
+    }catch(_){ /* stay silent — retried on the next poll */ }
+  }
+
+  /* One batched call for every open symbol's current price (Binance's
+     ticker/price with no `symbol` param returns ALL of them at once) —
+     regardless of how many positions are open, this is always exactly one
+     lightweight request, never one per position. */
+  async function checkPositions(){
+    var symbols={};
+    wallets.LONG.positions.forEach(function(p){ symbols[p.symbol]=1; });
+    wallets.SHORT.positions.forEach(function(p){ symbols[p.symbol]=1; });
+    if(!Object.keys(symbols).length) return;
+    try{
+      var arr=await fetchJson("https://fapi.binance.com/fapi/v1/ticker/price");
+      var map={};
+      (Array.isArray(arr)?arr:[]).forEach(function(t){ map[t.symbol]=Number(t.price); });
+      _lastPriceMap=map;
+      var now=Date.now();
+      ["LONG","SHORT"].forEach(function(side){
+        wallet(side).positions.slice().forEach(function(pos){
+          var price=map[pos.symbol];
+          if(!(price>0)) return;
+          var hitTp=side==="SHORT" ? price<=pos.tp : price>=pos.tp;
+          var hitSl=side==="SHORT" ? price>=pos.sl : price<=pos.sl;
+          var timedOut=(now-pos.openedAt)>=MAX_HORIZON_MS;
+          if(hitTp) closePosition(side,pos,price,"target");
+          else if(hitSl) closePosition(side,pos,price,"stop");
+          else if(timedOut) closePosition(side,pos,price,"timeout");
+        });
+      });
+      render();
+    }catch(_){}
+  }
+
+  function walletHtml(side){
+    var w=wallet(side);
+    var unreal=unrealizedFor(side);
+    var equity=w.balance+unreal;
+    var retPct=((equity-START_BALANCE)/START_BALANCE)*100;
+    var closed=w.history;
+    var wins=closed.filter(function(h){ return h.pnl>0; }).length;
+    var winRate=closed.length ? Math.round(wins/closed.length*100) : null;
+    var titleCls=side==="SHORT" ? "dvlBd1030Title short" : "dvlBd1030Title";
+    var out='<div class="dvlBd1030Wallet"><div class="'+titleCls+'">'+esc(side)+'</div>';
+    out+='<div class="dvlBd1030Stat"><span>Patrimônio</span><b>'+esc(fmtMoney(equity))+'</b></div>';
+    out+='<div class="dvlBd1030Stat"><span>Retorno desde o início</span><b class="'+(retPct>=0?"pos":"neg")+'">'+esc(fmtPct(retPct))+'</b></div>';
+    out+='<div class="dvlBd1030Stat"><span>Posições abertas</span><b>'+w.positions.length+'</b></div>';
+    out+='<div class="dvlBd1030Stat"><span>Taxa de acerto</span><b>'+(winRate==null?"—":winRate+"% ("+closed.length+" trades)")+'</b></div>';
+    if(w.positions.length){
+      out+='<div class="dvlBd1030Positions">'+w.positions.slice(0,5).map(function(p){
+        var price=_lastPriceMap[p.symbol];
+        var pnl=price>0 ? (side==="SHORT"?(p.entry-price)*p.qty:(price-p.entry)*p.qty) : 0;
+        var pnlPct=price>0 ? (pnl/p.size)*100 : 0;
+        return '<div class="dvlBd1030PosRow"><span>'+esc(p.symbol)+'</span><b class="'+(pnl>=0?"pos":"neg")+'">'+esc(fmtPct(pnlPct))+'</b></div>';
+      }).join("")+'</div>';
+    }
+    if(closed.length){
+      out+='<div class="dvlBd1030History">'+closed.slice(0,5).map(function(h){
+        return '<div class="dvlBd1030HistRow"><span>'+esc(h.symbol)+'</span><b class="'+(h.pnl>=0?"pos":"neg")+'">'+esc(fmtPct(h.pnlPct))+'</b><i>'+esc(REASON_LABEL[h.reason]||h.reason)+'</i></div>';
+      }).join("")+'</div>';
+    }
+    out+='<button type="button" class="dvlBd1030Reset" data-bd-reset="'+side+'">Reiniciar carteira '+side+'</button>';
+    out+='</div>';
+    return out;
+  }
+
+  function bodyHtml(){
+    var out='<div class="dvlBd1030Body">';
+    out+='<div class="dvlBd1030Note">100% simulado — carteira virtual, não envia ordem nenhuma pra exchange nem usa dinheiro real. Abre quando um ativo bate score alto no Scanner (≥'+SCORE_THRESHOLD+'), fecha no alvo/stop ou depois de 4h — os mesmos critérios que já rotulam os dados do ML. LONG e SHORT rodam em carteiras separadas, cada uma começando com '+esc(fmtMoney(START_BALANCE))+'.</div>';
+    out+=walletHtml("LONG");
+    out+=walletHtml("SHORT");
+    out+='</div>';
+    return out;
+  }
+
+  function html(){
+    return '<section class="dvlCp0976Panel dvlBd1030Panel" data-dvl-cp-section="bot-demo" data-dvl-cp-section-version="1030">'
+      +'<div class="dvlBd1030Head"><i class="dvlBd1030Icon">🤖</i>'
+      +'<div class="dvlBd1030HeadTitle"><b>Bot Demo</b><span>Opera os sinais do scanner sozinho, numa carteira virtual</span></div></div>'
+      +bodyHtml()
+      +'</section>';
+  }
+
+  function bindEvents(panel){
+    if(!panel) return;
+    panel.querySelectorAll("[data-bd-reset]").forEach(function(btn){
+      if(btn.dataset.bdBound) return;
+      btn.dataset.bdBound="1";
+      btn.addEventListener("click", function(){
+        var side=btn.getAttribute("data-bd-reset")==="SHORT" ? "SHORT" : "LONG";
+        wallets[side]=defaultWallet();
+        persist(side);
+        render();
+      });
+    });
+  }
+
+  function render(){
+    var p=document.getElementById("dvlCopilotPage0974");
+    if(!p) return false;
+    var panel=p.querySelector("[data-dvl-cp-section='bot-demo'][data-dvl-cp-section-version='1030']");
+    if(!panel){
+      var bot=p.querySelector("[data-dvl-cp-section='bot-soon']");
+      var mlStatus=p.querySelector("[data-dvl-cp-section='ml-status']");
+      var chat=p.querySelector("[data-dvl-cp-section='ai-chat']");
+      if(bot) bot.insertAdjacentHTML("beforebegin", html());
+      else if(mlStatus) mlStatus.insertAdjacentHTML("afterend", html());
+      else if(chat) chat.insertAdjacentHTML("afterend", html());
+      else p.insertAdjacentHTML("beforeend", html());
+      panel=p.querySelector("[data-dvl-cp-section='bot-demo'][data-dvl-cp-section-version='1030']");
+    }else{
+      var body=panel.querySelector(".dvlBd1030Body");
+      if(body) body.outerHTML=bodyHtml();
+    }
+    bindEvents(panel);
+    return !!panel;
+  }
+
+  function boot(){
+    render();
+    scanSignals();
+    checkPositions();
+    setInterval(scanSignals, SIGNAL_POLL_MS);
+    setInterval(checkPositions, PRICE_POLL_MS);
+    setInterval(render, 15000); // keeps unrealized PnL display fresh even without a state change
+    [300,900,1500,2500,4000,6000,9000].forEach(function(ms){ setTimeout(render,ms); });
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot, {once:true});
+  else boot();
+
+  window.DVL_BOTDEMO_1030={
+    version:"1.030",
+    render:render,
+    scanSignals:scanSignals,
+    checkPositions:checkPositions,
+    resetWallet:function(side){ side=side==="SHORT"?"SHORT":"LONG"; wallets[side]=defaultWallet(); persist(side); render(); },
+    get wallets(){ return { LONG:clone(wallets.LONG), SHORT:clone(wallets.SHORT) }; },
+    audit:function(){ var p=document.getElementById("dvlCopilotPage0974"); return { version:"1.030", panelFound:!!(p&&p.querySelector("[data-dvl-cp-section='bot-demo']")), LONG:wallets.LONG, SHORT:wallets.SHORT }; }
+  };
 })();
 </script>
 
