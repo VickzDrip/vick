@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.076</title>
+<title>DVL Binance Live — Beta 1.077</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.076';
+window.DVL_APP_VERSION = 'Beta 1.077';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.076";
+const DVL_APP_VERSION = "Beta 1.077";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.077", note: "Bot 4 (order flow) agora trabalha exclusivamente com a MEXC: universo de símbolos, stream de negociações ao vivo, ATR de fallback e checagem de preço das posições passam a vir todos da MEXC, não mais da Binance. Símbolos MEXC mantêm o formato nativo (ex: BTC_USDT) para nunca colidir com posições dos Bots 1-3 (Binance)." },
   { version: "Beta 1.076", note: "Bot 4 (order flow) agora tem universo de símbolos próprio — antes ele só monitorava o que o Scanner já tinha rastreado em 1m/3m/5m, que às vezes é só um punhado de ativos (se 3m/5m estiverem parados). Agora ele busca sozinho os top 40 pares por volume 24h direto na Binance, atualizando a cada 5min, independente do que o Scanner filtrou. Mais chance de pegar uma rajada de compra de verdade." },
   { version: "Beta 1.075", note: "Novo Bot 4 nos Fast Bots — 'segue as ordens do mercado' de verdade: em vez de ler candle fechado como os outros 3, ele conecta direto no fluxo de negócios da Binance (aggTrade, ao vivo) e entra quando uma rajada de compra agressiva aparece (compra pelo menos 2.5x maior que venda numa janela de 20s). Só monitora os ativos que o Scanner já está de olho (não todos os pares). Mesma carteira de $1.000, mesma fração de $100 e mesma saída em 2 etapas dos outros bots, pra comparação justa. O card agora mostra também o status da conexão de order flow." },
   { version: "Beta 1.074", note: "Fast Bots — apertei o combo do Bot 3 (só short): agora exige os 3 sinais de fluxo alinhados pro lado vendedor ao mesmo tempo — Net Short acima da média, Net Delta abaixo E Net Long caindo (antes eram só os 2 primeiros). Analisando os osciladores ao vivo, o combo de 2 pernas disparava em momentos de lado/chop onde o preço não confirmava queda nenhuma — Net Short e Net Long sobem juntos quando só tem mais gente entrando dos dois lados, não é sinal de nada sozinho. Bot 1 e Bot 2 continuam iguais." },
@@ -73303,25 +73304,43 @@ window.DVL_COPILOT_BACKTEST_1040={
    DIFFERENT kind of signal from Bots 1-3, which all read candle-close
    snapshots (blocks/OI-slope/net-flow ratios, updated once per Scanner
    cycle). Bot 1-3's data is too coarse for a 15-30s reaction; there's no
-   "order flow" in a 1m candle. This one reads Binance's own aggTrade
-   stream directly (every individual trade, tagged with which side was
-   the aggressor) over a live WebSocket — a rolling 20s window per
-   symbol, and if aggressive BUY volume clears AGG_BUY_RATIO x the SELL
-   volume (with enough total volume to not be noise on a dead pair), it
-   buys. Its symbol universe is INDEPENDENT of the Scanner (started out
+   "order flow" in a 1m candle. This one works EXCLUSIVELY against MEXC
+   (not Binance, not both) — reads MEXC Futures' own trade stream
+   directly (every individual fill, tagged with which side was the
+   aggressor) over a live WebSocket — a rolling 20s window per symbol,
+   and if aggressive BUY volume clears AGG_BUY_RATIO x the SELL volume
+   (with enough total volume to not be noise on a dead pair), it buys.
+   Its symbol universe is INDEPENDENT of the Scanner (started out
    reusing the Scanner's own tracked-symbol set, but that pool is often
    tiny — a handful of symbols when 3m/5m have nothing detected — which
    starves Bot 4 of opportunities for no reason tied to order flow
-   itself): refreshAggUniverse() fetches Binance's own ticker/24hr and
-   subscribes to the top AGG_TOP_N (40) USDT perpetuals by 24h quote
-   volume, refreshed every AGG_UNIVERSE_REFRESH_MS (5min, since a
-   top-volume ranking doesn't churn like the Scanner's own signal list
-   does) — via one combined-stream WebSocket connection, not one per
-   symbol. Same $100 fraction / 2-stage exit / ATR stop as Bots 1-3
-   (using the 1m ATR, the finest Binance actually offers, opportunistically
-   reused from a Scanner row if that symbol happens to also be tracked
-   there, else fetched fresh) so the comparison stays apples-to-apples —
-   the entry TRIGGER is the only thing that's different. */
+   itself): refreshAggUniverse() fetches MEXC's own contract/ticker
+   (same shape/filter the backend's own exchanges.js mexc adapter uses
+   server-side: {data:[...]}, symbols matching /_USDT$/, amount24>0) and
+   subscribes to the top AGG_TOP_N (40) by 24h quote volume, refreshed
+   every AGG_UNIVERSE_REFRESH_MS (5min, since a top-volume ranking
+   doesn't churn like the Scanner's own signal list does) — via ONE
+   shared WebSocket connection (wss://contract.mexc.com/ws), since MEXC
+   has no Binance-style combined-stream URL: each symbol is subscribed
+   with its own {"method":"sub.deal",...} message after connecting, and
+   a periodic ping keeps the connection alive. Symbols keep MEXC's own
+   "BTC_USDT" format everywhere in this block (never stripped to
+   "BTCUSDT") specifically so Bot 4's positions can never collide with
+   Bots 1-3's Binance-sourced ones. Same $100 fraction / 2-stage exit /
+   ATR stop as Bots 1-3 (using MEXC's own 1m klines for ATR,
+   opportunistically reused from a MEXC-tracked Scanner row if that
+   symbol happens to also be tracked there, else fetched fresh from
+   MEXC) so the comparison stays apples-to-apples — the entry TRIGGER is
+   the only thing that's different.
+   NOTE on confidence: MEXC's contract/ticker and contract/kline REST
+   shapes here match the backend's own proven exchanges.js adapter, but
+   the push.deal WebSocket message shape is implemented from
+   best-available documentation, not verified live against MEXC's
+   server from this sandbox — field names/units should be double-checked
+   once this runs in production (in particular, MEXC futures trade sizes
+   are sometimes expressed in contracts rather than raw coin quantity,
+   which would throw off the price*qty notional math and may need the
+   AGG_MIN_NOTIONAL/AGG_BUY_RATIO thresholds recalibrated). */
 (function(){
   "use strict";
   if(window.DVL_FASTBOTS_1060) return;
@@ -73348,7 +73367,8 @@ window.DVL_COPILOT_BACKTEST_1040={
   var AGG_BUY_RATIO=2.5;       // aggressive buy volume must clear 2.5x the sell volume in the window
   var AGG_CHECK_MS=5000;       // re-evaluate every 5s, independent of trade arrival
   var AGG_MAX_SYMBOLS=100;     // safety cap on the combined-stream subscription
-  var AGG_TOP_N=40;            // universe size: top N Binance USDT perpetuals by 24h quote volume
+  var AGG_TOP_N=40;            // universe size: top N MEXC USDT perpetuals by 24h quote volume
+  var AGG_PING_MS=15000;       // MEXC's WS needs a periodic ping to stay alive (unlike Binance's combined stream)
   var AGG_UNIVERSE_REFRESH_MS=5*60000; // top-volume ranking doesn't need to churn every minute like the Scanner poll does
 
   var BOTS=[
@@ -73362,7 +73382,7 @@ window.DVL_COPILOT_BACKTEST_1040={
       comboLabel:"Net Short acima da média + Net Delta abaixo + Net Long caindo",
       match:function(r){ return Number(r.netShortRatio)>0 && Number(r.netDeltaRatio)<0 && Number(r.netLongSlope)<-0.03; } },
     { id:"b4", name:"Bot 4", side:"LONG",  ls:"dvl_fastbot_b4_v1",
-      comboLabel:"Rajada de compra agressiva (order flow ao vivo, aggTrade)",
+      comboLabel:"Rajada de compra agressiva (order flow ao vivo, MEXC)",
       wsOnly:true, match:function(){ return false; } } // triggered by checkAggression(), not the row scan below
   ];
 
@@ -73419,9 +73439,44 @@ window.DVL_COPILOT_BACKTEST_1040={
     }catch(_){ return null; }
   }
 
+  var MEXC_TF={ "1m":"Min1", "3m":"Min5", "5m":"Min5", "15m":"Min15", "30m":"Min30", "1h":"Min60" };
+  var MEXC_TF_MS={ "1m":60000, "3m":300000, "5m":300000, "15m":900000, "30m":1800000, "1h":3600000 };
+
+  /* Bot 4's own ATR fallback — MEXC's contract/kline has a different URL,
+     response shape ({data:{close,high,low,time,...}}, not an array of
+     candle arrays) and symbol format ("BTC_USDT") than fetchAtr() above,
+     which is Binance-only and used by Bots 1-3. Mirrors the shape the
+     backend's own exchanges.js mexc.klines() already relies on. */
+  async function fetchMexcAtr(symbol,tf){
+    try{
+      var mexcTf=MEXC_TF[tf]||"Min1";
+      var stepMs=MEXC_TF_MS[tf]||60000;
+      var start=Math.floor((Date.now()-stepMs*(ATR_PERIOD+10))/1000);
+      var d=await fetchJson("https://contract.mexc.com/api/v1/contract/kline/"+encodeURIComponent(symbol)+"?interval="+mexcTf+"&start="+start);
+      var k=d&&d.data;
+      if(!k||!Array.isArray(k.close)||k.close.length<ATR_PERIOD+1) return null;
+      var closes=k.close.map(Number), highs=(k.high||[]).map(Number), lows=(k.low||[]).map(Number);
+      var trs=[];
+      for(var i=1;i<closes.length;i++){
+        var h=highs[i], l=lows[i], pc=closes[i-1];
+        if(!(h>0)||!(l>0)||!(pc>0)) continue;
+        trs.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+      }
+      if(trs.length<ATR_PERIOD) return null;
+      var last2=trs.slice(-ATR_PERIOD), sum2=0;
+      for(var j2=0;j2<last2.length;j2++) sum2+=last2[j2];
+      return sum2/last2.length;
+    }catch(_){ return null; }
+  }
+
   async function tryOpen(bot,row,tf){
     var w=wallets[bot.id];
-    var symbol=String(row.rawSymbol||row.symbol||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+    /* Keeps the underscore ("BTC_USDT") for Bot 4's MEXC symbols instead of
+       stripping it like every other non-alnum char — otherwise a MEXC
+       "BTC_USDT" position would collapse to "BTCUSDT" and collide with
+       (or get silently merged into) a Binance-sourced position from Bots
+       1-3 for the same base pair. */
+    var symbol=String(row.rawSymbol||row.symbol||"").toUpperCase().replace(/[^A-Z0-9_]/g,"");
     var price=Number(row.price)||0;
     var now=Date.now();
     if(!symbol || !(price>0)) return;
@@ -73430,7 +73485,7 @@ window.DVL_COPILOT_BACKTEST_1040={
     if(hasOpen(bot,symbol) || inCooldown(bot,symbol,now)) return;
 
     var atr=Number(row.atr14)||0;
-    if(!(atr>0)) atr=await fetchAtr(symbol,tf)||0;
+    if(!(atr>0)) atr=await (bot.id==="b4" ? fetchMexcAtr(symbol,tf) : fetchAtr(symbol,tf))||0;
     if(!(atr>0)) return;
     var r1=atr*ATR_MULT;
     var short=bot.side==="SHORT";
@@ -73490,6 +73545,19 @@ window.DVL_COPILOT_BACKTEST_1040={
       var arr=await fetchJson("https://fapi.binance.com/fapi/v1/ticker/price");
       var map={};
       (Array.isArray(arr)?arr:[]).forEach(function(t){ map[t.symbol]=Number(t.price); });
+      /* Bot 4 trades MEXC symbols ("BTC_USDT"), which never show up in
+         Binance's price map above — a second batched call covers those,
+         merged into the same map (the two symbol formats can't collide:
+         MEXC always keeps its underscore, Binance's never has one). */
+      if(wallets.b4.positions.length>0){
+        try{
+          var mexcArr=await fetchJson("https://contract.mexc.com/api/v1/contract/ticker");
+          var mexcData=(mexcArr&&mexcArr.data)||[];
+          (Array.isArray(mexcData)?mexcData:[]).forEach(function(t){
+            if(t&&t.symbol) map[t.symbol]=Number(t.lastPrice);
+          });
+        }catch(_){}
+      }
       _lastPriceMap=map;
       var now=Date.now();
       BOTS.forEach(function(bot){
@@ -73511,23 +73579,25 @@ window.DVL_COPILOT_BACKTEST_1040={
     }catch(_){}
   }
 
-  /* ── Bot 4's order flow: Binance's aggTrade stream, live ──────────────
-     One combined-stream WebSocket ("wss://.../stream?streams=a@aggTrade/
-     b@aggTrade/...") covering every symbol the Scanner currently tracks
-     across 1m/3m/5m — updated whenever scanSignals() sees the candidate
-     set change, not on a fixed timer, so it only reconnects when there's
-     actually something different to subscribe to. Each trade message
-     carries `m`: true when the BUYER was the market-maker, i.e. the SELL
-     side was the aggressor; `m===false` means the buyer was aggressive —
-     that's the "someone is buying into the ask" signal this is built to
-     catch. Fails silently (some networks/proxies block raw WebSockets) —
-     Bots 1-3 keep working normally either way. */
-  var _aggTrades={};       // symbol (upper) -> [{ts, notional, buy}], pruned to AGG_WINDOW_MS
-  var _lastAggPrice={};    // symbol (upper) -> last traded price
-  var _atrCache={};        // symbol (upper) -> atr14, opportunistically reused from Scanner rows
+  /* ── Bot 4's order flow: MEXC's own trade stream, live ────────────────
+     ONE shared WebSocket (wss://contract.mexc.com/ws) — MEXC has no
+     Binance-style combined-stream URL, so every symbol gets its own
+     {"method":"sub.deal","param":{"symbol":"BTC_USDT"}} message sent
+     after the connection opens, plus a periodic {"method":"ping"} to
+     keep it alive. Each push.deal message's data.T tags the aggressor
+     side directly (1=buy, 2=sell) — unlike Binance's inverted boolean
+     `m` flag, no inversion needed here. Fails silently (some
+     networks/proxies block raw WebSockets, and this message shape is
+     implemented from best-available docs rather than a live-verified
+     connection — see the module doc-comment's confidence note) — Bots
+     1-3 keep working normally either way. */
+  var _aggTrades={};       // symbol ("BTC_USDT") -> [{ts, notional, buy}], pruned to AGG_WINDOW_MS
+  var _lastAggPrice={};    // symbol ("BTC_USDT") -> last traded price
+  var _atrCache={};        // symbol -> atr14, opportunistically reused from MEXC-tracked Scanner rows
   var _aggWs=null;
-  var _aggSymbols=[];      // currently-subscribed lowercase symbols
+  var _aggSymbols=[];      // currently-subscribed MEXC symbols ("BTC_USDT" form)
   var _aggWsOk=false;
+  var _aggPingTimer=null;
 
   function pruneAgg(sym, now){
     var arr=_aggTrades[sym];
@@ -73542,47 +73612,58 @@ window.DVL_COPILOT_BACKTEST_1040={
     return { buy:buy, sell:sell, total:buy+sell };
   }
 
-  function connectAggWs(symbolsLower){
+  function connectAggWs(symbols){
+    try{ if(_aggPingTimer){ clearInterval(_aggPingTimer); _aggPingTimer=null; } }catch(_){}
     try{ if(_aggWs){ _aggWs.onmessage=null; _aggWs.onclose=null; _aggWs.onerror=null; _aggWs.close(); } }catch(_){}
     _aggWs=null; _aggWsOk=false;
-    if(!symbolsLower.length || typeof WebSocket==="undefined") return;
-    var streams=symbolsLower.map(function(s){ return s+"@aggTrade"; }).join("/");
+    if(!symbols.length || typeof WebSocket==="undefined") return;
     var ws;
-    try{ ws=new WebSocket("wss://fstream.binance.com/stream?streams="+streams); }catch(_){ return; }
+    try{ ws=new WebSocket("wss://contract.mexc.com/ws"); }catch(_){ return; }
     _aggWs=ws;
-    ws.onopen=function(){ _aggWsOk=true; };
+    ws.onopen=function(){
+      _aggWsOk=true;
+      symbols.forEach(function(sym){
+        try{ ws.send(JSON.stringify({ method:"sub.deal", param:{ symbol:sym } })); }catch(_){}
+      });
+      _aggPingTimer=setInterval(function(){
+        try{ if(ws.readyState===1) ws.send(JSON.stringify({ method:"ping" })); }catch(_){}
+      }, AGG_PING_MS);
+    };
     ws.onmessage=function(ev){
       try{
         var msg=JSON.parse(ev.data);
-        var d=msg&&msg.data;
-        if(!d||!d.s) return;
-        var sym=String(d.s).toUpperCase();
-        var price=Number(d.p), qty=Number(d.q);
+        if(!msg||msg.channel!=="push.deal"||!msg.symbol) return;
+        var d=msg.data;
+        if(!d) return;
+        var sym=String(msg.symbol).toUpperCase();
+        var price=Number(d.p), qty=Number(d.v);
         if(!(price>0)||!(qty>0)) return;
         _lastAggPrice[sym]=price;
         var arr=_aggTrades[sym]||(_aggTrades[sym]=[]);
-        arr.push({ ts:Date.now(), notional:price*qty, buy:(d.m===false) });
+        arr.push({ ts:Date.now(), notional:price*qty, buy:(Number(d.T)===1) });
       }catch(_){}
     };
     ws.onerror=function(){ _aggWsOk=false; };
-    ws.onclose=function(){ if(_aggWs===ws){ _aggWs=null; _aggWsOk=false; } };
+    ws.onclose=function(){
+      if(_aggWs===ws){ _aggWs=null; _aggWsOk=false; }
+      try{ if(_aggPingTimer){ clearInterval(_aggPingTimer); _aggPingTimer=null; } }catch(_){}
+    };
   }
 
-  /* Rebuilds the subscription set from whatever scanSignals() just saw —
-     only reconnects when the set actually changed, so a stable candidate
-     list doesn't churn the WebSocket every 60s for no reason. Drops
+  /* Rebuilds the subscription set from refreshAggUniverse() — only
+     reconnects when the set actually changed, so a stable top-N list
+     doesn't churn the WebSocket every 5min for no reason. Drops
      tracking state for symbols no longer in scope. */
   function updateAggSubscription(symbolsUpper){
-    symbolsUpper=symbolsUpper.slice(0, AGG_MAX_SYMBOLS);
-    var lower=symbolsUpper.map(function(s){ return s.toLowerCase(); }).sort();
-    var changed=lower.length!==_aggSymbols.length || lower.some(function(s,i){ return s!==_aggSymbols[i]; });
+    symbolsUpper=symbolsUpper.slice(0, AGG_MAX_SYMBOLS).sort();
+    var changed=symbolsUpper.length!==_aggSymbols.length || symbolsUpper.some(function(s,i){ return s!==_aggSymbols[i]; });
     if(!changed) return;
     var keep={}; symbolsUpper.forEach(function(s){ keep[s]=true; });
     Object.keys(_aggTrades).forEach(function(s){ if(!keep[s]) delete _aggTrades[s]; });
     Object.keys(_lastAggPrice).forEach(function(s){ if(!keep[s]) delete _lastAggPrice[s]; });
     Object.keys(_atrCache).forEach(function(s){ if(!keep[s]) delete _atrCache[s]; });
-    _aggSymbols=lower;
-    connectAggWs(lower);
+    _aggSymbols=symbolsUpper;
+    connectAggWs(symbolsUpper);
   }
 
   /* Bot 4's OWN symbol universe — independent of the Scanner (which can
@@ -73592,16 +73673,18 @@ window.DVL_COPILOT_BACKTEST_1040={
      opportunity, so tying Bot 4 to it just starves it for an unrelated
      reason). Top N by 24h quote volume is a simple, order-flow-agnostic
      way to pick "enough liquid symbols to plausibly see real aggression
-     bursts" — same filter (USDT-margined, no "_" in the symbol) the
-     backend's own binance.tickers() uses server-side. */
+     bursts" — same shape/filter the backend's own exchanges.js mexc
+     adapter's tickers() uses server-side: {data:[...]}, symbols matching
+     /_USDT$/, amount24 (24h quote volume) > 0. */
   async function fetchTopVolumeSymbols(n){
     try{
-      var d=await fetchJson("https://fapi.binance.com/fapi/v1/ticker/24hr");
-      if(!Array.isArray(d)) return [];
-      return d.filter(function(t){
+      var d=await fetchJson("https://contract.mexc.com/api/v1/contract/ticker");
+      var list=(d&&d.data)||[];
+      if(!Array.isArray(list)) return [];
+      return list.filter(function(t){
         var s=(t&&t.symbol)||"";
-        return /USDT$/.test(s) && s.indexOf("_")<0 && Number(t.quoteVolume)>0;
-      }).sort(function(a,b){ return Number(b.quoteVolume)-Number(a.quoteVolume); })
+        return /_USDT$/.test(s) && Number(t.amount24)>0;
+      }).sort(function(a,b){ return Number(b.amount24)-Number(a.amount24); })
         .slice(0, n)
         .map(function(t){ return t.symbol; });
     }catch(_){ return []; }
@@ -73647,12 +73730,6 @@ window.DVL_COPILOT_BACKTEST_1040={
       var freshCount=0;
       for(var i=0;i<rows.length;i++){
         var r=rows[i];
-        /* Opportunistic reuse for Bot 4's ATR fallback (its own symbol
-           universe is independent — see refreshAggUniverse — but if a
-           top-volume symbol ALSO happens to be Scanner-tracked, this
-           saves it a fresh klines fetch at entry time). */
-        var symKey=String(r.rawSymbol||r.symbol||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
-        if(symKey && Number(r.atr14)>0) _atrCache[symKey]=Number(r.atr14);
         if(r.spikeAt && (now-r.spikeAt)>FRESH_MS) continue; // stale detection — not a "fast" opportunity anymore
         freshCount++;
         for(var b=0;b<BOTS.length;b++){
@@ -73662,6 +73739,22 @@ window.DVL_COPILOT_BACKTEST_1040={
       }
       counts[tf]={ rows:rows.length, fresh:freshCount };
     }
+    /* Opportunistic reuse for Bot 4's ATR fallback: a SEPARATE MEXC-tagged
+       snapshot fetch (Bot 4 only ever trades tf="1m", see checkAggression)
+       — the Binance-exchange snapshot above is for Bots 1-3's own row
+       matching and its rawSymbol keys ("BTCUSDT") could never match Bot
+       4's MEXC keys ("BTC_USDT") anyway. If a MEXC top-volume symbol ALSO
+       happens to be Scanner-tracked, this saves Bot 4 a fresh klines
+       fetch at entry time. */
+    try{
+      var mexcSnap=await fetchJson("/api/dvl/scanner/snapshot?exchange=mexc&tf=1m");
+      var mexcRows=Array.isArray(mexcSnap&&mexcSnap.rows)?mexcSnap.rows:[];
+      for(var m=0;m<mexcRows.length;m++){
+        var mr=mexcRows[m];
+        var mSymKey=String(mr.rawSymbol||mr.symbol||"").toUpperCase().replace(/[^A-Z0-9_]/g,"");
+        if(mSymKey && Number(mr.atr14)>0) _atrCache[mSymKey]=Number(mr.atr14);
+      }
+    }catch(_){}
     _lastScanAt=now;
     _lastScanErr=anyErr;
     _lastScanCounts=counts;
@@ -73732,7 +73825,7 @@ window.DVL_COPILOT_BACKTEST_1040={
     }).join(" · ");
     var wsTxt=_aggSymbols.length ? (_aggWsOk?"conectado":"reconectando") + " · "+_aggSymbols.length+" símbolo"+(_aggSymbols.length===1?"":"s") : "aguardando candidatos";
     return '<div class="dvlFb1060Status'+(_lastScanErr?' err':'')+'">Última varredura: '+esc(agoTxt)+' — '+esc(parts)+'</div>'
-      +'<div class="dvlFb1060Status'+(_aggSymbols.length&&!_aggWsOk?' err':'')+'">Order flow (Bot 4): '+esc(wsTxt)+'</div>';
+      +'<div class="dvlFb1060Status'+(_aggSymbols.length&&!_aggWsOk?' err':'')+'">Order flow (Bot 4, MEXC): '+esc(wsTxt)+'</div>';
   }
 
   function bodyHtml(){
