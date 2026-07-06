@@ -10,10 +10,10 @@
    so nothing in the browser ever talks to contract.mexc.com directly.
 
    This module holds the ONE connection to MEXC that everything else
-   depends on. It went through two failed designs before this one, all
-   confirmed via this module's own logging in production (nothing here
-   could be verified live from the sandbox this was built in — see the
-   confidence note below):
+   depends on. It went through several failed designs before this one,
+   all confirmed via this module's own logging in production (nothing
+   here could be verified live from the sandbox this was built in — see
+   the confidence note below):
      1) A plain `ws` client hit "Unexpected server response: 301" — MEXC's
         WS answers the handshake with an HTTP redirect. Fixed by
         following it (followRedirects), which surfaced —
@@ -22,13 +22,22 @@
         cdn-cache" response headers this module logged) — a raw Node.js
         WebSocket client's TLS/HTTP fingerprint gets blocked before it
         ever reaches MEXC's own server, no matter what headers are added
-        on top of it.
-   So this module runs a headless Chromium tab (Playwright) and opens the
-   WebSocket from INSIDE that real browser's network stack instead of
-   Node's — that's the only way ever to look like an actual browser to
-   Akamai. The browser tab first navigates to mexc.com itself (picking up
-   whatever cookies/session context a real visit would) before opening
-   the WS, then bridges every message back to Node via
+        on top of it. Fixed by moving the connection into a headless
+        Chromium tab (Playwright), opening the WebSocket from INSIDE that
+        real browser's network stack instead of Node's — the only way to
+        actually look like a browser to Akamai. Which surfaced —
+     3) — the SAME 301 as step 1, but now unfixable the same way: browsers
+        deliberately do NOT follow redirects during a WebSocket handshake
+        (removed from Chromium ~2018 over security concerns; there is no
+        in-page JS API to opt back into it). So discoverRedirectUrl()
+        below uses the Node `ws` client's followRedirects ONE TIME at
+        startup purely to resolve the 301's real target — it doesn't
+        matter that Akamai will 403 it once it gets there, the 'redirect'
+        event fires (with the target URL) before that 403 ever happens —
+        then the browser tab connects DIRECTLY to that resolved URL,
+        skipping the redirect Chromium itself would refuse to follow.
+   So: Node resolves the URL, the browser holds the connection. The
+   browser tab bridges every message back to Node via
    page.exposeFunction(). Re-launching a whole browser process is far more
    expensive than a raw WS reconnect, so failures are handled in two
    tiers: if just the WS drops but the page/browser are still alive, only
@@ -53,11 +62,13 @@
    this shape is off. */
 
 const { chromium } = require("playwright");
+const NodeWebSocket = require("ws");
 const worker = require("./worker");
 
 const WS_RECONNECT_MS = 5000;     // just re-opens the WS inside the same page — cheap, can retry often
 const BROWSER_RELAUNCH_MS = 20000; // relaunches the whole Chromium process — expensive, back off more
 const RESUBSCRIBE_CHECK_MS = 10000;
+const REDIRECT_DISCOVERY_TIMEOUT_MS = 8000;
 const MAX_SYMBOLS = 100;
 /* about:blank, not a real mexc.com page: the Akamai fingerprint check this
    module works around is a property of the BROWSER PROCESS's own TLS/HTTP
@@ -107,11 +118,51 @@ function start(onTrade, opts) {
   if (opts.wsReconnectMs) _wsReconnectMs = opts.wsReconnectMs;
   if (opts.browserRelaunchMs) _browserRelaunchMs = opts.browserRelaunchMs;
   if (opts.quiet) _log = false;
-  launchBrowser().catch(e => log("initial launch failed:", e && e.message));
+  discoverRedirectUrl(_wsUrl).then((resolved) => {
+    if (resolved !== _wsUrl) log("resolved WS redirect ->", resolved);
+    _wsUrl = resolved;
+    return launchBrowser();
+  }).catch(e => log("initial launch failed:", e && e.message));
   _resubTimer = setInterval(() => { maybeResubscribe().catch(() => {}); }, opts.resubscribeMs || RESUBSCRIBE_CHECK_MS);
   _heartbeatTimer = setInterval(() => {
     log("heartbeat — connected:", _connected, "subscribed:", _subscribed.length, "tradesSeen:", _tradesSeen);
   }, 30000);
+}
+
+/* Browsers refuse to follow a WS handshake redirect themselves (see the
+   module doc-comment's step 3), so this runs ONCE at startup, entirely in
+   Node, purely to learn where wsUrl's 301 actually points — using the
+   `ws` package's own followRedirects, the exact mechanism that already
+   proved it can navigate this specific redirect (see step 1/2 history).
+   It doesn't matter that Akamai will reject a raw Node client once it
+   gets there: the 'redirect' event fires with the target URL as soon as
+   the 301 itself is parsed, before that eventual rejection ever happens.
+   Falls back to the original url unchanged if no redirect is seen within
+   the timeout (including the "no redirect needed at all" case) — the
+   browser will simply hit whatever that url's real response is, same as
+   before this existed. */
+function discoverRedirectUrl(url) {
+  return new Promise((resolve) => {
+    let done = false;
+    let probe;
+    const finish = (target) => {
+      if (done) return;
+      done = true;
+      try { if (probe) probe.terminate(); } catch (_) { /* ignore */ }
+      resolve(target);
+    };
+    try {
+      probe = new NodeWebSocket(url, { followRedirects: true });
+    } catch (_) {
+      finish(url);
+      return;
+    }
+    probe.on("redirect", (target) => finish(target));
+    probe.on("open", () => finish(url));
+    probe.on("unexpected-response", () => finish(url));
+    probe.on("error", () => finish(url));
+    setTimeout(() => finish(url), REDIRECT_DISCOVERY_TIMEOUT_MS);
+  });
 }
 
 async function stop() {

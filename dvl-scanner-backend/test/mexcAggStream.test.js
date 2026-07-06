@@ -128,7 +128,39 @@ async function main() {
   ok(reconnectedOk, "reconnects (in-page WS) after the server drops the connection");
 
   await stream.stop();
+
+  /* 6) discoverRedirectUrl (see the module doc-comment's step 3): a
+     handshake that 301s must still resolve — the module works around
+     browsers refusing to follow WS redirects themselves by using Node's
+     `ws` client (which CAN follow it) once at startup, purely to learn
+     the real target, then pointing the browser tab straight at that. */
+  const redirectHttp = http.createServer((req, res) => {
+    res.writeHead(301, { Location: "ws://127.0.0.1:" + wsPort + "/" });
+    res.end();
+  });
+  await new Promise(resolve => redirectHttp.listen(0, resolve));
+  const redirectPort = redirectHttp.address().port;
+  const redirectingWsUrl = "ws://127.0.0.1:" + redirectPort + "/";
+
+  const trades2 = [];
+  stream.start(
+    (trade) => trades2.push(trade),
+    {
+      getSymbols: () => ["BTC_USDT"],
+      navigateUrl, wsUrl: redirectingWsUrl, launchOptions,
+      resubscribeMs: 150, wsReconnectMs: 200, browserRelaunchMs: 300,
+      quiet: true
+    }
+  );
+  const connectedViaRedirect = await waitUntil(() => stream.isConnected(), 15000);
+  ok(connectedViaRedirect, "connects even when wsUrl itself 301-redirects (browser can't follow it, Node resolves it first)");
+  serverSocket.send(JSON.stringify({ channel: "push.deal", symbol: "BTC_USDT", data: { p: 50, v: 1, T: 1 } }));
+  await waitUntil(() => trades2.length >= 1, 2000);
+  eq(trades2.length, 1, "trades flow normally once connected through the resolved redirect target");
+
+  await stream.stop();
   await new Promise(resolve => httpServer.close(resolve));
+  await new Promise(resolve => redirectHttp.close(resolve));
   wss.close();
 
   console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
