@@ -59,7 +59,14 @@ const WS_RECONNECT_MS = 5000;     // just re-opens the WS inside the same page �
 const BROWSER_RELAUNCH_MS = 20000; // relaunches the whole Chromium process — expensive, back off more
 const RESUBSCRIBE_CHECK_MS = 10000;
 const MAX_SYMBOLS = 100;
-const DEFAULT_NAV_URL = "https://www.mexc.com/";
+/* about:blank, not a real mexc.com page: the Akamai fingerprint check this
+   module works around is a property of the BROWSER PROCESS's own TLS/HTTP
+   stack, not of what page happened to load first — but a real mexc.com
+   page comes with its OWN Content-Security-Policy, which could block our
+   script's own WebSocket connect-src as a same-origin-policy violation
+   before the request even leaves the browser. Not worth the risk for a
+   benefit (session cookies) this module doesn't need anyway. */
+const DEFAULT_NAV_URL = "about:blank";
 const DEFAULT_WS_URL = "wss://contract.mexc.com/ws";
 
 let _browser = null;
@@ -168,6 +175,21 @@ async function launchBrowser() {
 
     page.on("close", () => { _connected = false; log("page closed"); scheduleBrowserRelaunch(); });
     page.on("crash", () => { _connected = false; log("page crashed"); scheduleBrowserRelaunch(); });
+    /* Our own ws.onerror inside the page only ever gets a generic "error
+       event" (that's all browsers expose to JS per spec) — Chromium's own
+       network layer knows the REAL reason (ERR_CONNECTION_RESET,
+       ERR_SSL_PROTOCOL_ERROR, ERR_BLOCKED_BY_CLIENT, ERR_NAME_NOT_RESOLVED,
+       ...) and Playwright can surface it via requestfailed. This is the
+       only way left to see WHY the handshake actually failed once it's no
+       longer a plain HTTP status code (301/403) to read off a response. */
+    page.on("requestfailed", (req) => {
+      var failure = req.failure();
+      log("page requestfailed:", req.url(), "-", failure && failure.errorText);
+    });
+    page.on("pageerror", (err) => { log("page JS error:", err && err.message); });
+    page.on("console", (msg) => {
+      if (msg.type() === "error" || msg.type() === "warning") log("page console." + msg.type() + ":", msg.text());
+    });
 
     try {
       await page.goto(_navUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
