@@ -107,7 +107,12 @@ function connect() {
   _subscribed = [];
   log("connecting to", _url);
   let ws;
-  try { ws = new WebSocket(_url); } catch (e) { log("constructor threw:", e && e.message); scheduleReconnect(); return; }
+  /* followRedirects: MEXC's wss://contract.mexc.com/ws answers the
+     handshake with an HTTP 301 in production (confirmed via this
+     module's own logs — "Unexpected server response: 301"), which ws's
+     default behavior treats as a hard failure instead of a redirect to
+     follow, since a WS handshake isn't a plain HTTP request by default. */
+  try { ws = new WebSocket(_url, { followRedirects: true }); } catch (e) { log("constructor threw:", e && e.message); scheduleReconnect(); return; }
   _ws = ws;
 
   ws.on("open", () => {
