@@ -442,6 +442,17 @@ async function computeLiveReading(symbol, tf) {
 /* Snapshots, keyed by [exchange][tf]. */
 const snapshots = { binance: {}, mexc: {} };
 
+/* Latest top-by-volume candidate list per exchange (TF-agnostic, refreshed
+   once per cycle() in scanCandidatesAndOi — see there). Exposed via
+   getCandidates() so the frontend can source Bot 4's own symbol universe
+   from an endpoint on this same server instead of calling MEXC's contract
+   API directly from the browser: that direct call is CORS/WAF-blocked in
+   practice (see exchanges.js's doc-comment on why exchange calls live
+   server-side at all), so a client-side fetch straight to MEXC never
+   reliably returns anything. Reusing this cache means zero extra outbound
+   requests to the exchange — cycle() already fetches it. */
+let _lastCands = { binance: [], mexc: [] };
+
 function emptySnapshot(exchange, tf) {
   return {
     version: "1.0",
@@ -499,6 +510,8 @@ async function cycle() {
   let mexcData = null, binData = null;
   try { mexcData = await scanCandidatesAndOi(mexc); } catch (e) { logErr("mexc", e); }
   try { binData = await scanCandidatesAndOi(binance); } catch (e) { logErr("binance", e); }
+  if (mexcData) _lastCands.mexc = mexcData.cands;
+  if (binData) _lastCands.binance = binData.cands;
 
   /* Latest known price per symbol this cycle, aggregated across every TF
      scanned (a later TF's price for the same symbol just overwrites the
@@ -560,6 +573,13 @@ function getSnapshot(exchange, tf) {
   const t = normTf(tf);
   const byEx = snapshots[ex] || (snapshots[ex] = {});
   return byEx[t] || (byEx[t] = emptySnapshot(ex, t));
+}
+
+/* Top-by-24h-volume candidates for one exchange, already sorted desc by
+   scanCandidatesAndOi() — see _lastCands' doc-comment above. */
+function getCandidates(exchange) {
+  const ex = exchange === "mexc" ? "mexc" : "binance";
+  return _lastCands[ex] || [];
 }
 
 /* Apply a runtime Filtros config patch (weights / engine params / OI-LSR MA
@@ -624,4 +644,4 @@ function getBacktestStats() {
   return result;
 }
 
-module.exports = { start, stop, cycle, getSnapshot, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading, getBacktestStats };
+module.exports = { start, stop, cycle, getSnapshot, getCandidates, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading, getBacktestStats };

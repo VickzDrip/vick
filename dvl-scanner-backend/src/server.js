@@ -9,6 +9,9 @@
    GET  /api/dvl/scanner/history?symbol=X  (every recorded signal for one symbol, for chart markers)
    GET  /api/dvl/scanner/live-reading?symbol=X&tf=Y  (current OI/LSR/RSI/spike reading for ANY symbol)
    GET  /api/dvl/scanner/backtest      (financial backtest: win rate / avg return, all signals vs model-favorable)
+   GET  /api/dvl/scanner/tickers?exchange=binance|mexc  (top-by-24h-volume candidates, server-fetched — see worker.getCandidates)
+   GET  /api/dvl/scanner/mexc-price    (fresh MEXC last-price map, for Fast Bots' Bot 4 to check its own open positions)
+   GET  /api/dvl/scanner/mexc-atr?symbol=X&tf=Y  (14-period ATR for one MEXC symbol, Bot 4's stop-distance fallback)
    This server is READ-ONLY re: trading: it never places or routes trades —
    manual-trade only LOGS a position the user already opened elsewhere in
    the app; it doesn't open, close, or touch anything itself. */
@@ -19,6 +22,8 @@ const { WebSocketServer } = require("ws");
 const cfg = require("./config");
 const worker = require("./worker");
 const analyze = require("./analyze");
+const { mexc } = require("./exchanges");
+const M = require("./metrics");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -39,6 +44,39 @@ function createServer() {
 
   app.get("/api/dvl/scanner/snapshot", (req, res) => {
     res.json(worker.getSnapshot(normExchange(req.query.exchange), normTf(req.query.tf)));
+  });
+
+  /* Top-by-volume candidates, already fetched server-side every cycle (see
+     worker.js's _lastCands) — exists so the browser can source a symbol
+     universe (e.g. Fast Bots' Bot 4) without calling the exchange's own
+     REST API directly, which for MEXC's contract API is blocked from
+     browser origins in practice. */
+  app.get("/api/dvl/scanner/tickers", (req, res) => {
+    const exchange = normExchange(req.query.exchange);
+    res.json({ ok: true, exchange, tickers: worker.getCandidates(exchange) });
+  });
+
+  /* Fresh (not cycle-cached) MEXC prices — Bot 4's own position exits need
+     current data, unlike the top-volume list above which tolerates being
+     up to one scan cycle (REFRESH_MS) stale. */
+  app.get("/api/dvl/scanner/mexc-price", (req, res) => {
+    mexc.prices()
+      .then(prices => res.json({ ok: true, prices }))
+      .catch(e => res.json({ ok: false, prices: {}, error: e.message }));
+  });
+
+  /* On-demand ATR for one MEXC symbol — Bot 4's entry-time fallback when
+     _atrCache has nothing cached for it. Same 14-period formula worker.js
+     already uses for every scanned candidate (M.computeAtr), just fetched
+     for a symbol that may not currently be in the scan cycle's candidate
+     list at all. */
+  app.get("/api/dvl/scanner/mexc-atr", (req, res) => {
+    const symbol = String(req.query.symbol || "");
+    const tf = normTf(req.query.tf);
+    if (!symbol) { res.json({ ok: false, atr: null, error: "missing symbol" }); return; }
+    mexc.klines(symbol, tf)
+      .then(k => res.json({ ok: true, atr: M.computeAtr(k.ohlc || [], 14) }))
+      .catch(e => res.json({ ok: false, atr: null, error: e.message }));
   });
 
   app.post("/api/dvl/scanner/config", (req, res) => {

@@ -103,7 +103,19 @@ const mexc = {
     }));
     return { closes, vols, ohlc, lastOpen: (Number(times[times.length - 1]) || 0) * 1000 };
   },
-  base(sym) { return String(sym).replace(/_USDT$/, ""); }
+  base(sym) { return String(sym).replace(/_USDT$/, ""); },
+  /* Fresh (uncached) last-price map for every MEXC USDT perpetual, in one
+     batched call — used by the frontend's Fast Bots (Bot 4) to price its
+     open MEXC positions for stop/target checks, which need live data, not
+     the once-per-cycle candidate cache getCandidates() exposes. */
+  async prices() {
+    const j = await getJSON("https://contract.mexc.com/api/v1/contract/ticker");
+    const d = (j && j.data) || [];
+    if (!Array.isArray(d)) throw new Error("mexc ticker shape");
+    const map = {};
+    d.forEach(t => { if (t && t.symbol) map[t.symbol] = Number(t.lastPrice); });
+    return map;
+  }
 };
 
 /* Binance Top Trader Long/Short ACCOUNT ratio — this is what the in-page
