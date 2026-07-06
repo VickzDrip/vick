@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.070</title>
+<title>DVL Binance Live — Beta 1.071</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.070';
+window.DVL_APP_VERSION = 'Beta 1.071';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.070";
+const DVL_APP_VERSION = "Beta 1.071";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.071", note: "Novo no Copilot: Fast Bots — corrida de combos. Três bots scalpers (100% simulados, $1.000 cada) competindo nos TFs 1m/3m/5m, cada um entrando só no seu combo: Bot 1 (só LONG) OI acima da média + LSR abaixo; Bot 2 (só LONG) pré-volume baixo + OI subindo; Bot 3 (só SHORT) Net Short acima da média + Net Delta abaixo. Entradas em frações de $100 (máx. 5 abertas), saída em 2 etapas: no +1R vende metade e o stop vai pro zero a zero, o resto corre até +2R, stop (1x ATR do próprio TF) ou 45 min. O card mostra patrimônio, retorno, trades em andamento e fechados de cada um, com coroa 👑 no líder — mesma regra de saída pra todos, então a diferença de resultado é do combo." },
   { version: "Beta 1.070", note: "Bot Demo — troquei o stop/alvo de % fixo pra ATR da vela de entrada com risco sempre igual em dólar ($30 por trade, não importa o ativo nem o preço). Numa vela de spike bem volátil o stop fica mais largo (não te tira por ruído normal) e a posição fica menor pra manter o risco fixo; numa vela calma o stop fica mais apertado e a posição maior. Alvo sempre 2x a distância do stop (2:1). Isso só muda como o Bot Demo opera — o treino do ML continua com o critério de %/4h de sempre, os dois passam a ter métricas separadas." },
   { version: "Beta 1.069", note: "Novo card no Copilot: Divergência Net Flow — aviso (não filtro) pra quando o Net Long está caindo, o Net Short subindo e o Net Delta caindo ao mesmo tempo (pelo menos 2 dos 3), mesmo com o preço ainda sem confirmar a virada. É só leitura: não muda o score do Scanner, não vira bloco novo e não entra no treino do ML — fica de fora de propósito, do mesmo jeito que o SHORT foi removido, pra não misturar um sinal de reversão dentro de uma máquina pensada só pra confirmar compra." },
   { version: "Beta 1.068", note: "Removi o SHORT do sistema inteiro: Scanner, Machine Learning e Bot Demo. Os 6 bloquinhos (RSI sobrevenda, OI subindo, LSR caindo...) só validam um setup de compra — SHORT nunca foi um setup de venda de verdade, só 'o candle fechou vermelho' pontuado com a mesma régua de compra, e o backtest financeiro confirmou que vinha perdendo dinheiro. Agora o Scanner só detecta LONG, o modelo aprendido treina só LONG, e o Bot Demo roda só uma carteira (a carteira LONG que você já tinha continua com o mesmo progresso — só a SHORT foi removida)." },
@@ -73692,6 +73693,409 @@ window.DVL_COPILOT_DIVERGENCE_1050={
   version:"1.050", render:render, fetchSnapshot:fetchSnapshot,
   audit:function(){ var p=page(), panel=p?p.querySelector("[data-dvl-cp-section='divergence']"):null; return {version:"1.050", panelFound:!!panel, rows:_rows, lastErr:_lastErr}; }
 };
+})();
+</script>
+
+<style id="DVL_FASTBOTS_1060_CSS">
+#dvlCopilotPage0974 .dvlFb1060Panel{margin-top:12px!important;}
+#dvlCopilotPage0974 .dvlFb1060Head{display:flex!important;align-items:center!important;gap:10px!important;margin-bottom:8px!important;}
+#dvlCopilotPage0974 .dvlFb1060Icon{width:34px!important;height:34px!important;border-radius:11px!important;display:grid!important;place-items:center!important;background:rgba(16,223,119,.10)!important;border:1px solid rgba(16,223,119,.25)!important;font-size:16px!important;flex:0 0 auto!important;}
+#dvlCopilotPage0974 .dvlFb1060HeadTitle{display:flex!important;flex-direction:column!important;min-width:0!important;}
+#dvlCopilotPage0974 .dvlFb1060HeadTitle b{color:#f4f7f4!important;font-size:13px!important;font-weight:900!important;}
+#dvlCopilotPage0974 .dvlFb1060HeadTitle span{color:#9aa6a1!important;font-size:10px!important;font-weight:700!important;}
+#dvlCopilotPage0974 .dvlFb1060Body{color:#cdd5d0!important;font-size:11.5px!important;font-weight:750!important;line-height:1.4!important;}
+#dvlCopilotPage0974 .dvlFb1060Note{margin-bottom:8px!important;padding:7px 8px!important;border-radius:9px!important;background:rgba(16,223,119,.06)!important;border:1px solid rgba(16,223,119,.16)!important;color:#9aa6a1!important;font-size:9.5px!important;font-weight:700!important;line-height:1.4!important;}
+#dvlCopilotPage0974 .dvlFb1060Bot{margin-top:10px!important;padding:8px!important;border-radius:11px!important;background:rgba(145,175,165,.05)!important;border:1px solid rgba(145,175,165,.12)!important;}
+#dvlCopilotPage0974 .dvlFb1060Bot.leader{border-color:rgba(16,223,119,.35)!important;background:rgba(16,223,119,.05)!important;}
+#dvlCopilotPage0974 .dvlFb1060BotTitle{display:flex!important;align-items:center!important;gap:6px!important;font-size:10.5px!important;font-weight:900!important;letter-spacing:.3px!important;color:#e9efeb!important;margin-bottom:2px!important;}
+#dvlCopilotPage0974 .dvlFb1060BotTitle .crown{font-size:11px!important;}
+#dvlCopilotPage0974 .dvlFb1060BotTitle .shortTag{color:#ff9f43!important;font-size:8.5px!important;font-weight:900!important;border:1px solid rgba(255,159,67,.35)!important;border-radius:5px!important;padding:1px 4px!important;}
+#dvlCopilotPage0974 .dvlFb1060BotTitle .longTag{color:#10df77!important;font-size:8.5px!important;font-weight:900!important;border:1px solid rgba(16,223,119,.35)!important;border-radius:5px!important;padding:1px 4px!important;}
+#dvlCopilotPage0974 .dvlFb1060Combo{color:#9aa6a1!important;font-size:9px!important;font-weight:750!important;margin-bottom:5px!important;}
+#dvlCopilotPage0974 .dvlFb1060Stat{display:flex!important;justify-content:space-between!important;gap:8px!important;font-size:10px!important;color:#9aa6a1!important;font-weight:750!important;padding:1.5px 0!important;}
+#dvlCopilotPage0974 .dvlFb1060Stat b{color:#f4f7f4!important;white-space:nowrap!important;}
+#dvlCopilotPage0974 .dvlFb1060Stat b.pos{color:#10df77!important;}
+#dvlCopilotPage0974 .dvlFb1060Stat b.neg{color:#ff4a61!important;}
+#dvlCopilotPage0974 .dvlFb1060Positions,#dvlCopilotPage0974 .dvlFb1060History{display:flex!important;flex-direction:column!important;gap:3px!important;margin-top:5px!important;}
+#dvlCopilotPage0974 .dvlFb1060Row{display:flex!important;align-items:center!important;gap:7px!important;font-size:9.5px!important;color:#b8c7c1!important;font-weight:750!important;padding:3px 6px!important;border-radius:6px!important;background:rgba(145,175,165,.06)!important;}
+#dvlCopilotPage0974 .dvlFb1060Row span{flex:1!important;color:#e9efeb!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
+#dvlCopilotPage0974 .dvlFb1060Row b{white-space:nowrap!important;}
+#dvlCopilotPage0974 .dvlFb1060Row b.pos{color:#10df77!important;}
+#dvlCopilotPage0974 .dvlFb1060Row b.neg{color:#ff4a61!important;}
+#dvlCopilotPage0974 .dvlFb1060Row i{font-style:normal!important;color:#70827c!important;font-size:8px!important;font-weight:700!important;text-transform:uppercase!important;white-space:nowrap!important;}
+#dvlCopilotPage0974 .dvlFb1060Row .half{color:#c9a85a!important;font-size:8px!important;font-weight:800!important;}
+#dvlCopilotPage0974 .dvlFb1060SubTitle{margin-top:6px!important;font-size:8.5px!important;font-weight:900!important;letter-spacing:.3px!important;color:#70827c!important;text-transform:uppercase!important;}
+#dvlCopilotPage0974 .dvlFb1060Reset{margin-top:7px!important;width:100%!important;padding:6px!important;border-radius:8px!important;border:1px solid rgba(145,175,165,.18)!important;background:rgba(255,255,255,.03)!important;color:#9aa6a1!important;font-size:9px!important;font-weight:800!important;cursor:pointer!important;}
+#dvlCopilotPage0974 .dvlFb1060Foot{margin-top:8px!important;padding-top:8px!important;border-top:1px solid rgba(145,175,165,.12)!important;color:#70827c!important;font-size:9.5px!important;font-weight:700!important;line-height:1.35!important;}
+#dvlCopilotPage0974 .dvlFb1060Foot b{color:#10df77!important;}
+</style>
+
+<script id="DVL_FASTBOTS_1060_JS">
+/* Fast Bots — three competing combo scalpers on the 1m/3m/5m timeframes,
+   each with its own isolated $1,000 virtual wallet, racing to see which
+   entry combo actually performs. 100% simulated, same guarantees as the
+   Bot Demo: never sends an order anywhere, never touches an API key or
+   the user's real paper-trading state — own localStorage keys, own
+   module, doesn't share wallets with DVL_BOTDEMO_1030.
+
+   The three combos (fixed, per bot — this is a controlled experiment, so
+   they don't drift):
+     Bot 1 (LONG only):  OI acima da média + LSR abaixo da média
+                         (blocks.oiAboveAvg && blocks.lsrBelowAvg)
+     Bot 2 (LONG only):  Pré-volume baixo + OI subindo
+                         (blocks.prevVolBelowHalf && oiSlope > 0)
+     Bot 3 (SHORT only): Net Short acima da média + Net Delta abaixo
+                         (netShortRatio > 0 && netDeltaRatio < 0)
+   Bot 3 SHORTS as a virtual wallet position — that's unrelated to the
+   scanner/ML's own SHORT removal (which was about the detection thesis
+   and training labels): here the ENTRY CONDITION is a genuinely
+   bearish-shaped net-flow read on a tracked symbol, and the wallet just
+   simulates the other direction's P&L. Nothing here feeds the ML.
+
+   "Frações + saídas rápidas": entries are fixed $100 slices of the
+   $1,000 (max 5 open per bot = at most half the wallet deployed), and
+   exits are two-staged — at +1R half the position is closed and the stop
+   jumps to breakeven (the trade can no longer lose), the remainder runs
+   to +2R, the stop, or a 45-minute timeout. R = ATR14 of the row's OWN
+   timeframe x 1.0 (tighter than the big Bot Demo's 1.5 — scalper stops).
+   row.atr14 comes free in the snapshot (worker.js computes it from
+   klines it already fetches); if a row doesn't carry it (backend not
+   restarted yet / new listing), the bot fetches ATR itself once at entry,
+   same pattern as the Bot Demo.
+
+   Freshness + cooldown keep it honest as a FAST bot: only rows detected
+   in the last 30 min are eligible (registry rows persist for hours —
+   without this, page load would instantly buy every stale signal whose
+   combo still reads true), and a symbol a bot just closed can't be
+   re-entered by that bot for 30 min (the combo usually still reads true
+   right after an exit — without this it would ping-pong). */
+(function(){
+  "use strict";
+  if(window.DVL_FASTBOTS_1060) return;
+
+  var START_BALANCE=1000;
+  var ENTRY_DOLLARS=100;       // one "fração" per entry
+  var MAX_OPEN=5;              // per bot -> at most $500 of the $1000 deployed
+  var ATR_PERIOD=14;
+  var ATR_MULT=1.0;            // scalper stop: 1x ATR of the row's own (1m/3m/5m) timeframe
+  var TP1_R=1;                 // +1R: close half, stop -> breakeven
+  var TP2_R=2;                 // +2R: close the rest
+  var MAX_HOLD_MS=45*60000;    // fast bot — never sits in a trade for hours
+  var FRESH_MS=30*60000;       // only rows detected in the last 30 min are eligible
+  var COOLDOWN_MS=30*60000;    // per bot+symbol, after a close
+  var TFS=["1m","3m","5m"];
+  var SIGNAL_POLL_MS=60000;    // matches the backend's own refresh cadence
+  var PRICE_POLL_MS=20000;     // exits need to be quicker than entries
+  var MAX_HISTORY=40;
+  var REASON_LABEL={tp2:"alvo 2R", stop:"stop", be:"b.e.", timeout:"tempo"};
+
+  var BOTS=[
+    { id:"b1", name:"Bot 1", side:"LONG",  ls:"dvl_fastbot_b1_v1",
+      comboLabel:"OI acima da média + LSR abaixo da média",
+      match:function(r){ return !!(r.blocks && r.blocks.oiAboveAvg && r.blocks.lsrBelowAvg); } },
+    { id:"b2", name:"Bot 2", side:"LONG",  ls:"dvl_fastbot_b2_v1",
+      comboLabel:"Pré-volume baixo + OI subindo",
+      match:function(r){ return !!(r.blocks && r.blocks.prevVolBelowHalf && Number(r.oiSlope)>0); } },
+    { id:"b3", name:"Bot 3", side:"SHORT", ls:"dvl_fastbot_b3_v1",
+      comboLabel:"Net Short acima da média + Net Delta abaixo",
+      match:function(r){ return Number(r.netShortRatio)>0 && Number(r.netDeltaRatio)<0; } }
+  ];
+
+  function esc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+  function clone(v){return JSON.parse(JSON.stringify(v));}
+  function fmtMoney(v){ v=Number(v)||0; return (v<0?"-":"")+"$"+Math.abs(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function fmtPct(v){ v=Number(v)||0; return (v>=0?"+":"")+v.toFixed(2)+"%"; }
+
+  function defaultWallet(){ return { balance:START_BALANCE, positions:[], history:[], startedAt:Date.now() }; }
+  function loadWallet(key){
+    try{
+      var w=JSON.parse(localStorage.getItem(key)||"null");
+      if(w && typeof w.balance==="number" && Array.isArray(w.positions) && Array.isArray(w.history)) return w;
+    }catch(_){}
+    return defaultWallet();
+  }
+  var wallets={};
+  BOTS.forEach(function(b){ wallets[b.id]=loadWallet(b.ls); });
+  function persist(bot){ try{ localStorage.setItem(bot.ls, JSON.stringify(wallets[bot.id])); }catch(_){} }
+
+  function baseUrl(){
+    try{ return (typeof window.DVL_SCANNER_BACKEND_URL==="string"?window.DVL_SCANNER_BACKEND_URL:null) || localStorage.getItem("dvlScannerBackendUrl") || ""; }
+    catch(_){ return ""; }
+  }
+  async function fetchJson(url){
+    var r=await fetch(url,{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    return await r.json();
+  }
+
+  function hasOpen(bot,symbol){ return wallets[bot.id].positions.some(function(p){ return p.symbol===symbol; }); }
+  function inCooldown(bot,symbol,now){
+    return wallets[bot.id].history.some(function(h){ return h.symbol===symbol && (now-(h.closedAt||0))<COOLDOWN_MS; });
+  }
+
+  /* ATR fallback for rows that don't carry atr14 yet — one klines call,
+     only at entry time (see module doc-comment). */
+  async function fetchAtr(symbol,tf){
+    try{
+      var d=await fetchJson("https://fapi.binance.com/fapi/v1/klines?symbol="+encodeURIComponent(symbol)+"&interval="+encodeURIComponent(tf)+"&limit="+(ATR_PERIOD+5));
+      if(!Array.isArray(d)||d.length<ATR_PERIOD+1) return null;
+      var trs=[];
+      for(var i=1;i<d.length;i++){
+        var h=Number(d[i][2]), l=Number(d[i][3]), pc=Number(d[i-1][4]);
+        if(!(h>0)||!(l>0)||!(pc>0)) continue;
+        trs.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+      }
+      if(trs.length<ATR_PERIOD) return null;
+      var last=trs.slice(-ATR_PERIOD), sum=0;
+      for(var j=0;j<last.length;j++) sum+=last[j];
+      return sum/last.length;
+    }catch(_){ return null; }
+  }
+
+  async function tryOpen(bot,row,tf){
+    var w=wallets[bot.id];
+    var symbol=String(row.rawSymbol||row.symbol||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+    var price=Number(row.price)||0;
+    var now=Date.now();
+    if(!symbol || !(price>0)) return;
+    if(w.positions.length>=MAX_OPEN) return;
+    if(w.balance<ENTRY_DOLLARS) return;
+    if(hasOpen(bot,symbol) || inCooldown(bot,symbol,now)) return;
+
+    var atr=Number(row.atr14)||0;
+    if(!(atr>0)) atr=await fetchAtr(symbol,tf)||0;
+    if(!(atr>0)) return;
+    var r1=atr*ATR_MULT;
+    var short=bot.side==="SHORT";
+    var qty=ENTRY_DOLLARS/price;
+    w.positions.push({
+      id:"fb_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
+      symbol:symbol, tf:tf, entry:price, qty:qty, size:ENTRY_DOLLARS,
+      sl: short ? price+r1 : price-r1,
+      tp1: short ? price-r1*TP1_R : price+r1*TP1_R,
+      tp2: short ? price-r1*TP2_R : price+r1*TP2_R,
+      atr:atr, halfTaken:false, realized:0, openedAt:now
+    });
+    w.balance-=ENTRY_DOLLARS;
+    persist(bot);
+    render();
+  }
+
+  function pnlOf(bot,pos,price,qty){
+    return bot.side==="SHORT" ? (pos.entry-price)*qty : (price-pos.entry)*qty;
+  }
+
+  function closeRest(bot,pos,price,reason){
+    var w=wallets[bot.id];
+    var idx=w.positions.indexOf(pos);
+    if(idx<0) return;
+    w.positions.splice(idx,1);
+    var remQty=pos.halfTaken ? pos.qty/2 : pos.qty;
+    var remSize=pos.halfTaken ? pos.size/2 : pos.size;
+    var pnl=(pos.realized||0)+pnlOf(bot,pos,price,remQty);
+    w.balance+=remSize+pnlOf(bot,pos,price,remQty);
+    w.history.unshift({ symbol:pos.symbol, tf:pos.tf, entry:pos.entry, exit:price, pnl:pnl, pnlPct:(pnl/pos.size)*100, reason:reason, halfTaken:pos.halfTaken, openedAt:pos.openedAt, closedAt:Date.now() });
+    if(w.history.length>MAX_HISTORY) w.history.length=MAX_HISTORY;
+    persist(bot);
+  }
+
+  /* The "saída inteligente": at +1R, half comes off and the stop moves to
+     breakeven — from that moment the trade can't turn into a loss. */
+  function takeHalf(bot,pos,price){
+    var w=wallets[bot.id];
+    var halfQty=pos.qty/2, halfSize=pos.size/2;
+    var pnl=pnlOf(bot,pos,price,halfQty);
+    w.balance+=halfSize+pnl;
+    pos.realized=(pos.realized||0)+pnl;
+    pos.halfTaken=true;
+    pos.sl=pos.entry; // breakeven
+    persist(bot);
+  }
+
+  var _lastPriceMap={};
+
+  async function checkPositions(){
+    var any=BOTS.some(function(b){ return wallets[b.id].positions.length>0; });
+    if(!any) return;
+    try{
+      /* One batched call regardless of how many positions/bots — Binance's
+         ticker/price with no symbol param returns everything at once. */
+      var arr=await fetchJson("https://fapi.binance.com/fapi/v1/ticker/price");
+      var map={};
+      (Array.isArray(arr)?arr:[]).forEach(function(t){ map[t.symbol]=Number(t.price); });
+      _lastPriceMap=map;
+      var now=Date.now();
+      BOTS.forEach(function(bot){
+        var short=bot.side==="SHORT";
+        wallets[bot.id].positions.slice().forEach(function(pos){
+          var price=map[pos.symbol];
+          if(!(price>0)) return;
+          var hitTp2=short ? price<=pos.tp2 : price>=pos.tp2;
+          var hitTp1=short ? price<=pos.tp1 : price>=pos.tp1;
+          var hitSl=short ? price>=pos.sl : price<=pos.sl;
+          var timedOut=(now-pos.openedAt)>=MAX_HOLD_MS;
+          if(hitTp2){ closeRest(bot,pos,price,"tp2"); return; }
+          if(hitTp1 && !pos.halfTaken){ takeHalf(bot,pos,price); }
+          if(hitSl){ closeRest(bot,pos,price,pos.halfTaken?"be":"stop"); return; }
+          if(timedOut){ closeRest(bot,pos,price,"timeout"); }
+        });
+      });
+      render();
+    }catch(_){}
+  }
+
+  async function scanSignals(){
+    var base=baseUrl().replace(/\/$/,"");
+    if(!base) return;
+    var now=Date.now();
+    for(var t=0;t<TFS.length;t++){
+      var tf=TFS[t];
+      var rows;
+      try{
+        var snap=await fetchJson(base+"/api/dvl/scanner/snapshot?exchange=binance&tf="+encodeURIComponent(tf));
+        rows=Array.isArray(snap&&snap.rows)?snap.rows:[];
+      }catch(_){ continue; }
+      for(var i=0;i<rows.length;i++){
+        var r=rows[i];
+        if(r.spikeAt && (now-r.spikeAt)>FRESH_MS) continue; // stale detection — not a "fast" opportunity anymore
+        for(var b=0;b<BOTS.length;b++){
+          if(BOTS[b].match(r)) await tryOpen(BOTS[b],r,tf);
+        }
+      }
+    }
+  }
+
+  function equityOf(bot){
+    var w=wallets[bot.id], sum=w.balance;
+    w.positions.forEach(function(p){
+      var price=_lastPriceMap[p.symbol];
+      var remQty=p.halfTaken?p.qty/2:p.qty, remSize=p.halfTaken?p.size/2:p.size;
+      sum+=remSize+(price>0?pnlOf(bot,p,price,remQty):0);
+    });
+    return sum;
+  }
+
+  function botHtml(bot,isLeader){
+    var w=wallets[bot.id];
+    var equity=equityOf(bot);
+    var retPct=((equity-START_BALANCE)/START_BALANCE)*100;
+    var closed=w.history;
+    var wins=closed.filter(function(h){ return h.pnl>0; }).length;
+    var winRate=closed.length?Math.round(wins/closed.length*100):null;
+    var sideTag=bot.side==="SHORT"?'<i class="shortTag">SÓ SHORT</i>':'<i class="longTag">SÓ LONG</i>';
+    var out='<div class="dvlFb1060Bot'+(isLeader?' leader':'')+'">';
+    out+='<div class="dvlFb1060BotTitle">'+(isLeader?'<span class="crown">👑</span>':'')+'<b>'+esc(bot.name)+'</b>'+sideTag+'</div>';
+    out+='<div class="dvlFb1060Combo">'+esc(bot.comboLabel)+'</div>';
+    out+='<div class="dvlFb1060Stat"><span>Patrimônio</span><b>'+esc(fmtMoney(equity))+'</b></div>';
+    out+='<div class="dvlFb1060Stat"><span>Retorno</span><b class="'+(retPct>=0?"pos":"neg")+'">'+esc(fmtPct(retPct))+'</b></div>';
+    out+='<div class="dvlFb1060Stat"><span>Em andamento</span><b>'+w.positions.length+' trade'+(w.positions.length===1?'':'s')+'</b></div>';
+    out+='<div class="dvlFb1060Stat"><span>Fechados</span><b>'+closed.length+(winRate==null?'':' ('+winRate+'% acerto)')+'</b></div>';
+    if(w.positions.length){
+      out+='<div class="dvlFb1060SubTitle">Abertos agora</div>';
+      out+='<div class="dvlFb1060Positions">'+w.positions.slice(0,5).map(function(p){
+        var price=_lastPriceMap[p.symbol];
+        var remQty=p.halfTaken?p.qty/2:p.qty;
+        var pnl=(p.realized||0)+(price>0?pnlOf(bot,p,price,remQty):0);
+        var pnlPct=(pnl/p.size)*100;
+        return '<div class="dvlFb1060Row"><span>'+esc(p.symbol)+' · '+esc(p.tf)+'</span>'+(p.halfTaken?'<em class="half">½ no bolso</em>':'')+'<b class="'+(pnl>=0?"pos":"neg")+'">'+esc(fmtPct(pnlPct))+'</b></div>';
+      }).join("")+'</div>';
+    }
+    if(closed.length){
+      out+='<div class="dvlFb1060SubTitle">Últimos fechados</div>';
+      out+='<div class="dvlFb1060History">'+closed.slice(0,4).map(function(h){
+        return '<div class="dvlFb1060Row"><span>'+esc(h.symbol)+' · '+esc(h.tf)+'</span><b class="'+(h.pnl>=0?"pos":"neg")+'">'+esc(fmtPct(h.pnlPct))+'</b><i>'+esc(REASON_LABEL[h.reason]||h.reason)+'</i></div>';
+      }).join("")+'</div>';
+    }
+    out+='<button type="button" class="dvlFb1060Reset" data-fb-reset="'+bot.id+'">Reiniciar '+esc(bot.name)+'</button>';
+    out+='</div>';
+    return out;
+  }
+
+  function bodyHtml(){
+    var out='<div class="dvlFb1060Body">';
+    out+='<div class="dvlFb1060Note">100% simulado — três carteiras virtuais de '+esc(fmtMoney(START_BALANCE))+' competindo, nenhuma ordem real. Cada bot só entra no SEU combo, nos TFs 1m/3m/5m, em sinais detectados nos últimos 30 min. Entradas em frações de '+esc(fmtMoney(ENTRY_DOLLARS))+' (máx. '+MAX_OPEN+' abertas); saída em 2 etapas: no +1R vende metade e o stop vai pro zero a zero (não perde mais), o resto corre até +2R, stop ou 45 min. Stop = 1x ATR do próprio TF.</div>';
+    /* Leader = highest CURRENT equity; requires at least one closed trade
+       somewhere so an untouched $1,000 wallet doesn't wear the crown. */
+    var anyClosed=BOTS.some(function(b){ return wallets[b.id].history.length>0; });
+    var leaderId=null;
+    if(anyClosed){
+      var best=-Infinity;
+      BOTS.forEach(function(b){ var eq=equityOf(b); if(eq>best){ best=eq; leaderId=b.id; } });
+    }
+    BOTS.forEach(function(b){ out+=botHtml(b, b.id===leaderId); });
+    out+='<div class="dvlFb1060Foot">Experimento controlado: os 3 combos são fixos, mesma regra de saída pra todos — a única variável é o critério de entrada, então a diferença de resultado é do combo, não da sorte de configuração. Bot 3 abre short na carteira virtual; isso <b>não</b> mexe no Scanner nem no ML (que seguem só LONG) — é só a simulação apostando na direção contrária quando o fluxo está vendedor.</div>';
+    out+='</div>';
+    return out;
+  }
+
+  function html(){
+    return '<section class="dvlCp0976Panel dvlFb1060Panel" data-dvl-cp-section="fast-bots" data-dvl-cp-section-version="1060">'
+      +'<div class="dvlFb1060Head"><i class="dvlFb1060Icon">⚡</i>'
+      +'<div class="dvlFb1060HeadTitle"><b>Fast Bots — corrida de combos</b><span>3 bots, 3 combos, $1.000 cada — 1m/3m/5m</span></div></div>'
+      +bodyHtml()
+      +'</section>';
+  }
+
+  function bindEvents(panel){
+    if(!panel) return;
+    panel.querySelectorAll("[data-fb-reset]").forEach(function(btn){
+      if(btn.dataset.fbBound) return;
+      btn.dataset.fbBound="1";
+      btn.addEventListener("click", function(){
+        var id=btn.getAttribute("data-fb-reset");
+        var bot=BOTS.filter(function(b){ return b.id===id; })[0];
+        if(!bot) return;
+        wallets[bot.id]=defaultWallet();
+        persist(bot);
+        render();
+      });
+    });
+  }
+
+  function render(){
+    var p=document.getElementById("dvlCopilotPage0974");
+    if(!p) return false;
+    var panel=p.querySelector("[data-dvl-cp-section='fast-bots'][data-dvl-cp-section-version='1060']");
+    if(!panel){
+      var botDemo=p.querySelector("[data-dvl-cp-section='bot-demo']");
+      var divergence=p.querySelector("[data-dvl-cp-section='divergence']");
+      var backtest=p.querySelector("[data-dvl-cp-section='backtest']");
+      var bot=p.querySelector("[data-dvl-cp-section='bot-soon']");
+      if(botDemo) botDemo.insertAdjacentHTML("afterend", html());
+      else if(divergence) divergence.insertAdjacentHTML("afterend", html());
+      else if(backtest) backtest.insertAdjacentHTML("afterend", html());
+      else if(bot) bot.insertAdjacentHTML("beforebegin", html());
+      else p.insertAdjacentHTML("beforeend", html());
+      panel=p.querySelector("[data-dvl-cp-section='fast-bots'][data-dvl-cp-section-version='1060']");
+    }else{
+      var body=panel.querySelector(".dvlFb1060Body");
+      if(body) body.outerHTML=bodyHtml();
+    }
+    bindEvents(panel);
+    return !!panel;
+  }
+
+  function boot(){
+    render();
+    scanSignals();
+    checkPositions();
+    setInterval(scanSignals, SIGNAL_POLL_MS);
+    setInterval(checkPositions, PRICE_POLL_MS);
+    setInterval(render, 15000); // keeps unrealized PnL fresh even without a state change
+    [300,900,1500,2500,4000,6000,9000].forEach(function(ms){ setTimeout(render,ms); });
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot, {once:true});
+  else boot();
+
+  window.DVL_FASTBOTS_1060={
+    version:"1.060",
+    render:render,
+    scanSignals:scanSignals,
+    checkPositions:checkPositions,
+    resetBot:function(id){ var bot=BOTS.filter(function(b){ return b.id===id; })[0]; if(!bot) return; wallets[bot.id]=defaultWallet(); persist(bot); render(); },
+    get wallets(){ var o={}; BOTS.forEach(function(b){ o[b.id]=clone(wallets[b.id]); }); return o; },
+    audit:function(){ var p=document.getElementById("dvlCopilotPage0974"); return { version:"1.060", panelFound:!!(p&&p.querySelector("[data-dvl-cp-section='fast-bots']")), b1:wallets.b1, b2:wallets.b2, b3:wallets.b3 }; }
+  };
 })();
 </script>
 
