@@ -111,9 +111,38 @@ function connect() {
      handshake with an HTTP 301 in production (confirmed via this
      module's own logs — "Unexpected server response: 301"), which ws's
      default behavior treats as a hard failure instead of a redirect to
-     follow, since a WS handshake isn't a plain HTTP request by default. */
-  try { ws = new WebSocket(_url, { followRedirects: true }); } catch (e) { log("constructor threw:", e && e.message); scheduleReconnect(); return; }
+     follow, since a WS handshake isn't a plain HTTP request by default.
+     Headers: after following that redirect the handshake started coming
+     back 403 — Node's default ws client sends no User-Agent/Origin at
+     all, which looks nothing like a real browser and is a common trigger
+     for exchange-side bot protection (Cloudflare etc.) on WS gateways
+     even when the plain REST endpoints (no such protection there) work
+     fine from the same server. Spoofing both to look like MEXC's own web
+     app connecting is the standard workaround; if the 403 persists even
+     with these, the block is more likely IP-based (this VPS's own
+     address) than header-based. */
+  var wsOpts = {
+    followRedirects: true,
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Origin": "https://www.mexc.com"
+    }
+  };
+  try { ws = new WebSocket(_url, wsOpts); } catch (e) { log("constructor threw:", e && e.message); scheduleReconnect(); return; }
   _ws = ws;
+
+  /* Fires on any non-101 handshake response (after following redirects) —
+     the response BODY often carries the real reason (geo-block, requires
+     auth, rate-limited, ...) in a way the bare status code from the
+     "error" event below never does. */
+  ws.on("unexpected-response", (req, res) => {
+    var chunks = [];
+    res.on("data", function (c) { chunks.push(c); });
+    res.on("end", function () {
+      var body = Buffer.concat(chunks).toString().slice(0, 500);
+      log("unexpected-response — status:", res.statusCode, "headers:", JSON.stringify(res.headers), "body:", body);
+    });
+  });
 
   ws.on("open", () => {
     _connected = true;
