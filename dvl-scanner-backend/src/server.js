@@ -12,6 +12,7 @@
    GET  /api/dvl/scanner/tickers?exchange=binance|mexc  (top-by-24h-volume candidates, server-fetched — see worker.getCandidates)
    GET  /api/dvl/scanner/mexc-price    (fresh MEXC last-price map, for Fast Bots' Bot 4 to check its own open positions)
    GET  /api/dvl/scanner/mexc-atr?symbol=X&tf=Y  (14-period ATR for one MEXC symbol, Bot 4's stop-distance fallback)
+   WS   /ws/dvl/agg            (relays MEXC's live trade stream — see mexcAggStream.js — to Fast Bots' Bot 4)
    This server is READ-ONLY re: trading: it never places or routes trades —
    manual-trade only LOGS a position the user already opened elsewhere in
    the app; it doesn't open, close, or touch anything itself. */
@@ -24,6 +25,7 @@ const worker = require("./worker");
 const analyze = require("./analyze");
 const { mexc } = require("./exchanges");
 const M = require("./metrics");
+const aggStream = require("./mexcAggStream");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -160,6 +162,13 @@ function createServer() {
   /* Track sockets by the exchange they subscribed to. */
   const clients = new Set();
 
+  /* MEXC's live trade stream relay (see mexcAggStream.js) — one server-side
+     connection to MEXC, rebroadcast to every browser client connected to
+     /ws/dvl/agg (Fast Bots' Bot 4). Declared before the upgrade handler
+     below so it's never referenced ahead of its own initialization. */
+  const aggWss = new WebSocketServer({ noServer: true });
+  const aggClients = new Set();
+
   server.on("upgrade", (req, socket, head) => {
     let pathname, exchange, tf;
     try {
@@ -168,17 +177,29 @@ function createServer() {
       exchange = normExchange(u.searchParams.get("exchange"));
       tf = normTf(u.searchParams.get("tf"));
     } catch (_) { socket.destroy(); return; }
-    if (pathname !== "/ws/dvl/scanner") { socket.destroy(); return; }
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      ws._dvlExchange = exchange;
-      ws._dvlTf = tf;
-      clients.add(ws);
-      ws.on("close", () => clients.delete(ws));
-      ws.on("error", () => clients.delete(ws));
-      /* Send the current snapshot immediately on connect. */
-      const snap = worker.getSnapshot(exchange, tf);
-      safeSend(ws, { type: "scanner:update", exchange, tf, updatedAt: snap.updatedAt, fallback: snap.fallback, activeSource: snap.activeSource, rows: snap.rows });
-    });
+    if (pathname === "/ws/dvl/scanner") {
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        ws._dvlExchange = exchange;
+        ws._dvlTf = tf;
+        clients.add(ws);
+        ws.on("close", () => clients.delete(ws));
+        ws.on("error", () => clients.delete(ws));
+        /* Send the current snapshot immediately on connect. */
+        const snap = worker.getSnapshot(exchange, tf);
+        safeSend(ws, { type: "scanner:update", exchange, tf, updatedAt: snap.updatedAt, fallback: snap.fallback, activeSource: snap.activeSource, rows: snap.rows });
+      });
+      return;
+    }
+    if (pathname === "/ws/dvl/agg") {
+      aggWss.handleUpgrade(req, socket, head, (ws) => {
+        aggClients.add(ws);
+        ws.on("close", () => aggClients.delete(ws));
+        ws.on("error", () => aggClients.delete(ws));
+        safeSend(ws, { type: "agg:status", connected: aggStream.isConnected(), symbols: aggStream.getSubscribed() });
+      });
+      return;
+    }
+    socket.destroy();
   });
 
   /* Broadcast worker changes to subscribers of that exchange + timeframe. */
@@ -189,7 +210,22 @@ function createServer() {
     }
   });
 
-  return { server, app, wss, clients };
+  /* Start relaying MEXC trades to every connected agg client — each client
+     still aggregates/filters client-side same as before, this just gets
+     the raw trades to the browser without it ever talking to MEXC itself. */
+  aggStream.start((trade) => {
+    const msg = { type: "agg:trade", symbol: trade.symbol, price: trade.price, qty: trade.qty, buy: trade.buy };
+    for (const ws of aggClients) { if (ws.readyState === ws.OPEN) safeSend(ws, msg); }
+  });
+  /* Periodic status broadcast (connected state + subscribed-symbol count)
+     so already-connected browser clients see MEXC connect/reconnect
+     transitions without needing to reopen their own WS. */
+  setInterval(() => {
+    const msg = { type: "agg:status", connected: aggStream.isConnected(), symbols: aggStream.getSubscribed() };
+    for (const ws of aggClients) { if (ws.readyState === ws.OPEN) safeSend(ws, msg); }
+  }, 10000);
+
+  return { server, app, wss, clients, aggClients };
 }
 
 function safeSend(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch (_) {} }
