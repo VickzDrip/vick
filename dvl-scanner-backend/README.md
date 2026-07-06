@@ -490,6 +490,43 @@ directly with `node src/backtest.js`.
 Bot Demo — it's a second, complementary lens (money, not just direction) on
 the exact same held-out data `trainSide()` already reports accuracy for.
 
+## Divergence warning (`metrics.js`'s `netFlowDivergence`)
+A read-only alert for a specific pattern spotted by eye on the chart: Net
+Long unwinding, Net Short building, AND Net Delta rolling over, all while
+price hasn't confirmed a reversal yet — longs quietly de-risking before the
+chart shows it. Deliberately kept **entirely separate** from the bullish
+Spike Score machinery, for the same reason SHORT was removed instead of
+just left untrained (see "LONG-only" above): this pattern is
+bearish-shaped, the opposite of what the 6 blocks confirm, and the
+existing scoring is purely additive — there's no clean way to make a block
+subtract from a score built to only ever add. Rather than force it in,
+`netFlowDivergence(row, warnThreshold)` lives on its own:
+
+- Reuses `netLongSlope`/`netShortSlope`/`netDeltaSlope` — already computed
+  by `netFlowTrend` at signal-detection time (the same rate-limit-safety
+  window Net Long/Short/Delta's own ratios use), just not previously kept
+  on the row (only `netDeltaSlope` was). Now `netLongSlope`/`netShortSlope`
+  are captured too, in both `scanExchange`'s fresh-join block and
+  `computeFreshRow`.
+- Flags each leg independently (`netLongFalling`, `netShortRising`,
+  `netDeltaFalling`) against a `warnThreshold` (default 0.03 = 3%
+  second-half-vs-first-half change, matching `netDeltaSlopeN`'s existing ML
+  scale) and fires `warning` on a **2-of-3 majority** rather than requiring
+  a clean sweep, so one noisy leg doesn't mask an otherwise-clear signal.
+- `worker.js` computes it alongside `spikeScore`/`status`/`blocks` but
+  writes it to separate `row.divergenceWarning`/`row.divergenceCount`
+  fields — `blocksOf()`/`score()` never see it, and it's not in
+  `train.js`'s `BLOCK_KEYS`/`CONT_KEYS`/`FEATURE_KEYS`, so it structurally
+  cannot leak into the model.
+- `outcomes.js` logs `divergenceWarning`/`divergenceCount` as their own
+  top-level informational fields (same spirit as `maxDrawdownPct`) — so a
+  future `analyze-combos.js`-style diagnostic can ask "did signals that
+  carried this warning actually do worse?" without it ever having
+  influenced training.
+- Shown read-only in the app's Copilot tab as the "Divergência Net Flow"
+  card — lists currently-tracked signals with the warning active, with a
+  note reiterating it's an alert, not a filter.
+
 ## Advanced combo mining (`npm run analyze:combos`)
 `src/analyze-combos.js` goes beyond `analyze.js`'s count-buckets: it mines
 every 1-, 2- and 3-block subset (41 total, superset match) per side and

@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.068</title>
+<title>DVL Binance Live — Beta 1.069</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.068';
+window.DVL_APP_VERSION = 'Beta 1.069';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.068";
+const DVL_APP_VERSION = "Beta 1.069";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.069", note: "Novo card no Copilot: Divergência Net Flow — aviso (não filtro) pra quando o Net Long está caindo, o Net Short subindo e o Net Delta caindo ao mesmo tempo (pelo menos 2 dos 3), mesmo com o preço ainda sem confirmar a virada. É só leitura: não muda o score do Scanner, não vira bloco novo e não entra no treino do ML — fica de fora de propósito, do mesmo jeito que o SHORT foi removido, pra não misturar um sinal de reversão dentro de uma máquina pensada só pra confirmar compra." },
   { version: "Beta 1.068", note: "Removi o SHORT do sistema inteiro: Scanner, Machine Learning e Bot Demo. Os 6 bloquinhos (RSI sobrevenda, OI subindo, LSR caindo...) só validam um setup de compra — SHORT nunca foi um setup de venda de verdade, só 'o candle fechou vermelho' pontuado com a mesma régua de compra, e o backtest financeiro confirmou que vinha perdendo dinheiro. Agora o Scanner só detecta LONG, o modelo aprendido treina só LONG, e o Bot Demo roda só uma carteira (a carteira LONG que você já tinha continua com o mesmo progresso — só a SHORT foi removida)." },
   { version: "Beta 1.067", note: "Bot Demo agora consulta o modelo aprendido antes de abrir posição: além do score do Scanner (≥72), só entra se o modelo daquele lado (regressão ou árvore, o que testar melhor) também não descartar o sinal. Entradas que o modelo aprovou ganham uma marquinha 🤖. Enquanto um lado não tem dados treinados suficientes, continua abrindo só pelo score, como antes." },
   { version: "Beta 1.066", note: "Novo card no Copilot: Backtest financeiro. O card 'Aprendizado (ML)' já mostrava a acurácia (acertou a direção?); este mostra quanto cada abordagem teria RENDIDO no mesmo conjunto de teste nunca visto no treino — taxa de acerto e retorno médio/total comparando negociar todo sinal vs. só o que a regressão chamou de favorável vs. só o que a árvore de decisão chamou de favorável. Só leitura, não abre posição nenhuma." },
@@ -73501,6 +73502,126 @@ else boot();
 window.DVL_COPILOT_BACKTEST_1040={
   version:"1.040", render:render, fetchBacktest:fetchBacktest,
   audit:function(){ var p=page(), panel=p?p.querySelector("[data-dvl-cp-section='backtest']"):null; return {version:"1.040", panelFound:!!panel, last:_last, lastErr:_lastErr}; }
+};
+})();
+</script>
+
+<style id="DVL_COPILOT_DIVERGENCE_1050_CSS">
+#dvlCopilotPage0974 .dvlDv1050Panel{margin-top:12px!important;}
+#dvlCopilotPage0974 .dvlDv1050Head{display:flex!important;align-items:center!important;gap:10px!important;margin-bottom:8px!important;}
+#dvlCopilotPage0974 .dvlDv1050Icon{width:34px!important;height:34px!important;border-radius:11px!important;display:grid!important;place-items:center!important;background:rgba(255,159,67,.10)!important;border:1px solid rgba(255,159,67,.28)!important;font-size:16px!important;flex:0 0 auto!important;}
+#dvlCopilotPage0974 .dvlDv1050HeadTitle{display:flex!important;flex-direction:column!important;min-width:0!important;}
+#dvlCopilotPage0974 .dvlDv1050HeadTitle b{color:#f4f7f4!important;font-size:13px!important;font-weight:900!important;}
+#dvlCopilotPage0974 .dvlDv1050HeadTitle span{color:#9aa6a1!important;font-size:10px!important;font-weight:700!important;}
+#dvlCopilotPage0974 .dvlDv1050Body{color:#cdd5d0!important;font-size:11.5px!important;font-weight:750!important;line-height:1.4!important;}
+#dvlCopilotPage0974 .dvlDv1050Note{margin-bottom:8px!important;padding:7px 8px!important;border-radius:9px!important;background:rgba(255,159,67,.07)!important;border:1px solid rgba(255,159,67,.20)!important;color:#c9a85a!important;font-size:9.5px!important;font-weight:700!important;line-height:1.35!important;}
+#dvlCopilotPage0974 .dvlDv1050Empty{color:#70827c!important;font-size:10px!important;font-weight:750!important;padding:4px 0!important;}
+#dvlCopilotPage0974 .dvlDv1050List{display:flex!important;flex-direction:column!important;gap:5px!important;margin-top:4px!important;}
+#dvlCopilotPage0974 .dvlDv1050Row{display:flex!important;align-items:center!important;gap:8px!important;font-size:10.5px!important;font-weight:800!important;color:#e9efeb!important;padding:6px 8px!important;border-radius:8px!important;background:rgba(255,159,67,.06)!important;border:1px solid rgba(255,159,67,.16)!important;}
+#dvlCopilotPage0974 .dvlDv1050Row span{flex:1!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
+#dvlCopilotPage0974 .dvlDv1050Row b{color:#ff9f43!important;white-space:nowrap!important;font-size:9.5px!important;}
+#dvlCopilotPage0974 .dvlDv1050Foot{margin-top:8px!important;padding-top:8px!important;border-top:1px solid rgba(145,175,165,.12)!important;color:#70827c!important;font-size:9.5px!important;font-weight:700!important;line-height:1.35!important;}
+#dvlCopilotPage0974 .dvlDv1050Foot b{color:#ff9f43!important;}
+</style>
+
+<script id="DVL_COPILOT_DIVERGENCE_1050_JS">
+/* Divergência Net Flow — a read-only alert, deliberately separate from
+   everything else: never touches spikeScore/status/blocks (worker.js's
+   scanExchange computes it alongside them but never feeds it back in),
+   never becomes an ML feature (train.js's FEATURE_KEYS never sees it — see
+   metrics.js's netFlowDivergence doc-comment for why forcing a
+   bearish-shaped signal into the bullish-thesis model would repeat the
+   SHORT mistake). Pattern: Net Long unwinding + Net Short building + Net
+   Delta rolling over (2-of-3 majority), all while price hasn't confirmed a
+   reversal yet — longs quietly de-risking before the chart shows it.
+
+   Reads the same GET /api/dvl/scanner/snapshot the Scanner tab and Bot
+   Demo already use, just filters for rows worker.js already flagged
+   row.divergenceWarning=true — no separate detection logic here. */
+(function(){"use strict";if(window.DVL_COPILOT_DIVERGENCE_1050)return;
+
+function page(){return document.getElementById("dvlCopilotPage0974");}
+function esc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+
+var _rows=null, _lastErr=false;
+
+function rowHtml(r){
+  var symbol=esc(r.rawSymbol||r.symbol||"?");
+  var count=Number(r.divergenceCount)||0;
+  var score=Number(r.spikeScore)||0;
+  return '<div class="dvlDv1050Row"><span>'+symbol+'</span><b>'+count+'/3 · score '+score+'</b></div>';
+}
+
+function bodyHtml(){
+  if(_lastErr || !_rows){
+    return '<div class="dvlDv1050Body">Backend do scanner não respondeu agora. Isso aqui é só leitura — não afeta o Scanner, o score nem o ML.</div>';
+  }
+  var out='<div class="dvlDv1050Body">';
+  out+='<div class="dvlDv1050Note">Aviso, não filtro: Net Long caindo + Net Short subindo + Net Delta caindo (pelo menos 2 dos 3), mesmo com o preço ainda sem confirmar — não muda o score nem entra no treino do ML, é só um sinal a mais pro seu olho.</div>';
+  var warned=_rows.filter(function(r){ return !!r.divergenceWarning; });
+  if(!warned.length){
+    out+='<div class="dvlDv1050Empty">Nenhuma divergência detectada agora nos sinais monitorados.</div>';
+  }else{
+    out+='<div class="dvlDv1050List">'+warned.map(rowHtml).join("")+'</div>';
+  }
+  out+='<div class="dvlDv1050Foot">Calculado só no momento em que um sinal novo aparece no Scanner (mesma regra de segurança do Net Long/Short/Delta, pra não sobrecarregar a Binance) — pode não refletir a leitura EXATA de agora se o sinal já está rastreado há um tempo. Ainda <b>não vira</b> bloco nem entra no treino: só log informativo, pra comparar resultado depois.</div>';
+  out+='</div>';
+  return out;
+}
+
+function html(){
+  return '<section class="dvlCp0976Panel dvlDv1050Panel" data-dvl-cp-section="divergence" data-dvl-cp-section-version="1050">'
+    +'<div class="dvlDv1050Head"><i class="dvlDv1050Icon">⚠️</i>'
+    +'<div class="dvlDv1050HeadTitle"><b>Divergência Net Flow</b><span>Longs saindo antes do preço confirmar</span></div></div>'
+    +bodyHtml()
+    +'</section>';
+}
+
+function render(){
+  var p=page();
+  if(!p) return false;
+  var panel=p.querySelector("[data-dvl-cp-section='divergence'][data-dvl-cp-section-version='1050']");
+  if(!panel){
+    var backtest=p.querySelector("[data-dvl-cp-section='backtest']");
+    var mlStatus=p.querySelector("[data-dvl-cp-section='ml-status']");
+    var botDemo=p.querySelector("[data-dvl-cp-section='bot-demo']");
+    var bot=p.querySelector("[data-dvl-cp-section='bot-soon']");
+    var chat=p.querySelector("[data-dvl-cp-section='ai-chat']");
+    if(backtest) backtest.insertAdjacentHTML("afterend", html());
+    else if(botDemo) botDemo.insertAdjacentHTML("afterend", html());
+    else if(mlStatus) mlStatus.insertAdjacentHTML("afterend", html());
+    else if(bot) bot.insertAdjacentHTML("beforebegin", html());
+    else if(chat) chat.insertAdjacentHTML("afterend", html());
+    else p.insertAdjacentHTML("beforeend", html());
+    panel=p.querySelector("[data-dvl-cp-section='divergence'][data-dvl-cp-section-version='1050']");
+  }else{
+    var body=panel.querySelector(".dvlDv1050Body");
+    if(body) body.outerHTML=bodyHtml();
+  }
+  return !!panel;
+}
+
+var _timer=null;
+function fetchSnapshot(){
+  fetch("/api/dvl/scanner/snapshot?exchange=binance",{cache:"no-store"})
+    .then(function(r){ if(!r.ok) throw new Error("snapshot "+r.status); return r.json(); })
+    .then(function(j){ _rows=Array.isArray(j&&j.rows)?j.rows:[]; _lastErr=false; render(); })
+    .catch(function(){ _lastErr=true; render(); });
+}
+
+function boot(){
+  render();
+  fetchSnapshot();
+  [300,900,1500,2500,4000,6000,9000].forEach(function(ms){ setTimeout(render,ms); });
+  if(_timer) clearInterval(_timer);
+  _timer=setInterval(fetchSnapshot, 60000);
+}
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true});
+else boot();
+
+window.DVL_COPILOT_DIVERGENCE_1050={
+  version:"1.050", render:render, fetchSnapshot:fetchSnapshot,
+  audit:function(){ var p=page(), panel=p?p.querySelector("[data-dvl-cp-section='divergence']"):null; return {version:"1.050", panelFound:!!panel, rows:_rows, lastErr:_lastErr}; }
 };
 })();
 </script>

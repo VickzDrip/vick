@@ -351,7 +351,39 @@ function netFlowTrend(oiSeries, posSeries) {
   return { netLong: trendVsMA(netLong), netShort: trendVsMA(netShort), netDelta: trendVsMA(netDelta) };
 }
 
+/* Divergence warning — a read-only alert, deliberately kept OUT of the
+   bullish Spike Score machinery entirely: never touches blocksOf()/score(),
+   never becomes a FEATURE_KEYS entry in train.js. The pattern: Net Long
+   unwinding, Net Short building, AND Net Delta rolling over, all while
+   price hasn't confirmed a reversal yet — longs quietly de-risking before
+   the chart shows it. This is the opposite shape of the 6 blocks (which
+   all confirm the bullish thesis), so it doesn't fit the same additive
+   scoring model; keeping it a separate flag avoids repeating the SHORT
+   mistake (see train.js's doc-comment) of forcing a bearish-shaped signal
+   into machinery built to predict a bullish setup's win rate.
+
+   `row` must carry netLongSlope/netShortSlope/netDeltaSlope (worker.js
+   sets these from this module's own netFlowTrend, at signal-detection
+   time only — same rate-limit-safety reasoning as netLongRatio etc.,
+   see worker.js's doc-comment). `warnThreshold` is the minimum |slope|
+   fraction to count a leg as "moving" rather than noise — 0.03 (3%
+   second-half-vs-first-half change) matches the scale netDeltaSlope
+   already uses as an ML feature. `warning` fires on a MAJORITY (2 of 3)
+   rather than requiring all three, so a single noisy leg doesn't mask an
+   otherwise-clear divergence. */
+function netFlowDivergence(row, warnThreshold) {
+  const t = Number.isFinite(warnThreshold) ? warnThreshold : 0.03;
+  const netLongSlope = Number(row.netLongSlope) || 0;
+  const netShortSlope = Number(row.netShortSlope) || 0;
+  const netDeltaSlope = Number(row.netDeltaSlope) || 0;
+  const netLongFalling = netLongSlope < -t;
+  const netShortRising = netShortSlope > t;
+  const netDeltaFalling = netDeltaSlope < -t;
+  const count = (netLongFalling ? 1 : 0) + (netShortRising ? 1 : 0) + (netDeltaFalling ? 1 : 0);
+  return { netLongFalling, netShortRising, netDeltaFalling, count, warning: count >= 2 };
+}
+
 module.exports = {
   sma, pct, priceMaGlueStats, computeSignal,
-  score, blocksOf, ignitionScore, statusOf, ignitionStatus, oiTrend, lsrTrend, factorsOf, trendVsMA, netFlowTrend
+  score, blocksOf, ignitionScore, statusOf, ignitionStatus, oiTrend, lsrTrend, factorsOf, trendVsMA, netFlowTrend, netFlowDivergence
 };

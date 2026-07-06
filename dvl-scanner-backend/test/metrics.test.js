@@ -158,5 +158,34 @@ eq(flowEmpty.netDelta.color, "yellow", "empty input yields the same neutral yell
 const flowShort = M.netFlowTrend([1000000], [{ long: 0.6, short: 0.4 }]);
 eq(flowShort.netDelta.slope, 0, "a single overlapping point also yields a neutral result (not enough data for a trend)");
 
+/* netFlowDivergence — a read-only alert, entirely separate from the
+   bullish Spike Score blocks/score()/FEATURE_KEYS (see its own doc-comment
+   for why). Majority vote (2 of 3) fires the warning. */
+const divAll3 = M.netFlowDivergence({ netLongSlope: -0.10, netShortSlope: 0.12, netDeltaSlope: -0.20 });
+eq(divAll3.netLongFalling, true, "netLongFalling true when the slope clears the threshold negatively");
+eq(divAll3.netShortRising, true, "netShortRising true when the slope clears the threshold positively");
+eq(divAll3.netDeltaFalling, true, "netDeltaFalling true when the slope clears the threshold negatively");
+eq(divAll3.count, 3, "all three legs counted when all three fire");
+eq(divAll3.warning, true, "warning fires when all three legs fire");
+
+const divMajority = M.netFlowDivergence({ netLongSlope: -0.10, netShortSlope: 0.12, netDeltaSlope: 0.01 });
+eq(divMajority.count, 2, "only the two legs that actually cleared the threshold are counted");
+eq(divMajority.warning, true, "warning still fires on a 2-of-3 majority, not just a clean sweep");
+
+const divOnlyOne = M.netFlowDivergence({ netLongSlope: -0.10, netShortSlope: 0.01, netDeltaSlope: 0.01 });
+eq(divOnlyOne.count, 1, "a single leg alone doesn't inflate the count");
+eq(divOnlyOne.warning, false, "warning does NOT fire on just one leg — avoids flagging normal single-metric noise");
+
+const divNone = M.netFlowDivergence({ netLongSlope: 0.10, netShortSlope: -0.10, netDeltaSlope: 0.10 });
+eq(divNone.count, 0, "the opposite (bullish-shaped) pattern never counts toward the warning");
+eq(divNone.warning, false, "no warning for a bullish-shaped Net Long/Short/Delta move");
+
+const divMissing = M.netFlowDivergence({});
+eq(divMissing.count, 0, "missing slope fields default to neutral (0), not a crash");
+eq(divMissing.warning, false, "no warning when the underlying data is simply absent");
+
+const divCustomThreshold = M.netFlowDivergence({ netLongSlope: -0.05, netShortSlope: 0.05, netDeltaSlope: -0.05 }, 0.10);
+eq(divCustomThreshold.count, 0, "a custom (higher) warnThreshold requires a stronger move before counting a leg");
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

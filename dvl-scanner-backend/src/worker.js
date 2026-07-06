@@ -323,9 +323,17 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
         ]);
         const netT = M.netFlowTrend(oiSeries, posData && posData.series);
         row.netLongRatio = netT.netLong.ratio || 0;
+        row.netLongSlope = netT.netLong.slope || 0;
         row.netShortRatio = netT.netShort.ratio || 0;
+        row.netShortSlope = netT.netShort.slope || 0;
         row.netDeltaRatio = netT.netDelta.ratio || 0;
         row.netDeltaSlope = netT.netDelta.slope || 0;
+        /* Divergence warning — read-only, NEVER touches spikeScore/status/
+           blocks or the ML feature set (see metrics.js's doc-comment on
+           netFlowDivergence for why this stays a separate flag). */
+        const div = M.netFlowDivergence(row);
+        row.divergenceWarning = div.warning;
+        row.divergenceCount = div.count;
       } catch (_) { /* leave unset — outcomes.js/train.js default to neutral */ }
     });
     for (const sym of freshJoins) {
@@ -365,12 +373,16 @@ async function computeFreshRow(symbol, tf, side, entryPrice) {
     volBelowMaBars: sig.volBelowMaBars, crossStrength: sig.crossStrength, rsi14: sig.rsi14,
     oi: oiT.arrow, oiColor: oiT.color, oiRatio: oiT.ratio || 0, oiSlope: oiT.slope || 0,
     lsr: lsrT.arrow, lsrColor: lsrT.color, lsrRatio: lsrT.ratio || 0, lsrSlope: lsrT.slope || 0,
-    netLongRatio: netT.netLong.ratio || 0, netShortRatio: netT.netShort.ratio || 0,
+    netLongRatio: netT.netLong.ratio || 0, netLongSlope: netT.netLong.slope || 0,
+    netShortRatio: netT.netShort.ratio || 0, netShortSlope: netT.netShort.slope || 0,
     netDeltaRatio: netT.netDelta.ratio || 0, netDeltaSlope: netT.netDelta.slope || 0
   };
   row.spikeScore = M.score(row, cfg.WEIGHTS, cfg.ENGINE);
   row.status = M.statusOf(row, row.spikeScore);
   row.blocks = M.blocksOf(row, cfg.ENGINE);
+  const div = M.netFlowDivergence(row);
+  row.divergenceWarning = div.warning;
+  row.divergenceCount = div.count;
   return row;
 }
 

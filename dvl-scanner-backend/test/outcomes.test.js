@@ -180,5 +180,21 @@ ok(!!loggedNoNet, "the no-net-flow-data entry did get logged");
 eq(loggedNoNet.features.netLongRatio, 0, "missing Net Long ratio defaults to neutral 0, not undefined/NaN");
 eq(loggedNoNet.features.netDeltaSlope, 0, "missing Net Delta slope defaults to neutral 0, not undefined/NaN");
 
+/* Divergence warning (metrics.js's netFlowDivergence) — logged as its own
+   top-level field, informational only, alongside (not inside) `features`.
+   Also appended at the end for the same index-stability reason as above. */
+outcomes.recordSignal("binance", "15m", Object.assign({}, rowLong, { rawSymbol: "DIVERGE_USDT", divergenceWarning: true, divergenceCount: 3 }), T0 + 3 * HOUR);
+outcomes.checkOutcomes("binance", { DIVERGE_USDT: 102.5 }, T0 + 3 * HOUR + 10 * MIN);
+const loggedDiv = readLog().find(e => e.symbol === "DIVERGE_USDT");
+ok(!!loggedDiv, "the divergence-flagged entry did get logged");
+eq(loggedDiv.divergenceWarning, true, "divergenceWarning is captured as its own top-level field");
+eq(loggedDiv.divergenceCount, 3, "divergenceCount is captured alongside it");
+
+outcomes.recordSignal("binance", "15m", Object.assign({}, rowLong, { rawSymbol: "NODIVERGE_USDT", divergenceWarning: undefined, divergenceCount: undefined }), T0 + 4 * HOUR);
+outcomes.checkOutcomes("binance", { NODIVERGE_USDT: 102.5 }, T0 + 4 * HOUR + 10 * MIN);
+const loggedNoDiv = readLog().find(e => e.symbol === "NODIVERGE_USDT");
+eq(loggedNoDiv.divergenceWarning, false, "missing divergenceWarning defaults to false, not undefined");
+eq(loggedNoDiv.divergenceCount, 0, "missing divergenceCount defaults to 0, not undefined/NaN");
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

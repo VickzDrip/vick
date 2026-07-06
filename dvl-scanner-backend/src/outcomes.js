@@ -131,10 +131,21 @@ function recordSignal(exchange, tf, row, now, source) {
          absent (defaults to 0, a neutral "no trend detected") on rows
          logged before this existed or where the extra fetch failed. */
       netLongRatio: Number(row.netLongRatio) || 0,
+      netLongSlope: Number(row.netLongSlope) || 0,
       netShortRatio: Number(row.netShortRatio) || 0,
+      netShortSlope: Number(row.netShortSlope) || 0,
       netDeltaRatio: Number(row.netDeltaRatio) || 0,
       netDeltaSlope: Number(row.netDeltaSlope) || 0
     },
+    /* Divergence warning (metrics.js's netFlowDivergence) — INFORMATIONAL
+       ONLY, same spirit as maxDrawdownPct: never read by train.js (it's
+       not in BLOCK_KEYS/CONT_KEYS/FEATURE_KEYS, so normalizeContinuous()
+       never sees it and it can't contaminate the bullish-thesis model).
+       Logged so a future analyze-combos.js-style diagnostic can ask "did
+       signals that carried this warning actually do worse?" without ever
+       having been part of what the model trains on. */
+    divergenceWarning: !!row.divergenceWarning,
+    divergenceCount: Number(row.divergenceCount) || 0,
     returns: {}
   };
 }
