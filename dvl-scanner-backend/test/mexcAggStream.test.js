@@ -41,7 +41,7 @@ async function main() {
   let symbols = ["BTC_USDT", "ETH_USDT"];
   stream.start(
     (trade) => trades.push(trade),
-    { getSymbols: () => symbols, url, resubscribeMs: 100, reconnectMs: 100 }
+    { getSymbols: () => symbols, url, resubscribeMs: 100, reconnectMs: 100, quiet: true }
   );
 
   /* 1) Connects and subscribes to the initial candidate list. */

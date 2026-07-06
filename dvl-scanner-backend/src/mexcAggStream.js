@@ -41,6 +41,7 @@ let _ws = null;
 let _pingTimer = null;
 let _resubTimer = null;
 let _reconnectTimer = null;
+let _heartbeatTimer = null;
 let _subscribed = [];
 let _connected = false;
 let _onTrade = () => {};
@@ -48,6 +49,19 @@ let _getSymbols = () => worker.getCandidates("mexc").map(c => c.sym);
 let _url = MEXC_WS_URL;
 let _reconnectMs = RECONNECT_MS;
 let _started = false;
+let _tradesSeen = 0;
+let _unknownLogged = 0;
+let _log = true;
+
+/* Everything below logs to console — this is the ONLY way to diagnose the
+   real MEXC connection remotely: it can't be verified from the sandbox
+   this was built in (see the module doc-comment), so once this runs on the
+   real server, `journalctl -u dvl-scanner -f` (or wherever stdout goes) is
+   how to tell "connects but MEXC never sends push.deal" apart from
+   "never connects at all" apart from "connects, sends something, but not
+   the shape this code expects" — the last one logs the raw message so the
+   real shape can be read directly instead of guessed at again. */
+function log() { if (_log) console.log.apply(console, ["[mexcAggStream]"].concat(Array.prototype.slice.call(arguments))); }
 
 /* onTrade and every field of opts are injectable so tests can run this
    against a fake local WS server + fake candidate list (with fast
@@ -61,14 +75,19 @@ function start(onTrade, opts) {
   if (typeof opts.getSymbols === "function") _getSymbols = opts.getSymbols;
   if (opts.url) _url = opts.url;
   if (opts.reconnectMs) _reconnectMs = opts.reconnectMs;
+  if (opts.quiet) _log = false;
   connect();
   _resubTimer = setInterval(maybeResubscribe, opts.resubscribeMs || RESUBSCRIBE_CHECK_MS);
+  _heartbeatTimer = setInterval(() => {
+    log("heartbeat — connected:", _connected, "subscribed:", _subscribed.length, "tradesSeen:", _tradesSeen);
+  }, 30000);
 }
 
 function stop() {
   _started = false;
   clearInterval(_resubTimer);
   clearInterval(_pingTimer);
+  clearInterval(_heartbeatTimer);
   clearTimeout(_reconnectTimer);
   try { if (_ws) _ws.terminate(); } catch (_) { /* ignore */ }
   _ws = null;
@@ -77,6 +96,7 @@ function stop() {
   _url = MEXC_WS_URL;
   _reconnectMs = RECONNECT_MS;
   _getSymbols = () => worker.getCandidates("mexc").map(c => c.sym);
+  _log = true;
 }
 
 function connect() {
@@ -85,12 +105,14 @@ function connect() {
   clearInterval(_pingTimer);
   _connected = false;
   _subscribed = [];
+  log("connecting to", _url);
   let ws;
-  try { ws = new WebSocket(_url); } catch (_) { scheduleReconnect(); return; }
+  try { ws = new WebSocket(_url); } catch (e) { log("constructor threw:", e && e.message); scheduleReconnect(); return; }
   _ws = ws;
 
   ws.on("open", () => {
     _connected = true;
+    log("connected");
     maybeResubscribe();
     _pingTimer = setInterval(() => {
       try { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ method: "ping" })); } catch (_) { /* ignore */ }
@@ -98,17 +120,29 @@ function connect() {
   });
 
   ws.on("message", (data) => {
-    try {
-      const msg = JSON.parse(data.toString());
-      if (!msg || msg.channel !== "push.deal" || !msg.symbol || !msg.data) return;
-      const price = Number(msg.data.p), qty = Number(msg.data.v);
-      if (!(price > 0) || !(qty > 0)) return;
-      _onTrade({ symbol: String(msg.symbol).toUpperCase(), price, qty, buy: Number(msg.data.T) === 1 });
-    } catch (_) { /* ignore malformed pushes */ }
+    let msg;
+    try { msg = JSON.parse(data.toString()); } catch (_) { return; }
+    if (!msg || msg.channel !== "push.deal" || !msg.symbol || !msg.data) {
+      /* Log the first few unrecognized messages verbatim — this is the
+         only way to see MEXC's REAL shape (subscribe acks, pongs, error
+         responses, or a different push-channel name entirely) if the
+         assumption this module was built on turns out to be wrong. */
+      if (_unknownLogged < 5) { _unknownLogged++; log("unrecognized message:", data.toString().slice(0, 500)); }
+      return;
+    }
+    const price = Number(msg.data.p), qty = Number(msg.data.v);
+    if (!(price > 0) || !(qty > 0)) return;
+    _tradesSeen++;
+    _onTrade({ symbol: String(msg.symbol).toUpperCase(), price, qty, buy: Number(msg.data.T) === 1 });
   });
 
-  ws.on("close", () => { _connected = false; clearInterval(_pingTimer); scheduleReconnect(); });
-  ws.on("error", () => { _connected = false; });
+  ws.on("close", (code, reason) => {
+    _connected = false;
+    clearInterval(_pingTimer);
+    log("closed — code:", code, "reason:", reason && reason.toString());
+    scheduleReconnect();
+  });
+  ws.on("error", (err) => { _connected = false; log("error:", err && err.message); });
 }
 
 function scheduleReconnect() {
@@ -125,7 +159,11 @@ function maybeResubscribe() {
   const cands = (_getSymbols() || []).filter(Boolean).slice(0, MAX_SYMBOLS);
   const known = new Set(_subscribed);
   const fresh = cands.filter(s => !known.has(s));
-  if (!fresh.length) return;
+  if (!fresh.length) {
+    if (!cands.length) log("no MEXC candidates available yet from worker.getCandidates — nothing to subscribe to");
+    return;
+  }
+  log("subscribing to", fresh.length, "new symbol(s), e.g.", fresh.slice(0, 5).join(","));
   fresh.forEach(sym => {
     try { _ws.send(JSON.stringify({ method: "sub.deal", param: { symbol: sym } })); } catch (_) { /* ignore */ }
   });
