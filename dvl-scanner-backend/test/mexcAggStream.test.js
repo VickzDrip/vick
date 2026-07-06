@@ -10,6 +10,7 @@
    loopback stand-ins instead of mexc.com and contract.mexc.com. */
 
 const http = require("http");
+const zlib = require("zlib");
 const { WebSocketServer } = require("ws");
 
 let pass = 0, fail = 0;
@@ -107,6 +108,18 @@ async function main() {
   serverSocket.send("not json");
   await wait(300);
   eq(trades.length, 2, "non-push.deal / malformed messages are silently ignored");
+
+  /* 3b) A GZIP-COMPRESSED BINARY push.deal frame — MEXC's actual production
+     format (see the module doc-comment) — must be decompressed in-page and
+     parsed exactly like the plain-text ones above. This is the case that
+     was silently producing "connected but 0 trades" before decompression
+     was added. */
+  serverSocket.send(zlib.gzipSync(Buffer.from(JSON.stringify({ channel: "push.deal", symbol: "SOL_USDT", data: { p: 200, v: 7, T: 1 } }))));
+  await waitUntil(() => trades.length >= 3, 2000);
+  eq(trades.length, 3, "a gzip-compressed binary push.deal frame is decompressed and produces a trade");
+  eq(trades[2].symbol, "SOL_USDT", "decompressed trade carries the right symbol");
+  eq(trades[2].price, 200, "decompressed trade carries the right price");
+  eq(trades[2].buy, true, "decompressed trade's buy flag parses correctly");
 
   /* 4) Growing the candidate list only sub.deal's the NEW symbol
      (additive), on the next resubscribe tick. */

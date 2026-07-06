@@ -56,15 +56,24 @@
    each time that candidate list is checked; a fresh WS connection always
    starts a clean subscription set.
 
+   Compression: MEXC's contract WS delivers its push frames as
+   gzip-compressed BINARY by default, with no documented way to opt into
+   plain text on this stream — so reconnectWs()'s in-page onmessage
+   decompresses (DecompressionStream, native to the browser) before
+   handing text back to Node. This was the "connected: true but
+   tradesSeen: 0" symptom in production: the socket was fine, the frames
+   were just bytes a JSON.parse silently dropped.
+
    NOTE on confidence: URL, subscribe method/params, and the push.deal
-   message shape ({channel:"push.deal", symbol, data:{p,v,T,...}}) are now
-   all corroborated against a real open-source SDK's source and a
-   published example payload — not just this module's own guess anymore.
-   The one still-unverified detail is T's exact value semantics (1=buy,
-   2=sell assumed, matching common exchange convention) — watch the logs
-   after deploy: an open connection with trades flowing but Bot 4 only
-   ever entering on what look like seller-driven bursts (or never
-   entering at all despite clear buy pressure) would mean that's flipped. */
+   message shape ({channel:"push.deal", symbol, data:{p,v,T,...}}) are all
+   corroborated against a real open-source SDK's source and a published
+   example payload. The two still-unverified details, both flagged by the
+   startup "raw message sample:" logs: (a) which compression format the
+   frames actually use (gzip tried first, then deflate/deflate-raw, then
+   plain text — one will win), and (b) T's exact value semantics (1=buy,
+   2=sell assumed, matching common exchange convention). If Bot 4 enters
+   only on seller-driven bursts, or never despite clear buy pressure,
+   T is flipped. */
 
 const { chromium } = require("playwright");
 const NodeWebSocket = require("ws");
@@ -110,6 +119,7 @@ let _browserRelaunchMs = BROWSER_RELAUNCH_MS;
 let _started = false;
 let _tradesSeen = 0;
 let _unknownLogged = 0;
+let _sampleLogged = 0;
 let _log = true;
 
 function log() { if (_log) console.log.apply(console, ["[mexcAggStream]"].concat(Array.prototype.slice.call(arguments))); }
@@ -194,6 +204,8 @@ async function stop() {
   _browserRelaunchMs = BROWSER_RELAUNCH_MS;
   _getSymbols = () => worker.getCandidates("mexc").map(c => c.sym);
   _log = true;
+  _sampleLogged = 0;
+  _unknownLogged = 0;
 }
 
 /* Tier 2 (expensive): launches a fresh headless Chromium + page, wires up
@@ -224,9 +236,19 @@ async function launchBrowser() {
     });
     await page.exposeFunction("__mexcOnError", (msg) => { log("in-page WS error:", msg); });
     await page.exposeFunction("__mexcOnMessage", (raw) => {
+      /* Log the first few messages verbatim regardless of shape — this is
+         how we confirm what MEXC actually sends (compressed binary that got
+         decompressed in-page, a JSON ack, a pong, a differently-named push
+         channel, ...) instead of guessing again. */
+      if (_sampleLogged < 4) { _sampleLogged++; log("raw message sample:", String(raw).slice(0, 300)); }
       let msg;
       try { msg = JSON.parse(raw); } catch (_) { return; }
-      if (!msg || msg.channel !== "push.deal" || !msg.symbol || !msg.data) {
+      /* MEXC's contract WS pongs a plain {channel:"pong"} back at our ping
+         and acks each sub.deal with {channel:"rs.sub.deal",...} — neither is
+         a trade, both are normal, so don't log them as "unrecognized". */
+      if (!msg || typeof msg.channel !== "string") return;
+      if (msg.channel === "pong" || msg.channel.indexOf("rs.") === 0 || msg.channel.indexOf("rs.error") === 0) return;
+      if (msg.channel !== "push.deal" || !msg.symbol || !msg.data) {
         if (_unknownLogged < 5) { _unknownLogged++; log("unrecognized message:", String(raw).slice(0, 500)); }
         return;
       }
@@ -284,11 +306,38 @@ async function reconnectWs() {
     await _page.evaluate((wsUrl) => {
       try { if (window.__mexcWs) window.__mexcWs.close(); } catch (_) { /* ignore */ }
       var ws = new WebSocket(wsUrl);
+      ws.binaryType = "arraybuffer";
       window.__mexcWs = ws;
       ws.onopen = function () { window.__mexcOnOpen(); };
       ws.onclose = function (ev) { window.__mexcOnClose(ev.code, ev.reason); };
       ws.onerror = function () { window.__mexcOnError("error event"); };
-      ws.onmessage = function (ev) { window.__mexcOnMessage(ev.data); };
+      /* MEXC's contract WS sends its push frames as gzip-compressed BINARY
+         by default (there's no documented way to ask for plain text on the
+         contract stream), so a plain JSON.parse of ev.data sees nothing but
+         bytes and silently drops every trade — exactly the "connected, 0
+         trades" symptom. Decompress in-page (browsers have Decompression
+         stream natively), trying gzip then deflate then raw-deflate, and
+         fall back to treating it as plain text if it wasn't compressed at
+         all (covers text control frames like the pong/ack, and keeps the
+         mocked-JSON test server working). */
+      async function toText(data) {
+        if (typeof data === "string") return data;
+        var bytes = new Uint8Array(data);
+        var formats = ["gzip", "deflate", "deflate-raw"];
+        for (var i = 0; i < formats.length; i++) {
+          try {
+            var ds = new DecompressionStream(formats[i]);
+            var stream = new Blob([bytes]).stream().pipeThrough(ds);
+            return await new Response(stream).text();
+          } catch (_) { /* try next format */ }
+        }
+        try { return new TextDecoder().decode(bytes); } catch (_) { return ""; }
+      }
+      ws.onmessage = function (ev) {
+        toText(ev.data).then(function (text) {
+          if (text) window.__mexcOnMessage(text);
+        }).catch(function (e) { window.__mexcOnError("decode: " + (e && e.message)); });
+      };
       if (window.__mexcPingTimer) clearInterval(window.__mexcPingTimer);
       window.__mexcPingTimer = setInterval(function () {
         try { if (ws.readyState === 1) ws.send(JSON.stringify({ method: "ping" })); } catch (_) { /* ignore */ }
