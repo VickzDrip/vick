@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.072</title>
+<title>DVL Binance Live — Beta 1.073</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.072';
+window.DVL_APP_VERSION = 'Beta 1.073';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.072";
+const DVL_APP_VERSION = "Beta 1.073";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.073", note: "Fast Bots — removida a exigência de configurar URL do backend (dependia de localStorage, igual o Bot Demo antigo; desnecessário já que o app e a API estão no mesmo domínio, e era um ponto de falha silenciosa a mais). Também adicionei uma linha de status no próprio card ('Última varredura: Xs atrás — 1m X/Y · 3m X/Y · 5m X/Y') pra você conferir se os bots estão varrendo e quantos sinais existem por TF sem precisar abrir o console do navegador." },
   { version: "Beta 1.072", note: "Removi do Copilot o card 'Divergência Net Flow' e o Bot Demo antigo (carteira única com stop por ATR) — deram lugar aos Fast Bots (3 carteiras competindo por combo). Nada de backend foi tocado, só limpeza de UI." },
   { version: "Beta 1.071", note: "Novo no Copilot: Fast Bots — corrida de combos. Três bots scalpers (100% simulados, $1.000 cada) competindo nos TFs 1m/3m/5m, cada um entrando só no seu combo: Bot 1 (só LONG) OI acima da média + LSR abaixo; Bot 2 (só LONG) pré-volume baixo + OI subindo; Bot 3 (só SHORT) Net Short acima da média + Net Delta abaixo. Entradas em frações de $100 (máx. 5 abertas), saída em 2 etapas: no +1R vende metade e o stop vai pro zero a zero, o resto corre até +2R, stop (1x ATR do próprio TF) ou 45 min. O card mostra patrimônio, retorno, trades em andamento e fechados de cada um, com coroa 👑 no líder — mesma regra de saída pra todos, então a diferença de resultado é do combo." },
   { version: "Beta 1.070", note: "Bot Demo — troquei o stop/alvo de % fixo pra ATR da vela de entrada com risco sempre igual em dólar ($30 por trade, não importa o ativo nem o preço). Numa vela de spike bem volátil o stop fica mais largo (não te tira por ruído normal) e a posição fica menor pra manter o risco fixo; numa vela calma o stop fica mais apertado e a posição maior. Alvo sempre 2x a distância do stop (2:1). Isso só muda como o Bot Demo opera — o treino do ML continua com o critério de %/4h de sempre, os dois passam a ter métricas separadas." },
@@ -73214,6 +73215,8 @@ window.DVL_COPILOT_BACKTEST_1040={
 #dvlCopilotPage0974 .dvlFb1060HeadTitle span{color:#9aa6a1!important;font-size:10px!important;font-weight:700!important;}
 #dvlCopilotPage0974 .dvlFb1060Body{color:#cdd5d0!important;font-size:11.5px!important;font-weight:750!important;line-height:1.4!important;}
 #dvlCopilotPage0974 .dvlFb1060Note{margin-bottom:8px!important;padding:7px 8px!important;border-radius:9px!important;background:rgba(16,223,119,.06)!important;border:1px solid rgba(16,223,119,.16)!important;color:#9aa6a1!important;font-size:9.5px!important;font-weight:700!important;line-height:1.4!important;}
+#dvlCopilotPage0974 .dvlFb1060Status{margin-bottom:8px!important;color:#70827c!important;font-size:9px!important;font-weight:750!important;}
+#dvlCopilotPage0974 .dvlFb1060Status.err{color:#ff4a61!important;}
 #dvlCopilotPage0974 .dvlFb1060Bot{margin-top:10px!important;padding:8px!important;border-radius:11px!important;background:rgba(145,175,165,.05)!important;border:1px solid rgba(145,175,165,.12)!important;}
 #dvlCopilotPage0974 .dvlFb1060Bot.leader{border-color:rgba(16,223,119,.35)!important;background:rgba(16,223,119,.05)!important;}
 #dvlCopilotPage0974 .dvlFb1060BotTitle{display:flex!important;align-items:center!important;gap:6px!important;font-size:10.5px!important;font-weight:900!important;letter-spacing:.3px!important;color:#e9efeb!important;margin-bottom:2px!important;}
@@ -73326,10 +73329,12 @@ window.DVL_COPILOT_BACKTEST_1040={
   BOTS.forEach(function(b){ wallets[b.id]=loadWallet(b.ls); });
   function persist(bot){ try{ localStorage.setItem(bot.ls, JSON.stringify(wallets[bot.id])); }catch(_){} }
 
-  function baseUrl(){
-    try{ return (typeof window.DVL_SCANNER_BACKEND_URL==="string"?window.DVL_SCANNER_BACKEND_URL:null) || localStorage.getItem("dvlScannerBackendUrl") || ""; }
-    catch(_){ return ""; }
-  }
+  /* Relative fetch, same as ml-status/backtest/divergence — the app and
+     the backend API live on the same origin here, so there's no base-URL
+     config to get wrong (an earlier version required localStorage's
+     dvlScannerBackendUrl to be set, like the old Bot Demo did; dropped —
+     it was an unnecessary extra failure point no other Copilot card
+     actually needed). */
   async function fetchJson(url){
     var r=await fetch(url,{cache:"no-store"});
     if(!r.ok) throw new Error("HTTP "+r.status);
@@ -73452,25 +73457,37 @@ window.DVL_COPILOT_BACKTEST_1040={
     }catch(_){}
   }
 
+  /* Status tracking exists purely so the card itself can show "last scan
+     Xs ago" / per-TF row counts / any fetch error — a mobile user can
+     diagnose "is this actually running?" just by looking at the card,
+     no DevTools console needed. */
+  var _lastScanAt=0, _lastScanErr=false, _lastScanCounts={};
+
   async function scanSignals(){
-    var base=baseUrl().replace(/\/$/,"");
-    if(!base) return;
     var now=Date.now();
+    var anyErr=false, counts={};
     for(var t=0;t<TFS.length;t++){
       var tf=TFS[t];
       var rows;
       try{
-        var snap=await fetchJson(base+"/api/dvl/scanner/snapshot?exchange=binance&tf="+encodeURIComponent(tf));
+        var snap=await fetchJson("/api/dvl/scanner/snapshot?exchange=binance&tf="+encodeURIComponent(tf));
         rows=Array.isArray(snap&&snap.rows)?snap.rows:[];
-      }catch(_){ continue; }
+      }catch(_){ anyErr=true; counts[tf]=null; continue; }
+      var freshCount=0;
       for(var i=0;i<rows.length;i++){
         var r=rows[i];
         if(r.spikeAt && (now-r.spikeAt)>FRESH_MS) continue; // stale detection — not a "fast" opportunity anymore
+        freshCount++;
         for(var b=0;b<BOTS.length;b++){
           if(BOTS[b].match(r)) await tryOpen(BOTS[b],r,tf);
         }
       }
+      counts[tf]={ rows:rows.length, fresh:freshCount };
     }
+    _lastScanAt=now;
+    _lastScanErr=anyErr;
+    _lastScanCounts=counts;
+    render();
   }
 
   function equityOf(bot){
@@ -73519,9 +73536,29 @@ window.DVL_COPILOT_BACKTEST_1040={
     return out;
   }
 
+  /* No DevTools needed to check "is this actually running?" — this line
+     shows the last scan's age and, per TF, how many rows came back vs.
+     how many were fresh enough (<=30min) to even be considered. A "falha"
+     tag means that TF's fetch itself threw (network/backend issue), not
+     just "zero rows right now" (a quiet market) — those read differently
+     and shouldn't be confused. */
+  function statusHtml(){
+    var agoTxt="ainda não rodou";
+    if(_lastScanAt){
+      var s=Math.round((Date.now()-_lastScanAt)/1000);
+      agoTxt=s<60 ? (s+"s atrás") : (Math.round(s/60)+"min atrás");
+    }
+    var parts=TFS.map(function(tf){
+      var c=_lastScanCounts[tf];
+      return tf+" "+(c ? (c.fresh+"/"+c.rows) : "falha");
+    }).join(" · ");
+    return '<div class="dvlFb1060Status'+(_lastScanErr?' err':'')+'">Última varredura: '+esc(agoTxt)+' — '+esc(parts)+'</div>';
+  }
+
   function bodyHtml(){
     var out='<div class="dvlFb1060Body">';
     out+='<div class="dvlFb1060Note">100% simulado — três carteiras virtuais de '+esc(fmtMoney(START_BALANCE))+' competindo, nenhuma ordem real. Cada bot só entra no SEU combo, nos TFs 1m/3m/5m, em sinais detectados nos últimos 30 min. Entradas em frações de '+esc(fmtMoney(ENTRY_DOLLARS))+' (máx. '+MAX_OPEN+' abertas); saída em 2 etapas: no +1R vende metade e o stop vai pro zero a zero (não perde mais), o resto corre até +2R, stop ou 45 min. Stop = 1x ATR do próprio TF.</div>';
+    out+=statusHtml();
     /* Leader = highest CURRENT equity; requires at least one closed trade
        somewhere so an untouched $1,000 wallet doesn't wear the crown. */
     var anyClosed=BOTS.some(function(b){ return wallets[b.id].history.length>0; });
