@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.069</title>
+<title>DVL Binance Live — Beta 1.070</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.069';
+window.DVL_APP_VERSION = 'Beta 1.070';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.069";
+const DVL_APP_VERSION = "Beta 1.070";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.070", note: "Bot Demo — troquei o stop/alvo de % fixo pra ATR da vela de entrada com risco sempre igual em dólar ($30 por trade, não importa o ativo nem o preço). Numa vela de spike bem volátil o stop fica mais largo (não te tira por ruído normal) e a posição fica menor pra manter o risco fixo; numa vela calma o stop fica mais apertado e a posição maior. Alvo sempre 2x a distância do stop (2:1). Isso só muda como o Bot Demo opera — o treino do ML continua com o critério de %/4h de sempre, os dois passam a ter métricas separadas." },
   { version: "Beta 1.069", note: "Novo card no Copilot: Divergência Net Flow — aviso (não filtro) pra quando o Net Long está caindo, o Net Short subindo e o Net Delta caindo ao mesmo tempo (pelo menos 2 dos 3), mesmo com o preço ainda sem confirmar a virada. É só leitura: não muda o score do Scanner, não vira bloco novo e não entra no treino do ML — fica de fora de propósito, do mesmo jeito que o SHORT foi removido, pra não misturar um sinal de reversão dentro de uma máquina pensada só pra confirmar compra." },
   { version: "Beta 1.068", note: "Removi o SHORT do sistema inteiro: Scanner, Machine Learning e Bot Demo. Os 6 bloquinhos (RSI sobrevenda, OI subindo, LSR caindo...) só validam um setup de compra — SHORT nunca foi um setup de venda de verdade, só 'o candle fechou vermelho' pontuado com a mesma régua de compra, e o backtest financeiro confirmou que vinha perdendo dinheiro. Agora o Scanner só detecta LONG, o modelo aprendido treina só LONG, e o Bot Demo roda só uma carteira (a carteira LONG que você já tinha continua com o mesmo progresso — só a SHORT foi removida)." },
   { version: "Beta 1.067", note: "Bot Demo agora consulta o modelo aprendido antes de abrir posição: além do score do Scanner (≥72), só entra se o modelo daquele lado (regressão ou árvore, o que testar melhor) também não descartar o sinal. Entradas que o modelo aprovou ganham uma marquinha 🤖. Enquanto um lado não tem dados treinados suficientes, continua abrindo só pelo score, como antes." },
@@ -73090,19 +73091,35 @@ window.DVL_COPILOT_ML_STATUS_1024={
    the LONG model — whichever of logistic/tree tests better): only
    `=== false` (the model actively disagrees) blocks an entry; `null` (not
    trained yet) leaves the score-only gate to decide alone, same fallback
-   convention as everywhere else ML touches this app. TP/SL/horizon mirror
-   outcomes.js's own triple-barrier definition (2%/1%/4h) so the demo's win
-   rate is directly comparable to what the ML's testAccuracy/backtest.js
-   already measure — same rules, just watched live instead of backtested. */
+   convention as everywhere else ML touches this app.
+
+   Stop/target/position-size are ATR-based with a FIXED DOLLAR RISK per
+   trade, not the fixed-%/fixed-position-size scheme this used to share
+   with outcomes.js's ML triple-barrier (2%/1%/4h) — deliberately scoped to
+   ONLY this wallet, at the user's request, so a spike candle's own
+   volatility sets how far away the stop sits (wide ATR -> wide stop ->
+   smaller position, so a single stop-out never costs more than
+   RISK_DOLLARS) instead of a flat % that's too tight on a violent spike
+   candle and too loose on a calm one. Target is a fixed REWARD_MULT (2)
+   multiple of the risk distance (a strict 2:1). outcomes.js's own
+   %-based labels are UNTOUCHED — the ML still trains on the original
+   triple-barrier definition — so this wallet's win rate is NO LONGER
+   directly comparable to the ML's testAccuracy/backtest.js the way it
+   used to be; it's its own, separate risk model now. ATR itself is
+   fetched fresh from Binance only at the moment of a candidate entry
+   (not every cycle for every tracked row) — same rate-limit-safety
+   reasoning as worker.js's Net Long/Short/Delta fetch. */
 (function(){
   "use strict";
   if(window.DVL_BOTDEMO_1030) return;
 
   var START_BALANCE=10000;
-  var POSITION_PCT=0.05;
   var SCORE_THRESHOLD=72;
-  var PROFIT_TARGET_PCT=2;
-  var STOP_LOSS_PCT=1;
+  var RISK_DOLLARS=30;       // fixed $ lost if a position gets stopped out, regardless of asset price/volatility
+  var ATR_PERIOD=14;
+  var ATR_MULT=1.5;          // stop distance = ATR14 x 1.5 — wider on a volatile/spike candle, tighter on a calm one
+  var REWARD_MULT=2;         // target distance = stop distance x 2 (a strict 2:1 reward:risk)
+  var MAX_POSITION_PCT=0.5;  // safety ceiling: never risk sizing a position above 50% of current balance, even if ATR is unusually tiny
   var MAX_HORIZON_MS=4*3600000;
   var SIGNAL_POLL_MS=60000;
   var PRICE_POLL_MS=30000;
@@ -73142,15 +73159,61 @@ window.DVL_COPILOT_ML_STATUS_1024={
 
   function hasOpen(symbol){ return wallet.positions.some(function(p){ return p.symbol===symbol; }); }
 
-  function tryOpen(symbol,score,price,mlFavorable,mlBestModel){
+  /* True Range / ATR — candles must be oldest->newest, each {h,l,c}. Needs
+     `period+1` candles (period TR values); returns null rather than a
+     misleadingly-partial average when there isn't enough history. */
+  function computeAtr(candles,period){
+    if(!Array.isArray(candles) || candles.length<period+1) return null;
+    var trs=[];
+    for(var i=1;i<candles.length;i++){
+      var h=candles[i].h, l=candles[i].l, pc=candles[i-1].c;
+      if(!(h>0)||!(l>0)||!(pc>0)) continue;
+      trs.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+    }
+    if(trs.length<period) return null;
+    var last=trs.slice(-period), sum=0;
+    for(var j=0;j<last.length;j++) sum+=last[j];
+    return sum/last.length;
+  }
+
+  /* Fetched fresh from Binance only at the moment of a candidate entry —
+     not every cycle for every tracked row — same rate-limit-safety
+     reasoning as worker.js's Net Long/Short/Delta fetch (see this
+     module's doc-comment). Returns null (never throws) on any failure so
+     tryOpen can simply skip the entry rather than guess a stop distance. */
+  async function fetchAtr(symbol,tf){
+    try{
+      var url="https://fapi.binance.com/fapi/v1/klines?symbol="+encodeURIComponent(symbol)+"&interval="+encodeURIComponent(tf)+"&limit="+(ATR_PERIOD+5);
+      var d=await fetchJson(url);
+      if(!Array.isArray(d) || d.length<ATR_PERIOD+1) return null;
+      var candles=d.map(function(k){ return { h:Number(k[2]), l:Number(k[3]), c:Number(k[4]) }; });
+      return computeAtr(candles,ATR_PERIOD);
+    }catch(_){ return null; }
+  }
+
+  /* Position size is DERIVED from a fixed dollar risk, not the other way
+     around: stop distance comes from that symbol's OWN volatility (ATR14 x
+     ATR_MULT), and qty is whatever makes losing that distance cost exactly
+     RISK_DOLLARS — so a violent spike candle (wide ATR) automatically gets
+     a smaller position instead of an unrealistically tight %-based stop
+     that would get shaken out by normal noise. MAX_POSITION_PCT is only a
+     safety ceiling for the rare case ATR comes back unusually tiny (which
+     would otherwise imply an oversized position). */
+  async function tryOpen(symbol,score,price,mlFavorable,mlBestModel){
     if(!(price>0) || !symbol) return;
     if(hasOpen(symbol)) return;
-    var size=wallet.balance*POSITION_PCT;
-    if(size<5) return; // wallet too depleted to open a meaningful position
-    var qty=size/price;
-    var tp=price*(1+PROFIT_TARGET_PCT/100);
-    var sl=price*(1-STOP_LOSS_PCT/100);
-    wallet.positions.push({ id:"bd_"+Date.now()+"_"+Math.random().toString(36).slice(2,7), symbol:symbol, entry:price, qty:qty, size:size, tp:tp, sl:sl, score:score, mlFavorable:(mlFavorable===true), mlBestModel:mlBestModel||null, openedAt:Date.now() });
+    var atr=await fetchAtr(symbol,curTf());
+    if(!(atr>0)) return; // can't safely size a position without a valid ATR reading
+    var stopDist=atr*ATR_MULT;
+    if(!(stopDist>0)) return;
+    var qty=RISK_DOLLARS/stopDist;
+    var size=qty*price;
+    var maxSize=wallet.balance*MAX_POSITION_PCT;
+    if(size>maxSize){ size=maxSize; qty=size/price; }
+    if(size<5 || size>wallet.balance) return; // too small to matter, or wallet can't cover even the capped size
+    var sl=price-stopDist;
+    var tp=price+stopDist*REWARD_MULT;
+    wallet.positions.push({ id:"bd_"+Date.now()+"_"+Math.random().toString(36).slice(2,7), symbol:symbol, entry:price, qty:qty, size:size, tp:tp, sl:sl, atr:atr, score:score, mlFavorable:(mlFavorable===true), mlBestModel:mlBestModel||null, openedAt:Date.now() });
     wallet.balance-=size;
     persist();
     render();
@@ -73205,15 +73268,21 @@ window.DVL_COPILOT_ML_STATUS_1024={
     try{
       var snap=await fetchJson(base+"/api/dvl/scanner/snapshot?exchange=binance&tf="+encodeURIComponent(curTf()));
       var rows=Array.isArray(snap&&snap.rows) ? snap.rows : [];
-      rows.forEach(function(r){
-        if(String(r.side||"").toUpperCase()==="SHORT") return; // defensive — the backend shouldn't ever send one
+      /* Sequential, not forEach+fire-and-forget: each candidate entry now
+         does its own ATR klines fetch (tryOpen), so awaiting one at a time
+         avoids bursting several Binance requests at once when multiple
+         signals clear the gate in the same poll. */
+      for(var i=0;i<rows.length;i++){
+        var r=rows[i];
+        if(String(r.side||"").toUpperCase()==="SHORT") continue; // defensive — the backend shouldn't ever send one
         var score=Number(r.spikeScore)||0;
-        if(score<SCORE_THRESHOLD) return;
-        if(r.mlFavorable===false) return; // the model actively disagrees — skip this one
+        if(score<SCORE_THRESHOLD) continue;
+        if(r.mlFavorable===false) continue; // the model actively disagrees — skip this one
         var symbol=String(r.rawSymbol||r.symbol||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
         var price=Number(r.price)||0;
-        tryOpen(symbol,score,price,r.mlFavorable,r.mlBestModel);
-      });
+        if(hasOpen(symbol)) continue;
+        await tryOpen(symbol,score,price,r.mlFavorable,r.mlBestModel);
+      }
     }catch(_){ /* stay silent — retried on the next poll */ }
   }
 
@@ -73277,7 +73346,7 @@ window.DVL_COPILOT_ML_STATUS_1024={
 
   function bodyHtml(){
     var out='<div class="dvlBd1030Body">';
-    out+='<div class="dvlBd1030Note">100% simulado — carteira virtual, não envia ordem nenhuma pra exchange nem usa dinheiro real. Abre quando um ativo bate score alto no Scanner (≥'+SCORE_THRESHOLD+') <b>e</b> o modelo aprendido não descarta o sinal (🤖 marca as entradas que o modelo também aprovou); fecha no alvo/stop ou depois de 4h — os mesmos critérios que já rotulam os dados do ML. Só LONG: SHORT foi removido do sistema inteiro (Scanner, ML e aqui), o backtest confirmou que vinha perdendo dinheiro. Começa com '+esc(fmtMoney(START_BALANCE))+'.</div>';
+    out+='<div class="dvlBd1030Note">100% simulado — carteira virtual, não envia ordem nenhuma pra exchange nem usa dinheiro real. Abre quando um ativo bate score alto no Scanner (≥'+SCORE_THRESHOLD+') <b>e</b> o modelo aprendido não descarta o sinal (🤖 marca as entradas que o modelo também aprovou). Stop por ATR da vela de entrada (não % fixo): risco sempre <b>'+esc(fmtMoney(RISK_DOLLARS))+'</b> por trade não importa o ativo, alvo sempre 2x essa distância — o tamanho da posição se ajusta pra trás pra manter esse risco fixo (posição menor numa vela de spike bem volátil, maior numa vela calma). Fecha no alvo/stop ou depois de 4h. Só LONG: SHORT foi removido do sistema inteiro (Scanner, ML e aqui), o backtest confirmou que vinha perdendo dinheiro. Começa com '+esc(fmtMoney(START_BALANCE))+'.</div>';
     out+=walletHtml();
     out+='</div>';
     return out;
