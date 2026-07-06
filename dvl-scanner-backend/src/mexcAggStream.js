@@ -3,63 +3,68 @@
 /* ── MEXC live trade-stream relay ──────────────────────────────────
    Fast Bots' Bot 4 (frontend) needs MEXC's live aggressive-trade feed to
    react within seconds, but a browser connecting straight to MEXC's own
-   WebSocket (wss://contract.mexc.com/ws) never stays connected in
-   production (same class of problem the REST endpoints in server.js
-   already work around) — every browser client gets its trades relayed
-   over OUR OWN WebSocket endpoint instead (server.js's "/ws/dvl/agg"),
-   so nothing in the browser ever talks to contract.mexc.com directly.
+   WebSocket never stays connected in production (same class of problem
+   the REST endpoints in server.js already work around) — every browser
+   client gets its trades relayed over OUR OWN WebSocket endpoint instead
+   (server.js's "/ws/dvl/agg"), so nothing in the browser ever talks to
+   contract.mexc.com directly.
 
    This module holds the ONE connection to MEXC that everything else
-   depends on. It went through several failed designs before this one,
-   all confirmed via this module's own logging in production (nothing
-   here could be verified live from the sandbox this was built in — see
-   the confidence note below):
-     1) A plain `ws` client hit "Unexpected server response: 301" — MEXC's
-        WS answers the handshake with an HTTP redirect. Fixed by
-        following it (followRedirects), which surfaced —
-     2) — a 403 from Akamai's edge/bot-protection sitting in front of the
-        real WS gateway (visible via the "akamai-grn"/"server-timing:
-        cdn-cache" response headers this module logged) — a raw Node.js
-        WebSocket client's TLS/HTTP fingerprint gets blocked before it
-        ever reaches MEXC's own server, no matter what headers are added
-        on top of it. Fixed by moving the connection into a headless
-        Chromium tab (Playwright), opening the WebSocket from INSIDE that
-        real browser's network stack instead of Node's — the only way to
-        actually look like a browser to Akamai. Which surfaced —
-     3) — the SAME 301 as step 1, but now unfixable the same way: browsers
+   depends on. It went through several wrong turns before landing here,
+   each one only diagnosable via this module's own logging in production
+   (nothing here could ever be tested against the real MEXC from the
+   sandbox this was built in):
+     1) A plain `ws` client hit "Unexpected server response: 301". Fixed
+        by following it (followRedirects), which surfaced —
+     2) — a 403 whose response headers ("akamai-grn", "server-timing:
+        cdn-cache") looked exactly like Akamai bot-protection blocking a
+        raw Node.js client's TLS/HTTP fingerprint. Fixed by moving the
+        connection into a headless Chromium tab (Playwright), opening the
+        WebSocket from INSIDE that real browser's network stack instead
+        of Node's. Which surfaced —
+     3) — the SAME 301 again, but now unfixable the same way: browsers
         deliberately do NOT follow redirects during a WebSocket handshake
-        (removed from Chromium ~2018 over security concerns; there is no
-        in-page JS API to opt back into it). So discoverRedirectUrl()
-        below uses the Node `ws` client's followRedirects ONE TIME at
-        startup purely to resolve the 301's real target — it doesn't
-        matter that Akamai will 403 it once it gets there, the 'redirect'
-        event fires (with the target URL) before that 403 ever happens —
-        then the browser tab connects DIRECTLY to that resolved URL,
-        skipping the redirect Chromium itself would refuse to follow.
-   So: Node resolves the URL, the browser holds the connection. The
-   browser tab bridges every message back to Node via
-   page.exposeFunction(). Re-launching a whole browser process is far more
-   expensive than a raw WS reconnect, so failures are handled in two
-   tiers: if just the WS drops but the page/browser are still alive, only
-   the in-page WebSocket is reconnected (reconnectWs); the browser itself
-   is only relaunched if the page/browser process itself dies.
+        (removed from Chromium ~2018; no in-page JS API opts back in).
+        discoverRedirectUrl() below still uses Node's `ws` client (which
+        CAN follow it) purely to resolve where the 301 actually points,
+        then hands that resolved URL to the browser tab instead. Which
+        finally revealed —
+     4) — the 301 was resolving to https://www.mexc.com/404: MEXC's own
+        "page not found", not an Akamai challenge at all. wss://contract.
+        mexc.com/ws (this module's original guess) simply doesn't exist.
+        The real endpoint, wss://contract.mexc.com/edge, was confirmed
+        against a working open-source SDK's actual source
+        (github.com/oboshto/mexc-futures-sdk) — same sub.deal/push.deal
+        protocol this module already had. So step 2's Akamai diagnosis
+        was likely a red herring from hitting a dead endpoint, not real
+        bot-protection — but the headless-browser design and redirect
+        resolution are harmless, low-cost insurance either way, so both
+        stayed rather than re-reverting back to a plain `ws` client.
+   Node resolves the URL once at startup; the browser holds the live
+   connection and bridges every message back via page.exposeFunction().
+   Re-launching a whole browser process is far more expensive than a raw
+   WS reconnect, so failures are handled in two tiers: if just the WS
+   drops but the page/browser are still alive, only the in-page WebSocket
+   is reconnected (reconnectWs); the browser itself is only relaunched if
+   the page/browser process itself dies.
 
    Subscribes to MEXC's own "sub.deal" channel for whatever
    worker.getCandidates("mexc") currently considers the top-by-volume
    universe (same list /api/dvl/scanner/tickers exposes) — capped at
-   MAX_SYMBOLS. Re-subscribes (only the newly-added symbols, additively)
+   MAX_SYMBOLS (MEXC's own documented limit: 30 subscriptions per
+   connection). Re-subscribes (only the newly-added symbols, additively)
    each time that candidate list is checked; a fresh WS connection always
    starts a clean subscription set.
 
-   NOTE on confidence: the REST shapes elsewhere in this backend
-   (exchanges.js) are proven in production. This WS message shape
-   (channel "push.deal", data.T 1=buy/2=sell) is implemented from
-   best-available documentation and verified here only against a mocked
-   MEXC-shaped server in tests, run over a real local browser tab — not
-   MEXC's actual push.deal payload, which nothing in this sandbox can
-   reach. Watch the logs after deploy: an open connection with zero
-   trades ever parsed, or "unrecognized message" log lines, would mean
-   this shape is off. */
+   NOTE on confidence: URL, subscribe method/params, and the push.deal
+   message shape ({channel:"push.deal", symbol, data:{p,v,T,...}}) are now
+   all corroborated against a real open-source SDK's source and a
+   published example payload — not just this module's own guess anymore.
+   The one still-unverified detail is T's exact value semantics (1=buy,
+   2=sell assumed, matching common exchange convention) — watch the logs
+   after deploy: an open connection with trades flowing but Bot 4 only
+   ever entering on what look like seller-driven bursts (or never
+   entering at all despite clear buy pressure) would mean that's flipped. */
 
 const { chromium } = require("playwright");
 const NodeWebSocket = require("ws");
@@ -69,7 +74,7 @@ const WS_RECONNECT_MS = 5000;     // just re-opens the WS inside the same page �
 const BROWSER_RELAUNCH_MS = 20000; // relaunches the whole Chromium process — expensive, back off more
 const RESUBSCRIBE_CHECK_MS = 10000;
 const REDIRECT_DISCOVERY_TIMEOUT_MS = 8000;
-const MAX_SYMBOLS = 100;
+const MAX_SYMBOLS = 30; // MEXC's own documented cap: max 30 subscriptions per WS connection
 /* about:blank, not a real mexc.com page: the Akamai fingerprint check this
    module works around is a property of the BROWSER PROCESS's own TLS/HTTP
    stack, not of what page happened to load first — but a real mexc.com
@@ -78,7 +83,14 @@ const MAX_SYMBOLS = 100;
    before the request even leaves the browser. Not worth the risk for a
    benefit (session cookies) this module doesn't need anyway. */
 const DEFAULT_NAV_URL = "about:blank";
-const DEFAULT_WS_URL = "wss://contract.mexc.com/ws";
+/* /ws (this module's original guess) turned out not to exist at all — its
+   301 resolves to https://www.mexc.com/404, MEXC's own site 404 page, not
+   an Akamai challenge (confirmed via this module's own production logs
+   once discoverRedirectUrl exposed the real target). /edge is the actual
+   endpoint, confirmed against a real working SDK's source
+   (github.com/oboshto/mexc-futures-sdk) — same sub.deal/push.deal
+   protocol this module already implements, just the wrong base URL. */
+const DEFAULT_WS_URL = "wss://contract.mexc.com/edge";
 
 let _browser = null;
 let _page = null;
