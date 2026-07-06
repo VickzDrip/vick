@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.079</title>
+<title>DVL Binance Live — Beta 1.080</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.079';
+window.DVL_APP_VERSION = 'Beta 1.080';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.079";
+const DVL_APP_VERSION = "Beta 1.080";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.080", note: "Corrige bug real: quando a Binance falha, o backend reaproveita dados da MEXC no snapshot \"binance\" (fallback) — Bots 1-3 abriam trade nesses sinais sem perceber, criando posições com símbolo formato MEXC que o mapa de preço da Binance nunca resolve, ficando travadas para sempre (5/5 slots ocupados, sempre +0.00%). Agora Bots 1-3 ignoram ciclos de fallback, e qualquer posição sem preço resolvível é fechada automaticamente (zerada) depois de 45min, sem precisar reiniciar o bot na mão." },
   { version: "Beta 1.079", note: "Bot 4: universo de símbolos, checagem de preço e ATR de fallback da MEXC deixam de ser buscados direto do navegador (travava, ficava \"aguardando candidatos\" pra sempre) e passam a vir do próprio backend (3 rotas novas: /tickers, /mexc-price, /mexc-atr), que já fala com a MEXC com sucesso hoje pro Scanner. Exige atualizar e reiniciar o dvl-scanner-backend no servidor, não só o deploy automático do site." },
   { version: "Beta 1.078", note: "Bot 4: corrige dois textos que ainda citavam Binance por engano (rodapé do card e nota de topo) e adiciona um radar de diagnóstico (\"Radar Bot 4\") mostrando, em tempo real, quantos símbolos MEXC estão realmente recebendo negociações e o buy/sell ratio + volume dos mais ativos — assim dá pra ver na hora se o bot está \"quase disparando\" ou se o WebSocket não está recebendo dado nenhum." },
   { version: "Beta 1.077", note: "Bot 4 (order flow) agora trabalha exclusivamente com a MEXC: universo de símbolos, stream de negociações ao vivo, ATR de fallback e checagem de preço das posições passam a vir todos da MEXC, não mais da Binance. Símbolos MEXC mantêm o formato nativo (ex: BTC_USDT) para nunca colidir com posições dos Bots 1-3 (Binance)." },
@@ -73361,7 +73362,7 @@ window.DVL_COPILOT_BACKTEST_1040={
   var SIGNAL_POLL_MS=60000;    // matches the backend's own refresh cadence
   var PRICE_POLL_MS=20000;     // exits need to be quicker than entries
   var MAX_HISTORY=40;
-  var REASON_LABEL={tp2:"alvo 2R", stop:"stop", be:"b.e.", timeout:"tempo"};
+  var REASON_LABEL={tp2:"alvo 2R", stop:"stop", be:"b.e.", timeout:"tempo", stale:"sem preço"};
 
   /* Bot 4's order-flow parameters — see the module doc-comment above. */
   var AGG_WINDOW_MS=20000;     // rolling window: 20s (middle of the 15-30s ask)
@@ -73551,7 +73552,16 @@ window.DVL_COPILOT_BACKTEST_1040={
         var short=bot.side==="SHORT";
         wallets[bot.id].positions.slice().forEach(function(pos){
           var price=map[pos.symbol];
-          if(!(price>0)) return;
+          if(!(price>0)){
+            /* Safety net: a position whose price can NEVER be resolved
+               (wrong-exchange symbol leaking in, a delisting, etc.) must
+               still not sit open forever — MAX_HOLD_MS's whole point is
+               "never sits in a trade for hours". Force-close flat (0%) at
+               its own entry price once well past the hold limit, instead
+               of silently deadlocking one of this bot's MAX_OPEN slots. */
+            if((now-pos.openedAt)>=MAX_HOLD_MS) closeRest(bot,pos,pos.entry,"stale");
+            return;
+          }
           var hitTp2=short ? price<=pos.tp2 : price>=pos.tp2;
           var hitTp1=short ? price<=pos.tp1 : price>=pos.tp1;
           var hitSl=short ? price>=pos.sl : price<=pos.sl;
@@ -73738,17 +73748,28 @@ window.DVL_COPILOT_BACKTEST_1040={
         var snap=await fetchJson("/api/dvl/scanner/snapshot?exchange=binance&tf="+encodeURIComponent(tf));
         rows=Array.isArray(snap&&snap.rows)?snap.rows:[];
       }catch(_){ anyErr=true; counts[tf]=null; continue; }
+      /* The backend's own "binance" snapshot silently falls back to MEXC
+         rows (activeSource:"mexc", fallback:true) when Binance's own scan
+         fails — real, but Bots 1-3 are Binance-only end to end (their ATR
+         fallback and checkPositions' price map are both Binance-specific).
+         Trading a fallback row here would open a position with a MEXC-
+         shaped symbol ("XAU_USDT") that Binance's price map can never
+         resolve — a position that then NEVER closes (checkPositions can't
+         price it, so even the 45min timeout never fires). Skip opening
+         anything on a fallback cycle; still count the rows for status. */
+      var binanceLive=!(snap && snap.fallback);
       var freshCount=0;
       for(var i=0;i<rows.length;i++){
         var r=rows[i];
         if(r.spikeAt && (now-r.spikeAt)>FRESH_MS) continue; // stale detection — not a "fast" opportunity anymore
         freshCount++;
+        if(!binanceLive) continue;
         for(var b=0;b<BOTS.length;b++){
           if(BOTS[b].wsOnly) continue;
           if(BOTS[b].match(r)) await tryOpen(BOTS[b],r,tf);
         }
       }
-      counts[tf]={ rows:rows.length, fresh:freshCount };
+      counts[tf]={ rows:rows.length, fresh:freshCount, fallback:!binanceLive };
     }
     /* Opportunistic reuse for Bot 4's ATR fallback: a SEPARATE MEXC-tagged
        snapshot fetch (Bot 4 only ever trades tf="1m", see checkAggression)
@@ -73830,13 +73851,16 @@ window.DVL_COPILOT_BACKTEST_1040={
       var s=Math.round((Date.now()-_lastScanAt)/1000);
       agoTxt=s<60 ? (s+"s atrás") : (Math.round(s/60)+"min atrás");
     }
+    var anyFallback=false;
     var parts=TFS.map(function(tf){
       var c=_lastScanCounts[tf];
-      return tf+" "+(c ? (c.fresh+"/"+c.rows) : "falha");
+      if(c && c.fallback) anyFallback=true;
+      return tf+" "+(c ? (c.fresh+"/"+c.rows+(c.fallback?"⚠":"")) : "falha");
     }).join(" · ");
     var wsTxt=_aggSymbols.length ? (_aggWsOk?"conectado":"reconectando") + " · "+_aggSymbols.length+" símbolo"+(_aggSymbols.length===1?"":"s") : "aguardando candidatos";
-    var out='<div class="dvlFb1060Status'+(_lastScanErr?' err':'')+'">Última varredura: '+esc(agoTxt)+' — '+esc(parts)+'</div>'
-      +'<div class="dvlFb1060Status'+(_aggSymbols.length&&!_aggWsOk?' err':'')+'">Order flow (Bot 4, MEXC): '+esc(wsTxt)+'</div>';
+    var out='<div class="dvlFb1060Status'+(_lastScanErr?' err':'')+'">Última varredura: '+esc(agoTxt)+' — '+esc(parts)+'</div>';
+    if(anyFallback) out+='<div class="dvlFb1060Status err">⚠ Binance indisponível agora — dados vieram da MEXC (Bots 1-3 NÃO abrem trade nesse ciclo, só a partir da própria Binance)</div>';
+    out+='<div class="dvlFb1060Status'+(_aggSymbols.length&&!_aggWsOk?' err':'')+'">Order flow (Bot 4, MEXC): '+esc(wsTxt)+'</div>';
     var radar=_aggSymbols.length ? aggRadarSnapshot(3) : null;
     if(radar && (_aggWsOk || radar.withData>0)){
       var noDataYet=radar.withData===0;
