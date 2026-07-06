@@ -217,14 +217,31 @@ instead of one each. The in-page poll interval was also relaxed to 90s
 header re-renders. `recordManualTrade` is NOT cached (a real trade should
 always read fresh data at the moment it's opened).
 
-**Resolution is event-driven (a "triple barrier"), not a fixed clock wait.**
-Every cycle, each pending signal's current price is checked against its
-entry price (side-adjusted: up is favorable for LONG, down for SHORT), and
-it resolves the moment either:
-- price moves `PROFIT_TARGET_PCT` (2%) in its favor → label **1** ("target")
-- price moves `STOP_LOSS_PCT` (1%) against it → label **0** ("stop")
+**Resolution is event-driven (a "triple barrier"), not a fixed clock wait,
+and the barrier itself is ATR-based, not a fixed %.** Every cycle, each
+pending signal's current price is checked against its entry price
+(side-adjusted: up is favorable for LONG, down for SHORT), and it resolves
+the moment either:
+- price reaches the target (entry + stop distance × `REWARD_MULT`, 2) →
+  label **1** ("target")
+- price reaches the stop (entry − stop distance) → label **0** ("stop")
 - `MAX_HORIZON_MS` (4h) elapses without hitting either → label from
   whichever side of zero the return sits on ("timeout")
+
+Stop distance is `ATR14 × ATR_MULT` (1.5) off the entry candle's OWN
+volatility (`worker.js`'s `computeAtr`, off `k.ohlc` — already fetched
+every cycle for every candidate, so this costs no extra network call) —
+not a flat percentage. An entry on a violent spike candle gets a wider
+barrier (so ordinary post-spike noise doesn't mislabel a real winner as a
+"stop"); a calm candle gets a tighter one. Same formula/parameters as the
+app's Bot Demo (`index.html`), so the two stay comparable even though
+they're independent systems. **This replaced an earlier fixed-% version
+(2%/1%, still available as `PROFIT_TARGET_PCT`/`STOP_LOSS_PCT` — used only
+as a fallback for any already-pending entry from before this change, never
+for anything newly recorded).** Old log entries were labeled under the old
+%-rule and are **not comparable** to new ATR-labeled ones — run `npm run
+reset-training-data` (see below) after switching, so the model doesn't
+train on a blend of two different definitions of "favorable".
 
 A spike that pumps and reverses in 20 minutes gets labeled correctly in 20
 minutes, not a day later — most examples resolve in minutes-to-hours. The
@@ -232,9 +249,11 @@ older fixed `r15m`/`r1h`/`r4h` snapshots are still recorded alongside the
 label purely for informational/diagnostic purposes; they don't determine
 it. Once resolved, the labeled example is appended to an append-only
 `data/outcomes-log.jsonl` (one JSON object per line, with `label`,
-`outcome`, `resolvedAfterMs` and `finalReturnPct` fields). Pending entries
-persist to `data/outcomes-pending.json` across restarts (dropped as stale,
-without logging, if a symbol never gets a fresh price again for 24h), and
+`outcome`, `resolvedAfterMs`, `finalReturnPct`, and now `atr14`/`stopDist`
+— the ATR reading and derived stop distance captured once at signal time,
+never recomputed retroactively). Pending entries persist to
+`data/outcomes-pending.json` across restarts (dropped as stale, without
+logging, if a symbol never gets a fresh price again for 24h), and
 `GET /api/dvl/scanner/health` reports `{ outcomes: { pending, resolved } }`.
 
 ## Learned weights — hybrid model (ML — trains automatically, not wired to the live score yet)
@@ -380,8 +399,10 @@ of the two `bestModel` currently names).
 something upstream of the logged features changes in a way that makes old
 and new samples not comparable anymore — e.g. switching the LSR/OI data
 source, so `lsrRatio`/`oiRatio` would mean two different things depending
-on when a sample was recorded — mixing old and new samples in the same
-training set silently contaminates it. This archives (never deletes)
+on when a sample was recorded, or switching the triple-barrier itself from
+fixed-% to ATR-based (see "Outcome logging" above) — mixing old and new
+samples in the same training set silently contaminates it. This archives
+(never deletes)
 `outcomes-log.jsonl`, `outcomes-pending.json` and `learned-weights.json`
 into a timestamped `data/archive-<date>/` folder and leaves the live paths
 empty, so pending/resolved/trained counts all start over from zero. **Stop

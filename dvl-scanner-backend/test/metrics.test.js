@@ -187,5 +187,28 @@ eq(divMissing.warning, false, "no warning when the underlying data is simply abs
 const divCustomThreshold = M.netFlowDivergence({ netLongSlope: -0.05, netShortSlope: 0.05, netDeltaSlope: -0.05 }, 0.10);
 eq(divCustomThreshold.count, 0, "a custom (higher) warnThreshold requires a stronger move before counting a leg");
 
+/* computeAtr — True Range averaged over `period` candles. Constant
+   high/low spread with a flat close gives a known, easy-to-check ATR:
+   TR = max(h-l, |h-pc|, |l-pc|) = h-l when close never moves. */
+function flatSpreadCandles(n, spread) {
+  const out = [];
+  for (let i = 0; i < n; i++) out.push({ high: 100 + spread / 2, low: 100 - spread / 2, close: 100 });
+  return out;
+}
+eq(M.computeAtr(flatSpreadCandles(15, 4), 14), 4, "ATR14 equals the constant true range (h-l=4) when close never moves");
+eq(M.computeAtr(flatSpreadCandles(20, 2.5), 14), 2.5, "works with more candles than the period — uses only the most recent `period` TRs");
+eq(M.computeAtr(flatSpreadCandles(14, 4), 14), null, "exactly `period` candles isn't enough (needs period+1, for period TR values)");
+eq(M.computeAtr(flatSpreadCandles(10, 4), 14), null, "too few candles returns null, not a partial/misleading average");
+eq(M.computeAtr([], 14), null, "empty input returns null, not NaN/crash");
+eq(M.computeAtr(null, 14), null, "null input is handled gracefully");
+
+/* A price gap (close far from the next candle's high/low) makes TRUE range
+   bigger than the candle's own h-l — computeAtr must pick that up, not
+   just look at h-l in isolation. */
+const gapCandles = flatSpreadCandles(15, 2);
+gapCandles[10] = { high: 110, low: 108, close: 109 }; // a gap-up candle, TR = |110-100| = 10 vs the previous close of 100
+const gapAtr = M.computeAtr(gapCandles, 14);
+ok(gapAtr > 2, "a gap candle's true range (measured against the prior close) pulls ATR above the flat h-l baseline (got " + gapAtr + ")");
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

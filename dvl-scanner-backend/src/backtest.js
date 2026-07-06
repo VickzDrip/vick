@@ -81,7 +81,7 @@ function backtestSide(side) {
     samples: examples.length,
     trainSamples: trainSet.length,
     testSamples: testSet.length,
-    labelMethod: "triple-barrier",
+    labelMethod: "triple-barrier-atr",
     allSignals: statsFor(testSet),
     logisticModel: statsFor(logisticFavorable),
     treeModel: statsFor(treeFavorable)

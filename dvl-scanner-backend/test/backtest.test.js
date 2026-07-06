@@ -70,7 +70,7 @@ eq(result.ready, true, "trains once enough samples exist");
 eq(result.side, "LONG", "tagged with its own side");
 eq(result.samples, N, "records the total sample count");
 eq(result.trainSamples + result.testSamples, result.samples, "train+test sizes add up to the full dataset");
-eq(result.labelMethod, "triple-barrier", "carries the same labelMethod tag trainSide() uses");
+eq(result.labelMethod, "triple-barrier-atr", "carries the same labelMethod tag trainSide() uses");
 
 /* Every bucket carries the statsFor() shape. */
 for (const bucket of ["allSignals", "logisticModel", "treeModel"]) {

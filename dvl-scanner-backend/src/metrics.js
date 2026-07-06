@@ -17,6 +17,29 @@ function sma(values, period, idx) {
 
 function pct(a, b) { if (!b) return 0; return ((a - b) / b) * 100; }
 
+/* Average True Range — a simple moving average of True Range over the
+   last `period` candles (not Wilder's smoothed variant), the same formula
+   the Bot Demo already computes client-side (index.html), so the two stay
+   comparable. `candles` must be oldest->newest {high, low, close} objects
+   (worker.js's own k.ohlc shape, already fetched every cycle for every
+   candidate — no extra network call needed to compute this). Returns null
+   (not 0) when there isn't enough history, so callers can fall back
+   explicitly instead of silently treating "unknown" as "zero volatility". */
+function computeAtr(candles, period) {
+  if (!Array.isArray(candles) || candles.length < period + 1) return null;
+  const trs = [];
+  for (let i = 1; i < candles.length; i++) {
+    const h = Number(candles[i].high), l = Number(candles[i].low), pc = Number(candles[i - 1].close);
+    if (!(h > 0) || !(l > 0) || !(pc > 0)) continue;
+    trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+  }
+  if (trs.length < period) return null;
+  const last = trs.slice(-period);
+  let sum = 0;
+  for (const v of last) sum += v;
+  return sum / last.length;
+}
+
 function priceMaGlueStats(closes, period, lookback, tolPct) {
   const len = closes.length;
   period = Math.min(500, Math.max(2, parseInt(period) || 20));
@@ -384,6 +407,6 @@ function netFlowDivergence(row, warnThreshold) {
 }
 
 module.exports = {
-  sma, pct, priceMaGlueStats, computeSignal,
+  sma, pct, priceMaGlueStats, computeSignal, computeAtr,
   score, blocksOf, ignitionScore, statusOf, ignitionStatus, oiTrend, lsrTrend, factorsOf, trendVsMA, netFlowTrend, netFlowDivergence
 };

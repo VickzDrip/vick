@@ -7,15 +7,31 @@
 
    Resolution is event-driven (a "triple barrier"), not a fixed clock wait:
    every cycle we check the symbol's current price against the entry price
-   and resolve — right then, whenever it happens — the moment either:
-     - price moves PROFIT_TARGET_PCT in the signal's favor  -> label 1 ("target")
-     - price moves STOP_LOSS_PCT against it                  -> label 0 ("stop")
-     - MAX_HORIZON_MS elapses without hitting either          -> label from
-       whichever side of zero the return is at that point ("timeout")
+   and resolve — right then, whenever it happens — the moment either
+   barrier is hit or MAX_HORIZON_MS elapses without hitting either (label
+   from whichever side of zero the return is at that point, "timeout").
    This means most examples resolve in minutes-to-hours instead of waiting
    a fixed 24h regardless of what the price already did — a spike that
    pumps and reverses within 20 minutes doesn't have to sit around for a
    day to be labeled correctly.
+
+   The barrier itself is ATR-based, not a fixed %: stop distance =
+   ATR14 (worker.js's own computeAtr, off the entry candle) x ATR_MULT,
+   target = stop distance x REWARD_MULT — an entry on a violent spike
+   candle gets a wider barrier (so normal post-spike noise doesn't
+   mislabel it "stop" when it was never really a loser), a calm candle
+   gets a tighter one. Same formula/parameters as the Bot Demo's own
+   client-side ATR sizing (index.html), so the two stay comparable, even
+   though they're otherwise independent systems (this module never reads
+   the Bot Demo's wallet, and vice versa). Replaces an earlier fixed-%
+   version (2%/1%) — old log entries were labeled under that rule and are
+   NOT comparable to new ones; see README/reset-training-data.js for how
+   to start a fresh training set when the label definition changes like
+   this. PROFIT_TARGET_PCT/STOP_LOSS_PCT stay as a fallback for any
+   already-pending entry from before this change (no atr14 captured at
+   signal time) — new entries always compute a real ATR-based barrier
+   since worker.js's computeAtr almost always succeeds (needs only 15
+   candles; every candidate already fetches 80).
 
    Once resolved, the labeled example is appended to an append-only JSONL
    log — a training set for a future model to learn block weights from
@@ -28,8 +44,14 @@ const path = require("path");
 const PENDING_FILE = process.env.DVL_OUTCOMES_PENDING_FILE || path.join(process.cwd(), "data", "outcomes-pending.json");
 const LOG_FILE = process.env.DVL_OUTCOMES_LOG_FILE || path.join(process.cwd(), "data", "outcomes-log.jsonl");
 
-/* Triple-barrier thresholds — side-adjusted (favorable = price moving in
-   the signal's own direction: up for LONG, down for SHORT). */
+/* ATR-based triple-barrier parameters — same values as the Bot Demo's own
+   client-side sizing (index.html), for direct comparability. */
+const ATR_PERIOD = 14;
+const ATR_MULT = 1.5;    // stop distance = ATR14 x this
+const REWARD_MULT = 2;   // target distance = stop distance x this (a strict 2:1)
+/* Fallback-only, %-based thresholds — used exclusively when a pending
+   entry has no atr14 captured (e.g. still pending from before this
+   change). Never used for anything newly recorded. */
 const PROFIT_TARGET_PCT = 2;   // hit this in favor -> resolves "it worked"
 const STOP_LOSS_PCT = 1;       // hit this against  -> resolves "it failed"
 /* Safety time limit: resolves on whichever side of zero the return sits,
@@ -90,11 +112,19 @@ function recordSignal(exchange, tf, row, now, source) {
     for (const k of keys) { if (pending[k].at < oldestAt) { oldestKey = k; oldestAt = pending[k].at; } }
     delete pending[oldestKey];
   }
+  const atr14 = Number(row.atr14) || 0;
   pending[key] = {
     exchange, tf, symbol: row.rawSymbol, side: row.side,
     at: now, entryPrice: Number(row.price) || 0,
     source: source === "manual" ? "manual" : "auto",
     score: row.spikeScore, blocks: row.blocks || null,
+    /* ATR14 at signal time and the stop DISTANCE derived from it (already
+       multiplied by ATR_MULT) — captured once, here, so a later change to
+       ATR_MULT never retroactively reinterprets an already-pending entry.
+       0 (not resolved to a fallback yet) when the row didn't carry a valid
+       atr14 (e.g. a brand-new listing without enough candle history) —
+       checkOutcomes() falls back to the %-based barrier in that case. */
+    atr14, stopDist: atr14 > 0 ? round3(atr14 * ATR_MULT) : 0,
     /* Worst adverse excursion seen while pending, side-adjusted and never
        negative (0 if price never moved against the signal at all) — how
        deep the drawdown got before resolution, whichever way it resolved. */
@@ -175,15 +205,28 @@ function checkOutcomes(exchange, priceBySymbol, now) {
 
     if (Number.isFinite(price) && price > 0) {
       const rawRetPct = e.entryPrice > 0 ? ((price - e.entryPrice) / e.entryPrice) * 100 : 0;
-      const favorableRetPct = String(e.side).toUpperCase() === "SHORT" ? -rawRetPct : rawRetPct;
+      const isShort = String(e.side).toUpperCase() === "SHORT";
+      const favorableRetPct = isShort ? -rawRetPct : rawRetPct;
       e.maxDrawdownPct = round3(Math.max(e.maxDrawdownPct || 0, -favorableRetPct));
 
       for (const h in INFO_HORIZONS_MS) {
         if (e.returns[h] === undefined && elapsed >= INFO_HORIZONS_MS[h]) e.returns[h] = round3(rawRetPct);
       }
 
-      if (favorableRetPct >= PROFIT_TARGET_PCT) { resolve(key, 1, "target", favorableRetPct, now); continue; }
-      if (favorableRetPct <= -STOP_LOSS_PCT) { resolve(key, 0, "stop", favorableRetPct, now); continue; }
+      if (e.stopDist > 0) {
+        /* ATR-based barrier: absolute price levels fixed at signal time
+           (e.stopDist already has ATR_MULT baked in), not a %-of-entry
+           threshold — see the module doc-comment for why. */
+        const targetPrice = isShort ? e.entryPrice - e.stopDist * REWARD_MULT : e.entryPrice + e.stopDist * REWARD_MULT;
+        const stopPrice = isShort ? e.entryPrice + e.stopDist : e.entryPrice - e.stopDist;
+        if (isShort ? price <= targetPrice : price >= targetPrice) { resolve(key, 1, "target", favorableRetPct, now); continue; }
+        if (isShort ? price >= stopPrice : price <= stopPrice) { resolve(key, 0, "stop", favorableRetPct, now); continue; }
+      } else {
+        /* Fallback — only ever hit by an entry pending from before ATR
+           capture existed (no atr14 at signal time). */
+        if (favorableRetPct >= PROFIT_TARGET_PCT) { resolve(key, 1, "target", favorableRetPct, now); continue; }
+        if (favorableRetPct <= -STOP_LOSS_PCT) { resolve(key, 0, "stop", favorableRetPct, now); continue; }
+      }
       if (elapsed >= MAX_HORIZON_MS) { resolve(key, favorableRetPct > 0 ? 1 : 0, "timeout", favorableRetPct, now); continue; }
     } else if (elapsed >= STALE_MS) {
       delete pending[key]; // never saw a fresh price again — drop without logging
@@ -243,5 +286,5 @@ function historyForSymbol(symbol) {
 
 module.exports = {
   recordSignal, checkOutcomes, loadPending, savePending, loadStats, historyForSymbol,
-  PROFIT_TARGET_PCT, STOP_LOSS_PCT, MAX_HORIZON_MS, INFO_HORIZONS_MS
+  ATR_PERIOD, ATR_MULT, REWARD_MULT, PROFIT_TARGET_PCT, STOP_LOSS_PCT, MAX_HORIZON_MS, INFO_HORIZONS_MS
 };

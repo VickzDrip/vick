@@ -109,6 +109,14 @@ function buildRow(exKey, adapter, t, k, now, tf) {
      then persists and refreshes here every cycle until it's pushed out by the
      row limit or ages out. */
   const candles = (k.ohlc || []).slice(-cfg.CANDLES_PER_ROW);
+  /* ATR14 off the FULL fetched series (k.ohlc, up to KLIM=80 candles) — not
+     the trimmed `candles` above (only CANDLES_PER_ROW=5, kept for the mini-
+     chart display). Free: no extra network call, k.ohlc is already fetched
+     every cycle for every candidate. Used by outcomes.js's triple-barrier
+     resolution (ATR-based stop/target, replacing the old fixed-% one) and
+     mirrors the Bot Demo's own client-side ATR (index.html) so the two stay
+     comparable. null when there isn't enough history yet. */
+  const atr14 = M.computeAtr(k.ohlc || [], 14);
 
   return {
     symbol: adapter.base(sym) + "USDT",
@@ -155,6 +163,7 @@ function buildRow(exKey, adapter, t, k, now, tf) {
 
     candles: candles,                 // real OHLC only; empty if missing
     last5Closes: sig.last5Closes,
+    atr14: atr14,
 
     factors: M.factorsOf(sig, 50)
   };
@@ -375,7 +384,8 @@ async function computeFreshRow(symbol, tf, side, entryPrice) {
     lsr: lsrT.arrow, lsrColor: lsrT.color, lsrRatio: lsrT.ratio || 0, lsrSlope: lsrT.slope || 0,
     netLongRatio: netT.netLong.ratio || 0, netLongSlope: netT.netLong.slope || 0,
     netShortRatio: netT.netShort.ratio || 0, netShortSlope: netT.netShort.slope || 0,
-    netDeltaRatio: netT.netDelta.ratio || 0, netDeltaSlope: netT.netDelta.slope || 0
+    netDeltaRatio: netT.netDelta.ratio || 0, netDeltaSlope: netT.netDelta.slope || 0,
+    atr14: M.computeAtr(k.ohlc || [], 14)
   };
   row.spikeScore = M.score(row, cfg.WEIGHTS, cfg.ENGINE);
   row.status = M.statusOf(row, row.spikeScore);

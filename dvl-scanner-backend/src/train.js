@@ -384,10 +384,15 @@ function trainSide(side, prev) {
     trainSamples: trainSet.length,
     testSamples: testSet.length,
     /* Labels come from outcomes.js's triple-barrier resolution, not a
-       fixed horizon — surfaced here so the model stays self-describing. */
-    labelMethod: "triple-barrier",
-    profitTargetPct: outcomes.PROFIT_TARGET_PCT,
-    stopLossPct: outcomes.STOP_LOSS_PCT,
+       fixed horizon — surfaced here so the model stays self-describing.
+       ATR-based (stop = ATR14 x atrMult off the entry candle, target =
+       stop x rewardMult), not a fixed %, since outcomes.js's own switch
+       away from PROFIT_TARGET_PCT/STOP_LOSS_PCT — old samples logged
+       under the %-based rule are not comparable to these. */
+    labelMethod: "triple-barrier-atr",
+    atrPeriod: outcomes.ATR_PERIOD,
+    atrMult: outcomes.ATR_MULT,
+    rewardMult: outcomes.REWARD_MULT,
     maxHorizonMs: outcomes.MAX_HORIZON_MS,
     /* `accuracy` kept as the headline field for backward compatibility —
        it's the HONEST held-out (test) accuracy, never in-sample. Always

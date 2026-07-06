@@ -196,5 +196,38 @@ const loggedNoDiv = readLog().find(e => e.symbol === "NODIVERGE_USDT");
 eq(loggedNoDiv.divergenceWarning, false, "missing divergenceWarning defaults to false, not undefined");
 eq(loggedNoDiv.divergenceCount, 0, "missing divergenceCount defaults to 0, not undefined/NaN");
 
+/* ATR-based triple barrier (replaces the old fixed-%): entry at 100 with
+   atr14=2 -> stopDist = 2 x ATR_MULT(1.5) = 3 -> stop at 97, target at
+   100 + 3 x REWARD_MULT(2) = 106. Also appended at the end. */
+outcomes.recordSignal("binance", "15m", Object.assign({}, rowLong, { rawSymbol: "ATRTGT_USDT", atr14: 2 }), T0 + 5 * HOUR);
+outcomes.checkOutcomes("binance", { ATRTGT_USDT: 98 }, T0 + 5 * HOUR + 5 * MIN);
+ok(!readLog().some(e => e.symbol === "ATRTGT_USDT"), "at $98 (2% down) the OLD %-rule would already have stopped it out, but the ATR stop (97) hasn't been hit yet — still pending");
+outcomes.checkOutcomes("binance", { ATRTGT_USDT: 106 }, T0 + 5 * HOUR + 10 * MIN);
+const loggedAtrTarget = readLog().find(e => e.symbol === "ATRTGT_USDT");
+ok(!!loggedAtrTarget, "resolves once price actually reaches the ATR-based target");
+eq(loggedAtrTarget.label, 1, "hitting the ATR target labels favorable (1)");
+eq(loggedAtrTarget.outcome, "target", "resolved via the ATR target, not the old % one");
+eq(loggedAtrTarget.atr14, 2, "the atr14 captured at signal time is preserved on the logged entry");
+eq(loggedAtrTarget.stopDist, 3, "stopDist = atr14 x ATR_MULT is precomputed once at signal time (2 x 1.5 = 3)");
+
+outcomes.recordSignal("binance", "15m", Object.assign({}, rowLong, { rawSymbol: "ATRSTOP_USDT", atr14: 2 }), T0 + 6 * HOUR);
+outcomes.checkOutcomes("binance", { ATRSTOP_USDT: 97 }, T0 + 6 * HOUR + 5 * MIN);
+const loggedAtrStop = readLog().find(e => e.symbol === "ATRSTOP_USDT");
+ok(!!loggedAtrStop, "resolves once price reaches the ATR-based stop");
+eq(loggedAtrStop.label, 0, "hitting the ATR stop labels unfavorable (0)");
+eq(loggedAtrStop.outcome, "stop", "resolved via the ATR stop, not the old % one");
+
+/* No atr14 at signal time (e.g. a brand-new listing without enough candle
+   history) -> falls back to the original %-based barrier exactly as
+   before this change. */
+outcomes.recordSignal("binance", "15m", Object.assign({}, rowLong, { rawSymbol: "NOATR_USDT", atr14: undefined }), T0 + 7 * HOUR);
+outcomes.checkOutcomes("binance", { NOATR_USDT: 101.5 }, T0 + 7 * HOUR + 5 * MIN); // +1.5%, below the fallback 2% target
+ok(!readLog().some(e => e.symbol === "NOATR_USDT"), "still pending at +1.5% (below the fallback 2% target)");
+outcomes.checkOutcomes("binance", { NOATR_USDT: 102 }, T0 + 7 * HOUR + 10 * MIN); // +2% clears PROFIT_TARGET_PCT
+const loggedNoAtr = readLog().find(e => e.symbol === "NOATR_USDT");
+ok(!!loggedNoAtr, "resolves via the fallback %-based barrier when no atr14 was ever captured");
+eq(loggedNoAtr.label, 1, "the fallback rule labels a +2% move favorable, same as before ATR existed");
+eq(loggedNoAtr.stopDist, 0, "stopDist is 0 (not set) for an entry with no valid atr14");
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);
