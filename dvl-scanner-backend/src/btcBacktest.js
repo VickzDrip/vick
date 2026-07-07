@@ -57,53 +57,55 @@ const BOTS = [
 
 async function getJSON(url) {
   const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(url.split("?")[0] + " -> HTTP " + res.status);
+  if (!res.ok) throw new Error("HTTP " + res.status);
   return res.json();
 }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* Live progress, surfaced to the frontend so the loading bar is real (which
+   phase, what %) and a stuck/failed run is visible instead of an eternal
+   "calculando…". */
+let _progress = { phase: "aguardando", pct: 0, lastError: null, attempts: 0, startedAt: 0 };
+function setProgress(phase, pct) { _progress.phase = phase; _progress.pct = Math.round(pct); }
 
 /* ── Data fetch (paginated back DAYS) ─────────────────────────────── */
 
 async function fetchKlines(tf, startMs, endMs) {
   const out = [];
-  let from = startMs;
+  let from = startMs, guard = 0;
   const step = TF_MS[tf];
-  while (from < endMs) {
+  while (from < endMs && guard++ < 400) {
     const url = "https://fapi.binance.com/fapi/v1/klines?symbol=" + SYMBOL +
-      "&interval=" + tf + "&startTime=" + from + "&limit=1500";
-    const d = await getJSON(url);
-    if (!Array.isArray(d) || !d.length) break;
+      "&interval=" + tf + "&startTime=" + from + "&endTime=" + endMs + "&limit=1500";
+    let d;
+    try { d = await getJSON(url); } catch (e) { _progress.lastError = "klines " + tf + ": " + e.message; from += 1500 * step; continue; }
+    if (!Array.isArray(d) || !d.length) { from += 1500 * step; continue; }
     for (const k of d) out.push({ t: Number(k[0]), o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] });
     const last = Number(d[d.length - 1][0]);
-    if (last <= from) break;
-    from = last + step;
-    if (d.length < 1500) break;
-    await sleep(120);
+    from = (last > from ? last : from) + step;
+    await sleep(100);
   }
   return out.filter(k => k.t >= startMs && k.t <= endMs);
 }
 
 /* Binance futures-data series (openInterestHist / topLongShortAccountRatio)
-   at 5m granularity, paginated back DAYS. Returns [{t, v}] sorted asc. */
+   at 5m granularity. Walks fixed windows forward (advancing on empty/error
+   instead of stopping — the oldest window can be past Binance's ~30-day
+   retention and come back empty, which must NOT abort the whole series).
+   Returns de-duplicated [{t, v}] sorted asc. */
 async function fetchSeries(path, valueKey, startMs, endMs) {
-  const out = [];
-  let from = startMs;
-  const step = 5 * 60000;
-  while (from < endMs) {
+  const map = new Map();
+  const step = 5 * 60000, pageMs = 500 * step;
+  for (let from = startMs; from < endMs; from += pageMs) {
+    const to = Math.min(from + pageMs, endMs);
     const url = "https://fapi.binance.com/futures/data/" + path + "?symbol=" + SYMBOL +
-      "&period=5m&startTime=" + from + "&endTime=" + Math.min(from + 500 * step, endMs) + "&limit=500";
+      "&period=5m&startTime=" + from + "&endTime=" + to + "&limit=500";
     let d;
-    try { d = await getJSON(url); } catch (e) { break; }
-    if (!Array.isArray(d) || !d.length) break;
-    for (const x of d) { const t = Number(x.timestamp), v = Number(x[valueKey]); if (Number.isFinite(t) && Number.isFinite(v)) out.push({ t, v }); }
-    const last = Number(d[d.length - 1].timestamp);
-    if (last <= from) break;
-    from = last + step;
-    if (d.length < 500) break;
-    await sleep(120);
+    try { d = await getJSON(url); } catch (e) { _progress.lastError = path + ": " + e.message; continue; }
+    if (Array.isArray(d)) for (const x of d) { const t = Number(x.timestamp), v = Number(x[valueKey]); if (Number.isFinite(t) && Number.isFinite(v)) map.set(t, v); }
+    await sleep(100);
   }
-  out.sort((a, b) => a.t - b.t);
-  return out;
+  return Array.from(map.entries()).map(([t, v]) => ({ t, v })).sort((a, b) => a.t - b.t);
 }
 
 /* ── Build per-candle rows with blocks ────────────────────────────── */
@@ -227,18 +229,24 @@ let _cache = null;          // { updatedAt, days, exit, results: {tf: {botId: st
 let _running = false;
 
 async function run() {
+  _progress = { phase: "buscando OI", pct: 3, lastError: null, attempts: _progress.attempts + 1, startedAt: Date.now() };
   const endMs = Date.now();
   const startMs = endMs - DAYS * 86400000;
   const oiSeries = await fetchSeries("openInterestHist", "sumOpenInterest", startMs, endMs);
+  setProgress("buscando LSR", 18);
   const lsrSeries = await fetchSeries("topLongShortAccountRatio", "longShortRatio", startMs, endMs);
+  setProgress("buscando candles", 32);
   const results = {}, coverage = {};
-  for (const tf of TFS) {
+  for (let ti = 0; ti < TFS.length; ti++) {
+    const tf = TFS[ti];
+    setProgress("candles + simulação " + tf, 32 + (ti + 0.3) * 20);
     const kl = await fetchKlines(tf, startMs, endMs);
     const rows = buildRows(kl, oiSeries, lsrSeries, tf);
     const usable = rows.filter(Boolean).length;
     coverage[tf] = { candles: kl.length, usable: usable };
     results[tf] = {};
     for (const bot of BOTS) results[tf][bot.id] = simulate(rows, bot.match, EXIT, tf);
+    setProgress("candles + simulação " + tf, 32 + (ti + 1) * 20);
   }
   _cache = {
     updatedAt: Date.now(), days: DAYS, symbol: SYMBOL,
@@ -247,21 +255,36 @@ async function run() {
     coverage: coverage, oiPoints: oiSeries.length, lsrPoints: lsrSeries.length,
     results: results
   };
+  /* If the data came back empty (OI/LSR past retention, or Binance
+     blocked the calls), keep the error visible so the frontend can say
+     so instead of showing a table of zeros as if it were real. */
+  if (!oiSeries.length || !lsrSeries.length) {
+    _cache.dataWarning = "OI/LSR vieram vazios (oi:" + oiSeries.length + " lsr:" + lsrSeries.length + ") — os combos que dependem deles não têm o que avaliar.";
+  }
+  setProgress("pronto", 100);
   console.log("[btcBacktest] done — oi:" + oiSeries.length + " lsr:" + lsrSeries.length +
-    " coverage:" + JSON.stringify(coverage));
+    " coverage:" + JSON.stringify(coverage) + (_progress.lastError ? " lastErr:" + _progress.lastError : ""));
   return _cache;
 }
 
 /* Lazy: kick a run if there's no fresh cache, but always return
    immediately with whatever we have (or a "running" marker) so the HTTP
-   request never blocks for the ~1 min a full run takes. */
+   request never blocks for the ~1 min a full run takes. Retries a failed
+   run at most once a minute so a persistent Binance failure doesn't hammer
+   it every request. */
+let _lastAttempt = 0;
 function get() {
-  const fresh = _cache && (Date.now() - _cache.updatedAt) < 6 * 3600000;
-  if (!fresh && !_running) {
-    _running = true;
-    run().catch(e => console.warn("[btcBacktest] run failed:", e && e.message)).finally(() => { _running = false; });
+  /* A good run is fresh for 6h; a run that came back with empty/short data
+     (dataWarning) is only "fresh" for 5 min, so a transient Binance hiccup
+     doesn't freeze a table of zeros for hours. */
+  const ttl = (_cache && _cache.dataWarning) ? 5 * 60000 : 6 * 3600000;
+  const fresh = _cache && (Date.now() - _cache.updatedAt) < ttl;
+  if (!fresh && !_running && (Date.now() - _lastAttempt) > 60000) {
+    _running = true; _lastAttempt = Date.now();
+    run().catch(e => { _progress.lastError = e && e.message; setProgress("erro", _progress.pct); console.warn("[btcBacktest] run failed:", e && e.message); })
+      .finally(() => { _running = false; });
   }
-  return { ready: !!_cache, running: _running, data: _cache };
+  return { ready: !!_cache, running: _running, progress: _progress, data: _cache };
 }
 
 module.exports = { get, run, buildRows, simulate, summarize, BOTS, EXIT, TFS };

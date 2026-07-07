@@ -150,7 +150,7 @@ function createServer() {
      the cached result or {ready:false, running:true} while it warms. */
   app.get("/api/dvl/scanner/btc-backtest", (req, res) => {
     const r = btcBacktest.get();
-    res.json({ ok: true, ready: r.ready, running: r.running, ...(r.data || {}) });
+    res.json({ ok: true, ready: r.ready, running: r.running, progress: r.progress, ...(r.data || {}) });
   });
 
   app.get("/api/dvl/scanner/health", (req, res) => {
