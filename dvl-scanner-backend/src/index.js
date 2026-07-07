@@ -24,6 +24,10 @@ const { createServer } = require("./server");
 
   await worker.start();
 
+  /* Warm the BTC backtest cache in the background so the first user who
+     opens the Copilot tab isn't the one who triggers the ~1-min run. */
+  try { require("./btcBacktest").get(); } catch (_) { /* non-fatal */ }
+
   const shutdown = () => { worker.stop(); server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 2000); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);

@@ -1,0 +1,111 @@
+"use strict";
+
+/* Offline test for btcBacktest.js — no network. Exercises the two pure
+   pieces (buildRows, simulate) with synthetic candles/series; the live
+   30-day fetch (run()) is deliberately not unit-tested here since it needs
+   Binance. */
+
+const assert = require("assert");
+const bt = require("../src/btcBacktest");
+
+let pass = 0, fail = 0;
+function ok(c, m) { if (c) pass++; else { fail++; console.error("FAIL: " + m); } }
+function near(a, b, m, eps) { if (Math.abs(a - b) <= (eps || 1e-6)) pass++; else { fail++; console.error("FAIL: " + m + " (got " + a + ", want " + b + ")"); } }
+
+/* Helper: a candle the sim reads. atr14=1, so with EXIT.atrMult 1.5 -> r=1.5. */
+function candle(close, high, low) { return { close: close, high: high, low: low, atr14: 1 }; }
+
+/* 1) A single winning trade that reaches +2R. Entry 100 -> r=1.5, tp1=101.5,
+   tp2=103. matchFn fires only on bar 0. Bar 1 spans up to 103.5 (past tp2). */
+(function () {
+  const rows = [
+    candle(100, 100, 100),                 // 0: entry signal
+    candle(102, 103.5, 100.1)              // 1: blows through tp1 and tp2
+  ];
+  // ensure no re-entry: matchFn true only at index 0
+  let fired = false;
+  const match = (c) => { if (!fired && c.close === 100) { fired = true; return true; } return false; };
+  const s = bt.simulate(rows, match, bt.EXIT, "5m");
+  ok(s.trades === 1, "one trade taken");
+  // half at +1R, half at +2R = +1.5R
+  near(s.avgR, 1.5, "winning trade banks +1.5R (half 1R + half 2R)");
+  ok(s.winPct === 100, "win rate 100%");
+})();
+
+/* 2) A losing trade: bar 1 drops to the stop (98.5) before any target. */
+(function () {
+  const rows = [
+    candle(100, 100.2, 99.8),              // 0: entry
+    candle(99, 100.4, 98.0)                // 1: low 98 <= sl 98.5 -> stop, high never reached tp2(103)
+  ];
+  let fired = false;
+  const match = (c) => { if (!fired && c.close === 100) { fired = true; return true; } return false; };
+  const s = bt.simulate(rows, match, bt.EXIT, "5m");
+  ok(s.trades === 1, "one trade taken (loss)");
+  near(s.avgR, -1, "losing trade is -1R");
+  ok(s.winPct === 0, "win rate 0%");
+})();
+
+/* 3) Partial then breakeven: bar1 hits tp1 (not tp2, not sl), bar2 stops at BE. */
+(function () {
+  const rows = [
+    candle(100, 100, 100),                 // 0: entry (r=1.5, tp1=101.5, tp2=103, sl=98.5)
+    candle(101.6, 102.0, 100.5),           // 1: high 102 >= tp1 1.5, < tp2 103; low 100.5 > sl -> partial + BE (sl->100)
+    candle(100, 100.2, 99.5)               // 2: low 99.5 <= sl(now 100) -> close at BE 100
+  ];
+  let fired = false;
+  const match = (c) => { if (!fired && c.close === 100 && !c.__seen) { fired = true; return true; } return false; };
+  const s = bt.simulate(rows, match, bt.EXIT, "5m");
+  ok(s.trades === 1, "one trade (partial then BE)");
+  near(s.avgR, 0.5, "partial-then-BE nets +0.5R (half at 1R, rest flat)");
+})();
+
+/* 4) Pessimistic intrabar: a bar that touches BOTH stop and tp2 is scored as
+   a STOP (loss), never the win. */
+(function () {
+  const rows = [
+    candle(100, 100, 100),                 // 0: entry
+    candle(100, 103.5, 98.0)               // 1: spans sl(98.5) AND tp2(103) -> stop wins the tie
+  ];
+  let fired = false;
+  const match = (c) => { if (!fired && c.close === 100) { fired = true; return true; } return false; };
+  const s = bt.simulate(rows, match, bt.EXIT, "5m");
+  near(s.avgR, -1, "ambiguous bar (stop+target) is scored as the stop, pessimistically");
+})();
+
+/* 5) summarize(): win rate / expectancy / compounded return / drawdown math. */
+(function () {
+  const s = bt.summarize([1.5, -1, 1.5, -1]); // 2 wins 2 losses, avg 0.25R
+  ok(s.trades === 4, "counts every trade");
+  ok(s.winPct === 50, "50% win rate");
+  near(s.avgR, 0.25, "expectancy = mean R");
+  near(s.totalR, 1, "total R summed (1.5-1+1.5-1)");
+  ok(s.retPct > 0, "net-positive expectancy -> positive compounded return");
+  ok(s.maxDDPct >= 0, "drawdown is reported and non-negative");
+  const empty = bt.summarize([]);
+  ok(empty.trades === 0 && empty.retPct === 0 && empty.avgR === 0, "empty set -> all zeros, no NaN");
+})();
+
+/* 6) buildRows(): with enough synthetic history + OI/LSR points, produces
+   non-null rows carrying .blocks and .oiSlope; warmup/insufficient-data
+   candles are null. */
+(function () {
+  const n = 120, t0 = 1700000000000, tfMs = 300000;
+  const klines = [];
+  for (let i = 0; i < n; i++) {
+    const base = 100 + Math.sin(i / 5) * 2;
+    klines.push({ t: t0 + i * tfMs, o: base, h: base + 1, l: base - 1, c: base + (i % 3 === 0 ? 0.5 : -0.3), v: 1000 + (i % 7) * 300 });
+  }
+  // OI + LSR at 5m across the same span, rising then falling
+  const oi = [], lsr = [];
+  for (let i = 0; i < n; i++) { oi.push({ t: t0 + i * tfMs, v: 1e6 + i * 1000 }); lsr.push({ t: t0 + i * tfMs, v: 1.2 - i * 0.001 }); }
+  const rows = bt.buildRows(klines, oi, lsr, "5m");
+  ok(rows.length === n, "one row slot per candle");
+  ok(rows.slice(0, 64).every(r => r === null), "warmup candles are null");
+  const live = rows.filter(Boolean);
+  ok(live.length > 0, "produces usable rows past warmup");
+  ok(live.every(r => r.blocks && typeof r.blocks.oiAboveAvg === "boolean" && typeof r.oiSlope === "number"), "rows carry blocks + oiSlope");
+})();
+
+console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
+process.exit(fail === 0 ? 0 : 1);

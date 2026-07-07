@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.085</title>
+<title>DVL Binance Live — Beta 1.086</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.085';
+window.DVL_APP_VERSION = 'Beta 1.086';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.085";
+const DVL_APP_VERSION = "Beta 1.086";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.086", note: "Nova aba no Copilot: Backteste 30 dias — BTC. Pega os 7 combos de ENTRADA dos Fast Bots e testa cada um em 30 dias reais de BTC, em 1m/3m/5m, com uma saída fixa igual pra todos (stop 1.5x ATR, parcial no +1R → breakeven, resto +2R, timeout 45min) — assim compara só a entrada. Mostra nº de trades, % de acerto, R médio (expectância), retorno (1% de risco por trade, composto) e queda máxima, com 👑 no melhor de cada timeframe. É só leitura, não mexe nas carteiras dos bots ao vivo. O cálculo roda no backend (baixa histórico de klines/OI/LSR e simula candle a candle) e atualiza a cada 6h. Exige atualizar e reiniciar o dvl-scanner-backend." },
   { version: "Beta 1.085", note: "Fast Bots agora compara SAÍDAS: cada um dos 7 bots ganhou um método de saída próprio (aparece na linha \"Saída\" embaixo do combo) — stop 1x, stop largo 1.5x, deixa correr (1/3 no 1R → 3R), alvo único rápido +1R, trailing 1.5x ATR, % fixo -1%/+2%, e stop largo 2x segurando 90min. Antes a saída era igual pra todos (o \"perde bastante\" vinha do stop 1x ATR apertado demais + tirar metade cedo no zero-a-zero). Agora dá pra bater o olho e ver qual pacote entrada+saída é o mais assertivo. Como a mecânica de saída mudou, as 7 carteiras reiniciam do zero ($1.000)." },
   { version: "Beta 1.084", note: "Fast Bots reformulado: saíram o Bot 3 (short por net-flow) e o Bot 4 (order flow ao vivo da MEXC) — e junto toda a maquinaria de WebSocket/relay de order flow, que só existia pra ele. Entraram 5 bots novos, um pra cada uma das \"Combinações que mais pesam\" do ML (Spike+RSI sobrevenda, OI+Pré-volume baixo, RSI sobrevenda+OI, RSI sobrevenda+LSR, LSR+Pré-volume baixo). Agora são 7 bots, todos LONG, todos no mesmo motor de blocos/saída — comparação limpa de qual combo do ML performa melhor de verdade. Bot 3 e 4 começam do zero (carteira nova de $1.000)." },
   { version: "Beta 1.083", note: "Bot 3 (short) estava zerado porque exigia Net Long caindo MAIS de 3% ao mesmo tempo que Net Short acima da média e Net Delta abaixo — os três juntos quase nunca batiam. Afrouxei a queda exigida de 3% pra 1%: ainda precisa de Net Long em queda de verdade (mantém o caráter direcional), só que menos íngreme, então ele volta a pegar trade. Bot 4 não mexeu — o zero dele era o bug de conexão (já corrigido), não o critério." },
@@ -73801,6 +73802,130 @@ window.DVL_COPILOT_BACKTEST_1040={
     get wallets(){ var o={}; BOTS.forEach(function(b){ o[b.id]=clone(wallets[b.id]); }); return o; },
     audit:function(){ var p=document.getElementById("dvlCopilotPage0974"); var o={ version:"1.060", panelFound:!!(p&&p.querySelector("[data-dvl-cp-section='fast-bots']")) }; BOTS.forEach(function(b){ o[b.id]=wallets[b.id]; }); return o; }
   };
+})();
+</script>
+
+<style id="DVL_BTCBACKTEST_1090_CSS">
+#dvlCopilotPage0974 .dvlBt1090Panel{margin:10px 0 0!important;padding:12px!important;border-radius:14px!important;border:1px solid rgba(120,150,140,.16)!important;background:linear-gradient(180deg,rgba(20,28,25,.55),rgba(14,18,16,.55))!important;}
+#dvlCopilotPage0974 .dvlBt1090Head{display:flex!important;align-items:center!important;gap:9px!important;margin-bottom:8px!important;}
+#dvlCopilotPage0974 .dvlBt1090Icon{font-size:16px!important;}
+#dvlCopilotPage0974 .dvlBt1090Head b{font-size:13px!important;font-weight:900!important;color:#dfeee8!important;display:block!important;}
+#dvlCopilotPage0974 .dvlBt1090Head span{font-size:9.5px!important;font-weight:700!important;color:#7d8f89!important;}
+#dvlCopilotPage0974 .dvlBt1090Note{font-size:9.5px!important;line-height:1.4!important;color:#8a9a94!important;font-weight:600!important;margin-bottom:8px!important;padding:7px 8px!important;border-radius:8px!important;background:rgba(255,255,255,.02)!important;}
+#dvlCopilotPage0974 .dvlBt1090Note b{color:#10df77!important;}
+#dvlCopilotPage0974 .dvlBt1090TfTitle{font-size:10px!important;font-weight:900!important;letter-spacing:.4px!important;color:#9fb0aa!important;text-transform:uppercase!important;margin:10px 0 4px!important;}
+#dvlCopilotPage0974 .dvlBt1090Scroll{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
+#dvlCopilotPage0974 table.dvlBt1090Tbl{width:100%!important;border-collapse:collapse!important;font-size:10px!important;min-width:340px!important;}
+#dvlCopilotPage0974 table.dvlBt1090Tbl th{font-size:8.5px!important;font-weight:800!important;color:#70827c!important;text-transform:uppercase!important;text-align:right!important;padding:3px 5px!important;border-bottom:1px solid rgba(145,175,165,.14)!important;white-space:nowrap!important;}
+#dvlCopilotPage0974 table.dvlBt1090Tbl th:first-child{text-align:left!important;}
+#dvlCopilotPage0974 table.dvlBt1090Tbl td{padding:4px 5px!important;text-align:right!important;color:#c7d3ce!important;font-weight:700!important;border-bottom:1px solid rgba(145,175,165,.06)!important;white-space:nowrap!important;}
+#dvlCopilotPage0974 table.dvlBt1090Tbl td:first-child{text-align:left!important;color:#aab8b2!important;font-weight:700!important;white-space:normal!important;min-width:120px!important;}
+#dvlCopilotPage0974 table.dvlBt1090Tbl tr.win td{background:rgba(16,223,119,.07)!important;}
+#dvlCopilotPage0974 table.dvlBt1090Tbl tr.win td:first-child{color:#eaf6f1!important;font-weight:900!important;}
+#dvlCopilotPage0974 .dvlBt1090 .pos{color:#10df77!important;}
+#dvlCopilotPage0974 .dvlBt1090 .neg{color:#ff4a61!important;}
+#dvlCopilotPage0974 .dvlBt1090Foot{margin-top:9px!important;font-size:9px!important;color:#6f817b!important;font-weight:600!important;line-height:1.35!important;}
+#dvlCopilotPage0974 .dvlBt1090Loading{font-size:11px!important;color:#8a9a94!important;font-weight:700!important;padding:10px 2px!important;}
+</style>
+<script id="DVL_BTCBACKTEST_1090_JS">
+/* BTC 30-day backtest of the 7 Fast Bots ENTRY combos — a read-only
+   Copilot card that does NOT touch the live paper wallets. It just fetches
+   the backend's /api/dvl/scanner/btc-backtest (which does the heavy
+   30-day fetch + candle-by-candle simulation server-side — see
+   src/btcBacktest.js) and renders the per-timeframe results table.
+
+   Why the numbers can differ from the live Fast Bots: this holds ONE
+   common exit fixed across all 7 combos (so the comparison is about the
+   entry), whereas the live bots each now have their own exit. Different
+   question, on purpose — this one asks "which ENTRY has an edge, all else
+   equal, on real BTC history". The backend caches the run (~1 min) and
+   this polls until it's ready. */
+(function(){
+  "use strict";
+  if(window.DVL_BTCBACKTEST_1090) return;
+  var TFS=["1m","3m","5m"];
+  var _data=null;
+  function esc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+  function fmtPct(v){ v=Number(v)||0; return (v>=0?"+":"")+v.toFixed(1)+"%"; }
+  function fmtAgo(ts){ if(!ts) return "—"; var s=Math.round((Date.now()-ts)/1000); if(s<60) return s+"s atrás"; if(s<3600) return Math.round(s/60)+"min atrás"; return Math.round(s/3600)+"h atrás"; }
+  async function fetchJson(url){ var r=await fetch(url,{cache:"no-store"}); if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }
+
+  async function poll(){
+    try{ _data=await fetchJson("/api/dvl/scanner/btc-backtest"); }catch(_){ if(!_data) _data={ __err:true }; }
+    render();
+  }
+
+  function tableHtml(tf){
+    var res=(_data.results||{})[tf]||{};
+    var bots=_data.bots||[];
+    var rows=bots.map(function(b){ return Object.assign({ id:b.id, label:b.label }, res[b.id]||{}); });
+    /* Rank by compounded return; the top one (with at least one trade) is
+       highlighted as this timeframe's winner. */
+    rows.sort(function(a,b){ return (Number(b.retPct)||0)-(Number(a.retPct)||0); });
+    var bestId=null; for(var i=0;i<rows.length;i++){ if((rows[i].trades||0)>0){ bestId=rows[i].id; break; } }
+    var cov=(_data.coverage||{})[tf]||{};
+    var out='<div class="dvlBt1090TfTitle">'+esc(tf)+(cov.candles?' · '+cov.candles+' candles':'')+'</div>';
+    out+='<div class="dvlBt1090Scroll"><table class="dvlBt1090Tbl"><thead><tr>'
+      +'<th>Combo (entrada)</th><th>Trades</th><th>Acerto</th><th>R méd.</th><th>Retorno</th><th>Máx queda</th></tr></thead><tbody>';
+    out+=rows.map(function(r){
+      var isWin=r.id===bestId;
+      var ret=Number(r.retPct)||0, avgr=Number(r.avgR)||0;
+      return '<tr class="'+(isWin?'win':'')+'">'
+        +'<td>'+(isWin?'👑 ':'')+esc(r.label)+'</td>'
+        +'<td>'+(r.trades||0)+'</td>'
+        +'<td>'+(r.trades?(r.winPct+'%'):'—')+'</td>'
+        +'<td class="'+(avgr>=0?'pos':'neg')+'">'+(r.trades?avgr.toFixed(2)+'R':'—')+'</td>'
+        +'<td class="'+(ret>=0?'pos':'neg')+'">'+(r.trades?esc(fmtPct(ret)):'—')+'</td>'
+        +'<td>'+(r.trades?'-'+(Number(r.maxDDPct)||0).toFixed(1)+'%':'—')+'</td></tr>';
+    }).join("");
+    out+='</tbody></table></div>';
+    return out;
+  }
+
+  function bodyHtml(){
+    if(!_data || _data.__err){ return '<div class="dvlBt1090Loading">Não consegui falar com o backend do backteste.</div>'; }
+    if(!_data.ready){ return '<div class="dvlBt1090Loading">⏳ Calculando o backteste de 30 dias no BTC… (baixando histórico + simulando candle a candle, ~1 min). Atualiza sozinho.</div>'; }
+    var out='<div class="dvlBt1090Note">Backteste de <b>30 dias</b> no <b>BTC</b>, dados reais. Cada linha é um combo de <b>entrada</b> dos Fast Bots; a saída é <b>igual pra todos</b> ('+esc(_data.exitLabel||'')+') pra comparar só a entrada. Retorno = arriscando 1% por trade, composto. 👑 = melhor retorno do timeframe.</div>';
+    out+=TFS.map(tableHtml).join("");
+    out+='<div class="dvlBt1090Foot">Atualizado '+esc(fmtAgo(_data.updatedAt))+' · OI '+(_data.oiPoints||0)+' pts · LSR '+(_data.lsrPoints||0)+' pts · recalcula a cada 6h. Não mexe nas carteiras dos bots ao vivo — é só simulação histórica.</div>';
+    return out;
+  }
+
+  function html(){
+    return '<section class="dvlBt1090Panel dvlBt1090" data-dvl-cp-section="btc-backtest" data-dvl-cp-section-version="1090">'
+      +'<div class="dvlBt1090Head"><i class="dvlBt1090Icon">📊</i>'
+      +'<div><b>Backteste 30 dias — BTC</b><span>7 combos de entrada · 1m/3m/5m · saída fixa</span></div></div>'
+      +'<div class="dvlBt1090Body">'+bodyHtml()+'</div></section>';
+  }
+
+  function render(){
+    var p=document.getElementById("dvlCopilotPage0974");
+    if(!p) return false;
+    var panel=p.querySelector("[data-dvl-cp-section='btc-backtest'][data-dvl-cp-section-version='1090']");
+    if(!panel){
+      var fast=p.querySelector("[data-dvl-cp-section='fast-bots']");
+      if(fast) fast.insertAdjacentHTML("afterend", html());
+      else p.insertAdjacentHTML("beforeend", html());
+      panel=p.querySelector("[data-dvl-cp-section='btc-backtest'][data-dvl-cp-section-version='1090']");
+    }else{
+      var body=panel.querySelector(".dvlBt1090Body");
+      if(body) body.innerHTML=bodyHtml();
+    }
+    return !!panel;
+  }
+
+  function boot(){
+    render();
+    poll();
+    /* Poll faster while it's still computing, then settle to a slow refresh. */
+    setInterval(function(){ if(!_data || !_data.ready) poll(); }, 12000);
+    setInterval(poll, 5*60000);
+    [400,1200,2500,5000,9000].forEach(function(ms){ setTimeout(render,ms); });
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot, {once:true});
+  else boot();
+
+  window.DVL_BTCBACKTEST_1090={ version:"1.090", render:render, poll:poll, audit:function(){ return { ready:_data&&_data.ready, updatedAt:_data&&_data.updatedAt }; } };
 })();
 </script>
 

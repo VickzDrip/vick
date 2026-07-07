@@ -9,6 +9,7 @@
    GET  /api/dvl/scanner/history?symbol=X  (every recorded signal for one symbol, for chart markers)
    GET  /api/dvl/scanner/live-reading?symbol=X&tf=Y  (current OI/LSR/RSI/spike reading for ANY symbol)
    GET  /api/dvl/scanner/backtest      (financial backtest: win rate / avg return, all signals vs model-favorable)
+   GET  /api/dvl/scanner/btc-backtest  (Fast Bots' 7 entry combos backtested on BTC 1m/3m/5m over 30 days)
    GET  /api/dvl/scanner/tickers?exchange=binance|mexc  (top-by-24h-volume candidates, server-fetched — see worker.getCandidates)
    GET  /api/dvl/scanner/mexc-price    (fresh MEXC last-price map, for Fast Bots' Bot 4 to check its own open positions)
    GET  /api/dvl/scanner/mexc-atr?symbol=X&tf=Y  (14-period ATR for one MEXC symbol, Fast Bots' fallback stop distance)
@@ -24,6 +25,7 @@ const worker = require("./worker");
 const analyze = require("./analyze");
 const { mexc } = require("./exchanges");
 const M = require("./metrics");
+const btcBacktest = require("./btcBacktest");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -140,6 +142,15 @@ function createServer() {
      persisted learned-weights.json. */
   app.get("/api/dvl/scanner/backtest", (req, res) => {
     res.json({ ok: true, ...worker.getBacktestStats() });
+  });
+
+  /* Fast Bots 30-day backtest on BTC (1m/3m/5m) — read-only, does not
+     touch the live paper wallets. Lazily computes + caches (a full run is
+     ~1 min of Binance fetches), so this returns immediately with either
+     the cached result or {ready:false, running:true} while it warms. */
+  app.get("/api/dvl/scanner/btc-backtest", (req, res) => {
+    const r = btcBacktest.get();
+    res.json({ ok: true, ready: r.ready, running: r.running, ...(r.data || {}) });
   });
 
   app.get("/api/dvl/scanner/health", (req, res) => {
