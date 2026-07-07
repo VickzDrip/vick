@@ -71,13 +71,6 @@ sudo mkdir -p /opt/dvl-scanner-backend
 # ...copy the dvl-scanner-backend/ contents there...
 cd /opt/dvl-scanner-backend
 sudo npm install --omit=dev
-# Fast Bots' Bot 4 (MEXC live order flow) runs a headless Chromium tab —
-# MEXC's WS gateway sits behind Akamai bot-protection that blocks a plain
-# Node.js WebSocket client outright, so mexcAggStream.js opens the
-# connection from inside a real browser instead (see its doc-comment).
-# Needs the actual browser binary + its Linux system deps, not just the
-# npm package:
-sudo npx playwright install --with-deps chromium
 sudo chown -R www-data:www-data /opt/dvl-scanner-backend
 
 # 2. Install the systemd service (keeps it running 24h, auto-restart, boot):
