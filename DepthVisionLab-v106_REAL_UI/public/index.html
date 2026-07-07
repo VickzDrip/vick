@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.084</title>
+<title>DVL Binance Live — Beta 1.085</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.084';
+window.DVL_APP_VERSION = 'Beta 1.085';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.084";
+const DVL_APP_VERSION = "Beta 1.085";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.085", note: "Fast Bots agora compara SAÍDAS: cada um dos 7 bots ganhou um método de saída próprio (aparece na linha \"Saída\" embaixo do combo) — stop 1x, stop largo 1.5x, deixa correr (1/3 no 1R → 3R), alvo único rápido +1R, trailing 1.5x ATR, % fixo -1%/+2%, e stop largo 2x segurando 90min. Antes a saída era igual pra todos (o \"perde bastante\" vinha do stop 1x ATR apertado demais + tirar metade cedo no zero-a-zero). Agora dá pra bater o olho e ver qual pacote entrada+saída é o mais assertivo. Como a mecânica de saída mudou, as 7 carteiras reiniciam do zero ($1.000)." },
   { version: "Beta 1.084", note: "Fast Bots reformulado: saíram o Bot 3 (short por net-flow) e o Bot 4 (order flow ao vivo da MEXC) — e junto toda a maquinaria de WebSocket/relay de order flow, que só existia pra ele. Entraram 5 bots novos, um pra cada uma das \"Combinações que mais pesam\" do ML (Spike+RSI sobrevenda, OI+Pré-volume baixo, RSI sobrevenda+OI, RSI sobrevenda+LSR, LSR+Pré-volume baixo). Agora são 7 bots, todos LONG, todos no mesmo motor de blocos/saída — comparação limpa de qual combo do ML performa melhor de verdade. Bot 3 e 4 começam do zero (carteira nova de $1.000)." },
   { version: "Beta 1.083", note: "Bot 3 (short) estava zerado porque exigia Net Long caindo MAIS de 3% ao mesmo tempo que Net Short acima da média e Net Delta abaixo — os três juntos quase nunca batiam. Afrouxei a queda exigida de 3% pra 1%: ainda precisa de Net Long em queda de verdade (mantém o caráter direcional), só que menos íngreme, então ele volta a pegar trade. Bot 4 não mexeu — o zero dele era o bug de conexão (já corrigido), não o critério." },
   { version: "Beta 1.082", note: "Bots 1-3 voltam a operar quando a Binance cai (fallback pra MEXC): antes ficavam travados sem abrir trade nesse ciclo porque não sabiam lidar com símbolo formato MEXC; agora o ATR de fallback e a checagem de preço das posições são escolhidos pelo FORMATO do símbolo (com ou sem underscore), não mais por qual bot é — então um sinal vindo da MEXC durante a queda da Binance funciona igual, sem risco de travar a posição." },
@@ -73279,16 +73280,21 @@ window.DVL_COPILOT_BACKTEST_1040={
    ML-ranked block-pair lineup — the order-flow relay/WebSocket machinery
    went with them.)
 
-   "Frações + saídas rápidas": entries are fixed $100 slices of the
-   $1,000 (max 5 open per bot = at most half the wallet deployed), and
-   exits are two-staged — at +1R half the position is closed and the stop
-   jumps to breakeven (the trade can no longer lose), the remainder runs
-   to +2R, the stop, or a 45-minute timeout. R = ATR14 of the row's OWN
-   timeframe x 1.0 (tighter than the big Bot Demo's 1.5 — scalper stops).
+   Entries are fixed $100 slices of the $1,000 (max 5 open per bot = at
+   most half the wallet deployed). The EXIT is now per-bot (each bot's
+   `exit` config, resolved onto the position in tryOpen) — that's the
+   whole point of this iteration: seven different exit styles racing so
+   you can eyeball the most assertive one. Some use an ATR stop (atrMult
+   × ATR14), one uses a fixed % of entry, one trails, some take a partial
+   at +1R and some don't, targets range from +1R to +3R, timeouts 45-90
+   min. R = the position's own risk distance (stored as pos.r).
    row.atr14 comes free in the snapshot (worker.js computes it from
    klines it already fetches); if a row doesn't carry it (backend not
    restarted yet / new listing), the bot fetches ATR itself once at entry,
-   same pattern as the Bot Demo.
+   same pattern as the Bot Demo. Because the exit rules changed shape,
+   all seven wallets reset to fresh localStorage keys (_e1) — old
+   positions were opened under the old single-exit model and can't be
+   re-scored under the new per-position params.
 
    Freshness + cooldown keep it honest as a FAST bot: only rows detected
    in the last 30 min are eligible (registry rows persist for hours —
@@ -73310,44 +73316,58 @@ window.DVL_COPILOT_BACKTEST_1040={
   var ENTRY_DOLLARS=100;       // one "fração" per entry
   var MAX_OPEN=5;              // per bot -> at most $500 of the $1000 deployed
   var ATR_PERIOD=14;
-  var ATR_MULT=1.0;            // scalper stop: 1x ATR of the row's own (1m/3m/5m) timeframe
-  var TP1_R=1;                 // +1R: close half, stop -> breakeven
-  var TP2_R=2;                 // +2R: close the rest
-  var MAX_HOLD_MS=45*60000;    // fast bot — never sits in a trade for hours
+  var MAX_HOLD_MS=45*60000;    // fallback timeout only — each bot sets its own holdMin (see BOTS[].exit)
   var FRESH_MS=30*60000;       // only rows detected in the last 30 min are eligible
   var COOLDOWN_MS=30*60000;    // per bot+symbol, after a close
   var TFS=["1m","3m","5m"];
   var SIGNAL_POLL_MS=60000;    // matches the backend's own refresh cadence
   var PRICE_POLL_MS=20000;     // exits need to be quicker than entries
   var MAX_HISTORY=40;
-  var REASON_LABEL={tp2:"alvo 2R", stop:"stop", be:"b.e.", timeout:"tempo", stale:"sem preço"};
+  var REASON_LABEL={tp2:"alvo", stop:"stop", be:"b.e.", trail:"trailing", timeout:"tempo", stale:"sem preço"};
 
   /* Bots 1-2: original hand-picked pairs. Bots 3-7: the ML's top-5
-     highest-weighted block combos ("Combinações que mais pesam"), each a
-     straight AND of two of the Scanner's own blocks. All LONG. */
+     highest-weighted block combos ("Combinações que mais pesam"). All
+     LONG. Each bot now ALSO carries its own exit method (`exit`) — the
+     experiment compares full packages (entry combo + exit style) so you
+     can eyeball which combination is most assertive. exit fields:
+       atrMult   stop distance = atrMult × ATR   (ignored if usePct)
+       usePct/stopPct/tpPct  percentage-of-entry stop/target instead of ATR
+       tp1R/tp1Frac/be  partial take at tp1R (in R), close tp1Frac of it,
+                        move stop to breakeven after (tp1R null = no partial)
+       tp2R      final target in R (null = no fixed target: trail/timeout)
+       trailMult trailing stop distance in ATR once in profit (null = none)
+       holdMin   timeout in minutes */
   var BOTS=[
-    { id:"b1", name:"Bot 1", side:"LONG", ls:"dvl_fastbot_b1_v1",
+    { id:"b1", name:"Bot 1", side:"LONG", ls:"dvl_fastbot_b1_e1",
       comboLabel:"OI acima da média + LSR abaixo da média",
+      exit:{ label:"Metade no +1R → resto +2R (stop 1x ATR)", atrMult:1.0, tp1R:1, tp1Frac:0.5, be:true, tp2R:2, holdMin:45 },
       match:function(r){ return !!(r.blocks && r.blocks.oiAboveAvg && r.blocks.lsrBelowAvg); } },
-    { id:"b2", name:"Bot 2", side:"LONG", ls:"dvl_fastbot_b2_v1",
+    { id:"b2", name:"Bot 2", side:"LONG", ls:"dvl_fastbot_b2_e1",
       comboLabel:"Pré-volume baixo + OI subindo",
+      exit:{ label:"Stop largo 1.5x ATR, metade no +1R → resto +2R", atrMult:1.5, tp1R:1, tp1Frac:0.5, be:true, tp2R:2, holdMin:45 },
       match:function(r){ return !!(r.blocks && r.blocks.prevVolBelowHalf && Number(r.oiSlope)>0); } },
-    { id:"b3", name:"Bot 3", side:"LONG", ls:"dvl_fastbot_b3_v2",
+    { id:"b3", name:"Bot 3", side:"LONG", ls:"dvl_fastbot_b3_e1",
       comboLabel:"Spike acima da média + RSI sobrevenda",
+      exit:{ label:"Deixa correr: 1/3 no +1R → resto +3R (stop 1.5x)", atrMult:1.5, tp1R:1, tp1Frac:0.334, be:true, tp2R:3, holdMin:60 },
       match:function(r){ return !!(r.blocks && r.blocks.spikeAboveAvg && r.blocks.rsiOversold); } },
-    { id:"b4", name:"Bot 4", side:"LONG", ls:"dvl_fastbot_b4_v2",
+    { id:"b4", name:"Bot 4", side:"LONG", ls:"dvl_fastbot_b4_e1",
       comboLabel:"OI acima da média + Pré-volume baixo",
+      exit:{ label:"Alvo único +1R, fecha tudo (rápido)", atrMult:1.0, tp1R:null, tp2R:1, holdMin:45 },
       match:function(r){ return !!(r.blocks && r.blocks.oiAboveAvg && r.blocks.prevVolBelowHalf); } },
-    { id:"b5", name:"Bot 5", side:"LONG", ls:"dvl_fastbot_b5_v1",
+    { id:"b5", name:"Bot 5", side:"LONG", ls:"dvl_fastbot_b5_e1",
       comboLabel:"RSI sobrevenda + OI acima da média",
+      exit:{ label:"Trailing 1.5x ATR, sem alvo fixo", atrMult:1.5, tp1R:null, tp2R:null, trailMult:1.5, holdMin:90 },
       match:function(r){ return !!(r.blocks && r.blocks.rsiOversold && r.blocks.oiAboveAvg); } },
-    { id:"b6", name:"Bot 6", side:"LONG", ls:"dvl_fastbot_b6_v1",
+    { id:"b6", name:"Bot 6", side:"LONG", ls:"dvl_fastbot_b6_e1",
       comboLabel:"RSI sobrevenda + LSR abaixo da média",
+      exit:{ label:"% fixo: stop -1% / alvo +2%", usePct:true, stopPct:0.01, tpPct:0.02, tp1R:null, holdMin:45 },
       match:function(r){ return !!(r.blocks && r.blocks.rsiOversold && r.blocks.lsrBelowAvg); } },
-    { id:"b7", name:"Bot 7", side:"LONG", ls:"dvl_fastbot_b7_v1",
+    { id:"b7", name:"Bot 7", side:"LONG", ls:"dvl_fastbot_b7_e1",
       comboLabel:"LSR abaixo da média + Pré-volume baixo",
+      exit:{ label:"Stop largo 2x ATR, alvo +2R, segura 90min", atrMult:2.0, tp1R:null, tp2R:2, holdMin:90 },
       match:function(r){ return !!(r.blocks && r.blocks.lsrBelowAvg && r.blocks.prevVolBelowHalf); } }
   ];
+  var DEFAULT_EXIT={ label:"Padrão", atrMult:1.0, tp1R:1, tp1Frac:0.5, be:true, tp2R:2, holdMin:45 };
 
   function esc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
   function clone(v){return JSON.parse(JSON.stringify(v));}
@@ -73436,19 +73456,32 @@ window.DVL_COPILOT_BACKTEST_1040={
        MEXC-shaped row too during a Binance-outage fallback cycle (see
        scanSignals), so "_" in the symbol, not bot.id==="b4", is what
        actually decides it. */
+    var ex=bot.exit||DEFAULT_EXIT;
     var atr=Number(row.atr14)||0;
-    if(!(atr>0)) atr=await (symbol.indexOf("_")>=0 ? fetchMexcAtr(symbol,tf) : fetchAtr(symbol,tf))||0;
-    if(!(atr>0)) return;
-    var r1=atr*ATR_MULT;
-    var short=bot.side==="SHORT";
+    /* % mode (Bot 6) doesn't need ATR at all — everything is off the entry
+       price. ATR modes still need a real ATR for the stop distance. */
+    if(!ex.usePct){
+      if(!(atr>0)) atr=await (symbol.indexOf("_")>=0 ? fetchMexcAtr(symbol,tf) : fetchAtr(symbol,tf))||0;
+      if(!(atr>0)) return;
+    }
     var qty=ENTRY_DOLLARS/price;
+    /* All 7 bots are LONG — sl below entry, targets above. r is the risk
+       distance in price; each bot's exit config decides how it's derived
+       and which targets exist. Resolved params are stored ON the position
+       so it keeps its own rules even if bot.exit is later changed. */
+    var r=ex.usePct ? price*(Number(ex.stopPct)||0.01) : atr*(Number(ex.atrMult)||1);
+    var tp1=(ex.tp1R!=null) ? price + r*Number(ex.tp1R) : null;
+    var tp2;
+    if(ex.usePct && ex.tpPct!=null) tp2=price*(1+Number(ex.tpPct));
+    else if(ex.tp2R!=null) tp2=price + r*Number(ex.tp2R);
+    else tp2=null;
     w.positions.push({
       id:"fb_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
       symbol:symbol, tf:tf, entry:price, qty:qty, size:ENTRY_DOLLARS,
-      sl: short ? price+r1 : price-r1,
-      tp1: short ? price-r1*TP1_R : price+r1*TP1_R,
-      tp2: short ? price-r1*TP2_R : price+r1*TP2_R,
-      atr:atr, halfTaken:false, realized:0, openedAt:now
+      r:r, sl: price-r, tp1:tp1, tp2:tp2,
+      tp1Frac:Number(ex.tp1Frac)||0.5, be:!!ex.be, trailMult:(ex.trailMult!=null?Number(ex.trailMult):null),
+      atr:atr, halfTaken:false, closedFrac:0, realized:0, openedAt:now,
+      holdMs:(Number(ex.holdMin)||45)*60000
     });
     w.balance-=ENTRY_DOLLARS;
     persist(bot);
@@ -73464,8 +73497,8 @@ window.DVL_COPILOT_BACKTEST_1040={
     var idx=w.positions.indexOf(pos);
     if(idx<0) return;
     w.positions.splice(idx,1);
-    var remQty=pos.halfTaken ? pos.qty/2 : pos.qty;
-    var remSize=pos.halfTaken ? pos.size/2 : pos.size;
+    var remFrac=1-(pos.closedFrac||0);
+    var remQty=pos.qty*remFrac, remSize=pos.size*remFrac;
     var pnl=(pos.realized||0)+pnlOf(bot,pos,price,remQty);
     w.balance+=remSize+pnlOf(bot,pos,price,remQty);
     w.history.unshift({ symbol:pos.symbol, tf:pos.tf, entry:pos.entry, exit:price, pnl:pnl, pnlPct:(pnl/pos.size)*100, reason:reason, halfTaken:pos.halfTaken, openedAt:pos.openedAt, closedAt:Date.now() });
@@ -73473,16 +73506,20 @@ window.DVL_COPILOT_BACKTEST_1040={
     persist(bot);
   }
 
-  /* The "saída inteligente": at +1R, half comes off and the stop moves to
-     breakeven — from that moment the trade can't turn into a loss. */
+  /* Partial take at tp1: closes tp1Frac of the position (half, a third,
+     whatever the bot's exit config says), banks the profit, and — if the
+     exit config asks for it — moves the stop to breakeven so the rest
+     can't turn into a loss. Bots whose exit has tp1R:null never call this. */
   function takeHalf(bot,pos,price){
     var w=wallets[bot.id];
-    var halfQty=pos.qty/2, halfSize=pos.size/2;
-    var pnl=pnlOf(bot,pos,price,halfQty);
-    w.balance+=halfSize+pnl;
+    var frac=Number(pos.tp1Frac)||0.5;
+    var partQty=pos.qty*frac, partSize=pos.size*frac;
+    var pnl=pnlOf(bot,pos,price,partQty);
+    w.balance+=partSize+pnl;
     pos.realized=(pos.realized||0)+pnl;
+    pos.closedFrac=frac;
     pos.halfTaken=true;
-    pos.sl=pos.entry; // breakeven
+    if(pos.be) pos.sl=pos.entry; // breakeven
     persist(bot);
   }
 
@@ -73517,26 +73554,37 @@ window.DVL_COPILOT_BACKTEST_1040={
       _lastPriceMap=map;
       var now=Date.now();
       BOTS.forEach(function(bot){
-        var short=bot.side==="SHORT";
         wallets[bot.id].positions.slice().forEach(function(pos){
+          var holdMs=Number(pos.holdMs)||MAX_HOLD_MS;
           var price=map[pos.symbol];
           if(!(price>0)){
             /* Safety net: a position whose price can NEVER be resolved
                (wrong-exchange symbol leaking in, a delisting, etc.) must
-               still not sit open forever — MAX_HOLD_MS's whole point is
-               "never sits in a trade for hours". Force-close flat (0%) at
-               its own entry price once well past the hold limit, instead
-               of silently deadlocking one of this bot's MAX_OPEN slots. */
-            if((now-pos.openedAt)>=MAX_HOLD_MS) closeRest(bot,pos,pos.entry,"stale");
+               still not sit open forever. Force-close flat (0%) at its own
+               entry price once past its hold limit, instead of silently
+               deadlocking one of this bot's MAX_OPEN slots. */
+            if((now-pos.openedAt)>=holdMs) closeRest(bot,pos,pos.entry,"stale");
             return;
           }
-          var hitTp2=short ? price<=pos.tp2 : price>=pos.tp2;
-          var hitTp1=short ? price<=pos.tp1 : price>=pos.tp1;
-          var hitSl=short ? price>=pos.sl : price<=pos.sl;
-          var timedOut=(now-pos.openedAt)>=MAX_HOLD_MS;
+          /* Trailing stop (LONG): once price runs up, ratchet the stop up
+             behind it by trailMult×ATR — never lower it. Bots without a
+             trailMult skip this and keep their fixed stop/BE. */
+          if(pos.trailMult && pos.atr>0){
+            var trailStop=price-Number(pos.trailMult)*pos.atr;
+            if(trailStop>pos.sl) pos.sl=trailStop;
+          }
+          var hitTp2=(pos.tp2!=null) && price>=pos.tp2;
+          var hitTp1=(pos.tp1!=null) && !pos.halfTaken && price>=pos.tp1;
+          var hitSl=price<=pos.sl;
+          var timedOut=(now-pos.openedAt)>=holdMs;
           if(hitTp2){ closeRest(bot,pos,price,"tp2"); return; }
-          if(hitTp1 && !pos.halfTaken){ takeHalf(bot,pos,price); }
-          if(hitSl){ closeRest(bot,pos,price,pos.halfTaken?"be":"stop"); return; }
+          if(hitTp1){ takeHalf(bot,pos,price); }
+          if(hitSl){
+            /* Reason label: a trailing stop that ratcheted above entry, or
+               a breakeven stop after a partial, is not a "loss" stop. */
+            var slReason=(pos.sl>pos.entry) ? (pos.trailMult?"trail":"be") : (pos.halfTaken?"be":"stop");
+            closeRest(bot,pos,price,slReason); return;
+          }
           if(timedOut){ closeRest(bot,pos,price,"timeout"); }
         });
       });
@@ -73600,7 +73648,8 @@ window.DVL_COPILOT_BACKTEST_1040={
     var w=wallets[bot.id], sum=w.balance;
     w.positions.forEach(function(p){
       var price=_lastPriceMap[p.symbol];
-      var remQty=p.halfTaken?p.qty/2:p.qty, remSize=p.halfTaken?p.size/2:p.size;
+      var remFrac=1-(p.closedFrac||0);
+      var remQty=p.qty*remFrac, remSize=p.size*remFrac;
       sum+=remSize+(price>0?pnlOf(bot,p,price,remQty):0);
     });
     return sum;
@@ -73617,6 +73666,7 @@ window.DVL_COPILOT_BACKTEST_1040={
     var out='<div class="dvlFb1060Bot'+(isLeader?' leader':'')+'">';
     out+='<div class="dvlFb1060BotTitle">'+(isLeader?'<span class="crown">👑</span>':'')+'<b>'+esc(bot.name)+'</b>'+sideTag+'</div>';
     out+='<div class="dvlFb1060Combo">'+esc(bot.comboLabel)+'</div>';
+    out+='<div class="dvlFb1060Combo" style="opacity:.72;font-style:italic">Saída: '+esc((bot.exit||DEFAULT_EXIT).label)+'</div>';
     out+='<div class="dvlFb1060Stat"><span>Patrimônio</span><b>'+esc(fmtMoney(equity))+'</b></div>';
     out+='<div class="dvlFb1060Stat"><span>Retorno</span><b class="'+(retPct>=0?"pos":"neg")+'">'+esc(fmtPct(retPct))+'</b></div>';
     out+='<div class="dvlFb1060Stat"><span>Em andamento</span><b>'+w.positions.length+' trade'+(w.positions.length===1?'':'s')+'</b></div>';
@@ -73625,10 +73675,10 @@ window.DVL_COPILOT_BACKTEST_1040={
       out+='<div class="dvlFb1060SubTitle">Abertos agora</div>';
       out+='<div class="dvlFb1060Positions">'+w.positions.slice(0,5).map(function(p){
         var price=_lastPriceMap[p.symbol];
-        var remQty=p.halfTaken?p.qty/2:p.qty;
+        var remQty=p.qty*(1-(p.closedFrac||0));
         var pnl=(p.realized||0)+(price>0?pnlOf(bot,p,price,remQty):0);
         var pnlPct=(pnl/p.size)*100;
-        return '<div class="dvlFb1060Row"><span>'+esc(p.symbol)+' · '+esc(p.tf)+'</span>'+(p.halfTaken?'<em class="half">½ no bolso</em>':'')+'<b class="'+(pnl>=0?"pos":"neg")+'">'+esc(fmtPct(pnlPct))+'</b></div>';
+        return '<div class="dvlFb1060Row"><span>'+esc(p.symbol)+' · '+esc(p.tf)+'</span>'+(p.halfTaken?'<em class="half">parcial no bolso</em>':'')+'<b class="'+(pnl>=0?"pos":"neg")+'">'+esc(fmtPct(pnlPct))+'</b></div>';
       }).join("")+'</div>';
     }
     if(closed.length){
@@ -73667,7 +73717,7 @@ window.DVL_COPILOT_BACKTEST_1040={
 
   function bodyHtml(){
     var out='<div class="dvlFb1060Body">';
-    out+='<div class="dvlFb1060Note">100% simulado — sete carteiras virtuais de '+esc(fmtMoney(START_BALANCE))+' competindo, nenhuma ordem real. Cada bot entra no seu próprio combo de blocos do Scanner, nos TFs 1m/3m/5m, em sinais detectados nos últimos 30 min. Entradas em frações de '+esc(fmtMoney(ENTRY_DOLLARS))+' (máx. '+MAX_OPEN+' abertas); saída em 2 etapas: no +1R vende metade e o stop vai pro zero a zero (não perde mais), o resto corre até +2R, stop ou 45 min. Stop = 1x ATR do próprio TF.</div>';
+    out+='<div class="dvlFb1060Note">100% simulado — sete carteiras virtuais de '+esc(fmtMoney(START_BALANCE))+' competindo, nenhuma ordem real. Cada bot entra no seu próprio combo de blocos do Scanner (nos TFs 1m/3m/5m, sinais dos últimos 30 min) e sai pelo seu próprio método — o método de saída de cada um aparece embaixo do combo, na linha "Saída". Entradas em frações de '+esc(fmtMoney(ENTRY_DOLLARS))+' (máx. '+MAX_OPEN+' abertas).</div>';
     out+=statusHtml();
     /* Leader = highest CURRENT equity; requires at least one closed trade
        somewhere so an untouched $1,000 wallet doesn't wear the crown. */
@@ -73678,7 +73728,7 @@ window.DVL_COPILOT_BACKTEST_1040={
       BOTS.forEach(function(b){ var eq=equityOf(b); if(eq>best){ best=eq; leaderId=b.id; } });
     }
     BOTS.forEach(function(b){ out+=botHtml(b, b.id===leaderId); });
-    out+='<div class="dvlFb1060Foot">Experimento controlado: mesma regra de saída pra todos os 7 — a única variável é o combo de entrada, então a diferença de resultado é dele, não da sorte de configuração. Bots 1-2 são os pares originais escolhidos na mão; Bots 3-7 são os 5 combos de blocos que o ML mais pontuou (as "Combinações que mais pesam"), virados em bots ao vivo pra comparar o desempenho real de cada um lado a lado.</div>';
+    out+='<div class="dvlFb1060Foot">Cada bot é um pacote completo: seu próprio combo de entrada (Bots 1-2 escolhidos na mão; Bots 3-7 os combos que o ML mais pontuou) E seu próprio método de saída (stop apertado, stop largo, deixa correr, alvo rápido, trailing, % fixo...). A ideia é bater o olho e ver qual pacote é o mais assertivo. Como entrada E saída mudam juntas, um bot vencer é o pacote inteiro vencendo — não dá pra isolar se foi a entrada ou a saída.</div>';
     out+='</div>';
     return out;
   }
@@ -73686,7 +73736,7 @@ window.DVL_COPILOT_BACKTEST_1040={
   function html(){
     return '<section class="dvlCp0976Panel dvlFb1060Panel" data-dvl-cp-section="fast-bots" data-dvl-cp-section-version="1060">'
       +'<div class="dvlFb1060Head"><i class="dvlFb1060Icon">⚡</i>'
-      +'<div class="dvlFb1060HeadTitle"><b>Fast Bots — corrida de combos</b><span>7 bots, $1.000 cada — combos do ML em 1m/3m/5m</span></div></div>'
+      +'<div class="dvlFb1060HeadTitle"><b>Fast Bots — corrida de combos</b><span>7 bots, $1.000 cada — entrada + saída própria em cada um</span></div></div>'
       +bodyHtml()
       +'</section>';
   }
