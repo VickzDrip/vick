@@ -57,20 +57,25 @@ const BOTS = [
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-/* Rate-limit aware: a 30-day run fires ~80 requests, and firing them too
-   fast gets Binance's weight limiter to answer 429 (and then 418 if you
-   keep hammering). On 429/418/5xx, honour Retry-After (or back off
-   exponentially) and retry the SAME request rather than skipping the page
-   — skipping is what left the last-fetched timeframe (5m) starved to zero.
-   Only a persistent failure after several retries throws. */
+/* Rate-limit aware, and careful NOT to make things worse. This IP is
+   shared with the live scanner, so a Binance ban here would hurt the bots
+   too — the priority is to never hammer.
+     - 429 (rate limit) / 5xx: honour Retry-After (or back off) and retry
+       the SAME page, so pages aren't skipped (skipping is what starved the
+       5m timeframe to zero).
+     - 418 (IP temporarily BANNED after ignoring 429s): do NOT retry — any
+       request during a ban extends it. Throw a .banned error so the whole
+       run aborts immediately and get() waits a long cooldown for the ban
+       to lapse. */
 async function getJSON(url, tries) {
   tries = tries || 0;
   let res;
   try { res = await fetch(url, { cache: "no-store" }); }
-  catch (e) { if (tries < 5) { await sleep(Math.min(20000, 800 * Math.pow(2, tries))); return getJSON(url, tries + 1); } throw e; }
-  if ((res.status === 429 || res.status === 418 || res.status >= 500) && tries < 6) {
+  catch (e) { if (tries < 4) { await sleep(Math.min(20000, 1000 * Math.pow(2, tries))); return getJSON(url, tries + 1); } throw e; }
+  if (res.status === 418) { const e = new Error("HTTP 418 (IP temporariamente banido pela Binance)"); e.banned = true; throw e; }
+  if ((res.status === 429 || res.status >= 500) && tries < 5) {
     const ra = Number(res.headers.get("retry-after"));
-    await sleep(ra > 0 ? Math.min(60000, ra * 1000) : Math.min(30000, 800 * Math.pow(2, tries)));
+    await sleep(ra > 0 ? Math.min(90000, ra * 1000) : Math.min(30000, 1500 * Math.pow(2, tries)));
     return getJSON(url, tries + 1);
   }
   if (!res.ok) throw new Error("HTTP " + res.status);
@@ -93,12 +98,12 @@ async function fetchKlines(tf, startMs, endMs) {
     const url = "https://fapi.binance.com/fapi/v1/klines?symbol=" + SYMBOL +
       "&interval=" + tf + "&startTime=" + from + "&endTime=" + endMs + "&limit=1500";
     let d;
-    try { d = await getJSON(url); } catch (e) { _progress.lastError = "klines " + tf + ": " + e.message; from += 1500 * step; continue; }
+    try { d = await getJSON(url); } catch (e) { if (e.banned) throw e; _progress.lastError = "klines " + tf + ": " + e.message; from += 1500 * step; continue; }
     if (!Array.isArray(d) || !d.length) { from += 1500 * step; continue; }
     for (const k of d) out.push({ t: Number(k[0]), o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] });
     const last = Number(d[d.length - 1][0]);
     from = (last > from ? last : from) + step;
-    await sleep(250);
+    await sleep(450);
   }
   return out.filter(k => k.t >= startMs && k.t <= endMs);
 }
@@ -116,9 +121,9 @@ async function fetchSeries(path, valueKey, startMs, endMs) {
     const url = "https://fapi.binance.com/futures/data/" + path + "?symbol=" + SYMBOL +
       "&period=5m&startTime=" + from + "&endTime=" + to + "&limit=500";
     let d;
-    try { d = await getJSON(url); } catch (e) { _progress.lastError = path + ": " + e.message; continue; }
+    try { d = await getJSON(url); } catch (e) { if (e.banned) throw e; _progress.lastError = path + ": " + e.message; continue; }
     if (Array.isArray(d)) for (const x of d) { const t = Number(x.timestamp), v = Number(x[valueKey]); if (Number.isFinite(t) && Number.isFinite(v)) map.set(t, v); }
-    await sleep(250);
+    await sleep(450);
   }
   return Array.from(map.entries()).map(([t, v]) => ({ t, v })).sort((a, b) => a.t - b.t);
 }
@@ -288,18 +293,32 @@ async function run() {
    run at most once a minute so a persistent Binance failure doesn't hammer
    it every request. */
 let _lastAttempt = 0;
+let _cooldownUntil = 0;   // don't touch Binance again before this (long after a 418 ban)
 function get() {
   /* A good run is fresh for 6h; a run that came back with empty/short data
      (dataWarning) is only "fresh" for 5 min, so a transient Binance hiccup
      doesn't freeze a table of zeros for hours. */
   const ttl = (_cache && _cache.dataWarning) ? 5 * 60000 : 6 * 3600000;
   const fresh = _cache && (Date.now() - _cache.updatedAt) < ttl;
-  if (!fresh && !_running && (Date.now() - _lastAttempt) > 60000) {
-    _running = true; _lastAttempt = Date.now();
-    run().catch(e => { _progress.lastError = e && e.message; setProgress("erro", _progress.pct); console.warn("[btcBacktest] run failed:", e && e.message); })
-      .finally(() => { _running = false; });
+  const now = Date.now();
+  if (!fresh && !_running && (now - _lastAttempt) > 60000 && now >= _cooldownUntil) {
+    _running = true; _lastAttempt = now;
+    run().catch(e => {
+      _progress.lastError = e && e.message;
+      if (e && e.banned) {
+        /* Binance temp-banned the IP (shared with the live scanner) — wait
+           20 min before ANY retry so we don't extend the ban or hurt the
+           bots. */
+        _cooldownUntil = Date.now() + 20 * 60000;
+        setProgress("banido — aguardando 20min", _progress.pct);
+      } else {
+        setProgress("erro", _progress.pct);
+      }
+      console.warn("[btcBacktest] run failed:", e && e.message);
+    }).finally(() => { _running = false; });
   }
-  return { ready: !!_cache, running: _running, progress: _progress, data: _cache };
+  const waitMin = _cooldownUntil > now ? Math.ceil((_cooldownUntil - now) / 60000) : 0;
+  return { ready: !!_cache, running: _running, progress: _progress, cooldownMin: waitMin, data: _cache };
 }
 
 module.exports = { get, run, buildRows, simulate, summarize, BOTS, EXIT, TFS };
