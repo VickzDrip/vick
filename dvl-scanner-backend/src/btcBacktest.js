@@ -55,12 +55,27 @@ const BOTS = [
   { id: "b7", label: "LSR abaixo da média + Pré-volume baixo", match: r => r.blocks.lsrBelowAvg && r.blocks.prevVolBelowHalf }
 ];
 
-async function getJSON(url) {
-  const res = await fetch(url, { cache: "no-store" });
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* Rate-limit aware: a 30-day run fires ~80 requests, and firing them too
+   fast gets Binance's weight limiter to answer 429 (and then 418 if you
+   keep hammering). On 429/418/5xx, honour Retry-After (or back off
+   exponentially) and retry the SAME request rather than skipping the page
+   — skipping is what left the last-fetched timeframe (5m) starved to zero.
+   Only a persistent failure after several retries throws. */
+async function getJSON(url, tries) {
+  tries = tries || 0;
+  let res;
+  try { res = await fetch(url, { cache: "no-store" }); }
+  catch (e) { if (tries < 5) { await sleep(Math.min(20000, 800 * Math.pow(2, tries))); return getJSON(url, tries + 1); } throw e; }
+  if ((res.status === 429 || res.status === 418 || res.status >= 500) && tries < 6) {
+    const ra = Number(res.headers.get("retry-after"));
+    await sleep(ra > 0 ? Math.min(60000, ra * 1000) : Math.min(30000, 800 * Math.pow(2, tries)));
+    return getJSON(url, tries + 1);
+  }
   if (!res.ok) throw new Error("HTTP " + res.status);
   return res.json();
 }
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 /* Live progress, surfaced to the frontend so the loading bar is real (which
    phase, what %) and a stuck/failed run is visible instead of an eternal
@@ -83,7 +98,7 @@ async function fetchKlines(tf, startMs, endMs) {
     for (const k of d) out.push({ t: Number(k[0]), o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] });
     const last = Number(d[d.length - 1][0]);
     from = (last > from ? last : from) + step;
-    await sleep(100);
+    await sleep(250);
   }
   return out.filter(k => k.t >= startMs && k.t <= endMs);
 }
@@ -103,7 +118,7 @@ async function fetchSeries(path, valueKey, startMs, endMs) {
     let d;
     try { d = await getJSON(url); } catch (e) { _progress.lastError = path + ": " + e.message; continue; }
     if (Array.isArray(d)) for (const x of d) { const t = Number(x.timestamp), v = Number(x[valueKey]); if (Number.isFinite(t) && Number.isFinite(v)) map.set(t, v); }
-    await sleep(100);
+    await sleep(250);
   }
   return Array.from(map.entries()).map(([t, v]) => ({ t, v })).sort((a, b) => a.t - b.t);
 }
