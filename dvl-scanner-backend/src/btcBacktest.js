@@ -41,8 +41,9 @@
    blocks, so 30 days is the longest window where all 7 combos can be
    reconstructed from REAL data instead of guessed.
 
-   The 7 combos mirror the frontend's BOTS array (kept in sync by hand —
-   they're trivial 2-block ANDs). The EXIT is a single common rule I
+   The combos (see BOTS) are trivial 2-block ANDs — currently the FOCUSED
+   set of the top-2 per timeframe from the earlier broad run, re-tested on
+   a wider asset universe. The EXIT is a single common rule I
    picked so the comparison is about the ENTRY combo, not the exit:
    1.5x-ATR stop, half off at +1R -> breakeven, rest to +2R, 45-min
    timeout. (The live bots each have their OWN exit now; this backtest
@@ -61,9 +62,10 @@ const M = require("./metrics");
 
 /* Assets to pool the backtest over. Each must exist as a MEXC perp
    (BASE_USDT, for candles) and have Binance futures OI/LSR (BASEUSDT).
-   Runtime scales ~linearly with this list — 6 is ~3 min of fetches,
-   cached 6h. */
-const ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE"];
+   Runtime scales ~linearly with this list — 15 is ~7-8 min of fetches,
+   cached 6h. Any asset that comes back empty (missing on either exchange)
+   is skipped, not fatal. */
+const ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "LINK", "LTC", "DOT", "TRX", "BCH", "NEAR", "ATOM"];
 const mexcSym = b => b + "_USDT";   // MEXC contract symbol (candles)
 const binSym = b => b + "USDT";     // Binance symbol (OI/LSR futures-data)
 const DAYS = 30;
@@ -75,16 +77,21 @@ const RISK_PER_TRADE = 0.01;       // 1% of equity risked per trade, for the com
 /* Single common exit, applied to every combo (see module doc-comment). */
 const EXIT = { atrMult: 1.5, tp1R: 1, tp1Frac: 0.5, be: true, tp2R: 2, holdMin: 45 };
 
-/* Mirror of the frontend's 7 entry combos. Each is a predicate on a row
-   carrying .blocks (from metrics.blocksOf) plus .oiSlope. */
+/* FOCUSED set: the top-2 entry combos of EACH timeframe from the earlier
+   6-asset 30-day run (union = these 4 distinct combos). This "bigger" run
+   re-tests just these across a WIDER asset universe (see ASSETS) to see
+   whether the thin edge holds on more coins. Each is a predicate on a row
+   carrying .blocks (from metrics.blocksOf) plus .oiSlope.
+     1M top-2: RSI+OI (b5), Spike+RSI (b3)
+     3M top-2: OI+Pré-vol (b4), Pré-vol+OI-subindo (b2)
+     5M top-2: Spike+RSI (b3), OI+Pré-vol (b4)
+   The other 3 combos (b1 OI+LSR, b6 RSI+LSR, b7 LSR+Pré-vol) were dropped —
+   they were LSR-driven and consistently the weakest across all timeframes. */
 const BOTS = [
-  { id: "b1", label: "OI acima da média + LSR abaixo da média", match: r => r.blocks.oiAboveAvg && r.blocks.lsrBelowAvg },
-  { id: "b2", label: "Pré-volume baixo + OI subindo", match: r => r.blocks.prevVolBelowHalf && r.oiSlope > 0 },
+  { id: "b5", label: "RSI sobrevenda + OI acima da média", match: r => r.blocks.rsiOversold && r.blocks.oiAboveAvg },
   { id: "b3", label: "Spike acima da média + RSI sobrevenda", match: r => r.blocks.spikeAboveAvg && r.blocks.rsiOversold },
   { id: "b4", label: "OI acima da média + Pré-volume baixo", match: r => r.blocks.oiAboveAvg && r.blocks.prevVolBelowHalf },
-  { id: "b5", label: "RSI sobrevenda + OI acima da média", match: r => r.blocks.rsiOversold && r.blocks.oiAboveAvg },
-  { id: "b6", label: "RSI sobrevenda + LSR abaixo da média", match: r => r.blocks.rsiOversold && r.blocks.lsrBelowAvg },
-  { id: "b7", label: "LSR abaixo da média + Pré-volume baixo", match: r => r.blocks.lsrBelowAvg && r.blocks.prevVolBelowHalf }
+  { id: "b2", label: "Pré-volume baixo + OI subindo", match: r => r.blocks.prevVolBelowHalf && r.oiSlope > 0 }
 ];
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
