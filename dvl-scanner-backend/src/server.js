@@ -145,9 +145,12 @@ function createServer() {
   });
 
   /* Fast Bots 30-day backtest on BTC (1m/3m/5m) — read-only, does not
-     touch the live paper wallets. Lazily computes + caches (a full run is
-     ~1 min of Binance fetches), so this returns immediately with either
-     the cached result or {ready:false, running:true} while it warms. */
+     touch the live paper wallets. Candles come from MEXC (Binance's klines
+     endpoint is shared with the live scanner and kept tripping a 418 IP
+     ban); OI/LSR direction still from Binance's light futures-data. Lazily
+     computes + caches (a full run is ~1 min of fetches), so this returns
+     immediately with either the cached result or {ready:false,
+     running:true} while it warms. */
   app.get("/api/dvl/scanner/btc-backtest", (req, res) => {
     const r = btcBacktest.get();
     res.json({ ok: true, ready: r.ready, running: r.running, progress: r.progress, cooldownMin: r.cooldownMin, ...(r.data || {}) });

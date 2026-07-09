@@ -6,14 +6,30 @@
    combos had traded BTC over the last 30 days, how would each have
    done?" on 1m/3m/5m, using REAL history.
 
-   Why 30 days (not a year): the entry combos need OI and LSR direction,
-   and Binance's futures-data endpoints (openInterestHist,
-   topLongShortAccountRatio) only retain ~30 days of intraday history.
-   Price/volume (klines) go back further, but OI/LSR are the wall — so
-   30 days is the longest window where all 7 combos can be reconstructed
-   from REAL data instead of guessed. All three series here come from
-   endpoints the live scanner already uses in production (exchanges.js),
-   just paginated back 30 days.
+   DATA SOURCES (hybrid, on purpose):
+     - CANDLES (price/volume) come from MEXC's contract/kline endpoint.
+       Binance's own klines endpoint is shared with the live scanner's
+       heavy 24h load on this same IP, and the backtest's extra burst
+       kept tripping Binance's WAF into an HTTP 418 IP ban — the wall
+       that motivated this switch. MEXC's kline API carries none of that
+       load, so the candles fetch cleanly. MEXC has no native 3m, so 3m
+       is aggregated from Min1 (5m uses Min5 directly, 1m uses Min1).
+     - OI + LSR direction still come from Binance's futures-data
+       endpoints (openInterestHist, topLongShortAccountRatio). MEXC's
+       public API exposes only the CURRENT open interest (ticker.holdVol)
+       with no history, and no long/short ratio at all — so those two
+       blocks can't be reconstructed from MEXC. Binance's futures-data
+       endpoints, unlike its klines, are light (a handful of calls) and
+       finish before any ban can trip, so keeping them there costs
+       nothing and keeps all 7 combos alive instead of collapsing to the
+       single pure-price/volume combo (Spike+RSI). They're best-effort:
+       if Binance is mid-ban, OI/LSR come back empty and only the
+       OI/LSR-free combos are scored (surfaced via dataWarning).
+
+   Why 30 days (not a year): Binance's futures-data endpoints only retain
+   ~30 days of intraday OI/LSR history — that's the wall for the direction
+   blocks, so 30 days is the longest window where all 7 combos can be
+   reconstructed from REAL data instead of guessed.
 
    The 7 combos mirror the frontend's BOTS array (kept in sync by hand —
    they're trivial 2-block ANDs). The EXIT is a single common rule I
@@ -25,15 +41,16 @@
 
    NOTE on confidence: the fetch endpoints are proven server-side
    (they power the live scanner), but the 30-day PAGINATION here couldn't
-   be exercised against live Binance from the sandbox this was written
-   in. buildRows() and simulate() ARE covered by an offline test with
-   synthetic data. Watch the first real run's log line for the row
-   counts / any fetch warning. */
+   be exercised against live exchanges from the sandbox this was written
+   in. buildRows(), simulate() and aggregate() ARE covered by an offline
+   test with synthetic data. Watch the first real run's log line for the
+   row counts / any fetch warning. */
 
 const cfg = require("./config");
 const M = require("./metrics");
 
-const SYMBOL = "BTCUSDT";
+const MEXC_SYMBOL = "BTC_USDT";    // MEXC contract symbol (candles)
+const BINANCE_SYMBOL = "BTCUSDT";  // Binance symbol (OI/LSR futures-data)
 const DAYS = 30;
 const TFS = ["1m", "3m", "5m"];
 const TF_MS = { "1m": 60000, "3m": 180000, "5m": 300000 };
@@ -57,16 +74,15 @@ const BOTS = [
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-/* Rate-limit aware, and careful NOT to make things worse. This IP is
-   shared with the live scanner, so a Binance ban here would hurt the bots
-   too — the priority is to never hammer.
+/* Rate-limit aware, shared by the MEXC candle fetch and the Binance
+   OI/LSR fetch. Careful NOT to make a Binance ban worse (that IP is shared
+   with the live scanner):
      - 429 (rate limit) / 5xx: honour Retry-After (or back off) and retry
-       the SAME page, so pages aren't skipped (skipping is what starved the
-       5m timeframe to zero).
-     - 418 (IP temporarily BANNED after ignoring 429s): do NOT retry — any
-       request during a ban extends it. Throw a .banned error so the whole
-       run aborts immediately and get() waits a long cooldown for the ban
-       to lapse. */
+       the SAME page, so pages aren't skipped.
+     - 418 (Binance IP temporarily BANNED): do NOT retry — any request
+       during a ban extends it. Throw a .banned error; the OI/LSR fetch
+       catches it and returns partial/empty (those combos just go no-data),
+       while the MEXC candles carry the run regardless. */
 async function getJSON(url, tries) {
   tries = tries || 0;
   let res;
@@ -90,42 +106,80 @@ function setProgress(phase, pct) { _progress.phase = phase; _progress.pct = Math
 
 /* ── Data fetch (paginated back DAYS) ─────────────────────────────── */
 
-async function fetchKlines(tf, startMs, endMs) {
+/* MEXC contract candles (open time in unix SECONDS in the payload; we
+   convert to ms to match everything else). One MEXC interval string
+   (Min1/Min5/...), paginated forward in windows of `pageCandles`. MEXC's
+   public contract API is not the load-shared, ban-prone endpoint Binance's
+   klines are, so this can move at a brisk 400ms between pages. Returns
+   de-duplicated {t,o,h,l,c,v} sorted asc, clipped to [startMs,endMs]. */
+async function fetchMexcKlines(interval, stepMs, startMs, endMs, pRange) {
+  const seen = new Set();
   const out = [];
-  let from = startMs, guard = 0;
-  const step = TF_MS[tf];
-  while (from < endMs && guard++ < 400) {
-    const url = "https://fapi.binance.com/fapi/v1/klines?symbol=" + SYMBOL +
-      "&interval=" + tf + "&startTime=" + from + "&endTime=" + endMs + "&limit=1500";
-    let d;
-    try { d = await getJSON(url); } catch (e) { if (e.banned) throw e; _progress.lastError = "klines " + tf + ": " + e.message; from += 1500 * step; continue; }
-    if (!Array.isArray(d) || !d.length) { from += 1500 * step; continue; }
-    for (const k of d) out.push({ t: Number(k[0]), o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] });
-    const last = Number(d[d.length - 1][0]);
-    from = (last > from ? last : from) + step;
-    /* Slow on purpose: /fapi/v1/klines is heavily used by the live scanner
-       on this same IP, so the backtest's extra klines load has to stay
-       negligible or it tips the shared budget into a 418. The run is
-       cached, so taking a couple minutes is fine. */
-    await sleep(1200);
+  const endSec = Math.floor(endMs / 1000), startSec = Math.floor(startMs / 1000);
+  const stepSec = stepMs / 1000, pageCandles = 1000;
+  let from = startSec, guard = 0;
+  const span = Math.max(1, endSec - startSec);
+  while (from < endSec && guard++ < 400) {
+    const to = Math.min(from + pageCandles * stepSec, endSec);
+    const url = "https://contract.mexc.com/api/v1/contract/kline/" + MEXC_SYMBOL +
+      "?interval=" + interval + "&start=" + from + "&end=" + to;
+    let j;
+    try { j = await getJSON(url); } catch (e) { _progress.lastError = "mexc kline " + interval + ": " + e.message; from = Math.floor(to) + stepSec; continue; }
+    const d = j && j.data;
+    const times = (d && d.time) || [];
+    if (times.length) {
+      const cl = d.close || [], op = d.open || [], hi = d.high || [], lo = d.low || [], vo = d.vol || d.amount || [];
+      for (let i = 0; i < times.length; i++) {
+        const tsec = Number(times[i]);
+        if (!Number.isFinite(tsec) || seen.has(tsec)) continue;
+        seen.add(tsec);
+        out.push({ t: tsec * 1000, o: +op[i], h: +hi[i], l: +lo[i], c: +cl[i], v: +(vo[i] || 0) });
+      }
+      const lastSec = Number(times[times.length - 1]);
+      from = (lastSec > from ? lastSec : Math.floor(to)) + stepSec;
+    } else {
+      from = Math.floor(to) + stepSec;
+    }
+    if (pRange) setProgress("candles MEXC " + interval, pRange[0] + (pRange[1] - pRange[0]) * Math.min(1, (from - startSec) / span));
+    await sleep(400);
   }
+  out.sort((a, b) => a.t - b.t);
   return out.filter(k => k.t >= startMs && k.t <= endMs);
+}
+
+/* Aggregate finer candles into a coarser timeframe, bucketed by clock
+   boundary (floor(t/bucketMs)) so it's robust to gaps and never straddles
+   a boundary. Assumes input sorted asc, so the last candle in a bucket is
+   its close. Used to synthesize a true 3m from MEXC's Min1 (MEXC has no
+   native 3m interval). */
+function aggregate(klines, bucketMs) {
+  const buckets = new Map();
+  for (const k of klines) {
+    const b = Math.floor(k.t / bucketMs) * bucketMs;
+    const g = buckets.get(b);
+    if (!g) buckets.set(b, { t: b, o: k.o, h: k.h, l: k.l, c: k.c, v: k.v });
+    else { if (k.h > g.h) g.h = k.h; if (k.l < g.l) g.l = k.l; g.c = k.c; g.v += k.v; }
+  }
+  return Array.from(buckets.values()).sort((a, b) => a.t - b.t);
 }
 
 /* Binance futures-data series (openInterestHist / topLongShortAccountRatio)
    at 5m granularity. Walks fixed windows forward (advancing on empty/error
    instead of stopping — the oldest window can be past Binance's ~30-day
    retention and come back empty, which must NOT abort the whole series).
-   Returns de-duplicated [{t, v}] sorted asc. */
+   Best-effort: if the IP is mid-ban (418), stop early and return whatever
+   was gathered so the run continues on the MEXC candles rather than
+   aborting — the OI/LSR combos just show up as no-data. Returns
+   de-duplicated [{t, v}] sorted asc. */
 async function fetchSeries(path, valueKey, startMs, endMs) {
   const map = new Map();
   const step = 5 * 60000, pageMs = 500 * step;
   for (let from = startMs; from < endMs; from += pageMs) {
     const to = Math.min(from + pageMs, endMs);
-    const url = "https://fapi.binance.com/futures/data/" + path + "?symbol=" + SYMBOL +
+    const url = "https://fapi.binance.com/futures/data/" + path + "?symbol=" + BINANCE_SYMBOL +
       "&period=5m&startTime=" + from + "&endTime=" + to + "&limit=500";
     let d;
-    try { d = await getJSON(url); } catch (e) { if (e.banned) throw e; _progress.lastError = path + ": " + e.message; continue; }
+    try { d = await getJSON(url); } catch (e) { _progress.lastError = path + ": " + e.message; if (e.banned) break; continue; }
     if (Array.isArray(d)) for (const x of d) { const t = Number(x.timestamp), v = Number(x[valueKey]); if (Number.isFinite(t) && Number.isFinite(v)) map.set(t, v); }
     await sleep(450);
   }
@@ -253,52 +307,54 @@ let _cache = null;          // { updatedAt, days, exit, results: {tf: {botId: st
 let _running = false;
 
 async function run() {
-  _progress = { phase: "buscando OI", pct: 3, lastError: null, attempts: _progress.attempts + 1, startedAt: Date.now() };
+  _progress = { phase: "buscando OI (Binance)", pct: 3, lastError: null, attempts: _progress.attempts + 1, startedAt: Date.now() };
   const endMs = Date.now();
   const startMs = endMs - DAYS * 86400000;
+  /* OI + LSR direction still come from Binance's futures-data (MEXC has no
+     history for either). Best-effort — fetchSeries returns partial/empty on
+     a residual ban rather than throwing, so the run always continues on the
+     MEXC candles below. */
   const oiSeries = await fetchSeries("openInterestHist", "sumOpenInterest", startMs, endMs);
-  setProgress("buscando LSR", 18);
+  setProgress("buscando LSR (Binance)", 18);
   const lsrSeries = await fetchSeries("topLongShortAccountRatio", "longShortRatio", startMs, endMs);
-  setProgress("buscando candles", 32);
-  /* Fetch timeframes LIGHTEST-first (5m: ~6 pages, 3m: ~10, 1m: ~29). The
-     ban trips on the heavy 1m, so doing it LAST means 5m + 3m results are
-     already secured — a ban on 1m keeps the partial instead of losing
-     everything (the old order did 1m first and lost the whole run). */
-  const fetchOrder = ["5m", "3m", "1m"];
+  const haveDir = oiSeries.length >= 2 && lsrSeries.length >= 2;
+
+  /* Candles from MEXC. Fetch Min1 (serves 1m directly + aggregated 3m) and
+     Min5 (5m) — two fetches instead of three, and a real 3m instead of
+     MEXC's absent native interval. */
+  setProgress("candles MEXC Min1", 30);
+  const min1 = await fetchMexcKlines("Min1", 60000, startMs, endMs, [30, 62]);
+  setProgress("candles MEXC Min5", 64);
+  const min5 = await fetchMexcKlines("Min5", 300000, startMs, endMs, [64, 78]);
+  const klinesByTf = { "1m": min1, "3m": aggregate(min1, TF_MS["3m"]), "5m": min5 };
+
   const results = {}, coverage = {};
-  let banned = false;
-  for (let ti = 0; ti < fetchOrder.length; ti++) {
-    const tf = fetchOrder[ti];
-    setProgress("candles + simulação " + tf, 32 + (ti + 0.3) * 20);
-    let kl;
-    try { kl = await fetchKlines(tf, startMs, endMs); }
-    catch (e) { if (e.banned) { banned = true; break; } throw e; }
+  for (let ti = 0; ti < TFS.length; ti++) {
+    const tf = TFS[ti];
+    setProgress("simulação " + tf, 80 + (ti + 0.5) * (20 / TFS.length));
+    const kl = klinesByTf[tf] || [];
     const rows = buildRows(kl, oiSeries, lsrSeries, tf);
     coverage[tf] = { candles: kl.length, usable: rows.filter(Boolean).length };
     results[tf] = {};
     for (const bot of BOTS) results[tf][bot.id] = simulate(rows, bot.match, EXIT, tf);
-    setProgress("candles + simulação " + tf, 32 + (ti + 1) * 20);
   }
-  const gotAll = TFS.every(tf => results[tf]);
+  const gotAll = TFS.every(tf => (coverage[tf] && coverage[tf].candles > WARMUP));
   _cache = {
-    updatedAt: Date.now(), days: DAYS, symbol: SYMBOL,
+    updatedAt: Date.now(), days: DAYS, symbol: MEXC_SYMBOL, candleSource: "MEXC", dirSource: "Binance",
     exitLabel: "Stop 1.5x ATR · parcial no +1R → b.e. · resto +2R · timeout 45min",
     bots: BOTS.map(b => ({ id: b.id, label: b.label })),
     coverage: coverage, oiPoints: oiSeries.length, lsrPoints: lsrSeries.length,
     results: results, partial: !gotAll
   };
-  if (banned && !gotAll) {
-    _cache.dataWarning = "A Binance limitou as chamadas (ban de IP) antes de terminar — mostrando os timeframes que deram tempo. Os que faltam entram nas próximas rodadas.";
-  } else if (!oiSeries.length || !lsrSeries.length) {
-    _cache.dataWarning = "OI/LSR vieram vazios (oi:" + oiSeries.length + " lsr:" + lsrSeries.length + ") — os combos que dependem deles não têm o que avaliar.";
+  if (!haveDir) {
+    _cache.dataWarning = "OI/LSR da Binance indisponíveis (oi:" + oiSeries.length + " lsr:" + lsrSeries.length +
+      ") — provavelmente ban temporário de IP. Os candles vieram da MEXC, então o combo Spike+RSI foi avaliado; os que dependem de OI/LSR ficam sem dados até a Binance liberar.";
+  } else if (!gotAll) {
+    _cache.dataWarning = "Alguns timeframes vieram curtos da MEXC — mostrando o que deu para calcular; o resto entra nas próximas rodadas.";
   }
-  setProgress(gotAll ? "pronto" : "parcial (ban)", 100);
-  console.log("[btcBacktest] done — oi:" + oiSeries.length + " lsr:" + lsrSeries.length +
-    " coverage:" + JSON.stringify(coverage) + (banned ? " (BANNED, partial)" : "") + (_progress.lastError ? " lastErr:" + _progress.lastError : ""));
-  /* Signal a ban up to get() (for the long cooldown) only if NOTHING new
-     was salvaged; if we got at least a fresh timeframe, treat it as a
-     normal short-TTL partial that retries in a few minutes for the rest. */
-  if (banned && !gotAll && Object.keys(results).length === 0) { const e = new Error("HTTP 418 (IP temporariamente banido pela Binance)"); e.banned = true; throw e; }
+  setProgress(gotAll && haveDir ? "pronto" : "parcial", 100);
+  console.log("[btcBacktest] done — src:MEXC(candles)/Binance(oi,lsr) oi:" + oiSeries.length + " lsr:" + lsrSeries.length +
+    " coverage:" + JSON.stringify(coverage) + (_progress.lastError ? " lastErr:" + _progress.lastError : ""));
   return _cache;
 }
 
@@ -308,32 +364,24 @@ async function run() {
    run at most once a minute so a persistent Binance failure doesn't hammer
    it every request. */
 let _lastAttempt = 0;
-let _cooldownUntil = 0;   // don't touch Binance again before this (long after a 418 ban)
 function get() {
   /* A good run is fresh for 6h; a run that came back with empty/short data
-     (dataWarning) is only "fresh" for 5 min, so a transient Binance hiccup
-     doesn't freeze a table of zeros for hours. */
+     (dataWarning — e.g. Binance mid-ban so OI/LSR were skipped) is only
+     "fresh" for 5 min, so once the ban lapses the full table fills in
+     within minutes instead of being frozen for hours. Candles come from
+     MEXC now, which doesn't get banned, so run() always completes. */
   const ttl = (_cache && _cache.dataWarning) ? 5 * 60000 : 6 * 3600000;
   const fresh = _cache && (Date.now() - _cache.updatedAt) < ttl;
   const now = Date.now();
-  if (!fresh && !_running && (now - _lastAttempt) > 60000 && now >= _cooldownUntil) {
+  if (!fresh && !_running && (now - _lastAttempt) > 60000) {
     _running = true; _lastAttempt = now;
     run().catch(e => {
       _progress.lastError = e && e.message;
-      if (e && e.banned) {
-        /* Binance temp-banned the IP (shared with the live scanner) — wait
-           20 min before ANY retry so we don't extend the ban or hurt the
-           bots. */
-        _cooldownUntil = Date.now() + 20 * 60000;
-        setProgress("banido — aguardando 20min", _progress.pct);
-      } else {
-        setProgress("erro", _progress.pct);
-      }
+      setProgress("erro", _progress.pct);
       console.warn("[btcBacktest] run failed:", e && e.message);
     }).finally(() => { _running = false; });
   }
-  const waitMin = _cooldownUntil > now ? Math.ceil((_cooldownUntil - now) / 60000) : 0;
-  return { ready: !!_cache, running: _running, progress: _progress, cooldownMin: waitMin, data: _cache };
+  return { ready: !!_cache, running: _running, progress: _progress, cooldownMin: 0, data: _cache };
 }
 
-module.exports = { get, run, buildRows, simulate, summarize, BOTS, EXIT, TFS };
+module.exports = { get, run, buildRows, simulate, summarize, aggregate, BOTS, EXIT, TFS };

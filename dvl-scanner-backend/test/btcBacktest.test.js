@@ -1,9 +1,9 @@
 "use strict";
 
-/* Offline test for btcBacktest.js — no network. Exercises the two pure
-   pieces (buildRows, simulate) with synthetic candles/series; the live
+/* Offline test for btcBacktest.js — no network. Exercises the pure pieces
+   (buildRows, simulate, aggregate) with synthetic candles/series; the live
    30-day fetch (run()) is deliberately not unit-tested here since it needs
-   Binance. */
+   MEXC (candles) + Binance (OI/LSR). */
 
 const assert = require("assert");
 const bt = require("../src/btcBacktest");
@@ -105,6 +105,33 @@ function candle(close, high, low) { return { close: close, high: high, low: low,
   const live = rows.filter(Boolean);
   ok(live.length > 0, "produces usable rows past warmup");
   ok(live.every(r => r.blocks && typeof r.blocks.oiAboveAvg === "boolean" && typeof r.oiSlope === "number"), "rows carry blocks + oiSlope");
+})();
+
+/* 7) aggregate(): Min1 candles roll up into 3m buckets on clock boundaries —
+   open from the first, close from the last, high/low the extremes, volume
+   summed. A gap (missing minute) must not straddle a bucket. */
+(function () {
+  const b = 180000; // 3m
+  // Three 1m candles inside the 0..3m bucket (t=0,60000,120000), then one in the next.
+  const k = [
+    { t: 0, o: 100, h: 102, l: 99, c: 101, v: 10 },
+    { t: 60000, o: 101, h: 105, l: 100, c: 104, v: 20 },
+    { t: 120000, o: 104, h: 104.5, l: 98, c: 100, v: 30 },
+    { t: 180000, o: 100, h: 101, l: 99.5, c: 100.5, v: 5 }
+  ];
+  const agg = bt.aggregate(k, b);
+  ok(agg.length === 2, "two 3m buckets from four 1m candles");
+  const g = agg[0];
+  ok(g.t === 0, "bucket aligned to clock boundary");
+  near(g.o, 100, "bucket open = first candle open");
+  near(g.c, 100, "bucket close = last candle close");
+  near(g.h, 105, "bucket high = max of members");
+  near(g.l, 98, "bucket low = min of members");
+  near(g.v, 60, "bucket volume = sum of members");
+  ok(agg[1].t === 180000 && agg[1].v === 5, "second bucket is the lone next-window candle");
+  // A gap (no 60000 candle) still buckets correctly, no straddle.
+  const gap = bt.aggregate([k[0], k[2], k[3]], b);
+  ok(gap.length === 2 && gap[0].v === 40 && gap[1].v === 5, "gap tolerated, no cross-boundary bleed");
 })();
 
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
