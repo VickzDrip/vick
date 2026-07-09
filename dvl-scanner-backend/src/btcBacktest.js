@@ -194,7 +194,18 @@ async function fetchSeries(sym, path, valueKey, startMs, endMs) {
     const url = "https://fapi.binance.com/futures/data/" + path + "?symbol=" + sym +
       "&period=5m&startTime=" + from + "&endTime=" + to + "&limit=500";
     let d;
-    try { d = await getJSON(url); } catch (e) { _progress.lastError = path + ": " + e.message; if (e.banned) break; continue; }
+    try { d = await getJSON(url); }
+    catch (e) {
+      if (e.banned) { _progress.lastError = path + ": " + e.message; break; }
+      /* HTTP 400 = this window's startTime is outside Binance's ~30-day
+         futures-data retention. Expected at the OLDEST edge — and that edge
+         drifts out of range as a multi-minute run progresses (later assets
+         hit it first). It's non-fatal: the newer in-range windows still
+         return data, so skip quietly WITHOUT flagging the whole run as
+         errored (which would paint the card red for nothing). */
+      if (!/HTTP 400/.test(e.message)) _progress.lastError = path + ": " + e.message;
+      continue;
+    }
     if (Array.isArray(d)) for (const x of d) { const t = Number(x.timestamp), v = Number(x[valueKey]); if (Number.isFinite(t) && Number.isFinite(v)) map.set(t, v); }
     await sleep(450);
   }
