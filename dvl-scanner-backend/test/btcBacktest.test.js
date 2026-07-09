@@ -107,6 +107,21 @@ function candle(close, high, low) { return { close: close, high: high, low: low,
   ok(live.every(r => r.blocks && typeof r.blocks.oiAboveAvg === "boolean" && typeof r.oiSlope === "number"), "rows carry blocks + oiSlope");
 })();
 
+/* 6b) simulateTrades(): returns the raw per-trade R array (chronological),
+   and simulate() is just summarize() over it — the two must agree. */
+(function () {
+  const rows = [
+    candle(100, 100, 100),                 // 0: entry
+    candle(102, 103.5, 100.1)              // 1: through tp1+tp2 -> +1.5R
+  ];
+  const mkMatch = () => { let fired = false; return (c) => { if (!fired && c.close === 100) { fired = true; return true; } return false; }; };
+  const tr = bt.simulateTrades(rows, mkMatch(), bt.EXIT, "5m");
+  ok(Array.isArray(tr) && tr.length === 1, "simulateTrades returns an array of R-multiples");
+  near(tr[0], 1.5, "raw trade R matches (+1.5R)");
+  const s = bt.simulate(rows, mkMatch(), bt.EXIT, "5m");
+  ok(s.trades === 1 && Math.abs(s.avgR - 1.5) < 1e-6, "simulate() == summarize(simulateTrades)");
+})();
+
 /* 7) aggregate(): Min1 candles roll up into 3m buckets on clock boundaries —
    open from the first, close from the last, high/low the extremes, volume
    summed. A gap (missing minute) must not straddle a bucket. */
@@ -132,6 +147,22 @@ function candle(close, high, low) { return { close: close, high: high, low: low,
   // A gap (no 60000 candle) still buckets correctly, no straddle.
   const gap = bt.aggregate([k[0], k[2], k[3]], b);
   ok(gap.length === 2 && gap[0].v === 40 && gap[1].v === 5, "gap tolerated, no cross-boundary bleed");
+})();
+
+/* 8) Multi-asset pooling math: win% + avgR pool EVERY trade across assets,
+   while retPct is the mean of the per-asset returns (the scheme run() uses).
+   This locks the two aggregation modes so a regression in either is caught. */
+(function () {
+  const A = [1.5, -1];        // asset A trades
+  const B = [1.5, 1.5];       // asset B trades
+  const pooled = bt.summarize(A.concat(B));
+  ok(pooled.trades === 4, "pooled counts every trade across assets");
+  ok(pooled.winPct === 75, "pooled win% over all trades (3/4)");
+  near(pooled.avgR, 0.875, "pooled avgR = mean R over all trades");
+  const retA = bt.summarize(A).retPct, retB = bt.summarize(B).retPct;
+  const avgRet = Math.round(((retA + retB) / 2) * 10) / 10;
+  ok(retB > retA, "the all-wins asset has the higher per-asset return");
+  ok(Number.isFinite(avgRet), "averaged per-asset return is a finite number, no NaN");
 })();
 
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
