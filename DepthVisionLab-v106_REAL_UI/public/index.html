@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.092</title>
+<title>DVL Binance Live — Beta 1.093</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.092';
+window.DVL_APP_VERSION = 'Beta 1.093';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.092";
+const DVL_APP_VERSION = "Beta 1.093";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.093", note: "Backteste agora é MULTI-ATIVO: em vez de só BTC, roda os 7 combos em 6 ativos (BTC, ETH, SOL, BNB, XRP, DOGE) nos mesmos 30 dias — amostra bem maior, testa se o edge é real ou só sorte de um ativo. Como junta os trades de vários ativos, mudei o jeito de medir pra não enganar: Acerto e R médio (expectância) somam TODOS os trades de todos os ativos (as métricas que importam pra comparar), enquanto Retorno e Máx queda são a MÉDIA por ativo — assim o número fica na mesma escala de antes, sem inflar por ter 6x mais trade. O card mostra quantos ativos entraram em cada timeframe. Exige atualizar/reiniciar o backend; a rodada leva ~3 min (mais ativos pra buscar), fica em cache 6h." },
   { version: "Beta 1.092", note: "Correção do 'app abrindo versão antiga': o site é servido sem cache (no-store), mas um app instalado (PWA) ou uma aba aberta há muito tempo guardava a página JÁ CARREGADA na memória e não buscava de novo depois de um deploy — por isso às vezes aparecia uma versão velha. Agora tem um verificador automático: ele consulta a versão realmente publicada no servidor (a cada 60s, ao voltar pro app e 8s depois de abrir) e, quando é diferente da que está rodando, ou recarrega sozinho (se o app estiver em segundo plano, pra não atrapalhar) ou mostra um aviso verde no topo 'Nova versão — toque para atualizar'. Tem trava anti-loop: tenta atualizar sozinho no máximo uma vez por versão, então nunca fica recarregando à toa." },
   { version: "Beta 1.091", note: "Backteste (BTC): os candles (preço/volume) agora vêm da MEXC, não da Binance — era a Binance que bania o IP (HTTP 418), porque o endpoint de klines é compartilhado com o scanner ao vivo e a rajada de 30 dias estourava a cota. A MEXC não tem esse problema, então os candles baixam limpos e o 1m/3m/5m preenchem de novo (o 3m é montado a partir do Min1 da MEXC, que não tem 3m nativo). O OI e o LSR continuam vindo da Binance (a MEXC não expõe histórico de nenhum dos dois) — mas essas chamadas são leves e não causam ban; se a Binance estiver num ban curto, só os combos que dependem de OI/LSR ficam sem dados por alguns minutos, o Spike+RSI e o resto já aparecem. Sem mais espera de 20 min travando tudo. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.090", note: "Backteste (BTC): descobri que o ban da Binance é só no endpoint de candles (klines) — que o scanner ao vivo também usa direto — não nos de OI/LSR. Por isso a rajada de candles do 1m (43 mil, o mais pesado) derrubava. Agora busca do MAIS LEVE pro mais pesado (5m → 3m → 1m) e guarda resultado PARCIAL: mesmo com ban no 1m, você já vê 5m e 3m, e o 1m entra nas próximas rodadas. Os candles vêm bem mais devagar (1,2s cada) pra não estourar a cota compartilhada com o scanner. Exige atualizar/reiniciar o backend." },
@@ -73953,7 +73954,8 @@ window.DVL_COPILOT_BACKTEST_1040={
     rows.sort(function(a,b){ return (Number(b.retPct)||0)-(Number(a.retPct)||0); });
     var bestId=null; for(var i=0;i<rows.length;i++){ if((rows[i].trades||0)>0){ bestId=rows[i].id; break; } }
     var cov=(_data.coverage||{})[tf]||{};
-    var out='<div class="dvlBt1090TfTitle">'+esc(tf)+(cov.candles?' · '+cov.candles+' candles':'')+'</div>';
+    var nAssets=(_data.assets&&_data.assets.length)||0;
+    var out='<div class="dvlBt1090TfTitle">'+esc(tf)+(nAssets?' · '+nAssets+' ativos':'')+(cov.candles?' · '+cov.candles.toLocaleString('pt-BR')+' candles':'')+'</div>';
     out+='<div class="dvlBt1090Scroll"><table class="dvlBt1090Tbl"><thead><tr>'
       +'<th>Combo (entrada)</th><th>Trades</th><th>Acerto</th><th>R méd.</th><th>Retorno</th><th>Máx queda</th></tr></thead><tbody>';
     out+=rows.map(function(r){
@@ -73990,14 +73992,15 @@ window.DVL_COPILOT_BACKTEST_1040={
       var head;
       if(banned){ head='⏳ Calculando… os candles vêm da MEXC (não sofrem ban). O OI/LSR da Binance pode estar num ban curto de IP; se estiver, os combos que dependem deles aparecem sem dados até liberar. Atualiza sozinho.'; }
       else if(isErr){ head='⚠️ Backteste com problema — veja abaixo. Ele tenta de novo sozinho a cada minuto.'; }
-      else { head='⏳ Calculando o backteste de 30 dias no BTC… atualiza sozinho.'; }
-      var extra=pg.lastError ? ("último erro: "+pg.lastError+(pg.attempts?" · tentativa "+pg.attempts:"")) : "candles da MEXC + OI/LSR da Binance, simulando candle a candle (~1 min)";
+      else { head='⏳ Calculando o backteste de 30 dias (vários ativos)… atualiza sozinho.'; }
+      var extra=pg.lastError ? ("último erro: "+pg.lastError+(pg.attempts?" · tentativa "+pg.attempts:"")) : "candles da MEXC + OI/LSR da Binance, vários ativos, candle a candle (~3 min)";
       return '<div class="dvlBt1090Loading">'+head+'</div>'
         +progressBar(pg.pct||3, isErr, pg.phase||"iniciando", extra);
     }
     var out='';
     if(_data.dataWarning) out+='<div class="dvlBt1090Warn">⚠️ '+esc(_data.dataWarning)+'</div>';
-    out+='<div class="dvlBt1090Note">Backteste de <b>30 dias</b> no <b>BTC</b>, dados reais (candles da <b>MEXC</b>, OI/LSR da <b>Binance</b>). Cada linha é um combo de <b>entrada</b> dos Fast Bots; a saída é <b>igual pra todos</b> ('+esc(_data.exitLabel||'')+') pra comparar só a entrada. Retorno = arriscando 1% por trade, composto. 👑 = melhor retorno do timeframe.</div>';
+    var assetTxt=(_data.assets&&_data.assets.length)?_data.assets.join(", "):"BTC";
+    out+='<div class="dvlBt1090Note">Backteste de <b>30 dias</b> em <b>'+((_data.assets&&_data.assets.length)||1)+' ativos</b> ('+esc(assetTxt)+'), dados reais (candles da <b>MEXC</b>, OI/LSR da <b>Binance</b>). Cada linha é um combo de <b>entrada</b> dos Fast Bots; a saída é <b>igual pra todos</b> ('+esc(_data.exitLabel||'')+') pra comparar só a entrada. <b>Acerto</b> e <b>R méd.</b> juntam TODOS os trades dos ativos; <b>Retorno</b> e <b>Máx queda</b> são a <b>média por ativo</b> (1% de risco por trade, composto). 👑 = melhor retorno do timeframe.</div>';
     out+=TFS.map(tableHtml).join("");
     out+='<div class="dvlBt1090Foot">Atualizado '+esc(fmtAgo(_data.updatedAt))+' · candles: '+esc(_data.candleSource||'MEXC')+' · OI/LSR: '+esc(_data.dirSource||'Binance')+' ('+(_data.oiPoints||0)+'/'+(_data.lsrPoints||0)+' pts) · recalcula a cada 6h. Não mexe nas carteiras dos bots ao vivo — é só simulação histórica.</div>';
     return out;
@@ -74006,7 +74009,7 @@ window.DVL_COPILOT_BACKTEST_1040={
   function html(){
     return '<section class="dvlBt1090Panel dvlBt1090" data-dvl-cp-section="btc-backtest" data-dvl-cp-section-version="1090">'
       +'<div class="dvlBt1090Head"><i class="dvlBt1090Icon">📊</i>'
-      +'<div><b>Backteste 30 dias — BTC</b><span>7 combos de entrada · 1m/3m/5m · saída fixa</span></div></div>'
+      +'<div><b>Backteste 30 dias — Multi-ativo</b><span>7 combos · vários ativos · 1m/3m/5m · saída fixa</span></div></div>'
       +'<div class="dvlBt1090Body">'+bodyHtml()+'</div></section>';
   }
 

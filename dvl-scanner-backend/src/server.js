@@ -9,7 +9,7 @@
    GET  /api/dvl/scanner/history?symbol=X  (every recorded signal for one symbol, for chart markers)
    GET  /api/dvl/scanner/live-reading?symbol=X&tf=Y  (current OI/LSR/RSI/spike reading for ANY symbol)
    GET  /api/dvl/scanner/backtest      (financial backtest: win rate / avg return, all signals vs model-favorable)
-   GET  /api/dvl/scanner/btc-backtest  (Fast Bots' 7 entry combos backtested on BTC 1m/3m/5m over 30 days)
+   GET  /api/dvl/scanner/btc-backtest  (Fast Bots' 7 entry combos backtested on 1m/3m/5m over 30 days, pooled across several assets)
    GET  /api/dvl/scanner/tickers?exchange=binance|mexc  (top-by-24h-volume candidates, server-fetched — see worker.getCandidates)
    GET  /api/dvl/scanner/mexc-price    (fresh MEXC last-price map, for Fast Bots' Bot 4 to check its own open positions)
    GET  /api/dvl/scanner/mexc-atr?symbol=X&tf=Y  (14-period ATR for one MEXC symbol, Fast Bots' fallback stop distance)
@@ -144,13 +144,13 @@ function createServer() {
     res.json({ ok: true, ...worker.getBacktestStats() });
   });
 
-  /* Fast Bots 30-day backtest on BTC (1m/3m/5m) — read-only, does not
-     touch the live paper wallets. Candles come from MEXC (Binance's klines
-     endpoint is shared with the live scanner and kept tripping a 418 IP
-     ban); OI/LSR direction still from Binance's light futures-data. Lazily
-     computes + caches (a full run is ~1 min of fetches), so this returns
-     immediately with either the cached result or {ready:false,
-     running:true} while it warms. */
+  /* Fast Bots 30-day backtest (1m/3m/5m), pooled across several assets —
+     read-only, does not touch the live paper wallets. Candles come from
+     MEXC (Binance's klines endpoint is shared with the live scanner and
+     kept tripping a 418 IP ban); OI/LSR direction still from Binance's
+     light futures-data. Lazily computes + caches (a full run is ~3 min of
+     fetches), so this returns immediately with either the cached result or
+     {ready:false, running:true} while it warms. */
   app.get("/api/dvl/scanner/btc-backtest", (req, res) => {
     const r = btcBacktest.get();
     res.json({ ok: true, ready: r.ready, running: r.running, progress: r.progress, cooldownMin: r.cooldownMin, ...(r.data || {}) });

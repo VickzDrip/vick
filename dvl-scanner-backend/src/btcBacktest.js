@@ -1,10 +1,20 @@
 "use strict";
 
-/* ── Fast Bots 30-day backtest on BTC ──────────────────────────────
+/* ── Fast Bots 30-day multi-asset backtest ─────────────────────────
    A READ-ONLY companion to the live Fast Bots (frontend). It does NOT
    touch the live paper wallets — it just answers "if these 7 entry
-   combos had traded BTC over the last 30 days, how would each have
-   done?" on 1m/3m/5m, using REAL history.
+   combos had traded over the last 30 days, how would each have done?"
+   on 1m/3m/5m, using REAL history — POOLED across several assets
+   (BTC, ETH, SOL, …) so the edge is measured on a much bigger sample
+   than a single coin's one-month regime.
+
+   How the pooling works: each combo is simulated per asset (so each
+   asset's equity curve/drawdown is its own), then the results are
+   combined — win% and R médio (expectancy) are pooled over EVERY trade
+   across all assets (scale-free, the honest comparison), while Retorno
+   and Máx. queda are the AVERAGE across the per-asset curves (keeps the
+   numbers on the same scale as a single-asset run instead of ballooning
+   with the trade count).
 
    DATA SOURCES (hybrid, on purpose):
      - CANDLES (price/volume) come from MEXC's contract/kline endpoint.
@@ -49,8 +59,13 @@
 const cfg = require("./config");
 const M = require("./metrics");
 
-const MEXC_SYMBOL = "BTC_USDT";    // MEXC contract symbol (candles)
-const BINANCE_SYMBOL = "BTCUSDT";  // Binance symbol (OI/LSR futures-data)
+/* Assets to pool the backtest over. Each must exist as a MEXC perp
+   (BASE_USDT, for candles) and have Binance futures OI/LSR (BASEUSDT).
+   Runtime scales ~linearly with this list — 6 is ~3 min of fetches,
+   cached 6h. */
+const ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE"];
+const mexcSym = b => b + "_USDT";   // MEXC contract symbol (candles)
+const binSym = b => b + "USDT";     // Binance symbol (OI/LSR futures-data)
 const DAYS = 30;
 const TFS = ["1m", "3m", "5m"];
 const TF_MS = { "1m": 60000, "3m": 180000, "5m": 300000 };
@@ -112,7 +127,7 @@ function setProgress(phase, pct) { _progress.phase = phase; _progress.pct = Math
    public contract API is not the load-shared, ban-prone endpoint Binance's
    klines are, so this can move at a brisk 400ms between pages. Returns
    de-duplicated {t,o,h,l,c,v} sorted asc, clipped to [startMs,endMs]. */
-async function fetchMexcKlines(interval, stepMs, startMs, endMs, pRange) {
+async function fetchMexcKlines(sym, interval, stepMs, startMs, endMs, pRange) {
   const seen = new Set();
   const out = [];
   const endSec = Math.floor(endMs / 1000), startSec = Math.floor(startMs / 1000);
@@ -121,7 +136,7 @@ async function fetchMexcKlines(interval, stepMs, startMs, endMs, pRange) {
   const span = Math.max(1, endSec - startSec);
   while (from < endSec && guard++ < 400) {
     const to = Math.min(from + pageCandles * stepSec, endSec);
-    const url = "https://contract.mexc.com/api/v1/contract/kline/" + MEXC_SYMBOL +
+    const url = "https://contract.mexc.com/api/v1/contract/kline/" + sym +
       "?interval=" + interval + "&start=" + from + "&end=" + to;
     let j;
     try { j = await getJSON(url); } catch (e) { _progress.lastError = "mexc kline " + interval + ": " + e.message; from = Math.floor(to) + stepSec; continue; }
@@ -171,12 +186,12 @@ function aggregate(klines, bucketMs) {
    was gathered so the run continues on the MEXC candles rather than
    aborting — the OI/LSR combos just show up as no-data. Returns
    de-duplicated [{t, v}] sorted asc. */
-async function fetchSeries(path, valueKey, startMs, endMs) {
+async function fetchSeries(sym, path, valueKey, startMs, endMs) {
   const map = new Map();
   const step = 5 * 60000, pageMs = 500 * step;
   for (let from = startMs; from < endMs; from += pageMs) {
     const to = Math.min(from + pageMs, endMs);
-    const url = "https://fapi.binance.com/futures/data/" + path + "?symbol=" + BINANCE_SYMBOL +
+    const url = "https://fapi.binance.com/futures/data/" + path + "?symbol=" + sym +
       "&period=5m&startTime=" + from + "&endTime=" + to + "&limit=500";
     let d;
     try { d = await getJSON(url); } catch (e) { _progress.lastError = path + ": " + e.message; if (e.banned) break; continue; }
@@ -222,11 +237,18 @@ function buildRows(klines, oiSeries, lsrSeries, tf) {
 
 /* ── Simulate one combo over the rows ─────────────────────────────── */
 
-/* Pure bar-by-bar LONG-only sim (BTC = single symbol, so at most one open
-   position at a time). Intrabar rule is PESSIMISTIC: if a bar's range
-   touches both the stop and a target, the stop is assumed hit first, so
-   results never overstate. Returns per-trade R-multiples + summary. */
+/* simulate() keeps the old contract (returns the summary); simulateTrades()
+   exposes the raw per-trade R-multiples so callers can pool them across
+   assets before summarizing. */
 function simulate(rows, matchFn, exit, tf) {
+  return summarize(simulateTrades(rows, matchFn, exit, tf));
+}
+
+/* Pure bar-by-bar LONG-only sim (one symbol → at most one open position at
+   a time). Intrabar rule is PESSIMISTIC: if a bar's range touches both the
+   stop and a target, the stop is assumed hit first, so results never
+   overstate. Returns the array of per-trade R-multiples (chronological). */
+function simulateTrades(rows, matchFn, exit, tf) {
   const holdBars = Math.max(1, Math.round((exit.holdMin || 45) / (TF_MS[tf] / 60000)));
   const cooldownBars = Math.max(1, Math.round(30 / (TF_MS[tf] / 60000)));
   let pos = null, lastCloseIdx = -1e9;
@@ -276,7 +298,7 @@ function simulate(rows, matchFn, exit, tf) {
       }
     }
   }
-  return summarize(trades);
+  return trades;
 }
 
 function summarize(trades) {
@@ -306,54 +328,106 @@ function summarize(trades) {
 let _cache = null;          // { updatedAt, days, exit, results: {tf: {botId: stats}}, coverage }
 let _running = false;
 
+function mean(arr) { return arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : 0; }
+
 async function run() {
-  _progress = { phase: "buscando OI (Binance)", pct: 3, lastError: null, attempts: _progress.attempts + 1, startedAt: Date.now() };
+  _progress = { phase: "iniciando", pct: 2, lastError: null, attempts: _progress.attempts + 1, startedAt: Date.now() };
   const endMs = Date.now();
   const startMs = endMs - DAYS * 86400000;
-  /* OI + LSR direction still come from Binance's futures-data (MEXC has no
-     history for either). Best-effort — fetchSeries returns partial/empty on
-     a residual ban rather than throwing, so the run always continues on the
-     MEXC candles below. */
-  const oiSeries = await fetchSeries("openInterestHist", "sumOpenInterest", startMs, endMs);
-  setProgress("buscando LSR (Binance)", 18);
-  const lsrSeries = await fetchSeries("topLongShortAccountRatio", "longShortRatio", startMs, endMs);
-  const haveDir = oiSeries.length >= 2 && lsrSeries.length >= 2;
 
-  /* Candles from MEXC. Fetch Min1 (serves 1m directly + aggregated 3m) and
-     Min5 (5m) — two fetches instead of three, and a real 3m instead of
-     MEXC's absent native interval. */
-  setProgress("candles MEXC Min1", 30);
-  const min1 = await fetchMexcKlines("Min1", 60000, startMs, endMs, [30, 62]);
-  setProgress("candles MEXC Min5", 64);
-  const min5 = await fetchMexcKlines("Min5", 300000, startMs, endMs, [64, 78]);
-  const klinesByTf = { "1m": min1, "3m": aggregate(min1, TF_MS["3m"]), "5m": min5 };
+  /* Accumulator per timeframe per bot: pooled R-multiples (for win% + avgR)
+     and the list of per-asset retPct/maxDD (averaged for scale). */
+  const acc = {}, coverage = {};
+  TFS.forEach(tf => {
+    acc[tf] = {};
+    BOTS.forEach(b => { acc[tf][b.id] = { pooled: [], rets: [], dds: [], assets: 0 }; });
+    coverage[tf] = { candles: 0, usable: 0 };
+  });
+  let oiTot = 0, lsrTot = 0, haveDirAny = false;
+  const assetsDone = [];
 
-  const results = {}, coverage = {};
-  for (let ti = 0; ti < TFS.length; ti++) {
-    const tf = TFS[ti];
-    setProgress("simulação " + tf, 80 + (ti + 0.5) * (20 / TFS.length));
-    const kl = klinesByTf[tf] || [];
-    const rows = buildRows(kl, oiSeries, lsrSeries, tf);
-    coverage[tf] = { candles: kl.length, usable: rows.filter(Boolean).length };
-    results[tf] = {};
-    for (const bot of BOTS) results[tf][bot.id] = simulate(rows, bot.match, EXIT, tf);
+  for (let si = 0; si < ASSETS.length; si++) {
+    const base = ASSETS[si];
+    const p0 = 2 + (si / ASSETS.length) * 95, p1 = 2 + ((si + 1) / ASSETS.length) * 95;
+    setProgress(base + ": OI/LSR (Binance)", p0);
+    /* OI + LSR direction come from Binance's futures-data (MEXC has no
+       history for either). Best-effort — fetchSeries returns partial/empty
+       on a residual ban rather than throwing, so a run always continues on
+       the MEXC candles below. */
+    let oiSeries = [], lsrSeries = [];
+    try {
+      oiSeries = await fetchSeries(binSym(base), "openInterestHist", "sumOpenInterest", startMs, endMs);
+      lsrSeries = await fetchSeries(binSym(base), "topLongShortAccountRatio", "longShortRatio", startMs, endMs);
+    } catch (e) { _progress.lastError = base + " OI/LSR: " + e.message; }
+    oiTot += oiSeries.length; lsrTot += lsrSeries.length;
+    if (oiSeries.length >= 2 && lsrSeries.length >= 2) haveDirAny = true;
+
+    /* Candles from MEXC. Min1 serves 1m directly + aggregated 3m; Min5 → 5m
+       (two fetches, and a real 3m instead of MEXC's absent native one). */
+    setProgress(base + ": candles (MEXC)", p0 + (p1 - p0) * 0.15);
+    let min1 = [], min5 = [];
+    try {
+      min1 = await fetchMexcKlines(mexcSym(base), "Min1", 60000, startMs, endMs, [p0 + (p1 - p0) * 0.15, p0 + (p1 - p0) * 0.75]);
+      min5 = await fetchMexcKlines(mexcSym(base), "Min5", 300000, startMs, endMs, [p0 + (p1 - p0) * 0.75, p1]);
+    } catch (e) { _progress.lastError = base + " candles: " + e.message; }
+    if (!min1.length && !min5.length) continue;  // asset unavailable — skip
+    const klinesByTf = { "1m": min1, "3m": aggregate(min1, TF_MS["3m"]), "5m": min5 };
+
+    for (const tf of TFS) {
+      const kl = klinesByTf[tf] || [];
+      if (kl.length <= WARMUP) continue;
+      const rows = buildRows(kl, oiSeries, lsrSeries, tf);
+      coverage[tf].candles += kl.length;
+      coverage[tf].usable += rows.filter(Boolean).length;
+      for (const bot of BOTS) {
+        const tr = simulateTrades(rows, bot.match, EXIT, tf);
+        if (!tr.length) continue;
+        const a = acc[tf][bot.id];
+        const s = summarize(tr);
+        a.pooled = a.pooled.concat(tr);
+        a.rets.push(s.retPct);
+        a.dds.push(s.maxDDPct);
+        a.assets++;
+      }
+    }
+    assetsDone.push(base);
   }
-  const gotAll = TFS.every(tf => (coverage[tf] && coverage[tf].candles > WARMUP));
+
+  /* Combine: win% + avgR pooled over every trade (scale-free), Retorno +
+     Máx. queda averaged across the per-asset curves (keeps the scale). */
+  const results = {};
+  for (const tf of TFS) {
+    results[tf] = {};
+    for (const bot of BOTS) {
+      const a = acc[tf][bot.id];
+      const p = summarize(a.pooled);
+      results[tf][bot.id] = {
+        trades: p.trades, winPct: p.winPct, avgR: p.avgR, totalR: p.totalR,
+        retPct: a.rets.length ? Math.round(mean(a.rets) * 10) / 10 : 0,
+        maxDDPct: a.dds.length ? Math.round(mean(a.dds) * 10) / 10 : 0,
+        assets: a.assets
+      };
+    }
+  }
+
+  const gotAll = assetsDone.length === ASSETS.length;
+  const haveDir = oiTot >= 2 && lsrTot >= 2;
   _cache = {
-    updatedAt: Date.now(), days: DAYS, symbol: MEXC_SYMBOL, candleSource: "MEXC", dirSource: "Binance",
+    updatedAt: Date.now(), days: DAYS, symbol: "Multi", assets: assetsDone,
+    candleSource: "MEXC", dirSource: "Binance",
     exitLabel: "Stop 1.5x ATR · parcial no +1R → b.e. · resto +2R · timeout 45min",
     bots: BOTS.map(b => ({ id: b.id, label: b.label })),
-    coverage: coverage, oiPoints: oiSeries.length, lsrPoints: lsrSeries.length,
+    coverage: coverage, oiPoints: oiTot, lsrPoints: lsrTot,
     results: results, partial: !gotAll
   };
   if (!haveDir) {
-    _cache.dataWarning = "OI/LSR da Binance indisponíveis (oi:" + oiSeries.length + " lsr:" + lsrSeries.length +
+    _cache.dataWarning = "OI/LSR da Binance indisponíveis (oi:" + oiTot + " lsr:" + lsrTot +
       ") — provavelmente ban temporário de IP. Os candles vieram da MEXC, então o combo Spike+RSI foi avaliado; os que dependem de OI/LSR ficam sem dados até a Binance liberar.";
   } else if (!gotAll) {
-    _cache.dataWarning = "Alguns timeframes vieram curtos da MEXC — mostrando o que deu para calcular; o resto entra nas próximas rodadas.";
+    _cache.dataWarning = "Alguns ativos não vieram completos — mostrando o que deu para calcular (" + assetsDone.join(", ") + ").";
   }
   setProgress(gotAll && haveDir ? "pronto" : "parcial", 100);
-  console.log("[btcBacktest] done — src:MEXC(candles)/Binance(oi,lsr) oi:" + oiSeries.length + " lsr:" + lsrSeries.length +
+  console.log("[btcBacktest] done — assets:" + assetsDone.join(",") + " oi:" + oiTot + " lsr:" + lsrTot +
     " coverage:" + JSON.stringify(coverage) + (_progress.lastError ? " lastErr:" + _progress.lastError : ""));
   return _cache;
 }
@@ -384,4 +458,4 @@ function get() {
   return { ready: !!_cache, running: _running, progress: _progress, cooldownMin: 0, data: _cache };
 }
 
-module.exports = { get, run, buildRows, simulate, summarize, aggregate, BOTS, EXIT, TFS };
+module.exports = { get, run, buildRows, simulate, simulateTrades, summarize, aggregate, ASSETS, BOTS, EXIT, TFS };
