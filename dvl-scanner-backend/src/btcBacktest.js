@@ -103,7 +103,11 @@ async function fetchKlines(tf, startMs, endMs) {
     for (const k of d) out.push({ t: Number(k[0]), o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] });
     const last = Number(d[d.length - 1][0]);
     from = (last > from ? last : from) + step;
-    await sleep(450);
+    /* Slow on purpose: /fapi/v1/klines is heavily used by the live scanner
+       on this same IP, so the backtest's extra klines load has to stay
+       negligible or it tips the shared budget into a 418. The run is
+       cached, so taking a couple minutes is fine. */
+    await sleep(1200);
   }
   return out.filter(k => k.t >= startMs && k.t <= endMs);
 }
@@ -256,34 +260,45 @@ async function run() {
   setProgress("buscando LSR", 18);
   const lsrSeries = await fetchSeries("topLongShortAccountRatio", "longShortRatio", startMs, endMs);
   setProgress("buscando candles", 32);
+  /* Fetch timeframes LIGHTEST-first (5m: ~6 pages, 3m: ~10, 1m: ~29). The
+     ban trips on the heavy 1m, so doing it LAST means 5m + 3m results are
+     already secured — a ban on 1m keeps the partial instead of losing
+     everything (the old order did 1m first and lost the whole run). */
+  const fetchOrder = ["5m", "3m", "1m"];
   const results = {}, coverage = {};
-  for (let ti = 0; ti < TFS.length; ti++) {
-    const tf = TFS[ti];
+  let banned = false;
+  for (let ti = 0; ti < fetchOrder.length; ti++) {
+    const tf = fetchOrder[ti];
     setProgress("candles + simulação " + tf, 32 + (ti + 0.3) * 20);
-    const kl = await fetchKlines(tf, startMs, endMs);
+    let kl;
+    try { kl = await fetchKlines(tf, startMs, endMs); }
+    catch (e) { if (e.banned) { banned = true; break; } throw e; }
     const rows = buildRows(kl, oiSeries, lsrSeries, tf);
-    const usable = rows.filter(Boolean).length;
-    coverage[tf] = { candles: kl.length, usable: usable };
+    coverage[tf] = { candles: kl.length, usable: rows.filter(Boolean).length };
     results[tf] = {};
     for (const bot of BOTS) results[tf][bot.id] = simulate(rows, bot.match, EXIT, tf);
     setProgress("candles + simulação " + tf, 32 + (ti + 1) * 20);
   }
+  const gotAll = TFS.every(tf => results[tf]);
   _cache = {
     updatedAt: Date.now(), days: DAYS, symbol: SYMBOL,
     exitLabel: "Stop 1.5x ATR · parcial no +1R → b.e. · resto +2R · timeout 45min",
     bots: BOTS.map(b => ({ id: b.id, label: b.label })),
     coverage: coverage, oiPoints: oiSeries.length, lsrPoints: lsrSeries.length,
-    results: results
+    results: results, partial: !gotAll
   };
-  /* If the data came back empty (OI/LSR past retention, or Binance
-     blocked the calls), keep the error visible so the frontend can say
-     so instead of showing a table of zeros as if it were real. */
-  if (!oiSeries.length || !lsrSeries.length) {
+  if (banned && !gotAll) {
+    _cache.dataWarning = "A Binance limitou as chamadas (ban de IP) antes de terminar — mostrando os timeframes que deram tempo. Os que faltam entram nas próximas rodadas.";
+  } else if (!oiSeries.length || !lsrSeries.length) {
     _cache.dataWarning = "OI/LSR vieram vazios (oi:" + oiSeries.length + " lsr:" + lsrSeries.length + ") — os combos que dependem deles não têm o que avaliar.";
   }
-  setProgress("pronto", 100);
+  setProgress(gotAll ? "pronto" : "parcial (ban)", 100);
   console.log("[btcBacktest] done — oi:" + oiSeries.length + " lsr:" + lsrSeries.length +
-    " coverage:" + JSON.stringify(coverage) + (_progress.lastError ? " lastErr:" + _progress.lastError : ""));
+    " coverage:" + JSON.stringify(coverage) + (banned ? " (BANNED, partial)" : "") + (_progress.lastError ? " lastErr:" + _progress.lastError : ""));
+  /* Signal a ban up to get() (for the long cooldown) only if NOTHING new
+     was salvaged; if we got at least a fresh timeframe, treat it as a
+     normal short-TTL partial that retries in a few minutes for the rest. */
+  if (banned && !gotAll && Object.keys(results).length === 0) { const e = new Error("HTTP 418 (IP temporariamente banido pela Binance)"); e.banned = true; throw e; }
   return _cache;
 }
 
