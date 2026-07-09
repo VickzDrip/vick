@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.095</title>
+<title>DVL Binance Live — Beta 1.096</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.095';
+window.DVL_APP_VERSION = 'Beta 1.096';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.095";
+const DVL_APP_VERSION = "Beta 1.096";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.096", note: "Conserta o layout da aba Copilot 'fugindo da página' (conteúdo cortado na direita, com rolagem horizontal) em telas estreitas (~360px). Causa: a página é uma coluna só (grid), e um item de grid não encolhe abaixo do próprio conteúdo — a mini-tabela do Scanner tem colunas de largura fixa (~341px) que não cabem num celular estreito, então ela empurrava a coluna inteira (e todos os cards junto) pra fora da tela. Agora a coluna é fixada na largura disponível, os cards podem encolher, a tabela do Scanner rola dentro da própria caixa, e qualquer sobra é cortada em vez de vazar. Testado a 360px e 412px. Só frontend, não precisa reiniciar o backend." },
   { version: "Beta 1.095", note: "Backteste focado + maior: pega os TOP 2 combos de cada timeframe da rodada anterior (união = 4 combos: RSI+OI, Spike+RSI, OI+Pré-volume, Pré-volume+OI-subindo) e re-testa numa amostra bem maior — de 6 pra 15 ativos (BTC, ETH, SOL, BNB, XRP, DOGE, ADA, AVAX, LINK, LTC, DOT, TRX, BCH, NEAR, ATOM). Como o OI só tem 30 dias de histórico na Binance, 'maior' aqui é mais ATIVOS, não mais tempo. Os 3 combos de LSR (os mais fracos em tudo) saíram. A rodada leva ~7-8 min agora (mais ativos), fica em cache 6h. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.094", note: "Conserta o card do backteste multi-ativo ficando vermelho de 'problema' sem motivo. Causa: ao buscar OI/LSR de cada ativo, a janela mais ANTIGA às vezes cai fora da retenção de ~30 dias da Binance e volta HTTP 400 — isso é esperado (a borda dos 30 dias 'anda' durante a rodada de ~3 min, então os ativos do fim pegam ela) e NÃO é fatal: as janelas mais novas trazem os dados normalmente. Agora o backend trata esse 400 como 'janela fora do range', pula quieto e segue; e o card só fica vermelho num erro de verdade, não numa janela velha recusada. Resultado: o backteste completa e mostra os 6 ativos sem o alarme falso. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.093", note: "Backteste agora é MULTI-ATIVO: em vez de só BTC, roda os 7 combos em 6 ativos (BTC, ETH, SOL, BNB, XRP, DOGE) nos mesmos 30 dias — amostra bem maior, testa se o edge é real ou só sorte de um ativo. Como junta os trades de vários ativos, mudei o jeito de medir pra não enganar: Acerto e R médio (expectância) somam TODOS os trades de todos os ativos (as métricas que importam pra comparar), enquanto Retorno e Máx queda são a MÉDIA por ativo — assim o número fica na mesma escala de antes, sem inflar por ter 6x mais trade. O card mostra quantos ativos entraram em cada timeframe. Exige atualizar/reiniciar o backend; a rodada leva ~3 min (mais ativos pra buscar), fica em cache 6h." },
@@ -73918,6 +73919,24 @@ window.DVL_COPILOT_BACKTEST_1040={
 #dvlCopilotPage0974 .dvlBt1090Bar.err i{background:linear-gradient(90deg,#a5303f,#ff4a61)!important;}
 #dvlCopilotPage0974 .dvlBt1090Phase{display:flex!important;justify-content:space-between!important;font-size:9px!important;font-weight:800!important;color:#7d8f89!important;margin-top:2px!important;}
 #dvlCopilotPage0974 .dvlBt1090Warn{font-size:9.5px!important;font-weight:700!important;color:#ffb454!important;background:rgba(255,180,84,.08)!important;border-radius:8px!important;padding:6px 8px!important;margin-bottom:8px!important;line-height:1.35!important;}
+</style>
+<style id="DVL_COPILOT_NOOVERFLOW_FIX_1095">
+/* Keep the Copilot page from ever escaping the viewport width ("não pode
+   fugir da página"). Root cause: the page content is a single-column grid
+   (.dvlCp0976Shell); a grid item defaults to min-width:auto, so one child
+   that can't shrink — notably the Scanner mini-table, whose row has FIXED
+   px columns summing ~341px — drags the whole column, and every card in it,
+   past narrow (~360px) phones. Fix: pin the column to the available width,
+   let cards shrink, let the wide table scroll inside its own box, and
+   hard-clip any residual horizontal bleed. Loaded last so it wins the
+   cascade over the earlier duplicate shell/table rules. */
+#dvlCopilotPage0974{overflow-x:hidden!important;}
+#dvlCopilotPage0974 .dvlCp0974Shell,
+#dvlCopilotPage0974 .dvlCp0976Shell{grid-template-columns:minmax(0,1fr)!important;max-width:100%!important;}
+#dvlCopilotPage0974 .dvlCp0974Shell>*,
+#dvlCopilotPage0974 .dvlCp0976Shell>*,
+#dvlCopilotPage0974 [data-dvl-cp-section]{min-width:0!important;max-width:100%!important;}
+#dvlCopilotPage0974 .dvlCp0976ScannerTable{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
 </style>
 <script id="DVL_BTCBACKTEST_1090_JS">
 /* BTC 30-day backtest of the 7 Fast Bots ENTRY combos — a read-only
