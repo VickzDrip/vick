@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.090</title>
+<title>DVL Binance Live — Beta 1.092</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.090';
+window.DVL_APP_VERSION = 'Beta 1.092';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,12 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.090";
+const DVL_APP_VERSION = "Beta 1.092";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.092", note: "Correção do 'app abrindo versão antiga': o site é servido sem cache (no-store), mas um app instalado (PWA) ou uma aba aberta há muito tempo guardava a página JÁ CARREGADA na memória e não buscava de novo depois de um deploy — por isso às vezes aparecia uma versão velha. Agora tem um verificador automático: ele consulta a versão realmente publicada no servidor (a cada 60s, ao voltar pro app e 8s depois de abrir) e, quando é diferente da que está rodando, ou recarrega sozinho (se o app estiver em segundo plano, pra não atrapalhar) ou mostra um aviso verde no topo 'Nova versão — toque para atualizar'. Tem trava anti-loop: tenta atualizar sozinho no máximo uma vez por versão, então nunca fica recarregando à toa." },
+  { version: "Beta 1.091", note: "Backteste (BTC): os candles (preço/volume) agora vêm da MEXC, não da Binance — era a Binance que bania o IP (HTTP 418), porque o endpoint de klines é compartilhado com o scanner ao vivo e a rajada de 30 dias estourava a cota. A MEXC não tem esse problema, então os candles baixam limpos e o 1m/3m/5m preenchem de novo (o 3m é montado a partir do Min1 da MEXC, que não tem 3m nativo). O OI e o LSR continuam vindo da Binance (a MEXC não expõe histórico de nenhum dos dois) — mas essas chamadas são leves e não causam ban; se a Binance estiver num ban curto, só os combos que dependem de OI/LSR ficam sem dados por alguns minutos, o Spike+RSI e o resto já aparecem. Sem mais espera de 20 min travando tudo. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.090", note: "Backteste (BTC): descobri que o ban da Binance é só no endpoint de candles (klines) — que o scanner ao vivo também usa direto — não nos de OI/LSR. Por isso a rajada de candles do 1m (43 mil, o mais pesado) derrubava. Agora busca do MAIS LEVE pro mais pesado (5m → 3m → 1m) e guarda resultado PARCIAL: mesmo com ban no 1m, você já vê 5m e 3m, e o 1m entra nas próximas rodadas. Os candles vêm bem mais devagar (1,2s cada) pra não estourar a cota compartilhada com o scanner. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.089", note: "Backteste (BTC): a Binance chegou a banir o IP temporariamente (HTTP 418) de tanto pedido rápido das versões anteriores. Agora, ao ver 418, o backteste PARA na hora e espera 20 min pra tentar de novo (insistir só estende o ban), e busca bem mais devagar pra não repetir — importante porque esse IP é o mesmo do scanner ao vivo, então não pode martelar. A aba mostra claramente quando está nesse modo de espera. Depois de reiniciar o backend, pode levar até ~20 min pro ban da Binance expirar e o backteste rodar; é esperado. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.088", note: "Backteste 30 dias (BTC): corrige o 5m aparecendo zerado e os candles vindo curtos (28k/6k em vez de 43k/14k). Não era erro de conta — era rate-limit da Binance: eu disparava ~80 requisições rápido demais e a última leva (5m) ficava sem cota. Agora respeita o Retry-After e tenta de novo a mesma página (backoff) em vez de pular, e busca mais devagar. Os 3 timeframes devem vir completos. (O sinal que já apareceu segue valendo: 'Pré-volume baixo + OI subindo' foi o melhor no 1m e no 3m.) Exige atualizar/reiniciar o backend." },
@@ -44015,6 +44017,84 @@ document.addEventListener("touchend", function(e){
     location.reload();
   }
 }, true);
+</script>
+<script id="DVL_VERSION_AUTOUPDATE_JS">
+/* ── Auto-update guard ──────────────────────────────────────────────
+   The single index.html is served no-store, but a long-lived tab or an
+   installed PWA (manifest display:standalone) keeps the ALREADY-LOADED
+   page in memory across visits (back/forward cache / app resume) and
+   never refetches — so a fresh deploy goes unseen until a manual hard
+   refresh. That's why the app "shows an old version when it updates".
+
+   Fix: poll the server's /api/version, which reports the version of the
+   CURRENTLY DEPLOYED index.html (re-read server-side every 15s). When it
+   no longer matches the version THIS page booted with, a newer build is
+   live, so we pull it in.
+     - Checks 8s after boot, every 60s, and whenever the tab/app regains
+       focus (the moment that matters most on mobile PWAs resuming from
+       memory).
+     - Never yanks the page from under an active user: while the tab is
+       visible it shows a tap-to-update banner; it only auto-reloads when
+       the tab is hidden/backgrounded, so no click is lost mid-trade.
+     - reload() defeats the bfcache and the no-store header defeats the
+       HTTP cache, so the next load is the real file.
+     - Loop guard (sessionStorage): auto-reloads AT MOST ONCE per new
+       deployed version. If we reload for version X and still don't come
+       back as X (e.g. a stubborn upstream/CDN cache serving stale HTML),
+       we stop auto-reloading and only offer the manual banner — never an
+       infinite reload loop. */
+(function(){
+  if(window.__DVL_VER_GUARD) return; window.__DVL_VER_GUARD = true;
+  var RUNNING = String(window.DVL_APP_VERSION || "").trim();
+  if(!RUNNING) return;
+  var pending = null, banner = null, reloading = false, autoBlocked = false;
+  var LAST_TRIED = null;
+  try { LAST_TRIED = sessionStorage.getItem("dvlUpdTo"); } catch(_){}
+
+  function doReload(){
+    if(reloading) return; reloading = true;
+    try { if(pending) sessionStorage.setItem("dvlUpdTo", pending); } catch(_){}
+    try { location.reload(); } catch(_){ location.href = location.pathname + "?v=" + Date.now(); }
+  }
+  function showBanner(v){
+    if(banner) return;
+    banner = document.createElement("div");
+    banner.id = "dvlUpdateBanner";
+    banner.setAttribute("role","button");
+    banner.textContent = "Nova versão (" + v + ") — toque para atualizar";
+    banner.style.cssText = "position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 10px);"
+      + "transform:translateX(-50%);z-index:2147483647;background:#0d6b3f;color:#eafff2;"
+      + "font:600 13px/1.2 system-ui,-apple-system,'Segoe UI',sans-serif;padding:10px 16px;"
+      + "border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.45);cursor:pointer;max-width:92vw;"
+      + "text-align:center;border:1px solid #12a862;";
+    banner.addEventListener("click", doReload);
+    (document.body || document.documentElement).appendChild(banner);
+  }
+  function onNewVersion(v){
+    pending = v;
+    if(LAST_TRIED === v){ autoBlocked = true; showBanner(v); return; } // already tried; don't loop
+    if(document.hidden){ doReload(); return; }
+    showBanner(v);
+  }
+  function check(){
+    fetch("/api/version", { cache: "no-store" })
+      .then(function(r){ return r && r.ok ? r.json() : null; })
+      .then(function(j){
+        if(!j || !j.v) return;
+        var deployed = String(j.v).trim();
+        if(deployed && deployed !== RUNNING) onNewVersion(deployed);
+      })
+      .catch(function(){});
+  }
+
+  document.addEventListener("visibilitychange", function(){
+    if(document.hidden){ if(pending && !autoBlocked) doReload(); }
+    else { check(); }
+  });
+  window.addEventListener("focus", check);
+  setTimeout(check, 8000);
+  setInterval(check, 60000);
+})();
 </script>
 <style id="DVL_POSITIONS_WATCHLIST_OVERLAY_CSS_0722">
 /*
@@ -73908,18 +73988,18 @@ window.DVL_COPILOT_BACKTEST_1040={
       var banned=(_data.cooldownMin||0)>0 || (pg.lastError&&pg.lastError.indexOf("418")>=0);
       var isErr=pg.phase==="erro"||banned||!!pg.lastError;
       var head;
-      if(banned){ head='🚫 A Binance limitou temporariamente as chamadas (ban curto de IP). O backteste está esperando '+((_data.cooldownMin||20))+' min pra tentar de novo, de propósito — insistir só piora. Ele volta sozinho.'; }
+      if(banned){ head='⏳ Calculando… os candles vêm da MEXC (não sofrem ban). O OI/LSR da Binance pode estar num ban curto de IP; se estiver, os combos que dependem deles aparecem sem dados até liberar. Atualiza sozinho.'; }
       else if(isErr){ head='⚠️ Backteste com problema — veja abaixo. Ele tenta de novo sozinho a cada minuto.'; }
       else { head='⏳ Calculando o backteste de 30 dias no BTC… atualiza sozinho.'; }
-      var extra=pg.lastError ? ("último erro: "+pg.lastError+(pg.attempts?" · tentativa "+pg.attempts:"")) : "baixando histórico + simulando candle a candle (~1-2 min)";
+      var extra=pg.lastError ? ("último erro: "+pg.lastError+(pg.attempts?" · tentativa "+pg.attempts:"")) : "candles da MEXC + OI/LSR da Binance, simulando candle a candle (~1 min)";
       return '<div class="dvlBt1090Loading">'+head+'</div>'
         +progressBar(pg.pct||3, isErr, pg.phase||"iniciando", extra);
     }
     var out='';
     if(_data.dataWarning) out+='<div class="dvlBt1090Warn">⚠️ '+esc(_data.dataWarning)+'</div>';
-    out+='<div class="dvlBt1090Note">Backteste de <b>30 dias</b> no <b>BTC</b>, dados reais. Cada linha é um combo de <b>entrada</b> dos Fast Bots; a saída é <b>igual pra todos</b> ('+esc(_data.exitLabel||'')+') pra comparar só a entrada. Retorno = arriscando 1% por trade, composto. 👑 = melhor retorno do timeframe.</div>';
+    out+='<div class="dvlBt1090Note">Backteste de <b>30 dias</b> no <b>BTC</b>, dados reais (candles da <b>MEXC</b>, OI/LSR da <b>Binance</b>). Cada linha é um combo de <b>entrada</b> dos Fast Bots; a saída é <b>igual pra todos</b> ('+esc(_data.exitLabel||'')+') pra comparar só a entrada. Retorno = arriscando 1% por trade, composto. 👑 = melhor retorno do timeframe.</div>';
     out+=TFS.map(tableHtml).join("");
-    out+='<div class="dvlBt1090Foot">Atualizado '+esc(fmtAgo(_data.updatedAt))+' · OI '+(_data.oiPoints||0)+' pts · LSR '+(_data.lsrPoints||0)+' pts · recalcula a cada 6h. Não mexe nas carteiras dos bots ao vivo — é só simulação histórica.</div>';
+    out+='<div class="dvlBt1090Foot">Atualizado '+esc(fmtAgo(_data.updatedAt))+' · candles: '+esc(_data.candleSource||'MEXC')+' · OI/LSR: '+esc(_data.dirSource||'Binance')+' ('+(_data.oiPoints||0)+'/'+(_data.lsrPoints||0)+' pts) · recalcula a cada 6h. Não mexe nas carteiras dos bots ao vivo — é só simulação histórica.</div>';
     return out;
   }
 
