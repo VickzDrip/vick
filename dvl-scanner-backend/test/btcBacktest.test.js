@@ -116,10 +116,23 @@ function candle(close, high, low) { return { close: close, high: high, low: low,
   ];
   const mkMatch = () => { let fired = false; return (c) => { if (!fired && c.close === 100) { fired = true; return true; } return false; }; };
   const tr = bt.simulateTrades(rows, mkMatch(), bt.EXIT, "5m");
-  ok(Array.isArray(tr) && tr.length === 1, "simulateTrades returns an array of R-multiples");
-  near(tr[0], 1.5, "raw trade R matches (+1.5R)");
+  ok(Array.isArray(tr) && tr.length === 1, "simulateTrades returns an array of trades");
+  near(tr[0].g, 1.5, "raw trade gross R matches (+1.5R)");
+  // atr14=1, atrMult=1.5 -> r=1.5, entry=100 -> stop distance fraction 0.015
+  near(tr[0].sd, 0.015, "trade carries its stop-distance fraction (for fees)");
   const s = bt.simulate(rows, mkMatch(), bt.EXIT, "5m");
-  ok(s.trades === 1 && Math.abs(s.avgR - 1.5) < 1e-6, "simulate() == summarize(simulateTrades)");
+  ok(s.trades === 1 && Math.abs(s.avgR - 1.5) < 1e-6, "simulate() == summarize(gross of simulateTrades)");
+})();
+
+/* 6c) Fees: net R = gross - FEE_ROUNDTRIP/stopDist, so a tighter stop (small
+   sd) is punished harder — the whole point of charging fees "per TF". */
+(function () {
+  const fee = bt.FEE_ROUNDTRIP;
+  ok(fee > 0 && fee < 0.01, "FEE_ROUNDTRIP is a small positive fraction");
+  const wide = fee / 0.02;   // stop = 2% of price -> light fee in R
+  const tight = fee / 0.002; // stop = 0.2% of price -> 10x heavier fee in R
+  ok(tight > wide, "same % fee costs more R when the stop is tighter (fast TF)");
+  near(tight, wide * 10, "fee-in-R scales inversely with stop distance", 1e-9);
 })();
 
 /* 7) aggregate(): Min1 candles roll up into 3m buckets on clock boundaries —
