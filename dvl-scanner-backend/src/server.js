@@ -9,7 +9,7 @@
    GET  /api/dvl/scanner/history?symbol=X  (every recorded signal for one symbol, for chart markers)
    GET  /api/dvl/scanner/live-reading?symbol=X&tf=Y  (current OI/LSR/RSI/spike reading for ANY symbol)
    GET  /api/dvl/scanner/backtest      (financial backtest: win rate / avg return, all signals vs model-favorable)
-   GET  /api/dvl/scanner/btc-backtest  (Fast Bots' 7 entry combos backtested on 1m/3m/5m over 30 days, pooled across several assets)
+   GET  /api/dvl/scanner/btc-backtest  (Fast Bots' top entry combos backtested on 15m/30m/1h over 30 days, pooled across several assets, net of fees)
    GET  /api/dvl/scanner/tickers?exchange=binance|mexc  (top-by-24h-volume candidates, server-fetched — see worker.getCandidates)
    GET  /api/dvl/scanner/mexc-price    (fresh MEXC last-price map, for Fast Bots' Bot 4 to check its own open positions)
    GET  /api/dvl/scanner/mexc-atr?symbol=X&tf=Y  (14-period ATR for one MEXC symbol, Fast Bots' fallback stop distance)

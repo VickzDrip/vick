@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.098</title>
+<title>DVL Binance Live — Beta 1.099</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.098';
+window.DVL_APP_VERSION = 'Beta 1.099';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.098";
+const DVL_APP_VERSION = "Beta 1.099";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.099", note: "Backteste muda pra timeframe ALTO: sai 1m/3m/5m, entra 15m/30m/1h. Motivo: no TF baixo a gente provou que não tem saída — stop apertado tem edge mas a taxa mata; stop largo mata a taxa mas também mata o edge. No TF alto o movimento é grande em % por natureza, então um stop NORMAL (2×ATR, piso 0,3%) já é bem maior que a taxa sem precisar sufocar o sinal — os alvos voltam pra perto (parcial +1R → breakeven, resto +2R, timeout 8h), que é o perfil que tinha edge de verdade. É o teste onde a física taxa-vs-movimento finalmente pode fechar. Candles 15m/30m/1h são nativos da MEXC (busca mais rápida, ~3-4 min). Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.098", note: "Novo stop no backteste, pra brigar com a taxa: o stop de 1,5×ATR era apertado demais no 1m (a taxa comia ~1R por trade). Agora é um stop LARGO — 3×ATR com PISO de 0,6% do preço — então o R vira um movimento de verdade e a taxa (taxa-em-R = taxa% ÷ stop%) para de dominar. Alvos também mais longe (parcial no +1,5R → breakeven, resto no +3R) e segura mais tempo (timeout 3h) pra dar espaço ao movimento maior. Menos trades e mais largos = menos mordida de taxa. Vamos ver se com stop largo sobra edge depois do custo. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.097", note: "Backteste agora desconta TAXA realista (~0,10% por rodada, ida+volta, taker) de cada trade — e ela pesa diferente em cada timeframe de propósito: como a taxa é uma % fixa e o stop no 1m é bem menor (ATR menor), ela come uma fatia MUITO maior de cada R no 1m do que no 5m. Por isso o custo é calculado em R usando o stop real de cada trade. Agora as colunas Acerto/R méd/Retorno/Máx queda são todas LÍQUIDAS (com taxa); o número cinza embaixo do retorno é o bruto (sem taxa), e o título de cada TF mostra 'taxa ~X R/trade' pra você ver o peso. Spoiler: no 1m a taxa é brutal (o stop é minúsculo). Slippage nem entrou na conta, então é até otimista. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.096", note: "Conserta o layout da aba Copilot 'fugindo da página' (conteúdo cortado na direita, com rolagem horizontal) em telas estreitas (~360px). Causa: a página é uma coluna só (grid), e um item de grid não encolhe abaixo do próprio conteúdo — a mini-tabela do Scanner tem colunas de largura fixa (~341px) que não cabem num celular estreito, então ela empurrava a coluna inteira (e todos os cards junto) pra fora da tela. Agora a coluna é fixada na largura disponível, os cards podem encolher, a tabela do Scanner rola dentro da própria caixa, e qualquer sobra é cortada em vez de vazar. Testado a 360px e 412px. Só frontend, não precisa reiniciar o backend." },
@@ -73957,7 +73958,7 @@ window.DVL_COPILOT_BACKTEST_1040={
 (function(){
   "use strict";
   if(window.DVL_BTCBACKTEST_1090) return;
-  var TFS=["1m","3m","5m"];
+  var TFS=["15m","30m","1h"];
   var _data=null;
   function esc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
   function fmtPct(v){ v=Number(v)||0; return (v>=0?"+":"")+v.toFixed(1)+"%"; }
@@ -74024,7 +74025,7 @@ window.DVL_COPILOT_BACKTEST_1040={
       if(banned){ head='⏳ Calculando… os candles vêm da MEXC (não sofrem ban). O OI/LSR da Binance pode estar num ban curto de IP; se estiver, os combos que dependem deles aparecem sem dados até liberar. Atualiza sozinho.'; }
       else if(pg.phase==="erro"){ head='⚠️ Backteste com problema — veja abaixo. Ele tenta de novo sozinho a cada minuto.'; }
       else { head='⏳ Calculando o backteste (top combos, vários ativos)… atualiza sozinho.'; }
-      var extra=pg.lastError ? ("último erro: "+pg.lastError+(pg.attempts?" · tentativa "+pg.attempts:"")) : "candles da MEXC + OI/LSR da Binance, ~15 ativos, candle a candle (~7 min)";
+      var extra=pg.lastError ? ("último erro: "+pg.lastError+(pg.attempts?" · tentativa "+pg.attempts:"")) : "candles da MEXC + OI/LSR da Binance, ~15 ativos, 15m/30m/1h (~3-4 min)";
       return '<div class="dvlBt1090Loading">'+head+'</div>'
         +progressBar(pg.pct||3, isErr, pg.phase||"iniciando", extra);
     }
@@ -74040,7 +74041,7 @@ window.DVL_COPILOT_BACKTEST_1040={
   function html(){
     return '<section class="dvlBt1090Panel dvlBt1090" data-dvl-cp-section="btc-backtest" data-dvl-cp-section-version="1090">'
       +'<div class="dvlBt1090Head"><i class="dvlBt1090Icon">📊</i>'
-      +'<div><b>Backteste 30 dias — Top combos</b><span>top 2 de cada TF · vários ativos · 1m/3m/5m · saída fixa</span></div></div>'
+      +'<div><b>Backteste 30 dias — Top combos</b><span>top 2 de cada TF · vários ativos · 15m/30m/1h · saída fixa</span></div></div>'
       +'<div class="dvlBt1090Body">'+bodyHtml()+'</div></section>';
   }
 

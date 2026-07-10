@@ -4,7 +4,7 @@
    A READ-ONLY companion to the live Fast Bots (frontend). It does NOT
    touch the live paper wallets — it just answers "if these 7 entry
    combos had traded over the last 30 days, how would each have done?"
-   on 1m/3m/5m, using REAL history — POOLED across several assets
+   on 15m/30m/1h, using REAL history — POOLED across several assets
    (BTC, ETH, SOL, …) so the edge is measured on a much bigger sample
    than a single coin's one-month regime.
 
@@ -22,8 +22,8 @@
        heavy 24h load on this same IP, and the backtest's extra burst
        kept tripping Binance's WAF into an HTTP 418 IP ban — the wall
        that motivated this switch. MEXC's kline API carries none of that
-       load, so the candles fetch cleanly. MEXC has no native 3m, so 3m
-       is aggregated from Min1 (5m uses Min5 directly, 1m uses Min1).
+       load, so the candles fetch cleanly. The active TFs (15m/30m/1h) are
+       all native MEXC intervals, fetched directly (no aggregation).
      - OI + LSR direction still come from Binance's futures-data
        endpoints (openInterestHist, topLongShortAccountRatio). MEXC's
        public API exposes only the CURRENT open interest (ticker.holdVol)
@@ -68,8 +68,11 @@ const ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "LINK"
 const mexcSym = b => b + "_USDT";   // MEXC contract symbol (candles)
 const binSym = b => b + "USDT";     // Binance symbol (OI/LSR futures-data)
 const DAYS = 30;
-const TFS = ["1m", "3m", "5m"];
-const TF_MS = { "1m": 60000, "3m": 180000, "5m": 300000 };
+const TFS = ["15m", "30m", "1h"];
+const TF_MS = { "1m": 60000, "3m": 180000, "5m": 300000, "15m": 900000, "30m": 1800000, "1h": 3600000 };
+/* MEXC native kline interval per TF (15m/30m/1h are native — no aggregation
+   like 3m needed). */
+const MEXC_INTERVAL = { "1m": "Min1", "5m": "Min5", "15m": "Min15", "30m": "Min30", "1h": "Min60" };
 const WARMUP = 64;                 // candles of history before the first eligible signal (covers MA50/RSI/ATR)
 const RISK_PER_TRADE = 0.01;       // 1% of equity risked per trade, for the compounded return curve
 
@@ -82,15 +85,13 @@ const RISK_PER_TRADE = 0.01;       // 1% of equity risked per trade, for the com
    is if anything optimistic. */
 const FEE_ROUNDTRIP = 0.0010;
 
-/* Single common exit, applied to every combo. REWORKED to survive fees: the
-   old 1.5x-ATR stop was so tight on fast TFs that a fixed % fee ate ~1R per
-   trade (fee-in-R = FEE_ROUNDTRIP / stopDistPct — a tiny stop = huge fee
-   share). This one WIDENS the stop (3x ATR) and adds a percentage FLOOR
-   (minStopPct) so R is always a meaningful price move even when ATR is
-   minuscule on 1m; targets run further (+3R) and it holds longer so the
-   wider move has time to develop (and fewer, longer trades = fewer fee
-   hits). */
-const EXIT = { atrMult: 3, minStopPct: 0.006, tp1R: 1.5, tp1Frac: 0.5, be: true, tp2R: 3, holdMin: 180 };
+/* Single common exit for the 15m/30m/1h test. On these higher TFs the moves
+   are big enough in % that a NORMAL stop (2x ATR) already dwarfs the fee, so
+   no fat floor is needed (a small 0.3% floor guards unusually calm periods).
+   Back to NEAR targets (+1R half → b.e., rest +2R) — the profile that had a
+   real gross edge on the fast bounce — since here that near target is a
+   meaningful move, not fee-sized. Timeout 8h ≈ 8-32 bars across 15m-1h. */
+const EXIT = { atrMult: 2, minStopPct: 0.003, tp1R: 1, tp1Frac: 0.5, be: true, tp2R: 2, holdMin: 480 };
 
 /* FOCUSED set: the top-2 entry combos of EACH timeframe from the earlier
    6-asset 30-day run (union = these 4 distinct combos). This "bigger" run
@@ -403,16 +404,21 @@ async function run() {
     oiTot += oiSeries.length; lsrTot += lsrSeries.length;
     if (oiSeries.length >= 2 && lsrSeries.length >= 2) haveDirAny = true;
 
-    /* Candles from MEXC. Min1 serves 1m directly + aggregated 3m; Min5 → 5m
-       (two fetches, and a real 3m instead of MEXC's absent native one). */
+    /* Candles from MEXC, one native interval per TF (15m/30m/1h all exist
+       natively — no aggregation). */
     setProgress(base + ": candles (MEXC)", p0 + (p1 - p0) * 0.15);
-    let min1 = [], min5 = [];
-    try {
-      min1 = await fetchMexcKlines(mexcSym(base), "Min1", 60000, startMs, endMs, [p0 + (p1 - p0) * 0.15, p0 + (p1 - p0) * 0.75]);
-      min5 = await fetchMexcKlines(mexcSym(base), "Min5", 300000, startMs, endMs, [p0 + (p1 - p0) * 0.75, p1]);
-    } catch (e) { _progress.lastError = base + " candles: " + e.message; }
-    if (!min1.length && !min5.length) continue;  // asset unavailable — skip
-    const klinesByTf = { "1m": min1, "3m": aggregate(min1, TF_MS["3m"]), "5m": min5 };
+    const klinesByTf = {};
+    let anyCandles = false;
+    const cStart = p0 + (p1 - p0) * 0.15, cEnd = p1;
+    for (let ti = 0; ti < TFS.length; ti++) {
+      const tf = TFS[ti];
+      const a0 = cStart + (cEnd - cStart) * (ti / TFS.length);
+      const a1 = cStart + (cEnd - cStart) * ((ti + 1) / TFS.length);
+      try { klinesByTf[tf] = await fetchMexcKlines(mexcSym(base), MEXC_INTERVAL[tf], TF_MS[tf], startMs, endMs, [a0, a1]); }
+      catch (e) { _progress.lastError = base + " candles " + tf + ": " + e.message; klinesByTf[tf] = []; }
+      if (klinesByTf[tf].length) anyCandles = true;
+    }
+    if (!anyCandles) continue;  // asset unavailable — skip
 
     for (const tf of TFS) {
       const kl = klinesByTf[tf] || [];
@@ -465,7 +471,7 @@ async function run() {
   _cache = {
     updatedAt: Date.now(), days: DAYS, symbol: "Multi", assets: assetsDone,
     candleSource: "MEXC", dirSource: "Binance", feePct: Math.round(FEE_ROUNDTRIP * 1000) / 10,
-    exitLabel: "Stop 3x ATR (piso 0,6%) · parcial +1,5R → b.e. · resto +3R · timeout 3h",
+    exitLabel: "Stop 2x ATR (piso 0,3%) · parcial +1R → b.e. · resto +2R · timeout 8h",
     bots: BOTS.map(b => ({ id: b.id, label: b.label })),
     coverage: coverage, oiPoints: oiTot, lsrPoints: lsrTot,
     results: results, partial: !gotAll
