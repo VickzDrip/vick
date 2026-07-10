@@ -74,6 +74,15 @@ const TF_MS = { "1m": 60000, "3m": 180000, "5m": 300000 };
 const WARMUP = 64;                 // candles of history before the first eligible signal (covers MA50/RSI/ATR)
 const RISK_PER_TRADE = 0.01;       // 1% of equity risked per trade, for the compounded return curve
 
+/* Realistic round-trip trading cost (entry + exit), as a fraction of
+   notional: ~0.05% per side taker on MEXC/Binance USDT-M perps → ~0.10%
+   round trip. Converted to R PER TRADE using that trade's own stop
+   distance (fee_in_R = FEE_ROUNDTRIP / stopDistPct), so it bites HARDER on
+   the fast timeframes (tighter ATR stops = smaller price move per 1R = the
+   fixed % fee eats a bigger share of R). Slippage is NOT included, so this
+   is if anything optimistic. */
+const FEE_ROUNDTRIP = 0.0010;
+
 /* Single common exit, applied to every combo (see module doc-comment). */
 const EXIT = { atrMult: 1.5, tp1R: 1, tp1Frac: 0.5, be: true, tp2R: 2, holdMin: 45 };
 
@@ -259,7 +268,7 @@ function buildRows(klines, oiSeries, lsrSeries, tf) {
    exposes the raw per-trade R-multiples so callers can pool them across
    assets before summarizing. */
 function simulate(rows, matchFn, exit, tf) {
-  return summarize(simulateTrades(rows, matchFn, exit, tf));
+  return summarize(simulateTrades(rows, matchFn, exit, tf).map(t => t.g));
 }
 
 /* Pure bar-by-bar LONG-only sim (one symbol → at most one open position at
@@ -274,7 +283,10 @@ function simulateTrades(rows, matchFn, exit, tf) {
   function close(pos, exitPrice, i) {
     const closedFrac = pos.halfTaken ? pos.tp1Frac : 0;
     const totalR = pos.realizedR + (1 - closedFrac) * ((exitPrice - pos.entry) / pos.r);
-    trades.push(totalR);
+    /* g = gross R; sd = stop distance as a fraction of entry price. Fees are
+       applied downstream as FEE_ROUNDTRIP/sd, so callers can compare gross
+       vs net without re-simulating. */
+    trades.push({ g: totalR, sd: pos.r / pos.entry });
     lastCloseIdx = i;
   }
   for (let i = 0; i < rows.length; i++) {
@@ -355,11 +367,12 @@ async function run() {
 
   /* Accumulator per timeframe per bot: pooled R-multiples (for win% + avgR)
      and the list of per-asset retPct/maxDD (averaged for scale). */
-  const acc = {}, coverage = {};
+  const acc = {}, coverage = {}, feeAcc = {};
   TFS.forEach(tf => {
     acc[tf] = {};
-    BOTS.forEach(b => { acc[tf][b.id] = { pooled: [], rets: [], dds: [], assets: 0 }; });
+    BOTS.forEach(b => { acc[tf][b.id] = { pooled: [], rets: [], dds: [], grossRets: [], assets: 0 }; });
     coverage[tf] = { candles: 0, usable: 0 };
+    feeAcc[tf] = { sum: 0, n: 0 };   // avg fee cost in R per timeframe
   });
   let oiTot = 0, lsrTot = 0, haveDirAny = false;
   const assetsDone = [];
@@ -401,11 +414,18 @@ async function run() {
         const tr = simulateTrades(rows, bot.match, EXIT, tf);
         if (!tr.length) continue;
         const a = acc[tf][bot.id];
-        const s = summarize(tr);
-        a.pooled = a.pooled.concat(tr);
-        a.rets.push(s.retPct);
-        a.dds.push(s.maxDDPct);
+        /* NET of fees: each trade's gross R minus its fee-in-R
+           (FEE_ROUNDTRIP / stop-distance). The card's numbers are all net —
+           the realistic view. Gross is kept only for the "sem taxa era…"
+           comparison. */
+        const net = tr.map(t => t.g - FEE_ROUNDTRIP / t.sd);
+        const sNet = summarize(net);
+        a.pooled = a.pooled.concat(net);
+        a.rets.push(sNet.retPct);
+        a.dds.push(sNet.maxDDPct);
+        a.grossRets.push(summarize(tr.map(t => t.g)).retPct);
         a.assets++;
+        for (const t of tr) { feeAcc[tf].sum += FEE_ROUNDTRIP / t.sd; feeAcc[tf].n++; }
       }
     }
     assetsDone.push(base);
@@ -418,21 +438,23 @@ async function run() {
     results[tf] = {};
     for (const bot of BOTS) {
       const a = acc[tf][bot.id];
-      const p = summarize(a.pooled);
+      const p = summarize(a.pooled);   // pooled is NET R
       results[tf][bot.id] = {
         trades: p.trades, winPct: p.winPct, avgR: p.avgR, totalR: p.totalR,
         retPct: a.rets.length ? Math.round(mean(a.rets) * 10) / 10 : 0,
         maxDDPct: a.dds.length ? Math.round(mean(a.dds) * 10) / 10 : 0,
+        grossRetPct: a.grossRets.length ? Math.round(mean(a.grossRets) * 10) / 10 : 0,
         assets: a.assets
       };
     }
+    coverage[tf].feeR = feeAcc[tf].n ? Math.round((feeAcc[tf].sum / feeAcc[tf].n) * 100) / 100 : 0;
   }
 
   const gotAll = assetsDone.length === ASSETS.length;
   const haveDir = oiTot >= 2 && lsrTot >= 2;
   _cache = {
     updatedAt: Date.now(), days: DAYS, symbol: "Multi", assets: assetsDone,
-    candleSource: "MEXC", dirSource: "Binance",
+    candleSource: "MEXC", dirSource: "Binance", feePct: Math.round(FEE_ROUNDTRIP * 1000) / 10,
     exitLabel: "Stop 1.5x ATR · parcial no +1R → b.e. · resto +2R · timeout 45min",
     bots: BOTS.map(b => ({ id: b.id, label: b.label })),
     coverage: coverage, oiPoints: oiTot, lsrPoints: lsrTot,
@@ -476,4 +498,4 @@ function get() {
   return { ready: !!_cache, running: _running, progress: _progress, cooldownMin: 0, data: _cache };
 }
 
-module.exports = { get, run, buildRows, simulate, simulateTrades, summarize, aggregate, ASSETS, BOTS, EXIT, TFS };
+module.exports = { get, run, buildRows, simulate, simulateTrades, summarize, aggregate, ASSETS, BOTS, EXIT, TFS, FEE_ROUNDTRIP };

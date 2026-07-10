@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.096</title>
+<title>DVL Binance Live — Beta 1.097</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.096';
+window.DVL_APP_VERSION = 'Beta 1.097';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.096";
+const DVL_APP_VERSION = "Beta 1.097";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.097", note: "Backteste agora desconta TAXA realista (~0,10% por rodada, ida+volta, taker) de cada trade — e ela pesa diferente em cada timeframe de propósito: como a taxa é uma % fixa e o stop no 1m é bem menor (ATR menor), ela come uma fatia MUITO maior de cada R no 1m do que no 5m. Por isso o custo é calculado em R usando o stop real de cada trade. Agora as colunas Acerto/R méd/Retorno/Máx queda são todas LÍQUIDAS (com taxa); o número cinza embaixo do retorno é o bruto (sem taxa), e o título de cada TF mostra 'taxa ~X R/trade' pra você ver o peso. Spoiler: no 1m a taxa é brutal (o stop é minúsculo). Slippage nem entrou na conta, então é até otimista. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.096", note: "Conserta o layout da aba Copilot 'fugindo da página' (conteúdo cortado na direita, com rolagem horizontal) em telas estreitas (~360px). Causa: a página é uma coluna só (grid), e um item de grid não encolhe abaixo do próprio conteúdo — a mini-tabela do Scanner tem colunas de largura fixa (~341px) que não cabem num celular estreito, então ela empurrava a coluna inteira (e todos os cards junto) pra fora da tela. Agora a coluna é fixada na largura disponível, os cards podem encolher, a tabela do Scanner rola dentro da própria caixa, e qualquer sobra é cortada em vez de vazar. Testado a 360px e 412px. Só frontend, não precisa reiniciar o backend." },
   { version: "Beta 1.095", note: "Backteste focado + maior: pega os TOP 2 combos de cada timeframe da rodada anterior (união = 4 combos: RSI+OI, Spike+RSI, OI+Pré-volume, Pré-volume+OI-subindo) e re-testa numa amostra bem maior — de 6 pra 15 ativos (BTC, ETH, SOL, BNB, XRP, DOGE, ADA, AVAX, LINK, LTC, DOT, TRX, BCH, NEAR, ATOM). Como o OI só tem 30 dias de histórico na Binance, 'maior' aqui é mais ATIVOS, não mais tempo. Os 3 combos de LSR (os mais fracos em tudo) saíram. A rodada leva ~7-8 min agora (mais ativos), fica em cache 6h. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.094", note: "Conserta o card do backteste multi-ativo ficando vermelho de 'problema' sem motivo. Causa: ao buscar OI/LSR de cada ativo, a janela mais ANTIGA às vezes cai fora da retenção de ~30 dias da Binance e volta HTTP 400 — isso é esperado (a borda dos 30 dias 'anda' durante a rodada de ~3 min, então os ativos do fim pegam ela) e NÃO é fatal: as janelas mais novas trazem os dados normalmente. Agora o backend trata esse 400 como 'janela fora do range', pula quieto e segue; e o card só fica vermelho num erro de verdade, não numa janela velha recusada. Resultado: o backteste completa e mostra os 6 ativos sem o alarme falso. Exige atualizar/reiniciar o backend." },
@@ -73912,6 +73913,7 @@ window.DVL_COPILOT_BACKTEST_1040={
 #dvlCopilotPage0974 table.dvlBt1090Tbl tr.win td:first-child{color:#eaf6f1!important;font-weight:900!important;}
 #dvlCopilotPage0974 .dvlBt1090 .pos{color:#10df77!important;}
 #dvlCopilotPage0974 .dvlBt1090 .neg{color:#ff4a61!important;}
+#dvlCopilotPage0974 .dvlBt1090Gross{display:block!important;font-size:8px!important;font-weight:700!important;color:#6f817b!important;margin-top:1px!important;letter-spacing:-.02em!important;}
 #dvlCopilotPage0974 .dvlBt1090Foot{margin-top:9px!important;font-size:9px!important;color:#6f817b!important;font-weight:600!important;line-height:1.35!important;}
 #dvlCopilotPage0974 .dvlBt1090Loading{font-size:11px!important;color:#a8b6b0!important;font-weight:700!important;padding:6px 2px 2px!important;line-height:1.4!important;}
 #dvlCopilotPage0974 .dvlBt1090Bar{margin:9px 0 4px!important;height:9px!important;border-radius:6px!important;background:rgba(255,255,255,.06)!important;overflow:hidden!important;}
@@ -73976,18 +73978,21 @@ window.DVL_COPILOT_BACKTEST_1040={
     var bestId=null; for(var i=0;i<rows.length;i++){ if((rows[i].trades||0)>0){ bestId=rows[i].id; break; } }
     var cov=(_data.coverage||{})[tf]||{};
     var nAssets=(_data.assets&&_data.assets.length)||0;
-    var out='<div class="dvlBt1090TfTitle">'+esc(tf)+(nAssets?' · '+nAssets+' ativos':'')+(cov.candles?' · '+cov.candles.toLocaleString('pt-BR')+' candles':'')+'</div>';
+    var out='<div class="dvlBt1090TfTitle">'+esc(tf)+(nAssets?' · '+nAssets+' ativos':'')+(cov.feeR?' · taxa ~'+cov.feeR+'R/trade':'')+(cov.candles?' · '+cov.candles.toLocaleString('pt-BR')+' candles':'')+'</div>';
     out+='<div class="dvlBt1090Scroll"><table class="dvlBt1090Tbl"><thead><tr>'
       +'<th>Combo (entrada)</th><th>Trades</th><th>Acerto</th><th>R méd.</th><th>Retorno</th><th>Máx queda</th></tr></thead><tbody>';
     out+=rows.map(function(r){
       var isWin=r.id===bestId;
-      var ret=Number(r.retPct)||0, avgr=Number(r.avgR)||0;
+      var ret=Number(r.retPct)||0, avgr=Number(r.avgR)||0, gross=Number(r.grossRetPct)||0;
+      /* Retorno cell shows NET (com taxa); the muted number under it is the
+         GROSS (sem taxa) so the fee bite is visible at a glance. */
+      var grossTag=(r.trades&&r.grossRetPct!=null)?'<span class="dvlBt1090Gross">'+esc(fmtPct(gross))+'</span>':'';
       return '<tr class="'+(isWin?'win':'')+'">'
         +'<td>'+(isWin?'👑 ':'')+esc(r.label)+'</td>'
         +'<td>'+(r.trades||0)+'</td>'
         +'<td>'+(r.trades?(r.winPct+'%'):'—')+'</td>'
         +'<td class="'+(avgr>=0?'pos':'neg')+'">'+(r.trades?avgr.toFixed(2)+'R':'—')+'</td>'
-        +'<td class="'+(ret>=0?'pos':'neg')+'">'+(r.trades?esc(fmtPct(ret)):'—')+'</td>'
+        +'<td class="'+(ret>=0?'pos':'neg')+'">'+(r.trades?esc(fmtPct(ret))+grossTag:'—')+'</td>'
         +'<td>'+(r.trades?'-'+(Number(r.maxDDPct)||0).toFixed(1)+'%':'—')+'</td></tr>';
     }).join("");
     out+='</tbody></table></div>';
@@ -74025,7 +74030,7 @@ window.DVL_COPILOT_BACKTEST_1040={
     var out='';
     if(_data.dataWarning) out+='<div class="dvlBt1090Warn">⚠️ '+esc(_data.dataWarning)+'</div>';
     var assetTxt=(_data.assets&&_data.assets.length)?_data.assets.join(", "):"BTC";
-    out+='<div class="dvlBt1090Note">Os <b>melhores combos</b> (top 2 de cada timeframe da rodada anterior) re-testados em <b>'+((_data.assets&&_data.assets.length)||1)+' ativos</b> ('+esc(assetTxt)+'), 30 dias, dados reais (candles da <b>MEXC</b>, OI/LSR da <b>Binance</b>). A saída é <b>igual pra todos</b> ('+esc(_data.exitLabel||'')+') pra comparar só a entrada. <b>Acerto</b> e <b>R méd.</b> juntam TODOS os trades dos ativos; <b>Retorno</b> e <b>Máx queda</b> são a <b>média por ativo</b> (1% de risco por trade, composto). 👑 = melhor retorno do timeframe.</div>';
+    out+='<div class="dvlBt1090Note">Os <b>melhores combos</b> (top 2 de cada timeframe da rodada anterior) re-testados em <b>'+((_data.assets&&_data.assets.length)||1)+' ativos</b> ('+esc(assetTxt)+'), 30 dias, dados reais (candles da <b>MEXC</b>, OI/LSR da <b>Binance</b>). A saída é <b>igual pra todos</b> ('+esc(_data.exitLabel||'')+') pra comparar só a entrada. <b>Acerto</b> e <b>R méd.</b> juntam TODOS os trades dos ativos; <b>Retorno</b> e <b>Máx queda</b> são a <b>média por ativo</b> (1% de risco por trade, composto). Tudo <b>já com taxa de '+((_data.feePct!=null)?_data.feePct:0.1)+'% por rodada</b> (ida+volta, taker) descontada por trade — o número cinza é o <b>bruto</b> (sem taxa). Como o stop é menor no 1m, a taxa pesa MAIS lá (veja "taxa ~X R/trade" no título de cada TF). 👑 = melhor retorno.</div>';
     out+=TFS.map(tableHtml).join("");
     out+='<div class="dvlBt1090Foot">Atualizado '+esc(fmtAgo(_data.updatedAt))+' · candles: '+esc(_data.candleSource||'MEXC')+' · OI/LSR: '+esc(_data.dirSource||'Binance')+' ('+(_data.oiPoints||0)+'/'+(_data.lsrPoints||0)+' pts) · recalcula a cada 6h. Não mexe nas carteiras dos bots ao vivo — é só simulação histórica.</div>';
     return out;
