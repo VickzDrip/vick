@@ -41,13 +41,13 @@
    blocks, so 30 days is the longest window where all 7 combos can be
    reconstructed from REAL data instead of guessed.
 
-   The combos (see BOTS) are trivial 2-block ANDs — currently the FOCUSED
-   set of the top-2 per timeframe from the earlier broad run, re-tested on
-   a wider asset universe. The EXIT is a single common rule (see EXIT):
-   a WIDE stop (3x ATR with a 0.6% floor) so trading fees don't dominate,
-   half off at +1.5R -> breakeven, rest to +3R, 3-hour timeout. (The live
-   bots each have their OWN exit now; this backtest holds the exit fixed to
-   isolate which entry combo has an edge, net of realistic fees.)
+   This run holds the ENTRY fixed (Spike+RSI, the most consistent combo) and
+   VARIES the EXIT: the table rows are 5 different TP/SL styles (see EXITS)
+   so we can see whether any exit turns the entry profitable net of fees.
+   (Earlier runs did the opposite — fixed exit, varied entry combo; the
+   entries all washed out to ~0 gross once fees were charged, so the question
+   moved to the exit.) The live bots each have their OWN exit; this is
+   read-only research.
 
    NOTE on confidence: the fetch endpoints are proven server-side
    (they power the live scanner), but the 30-day PAGINATION here couldn't
@@ -85,24 +85,24 @@ const RISK_PER_TRADE = 0.01;       // 1% of equity risked per trade, for the com
    is if anything optimistic. */
 const FEE_ROUNDTRIP = 0.0010;
 
-/* Single common exit for the 15m/30m/1h test. On these higher TFs the moves
-   are big enough in % that a NORMAL stop (2x ATR) already dwarfs the fee, so
-   no fat floor is needed (a small 0.3% floor guards unusually calm periods).
-   Back to NEAR targets (+1R half → b.e., rest +2R) — the profile that had a
-   real gross edge on the fast bounce — since here that near target is a
-   meaningful move, not fee-sized. Timeout 8h ≈ 8-32 bars across 15m-1h. */
-const EXIT = { atrMult: 2, minStopPct: 0.003, tp1R: 1, tp1Frac: 0.5, be: true, tp2R: 2, holdMin: 480 };
+/* The ENTRY is held FIXED while we vary the EXIT (the request: "testar 5
+   TP/SL"). Spike+RSI sobrevenda — the most consistent, candle-only combo
+   across the earlier runs. (Swap this predicate to test the exits on another
+   entry.) */
+const ENTRY = { id: "spikeRsi", label: "Spike acima da média + RSI sobrevenda", match: r => r.blocks.spikeAboveAvg && r.blocks.rsiOversold };
 
-/* FOCUSED set: the top-2 entry combos of EACH timeframe from the earlier
-   6-asset 30-day run (union = these 4 distinct combos). This "bigger" run
-   re-tests just these across a WIDER asset universe (see ASSETS) to see
-   whether the thin edge holds on more coins. Each is a predicate on a row
-   carrying .blocks (from metrics.blocksOf) plus .oiSlope.
-     1M top-2: RSI+OI (b5), Spike+RSI (b3)
-     3M top-2: OI+Pré-vol (b4), Pré-vol+OI-subindo (b2)
-     5M top-2: Spike+RSI (b3), OI+Pré-vol (b4)
-   The other 3 combos (b1 OI+LSR, b6 RSI+LSR, b7 LSR+Pré-vol) were dropped —
-   they were LSR-driven and consistently the weakest across all timeframes. */
+/* Five exit styles to compare — these are the TABLE ROWS now. All use params
+   the simulator already supports (atrMult/minStopPct, usePct/stopPct/tpPct,
+   tp1R/tp1Frac/be, tp2R, trailMult, holdMin). Numbers are all net of fees. */
+const EXITS = [
+  { id: "e1", label: "Scalp 1:1 · SL 1×ATR · TP +1R",              atrMult: 1,   minStopPct: 0.002, tp2R: 1,                                   holdMin: 480 },
+  { id: "e2", label: "1:2 parcial · SL 1.5×ATR · ½+1R→b.e. · +2R",  atrMult: 1.5, minStopPct: 0.003, tp1R: 1,   tp1Frac: 0.5, be: true, tp2R: 2, holdMin: 480 },
+  { id: "e3", label: "1:3 corre · SL 2×ATR · ½+1.5R→b.e. · +3R",    atrMult: 2,   minStopPct: 0.003, tp1R: 1.5, tp1Frac: 0.5, be: true, tp2R: 3, holdMin: 720 },
+  { id: "e4", label: "Trailing · SL/trail 2×ATR",                   atrMult: 2,   minStopPct: 0.003, trailMult: 2,                              holdMin: 720 },
+  { id: "e5", label: "% fixo · SL −1% · TP +2%",                    usePct: true, stopPct: 0.01,     tpPct: 0.02,                               holdMin: 480 }
+];
+
+/* (Reference) the entry combos that were compared before the pivot to exits. */
 const BOTS = [
   { id: "b5", label: "RSI sobrevenda + OI acima da média", match: r => r.blocks.rsiOversold && r.blocks.oiAboveAvg },
   { id: "b3", label: "Spike acima da média + RSI sobrevenda", match: r => r.blocks.spikeAboveAvg && r.blocks.rsiOversold },
@@ -378,12 +378,13 @@ async function run() {
 
   /* Accumulator per timeframe per bot: pooled R-multiples (for win% + avgR)
      and the list of per-asset retPct/maxDD (averaged for scale). */
-  const acc = {}, coverage = {}, feeAcc = {};
+  /* Accumulator per timeframe per EXIT variant (the rows now): pooled net
+     R-multiples (win% + avgR) and per-asset net retPct/maxDD/grossRet. */
+  const acc = {}, coverage = {};
   TFS.forEach(tf => {
     acc[tf] = {};
-    BOTS.forEach(b => { acc[tf][b.id] = { pooled: [], rets: [], dds: [], grossRets: [], assets: 0 }; });
+    EXITS.forEach(e => { acc[tf][e.id] = { pooled: [], rets: [], dds: [], grossRets: [], fees: [], assets: 0 }; });
     coverage[tf] = { candles: 0, usable: 0 };
-    feeAcc[tf] = { sum: 0, n: 0 };   // avg fee cost in R per timeframe
   });
   let oiTot = 0, lsrTot = 0, haveDirAny = false;
   const assetsDone = [];
@@ -426,22 +427,22 @@ async function run() {
       const rows = buildRows(kl, oiSeries, lsrSeries, tf);
       coverage[tf].candles += kl.length;
       coverage[tf].usable += rows.filter(Boolean).length;
-      for (const bot of BOTS) {
-        const tr = simulateTrades(rows, bot.match, EXIT, tf);
+      /* Fixed ENTRY, five EXIT variants (the rows). Each trade's NET R =
+         gross − fee-in-R (FEE_ROUNDTRIP / stop-distance). Gross kept for the
+         "sem taxa" comparison; fee kept to show each exit's own fee weight
+         (it differs per exit, since the stop differs). */
+      for (const ex of EXITS) {
+        const tr = simulateTrades(rows, ENTRY.match, ex, tf);
         if (!tr.length) continue;
-        const a = acc[tf][bot.id];
-        /* NET of fees: each trade's gross R minus its fee-in-R
-           (FEE_ROUNDTRIP / stop-distance). The card's numbers are all net —
-           the realistic view. Gross is kept only for the "sem taxa era…"
-           comparison. */
+        const a = acc[tf][ex.id];
         const net = tr.map(t => t.g - FEE_ROUNDTRIP / t.sd);
         const sNet = summarize(net);
         a.pooled = a.pooled.concat(net);
         a.rets.push(sNet.retPct);
         a.dds.push(sNet.maxDDPct);
         a.grossRets.push(summarize(tr.map(t => t.g)).retPct);
+        a.fees.push(mean(tr.map(t => FEE_ROUNDTRIP / t.sd)));
         a.assets++;
-        for (const t of tr) { feeAcc[tf].sum += FEE_ROUNDTRIP / t.sd; feeAcc[tf].n++; }
       }
     }
     assetsDone.push(base);
@@ -452,18 +453,18 @@ async function run() {
   const results = {};
   for (const tf of TFS) {
     results[tf] = {};
-    for (const bot of BOTS) {
-      const a = acc[tf][bot.id];
+    for (const ex of EXITS) {
+      const a = acc[tf][ex.id];
       const p = summarize(a.pooled);   // pooled is NET R
-      results[tf][bot.id] = {
+      results[tf][ex.id] = {
         trades: p.trades, winPct: p.winPct, avgR: p.avgR, totalR: p.totalR,
         retPct: a.rets.length ? Math.round(mean(a.rets) * 10) / 10 : 0,
         maxDDPct: a.dds.length ? Math.round(mean(a.dds) * 10) / 10 : 0,
         grossRetPct: a.grossRets.length ? Math.round(mean(a.grossRets) * 10) / 10 : 0,
+        feeR: a.fees.length ? Math.round(mean(a.fees) * 100) / 100 : 0,
         assets: a.assets
       };
     }
-    coverage[tf].feeR = feeAcc[tf].n ? Math.round((feeAcc[tf].sum / feeAcc[tf].n) * 100) / 100 : 0;
   }
 
   const gotAll = assetsDone.length === ASSETS.length;
@@ -471,14 +472,15 @@ async function run() {
   _cache = {
     updatedAt: Date.now(), days: DAYS, symbol: "Multi", assets: assetsDone,
     candleSource: "MEXC", dirSource: "Binance", feePct: Math.round(FEE_ROUNDTRIP * 1000) / 10,
-    exitLabel: "Stop 2x ATR (piso 0,3%) · parcial +1R → b.e. · resto +2R · timeout 8h",
-    bots: BOTS.map(b => ({ id: b.id, label: b.label })),
+    entryLabel: ENTRY.label,
+    exits: EXITS.map(e => ({ id: e.id, label: e.label })),
+    bots: EXITS.map(e => ({ id: e.id, label: e.label })),   // card reads .bots; rows are the exits now
     coverage: coverage, oiPoints: oiTot, lsrPoints: lsrTot,
     results: results, partial: !gotAll
   };
   if (!haveDir) {
     _cache.dataWarning = "OI/LSR da Binance indisponíveis (oi:" + oiTot + " lsr:" + lsrTot +
-      ") — provavelmente ban temporário de IP. Os candles vieram da MEXC, então o combo Spike+RSI foi avaliado; os que dependem de OI/LSR ficam sem dados até a Binance liberar.";
+      ") — provavelmente ban temporário de IP. Os candles vieram da MEXC; a entrada Spike+RSI não depende de OI/LSR, então os testes de saída seguem valendo.";
   } else if (!gotAll) {
     _cache.dataWarning = "Alguns ativos não vieram completos — mostrando o que deu para calcular (" + assetsDone.join(", ") + ").";
   }
@@ -514,4 +516,4 @@ function get() {
   return { ready: !!_cache, running: _running, progress: _progress, cooldownMin: 0, data: _cache };
 }
 
-module.exports = { get, run, buildRows, simulate, simulateTrades, summarize, aggregate, ASSETS, BOTS, EXIT, TFS, FEE_ROUNDTRIP };
+module.exports = { get, run, buildRows, simulate, simulateTrades, summarize, aggregate, ASSETS, BOTS, ENTRY, EXITS, TFS, FEE_ROUNDTRIP };
