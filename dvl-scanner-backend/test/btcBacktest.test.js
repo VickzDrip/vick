@@ -12,8 +12,13 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error("FAIL: " + m); } }
 function near(a, b, m, eps) { if (Math.abs(a - b) <= (eps || 1e-6)) pass++; else { fail++; console.error("FAIL: " + m + " (got " + a + ", want " + b + ")"); } }
 
-/* Helper: a candle the sim reads. atr14=1, so with EXIT.atrMult 1.5 -> r=1.5. */
+/* Helper: a candle the sim reads. atr14=1, so with EX.atrMult 1.5 -> r=1.5. */
 function candle(close, high, low) { return { close: close, high: high, low: low, atr14: 1 }; }
+
+/* Fixed exit for the sim-MECHANICS tests, independent of the production
+   EXIT constant (which gets tuned) so these keep asserting the engine, not
+   whatever the live exit params happen to be today. */
+const EX = { atrMult: 1.5, tp1R: 1, tp1Frac: 0.5, be: true, tp2R: 2, holdMin: 45 };
 
 /* 1) A single winning trade that reaches +2R. Entry 100 -> r=1.5, tp1=101.5,
    tp2=103. matchFn fires only on bar 0. Bar 1 spans up to 103.5 (past tp2). */
@@ -25,7 +30,7 @@ function candle(close, high, low) { return { close: close, high: high, low: low,
   // ensure no re-entry: matchFn true only at index 0
   let fired = false;
   const match = (c) => { if (!fired && c.close === 100) { fired = true; return true; } return false; };
-  const s = bt.simulate(rows, match, bt.EXIT, "5m");
+  const s = bt.simulate(rows, match, EX, "5m");
   ok(s.trades === 1, "one trade taken");
   // half at +1R, half at +2R = +1.5R
   near(s.avgR, 1.5, "winning trade banks +1.5R (half 1R + half 2R)");
@@ -40,7 +45,7 @@ function candle(close, high, low) { return { close: close, high: high, low: low,
   ];
   let fired = false;
   const match = (c) => { if (!fired && c.close === 100) { fired = true; return true; } return false; };
-  const s = bt.simulate(rows, match, bt.EXIT, "5m");
+  const s = bt.simulate(rows, match, EX, "5m");
   ok(s.trades === 1, "one trade taken (loss)");
   near(s.avgR, -1, "losing trade is -1R");
   ok(s.winPct === 0, "win rate 0%");
@@ -55,7 +60,7 @@ function candle(close, high, low) { return { close: close, high: high, low: low,
   ];
   let fired = false;
   const match = (c) => { if (!fired && c.close === 100 && !c.__seen) { fired = true; return true; } return false; };
-  const s = bt.simulate(rows, match, bt.EXIT, "5m");
+  const s = bt.simulate(rows, match, EX, "5m");
   ok(s.trades === 1, "one trade (partial then BE)");
   near(s.avgR, 0.5, "partial-then-BE nets +0.5R (half at 1R, rest flat)");
 })();
@@ -69,7 +74,7 @@ function candle(close, high, low) { return { close: close, high: high, low: low,
   ];
   let fired = false;
   const match = (c) => { if (!fired && c.close === 100) { fired = true; return true; } return false; };
-  const s = bt.simulate(rows, match, bt.EXIT, "5m");
+  const s = bt.simulate(rows, match, EX, "5m");
   near(s.avgR, -1, "ambiguous bar (stop+target) is scored as the stop, pessimistically");
 })();
 
@@ -115,12 +120,12 @@ function candle(close, high, low) { return { close: close, high: high, low: low,
     candle(102, 103.5, 100.1)              // 1: through tp1+tp2 -> +1.5R
   ];
   const mkMatch = () => { let fired = false; return (c) => { if (!fired && c.close === 100) { fired = true; return true; } return false; }; };
-  const tr = bt.simulateTrades(rows, mkMatch(), bt.EXIT, "5m");
+  const tr = bt.simulateTrades(rows, mkMatch(), EX, "5m");
   ok(Array.isArray(tr) && tr.length === 1, "simulateTrades returns an array of trades");
   near(tr[0].g, 1.5, "raw trade gross R matches (+1.5R)");
   // atr14=1, atrMult=1.5 -> r=1.5, entry=100 -> stop distance fraction 0.015
   near(tr[0].sd, 0.015, "trade carries its stop-distance fraction (for fees)");
-  const s = bt.simulate(rows, mkMatch(), bt.EXIT, "5m");
+  const s = bt.simulate(rows, mkMatch(), EX, "5m");
   ok(s.trades === 1 && Math.abs(s.avgR - 1.5) < 1e-6, "simulate() == summarize(gross of simulateTrades)");
 })();
 

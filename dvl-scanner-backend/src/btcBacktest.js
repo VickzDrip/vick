@@ -43,12 +43,11 @@
 
    The combos (see BOTS) are trivial 2-block ANDs — currently the FOCUSED
    set of the top-2 per timeframe from the earlier broad run, re-tested on
-   a wider asset universe. The EXIT is a single common rule I
-   picked so the comparison is about the ENTRY combo, not the exit:
-   1.5x-ATR stop, half off at +1R -> breakeven, rest to +2R, 45-min
-   timeout. (The live bots each have their OWN exit now; this backtest
-   deliberately holds the exit fixed to isolate which entry combo has an
-   edge.)
+   a wider asset universe. The EXIT is a single common rule (see EXIT):
+   a WIDE stop (3x ATR with a 0.6% floor) so trading fees don't dominate,
+   half off at +1.5R -> breakeven, rest to +3R, 3-hour timeout. (The live
+   bots each have their OWN exit now; this backtest holds the exit fixed to
+   isolate which entry combo has an edge, net of realistic fees.)
 
    NOTE on confidence: the fetch endpoints are proven server-side
    (they power the live scanner), but the 30-day PAGINATION here couldn't
@@ -83,8 +82,15 @@ const RISK_PER_TRADE = 0.01;       // 1% of equity risked per trade, for the com
    is if anything optimistic. */
 const FEE_ROUNDTRIP = 0.0010;
 
-/* Single common exit, applied to every combo (see module doc-comment). */
-const EXIT = { atrMult: 1.5, tp1R: 1, tp1Frac: 0.5, be: true, tp2R: 2, holdMin: 45 };
+/* Single common exit, applied to every combo. REWORKED to survive fees: the
+   old 1.5x-ATR stop was so tight on fast TFs that a fixed % fee ate ~1R per
+   trade (fee-in-R = FEE_ROUNDTRIP / stopDistPct — a tiny stop = huge fee
+   share). This one WIDENS the stop (3x ATR) and adds a percentage FLOOR
+   (minStopPct) so R is always a meaningful price move even when ATR is
+   minuscule on 1m; targets run further (+3R) and it holds longer so the
+   wider move has time to develop (and fewer, longer trades = fewer fee
+   hits). */
+const EXIT = { atrMult: 3, minStopPct: 0.006, tp1R: 1.5, tp1Frac: 0.5, be: true, tp2R: 3, holdMin: 180 };
 
 /* FOCUSED set: the top-2 entry combos of EACH timeframe from the earlier
    6-asset 30-day run (union = these 4 distinct combos). This "bigger" run
@@ -316,7 +322,11 @@ function simulateTrades(rows, matchFn, exit, tf) {
       }
     }
     if (!pos && (i - lastCloseIdx) >= cooldownBars && c.atr14 > 0 && matchFn(c)) {
-      const r = exit.usePct ? c.close * exit.stopPct : c.atr14 * exit.atrMult;
+      let r = exit.usePct ? c.close * exit.stopPct : c.atr14 * exit.atrMult;
+      /* Percentage floor: never let the stop be tighter than minStopPct of
+         price, so R stays a meaningful move and fees (fee-in-R =
+         FEE_ROUNDTRIP/stopDistPct) can't dominate on low-ATR fast TFs. */
+      if (exit.minStopPct) r = Math.max(r, c.close * exit.minStopPct);
       if (r > 0) {
         pos = {
           entry: c.close, r: r, sl: c.close - r, atr: c.atr14,
@@ -455,7 +465,7 @@ async function run() {
   _cache = {
     updatedAt: Date.now(), days: DAYS, symbol: "Multi", assets: assetsDone,
     candleSource: "MEXC", dirSource: "Binance", feePct: Math.round(FEE_ROUNDTRIP * 1000) / 10,
-    exitLabel: "Stop 1.5x ATR · parcial no +1R → b.e. · resto +2R · timeout 45min",
+    exitLabel: "Stop 3x ATR (piso 0,6%) · parcial +1,5R → b.e. · resto +3R · timeout 3h",
     bots: BOTS.map(b => ({ id: b.id, label: b.label })),
     coverage: coverage, oiPoints: oiTot, lsrPoints: lsrTot,
     results: results, partial: !gotAll

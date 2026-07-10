@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.097</title>
+<title>DVL Binance Live — Beta 1.098</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.097';
+window.DVL_APP_VERSION = 'Beta 1.098';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.097";
+const DVL_APP_VERSION = "Beta 1.098";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.098", note: "Novo stop no backteste, pra brigar com a taxa: o stop de 1,5×ATR era apertado demais no 1m (a taxa comia ~1R por trade). Agora é um stop LARGO — 3×ATR com PISO de 0,6% do preço — então o R vira um movimento de verdade e a taxa (taxa-em-R = taxa% ÷ stop%) para de dominar. Alvos também mais longe (parcial no +1,5R → breakeven, resto no +3R) e segura mais tempo (timeout 3h) pra dar espaço ao movimento maior. Menos trades e mais largos = menos mordida de taxa. Vamos ver se com stop largo sobra edge depois do custo. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.097", note: "Backteste agora desconta TAXA realista (~0,10% por rodada, ida+volta, taker) de cada trade — e ela pesa diferente em cada timeframe de propósito: como a taxa é uma % fixa e o stop no 1m é bem menor (ATR menor), ela come uma fatia MUITO maior de cada R no 1m do que no 5m. Por isso o custo é calculado em R usando o stop real de cada trade. Agora as colunas Acerto/R méd/Retorno/Máx queda são todas LÍQUIDAS (com taxa); o número cinza embaixo do retorno é o bruto (sem taxa), e o título de cada TF mostra 'taxa ~X R/trade' pra você ver o peso. Spoiler: no 1m a taxa é brutal (o stop é minúsculo). Slippage nem entrou na conta, então é até otimista. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.096", note: "Conserta o layout da aba Copilot 'fugindo da página' (conteúdo cortado na direita, com rolagem horizontal) em telas estreitas (~360px). Causa: a página é uma coluna só (grid), e um item de grid não encolhe abaixo do próprio conteúdo — a mini-tabela do Scanner tem colunas de largura fixa (~341px) que não cabem num celular estreito, então ela empurrava a coluna inteira (e todos os cards junto) pra fora da tela. Agora a coluna é fixada na largura disponível, os cards podem encolher, a tabela do Scanner rola dentro da própria caixa, e qualquer sobra é cortada em vez de vazar. Testado a 360px e 412px. Só frontend, não precisa reiniciar o backend." },
   { version: "Beta 1.095", note: "Backteste focado + maior: pega os TOP 2 combos de cada timeframe da rodada anterior (união = 4 combos: RSI+OI, Spike+RSI, OI+Pré-volume, Pré-volume+OI-subindo) e re-testa numa amostra bem maior — de 6 pra 15 ativos (BTC, ETH, SOL, BNB, XRP, DOGE, ADA, AVAX, LINK, LTC, DOT, TRX, BCH, NEAR, ATOM). Como o OI só tem 30 dias de histórico na Binance, 'maior' aqui é mais ATIVOS, não mais tempo. Os 3 combos de LSR (os mais fracos em tudo) saíram. A rodada leva ~7-8 min agora (mais ativos), fica em cache 6h. Exige atualizar/reiniciar o backend." },
