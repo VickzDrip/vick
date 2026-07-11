@@ -188,6 +188,31 @@ const mexc = {
     const map = {};
     d.forEach(t => { if (t && t.symbol) map[t.symbol] = Number(t.lastPrice); });
     return map;
+  },
+  /* REAL historical funding rate for one MEXC symbol (oldest→newest), the
+     backfill that gives the chart's funding-based Long/Short PROXY real depth
+     for MEXC-only assets instead of a single live point. Unlike OI — which
+     MEXC only exposes as a current value — funding IS published historically
+     (settles ~every 8h). Paginated (page_size 100, newest first); we pull a
+     few pages for a few months of history. Returns [{time, value}] in ms. */
+  async fundingHistory(sym, pages) {
+    const out = [];
+    const P = Math.max(1, Math.min(Number(pages) || 3, 10));
+    for (let pg = 1; pg <= P; pg++) {
+      const url = "https://contract.mexc.com/api/v1/contract/funding_rate/history?symbol=" +
+        encodeURIComponent(sym) + "&page_num=" + pg + "&page_size=100";
+      let j;
+      try { j = await getJSON(url); } catch (_) { break; }
+      const data = (j && j.data) || {};
+      const list = data.resultList || data.result_list || [];
+      if (!Array.isArray(list) || !list.length) break;
+      for (const r of list) {
+        const t = Number(r.settleTime), v = Number(r.fundingRate);
+        if (Number.isFinite(t) && Number.isFinite(v)) out.push({ time: t, value: v });
+      }
+      if (list.length < 100) break;
+    }
+    return out.sort((a, b) => a.time - b.time);
   }
 };
 
