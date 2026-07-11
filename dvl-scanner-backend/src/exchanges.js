@@ -104,6 +104,45 @@ const mexc = {
     return { closes, vols, ohlc, lastOpen: (Number(times[times.length - 1]) || 0) * 1000 };
   },
   base(sym) { return String(sym).replace(/_USDT$/, ""); },
+  /* Chart failover: raw OHLCV for one MEXC symbol, returned already shaped
+     as Binance-style kline rows so the in-page chart can consume it as a
+     drop-in when Binance is unreachable (the browser can't reach
+     contract.mexc.com directly, so it proxies through the backend). Unlike
+     klines() above — which the scanner caps at KLIM (80) candles — this
+     serves a full charting window (`limit`). tf is the chart's timeframe
+     ("1m"/"5m"/"15m"/"30m"/"1h"/"4h"/"1d"); MEXC has no native 3m/seconds,
+     so those simply aren't offered here (chart keeps Binance for them). */
+  async klinesChart(sym, tf, limit) {
+    const MEXC_CHART_TF = {
+      "1m": "Min1", "5m": "Min5", "15m": "Min15", "30m": "Min30",
+      "1h": "Min60", "4h": "Hour4", "1d": "Day1"
+    };
+    const mexcTf = MEXC_CHART_TF[tf];
+    if (!mexcTf) throw new Error("mexc chart tf unsupported: " + tf);
+    const n = Math.max(25, Math.min(2000, Number(limit) || 500));
+    const tfMs = tfToMs(tf);
+    const start = Math.floor(Date.now() / 1000) - n * (tfMs / 1000);
+    const url = "https://contract.mexc.com/api/v1/contract/kline/" + encodeURIComponent(sym) +
+      "?interval=" + mexcTf + "&start=" + start;
+    const j = await getJSON(url);
+    const d = (j && j.data) || null;
+    if (!d || !d.time || !d.close || d.close.length < 2) throw new Error("mexc chart kl empty " + sym);
+    const rows = [];
+    for (let i = 0; i < d.time.length; i++) {
+      const openMs = (Number(d.time[i]) || 0) * 1000;
+      const c = d.close[i];
+      rows.push([
+        openMs,
+        String(d.open ? d.open[i] : c), String(d.high ? d.high[i] : c),
+        String(d.low ? d.low[i] : c), String(c),
+        String(d.vol ? d.vol[i] : 0),          // base volume (contracts)
+        openMs + tfMs - 1,                       // close time
+        String(d.amount ? d.amount[i] : 0),      // quote volume (USDT turnover)
+        0, "0", "0", "0"                         // trades / taker-buy fields (unknown on MEXC)
+      ]);
+    }
+    return rows;
+  },
   /* Fresh (uncached) last-price map for every MEXC USDT perpetual, in one
      batched call — used by the frontend's Fast Bots (Bot 4) to price its
      open MEXC positions for stop/target checks, which need live data, not
