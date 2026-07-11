@@ -116,7 +116,15 @@ function createServer() {
   app.get("/api/dvl/scanner/mexc-derivs", (req, res) => {
     const symbol = String(req.query.symbol || "");
     if (!symbol) { res.json({ ok: false, oi: [], funding: [], error: "missing symbol" }); return; }
-    res.json(Object.assign({ ok: true, proxy: "funding" }, worker.getMexcDerivs(symbol)));
+    const base = worker.getMexcDerivs(symbol); // { symbol, oi:[], funding:[], updatedAt }
+    /* OI can only grow forward (MEXC has no historical OI endpoint), but
+       funding IS published historically — backfill it so the Long/Short proxy
+       has real depth immediately instead of a single live point. Falls back to
+       the live-sampled funding if the history call fails. */
+    mexc.fundingHistory(base.symbol, 3)
+      .then(fh => res.json(Object.assign({ ok: true, proxy: "funding" }, base,
+        fh.length ? { funding: fh, fundingSource: "history" } : { fundingSource: "sampled" })))
+      .catch(() => res.json(Object.assign({ ok: true, proxy: "funding", fundingSource: "sampled" }, base)));
   });
 
   app.post("/api/dvl/scanner/config", (req, res) => {
