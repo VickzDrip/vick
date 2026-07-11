@@ -265,6 +265,14 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
     if (priceMap) priceMap[cands[i].sym] = row.price;
   }
 
+  /* Stash the FULL universe (all candidates, ranked by spike) for the
+     frontend's full table — independent of the ignited-signal registry
+     built below. The Pro re-derives score/blocks from these raw fields. */
+  (_universe[adapter.key] || (_universe[adapter.key] = {}))[tf] = {
+    updatedAt: now,
+    rows: Object.keys(cur).map(s => cur[s]).sort((a, b) => (b.spike20 || 0) - (a.spike20 || 0))
+  };
+
   /* Symbols about to freshly JOIN the registry this cycle — captured before
      mergeRegistry mutates sigReg, so this mirrors its own join condition
      exactly (a real detection, not a refresh of an already-tracked row). */
@@ -453,6 +461,15 @@ const snapshots = { binance: {}, mexc: {} };
    requests to the exchange — cycle() already fetches it. */
 let _lastCands = { binance: [], mexc: [] };
 
+/* Full scanned UNIVERSE per exchange+tf (every candidate computed this cycle,
+   igniting or not), captured in scanExchange. The snapshot above is only the
+   ignited-signal REGISTRY — the frontend Scanner Pro's full ranked table
+   needs the whole universe, and the browser can't scan MEXC itself
+   (contract.mexc.com is blocked there), so it reads this instead. Exposed
+   via getUniverse() / the /universe endpoint. Cheap: these rows are already
+   built each cycle; the Pro re-derives score/status/blocks locally. */
+let _universe = { binance: {}, mexc: {} };
+
 function emptySnapshot(exchange, tf) {
   return {
     version: "1.0",
@@ -582,6 +599,15 @@ function getCandidates(exchange) {
   return _lastCands[ex] || [];
 }
 
+/* Full scanned universe (every candidate, not just ignited signals) for one
+   exchange+tf — the frontend Scanner Pro's full ranked table. See _universe. */
+function getUniverse(exchange, tf) {
+  const ex = exchange === "mexc" ? "mexc" : "binance";
+  const t = normTf(tf);
+  const u = (_universe[ex] || {})[t];
+  return { exchange: ex, tf: t, updatedAt: (u && u.updatedAt) || 0, rows: (u && u.rows) || [] };
+}
+
 /* Apply a runtime Filtros config patch (weights / engine params / OI-LSR MA
    lengths) — takes effect from the NEXT scan cycle onward. This backend
    serves a single user, so "last write wins" globally is an intentional
@@ -644,4 +670,4 @@ function getBacktestStats() {
   return result;
 }
 
-module.exports = { start, stop, cycle, getSnapshot, getCandidates, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading, getBacktestStats };
+module.exports = { start, stop, cycle, getSnapshot, getUniverse, getCandidates, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading, getBacktestStats };
