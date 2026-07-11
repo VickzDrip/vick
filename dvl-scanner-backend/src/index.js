@@ -28,9 +28,10 @@ function startOiSampler() {
     .then(ts => oiStore.sample(ts, Date.now()))
     .catch(e => console.error("[DVL] OI sample failed:", e.message));
 
-  refreshDetail();
-  tick();
-  setInterval(tick, SAMPLE_MS);
+  /* Load contractSize BEFORE the first sample so no snapshot is ever read back
+     in the wrong unit during the ~1s the detail call takes (that produced a
+     brief "wrong scale" transient right after a restart). */
+  refreshDetail().finally(() => { tick(); setInterval(tick, SAMPLE_MS); });
   setInterval(refreshDetail, DETAIL_MS);
   setInterval(() => oiStore.save(), SAVE_MS);
 }
