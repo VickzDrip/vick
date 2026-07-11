@@ -26,6 +26,7 @@ const analyze = require("./analyze");
 const { mexc } = require("./exchanges");
 const M = require("./metrics");
 const oiStore = require("./oiStore");
+const coinalyze = require("./coinalyze");
 const btcBacktest = require("./btcBacktest");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
@@ -141,6 +142,27 @@ function createServer() {
     const limit = Number(req.query.limit) || 600;
     const r = oiStore.getCandles(symbol, tf, unit, limit);
     res.json(Object.assign({ ok: true, snaps: oiStore.snapCount(symbol) }, r));
+  });
+
+  /* DIAGNOSTIC (not wired into the UI yet): does Coinalyze cover this MEXC
+     symbol, and what does its OI history look like? Lets us confirm coverage +
+     unit on the VPS before merging it into the OI panel. Returns the resolved
+     Coinalyze symbol, a small sample of rows, and both USD and native units so
+     we can see which lines up with our holdVol candles. Needs DVL_COINALYZE_KEY. */
+  app.get("/api/dvl/scanner/coinalyze-oi", (req, res) => {
+    const symbol = String(req.query.symbol || "");
+    const tf = String(req.query.tf || "1h").replace(/[^a-zA-Z0-9]/g, "");
+    const hours = Number(req.query.hours) || 24;
+    if (!symbol) { res.json({ ok: false, error: "missing symbol" }); return; }
+    Promise.all([
+      coinalyze.debugResolve(symbol),
+      coinalyze.oiHistory(symbol, tf, hours, true),   // USD-notional
+      coinalyze.oiHistory(symbol, tf, hours, false)   // native units
+    ]).then(([dbg, usd, native]) => res.json({
+      ok: true, symbol, tf, hours, enabled: coinalyze.enabled(), resolve: dbg,
+      usd: { count: usd.rows.length, note: usd.note, czSymbol: usd.czSymbol, sample: usd.rows.slice(-3) },
+      native: { count: native.rows.length, note: native.note, sample: native.rows.slice(-3) }
+    })).catch(e => res.json({ ok: false, error: e.message }));
   });
 
   app.post("/api/dvl/scanner/config", (req, res) => {
