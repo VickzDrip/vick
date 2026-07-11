@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.110</title>
+<title>DVL — Beta 1.111</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.110';
+window.DVL_APP_VERSION = 'Beta 1.111';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.110";
+const DVL_APP_VERSION = "Beta 1.111";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.111", note: "Tirei o '<CoinGlass>' do título do painel de Long/Short — agora é só 'Long/Short Ratio', sem marca de terceiro na tela. As legendas do indicador também deixaram de citar 'CoinGlass-style'. Só rótulo, o cálculo é o mesmo. Frontend-only." },
   { version: "Beta 1.110", note: "Tirei o 'BINANCE' dos rótulos dos indicadores. O selo que ficava no canto dos painéis de Open Interest e Long/Short agora é neutro: OI mostra 'AGREGADO' e o LSR mostra 'TOP TRADERS' (ou 'GLOBAL'), sem citar exchange. Só o nomezinho — os dados e o cálculo continuam iguais. (Sobre os osciladores que às vezes não carregam: o OI e o LSR vêm de dados de futuros que só existem pra ativos listados naquela fonte. Ativo só-MEXC, tipo ANSEM, não tem OI/LSR nessa fonte, então esses dois painéis ficam vazios pra ele — o gráfico de candles carrega normal porque agora vem da MEXC. Pra ativos que existem nas duas pontas, tipo SOL, os osciladores carregam certinho.)" },
   { version: "Beta 1.109", note: "Gráfico MUITO mais rápido, MEXC como fonte principal e sem 'Binance' na cara. (1) A MEXC virou a PRIMEIRA fonte de candles do gráfico (não mais só reserva): uma chamada rápida via backend, então trocar de ativo/timeframe carrega quase instantâneo em vez de 10-20s. Antes o gráfico tentava 6 endpoints da Binance em sequência (cada um tinha que dar timeout) antes de desistir — por isso a demora e o 'CARREGANDO' travado. (2) Ativos só-MEXC como VIRTUAL no 3m agora ABREM: a MEXC não tem candle nativo de 3m, então o backend monta o 3m a partir do 1m (vale pra qualquer timeframe que a MEXC não tenha nativo). (3) O gráfico DESENHA assim que os candles chegam — o OI/LSR (que podem travar quando a Binance está off) carregam depois e não seguram mais o desenho. (4) Tirei o 'Binance' do que aparece na tela: título vira só 'DVL', o overlay vira 'CARREGANDO...' e a mensagem do scanner não cita mais exchange. Exige atualizar/reiniciar o backend (endpoint /mexc-klines agora serve qualquer timeframe)." },
   { version: "Beta 1.108", note: "Failover automático de exchange NO GRÁFICO: quando a Binance está off, o chart agora puxa os candles da MEXC sozinho, então a plataforma não fica offline. Antes, com a Binance banida, clicar num ativo só-MEXC dava erro de fallback e o gráfico não abria (a última peça que ainda dependia só da Binance). Agora, se TODOS os endpoints da Binance falharem, o gráfico busca o mesmo candle na MEXC via backend (o navegador não alcança a MEXC direto) e desenha normal — o ticker/preço se reconstrói dos próprios candles. Cobre 1m/5m/15m/30m/1h/4h/1d (a MEXC não tem 3m/segundos nativo, então esses seguem só na Binance). Painéis de OI/LSR ainda vêm da Binance e podem ficar de fora enquanto ela está off, mas o gráfico fica de pé. Exige atualizar/reiniciar o backend (endpoint novo /mexc-klines)." },
@@ -35965,7 +35966,7 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
     const right = last ? (fmt(last.ratio)) : (CACHE.fetching ? "LOADING" : "NO DATA");
 
     ctx.save();
-    basePanel(ctx, m, "<CoinGlass> Long/Short Ratio", right, kind);
+    basePanel(ctx, m, "Long/Short Ratio", right, kind);
 
     ctx.save();
     ctx.beginPath();
@@ -36088,7 +36089,7 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
     panel.className = "dvl-vt-panel";
     panel.innerHTML = `
       <div class="dvl-vt-head">
-        <div class="dvl-vt-title"><b>DVL Long/Short Ratio</b><small>CoinGlass-style · real data</small></div>
+        <div class="dvl-vt-title"><b>DVL Long/Short Ratio</b><small>Long/Short · real data</small></div>
         <div class="dvl-vt-head-actions">
           <button class="dvl-vt-close" id="dvlLSPanelClose" type="button">×</button>
         </div>
@@ -36145,7 +36146,7 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
       item.className = "indicatorItem dvl-ls-indicator-item";
       item.innerHTML = `
         <span class="indicatorFxMark">LS</span>
-        <span><b>DVL Long/Short Ratio</b><small>CoinGlass-style line · real data</small></span>
+        <span><b>DVL Long/Short Ratio</b><small>Long/Short · real data</small></span>
         <i class="dvl-vt-state" id="dvlLongShortOscState">ON</i>
       `;
 
@@ -65514,7 +65515,7 @@ body.dvlScannerOpen080 #chartWrap{
     return [
       {key:"vol",mark:"VOL",title:"DVL Volume",sub:"overlay",api:"DVLVolume",pill:"dvlVolState",row:"dvlVolumeItem"},
       {key:"oi",mark:"OI",title:"DVL Open Interest",sub:"AGG OI candles · real data",api:"DVLOpenInterestOscillator",pill:"dvlOpenInterestOscState",row:"dvlOpenInterestOscItem"},
-      {key:"ls",mark:"LS",title:"DVL Long/Short Ratio",sub:"CoinGlass-style line · real data",api:"DVLLongShortOscillator",pill:"dvlLongShortOscState",row:"dvlLongShortOscItem"},
+      {key:"ls",mark:"LS",title:"DVL Long/Short Ratio",sub:"Long/Short · real data",api:"DVLLongShortOscillator",pill:"dvlLongShortOscState",row:"dvlLongShortOscItem"},
       {key:"netlong",mark:"NL",title:"DVL Net Long",sub:"aprox. via Binance (posição × OI)",api:"DVLNetLongOscillator",pill:"dvlNetLongState",row:"dvlNetLongItem"},
       {key:"netshort",mark:"NS",title:"DVL Net Short",sub:"aprox. via Binance (posição × OI)",api:"DVLNetShortOscillator",pill:"dvlNetShortState",row:"dvlNetShortItem"},
       {key:"netdelta",mark:"ND",title:"DVL Net Delta",sub:"aprox. via Binance (long − short × OI)",api:"DVLNetDeltaOscillator",pill:"dvlNetDeltaState",row:"dvlNetDeltaItem"},
