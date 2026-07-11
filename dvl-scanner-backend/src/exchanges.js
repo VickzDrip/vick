@@ -104,44 +104,78 @@ const mexc = {
     return { closes, vols, ohlc, lastOpen: (Number(times[times.length - 1]) || 0) * 1000 };
   },
   base(sym) { return String(sym).replace(/_USDT$/, ""); },
-  /* Chart failover: raw OHLCV for one MEXC symbol, returned already shaped
-     as Binance-style kline rows so the in-page chart can consume it as a
-     drop-in when Binance is unreachable (the browser can't reach
-     contract.mexc.com directly, so it proxies through the backend). Unlike
-     klines() above — which the scanner caps at KLIM (80) candles — this
-     serves a full charting window (`limit`). tf is the chart's timeframe
-     ("1m"/"5m"/"15m"/"30m"/"1h"/"4h"/"1d"); MEXC has no native 3m/seconds,
-     so those simply aren't offered here (chart keeps Binance for them). */
+  /* PRIMARY chart candle source: raw OHLCV for one MEXC symbol, returned
+     already shaped as Binance-style kline rows so the in-page chart consumes
+     it as a drop-in. The chart calls this first for every asset (MEXC lists
+     ~everything and the browser can't reach contract.mexc.com directly, so it
+     proxies through the backend); Binance is only a fallback for the rare
+     MEXC-missing symbol. Unlike klines() above — which the scanner caps at
+     KLIM (80) candles — this serves a full charting window (`limit`).
+
+     Any timeframe is supported: MEXC's native candle set is Min1/Min5/Min15/
+     Min30/Min60/Hour4/Hour8/Day1, so for a TF MEXC has no native candle for
+     (e.g. 3m, 2h, 12h, 1w) we fetch the largest native that divides it evenly
+     and aggregate server-side. Only sub-minute (seconds) TFs aren't offered
+     (chart keeps Binance aggTrades for those). */
   async klinesChart(sym, tf, limit) {
-    const MEXC_CHART_TF = {
-      "1m": "Min1", "5m": "Min5", "15m": "Min15", "30m": "Min30",
-      "1h": "Min60", "4h": "Hour4", "1d": "Day1"
-    };
-    const mexcTf = MEXC_CHART_TF[tf];
-    if (!mexcTf) throw new Error("mexc chart tf unsupported: " + tf);
-    const n = Math.max(25, Math.min(2000, Number(limit) || 500));
-    const tfMs = tfToMs(tf);
-    const start = Math.floor(Date.now() / 1000) - n * (tfMs / 1000);
+    const MEXC_NATIVE = [
+      ["Min1", 60000], ["Min5", 300000], ["Min15", 900000], ["Min30", 1800000],
+      ["Min60", 3600000], ["Hour4", 14400000], ["Hour8", 28800000], ["Day1", 86400000]
+    ];
+    const m = String(tf).match(/^(\d+)([smhdw])$/);
+    if (!m) throw new Error("mexc chart tf invalid: " + tf);
+    const unitMs = { s: 1000, m: 60000, h: 3600000, d: 86400000, w: 604800000 }[m[2]];
+    const tfMs = Number(m[1]) * unitMs;
+    if (tfMs < 60000) throw new Error("mexc chart tf sub-minute: " + tf); // seconds → Binance only
+    // Largest native interval that divides the requested TF evenly.
+    let base = null;
+    for (let i = MEXC_NATIVE.length - 1; i >= 0; i--) {
+      if (tfMs % MEXC_NATIVE[i][1] === 0) { base = MEXC_NATIVE[i]; break; }
+    }
+    if (!base) base = MEXC_NATIVE[0]; // fall back to Min1
+    const factor = Math.max(1, Math.round(tfMs / base[1]));
+    const n = Math.max(25, Math.min(1500, Number(limit) || 500));
+    const baseCount = n * factor;
+    const start = Math.floor(Date.now() / 1000) - baseCount * (base[1] / 1000);
     const url = "https://contract.mexc.com/api/v1/contract/kline/" + encodeURIComponent(sym) +
-      "?interval=" + mexcTf + "&start=" + start;
+      "?interval=" + base[0] + "&start=" + start;
     const j = await getJSON(url);
     const d = (j && j.data) || null;
     if (!d || !d.time || !d.close || d.close.length < 2) throw new Error("mexc chart kl empty " + sym);
-    const rows = [];
+
+    // Native base rows as Binance-shaped arrays.
+    const baseRows = [];
     for (let i = 0; i < d.time.length; i++) {
       const openMs = (Number(d.time[i]) || 0) * 1000;
-      const c = d.close[i];
-      rows.push([
+      const c = Number(d.close[i]);
+      baseRows.push([
         openMs,
-        String(d.open ? d.open[i] : c), String(d.high ? d.high[i] : c),
-        String(d.low ? d.low[i] : c), String(c),
-        String(d.vol ? d.vol[i] : 0),          // base volume (contracts)
-        openMs + tfMs - 1,                       // close time
-        String(d.amount ? d.amount[i] : 0),      // quote volume (USDT turnover)
-        0, "0", "0", "0"                         // trades / taker-buy fields (unknown on MEXC)
+        Number(d.open ? d.open[i] : c), Number(d.high ? d.high[i] : c),
+        Number(d.low ? d.low[i] : c), c,
+        Number(d.vol ? d.vol[i] : 0),           // base volume (contracts)
+        openMs + base[1] - 1,                     // close time
+        Number(d.amount ? d.amount[i] : 0)        // quote volume (USDT turnover)
       ]);
     }
-    return rows;
+
+    // Aggregate base candles into the requested TF's buckets when needed.
+    const src = factor === 1 ? baseRows : (() => {
+      const buckets = new Map();
+      for (const r of baseRows) {
+        const bt = Math.floor(r[0] / tfMs) * tfMs;
+        let b = buckets.get(bt);
+        if (!b) { b = [bt, r[1], r[2], r[3], r[4], r[5], bt + tfMs - 1, r[7]]; buckets.set(bt, b); }
+        else { if (r[2] > b[2]) b[2] = r[2]; if (r[3] < b[3]) b[3] = r[3]; b[4] = r[4]; b[5] += r[5]; b[7] += r[7]; }
+      }
+      return Array.from(buckets.values()).sort((a, b2) => a[0] - b2[0]);
+    })();
+
+    // Stringify OHLCV to match Binance's REST shape; pad taker-buy fields
+    // (unknown on MEXC) so downstream index access never breaks.
+    return src.map(r => [
+      r[0], String(r[1]), String(r[2]), String(r[3]), String(r[4]),
+      String(r[5]), r[6], String(r[7]), 0, "0", "0", "0"
+    ]);
   },
   /* Fresh (uncached) last-price map for every MEXC USDT perpetual, in one
      batched call — used by the frontend's Fast Bots (Bot 4) to price its

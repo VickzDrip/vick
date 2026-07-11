@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.108</title>
+<title>DVL — Beta 1.109</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.108';
+window.DVL_APP_VERSION = 'Beta 1.109';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -39,7 +39,7 @@ window.DVL_syncVersionBadge = function(){
   }catch(_){}
 };
 document.addEventListener('DOMContentLoaded', function(){
-  document.title = 'DVL Binance Live — ' + window.DVL_APP_VERSION;
+  document.title = 'DVL — ' + window.DVL_APP_VERSION;
   window.DVL_syncVersionBadge();
 }, {once:true});
 </script>
@@ -20142,7 +20142,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
     </div>
     <div class="canvasWrap" id="chartWrap">
       <canvas id="chart"></canvas>
-      <div class="loading" id="loading">CARREGANDO BINANCE...</div>
+      <div class="loading" id="loading">CARREGANDO...</div>
 
       <div class="dvlChartHistoryBar" id="dvlChartHistoryBar" aria-label="Histórico de desenhos">
         <button class="dvlChartHistoryBtn" id="dvlChartUndoBtn" type="button" aria-label="Retroceder alteração">
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.108";
+const DVL_APP_VERSION = "Beta 1.109";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.109", note: "Gráfico MUITO mais rápido, MEXC como fonte principal e sem 'Binance' na cara. (1) A MEXC virou a PRIMEIRA fonte de candles do gráfico (não mais só reserva): uma chamada rápida via backend, então trocar de ativo/timeframe carrega quase instantâneo em vez de 10-20s. Antes o gráfico tentava 6 endpoints da Binance em sequência (cada um tinha que dar timeout) antes de desistir — por isso a demora e o 'CARREGANDO' travado. (2) Ativos só-MEXC como VIRTUAL no 3m agora ABREM: a MEXC não tem candle nativo de 3m, então o backend monta o 3m a partir do 1m (vale pra qualquer timeframe que a MEXC não tenha nativo). (3) O gráfico DESENHA assim que os candles chegam — o OI/LSR (que podem travar quando a Binance está off) carregam depois e não seguram mais o desenho. (4) Tirei o 'Binance' do que aparece na tela: título vira só 'DVL', o overlay vira 'CARREGANDO...' e a mensagem do scanner não cita mais exchange. Exige atualizar/reiniciar o backend (endpoint /mexc-klines agora serve qualquer timeframe)." },
   { version: "Beta 1.108", note: "Failover automático de exchange NO GRÁFICO: quando a Binance está off, o chart agora puxa os candles da MEXC sozinho, então a plataforma não fica offline. Antes, com a Binance banida, clicar num ativo só-MEXC dava erro de fallback e o gráfico não abria (a última peça que ainda dependia só da Binance). Agora, se TODOS os endpoints da Binance falharem, o gráfico busca o mesmo candle na MEXC via backend (o navegador não alcança a MEXC direto) e desenha normal — o ticker/preço se reconstrói dos próprios candles. Cobre 1m/5m/15m/30m/1h/4h/1d (a MEXC não tem 3m/segundos nativo, então esses seguem só na Binance). Painéis de OI/LSR ainda vêm da Binance e podem ficar de fora enquanto ela está off, mas o gráfico fica de pé. Exige atualizar/reiniciar o backend (endpoint novo /mexc-klines)." },
   { version: "Beta 1.107", note: "Conserta a tabela do Scanner ficando VAZIA e 'recarregando' ao clicar num ativo. Quando você clicava numa linha, o feed re-consultava por um instante e a tabela piscava vazia com 'Carregando…'. Agora, se já tem tabela na tela, ela FICA (não pisca vazio) — o placeholder de carregando só aparece na primeira vez, quando não há nada pra manter. (O gráfico em si ainda depende da Binance pra abrir o ativo; com a Binance off, o chart de um ativo só-MEXC não carrega — isso é uma limitação maior, separada.) Só frontend." },
   { version: "Beta 1.106", note: "Conserta o score inflado (vários 99) e o OI aparecendo ↑ em TUDO. Causa: quando o backend reinicia, o histórico de OI de cada ativo ainda não encheu, e a função de tendência devolvia 'up' por padrão quando faltava dado — então TODO ativo lia 'OI acima da média', acendia esse bloquinho e empurrava o score pro teto (99). Agora, sem dado suficiente (ou empate), a tendência é NEUTRA ('flat'), não 'up' — o bloco de OI só acende com OI realmente acima da média. Os scores voltam ao normal conforme o histórico de OI enche (uns 40min depois de reiniciar). Exige atualizar/reiniciar o backend." },
@@ -23003,7 +23004,7 @@ async function fetchMexcKlinesViaBackend(sym, iv, targetLimit){
   const mexcSym = String(sym || "").toUpperCase().replace(/USDT$/, "_USDT");
   if(!/_USDT$/.test(mexcSym)) throw new Error("mexc sym n/a: " + sym);
   const url = "/api/dvl/scanner/mexc-klines?symbol=" + encodeURIComponent(mexcSym)
-    + "&tf=" + encodeURIComponent(iv) + "&limit=" + (Math.min(2000, targetLimit || 500));
+    + "&tf=" + encodeURIComponent(iv) + "&limit=" + (Math.min(1500, targetLimit || 500));
   const j = await jget(url);
   const rows = j && Array.isArray(j.rows) ? j.rows : null;
   if(!rows || !rows.length) throw new Error("mexc backend empty");
@@ -23169,6 +23170,18 @@ async function fetchKlinesSmart(sym, iv, targetLimit){
     throw new Error("Sem aggTrades reais para " + iv);
   }
 
+  /* MEXC-FIRST — the chart is exchange-agnostic and MEXC lists ~every asset,
+     so pull candles from MEXC (via the backend) before anything else. This is
+     ONE fast call, so switching assets is near-instant, and it avoids the slow
+     cascade of Binance endpoints (each one has to time out when Binance is
+     geo-banned). MEXC serves every non-seconds TF (it resamples the ones it
+     has no native candle for, e.g. 3m). Only if MEXC has no data for this
+     symbol/TF do we fall through to the Binance path below. */
+  try{
+    const mrows = await fetchMexcKlinesViaBackend(sym, iv, targetLimit);
+    if(Array.isArray(mrows) && mrows.length) return mrows;
+  }catch(_){}
+
   if(isNativeTimeframe(iv)){
     return await fetchKlinesHistory(sym, iv, targetLimit);
   }
@@ -23281,8 +23294,49 @@ async function loadAll(silent=false){
     const _pMs = periodToMs(period), _now = Date.now();
     const _bbP = periodToBybitPeriod(period);
     const _bbUrl = (n) => "https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=" + encodeURIComponent(symbol) + "&period=" + _bbP + "&limit=200" + (n>0?"&endTime="+(_now-n*200*_pMs):"");
-    const [k, t, oi0, oi1, oi2, ls0, ls1, ls2, bb0, bb1, bb2] = await Promise.all([
-      fetchKlinesSmart(symbol, interval, historyLimitForInterval(interval)),
+
+    /* ── 1) CANDLES FIRST ── paint the chart the instant candles arrive. The
+       OI/LSR/ticker side-calls (which can hang for seconds when an exchange is
+       geo-banned) are fetched AFTER and never block this draw — that's what
+       makes opening an asset / switching TF near-instant instead of a long
+       "carregando" wait. */
+    const k = await fetchKlinesSmart(symbol, interval, historyLimitForInterval(interval));
+    if(symbol !== _reqSym || interval !== _reqIv){ try{els.loading.classList.add("hidden");}catch(_){} return; }
+    if(!Array.isArray(k) || !k.length){
+      throw new Error("Sem candles para " + symbol + " " + interval);
+    }
+    applyKlineRowsToChart(k);
+    ticker = buildTickerFromRealKlines(); /* provisional price from candles; refined by the real ticker in stage 2 */
+    assetTickerMap[symbol] = ticker;
+    window.DVL_API_STATUS = {
+      source:k.__dvlSource || "REAL_KLINES",
+      endpoint:k.__dvlEndpoint || null,
+      market:k.__dvlMarket || null,
+      candles:true,
+      ticker:false,
+      tickerFallbackFromRealKlines:true,
+      derivatives:false,
+      fallback:false,
+      fakeFallbackBlocked:true,
+      symbol:symbol,
+      interval:interval,
+      rows:klines.length,
+      lastError:null,
+      updatedAt:Date.now()
+    };
+    refreshAssetTickers(true);
+    updateHeader();
+    els.loading.classList.add("hidden");
+    drawSoon();
+    if(typeof _klWsConnect==='function') _klWsConnect();
+    if(typeof _nnWsConnect==='function') _nnWsConnect();
+    try{if(window.DVL_PAPER_TRADING_V2_PRO&&typeof window.DVL_PAPER_TRADING_V2_PRO.render==='function')window.DVL_PAPER_TRADING_V2_PRO.render();}catch(_){}
+
+    /* ── 2) SIDE DATA (real ticker + OI + LSR) ── best-effort, applied when it
+       lands; every call is individually .catch()-guarded so a slow/failed
+       source leaves the already-drawn chart untouched and only affects the
+       OI/LSR panes. */
+    const [t, oi0, oi1, oi2, ls0, ls1, ls2, bb0, bb1, bb2] = await Promise.all([
       jget(`${BINANCE}/fapi/v1/ticker/24hr?symbol=${symbol}`).catch(()=>null),
       jget(`${DATA}/openInterestHist?symbol=${symbol}&period=${period}&limit=500`).catch(()=>[]),
       jget(`${DATA}/openInterestHist?symbol=${symbol}&period=${period}&limit=500&endTime=${_now-500*_pMs}`).catch(()=>[]),
@@ -23294,40 +23348,15 @@ async function loadAll(silent=false){
       jget(_bbUrl(1)).catch(()=>null),
       jget(_bbUrl(2)).catch(()=>null)
     ]);
-    /* Symbol/TF changed while this request was in flight → discard the stale
-       result so it can never clobber the current asset's chart. Hide the
-       overlay first so it can never get stuck. */
-    if(symbol !== _reqSym || interval !== _reqIv){ try{els.loading.classList.add("hidden");}catch(_){} return; }
-    if(!Array.isArray(k) || !k.length){
-      throw new Error("Binance klines vazio para " + symbol + " " + interval);
-    }
-
-    applyKlineRowsToChart(k);
-
+    /* Asset/TF changed while the side data was in flight → drop it so it can't
+       overwrite the new asset's panes. */
+    if(symbol !== _reqSym || interval !== _reqIv){ return; }
     if(t){
       ticker = t;
-    }else{
-      ticker = buildTickerFromRealKlines();
+      assetTickerMap[symbol] = ticker;
+      try{ window.DVL_API_STATUS.ticker = true; window.DVL_API_STATUS.tickerFallbackFromRealKlines = false; }catch(_){}
+      refreshAssetTickers(true);
     }
-
-    assetTickerMap[symbol] = ticker;
-    window.DVL_API_STATUS = {
-      source:k.__dvlSource || "BINANCE_REAL_KLINES",
-      endpoint:k.__dvlEndpoint || null,
-      market:k.__dvlMarket || null,
-      candles:true,
-      ticker:!!t,
-      tickerFallbackFromRealKlines:!t,
-      derivatives:false,
-      fallback:false,
-      fakeFallbackBlocked:true,
-      symbol:symbol,
-      interval:interval,
-      rows:klines.length,
-      lastError:null,
-      updatedAt:Date.now()
-    };
-    refreshAssetTickers(true);
     { const _s=new Set(); const _oi=[oi0,oi1,oi2].filter(Array.isArray).flatMap(p=>p).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_s.has(k))return false;_s.add(k);return true;}).map(x=>({time:+x.timestamp,value:+x.sumOpenInterestValue,qty:+x.sumOpenInterest})); if(_oi.length) oiHist=_oi; /* keep last OI if the fetch came back empty so the pane doesn't vanish */ }
     {
       const _s=new Set();
@@ -23350,12 +23379,8 @@ async function loadAll(silent=false){
       window.DVL_API_STATUS.lsrRows = Array.isArray(lsHist) ? lsHist.length : 0;
     }catch(_){}
     updateHeader();
-    els.loading.classList.add("hidden");
-    try{if(window.DVL_PAPER_TRADING_V2_PRO&&typeof window.DVL_PAPER_TRADING_V2_PRO.render==='function')window.DVL_PAPER_TRADING_V2_PRO.render();}catch(_){}
     if(candleMode === "footprint") fetchFootprintData();
     drawSoon();
-    if(typeof _klWsConnect==='function') _klWsConnect();
-    if(typeof _nnWsConnect==='function') _nnWsConnect();
   }catch(err){
     console.warn(err);
 
@@ -63112,7 +63137,7 @@ body.dvlScannerOpen080 #chartWrap{
          screen, keep it — only show the "loading" placeholder on the very
          first load, when there's nothing to keep. */
       if(!body.querySelector(".dvlScan1013Row")){
-        body.innerHTML='<div class="dvlScan1013Empty">Carregando scanner completo… Se a Binance ainda estiver carregando, o painel continua aberto e a tabela aparece quando os dados chegarem.</div>';
+        body.innerHTML='<div class="dvlScan1013Empty">Carregando scanner completo… O painel continua aberto e a tabela aparece assim que os dados chegarem.</div>';
       }
       renderDetected(p);   // archive still shows even while the live feed loads
       return;
