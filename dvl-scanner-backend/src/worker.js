@@ -78,6 +78,39 @@ function pushOi(exKey, sym, value) {
   return buf;
 }
 
+/* TIMESTAMPED derivative series for the in-page chart oscillators, built from
+   MEXC's own data (the bulk ticker payload already carries holdVol = OI and
+   fundingRate for EVERY symbol, so this costs no extra API calls). Unlike the
+   short OI_MA_LEN buffer above (which only feeds the scanner's OI arrow and
+   only for candidates), this keeps a long, wall-clock-stamped series for every
+   MEXC symbol so the chart's OI panel — and a clearly-labelled funding-based
+   sentiment PROXY for the Long/Short panel — can be filled for MEXC-only
+   assets that don't exist on Binance's futures-data at all. The series starts
+   empty and grows one point per cycle (there's no retroactive OI/funding
+   history on MEXC's public API — this is real data sampled forward in time). */
+const mexcDerivSeries = {}; // sym -> { oi:[{t,v}], fr:[{t,v}] }
+const DERIV_MAX = 400;
+
+function pushMexcDeriv(sym, oi, fr, t) {
+  const e = mexcDerivSeries[sym] || (mexcDerivSeries[sym] = { oi: [], fr: [] });
+  if (Number.isFinite(oi)) { e.oi.push({ t, v: oi }); if (e.oi.length > DERIV_MAX) e.oi.shift(); }
+  if (Number.isFinite(fr)) { e.fr.push({ t, v: fr }); if (e.fr.length > DERIV_MAX) e.fr.shift(); }
+}
+
+/* Accessor for the chart: OI + funding-proxy series for one MEXC symbol.
+   Accepts either MEXC form ("ANSEM_USDT") or Binance form ("ANSEMUSDT"). */
+function getMexcDerivs(symbol) {
+  const raw = String(symbol || "").toUpperCase().replace(/[^A-Z0-9_]/g, "");
+  const mexcSym = /_USDT$/.test(raw) ? raw : raw.replace(/USDT$/, "_USDT");
+  const e = mexcDerivSeries[mexcSym] || { oi: [], fr: [] };
+  return {
+    symbol: mexcSym,
+    oi: e.oi.map(p => ({ time: p.t, value: p.v })),
+    funding: e.fr.map(p => ({ time: p.t, value: p.v })),
+    updatedAt: (e.oi.length ? e.oi[e.oi.length - 1].t : (e.fr.length ? e.fr[e.fr.length - 1].t : 0))
+  };
+}
+
 /* Per-exchange, per-TF PERSISTENT signal registry: once a symbol ignites on
    a given timeframe it lives here (keyed by raw symbol) and is refreshed
    every cycle until it ages out, leaves the feed, or is pushed past the row
@@ -226,6 +259,14 @@ function mergeRegistry(sigReg, cur, now) {
    a different data source. */
 async function scanCandidatesAndOi(adapter) {
   let cands = await adapter.tickers();
+  /* Sample the timestamped OI + funding series for EVERY MEXC symbol from the
+     full ticker payload (before it's sliced down to top-volume candidates) —
+     this is what lets the chart show real MEXC OI (and a funding-based proxy)
+     for low-volume, MEXC-only assets the scanner would otherwise drop. */
+  if (adapter.key === "mexc") {
+    const now = Date.now();
+    for (const c of cands) pushMexcDeriv(c.sym, Number(c.oi), Number(c.fr), now);
+  }
   cands.sort((a, b) => b.qv - a.qv);
   cands = cands.slice(0, cfg.CAND);
   if (adapter.key === "binance" && typeof adapter.openInterest === "function") {
@@ -670,4 +711,4 @@ function getBacktestStats() {
   return result;
 }
 
-module.exports = { start, stop, cycle, getSnapshot, getUniverse, getCandidates, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading, getBacktestStats };
+module.exports = { start, stop, cycle, getSnapshot, getUniverse, getCandidates, getMexcDerivs, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading, getBacktestStats };
