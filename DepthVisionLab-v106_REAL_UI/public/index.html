@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.100</title>
+<title>DVL Binance Live — Beta 1.101</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.100';
+window.DVL_APP_VERSION = 'Beta 1.101';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.100";
+const DVL_APP_VERSION = "Beta 1.101";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.101", note: "Fast Bots reformulados: (1) timeframes mudam de 1m/3m/5m pra 5m / 15m / 30m / 1h; (2) cada bot agora mostra o resultado SEPARADO POR TIMEFRAME (bloco 'Por timeframe' dentro do card: trades, % de acerto e P&L de cada TF) — assim dá pra ver em qual TF cada combo realmente ganha, em vez de tudo misturado. A janela de 'sinal fresco' escala por TF (30min no 5m até 2h no 1h) pra não faltar entrada nos TFs lentos. Como os TFs mudaram, as 7 carteiras reiniciam do zero ($1.000) pra os números por TF nascerem limpos. Só frontend — não precisa reiniciar o backend." },
   { version: "Beta 1.100", note: "Backteste vira teste de SAÍDAS: a entrada fica FIXA (Spike + RSI sobrevenda, o combo mais consistente) e agora as LINHAS da tabela são 5 tipos de TP/SL pra ver se alguma saída vira o jogo: (1) Scalp 1:1 (SL 1×ATR, TP +1R); (2) 1:2 parcial (SL 1.5×ATR, ½ no +1R→b.e., resto +2R); (3) 1:3 corre (SL 2×ATR, ½ no +1.5R→b.e., resto +3R); (4) Trailing (SL/trailing 2×ATR); (5) % fixo (SL −1%, TP +2%). Tudo líquido de taxa, com o bruto em cinza e a 'taxa ~X R' de cada saída na própria linha (cada saída tem um stop diferente, então a taxa pesa diferente). Roda em 15m/30m/1h, 15 ativos. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.099", note: "Backteste muda pra timeframe ALTO: sai 1m/3m/5m, entra 15m/30m/1h. Motivo: no TF baixo a gente provou que não tem saída — stop apertado tem edge mas a taxa mata; stop largo mata a taxa mas também mata o edge. No TF alto o movimento é grande em % por natureza, então um stop NORMAL (2×ATR, piso 0,3%) já é bem maior que a taxa sem precisar sufocar o sinal — os alvos voltam pra perto (parcial +1R → breakeven, resto +2R, timeout 8h), que é o perfil que tinha edge de verdade. É o teste onde a física taxa-vs-movimento finalmente pode fechar. Candles 15m/30m/1h são nativos da MEXC (busca mais rápida, ~3-4 min). Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.098", note: "Novo stop no backteste, pra brigar com a taxa: o stop de 1,5×ATR era apertado demais no 1m (a taxa comia ~1R por trade). Agora é um stop LARGO — 3×ATR com PISO de 0,6% do preço — então o R vira um movimento de verdade e a taxa (taxa-em-R = taxa% ÷ stop%) para de dominar. Alvos também mais longe (parcial no +1,5R → breakeven, resto no +3R) e segura mais tempo (timeout 3h) pra dar espaço ao movimento maior. Menos trades e mais largos = menos mordida de taxa. Vamos ver se com stop largo sobra edge depois do custo. Exige atualizar/reiniciar o backend." },
@@ -73345,6 +73346,14 @@ window.DVL_COPILOT_BACKTEST_1040={
 #dvlCopilotPage0974 .dvlFb1060Reset{margin-top:7px!important;width:100%!important;padding:6px!important;border-radius:8px!important;border:1px solid rgba(145,175,165,.18)!important;background:rgba(255,255,255,.03)!important;color:#9aa6a1!important;font-size:9px!important;font-weight:800!important;cursor:pointer!important;}
 #dvlCopilotPage0974 .dvlFb1060Foot{margin-top:8px!important;padding-top:8px!important;border-top:1px solid rgba(145,175,165,.12)!important;color:#70827c!important;font-size:9.5px!important;font-weight:700!important;line-height:1.35!important;}
 #dvlCopilotPage0974 .dvlFb1060Foot b{color:#10df77!important;}
+#dvlCopilotPage0974 .dvlFb1060TfGrid{display:flex!important;flex-direction:column!important;gap:3px!important;margin-top:5px!important;}
+#dvlCopilotPage0974 .dvlFb1060TfRow{display:grid!important;grid-template-columns:34px 1fr auto auto!important;align-items:center!important;gap:7px!important;font-size:9.5px!important;font-weight:750!important;color:#c7d3ce!important;padding:3px 7px!important;border-radius:6px!important;background:rgba(16,223,119,.05)!important;}
+#dvlCopilotPage0974 .dvlFb1060TfRow.idle{background:rgba(145,175,165,.05)!important;color:#70827c!important;}
+#dvlCopilotPage0974 .dvlFb1060TfRow .tf{font-weight:900!important;color:#9fb0aa!important;}
+#dvlCopilotPage0974 .dvlFb1060TfRow .cnt{color:#8a9a94!important;font-weight:700!important;}
+#dvlCopilotPage0974 .dvlFb1060TfRow .wr{color:#8a9a94!important;font-weight:800!important;font-size:8.5px!important;}
+#dvlCopilotPage0974 .dvlFb1060TfRow .pos{color:#10df77!important;}
+#dvlCopilotPage0974 .dvlFb1060TfRow .neg{color:#ff4a61!important;}
 </style>
 
 <script id="DVL_FASTBOTS_1060_JS">
@@ -73410,9 +73419,14 @@ window.DVL_COPILOT_BACKTEST_1040={
   var MAX_OPEN=5;              // per bot -> at most $500 of the $1000 deployed
   var ATR_PERIOD=14;
   var MAX_HOLD_MS=45*60000;    // fallback timeout only — each bot sets its own holdMin (see BOTS[].exit)
-  var FRESH_MS=30*60000;       // only rows detected in the last 30 min are eligible
+  var FRESH_MS=30*60000;       // default eligibility window (see FRESH_MS_BY_TF)
+  /* Eligibility window scaled per TF: a 30-min window is 6 candles on 5m but
+     only half a candle on 1h, which would starve the slow TFs of entries and
+     make the per-TF comparison unfair. Give each TF a window of a few of its
+     own candles instead. */
+  var FRESH_MS_BY_TF={ "5m":30*60000, "15m":45*60000, "30m":60*60000, "1h":120*60000 };
   var COOLDOWN_MS=30*60000;    // per bot+symbol, after a close
-  var TFS=["1m","3m","5m"];
+  var TFS=["5m","15m","30m","1h"];
   var SIGNAL_POLL_MS=60000;    // matches the backend's own refresh cadence
   var PRICE_POLL_MS=20000;     // exits need to be quicker than entries
   var MAX_HISTORY=40;
@@ -73431,31 +73445,31 @@ window.DVL_COPILOT_BACKTEST_1040={
        trailMult trailing stop distance in ATR once in profit (null = none)
        holdMin   timeout in minutes */
   var BOTS=[
-    { id:"b1", name:"Bot 1", side:"LONG", ls:"dvl_fastbot_b1_e1",
+    { id:"b1", name:"Bot 1", side:"LONG", ls:"dvl_fastbot_b1_e2",
       comboLabel:"OI acima da média + LSR abaixo da média",
       exit:{ label:"Metade no +1R → resto +2R (stop 1x ATR)", atrMult:1.0, tp1R:1, tp1Frac:0.5, be:true, tp2R:2, holdMin:45 },
       match:function(r){ return !!(r.blocks && r.blocks.oiAboveAvg && r.blocks.lsrBelowAvg); } },
-    { id:"b2", name:"Bot 2", side:"LONG", ls:"dvl_fastbot_b2_e1",
+    { id:"b2", name:"Bot 2", side:"LONG", ls:"dvl_fastbot_b2_e2",
       comboLabel:"Pré-volume baixo + OI subindo",
       exit:{ label:"Stop largo 1.5x ATR, metade no +1R → resto +2R", atrMult:1.5, tp1R:1, tp1Frac:0.5, be:true, tp2R:2, holdMin:45 },
       match:function(r){ return !!(r.blocks && r.blocks.prevVolBelowHalf && Number(r.oiSlope)>0); } },
-    { id:"b3", name:"Bot 3", side:"LONG", ls:"dvl_fastbot_b3_e1",
+    { id:"b3", name:"Bot 3", side:"LONG", ls:"dvl_fastbot_b3_e2",
       comboLabel:"Spike acima da média + RSI sobrevenda",
       exit:{ label:"Deixa correr: 1/3 no +1R → resto +3R (stop 1.5x)", atrMult:1.5, tp1R:1, tp1Frac:0.334, be:true, tp2R:3, holdMin:60 },
       match:function(r){ return !!(r.blocks && r.blocks.spikeAboveAvg && r.blocks.rsiOversold); } },
-    { id:"b4", name:"Bot 4", side:"LONG", ls:"dvl_fastbot_b4_e1",
+    { id:"b4", name:"Bot 4", side:"LONG", ls:"dvl_fastbot_b4_e2",
       comboLabel:"OI acima da média + Pré-volume baixo",
       exit:{ label:"Alvo único +1R, fecha tudo (rápido)", atrMult:1.0, tp1R:null, tp2R:1, holdMin:45 },
       match:function(r){ return !!(r.blocks && r.blocks.oiAboveAvg && r.blocks.prevVolBelowHalf); } },
-    { id:"b5", name:"Bot 5", side:"LONG", ls:"dvl_fastbot_b5_e1",
+    { id:"b5", name:"Bot 5", side:"LONG", ls:"dvl_fastbot_b5_e2",
       comboLabel:"RSI sobrevenda + OI acima da média",
       exit:{ label:"Trailing 1.5x ATR, sem alvo fixo", atrMult:1.5, tp1R:null, tp2R:null, trailMult:1.5, holdMin:90 },
       match:function(r){ return !!(r.blocks && r.blocks.rsiOversold && r.blocks.oiAboveAvg); } },
-    { id:"b6", name:"Bot 6", side:"LONG", ls:"dvl_fastbot_b6_e1",
+    { id:"b6", name:"Bot 6", side:"LONG", ls:"dvl_fastbot_b6_e2",
       comboLabel:"RSI sobrevenda + LSR abaixo da média",
       exit:{ label:"% fixo: stop -1% / alvo +2%", usePct:true, stopPct:0.01, tpPct:0.02, tp1R:null, holdMin:45 },
       match:function(r){ return !!(r.blocks && r.blocks.rsiOversold && r.blocks.lsrBelowAvg); } },
-    { id:"b7", name:"Bot 7", side:"LONG", ls:"dvl_fastbot_b7_e1",
+    { id:"b7", name:"Bot 7", side:"LONG", ls:"dvl_fastbot_b7_e2",
       comboLabel:"LSR abaixo da média + Pré-volume baixo",
       exit:{ label:"Stop largo 2x ATR, alvo +2R, segura 90min", atrMult:2.0, tp1R:null, tp2R:2, holdMin:90 },
       match:function(r){ return !!(r.blocks && r.blocks.lsrBelowAvg && r.blocks.prevVolBelowHalf); } }
@@ -73720,10 +73734,11 @@ window.DVL_COPILOT_BACKTEST_1040={
          in the status line purely as info (Binance being down right now
          is worth knowing even though trading continues against MEXC). */
       var binanceLive=!(snap && snap.fallback);
+      var freshMs=FRESH_MS_BY_TF[tf]||FRESH_MS;
       var freshCount=0;
       for(var i=0;i<rows.length;i++){
         var r=rows[i];
-        if(r.spikeAt && (now-r.spikeAt)>FRESH_MS) continue; // stale detection — not a "fast" opportunity anymore
+        if(r.spikeAt && (now-r.spikeAt)>freshMs) continue; // stale detection — not a "fast" opportunity anymore
         freshCount++;
         for(var b=0;b<BOTS.length;b++){
           if(BOTS[b].match(r)) await tryOpen(BOTS[b],r,tf);
@@ -73764,6 +73779,26 @@ window.DVL_COPILOT_BACKTEST_1040={
     out+='<div class="dvlFb1060Stat"><span>Retorno</span><b class="'+(retPct>=0?"pos":"neg")+'">'+esc(fmtPct(retPct))+'</b></div>';
     out+='<div class="dvlFb1060Stat"><span>Em andamento</span><b>'+w.positions.length+' trade'+(w.positions.length===1?'':'s')+'</b></div>';
     out+='<div class="dvlFb1060Stat"><span>Fechados</span><b>'+closed.length+(winRate==null?'':' ('+winRate+'% acerto)')+'</b></div>';
+    /* Per-TF breakdown: realized P&L / trades / win rate split by the TF the
+       signal came from (pos.tf, carried into history), plus how many are
+       open now on that TF — so you can see which timeframe actually carries
+       this bot's edge. Open positions add their live unrealized $ too. */
+    var byTf={};
+    TFS.forEach(function(tf){ byTf[tf]={ n:0, wins:0, pnl:0, open:0 }; });
+    closed.forEach(function(h){ var t=byTf[h.tf]; if(!t) return; t.n++; if(h.pnl>0) t.wins++; t.pnl+=Number(h.pnl)||0; });
+    w.positions.forEach(function(p){ var t=byTf[p.tf]; if(!t) return; t.open++;
+      var price=_lastPriceMap[p.symbol]; var remQty=p.qty*(1-(p.closedFrac||0));
+      t.pnl+=(p.realized||0)+(price>0?pnlOf(bot,p,price,remQty):0); });
+    out+='<div class="dvlFb1060SubTitle">Por timeframe</div>';
+    out+='<div class="dvlFb1060TfGrid">'+TFS.map(function(tf){
+      var t=byTf[tf], wr=t.n?Math.round(t.wins/t.n*100):null;
+      var active=(t.n>0||t.open>0);
+      return '<div class="dvlFb1060TfRow'+(active?'':' idle')+'">'
+        +'<span class="tf">'+esc(tf)+'</span>'
+        +'<span class="cnt">'+(t.n+t.open? (t.n+' fech.'+(t.open?' · '+t.open+' aberto':'')) : '—')+'</span>'
+        +'<span class="wr">'+(wr==null?'':wr+'%')+'</span>'
+        +'<b class="'+(t.pnl>=0?'pos':'neg')+'">'+(active?esc(fmtMoney(t.pnl)):'')+'</b></div>';
+    }).join("")+'</div>';
     if(w.positions.length){
       out+='<div class="dvlFb1060SubTitle">Abertos agora</div>';
       out+='<div class="dvlFb1060Positions">'+w.positions.slice(0,5).map(function(p){
@@ -73810,7 +73845,7 @@ window.DVL_COPILOT_BACKTEST_1040={
 
   function bodyHtml(){
     var out='<div class="dvlFb1060Body">';
-    out+='<div class="dvlFb1060Note">100% simulado — sete carteiras virtuais de '+esc(fmtMoney(START_BALANCE))+' competindo, nenhuma ordem real. Cada bot entra no seu próprio combo de blocos do Scanner (nos TFs 1m/3m/5m, sinais dos últimos 30 min) e sai pelo seu próprio método — o método de saída de cada um aparece embaixo do combo, na linha "Saída". Entradas em frações de '+esc(fmtMoney(ENTRY_DOLLARS))+' (máx. '+MAX_OPEN+' abertas).</div>';
+    out+='<div class="dvlFb1060Note">100% simulado — sete carteiras virtuais de '+esc(fmtMoney(START_BALANCE))+' competindo, nenhuma ordem real. Cada bot entra no seu próprio combo do Scanner (agora em <b>5m / 15m / 30m / 1h</b>) e sai pelo seu próprio método ("Saída"). Novo: cada bot mostra o resultado <b>separado por timeframe</b> (bloco "Por timeframe") pra você ver em qual TF ele realmente ganha. Entradas de '+esc(fmtMoney(ENTRY_DOLLARS))+' (máx. '+MAX_OPEN+' abertas).</div>';
     out+=statusHtml();
     /* Leader = highest CURRENT equity; requires at least one closed trade
        somewhere so an untouched $1,000 wallet doesn't wear the crown. */
