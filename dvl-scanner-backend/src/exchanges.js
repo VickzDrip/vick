@@ -82,7 +82,22 @@ const mexc = {
     return d.filter(t => {
       const s = (t && t.symbol) || "";
       return /_USDT$/.test(s) && Number(t.amount24) > 0;
-    }).map(t => ({ sym: t.symbol, qv: Number(t.amount24), oi: Number(t.holdVol), fr: Number(t.fundingRate) }));
+    }).map(t => ({ sym: t.symbol, qv: Number(t.amount24), oi: Number(t.holdVol), fr: Number(t.fundingRate), fp: Number(t.fairPrice) }));
+  },
+  /* Per-contract static info — notably contractSize, the multiplier that turns
+     holdVol (contract count) into the base-asset amount (oiBase = holdVol *
+     contractSize) and then USDT (oiBase * fairPrice). MUST be per symbol —
+     contractSize differs across assets — so this returns the whole map in one
+     call (fetched once at boot, refreshed daily). Returns { SYM: contractSize }. */
+  async contractDetail() {
+    const j = await getJSON("https://contract.mexc.com/api/v1/contract/detail");
+    const d = (j && j.data) || [];
+    if (!Array.isArray(d)) throw new Error("mexc detail shape");
+    const map = {};
+    for (const c of d) {
+      if (c && c.symbol && Number.isFinite(Number(c.contractSize))) map[c.symbol] = Number(c.contractSize);
+    }
+    return map;
   },
   async klines(sym, tf) {
     const mexcTf = MEXC_TF[tf] || "Min15";
