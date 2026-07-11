@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.109</title>
+<title>DVL — Beta 1.114</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.109';
+window.DVL_APP_VERSION = 'Beta 1.114';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,15 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.109";
+const DVL_APP_VERSION = "Beta 1.114";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.114", note: "DVL Open Interest (Fase A) — candles de OI REAIS da MEXC. O backend agora amostra o holdVol (contratos em aberto) + fairPrice de todo ativo MEXC a cada 30s num coletor dedicado, guarda os snapshots com carimbo de tempo e monta candles OHLC (abertura/máxima/mínima/fechamento do holdVol) no timeframe do gráfico. Candles fechados são imutáveis; o histórico persiste no servidor (sobrevive a restart) e só cresce pra frente (a MEXC não dá OI passado — nada é inventado). Conversão de unidade por ativo usando o contractSize real da MEXC (nunca o mesmo pra todos): Contratos = holdVol, Moeda base = holdVol×contractSize, USDT = base×fairPrice — escolhível no ícone de config do painel. A cor do candle vem do próprio movimento do OI (fecha ≥ abre = verde), não da cor do preço. Também troquei a linha de média do painel de OI de azul para dourado (tema DVL, sem azul). O painel Long/Short (proxy) segue como estava — vira 'Long/Short Pressure — Estimated' na Fase B. Exige atualizar/reiniciar o backend (coletor de OI + endpoint /mexc-oi)." },
+  { version: "Beta 1.113", note: "Long/Short dos ativos só-MEXC deixa de ser uma linha reta: agora o proxy puxa o HISTÓRICO REAL de funding da MEXC (a MEXC publica o histórico de funding, só não o de OI). Então a linha tem profundidade de verdade na hora, sem esperar encher. O OI continua sendo o único que só cresce pra frente — a MEXC não expõe histórico de OI na API pública (só o valor atual), e histórico de preço não contém OI (são dados separados). Também consertei um bug antigo: o cabeçalho do OI mostrava o valor sempre com a unidade 'BTC' fixa (aparecia '56.0K BTC' em qualquer ativo) — agora usa a moeda certa (ex.: 'DEXE'). Exige atualizar/reiniciar o backend (backfill de funding no /mexc-derivs)." },
+  { version: "Beta 1.112", note: "OI e Long/Short agora carregam pra ativos só-MEXC (tipo ANSEM), com dado REAL da MEXC — não inventado. Como funciona: o backend já recebe o OI (holdVol) e o funding de TODO ativo MEXC no mesmo ticker que puxa a cada ciclo; agora ele guarda isso com carimbo de tempo e monta uma série. O painel de OI, quando não acha dado na fonte antiga (ativo que não existe lá), passa a usar essa série real da MEXC (selo 'MEXC'). O painel de Long/Short, como a MEXC NÃO tem long/short ratio de verdade na API, usa um PROXY de sentimento derivado do funding real (selo 'MEXC · proxy funding', pra deixar claro que é aproximação, não o ratio verdadeiro). Detalhe honesto: a série começa curtinha e vai enchendo daqui pra frente (a MEXC não dá histórico retroativo de OI/funding) — em algumas horas já tem linha decente. Exige atualizar/reiniciar o backend (endpoint novo /mexc-derivs + amostragem por ciclo)." },
+  { version: "Beta 1.111", note: "Tirei o '<CoinGlass>' do título do painel de Long/Short — agora é só 'Long/Short Ratio', sem marca de terceiro na tela. As legendas do indicador também deixaram de citar 'CoinGlass-style'. Só rótulo, o cálculo é o mesmo. Frontend-only." },
+  { version: "Beta 1.110", note: "Tirei o 'BINANCE' dos rótulos dos indicadores. O selo que ficava no canto dos painéis de Open Interest e Long/Short agora é neutro: OI mostra 'AGREGADO' e o LSR mostra 'TOP TRADERS' (ou 'GLOBAL'), sem citar exchange. Só o nomezinho — os dados e o cálculo continuam iguais. (Sobre os osciladores que às vezes não carregam: o OI e o LSR vêm de dados de futuros que só existem pra ativos listados naquela fonte. Ativo só-MEXC, tipo ANSEM, não tem OI/LSR nessa fonte, então esses dois painéis ficam vazios pra ele — o gráfico de candles carrega normal porque agora vem da MEXC. Pra ativos que existem nas duas pontas, tipo SOL, os osciladores carregam certinho.)" },
   { version: "Beta 1.109", note: "Gráfico MUITO mais rápido, MEXC como fonte principal e sem 'Binance' na cara. (1) A MEXC virou a PRIMEIRA fonte de candles do gráfico (não mais só reserva): uma chamada rápida via backend, então trocar de ativo/timeframe carrega quase instantâneo em vez de 10-20s. Antes o gráfico tentava 6 endpoints da Binance em sequência (cada um tinha que dar timeout) antes de desistir — por isso a demora e o 'CARREGANDO' travado. (2) Ativos só-MEXC como VIRTUAL no 3m agora ABREM: a MEXC não tem candle nativo de 3m, então o backend monta o 3m a partir do 1m (vale pra qualquer timeframe que a MEXC não tenha nativo). (3) O gráfico DESENHA assim que os candles chegam — o OI/LSR (que podem travar quando a Binance está off) carregam depois e não seguram mais o desenho. (4) Tirei o 'Binance' do que aparece na tela: título vira só 'DVL', o overlay vira 'CARREGANDO...' e a mensagem do scanner não cita mais exchange. Exige atualizar/reiniciar o backend (endpoint /mexc-klines agora serve qualquer timeframe)." },
   { version: "Beta 1.108", note: "Failover automático de exchange NO GRÁFICO: quando a Binance está off, o chart agora puxa os candles da MEXC sozinho, então a plataforma não fica offline. Antes, com a Binance banida, clicar num ativo só-MEXC dava erro de fallback e o gráfico não abria (a última peça que ainda dependia só da Binance). Agora, se TODOS os endpoints da Binance falharem, o gráfico busca o mesmo candle na MEXC via backend (o navegador não alcança a MEXC direto) e desenha normal — o ticker/preço se reconstrói dos próprios candles. Cobre 1m/5m/15m/30m/1h/4h/1d (a MEXC não tem 3m/segundos nativo, então esses seguem só na Binance). Painéis de OI/LSR ainda vêm da Binance e podem ficar de fora enquanto ela está off, mas o gráfico fica de pé. Exige atualizar/reiniciar o backend (endpoint novo /mexc-klines)." },
   { version: "Beta 1.107", note: "Conserta a tabela do Scanner ficando VAZIA e 'recarregando' ao clicar num ativo. Quando você clicava numa linha, o feed re-consultava por um instante e a tabela piscava vazia com 'Carregando…'. Agora, se já tem tabela na tela, ela FICA (não pisca vazio) — o placeholder de carregando só aparece na primeira vez, quando não há nada pra manter. (O gráfico em si ainda depende da Binance pra abrir o ativo; com a Binance off, o chart de um ativo só-MEXC não carrega — isso é uma limitação maior, separada.) Só frontend." },
@@ -34697,10 +34702,35 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     return await r.json();
   }
 
+  /* MEXC-only assets have no Binance OI. Pull the REAL DVL Open Interest
+     candles the backend builds from MEXC holdVol snapshots — genuine OHLC per
+     the CHART timeframe (open/high/low/close of holdVol in the bucket), with
+     unit conversion applied server-side via the per-asset contractSize:
+       contracts = holdVol · base = holdVol×contractSize · usdt = base×fairPrice
+     History grows forward from when sampling started; closed candles are
+     immutable. Returns the same row shape parseOI() produces. */
+  async function fetchMexcOiSeries(){
+    try{
+      const tf = (typeof interval === "string" && interval) ? interval : period();
+      const unit = state.unit === "coins" ? "base" : (state.unit === "usd" ? "usdt" : (state.unit || "contracts"));
+      const j = await fetchJson("/api/dvl/scanner/mexc-oi?symbol=" + encodeURIComponent(sym())
+        + "&tf=" + encodeURIComponent(tf) + "&unit=" + encodeURIComponent(unit) + "&limit=600");
+      const cs = (j && Array.isArray(j.candles)) ? j.candles : [];
+      if(cs.length < 2) return [];
+      return cs.map(c => {
+        const t = +c.time, open = +c.open, high = +c.high, low = +c.low, close = +c.close;
+        return { t, open, high, low, close, qty: close, usd: close };
+      }).filter(d => d.t && Number.isFinite(d.close) && d.close > 0).sort((a,b)=>a.t-b.t);
+    }catch(_){ return []; }
+  }
+
   async function ensureData(force=false){
     if(!on()) return;
     const p = period();
-    const key = ["binance", sym(), p, state.unit].join("|");
+    /* include the chart interval so switching TF always refetches — the MEXC
+       OI candles are aggregated to the CHART timeframe, and two intervals can
+       map to the same Binance period() otherwise (1m & 3m → "5m"). */
+    const key = ["binance", sym(), p, state.unit, (typeof interval==="string"?interval:"")].join("|");
 
     if(!force && CACHE.key === key && CACHE.data.length && Date.now() - CACHE.ts < 45000) return;
     if(CACHE.fetching) return;
@@ -34717,13 +34747,22 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       const [_oiR0,_oiR1,_oiR2] = await Promise.all([fetchJson(_oiUrl(0)),fetchJson(_oiUrl(1)).catch(()=>[]),fetchJson(_oiUrl(2)).catch(()=>[])]);
       const _oiSeen=new Set();
       const arr = [arrFromResp(_oiR0),arrFromResp(_oiR1),arrFromResp(_oiR2)].filter(Array.isArray).flatMap(a=>a).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_oiSeen.has(k))return false;_oiSeen.add(k);return true;});
-      const data = parseOI(arr, false);
+      let data = parseOI(arr, false);
+      let srcLabel = "AGREGADO";
 
-      if(!data.length) throw new Error("NO DATA");
+      if(!data.length){
+        /* Binance has no OI for this symbol (e.g. a MEXC-only asset) → use the
+           REAL MEXC OI series the backend samples from holdVol over time. */
+        const mx = await fetchMexcOiSeries();
+        if(!mx.length) throw new Error("NO DATA");
+        data = mx;
+        srcLabel = "MEXC";
+      }
 
-      // Sub-period wicks: fetch finer-grained OI to derive real intra-candle high/low
+      // Sub-period wicks: fetch finer-grained OI to derive real intra-candle
+      // high/low. Only exists for the Binance source — skip for the MEXC series.
       const _subPMap={"15m":"5m","30m":"5m","1h":"15m","2h":"30m","4h":"1h","6h":"1h","12h":"4h","1d":"4h"};
-      const _subP=_subPMap[p];
+      const _subP = srcLabel === "AGREGADO" ? _subPMap[p] : null;
       if(_subP){
         try{
           const _subUrl2=(n)=>_oiBase+"/openInterestHist?symbol="+encodeURIComponent(sym())+"&period="+encodeURIComponent(_subP)+"&limit=500"+(n>0?"&endTime="+(_oiNow-n*500*_oiPMs):"");
@@ -34752,7 +34791,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       CACHE.key = key;
       CACHE.data = data;
       CACHE.ts = Date.now();
-      CACHE.src = "BINANCE";
+      CACHE.src = srcLabel;
       CACHE.err = "";
 
       try{
@@ -35093,7 +35132,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     const prev = vals.length > 1 ? vals[vals.length-2] : ((CACHE.data || []).length > 1 ? (CACHE.data || []).at(-2) : last);
     const pct = last && prev && prev.close ? ((last.close - prev.close) / prev.close * 100) : 0;
     const kind = pct > 0 ? "bull" : pct < 0 ? "bear" : "neutral";
-    const right = last ? ((state.unit==="coins"?fmtCoins(last.close)+" BTC":fmtMoney(last.close)) + " " + (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%") : (CACHE.fetching ? "LOADING" : "NO DATA");
+    const right = last ? ((state.unit==="coins"?fmtCoins(last.close)+" "+coin():fmtMoney(last.close)) + " " + (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%") : (CACHE.fetching ? "LOADING" : "NO DATA");
 
     ctx.save();
     basePanel(ctx, m, "DVL AGG OI", right, kind);
@@ -35152,7 +35191,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
         for(let i=0;i<_closes.length;i++) _prefix[i+1]=_prefix[i]+_closes[i];
         const _idxMap = new Map(_maSrc.map((d,i)=>[d.t,i]));
         ctx.beginPath();
-        ctx.strokeStyle = "#4db8ff";
+        ctx.strokeStyle = "#d9b26a"; /* DVL theme (no blue/navy) — matches the price MA */
         ctx.lineWidth = 1.5;
         ctx.setLineDash([]);
         let _started = false, _lastMAT = null;
@@ -35175,7 +35214,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       ctx.font = "760 8px system-ui";
       ctx.textAlign = "left";
       ctx.textBaseline = "bottom";
-      ctx.fillText(CACHE.src || "BINANCE", m.x0 + 8, m.y1 - 5);
+      ctx.fillText(CACHE.src || "AGREGADO", m.x0 + 8, m.y1 - 5);
     }else{
       ctx.fillStyle = "rgba(127,145,167,.72)";
       ctx.font = "800 9px system-ui";
@@ -35229,7 +35268,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
         <div class="dvl-vt-section-title"><span>General</span></div>
         <div class="dvl-vt-grid">
           <div class="dvl-vt-field"><label>Indicator</label><label class="dvl-switch"><input id="dvlOIOn" type="checkbox" ${state.on?"checked":""}><i></i><b></b></label></div>
-          <div class="dvl-vt-field"><label>Measure</label><select id="dvlOIUnit" class="dvl-vt-select"><option value="usd" ${(state.unit||"usd")==="usd"?"selected":""}>USD ($)</option><option value="coins" ${state.unit==="coins"?"selected":""}>Coins (BTC)</option></select></div>
+          <div class="dvl-vt-field"><label>Medida</label><select id="dvlOIUnit" class="dvl-vt-select"><option value="usd" ${(state.unit||"usd")==="usd"?"selected":""}>USDT ($)</option><option value="coins" ${state.unit==="coins"?"selected":""}>Moeda base</option><option value="contracts" ${state.unit==="contracts"?"selected":""}>Contratos</option></select></div>
           <div class="dvl-vt-field"><label>MA Length</label><input id="dvlOIMALenPanel" class="dvl-vt-input" type="number" min="2" max="500" step="1" value="${state.maLen||20}"></div>
         </div>
       </div>
@@ -35660,6 +35699,25 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
     return await r.json();
   }
 
+  /* MEXC has no real long/short ratio, so for MEXC-only assets we derive a
+     sentiment PROXY from the REAL funding-rate series the backend samples:
+     positive funding = longs pay shorts = long-heavy crowd. This is NOT the
+     true long/short ratio — the panel watermark says "proxy funding" so it's
+     never mistaken for the real thing. */
+  async function fetchMexcLsProxy(){
+    try{
+      const j = await fetchJson("/api/dvl/scanner/mexc-derivs?symbol=" + encodeURIComponent(sym()));
+      const pts = (j && Array.isArray(j.funding)) ? j.funding : [];
+      if(pts.length < 2) return [];
+      return pts.map(p => {
+        const t = +p.time, fr = +p.value;
+        const long = Math.min(0.99, Math.max(0.01, 0.5 + Math.max(-0.49, Math.min(0.49, fr * 100))));
+        const short = 1 - long;
+        return { t, ratio: long / Math.max(short, 0.0001), long, short };
+      }).filter(d => d.t && d.ratio > 0).sort((a,b)=>a.t-b.t);
+    }catch(_){ return []; }
+  }
+
   async function ensureData(force=false){
     if(!on()) return;
 
@@ -35697,14 +35755,22 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
       const _bbList3=[_bbR0,_bbR1,_bbR2].flatMap(r=>(Array.isArray(r?.result?.list)?r.result.list:[])).sort((a,b)=>+a.timestamp-+b.timestamp).filter(x=>{const k=x.timestamp;if(_bbSeen.has(k))return false;_bbSeen.add(k);return true;});
       const _bbMap3=new Map(_bbList3.map(x=>[+x.timestamp,x]));
       const arr=_bnArr.map(x=>{const bb=_bbMap3.get(+x.timestamp);if(!bb)return x;const lng=(+x.longAccount+(+bb.buyRatio))/2,sht=1-lng;return{...x,longAccount:lng,shortAccount:sht,longShortRatio:lng/Math.max(sht,0.0001)};});
-      const data = parseLS(arr);
+      let data = parseLS(arr);
+      let srcLabel = (mode === "top" ? "TOP TRADERS" : "GLOBAL");
 
-      if(!data.length) throw new Error("NO DATA");
+      if(!data.length){
+        /* No Binance long/short for this symbol (MEXC-only) → funding-based
+           sentiment PROXY (clearly labelled, not the real long/short ratio). */
+        const mx = await fetchMexcLsProxy();
+        if(!mx.length) throw new Error("NO DATA");
+        data = mx;
+        srcLabel = "MEXC · proxy funding";
+      }
 
       CACHE.key = key;
       CACHE.data = data;
       CACHE.ts = Date.now();
-      CACHE.src = "BINANCE " + (mode === "top" ? "TOP" : "GLOBAL");
+      CACHE.src = srcLabel;
       CACHE.err = "";
 
       try{
@@ -35964,7 +36030,7 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
     const right = last ? (fmt(last.ratio)) : (CACHE.fetching ? "LOADING" : "NO DATA");
 
     ctx.save();
-    basePanel(ctx, m, "<CoinGlass> Long/Short Ratio", right, kind);
+    basePanel(ctx, m, "Long/Short Ratio", right, kind);
 
     ctx.save();
     ctx.beginPath();
@@ -36055,7 +36121,7 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
       ctx.font = "760 8px system-ui";
       ctx.textAlign = "left";
       ctx.textBaseline = "bottom";
-      ctx.fillText(CACHE.src || "BINANCE GLOBAL", m.x0 + 8, m.y1 - 5);
+      ctx.fillText(CACHE.src || "GLOBAL", m.x0 + 8, m.y1 - 5);
     }else{
       ctx.fillStyle = "rgba(127,145,167,.72)";
       ctx.font = "800 9px system-ui";
@@ -36087,7 +36153,7 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
     panel.className = "dvl-vt-panel";
     panel.innerHTML = `
       <div class="dvl-vt-head">
-        <div class="dvl-vt-title"><b>DVL Long/Short Ratio</b><small>CoinGlass-style · real data</small></div>
+        <div class="dvl-vt-title"><b>DVL Long/Short Ratio</b><small>Long/Short · real data</small></div>
         <div class="dvl-vt-head-actions">
           <button class="dvl-vt-close" id="dvlLSPanelClose" type="button">×</button>
         </div>
@@ -36144,7 +36210,7 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
       item.className = "indicatorItem dvl-ls-indicator-item";
       item.innerHTML = `
         <span class="indicatorFxMark">LS</span>
-        <span><b>DVL Long/Short Ratio</b><small>CoinGlass-style line · real data</small></span>
+        <span><b>DVL Long/Short Ratio</b><small>Long/Short · real data</small></span>
         <i class="dvl-vt-state" id="dvlLongShortOscState">ON</i>
       `;
 
@@ -36601,7 +36667,7 @@ drag = {
         const ratioPoints = parsePositionRatio(arr);
         const data = joinWithOI(ratioPoints);
         if(!data.length) throw new Error(oiSeries().length ? "NO DATA" : "SEM OI");
-        CACHE.key = key; CACHE.data = data; CACHE.ts = Date.now(); CACHE.src = "BINANCE"; CACHE.err = "";
+        CACHE.key = key; CACHE.data = data; CACHE.ts = Date.now(); CACHE.src = "AGREGADO"; CACHE.err = "";
       }catch(e){
         CACHE.err = String(e && e.message || e);
         CACHE.data = [];
@@ -36699,7 +36765,7 @@ drag = {
         ctx.fillStyle = "rgba(120,145,180,.78)";
         ctx.font = "760 8px system-ui";
         ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-        ctx.fillText(CACHE.src || "BINANCE", m.x0+8, m.y1-5);
+        ctx.fillText(CACHE.src || "AGREGADO", m.x0+8, m.y1-5);
       }else{
         ctx.fillStyle = "rgba(127,145,167,.72)";
         ctx.font = "800 9px system-ui";
@@ -65513,7 +65579,7 @@ body.dvlScannerOpen080 #chartWrap{
     return [
       {key:"vol",mark:"VOL",title:"DVL Volume",sub:"overlay",api:"DVLVolume",pill:"dvlVolState",row:"dvlVolumeItem"},
       {key:"oi",mark:"OI",title:"DVL Open Interest",sub:"AGG OI candles · real data",api:"DVLOpenInterestOscillator",pill:"dvlOpenInterestOscState",row:"dvlOpenInterestOscItem"},
-      {key:"ls",mark:"LS",title:"DVL Long/Short Ratio",sub:"CoinGlass-style line · real data",api:"DVLLongShortOscillator",pill:"dvlLongShortOscState",row:"dvlLongShortOscItem"},
+      {key:"ls",mark:"LS",title:"DVL Long/Short Ratio",sub:"Long/Short · real data",api:"DVLLongShortOscillator",pill:"dvlLongShortOscState",row:"dvlLongShortOscItem"},
       {key:"netlong",mark:"NL",title:"DVL Net Long",sub:"aprox. via Binance (posição × OI)",api:"DVLNetLongOscillator",pill:"dvlNetLongState",row:"dvlNetLongItem"},
       {key:"netshort",mark:"NS",title:"DVL Net Short",sub:"aprox. via Binance (posição × OI)",api:"DVLNetShortOscillator",pill:"dvlNetShortState",row:"dvlNetShortItem"},
       {key:"netdelta",mark:"ND",title:"DVL Net Delta",sub:"aprox. via Binance (long − short × OI)",api:"DVLNetDeltaOscillator",pill:"dvlNetDeltaState",row:"dvlNetDeltaItem"},
