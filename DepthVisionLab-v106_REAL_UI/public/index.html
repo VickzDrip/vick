@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.105</title>
+<title>DVL Binance Live — Beta 1.106</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.105';
+window.DVL_APP_VERSION = 'Beta 1.106';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.105";
+const DVL_APP_VERSION = "Beta 1.106";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.106", note: "Conserta o score inflado (vários 99) e o OI aparecendo ↑ em TUDO. Causa: quando o backend reinicia, o histórico de OI de cada ativo ainda não encheu, e a função de tendência devolvia 'up' por padrão quando faltava dado — então TODO ativo lia 'OI acima da média', acendia esse bloquinho e empurrava o score pro teto (99). Agora, sem dado suficiente (ou empate), a tendência é NEUTRA ('flat'), não 'up' — o bloco de OI só acende com OI realmente acima da média. Os scores voltam ao normal conforme o histórico de OI enche (uns 40min depois de reiniciar). Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.105", note: "Scanner MEXC de verdade: o snapshot do backend só guardava os sinais 'ignitados' (por isso vinha vazio na MEXC recém-reiniciada). Agora o backend expõe a VARREDURA COMPLETA que ele já calcula todo ciclo (todos os ~80 ativos por volume, não só os que deram spike) num endpoint novo /universe, e a ponte do Scanner puxa dele — então a tabela cheia aparece na MEXC (o navegador não alcança a MEXC direto). O scan do navegador continua rodando como reserva: se o backend cair, volta pra ele. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.104", note: "Scanner passa a puxar do BACKEND (funciona com a MEXC mesmo com a Binance off). O navegador não consegue buscar a MEXC direto (contract.mexc.com é bloqueado na página), só o servidor consegue — e existia uma 'ponte' pro backend que nunca era ligada, então a tabela ao vivo ficava travada no scan do navegador (que só faz Binance). Agora a ponte liga sozinha, na mesma origem (o /api/dvl/scanner já é servido ao lado do backend), e a tabela mostra os dados do servidor: com MEXC selecionado, vêm os candles/OI/LSR da MEXC. Seguro: a ponte só assume quando o backend realmente devolve linhas — se o backend estiver fora, cai de volta no scan do navegador. Atualiza a cada 30s mesmo se o WebSocket não estiver disponível. Só frontend." },
   { version: "Beta 1.103", note: "Scanner agora GUARDA os sinais: nova seção 'Detectados (24h)' embaixo da tabela ao vivo. Antes, quando o spike passava ou o RSI recuperava, a linha sumia do ao vivo (o score caía abaixo do filtro — e com 'Pesos aprendidos' ligado, sumia até mais rápido). Agora todo sinal que aparece no ao vivo é registrado no instante em que surge, com o HORÁRIO em que foi gerado (spike há), e FICA na lista por 24h mesmo depois de sair de cima — marcado '● ao vivo' enquanto está lá e 'saiu' quando deixa a tabela. Guarda por ativo+timeframe (15m e 1h não se sobrescrevem). Tem botão Limpar. Só frontend, não precisa reiniciar o backend." },

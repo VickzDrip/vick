@@ -320,11 +320,16 @@ function factorsOf(r, sc) {
        MA falling + below = red */
 function trendVsMA(series) {
   const s = (series || []).map(Number).filter(v => Number.isFinite(v));
-  if (s.length < 2) return { arrow: "up", color: "yellow", ratio: 0, slope: 0 }; // not enough data yet
+  /* Not enough history yet → NEUTRAL, never "up". Returning "up" here made
+     every symbol read as "OI acima da média" right after a restart (before
+     the rolling OI buffer filled), which lit the oiAboveAvg block on the
+     whole scanner and inflated scores toward the 99 cap. Unknown = flat. */
+  if (s.length < 2) return { arrow: "flat", color: "yellow", ratio: 0, slope: 0 };
   const avg = a => a.reduce((x, y) => x + y, 0) / Math.max(a.length, 1);
   const ma = avg(s);
   const cur = s[s.length - 1];
-  const above = cur >= ma;
+  const above = cur > ma;      // strict: an exact tie is neutral, not "up"
+  const below = cur < ma;
   const half = Math.floor(s.length / 2);
   const firstHalfAvg = avg(s.slice(0, half));
   const secondHalfAvg = avg(s.slice(half));
@@ -343,7 +348,7 @@ function trendVsMA(series) {
      watches on the chart, which the boolean arrow/ratio above don't capture
      (a value can sit above its MA while already falling from a peak). */
   const slope = firstHalfAvg !== 0 ? (secondHalfAvg - firstHalfAvg) / Math.abs(firstHalfAvg) : 0;
-  return { arrow: above ? "up" : "down", color, ratio, slope };
+  return { arrow: above ? "up" : (below ? "down" : "flat"), color, ratio, slope };
 }
 
 /* Approximates CoinGlass's Net Long / Net Short / Net Delta panels using
