@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.114</title>
+<title>DVL — Beta 1.115</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.114';
+window.DVL_APP_VERSION = 'Beta 1.115';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.114";
+const DVL_APP_VERSION = "Beta 1.115";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.115", note: "Ajustes finos do DVL Open Interest (Fase A). (1) Conserta o artefato visual: quando a coleta de um ativo só-MEXC começou há pouco, o lado esquerdo do gráfico (antes da coleta) esticava o primeiro candle numa barra chapada e a linha de média despencava cruzando o vazio. Agora, onde não há OI coletado, fica vazio de verdade — média e candles só desenham sobre o período realmente coletado. (2) Blinda o arranque: o backend carrega o contractSize ANTES da primeira amostra, então logo após reiniciar não aparece mais aquele -96%/escala errada de transição. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.114", note: "DVL Open Interest (Fase A) — candles de OI REAIS da MEXC. O backend agora amostra o holdVol (contratos em aberto) + fairPrice de todo ativo MEXC a cada 30s num coletor dedicado, guarda os snapshots com carimbo de tempo e monta candles OHLC (abertura/máxima/mínima/fechamento do holdVol) no timeframe do gráfico. Candles fechados são imutáveis; o histórico persiste no servidor (sobrevive a restart) e só cresce pra frente (a MEXC não dá OI passado — nada é inventado). Conversão de unidade por ativo usando o contractSize real da MEXC (nunca o mesmo pra todos): Contratos = holdVol, Moeda base = holdVol×contractSize, USDT = base×fairPrice — escolhível no ícone de config do painel. A cor do candle vem do próprio movimento do OI (fecha ≥ abre = verde), não da cor do preço. Também troquei a linha de média do painel de OI de azul para dourado (tema DVL, sem azul). O painel Long/Short (proxy) segue como estava — vira 'Long/Short Pressure — Estimated' na Fase B. Exige atualizar/reiniciar o backend (coletor de OI + endpoint /mexc-oi)." },
   { version: "Beta 1.113", note: "Long/Short dos ativos só-MEXC deixa de ser uma linha reta: agora o proxy puxa o HISTÓRICO REAL de funding da MEXC (a MEXC publica o histórico de funding, só não o de OI). Então a linha tem profundidade de verdade na hora, sem esperar encher. O OI continua sendo o único que só cresce pra frente — a MEXC não expõe histórico de OI na API pública (só o valor atual), e histórico de preço não contém OI (são dados separados). Também consertei um bug antigo: o cabeçalho do OI mostrava o valor sempre com a unidade 'BTC' fixa (aparecia '56.0K BTC' em qualquer ativo) — agora usa a moeda certa (ex.: 'DEXE'). Exige atualizar/reiniciar o backend (backfill de funding no /mexc-derivs)." },
   { version: "Beta 1.112", note: "OI e Long/Short agora carregam pra ativos só-MEXC (tipo ANSEM), com dado REAL da MEXC — não inventado. Como funciona: o backend já recebe o OI (holdVol) e o funding de TODO ativo MEXC no mesmo ticker que puxa a cada ciclo; agora ele guarda isso com carimbo de tempo e monta uma série. O painel de OI, quando não acha dado na fonte antiga (ativo que não existe lá), passa a usar essa série real da MEXC (selo 'MEXC'). O painel de Long/Short, como a MEXC NÃO tem long/short ratio de verdade na API, usa um PROXY de sentimento derivado do funding real (selo 'MEXC · proxy funding', pra deixar claro que é aproximação, não o ratio verdadeiro). Detalhe honesto: a série começa curtinha e vai enchendo daqui pra frente (a MEXC não dá histórico retroativo de OI/funding) — em algumas horas já tem linha decente. Exige atualizar/reiniciar o backend (endpoint novo /mexc-derivs + amostragem por ciclo)." },
@@ -34892,7 +34893,11 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
 
   function valueAt(data, t){
     if(!data || !data.length) return null;
-    if(t <= data[0].t) return data[0];
+    /* No data before the first collected point → return null (empty), not the
+       first point. Otherwise a short series (e.g. a MEXC asset whose OI/funding
+       collection just started) stretches its first bar across the whole
+       pre-collection region and the MA/line dives across the gap. */
+    if(t < data[0].t) return null;
     if(t >= data[data.length-1].t) return data[data.length-1];
     let lo = 0, hi = data.length - 1;
     while(lo < hi){
@@ -35862,7 +35867,11 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
 
   function valueAt(data, t){
     if(!data || !data.length) return null;
-    if(t <= data[0].t) return data[0];
+    /* No data before the first collected point → return null (empty), not the
+       first point. Otherwise a short series (e.g. a MEXC asset whose OI/funding
+       collection just started) stretches its first bar across the whole
+       pre-collection region and the MA/line dives across the gap. */
+    if(t < data[0].t) return null;
     if(t >= data[data.length-1].t) return data[data.length-1];
     let lo = 0, hi = data.length - 1;
     while(lo < hi){
@@ -36581,7 +36590,11 @@ drag = {
   }
   function valueAt(data, t){
     if(!data || !data.length) return null;
-    if(t <= data[0].t) return data[0];
+    /* No data before the first collected point → return null (empty), not the
+       first point. Otherwise a short series (e.g. a MEXC asset whose OI/funding
+       collection just started) stretches its first bar across the whole
+       pre-collection region and the MA/line dives across the gap. */
+    if(t < data[0].t) return null;
     if(t >= data[data.length-1].t) return data[data.length-1];
     let lo=0, hi=data.length-1;
     while(lo<hi){ const mid=(lo+hi+1)>>1; if(data[mid].t<=t) lo=mid; else hi=mid-1; }
