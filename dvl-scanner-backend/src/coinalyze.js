@@ -106,6 +106,29 @@ async function oiHistory(mexcSymbol, tf, hours, convertUsd) {
   }
 }
 
+/* Raw diagnostic: dump the actual /exchanges + /future-markets shapes so we
+   can see MEXC's real name/code and the market field names (discovery guessed
+   wrong somewhere — this shows the ground truth). */
+async function diagnose(base) {
+  const out = { enabled: enabled() };
+  if (!enabled()) return out;
+  try {
+    const ex = await cz("/exchanges");
+    out.exchangesCount = Array.isArray(ex) ? ex.length : 0;
+    out.exchangesRaw = Array.isArray(ex) ? ex : ex;             // small list, dump it
+    out.mexcGuess = Array.isArray(ex) ? ex.find(e => /mexc/i.test(JSON.stringify(e))) || null : null;
+  } catch (e) { out.exchangesError = e.message; }
+  try {
+    const fm = await cz("/future-markets");
+    out.marketsCount = Array.isArray(fm) ? fm.length : 0;
+    if (Array.isArray(fm)) {
+      const b = String(base || "BTC").toUpperCase();
+      out.marketSample = fm.filter(m => m && (JSON.stringify(m).toUpperCase().includes(b + "_USDT") || JSON.stringify(m).toUpperCase().includes(b + "USDT"))).slice(0, 6);
+    }
+  } catch (e) { out.marketsError = e.message; }
+  return out;
+}
+
 /* Diagnostic: what did discovery resolve for this symbol? */
 async function debugResolve(mexcSymbol) {
   if (!enabled()) return { enabled: false };
@@ -115,4 +138,4 @@ async function debugResolve(mexcSymbol) {
   } catch (e) { return { enabled: true, error: e.message }; }
 }
 
-module.exports = { enabled, oiHistory, resolveSymbol, debugResolve, ivFor };
+module.exports = { enabled, oiHistory, resolveSymbol, debugResolve, diagnose, ivFor };
