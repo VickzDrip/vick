@@ -108,6 +108,17 @@ function createServer() {
       .catch(e => res.json({ ok: false, symbol, tf, rows: [], error: e.message }));
   });
 
+  /* Chart oscillators for MEXC-only assets: real OI series (sampled from
+     MEXC holdVol over time) + a funding-rate sentiment PROXY for Long/Short
+     (MEXC has no real long/short ratio; funding is a clearly-labelled proxy).
+     Both grow forward from when the backend started sampling. `symbol` may be
+     MEXC ("ANSEM_USDT") or Binance ("ANSEMUSDT") form. */
+  app.get("/api/dvl/scanner/mexc-derivs", (req, res) => {
+    const symbol = String(req.query.symbol || "");
+    if (!symbol) { res.json({ ok: false, oi: [], funding: [], error: "missing symbol" }); return; }
+    res.json(Object.assign({ ok: true, proxy: "funding" }, worker.getMexcDerivs(symbol)));
+  });
+
   app.post("/api/dvl/scanner/config", (req, res) => {
     worker.setEngineConfig(req.body || {});
     res.json({ ok: true, engine: cfg.ENGINE, weights: cfg.WEIGHTS, oiMaLen: cfg.OI_MA_LEN, lsrMaLen: cfg.LSR_MA_LEN });
