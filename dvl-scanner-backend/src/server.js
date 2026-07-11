@@ -48,6 +48,15 @@ function createServer() {
     res.json(worker.getSnapshot(normExchange(req.query.exchange), normTf(req.query.tf)));
   });
 
+  /* FULL scanned universe (every candidate, not just ignited signals) for the
+     Scanner Pro's full ranked table. The browser can't scan MEXC itself
+     (contract.mexc.com is blocked from the page), so it reads this to show
+     the whole MEXC table server-side. Distinct from /snapshot, which is the
+     ignited-signal registry the Fast Bots consume. */
+  app.get("/api/dvl/scanner/universe", (req, res) => {
+    res.json(Object.assign({ ok: true }, worker.getUniverse(normExchange(req.query.exchange), normTf(req.query.tf))));
+  });
+
   /* Top-by-volume candidates, already fetched server-side every cycle (see
      worker.js's _lastCands) — exists so the browser can source a symbol
      universe (e.g. Fast Bots' Bot 4) without calling the exchange's own

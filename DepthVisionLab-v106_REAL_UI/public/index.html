@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.104</title>
+<title>DVL Binance Live — Beta 1.105</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.104';
+window.DVL_APP_VERSION = 'Beta 1.105';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.104";
+const DVL_APP_VERSION = "Beta 1.105";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.105", note: "Scanner MEXC de verdade: o snapshot do backend só guardava os sinais 'ignitados' (por isso vinha vazio na MEXC recém-reiniciada). Agora o backend expõe a VARREDURA COMPLETA que ele já calcula todo ciclo (todos os ~80 ativos por volume, não só os que deram spike) num endpoint novo /universe, e a ponte do Scanner puxa dele — então a tabela cheia aparece na MEXC (o navegador não alcança a MEXC direto). O scan do navegador continua rodando como reserva: se o backend cair, volta pra ele. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.104", note: "Scanner passa a puxar do BACKEND (funciona com a MEXC mesmo com a Binance off). O navegador não consegue buscar a MEXC direto (contract.mexc.com é bloqueado na página), só o servidor consegue — e existia uma 'ponte' pro backend que nunca era ligada, então a tabela ao vivo ficava travada no scan do navegador (que só faz Binance). Agora a ponte liga sozinha, na mesma origem (o /api/dvl/scanner já é servido ao lado do backend), e a tabela mostra os dados do servidor: com MEXC selecionado, vêm os candles/OI/LSR da MEXC. Seguro: a ponte só assume quando o backend realmente devolve linhas — se o backend estiver fora, cai de volta no scan do navegador. Atualiza a cada 30s mesmo se o WebSocket não estiver disponível. Só frontend." },
   { version: "Beta 1.103", note: "Scanner agora GUARDA os sinais: nova seção 'Detectados (24h)' embaixo da tabela ao vivo. Antes, quando o spike passava ou o RSI recuperava, a linha sumia do ao vivo (o score caía abaixo do filtro — e com 'Pesos aprendidos' ligado, sumia até mais rápido). Agora todo sinal que aparece no ao vivo é registrado no instante em que surge, com o HORÁRIO em que foi gerado (spike há), e FICA na lista por 24h mesmo depois de sair de cima — marcado '● ao vivo' enquanto está lá e 'saiu' quando deixa a tabela. Guarda por ativo+timeframe (15m e 1h não se sobrescrevem). Tem botão Limpar. Só frontend, não precisa reiniciar o backend." },
   { version: "Beta 1.102", note: "Correção importante de conceito no backteste: até agora eu testei os combos como PARES soltos (2 blocos), que são comuns e fracos — por isso tudo dava cara-ou-coroa. Agora o backteste usa o SETUP de verdade: uma CONFLUÊNCIA única de 4 blocos — RSI sobrevenda como base (podendo ter acontecido nas últimas ~4 velas), MAIS pré-volume baixo, OI acima da média e LSR abaixo da média, todos alinhados. É bem mais raro (menos trades), mas é o padrão certo, não a média de sinais fracos. Testado com as 5 saídas, 15 ativos, 15m/30m/1h, com taxa. Exige atualizar/reiniciar o backend." },
@@ -70793,7 +70794,9 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
        client scan. */
     e.rows=function(){ return (_active && _rows.length) ? _rows.slice() : (typeof _orig.rows==="function"?_orig.rows.apply(e,arguments):[]); };
     e.rawRows=function(){ return (_active && _rows.length) ? _rows.slice() : (typeof _orig.rawRows==="function"?_orig.rawRows.apply(e,arguments):[]); };
-    e.refresh=function(){ if(_active){ pull(); return Promise.resolve(); } return typeof _orig.refresh==="function"?_orig.refresh.apply(e,arguments):Promise.resolve(); };
+    /* NOTE: refresh is intentionally NOT hijacked — the client engine keeps
+       running its own scan, so if the backend goes empty/unreachable the
+       client rows are still there as a live fallback (see rows() above). */
     _hooked=true; return true;
   }
 
@@ -70821,10 +70824,13 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   function pull(){
     if(_base==null) return Promise.resolve(null);
     var ex=curExchange(), tf=curTf();
-    return fetch(api("/api/dvl/scanner/snapshot?exchange="+encodeURIComponent(ex)+"&tf="+encodeURIComponent(tf)),{cache:"no-store"})
-      .then(function(r){ if(!r.ok) throw new Error("snapshot "+r.status); return r.json(); })
+    /* FULL universe (every candidate) — not /snapshot, which is only the
+       ignited-signal registry. This is what lets the Pro show the whole MEXC
+       table server-side when the browser can't reach MEXC. */
+    return fetch(api("/api/dvl/scanner/universe?exchange="+encodeURIComponent(ex)+"&tf="+encodeURIComponent(tf)),{cache:"no-store"})
+      .then(function(r){ if(!r.ok) throw new Error("universe "+r.status); return r.json(); })
       .then(function(snap){ setSnapshot(snap); return snap; })
-      .catch(function(e){ console.warn("[DVL 1023] snapshot pull failed:",e&&e.message); return null; });
+      .catch(function(e){ console.warn("[DVL 1023] universe pull failed:",e&&e.message); return null; });
   }
 
   function pushConfig(patch){
@@ -70865,9 +70871,11 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     if(_base==null){ _base=""; }
     _enabled=true;
     /* Don't hijack the client engine yet — setSnapshot() flips _active on
-       only after a real (non-empty) backend snapshot arrives. */
-    pull().then(function(snap){ if(snap && snap.rows && snap.rows.length) connectWS(); });
-    if(!_poll) _poll=setInterval(function(){ pull(); }, 30000);  // refresh + safety net if the WS isn't proxied
+       only after a real (non-empty) backend universe arrives. Poll-based (no
+       WS): the WS broadcasts the ignited-signal registry, but the Pro's table
+       wants the full universe, which we fetch over REST. */
+    pull();
+    if(!_poll) _poll=setInterval(function(){ pull(); }, 30000);
     return true;
   }
   function disable(){ _active=false; _enabled=false; disconnect(); if(_poll){ clearInterval(_poll); _poll=null; } try{ localStorage.removeItem(LS_URL); }catch(_){} _rows=[]; rerender(); }
