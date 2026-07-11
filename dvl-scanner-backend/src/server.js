@@ -165,6 +165,14 @@ function createServer() {
     })).catch(e => res.json({ ok: false, error: e.message }));
   });
 
+  /* DIAGNOSTIC: raw Coinalyze /exchanges + /future-markets so we can read the
+     real MEXC exchange code + market field names (discovery guessed wrong). */
+  app.get("/api/dvl/scanner/coinalyze-debug", (req, res) => {
+    coinalyze.diagnose(String(req.query.base || "BTC"))
+      .then(d => res.json({ ok: true, ...d }))
+      .catch(e => res.json({ ok: false, error: e.message }));
+  });
+
   app.post("/api/dvl/scanner/config", (req, res) => {
     worker.setEngineConfig(req.body || {});
     res.json({ ok: true, engine: cfg.ENGINE, weights: cfg.WEIGHTS, oiMaLen: cfg.OI_MA_LEN, lsrMaLen: cfg.LSR_MA_LEN });
