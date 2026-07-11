@@ -41,7 +41,7 @@
    blocks, so 30 days is the longest window where all 7 combos can be
    reconstructed from REAL data instead of guessed.
 
-   This run holds the ENTRY fixed (Spike+RSI, the most consistent combo) and
+   This run holds the ENTRY fixed (the CONFLUENCE setup — see ENTRY) and
    VARIES the EXIT: the table rows are 5 different TP/SL styles (see EXITS)
    so we can see whether any exit turns the entry profitable net of fees.
    (Earlier runs did the opposite — fixed exit, varied entry combo; the
@@ -85,11 +85,22 @@ const RISK_PER_TRADE = 0.01;       // 1% of equity risked per trade, for the com
    is if anything optimistic. */
 const FEE_ROUNDTRIP = 0.0010;
 
-/* The ENTRY is held FIXED while we vary the EXIT (the request: "testar 5
-   TP/SL"). Spike+RSI sobrevenda — the most consistent, candle-only combo
-   across the earlier runs. (Swap this predicate to test the exits on another
-   entry.) */
-const ENTRY = { id: "spikeRsi", label: "Spike acima da média + RSI sobrevenda", match: r => r.blocks.spikeAboveAvg && r.blocks.rsiOversold };
+/* How many candles back the RSI-oversold "base" still counts as the anchor
+   of the sequence (the setup is: RSI went oversold, and within a few candles
+   the other confirmations line up). buildRows() sets row.recentRsiOversold. */
+const RSI_ANCHOR = 4;
+
+/* The ENTRY is held FIXED while we vary the EXIT. This is the user's real
+   setup: NOT a loose 2-block pair, but the full CONFLUENCE — RSI oversold as
+   the base (recent), plus pré-volume baixo + OI acima da média + LSR abaixo
+   da média all confirming. Much rarer than the pairs we tested before, which
+   is the whole point: the pairs were common/noisy (~coin-flip); this asks
+   whether the aligned setup has a real edge. */
+const ENTRY = {
+  id: "seq",
+  label: "RSI sobrevenda (base) + Pré-vol baixo + OI acima + LSR abaixo",
+  match: r => r.recentRsiOversold && r.blocks.prevVolBelowHalf && r.blocks.oiAboveAvg && r.blocks.lsrBelowAvg
+};
 
 /* Five exit styles to compare — these are the TABLE ROWS now. All use params
    the simulator already supports (atrMult/minStopPct, usePct/stopPct/tpPct,
@@ -265,6 +276,17 @@ function buildRows(klines, oiSeries, lsrSeries, tf) {
     row.blocks = M.blocksOf(row, cfg.ENGINE);
     row.high = klines[i].h; row.low = klines[i].l; row.close = klines[i].c; row.t = klines[i].t;
     rows.push(row);
+  }
+  /* Sequence anchor: mark each row where RSI went oversold within the last
+     RSI_ANCHOR candles (inclusive). The confluence ENTRY uses this so the
+     RSI-oversold "base" doesn't have to be on the exact entry candle — it
+     just has to have kicked off the setup a few candles earlier. */
+  let sinceOversold = 1e9;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (r && r.blocks && r.blocks.rsiOversold) sinceOversold = 0;
+    else sinceOversold = Math.min(sinceOversold + 1, 1e9);
+    if (r) r.recentRsiOversold = sinceOversold <= RSI_ANCHOR;
   }
   return rows;
 }
@@ -480,7 +502,7 @@ async function run() {
   };
   if (!haveDir) {
     _cache.dataWarning = "OI/LSR da Binance indisponíveis (oi:" + oiTot + " lsr:" + lsrTot +
-      ") — provavelmente ban temporário de IP. Os candles vieram da MEXC; a entrada Spike+RSI não depende de OI/LSR, então os testes de saída seguem valendo.";
+      ") — provavelmente ban temporário de IP. O setup depende de OI e LSR, então sem eles não dá pra avaliar; assim que a Binance liberar, a próxima rodada preenche.";
   } else if (!gotAll) {
     _cache.dataWarning = "Alguns ativos não vieram completos — mostrando o que deu para calcular (" + assetsDone.join(", ") + ").";
   }
