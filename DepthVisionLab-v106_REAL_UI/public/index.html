@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL Binance Live — Beta 1.103</title>
+<title>DVL Binance Live — Beta 1.104</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.103';
+window.DVL_APP_VERSION = 'Beta 1.104';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.103";
+const DVL_APP_VERSION = "Beta 1.104";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.104", note: "Scanner passa a puxar do BACKEND (funciona com a MEXC mesmo com a Binance off). O navegador não consegue buscar a MEXC direto (contract.mexc.com é bloqueado na página), só o servidor consegue — e existia uma 'ponte' pro backend que nunca era ligada, então a tabela ao vivo ficava travada no scan do navegador (que só faz Binance). Agora a ponte liga sozinha, na mesma origem (o /api/dvl/scanner já é servido ao lado do backend), e a tabela mostra os dados do servidor: com MEXC selecionado, vêm os candles/OI/LSR da MEXC. Seguro: a ponte só assume quando o backend realmente devolve linhas — se o backend estiver fora, cai de volta no scan do navegador. Atualiza a cada 30s mesmo se o WebSocket não estiver disponível. Só frontend." },
   { version: "Beta 1.103", note: "Scanner agora GUARDA os sinais: nova seção 'Detectados (24h)' embaixo da tabela ao vivo. Antes, quando o spike passava ou o RSI recuperava, a linha sumia do ao vivo (o score caía abaixo do filtro — e com 'Pesos aprendidos' ligado, sumia até mais rápido). Agora todo sinal que aparece no ao vivo é registrado no instante em que surge, com o HORÁRIO em que foi gerado (spike há), e FICA na lista por 24h mesmo depois de sair de cima — marcado '● ao vivo' enquanto está lá e 'saiu' quando deixa a tabela. Guarda por ativo+timeframe (15m e 1h não se sobrescrevem). Tem botão Limpar. Só frontend, não precisa reiniciar o backend." },
   { version: "Beta 1.102", note: "Correção importante de conceito no backteste: até agora eu testei os combos como PARES soltos (2 blocos), que são comuns e fracos — por isso tudo dava cara-ou-coroa. Agora o backteste usa o SETUP de verdade: uma CONFLUÊNCIA única de 4 blocos — RSI sobrevenda como base (podendo ter acontecido nas últimas ~4 velas), MAIS pré-volume baixo, OI acima da média e LSR abaixo da média, todos alinhados. É bem mais raro (menos trades), mas é o padrão certo, não a média de sinais fracos. Testado com as 5 saídas, 15 ativos, 15m/30m/1h, com taxa. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.101", note: "Fast Bots reformulados: (1) timeframes mudam de 1m/3m/5m pra 5m / 15m / 30m / 1h; (2) cada bot agora mostra o resultado SEPARADO POR TIMEFRAME (bloco 'Por timeframe' dentro do card: trades, % de acerto e P&L de cada TF) — assim dá pra ver em qual TF cada combo realmente ganha, em vez de tudo misturado. A janela de 'sinal fresco' escala por TF (30min no 5m até 2h no 1h) pra não faltar entrada nos TFs lentos. Como os TFs mudaram, as 7 carteiras reiniciam do zero ($1.000) pra os números por TF nascerem limpos. Só frontend — não precisa reiniciar o backend." },
@@ -70724,6 +70725,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 
   var LS_URL="dvlScannerBackendUrl";
   var _base=null, _active=false, _rows=[], _meta={}, _ws=null, _reconnect=null, _hooked=false;
+  var _poll=null, _enabled=false;
   var _orig={rows:null,rawRows:null,refresh:null};
 
   function engine(){ return window.__DVL_SCANNER_ORIGINAL_1013 || null; }
@@ -70785,8 +70787,12 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   function installHooks(){
     var e=engine(); if(!e || _hooked) return false;
     _orig.rows=e.rows; _orig.rawRows=e.rawRows; _orig.refresh=e.refresh;
-    e.rows=function(){ return _active ? _rows.slice() : (typeof _orig.rows==="function"?_orig.rows.apply(e,arguments):[]); };
-    e.rawRows=function(){ return _active ? _rows.slice() : (typeof _orig.rawRows==="function"?_orig.rawRows.apply(e,arguments):[]); };
+    /* Prefer backend rows, but fall back to the client engine's own rows
+       whenever the backend hasn't delivered any (unreachable, or a genuinely
+       empty snapshot) — so turning the bridge on never blanks a working
+       client scan. */
+    e.rows=function(){ return (_active && _rows.length) ? _rows.slice() : (typeof _orig.rows==="function"?_orig.rows.apply(e,arguments):[]); };
+    e.rawRows=function(){ return (_active && _rows.length) ? _rows.slice() : (typeof _orig.rawRows==="function"?_orig.rawRows.apply(e,arguments):[]); };
     e.refresh=function(){ if(_active){ pull(); return Promise.resolve(); } return typeof _orig.refresh==="function"?_orig.refresh.apply(e,arguments):Promise.resolve(); };
     _hooked=true; return true;
   }
@@ -70796,7 +70802,10 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     if(!snap || !Array.isArray(snap.rows)) return;
     _meta={updatedAt:snap.updatedAt, exchange:snap.exchange, activeSource:snap.activeSource, fallback:!!snap.fallback};
     _rows=snap.rows.map(mapRow);
-    installHooks();
+    /* Only take over the client engine once the backend actually delivered
+       rows — then the Scanner Pro shows the backend feed (which can reach
+       MEXC server-side even when Binance is off). */
+    if(_rows.length){ _active=true; installHooks(); }
     rerender();
   }
   function updateRows(rows){ if(Array.isArray(rows)){ _rows=rows.map(mapRow); rerender(); } }
@@ -70849,13 +70858,19 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   function enable(url){
     if(typeof url==="string"){ _base=url; if(url){ try{ localStorage.setItem(LS_URL,url); }catch(_){} } }
     else if(_base==null){ _base=loadUrl(); }
-    if(_base==null){ console.warn("[DVL 1023] no backend URL set; bridge stays inactive"); return false; }
-    _active=true;
-    installHooks();
-    pull().then(function(snap){ if(snap) connectWS(); });
+    /* No explicit backend URL? Use the SAME ORIGIN — the app is served next
+       to the scanner backend and /api/dvl/scanner/* is proxied to it (the
+       Copilot cards already fetch it relatively). This is what lets the
+       Scanner Pro get MEXC data server-side when Binance is off. */
+    if(_base==null){ _base=""; }
+    _enabled=true;
+    /* Don't hijack the client engine yet — setSnapshot() flips _active on
+       only after a real (non-empty) backend snapshot arrives. */
+    pull().then(function(snap){ if(snap && snap.rows && snap.rows.length) connectWS(); });
+    if(!_poll) _poll=setInterval(function(){ pull(); }, 30000);  // refresh + safety net if the WS isn't proxied
     return true;
   }
-  function disable(){ _active=false; disconnect(); try{ localStorage.removeItem(LS_URL); }catch(_){} _rows=[]; rerender(); }
+  function disable(){ _active=false; _enabled=false; disconnect(); if(_poll){ clearInterval(_poll); _poll=null; } try{ localStorage.removeItem(LS_URL); }catch(_){} _rows=[]; rerender(); }
 
   /* Re-pull + reconnect when the user switches Binance/MEXC in the filter. */
   window.addEventListener("dvl:scanner-exchange-change", function(){ if(_active){ pull().then(function(snap){ if(snap) connectWS(); }); } });
@@ -70868,13 +70883,28 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
      recompute in score()/blocksOf() is what's actually displayed either way. */
   window.addEventListener("dvl:scanner-config-change", function(ev){ if(_active) pushConfig(ev && ev.detail); });
 
+  /* Auto-enable against the same origin once the scanner engine + Pro are
+     registered. This is what makes the live table pull from the backend
+     (MEXC-capable, always-on) by default — previously the bridge existed but
+     nothing ever switched it on, so the Pro was stuck on the browser-side
+     scan that can't reach MEXC (contract.mexc.com is blocked from the page).
+     Safe: it only takes over once the backend actually returns rows. */
+  function autoEnable(tries){
+    tries=tries||0;
+    if(_enabled) return;
+    if(engine() && pro()){ enable(); return; }
+    if(tries<60) setTimeout(function(){ autoEnable(tries+1); }, 500);
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", function(){ autoEnable(0); }, {once:true});
+  else autoEnable(0);
+
   window.DVL_SCANNER_LIVE_FEED_BRIDGE_1023={
     version:"1.023",
     enable:enable, disable:disable,
     setSnapshot:setSnapshot, setFeed:setSnapshot,
     updateRows:updateRows, updateAsset:updateAsset,
     connectWS:connectWS, disconnect:disconnect, pull:pull, pushConfig:pushConfig,
-    audit:function(){ return { version:"1.023", active:_active, base:_base, hooked:_hooked, rows:_rows.length, ws:!!(_ws&&_ws.readyState===1), exchange:curExchange(), tf:curTf(), meta:_meta }; }
+    audit:function(){ return { version:"1.023", active:_active, enabled:_enabled, base:_base, hooked:_hooked, rows:_rows.length, ws:!!(_ws&&_ws.readyState===1), exchange:curExchange(), tf:curTf(), meta:_meta }; }
   };
 
   /* Auto-start: if a backend URL was saved, use it. Otherwise probe the SAME
