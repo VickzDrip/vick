@@ -25,6 +25,7 @@ const worker = require("./worker");
 const analyze = require("./analyze");
 const { mexc } = require("./exchanges");
 const M = require("./metrics");
+const oiStore = require("./oiStore");
 const btcBacktest = require("./btcBacktest");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
@@ -125,6 +126,21 @@ function createServer() {
       .then(fh => res.json(Object.assign({ ok: true, proxy: "funding" }, base,
         fh.length ? { funding: fh, fundingSource: "history" } : { fundingSource: "sampled" })))
       .catch(() => res.json(Object.assign({ ok: true, proxy: "funding", fundingSource: "sampled" }, base)));
+  });
+
+  /* DVL Open Interest candles for one MEXC symbol, aggregated on demand into
+     the requested timeframe from the holdVol snapshots oiStore samples. `unit`
+     is contracts | base | usdt (base/usdt need the symbol's contractSize; if
+     unknown, falls back to contracts and says so in `unit`). History grows
+     forward from when sampling started — closed candles are immutable. */
+  app.get("/api/dvl/scanner/mexc-oi", (req, res) => {
+    const symbol = String(req.query.symbol || "");
+    if (!symbol) { res.json({ ok: false, candles: [], error: "missing symbol" }); return; }
+    const tf = String(req.query.tf || "5m").replace(/[^a-zA-Z0-9]/g, "");
+    const unit = String(req.query.unit || "contracts");
+    const limit = Number(req.query.limit) || 600;
+    const r = oiStore.getCandles(symbol, tf, unit, limit);
+    res.json(Object.assign({ ok: true, snaps: oiStore.snapCount(symbol) }, r));
   });
 
   app.post("/api/dvl/scanner/config", (req, res) => {
