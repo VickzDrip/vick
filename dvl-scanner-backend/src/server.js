@@ -27,6 +27,7 @@ const { mexc } = require("./exchanges");
 const M = require("./metrics");
 const oiStore = require("./oiStore");
 const coinalyze = require("./coinalyze");
+const sharpe = require("./sharpe");
 const btcBacktest = require("./btcBacktest");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
@@ -171,6 +172,24 @@ function createServer() {
     coinalyze.diagnose(String(req.query.base || "BTC"))
       .then(d => res.json({ ok: true, ...d }))
       .catch(e => res.json({ ok: false, error: e.message }));
+  });
+
+  /* DIAGNOSTIC probe for the Sharpe API — forwards `path` + any other query
+     params straight to sharpe.ai with the Bearer key and returns the raw
+     response (arrays summarised to count + first 3). Lets us discover, from the
+     VPS, whether Sharpe exposes HISTORICAL open interest and covers a given
+     MEXC symbol before wiring anything into the panel. Needs DVL_SHARPE_KEY.
+     e.g. ?path=/funding/rates&type=current  */
+  app.get("/api/dvl/scanner/sharpe-debug", (req, res) => {
+    if (!sharpe.enabled()) { res.json({ ok: false, error: "no key (set DVL_SHARPE_KEY)" }); return; }
+    const path = String(req.query.path || "/funding/rates");
+    const params = Object.assign({}, req.query); delete params.path;
+    sharpe.get(path, params).then(r => {
+      let sample = r.json;
+      if (Array.isArray(r.json)) sample = { count: r.json.length, first: r.json.slice(0, 3) };
+      else if (r.json && Array.isArray(r.json.data)) sample = { keys: Object.keys(r.json), count: r.json.data.length, first: r.json.data.slice(0, 3) };
+      res.json({ ok: true, status: r.status, path, params, sample, textError: r.text });
+    }).catch(e => res.json({ ok: false, error: e.message }));
   });
 
   app.post("/api/dvl/scanner/config", (req, res) => {
