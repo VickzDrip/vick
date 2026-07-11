@@ -90,6 +90,24 @@ function createServer() {
       .catch(e => res.json({ ok: false, atr: null, error: e.message }));
   });
 
+  /* Chart failover: MEXC OHLCV for one symbol, returned as Binance-shaped
+     kline rows so the in-page chart consumes it as a drop-in when Binance is
+     off/geo-banned. The browser can't reach contract.mexc.com directly, so it
+     proxies through here. `symbol` is MEXC form ("BTC_USDT"); `tf` is the
+     chart timeframe; `limit` the candle count. See mexc.klinesChart. */
+  app.get("/api/dvl/scanner/mexc-klines", (req, res) => {
+    const symbol = String(req.query.symbol || "").toUpperCase().replace(/[^A-Z0-9_]/g, "");
+    // Chart TF is passed through as-is (not normalized to the scanner's TF_LIST) —
+    // the chart also charts 4h/1d and resample base intervals; klinesChart itself
+    // rejects anything MEXC has no native candle for.
+    const tf = String(req.query.tf || "15m").replace(/[^a-zA-Z0-9]/g, "");
+    const limit = Number(req.query.limit) || 500;
+    if (!symbol) { res.json({ ok: false, rows: [], error: "missing symbol" }); return; }
+    mexc.klinesChart(symbol, tf, limit)
+      .then(rows => res.json({ ok: true, symbol, tf, rows }))
+      .catch(e => res.json({ ok: false, symbol, tf, rows: [], error: e.message }));
+  });
+
   app.post("/api/dvl/scanner/config", (req, res) => {
     worker.setEngineConfig(req.body || {});
     res.json({ ok: true, engine: cfg.ENGINE, weights: cfg.WEIGHTS, oiMaLen: cfg.OI_MA_LEN, lsrMaLen: cfg.LSR_MA_LEN });
