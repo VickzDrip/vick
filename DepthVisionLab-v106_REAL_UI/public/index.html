@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.117</title>
+<title>DVL — Beta 1.118</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.117';
+window.DVL_APP_VERSION = 'Beta 1.118';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.117";
+const DVL_APP_VERSION = "Beta 1.118";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.118", note: "Casei o bloco 'Spike' do scanner com o marcador 'spike pós-flat' do gráfico: agora o gatilho é a vela CRUZAR acima da média (fator >1.0) após a calmaria — exatamente o que pinta as velas de volume no gráfico. Antes o scanner exigia um pouco mais (≥1.3×); agora toda vela que o gráfico marca de spike pós-flat vira um sinal no scanner. O fator continua ajustável em Filtros (sobe pra 1.15/1.3 se quiser filtrar cruzamentos fracos). Migração automática reseta esse parâmetro pro novo padrão (preservando teus outros filtros). Só frontend." },
   { version: "Beta 1.117", note: "Scanner refeito pra pré-pump — agora são só 2 bloquinhos. (1) 'Pré-volume (calmaria)': as velas antes ficaram abaixo da média (base morta) — a pré-análise. (2) 'Spike': a vela atual se destaca das menores por um fator MODERADO (padrão ≥1.3× a média — não precisa ser descomunal). O sinal 'detectado' acende quando os 2 batem juntos (calmaria → coluna que rompe). Score vira 50/50 (2 blocos = 99). Saíram do scanner os blocos de RSI, OI, LSR e prev-volume. Os dois limiares são ajustáveis em Filtros (nº de velas da base + fator do spike). Só frontend — não precisa reiniciar o backend." },
   { version: "Beta 1.116", note: "Enxugada: removidos o Fast Bots, o Aprendizado (ML), o Backteste 30 dias e o Backteste Financeiro. O Copilot continua (só sem esses 4 cards), e Scanner, Gráfico, Positions e Watchlist seguem intactos. No backend, parei o treino do ML no ciclo do worker e removi os endpoints de backteste (economiza recurso do servidor) — o score do scanner NÃO muda, ele já rodava nos pesos que você ajusta em Filtros. Também limpei o código morto das tentativas de provedor de OI (Coinalyze/Sharpe). Exige atualizar/reiniciar o backend. Próximo passo: refazer o scanner pra detectar 'volume acordando' (pré-pump)." },
   { version: "Beta 1.115", note: "Ajustes finos do DVL Open Interest (Fase A). (1) Conserta o artefato visual: quando a coleta de um ativo só-MEXC começou há pouco, o lado esquerdo do gráfico (antes da coleta) esticava o primeiro candle numa barra chapada e a linha de média despencava cruzando o vazio. Agora, onde não há OI coletado, fica vazio de verdade — média e candles só desenham sobre o período realmente coletado. (2) Blinda o arranque: o backend carrega o contractSize ANTES da primeira amostra, então logo após reiniciar não aparece mais aquele -96%/escala errada de transição. Exige atualizar/reiniciar o backend." },
@@ -62451,8 +62452,9 @@ body.dvlScannerOpen080 #chartWrap{
     preset:"all", tf:"15m", minScore:0, maxRows:20,
     maPeriod1:20, maPeriod2:50, spikeMaMode:"2", flatVolumeBarLen:5,
     rsiOversoldThreshold:30, rsiOversoldLookback:20, oiMaLen:20, lsrMaLen:20,
-    /* Scanner de 2 blocos (pré-pump): calmaria + spike moderado. */
-    minBaseBars:6, spikeMin:1.3,
+    /* Scanner de 2 blocos (pré-pump): calmaria + spike. spikeMin=1.0 casa
+       exatamente com o marcador "spike pós-flat" do gráfico (vela cruza a MA). */
+    minBaseBars:6, spikeMin:1.0, scanRulesVersion:2,
     weights:{ preVolume:50, spike:50 },
     /* Off by default — the ML-learned block weights (src/train.js on the
        backend) only ever apply when the user opts in here. */
@@ -62461,7 +62463,18 @@ body.dvlScannerOpen080 #chartWrap{
   function loadFilterState1015(){
     try{
       var saved=JSON.parse(localStorage.getItem(LS_1015)||"{}");
-      return Object.assign({}, FILTER1015_DEFAULTS, saved, { weights: Object.assign({}, FILTER1015_DEFAULTS.weights, saved.weights||{}) });
+      var st=Object.assign({}, FILTER1015_DEFAULTS, saved, { weights: Object.assign({}, FILTER1015_DEFAULTS.weights, saved.weights||{}) });
+      /* Migração da regra do scanner (2 blocos, casada com o marcador do
+         gráfico): se o estado salvo é de antes, reseta SÓ os parâmetros da
+         regra (base/spike/pesos) pros novos defaults, preservando o resto
+         (TF, nº de ativos, etc.). */
+      if(st.scanRulesVersion !== 2){
+        st.minBaseBars = FILTER1015_DEFAULTS.minBaseBars;
+        st.spikeMin = FILTER1015_DEFAULTS.spikeMin;
+        st.weights = Object.assign({}, FILTER1015_DEFAULTS.weights);
+        st.scanRulesVersion = 2;
+      }
+      return st;
     }catch(_){ return Object.assign({}, FILTER1015_DEFAULTS, { weights: Object.assign({}, FILTER1015_DEFAULTS.weights) }); }
   }
   function saveFilterState1015(){
@@ -62604,7 +62617,9 @@ body.dvlScannerOpen080 #chartWrap{
     var spike20=Number(r.spike20)||Number(r.volX)||0;
     return {
       preVolume: (Number(r.volBelowMaBars)||0) >= minBase,
-      spike: spike20 >= spikeMin
+      /* mesma regra do marcador "spike pós-flat" do gráfico: a vela CRUZA
+         acima da média (>1). spikeMin é o fator mínimo (1.0 = só cruzar). */
+      spike: spike20 > spikeMin
     };
   }
   function allBlocksTrue(r){
@@ -62691,7 +62706,7 @@ body.dvlScannerOpen080 #chartWrap{
   function metricSub1016(key){
     return ({
       preVolume:"volume baixo/uniforme antes (base morta)",
-      spike:"coluna atual se destaca das menores (moderado)"
+      spike:"vela cruza acima da média após a calmaria (= marcador do gráfico)"
     })[key] || "";
   }
   function metricStep1016(key){ return 1; }
