@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.116</title>
+<title>DVL — Beta 1.117</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.116';
+window.DVL_APP_VERSION = 'Beta 1.117';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.116";
+const DVL_APP_VERSION = "Beta 1.117";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.117", note: "Scanner refeito pra pré-pump — agora são só 2 bloquinhos. (1) 'Pré-volume (calmaria)': as velas antes ficaram abaixo da média (base morta) — a pré-análise. (2) 'Spike': a vela atual se destaca das menores por um fator MODERADO (padrão ≥1.3× a média — não precisa ser descomunal). O sinal 'detectado' acende quando os 2 batem juntos (calmaria → coluna que rompe). Score vira 50/50 (2 blocos = 99). Saíram do scanner os blocos de RSI, OI, LSR e prev-volume. Os dois limiares são ajustáveis em Filtros (nº de velas da base + fator do spike). Só frontend — não precisa reiniciar o backend." },
   { version: "Beta 1.116", note: "Enxugada: removidos o Fast Bots, o Aprendizado (ML), o Backteste 30 dias e o Backteste Financeiro. O Copilot continua (só sem esses 4 cards), e Scanner, Gráfico, Positions e Watchlist seguem intactos. No backend, parei o treino do ML no ciclo do worker e removi os endpoints de backteste (economiza recurso do servidor) — o score do scanner NÃO muda, ele já rodava nos pesos que você ajusta em Filtros. Também limpei o código morto das tentativas de provedor de OI (Coinalyze/Sharpe). Exige atualizar/reiniciar o backend. Próximo passo: refazer o scanner pra detectar 'volume acordando' (pré-pump)." },
   { version: "Beta 1.115", note: "Ajustes finos do DVL Open Interest (Fase A). (1) Conserta o artefato visual: quando a coleta de um ativo só-MEXC começou há pouco, o lado esquerdo do gráfico (antes da coleta) esticava o primeiro candle numa barra chapada e a linha de média despencava cruzando o vazio. Agora, onde não há OI coletado, fica vazio de verdade — média e candles só desenham sobre o período realmente coletado. (2) Blinda o arranque: o backend carrega o contractSize ANTES da primeira amostra, então logo após reiniciar não aparece mais aquele -96%/escala errada de transição. Exige atualizar/reiniciar o backend." },
   { version: "Beta 1.114", note: "DVL Open Interest (Fase A) — candles de OI REAIS da MEXC. O backend agora amostra o holdVol (contratos em aberto) + fairPrice de todo ativo MEXC a cada 30s num coletor dedicado, guarda os snapshots com carimbo de tempo e monta candles OHLC (abertura/máxima/mínima/fechamento do holdVol) no timeframe do gráfico. Candles fechados são imutáveis; o histórico persiste no servidor (sobrevive a restart) e só cresce pra frente (a MEXC não dá OI passado — nada é inventado). Conversão de unidade por ativo usando o contractSize real da MEXC (nunca o mesmo pra todos): Contratos = holdVol, Moeda base = holdVol×contractSize, USDT = base×fairPrice — escolhível no ícone de config do painel. A cor do candle vem do próprio movimento do OI (fecha ≥ abre = verde), não da cor do preço. Também troquei a linha de média do painel de OI de azul para dourado (tema DVL, sem azul). O painel Long/Short (proxy) segue como estava — vira 'Long/Short Pressure — Estimated' na Fase B. Exige atualizar/reiniciar o backend (coletor de OI + endpoint /mexc-oi)." },
@@ -62450,7 +62451,9 @@ body.dvlScannerOpen080 #chartWrap{
     preset:"all", tf:"15m", minScore:0, maxRows:20,
     maPeriod1:20, maPeriod2:50, spikeMaMode:"2", flatVolumeBarLen:5,
     rsiOversoldThreshold:30, rsiOversoldLookback:20, oiMaLen:20, lsrMaLen:20,
-    weights:{ spikeAboveAvg:20, rsiOversold:15, oiAboveAvg:15, lsrBelowAvg:15, flatVolumeBar:12, prevVolBelowHalf:12 },
+    /* Scanner de 2 blocos (pré-pump): calmaria + spike moderado. */
+    minBaseBars:6, spikeMin:1.3,
+    weights:{ preVolume:50, spike:50 },
     /* Off by default — the ML-learned block weights (src/train.js on the
        backend) only ever apply when the user opts in here. */
     useLearnedWeights:false
@@ -62590,24 +62593,23 @@ body.dvlScannerOpen080 #chartWrap{
      scanner (which assets show up) and, weighted, the 0-99 score. Same
      score mechanism as before (weighted sum -> 0-99), just a different
      set of factors, all boolean now instead of continuous ranges. */
+  /* ── 2-block scanner (pré-pump): calmaria de volume + coluna que se destaca ──
+     Bloco 1 "Pré-volume": as velas antes ficaram abaixo da média (base morta /
+     calmaria) — a pré-análise. Bloco 2 "Spike": a vela atual se destaca das
+     menores por um fator MODERADO (não precisa ser descomunal). Ambos usam
+     campos que o backend já manda: volBelowMaBars e spike20. */
   function blocksOf(r){
-    var mode=filterState1015.spikeMaMode||"2";
+    var minBase=Number(filterState1015.minBaseBars)||6;
+    var spikeMin=Number(filterState1015.spikeMin)||1.3;
     var spike20=Number(r.spike20)||Number(r.volX)||0;
-    var spike50=Number(r.spike50)||0;
-    var spikeAboveAvg = mode==="1" ? spike20>1 : (spike20>1 && spike50>1);
-    var flatLen=filterState1015.flatVolumeBarLen||5;
     return {
-      spikeAboveAvg: spikeAboveAvg,
-      rsiOversold: !!r.rsiOversoldOk,
-      oiAboveAvg: r.oi==="up",
-      lsrBelowAvg: r.lsr==="down",
-      flatVolumeBar: (Number(r.volBelowMaBars)||0) >= flatLen,
-      prevVolBelowHalf: !!r.prevVolBelowHalf
+      preVolume: (Number(r.volBelowMaBars)||0) >= minBase,
+      spike: spike20 >= spikeMin
     };
   }
   function allBlocksTrue(r){
     var b=blocksOf(r);
-    return b.spikeAboveAvg && b.rsiOversold && b.oiAboveAvg && b.lsrBelowAvg && b.flatVolumeBar && b.prevVolBelowHalf;
+    return b.preVolume && b.spike;
   }
 
   /* ── Confluência total alerts — fires once per symbol on the FALSE→TRUE
@@ -62622,7 +62624,7 @@ body.dvlScannerOpen080 #chartWrap{
   function notifyConfluence(sym){
     try{
       if(typeof Notification!=="undefined" && Notification.permission==="granted"){
-        new Notification("DVL Scanner — Confluência total", { body: sym+" bateu os 6 bloquinhos (RSI, OI, LSR, flat vol, spike, prev vol).", tag:"dvl-confluence-"+sym });
+        new Notification("DVL Scanner — Sinal", { body: sym+" bateu os 2 bloquinhos: pré-volume (calmaria) + spike.", tag:"dvl-confluence-"+sym });
       }
     }catch(_){}
   }
@@ -62645,7 +62647,7 @@ body.dvlScannerOpen080 #chartWrap{
   function alertMenu(){
     return '<div class="dvlScan1013FilterMenu dvlScan1015FilterMenu" id="dvlScan1013AlertMenu">'
       +'<h3>Alertas — Confluência total</h3>'
-      +'<div class="dvlScan1015FilterFoot" id="dvlScan1013AlertList">Nenhum alerta ainda. Avisamos aqui (e por notificação do navegador, se permitida) assim que um ativo bater os 6 bloquinhos ao mesmo tempo.</div>'
+      +'<div class="dvlScan1015FilterFoot" id="dvlScan1013AlertList">Nenhum alerta ainda. Avisamos aqui (e por notificação do navegador, se permitida) assim que um ativo bater os 2 bloquinhos (pré-volume + spike).</div>'
       +'</div>';
   }
   function renderAlertMenu(root){
@@ -62654,7 +62656,7 @@ body.dvlScannerOpen080 #chartWrap{
     var list=root.querySelector("#dvlScan1013AlertList");
     if(list){
       if(!confluenceLog.length){
-        list.textContent="Nenhum alerta ainda. Avisamos aqui (e por notificação do navegador, se permitida) assim que um ativo bater os 6 bloquinhos ao mesmo tempo.";
+        list.textContent="Nenhum alerta ainda. Avisamos aqui (e por notificação do navegador, se permitida) assim que um ativo bater os 2 bloquinhos (pré-volume + spike).";
       } else {
         list.innerHTML=confluenceLog.map(function(e){
           return '<div class="dvlScan1013AlertRow"><b>'+esc(e.symbol)+'</b><span>'+esc(ago(e.at))+'</span></div>';
@@ -62666,36 +62668,13 @@ body.dvlScannerOpen080 #chartWrap{
   }
   function score(r){
     var b=blocksOf(r), w=effectiveWeights(r&&r.side)||{};
-    var W={
-      spikeAboveAvg:Number(w.spikeAboveAvg||0), rsiOversold:Number(w.rsiOversold||0),
-      oiAboveAvg:Number(w.oiAboveAvg||0), lsrBelowAvg:Number(w.lsrBelowAvg||0),
-      flatVolumeBar:Number(w.flatVolumeBar||0), prevVolBelowHalf:Number(w.prevVolBelowHalf||0)
-    };
-    var wTotal=W.spikeAboveAvg+W.rsiOversold+W.oiAboveAvg+W.lsrBelowAvg+W.flatVolumeBar+W.prevVolBelowHalf;
-
-    /* Pesos do score aprendido, quando ligado, também soma o "bônus" das
-       combinações de 2 blocos que o modelo achou relevantes (train.js's
-       pairWeights) — uma regressão logística pura só soma pesos isolados,
-       então sem isso "OI subindo + LSR caindo juntos" nunca pontuaria
-       diferente da soma dos dois sozinhos. Manual (pesos na mão) não tem
-       esse conceito, então fica de fora nesse modo — só entra quando o
-       modelo aprendido do lado certo (LONG/SHORT) está de fato sendo usado. */
-    var pairBonus=0, pairTotal=0;
-    var m=learnedModelFor(r&&r.side);
-    if(filterState1015.useLearnedWeights && m && m.trained && Array.isArray(m.pairWeights)){
-      m.pairWeights.forEach(function(p){
-        var pw=Number(p.weight)||0;
-        pairTotal+=pw;
-        if(b[p.a] && b[p.b]) pairBonus+=pw;
-      });
-    }
-
-    var denom=wTotal+pairTotal;
-    if(denom<=0) return 0;
-    var pts=(b.spikeAboveAvg?W.spikeAboveAvg:0)+(b.rsiOversold?W.rsiOversold:0)+(b.oiAboveAvg?W.oiAboveAvg:0)
-          +(b.lsrBelowAvg?W.lsrBelowAvg:0)+(b.flatVolumeBar?W.flatVolumeBar:0)+(b.prevVolBelowHalf?W.prevVolBelowHalf:0)
-          +pairBonus;
-    return Math.max(0,Math.min(99,Math.round(pts/denom*99)));
+    /* Default 50/50 se o peso não existir (ex.: estado antigo salvo com os 6
+       blocos) — assim o score nunca zera por causa de estado persistido. */
+    var W={ preVolume:Number(w.preVolume)||50, spike:Number(w.spike)||50 };
+    var wTotal=W.preVolume+W.spike;
+    if(wTotal<=0) return 0;
+    var pts=(b.preVolume?W.preVolume:0)+(b.spike?W.spike:0);
+    return Math.max(0,Math.min(99,Math.round(pts/wTotal*99)));
   }
 
   function fmtWeight1016(v){
@@ -62705,27 +62684,19 @@ body.dvlScannerOpen080 #chartWrap{
   }
   function metricLabel1016(key){
     return ({
-      spikeAboveAvg:"Spike acima da média",
-      rsiOversold:"RSI sobrevenda",
-      oiAboveAvg:"OI acima da média",
-      lsrBelowAvg:"LSR abaixo da média",
-      flatVolumeBar:"Flat volume bar",
-      prevVolBelowHalf:"Pré-volume baixo"
+      preVolume:"Pré-volume (calmaria)",
+      spike:"Spike"
     })[key] || key;
   }
   function metricSub1016(key){
     return ({
-      spikeAboveAvg:"volume atual acima da(s) MA configurada(s)",
-      rsiOversold:"RSI esteve em sobrevenda dentro do lookback",
-      oiAboveAvg:"open interest acima da própria média",
-      lsrBelowAvg:"long/short ratio abaixo da própria média",
-      flatVolumeBar:"volume ficou abaixo da média antes do spike",
-      prevVolBelowHalf:"bônus se volume anterior estava baixo"
+      preVolume:"volume baixo/uniforme antes (base morta)",
+      spike:"coluna atual se destaca das menores (moderado)"
     })[key] || "";
   }
   function metricStep1016(key){ return 1; }
   function metricMin1016(key){ return 0; }
-  function metricMax1016(key){ return 40; }
+  function metricMax1016(key){ return 100; }
   function setMetric1016(key,delta){
     var w=filterState1015.weights || (filterState1015.weights={});
     var cur=Number(w[key]||0);
@@ -62733,7 +62704,7 @@ body.dvlScannerOpen080 #chartWrap{
     next=Math.max(metricMin1016(key),Math.min(metricMax1016(key),next));
     w[key]=Math.round(next*10)/10;
   }
-  var BLOCK_KEYS_1016=["spikeAboveAvg","rsiOversold","oiAboveAvg","lsrBelowAvg","flatVolumeBar","prevVolBelowHalf"];
+  var BLOCK_KEYS_1016=["preVolume","spike"];
   function metricRows1016(){
     return BLOCK_KEYS_1016.map(function(k){
       return '<div class="dvlScan1016MetricRow" data-dvl-scan1016-row="'+k+'">'
@@ -62841,9 +62812,7 @@ body.dvlScannerOpen080 #chartWrap{
   }
   /* Per-row checklist of the 6 blocks — purely a reading aid, no priority
      between them (order shown is fixed but meaningless). */
-  var BLOCK_BADGE_ORDER=[["S","spikeAboveAvg","Spike acima da média"],["R","rsiOversold","RSI sobrevenda"],
-    ["O","oiAboveAvg","OI acima da média"],["L","lsrBelowAvg","LSR abaixo da média"],
-    ["F","flatVolumeBar","Flat volume bar"],["P","prevVolBelowHalf","Pré-volume baixo"]];
+  var BLOCK_BADGE_ORDER=[["V","preVolume","Pré-volume (calmaria)"],["S","spike","Spike (coluna se destaca)"]];
   function blockBadges(r){
     var b=blocksOf(r);
     return '<span class="dvlScan1013Blocks">'+BLOCK_BADGE_ORDER.map(function(o){
@@ -63228,7 +63197,7 @@ body.dvlScannerOpen080 #chartWrap{
       var full=allBlocksTrue(r);
       return '<div class="dvlScan1013Row'+(full?" confluence":"")+'" data-dvl-scan-analyze="'+esc(r.mexc||r.symbol||"")+'">'
         +'<div class="dvlScan1013Rank">'+(i+1)+'</div>'
-        +'<div class="dvlScan1013Asset"><b>'+esc(r.symbol||r.mexc||"—")+'</b><span>'+esc(fmtPrice(r.lastClose))+'</span>'+(full?'<i class="dvlScan1013ConfluenceTag">🔥 6/6</i>':'')+'</div>'
+        +'<div class="dvlScan1013Asset"><b>'+esc(r.symbol||r.mexc||"—")+'</b><span>'+esc(fmtPrice(r.lastClose))+'</span>'+(full?'<i class="dvlScan1013ConfluenceTag">🔥 2/2</i>':'')+'</div>'
         +'<div class="dvlScan1013Var '+varCls+'">'+(p24>=0?"+":"")+p24.toFixed(2)+'%</div>'
         +'<div class="dvlScan1013Trend '+oi.c+'">'+oi.t+'</div>'
         +'<div class="dvlScan1013Trend '+ls.c+'">'+ls.t+'</div>'
