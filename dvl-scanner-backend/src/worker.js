@@ -603,10 +603,9 @@ async function cycle() {
   /* Attempt to (re)train the learned-weights model — cheap no-op below
      MIN_SAMPLES, and self-throttled to at most once/hour otherwise so a
      multi-TF cycle isn't slowed down re-fitting on an unchanged dataset. */
-  if (resolveNow - _lastTrainAttempt > TRAIN_INTERVAL_MS) {
-    _lastTrainAttempt = resolveNow;
-    try { _modelStatus = train.maybeTrain(); } catch (e) { logErr("train", e); }
-  }
+  /* ML training ("Aprendizado") removed per product decision — the scanner
+     runs on the manually-set weights only. Left the outcome logging above
+     (harmless) but no model is ever fit. */
 
   /* Mirror the registry to disk so signals survive restarts. */
   saveRegistry();
