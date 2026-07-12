@@ -8,8 +8,6 @@
    POST /api/dvl/scanner/manual-trade  (log a user-opened position as an ML training example)
    GET  /api/dvl/scanner/history?symbol=X  (every recorded signal for one symbol, for chart markers)
    GET  /api/dvl/scanner/live-reading?symbol=X&tf=Y  (current OI/LSR/RSI/spike reading for ANY symbol)
-   GET  /api/dvl/scanner/backtest      (financial backtest: win rate / avg return, all signals vs model-favorable)
-   GET  /api/dvl/scanner/btc-backtest  (Fast Bots' top entry combos backtested on 15m/30m/1h over 30 days, pooled across several assets, net of fees)
    GET  /api/dvl/scanner/tickers?exchange=binance|mexc  (top-by-24h-volume candidates, server-fetched — see worker.getCandidates)
    GET  /api/dvl/scanner/mexc-price    (fresh MEXC last-price map, for Fast Bots' Bot 4 to check its own open positions)
    GET  /api/dvl/scanner/mexc-atr?symbol=X&tf=Y  (14-period ATR for one MEXC symbol, Fast Bots' fallback stop distance)
@@ -26,9 +24,6 @@ const analyze = require("./analyze");
 const { mexc } = require("./exchanges");
 const M = require("./metrics");
 const oiStore = require("./oiStore");
-const coinalyze = require("./coinalyze");
-const sharpe = require("./sharpe");
-const btcBacktest = require("./btcBacktest");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -145,53 +140,6 @@ function createServer() {
     res.json(Object.assign({ ok: true, snaps: oiStore.snapCount(symbol) }, r));
   });
 
-  /* DIAGNOSTIC (not wired into the UI yet): does Coinalyze cover this MEXC
-     symbol, and what does its OI history look like? Lets us confirm coverage +
-     unit on the VPS before merging it into the OI panel. Returns the resolved
-     Coinalyze symbol, a small sample of rows, and both USD and native units so
-     we can see which lines up with our holdVol candles. Needs DVL_COINALYZE_KEY. */
-  app.get("/api/dvl/scanner/coinalyze-oi", (req, res) => {
-    const symbol = String(req.query.symbol || "");
-    const tf = String(req.query.tf || "1h").replace(/[^a-zA-Z0-9]/g, "");
-    const hours = Number(req.query.hours) || 24;
-    if (!symbol) { res.json({ ok: false, error: "missing symbol" }); return; }
-    Promise.all([
-      coinalyze.debugResolve(symbol),
-      coinalyze.oiHistory(symbol, tf, hours, true),   // USD-notional
-      coinalyze.oiHistory(symbol, tf, hours, false)   // native units
-    ]).then(([dbg, usd, native]) => res.json({
-      ok: true, symbol, tf, hours, enabled: coinalyze.enabled(), resolve: dbg,
-      usd: { count: usd.rows.length, note: usd.note, czSymbol: usd.czSymbol, sample: usd.rows.slice(-3) },
-      native: { count: native.rows.length, note: native.note, sample: native.rows.slice(-3) }
-    })).catch(e => res.json({ ok: false, error: e.message }));
-  });
-
-  /* DIAGNOSTIC: raw Coinalyze /exchanges + /future-markets so we can read the
-     real MEXC exchange code + market field names (discovery guessed wrong). */
-  app.get("/api/dvl/scanner/coinalyze-debug", (req, res) => {
-    coinalyze.diagnose(String(req.query.base || "BTC"))
-      .then(d => res.json({ ok: true, ...d }))
-      .catch(e => res.json({ ok: false, error: e.message }));
-  });
-
-  /* DIAGNOSTIC probe for the Sharpe API — forwards `path` + any other query
-     params straight to sharpe.ai with the Bearer key and returns the raw
-     response (arrays summarised to count + first 3). Lets us discover, from the
-     VPS, whether Sharpe exposes HISTORICAL open interest and covers a given
-     MEXC symbol before wiring anything into the panel. Needs DVL_SHARPE_KEY.
-     e.g. ?path=/funding/rates&type=current  */
-  app.get("/api/dvl/scanner/sharpe-debug", (req, res) => {
-    if (!sharpe.enabled()) { res.json({ ok: false, error: "no key (set DVL_SHARPE_KEY)" }); return; }
-    const path = String(req.query.path || "/funding/rates");
-    const params = Object.assign({}, req.query); delete params.path;
-    sharpe.get(path, params).then(r => {
-      let sample = r.json;
-      if (Array.isArray(r.json)) sample = { count: r.json.length, first: r.json.slice(0, 3) };
-      else if (r.json && Array.isArray(r.json.data)) sample = { keys: Object.keys(r.json), count: r.json.data.length, first: r.json.data.slice(0, 3) };
-      res.json({ ok: true, status: r.status, path, params, sample, textError: r.text });
-    }).catch(e => res.json({ ok: false, error: e.message }));
-  });
-
   app.post("/api/dvl/scanner/config", (req, res) => {
     worker.setEngineConfig(req.body || {});
     res.json({ ok: true, engine: cfg.ENGINE, weights: cfg.WEIGHTS, oiMaLen: cfg.OI_MA_LEN, lsrMaLen: cfg.LSR_MA_LEN });
@@ -244,27 +192,6 @@ function createServer() {
         flatCandles: row.flatCandles, prevVolBelowHalf: row.prevVolBelowHalf, spike20: row.spike20, spike50: row.spike50
       }))
       .catch(e => { console.error("[live-reading]", symbol, e.message); res.json({ ok: false, error: e.message }); });
-  });
-
-  /* Financial backtest — how the model's calls would have actually paid
-     off (win rate / avg / total return), not just accuracy — on the SAME
-     temporal test split trainSide() already reports accuracy for. See
-     backtest.js's doc-comment for why it re-fits instead of reusing the
-     persisted learned-weights.json. */
-  app.get("/api/dvl/scanner/backtest", (req, res) => {
-    res.json({ ok: true, ...worker.getBacktestStats() });
-  });
-
-  /* Fast Bots 30-day backtest (1m/3m/5m), pooled across several assets —
-     read-only, does not touch the live paper wallets. Candles come from
-     MEXC (Binance's klines endpoint is shared with the live scanner and
-     kept tripping a 418 IP ban); OI/LSR direction still from Binance's
-     light futures-data. Lazily computes + caches (a full run is ~3 min of
-     fetches), so this returns immediately with either the cached result or
-     {ready:false, running:true} while it warms. */
-  app.get("/api/dvl/scanner/btc-backtest", (req, res) => {
-    const r = btcBacktest.get();
-    res.json({ ok: true, ready: r.ready, running: r.running, progress: r.progress, cooldownMin: r.cooldownMin, ...(r.data || {}) });
   });
 
   app.get("/api/dvl/scanner/health", (req, res) => {
