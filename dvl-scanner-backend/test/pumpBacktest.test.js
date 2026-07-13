@@ -50,6 +50,38 @@ ok(weak.trades === 0, "low-conviction signal skipped");
 const untrained = BT.run([{ f: [0], path: [[2.1, 0.1, 1.9]] }], () => null, {});
 ok(untrained.trades === 0, "no model → no trades");
 
+// ── simulateMfe (old signals: up/down only, no path) ──────────
+// long: fav(up)=2.2 >= tp2, adv(down)=0.3 < sl1 → +2
+ok(BT.simulateMfe(2.2, 0.3, "long", 1, 2) === 2, "MFE long → TP");
+// long: adv(down)=1.5 >= sl1, fav(up)=0.4 < tp2 → -1
+ok(BT.simulateMfe(0.4, 1.5, "long", 1, 2) === -1, "MFE long → SL");
+// both reached → stop first (conservative)
+ok(BT.simulateMfe(2.5, 1.5, "long", 1, 2) === -1, "MFE both → SL first");
+// neither → flat
+ok(BT.simulateMfe(0.5, 0.5, "long", 1, 2) === 0, "MFE neither → flat");
+// short mirror: fav is down; down=2.3>=tp2, up=0.2<sl1 → +2
+ok(BT.simulateMfe(0.2, 2.3, "short", 1, 2) === 2, "MFE short → TP");
+
+// run() uses MFE for path-less samples (all still counted)
+const oldSamples = [
+  { f: [0], up: 2.2, down: 0.2 },  // long TP → +2
+  { f: [0], up: 0.3, down: 1.4 }   // long SL → -1
+];
+const oldRun = BT.run(oldSamples, alwaysLong, { slAtr: 1, tpAtr: 2, riskPct: 0.01 });
+ok(oldRun.trades === 2, "path-less samples still simulated (via MFE)");
+ok(oldRun.exactPath === 0, "exactPath counts only path samples");
+
+// side filter: only-long ignores short predictions
+const bothSides = [
+  { f: [1], up: 2.2, down: 0.2 },   // model → long (up>down)
+  { f: [2], up: 0.2, down: 2.2 }    // model → short (down>up)
+];
+const predBySample = f => (f[0] === 1 ? { up: 3, down: 0 } : { up: 0, down: 3 });
+const longOnly = BT.run(bothSides, predBySample, { slAtr: 1, tpAtr: 2, side: "long" });
+ok(longOnly.trades === 1 && longOnly.side === "long", "side:long takes only long signals");
+const shortOnly = BT.run(bothSides, predBySample, { slAtr: 1, tpAtr: 2, side: "short" });
+ok(shortOnly.trades === 1 && shortOnly.side === "short", "side:short takes only short signals");
+
 // ── sweepTp ───────────────────────────────────────────────────
 // Path runs to +3 then closes; a higher TP captures more, so best should be the
 // largest TP that still fills (3).

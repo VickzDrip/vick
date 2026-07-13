@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.125</title>
+<title>DVL — Beta 1.126</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.125';
+window.DVL_APP_VERSION = 'Beta 1.126';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.125";
+const DVL_APP_VERSION = "Beta 1.126";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.126", note: "Backtest financeiro agora usa TODOS os sinais já resolvidos pelo modelo na hora (antes esperava juntar sinais novos com trajetória de preço). Como todo sinal guarda o quanto andou pra cima/baixo em ATR, dá pra simular já: sinais antigos usam aproximação conservadora (MFE — se bateu stop e alvo, assume o stop primeiro), e os novos usam a trajetória exata; o card mostra quantos já usam a exata. Além disso o resultado agora vem SEPARADO entre pré-pump (long) e pré-short (short) — cada um uma conta de $1000 própria, com retorno e taxa de acerto por lado. Também tira o SOXL e outros ETFs alavancados (SOXS, TQQQ, SQQQ, SPXL, TSLL…) que tinham escapado do filtro. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.125", note: "Novo: BACKTEST FINANCEIRO do modelo pré-pump/pré-short (novo cartão no Copilot, logo abaixo do modelo). Pega cada sinal resolvido, segue a direção que o modelo previu e simula uma conta de $1000 com gestão de risco: arrisca 1% da conta por trade, stop em 1× ATR, e o tamanho da posição se ajusta pra bater exatamente esse 1% (então a conta compõe). Mostra pra quanto os $1000 teriam ido, o retorno %, o DRAWDOWN máximo e a taxa de acerto. E responde sua pergunta do 'quanto segurar': faz um sweep do take-profit (0.5× a 5× ATR) e mostra o ponto de saída que mais rendeu no conjunto de sinais. Honesto: é estimativa in-sample (o modelo treinou nos mesmos sinais), sem corretagem/slippage — calibra, não promete; e nunca abre ordem. Precisa de sinais com trajetória de preço guardada (registrados a partir desta versão), então o cartão mostra 'coletando' até juntar uns 20. Backend (pumpBacktest + endpoint + testes) exige reiniciar o dvl-scanner. Backend + frontend." },
   { version: "Beta 1.124", note: "Tira do scanner (e do modelo pré-pump/pré-short) as AÇÕES, ÍNDICES, COMMODITIES e FOREX tokenizados da MEXC — SKHYNIXSTOCK, MUSTOCK, SAMSUNGSTOCK, NAS100, SPX500, XAU, WTI etc. Motivo: esses ativos quase não se mexem, então qualquer micro-variação vira 'muitos ATRs' e eles entupiam o topo do ranking de pré-pump/pré-short com ruído (e nem são cripto, não dava pra caçar pump neles). Filtro conservador por nome (contém STOCK + lista exata de índices/metais/energia/forex), com match EXATO pra nunca esconder cripto real tipo SPX6900 ou AAVE. Backend (novo módulo symbolFilter + teste) exige reiniciar o dvl-scanner; o card do Copilot já filtra no front como rede de segurança. Backend + frontend." },
   { version: "Beta 1.123", note: "Conserta o bug do preço/escala que 'demorava pra voltar ao normal' em ativos só-MEXC (ex.: HYPE). Causa: a vela em formação só era atualizada ao vivo pelo WebSocket da Binance, que não conecta pra esses ativos — então a vela congelava no último refresh (a cada 15s) enquanto o preço ao vivo (fonte MEXC) continuava andando. O marcador verde descolava das velas e o eixo ficava com a escala velha (o mesmo sintoma no painel de OI). Agora a vela em formação é 'grudada' no preço ao vivo a cada 1s (atualiza fecho/máxima/mínima com o mesmo preço já mostrado no marcador) e, se a escala estiver travada, ela expande pra incluir o preço. Tem trava de sanidade (ignora preço absurdo, nunca mexe em vela fechada) e é no-op pra ativos da Binance. Só frontend." },
@@ -71326,22 +71327,26 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         +'<p class="dvlCpBt1124Sub">Aguardando o scanner backend responder.</p>'};
     }
     if(!s.ready){
-      var wp=Number(s.withPath)||0, need=Number(s.need)||20;
-      var pct=Math.max(0,Math.min(100,Math.round(wp/Math.max(1,need)*100)));
-      var msg = s.trained
-        ? 'O modelo já treina, mas o backtest precisa de sinais com trajetória de preço guardada (registrados a partir de agora). Faltam coletar alguns.'
-        : 'Espera o modelo treinar primeiro. O backtest roda sobre os sinais resolvidos.';
+      var need=Number(s.need)||20;
+      var have=Number(s.samples)||0, pct=Math.max(0,Math.min(100,Math.round(have/Math.max(1,need)*100)));
       return {on:false, html:''
-        +'<h4><i class="dvlCpBt1124Dot"></i>Backtest financeiro · coletando</h4>'
-        +'<p class="dvlCpBt1124Sub">'+msg+'</p>'
+        +'<h4><i class="dvlCpBt1124Dot"></i>Backtest financeiro · aguardando modelo</h4>'
+        +'<p class="dvlCpBt1124Sub">O backtest roda assim que o modelo treinar — usa todos os sinais já resolvidos.</p>'
         +'<div class="dvlCpBt1124Bar"><i style="width:'+pct+'%"></i></div>'
-        +'<div class="dvlCpBt1124BarLbl">'+wp+' / '+need+' sinais com trajetória</div>'};
+        +'<div class="dvlCpBt1124BarLbl">'+have+' / '+need+' sinais resolvidos</div>'};
     }
     var b=s.best||{}, p=s.params||{};
     var acc=Number(b.account)||0, acc0=Number(b.account0)||1000, ret=Number(b.returnPct)||0;
     var dd=Number(b.maxDrawdownPct)||0, win=Number(b.winRate)||0, tr=Number(b.trades)||0;
     var tp=Number(p.tpAtr)||Number(b.tpAtr)||0, sl=Number(p.slAtr)||1, risk=(Number(p.riskPct)||0.01)*100;
     var eqCls=ret>=0?"pos":"neg";
+    function sideRow(o, label, cls){
+      o=o||{}; var a=Number(o.account)||0, r=Number(o.returnPct)||0, w=Number(o.winRate)||0, n=Number(o.trades)||0;
+      return '<div class="dvlCpBt1124Cell"><div class="k" style="color:'+cls+'">'+label+' · '+n+' trades</div>'
+        +'<div class="v '+(r>=0?'pos':'neg')+'">'+fmtUsd(a)+'</div>'
+        +'<div class="k" style="margin-top:2px">'+sign(r)+' · '+w.toFixed(0)+'% acerto</div></div>';
+    }
+    var exact=Number(s.exactPath)||0;
     return {on:true, html:''
       +'<h4><i class="dvlCpBt1124Dot"></i>Backtest financeiro · '+tr+' trades</h4>'
       +'<p class="dvlCpBt1124Sub">Seguindo a direção do modelo em cada sinal, arriscando '+risk.toFixed(0)+'% da conta por trade, stop em '+sl.toFixed(1)+'× ATR.</p>'
@@ -71350,8 +71355,12 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         +'<div class="dvlCpBt1124Cell"><div class="k">Drawdown máx.</div><div class="v neg">-'+dd.toFixed(1)+'%</div></div>'
         +'<div class="dvlCpBt1124Cell"><div class="k">Taxa de acerto</div><div class="v">'+win.toFixed(0)+'%</div></div>'
       +'</div>'
+      +'<div class="dvlCpBt1124Grid" style="margin-top:8px">'
+        + sideRow(s.long, '▲ Pré-pump (long)', '#10df77')
+        + sideRow(s.short, '▼ Pré-short (short)', '#ff5966')
+      +'</div>'
       +'<div class="dvlCpBt1124Exit">Melhor saída aprendida: <b>fechar ao andar '+tp.toFixed(1)+'× ATR a favor</b>. Foi o take-profit que mais rendeu no conjunto de sinais.</div>'
-      +'<div class="dvlCpBt1124Note">Estimativa in-sample (o modelo foi treinado nos mesmos sinais), sem custos de corretagem/slippage — serve pra calibrar, não é promessa de retorno. Não abre ordem nenhuma.</div>'};
+      +'<div class="dvlCpBt1124Note">Cada coluna long/short é uma conta de '+fmtUsd(acc0)+' separada. Estimativa in-sample, sem corretagem/slippage — calibra, não promete. '+(exact<tr?('Sinais antigos usam aproximação conservadora (MFE); '+exact+' de '+tr+' já usam a trajetória exata. '):'')+'Não abre ordem nenhuma.</div>'};
   }
 
   function render(){
