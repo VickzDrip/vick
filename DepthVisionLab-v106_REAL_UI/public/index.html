@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.127</title>
+<title>DVL — Beta 1.128</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.127';
+window.DVL_APP_VERSION = 'Beta 1.128';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.127";
+const DVL_APP_VERSION = "Beta 1.128";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.128", note: "Novo GATILHO aprendido do backtest: em vez de operar todo sinal, o sistema varre o limiar de conviction (a expectativa em ATR) e descobre o ponto acima do qual dá lucro LÍQUIDO (depois das taxas). O card do backtest mostra 'só operar quando a expectativa for ≥ X× ATR na direção' e diz, por lado, se vale operar (▲ long / ▼ short) ou evitar por ora — porque abaixo do limiar as taxas comem o edge. O card do modelo pré-pump/pré-short passa a marcar com ✓ as moedas que já passam do gatilho num lado que vale operar, então bate o olho e sabe direção + se a confirmação presta. O sweep tem trava anti-overfit (exige um mínimo de trades pra escolher o limiar). Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.127", note: "O backtest financeiro agora desconta CUSTOS REALISTAS de cada trade (taxa + slippage), então o edge que aparece é líquido, não fantasia. O custo é uma % do notional (padrão ~0.04%/lado de taxa MEXC taker + ~0.02%/lado de slippage) e — a parte importante — ele escala com a volatilidade de CADA ativo: como pra arriscar 1% com stop de 1 ATR você usa um notional maior em moeda de baixa volatilidade, ela paga proporcionalmente mais taxa (custo em ATR = custo% × preço/ATR). O card mostra o resultado LÍQUIDO e, pra comparar, quanto daria sem custos (dá pra ver a taxa comendo o edge). O sweep do melhor take-profit também já roda com custos (fee empurra o alvo ideal pra cima). Dá pra ajustar taxa/slippage por query (feePct/slipPct). Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.126", note: "Backtest financeiro agora usa TODOS os sinais já resolvidos pelo modelo na hora (antes esperava juntar sinais novos com trajetória de preço). Como todo sinal guarda o quanto andou pra cima/baixo em ATR, dá pra simular já: sinais antigos usam aproximação conservadora (MFE — se bateu stop e alvo, assume o stop primeiro), e os novos usam a trajetória exata; o card mostra quantos já usam a exata. Além disso o resultado agora vem SEPARADO entre pré-pump (long) e pré-short (short) — cada um uma conta de $1000 própria, com retorno e taxa de acerto por lado. Também tira o SOXL e outros ETFs alavancados (SOXS, TQQQ, SQQQ, SPXL, TSLL…) que tinham escapado do filtro. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.125", note: "Novo: BACKTEST FINANCEIRO do modelo pré-pump/pré-short (novo cartão no Copilot, logo abaixo do modelo). Pega cada sinal resolvido, segue a direção que o modelo previu e simula uma conta de $1000 com gestão de risco: arrisca 1% da conta por trade, stop em 1× ATR, e o tamanho da posição se ajusta pra bater exatamente esse 1% (então a conta compõe). Mostra pra quanto os $1000 teriam ido, o retorno %, o DRAWDOWN máximo e a taxa de acerto. E responde sua pergunta do 'quanto segurar': faz um sweep do take-profit (0.5× a 5× ATR) e mostra o ponto de saída que mais rendeu no conjunto de sinais. Honesto: é estimativa in-sample (o modelo treinou nos mesmos sinais), sem corretagem/slippage — calibra, não promete; e nunca abre ordem. Precisa de sinais com trajetória de preço guardada (registrados a partir desta versão), então o cartão mostra 'coletando' até juntar uns 20. Backend (pumpBacktest + endpoint + testes) exige reiniciar o dvl-scanner. Backend + frontend." },
@@ -71178,6 +71179,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 .dvlCpPm1120 .dvlCpPm1120Col.down h5{color:#ff5966;}
 .dvlCpPm1120 .dvlCpPm1120Item{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 8px;border-radius:9px;background:rgba(145,175,165,.06);margin-bottom:5px;min-width:0;}
 .dvlCpPm1120 .dvlCpPm1120Item b{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;font-weight:800;color:#d7e2dc;}
+.dvlCpPm1120 .dvlCpPm1120Go{font-style:normal;color:#10df77;font-weight:900;}
 .dvlCpPm1120 .dvlCpPm1120Item span{flex:0 0 auto;white-space:nowrap;font-size:11.5px;font-weight:900;}
 .dvlCpPm1120 .dvlCpPm1120Col.up .dvlCpPm1120Item span{color:#10df77;}
 .dvlCpPm1120 .dvlCpPm1120Col.down .dvlCpPm1120Item span{color:#ff5966;}
@@ -71221,11 +71223,24 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       .sort(function(a,b){ return Number(b[key])-Number(a[key]); }).slice(0,4);
   }
 
+  /* Gatilho aprendido pelo backtest (window.DVL_PUMP_BACKTEST.trigger): limiar
+     de ATR e se cada lado vale operar. Marca com ✓ as moedas que já passam do
+     limiar num lado que o backtest diz valer a pena. */
+  function trigInfo(){
+    var t=window.DVL_PUMP_BACKTEST && window.DVL_PUMP_BACKTEST.trigger;
+    if(!t) return null;
+    var mc=Number(t.minConv);
+    return { mc:isFinite(mc)?mc:null, longOk:!!(t.long&&t.long.operate), shortOk:!!(t.short&&t.short.operate) };
+  }
   function itemsHtml(list, key){
     if(!list.length) return '<div class="dvlCpPm1120Empty">—</div>';
+    var tg=trigInfo(), isLong=(key==="predUp");
+    var sideOk = tg ? (isLong?tg.longOk:tg.shortOk) : false;
     return list.map(function(r){
       var name=esc(r.symbol||r.mexc||"—").replace(/\/USDT$/,""), v=Number(r[key])||0;
-      return '<div class="dvlCpPm1120Item"><b>'+name+'</b><span>'+v.toFixed(1)+'×</span></div>';
+      var go = tg && tg.mc!=null && sideOk && v>=tg.mc;
+      var mark = go ? ' <i class="dvlCpPm1120Go" title="Passa do gatilho e o lado vale operar">✓</i>' : '';
+      return '<div class="dvlCpPm1120Item"><b>'+name+mark+'</b><span>'+v.toFixed(1)+'×</span></div>';
     }).join("");
   }
 
@@ -71304,6 +71319,9 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 .dvlCpBt1124 .dvlCpBt1124Cell .v.neg{color:#ff5966;} .dvlCpBt1124 .dvlCpBt1124Cell .v.pos{color:#10df77;}
 .dvlCpBt1124 .dvlCpBt1124Exit{margin-top:12px;padding:10px 12px;border-radius:10px;background:rgba(16,223,119,.08);border:1px solid rgba(16,223,119,.25);font-size:12px;color:#bfe9d4;line-height:1.5;}
 .dvlCpBt1124 .dvlCpBt1124Exit b{color:#10df77;}
+.dvlCpBt1124 .dvlCpBt1124Trig{margin-top:8px;padding:11px 12px;border-radius:10px;background:rgba(255,211,33,.07);border:1px solid rgba(255,211,33,.28);font-size:12.5px;color:#e6dcb4;line-height:1.55;}
+.dvlCpBt1124 .dvlCpBt1124Trig b{color:#ffd321;}
+.dvlCpBt1124 .dvlCpBt1124Trig .ok{color:#10df77;} .dvlCpBt1124 .dvlCpBt1124Trig .no{color:#ff5966;}
 .dvlCpBt1124 .dvlCpBt1124Note{margin-top:10px;font-size:10.5px;color:#697570;line-height:1.45;}
 .dvlCpBt1124 .dvlCpBt1124Bar{height:7px;border-radius:999px;background:rgba(145,175,165,.14);overflow:hidden;margin:10px 0 4px;}
 .dvlCpBt1124 .dvlCpBt1124Bar i{display:block;height:100%;background:linear-gradient(90deg,#0e9c5a,#10df77);border-radius:999px;}
@@ -71319,6 +71337,17 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   if(window.DVL_COPILOT_PUMP_BACKTEST_1124) return;
   function fmtUsd(v){ v=Number(v)||0; return "$"+v.toLocaleString("en-US",{maximumFractionDigits:0}); }
   function sign(v){ v=Number(v)||0; return (v>=0?"+":"")+v.toFixed(1)+"%"; }
+
+  /* Gatilho aprendido: o limiar de expectativa (ATR) acima do qual o backtest
+     fica lucrativo líquido, e se cada lado vale a pena operar. */
+  function trigHtml(t){
+    if(!t||typeof t!=="object") return '';
+    var mc=Number(t.minConv); if(!isFinite(mc)) return '';
+    var l=t.long||{}, s=t.short||{};
+    function tag(o){ return o&&o.operate ? '<b class="ok">vale operar</b>' : '<b class="no">evitar por ora</b>'; }
+    return '<div class="dvlCpBt1124Trig">🎯 <b>Gatilho:</b> só operar quando a expectativa do modelo for <b>≥ '+mc.toFixed(1)+'× ATR</b> na direção. '
+      +'▲ Long: '+tag(l)+' · ▼ Short: '+tag(s)+'. Abaixo desse limiar, as taxas comem o edge.</div>';
+  }
 
   function bodyHtml(){
     var s=window.DVL_PUMP_BACKTEST;
@@ -71364,6 +71393,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         + sideRow(s.short, '▼ Pré-short (short)', '#ff5966')
       +'</div>'
       +'<div class="dvlCpBt1124Exit">Melhor saída aprendida: <b>fechar ao andar '+tp.toFixed(1)+'× ATR a favor</b>. Foi o take-profit que mais rendeu já descontando os custos.</div>'
+      + trigHtml(s.trigger)
       +'<div class="dvlCpBt1124Note">Valores LÍQUIDOS (taxa ~'+((Number(p.feePct)||0).toFixed(2))+'%/lado + slippage ~'+((Number(p.slipPct)||0).toFixed(2))+'%/lado, custo por ativo escala com a volatilidade).'+grossNote+' Cada coluna long/short é uma conta de '+fmtUsd(acc0)+' separada. Estimativa in-sample — calibra, não promete. '+(exact<tr?(exact+' de '+tr+' trades usam a trajetória exata (o resto, aproximação MFE). '):'')+'Não abre ordem nenhuma.</div>'};
   }
 

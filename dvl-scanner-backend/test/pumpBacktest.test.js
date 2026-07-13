@@ -104,6 +104,23 @@ const sweep = BT.sweepTp(climber, alwaysLong, { slAtr: 1, riskPct: 0.01, tpGrid:
 ok(sweep.best.tpAtr === 3, "sweep picks TP=3 (fills highest, best return)");
 ok(sweep.grid.length === 4, "sweep returns full grid");
 
+// ── sweepMinConv (learned trigger) ────────────────────────────
+// Winners have high conviction (up=3), losers low (up=0.6). A gate at 1 keeps
+// only winners → best threshold should be > the loosest gate (0).
+const trg = [];
+for (let i = 0; i < 40; i++) {
+  const winner = i % 2 === 0;
+  trg.push({ f: [winner ? 1 : 0], entry: 100, atr: 2,
+    path: winner ? [[2.2, 0.1, 2.0]] : [[0.2, -1.2, -1.0]] });
+}
+const predConv = f => (f[0] === 1 ? { up: 3, down: 0 } : { up: 0.6, down: 0 });
+const cs = BT.sweepMinConv(trg, predConv, { slAtr: 1, tpAtr: 2, riskPct: 0.01, minTrades: 5, convGrid: [0, 1, 2] });
+ok(cs.best.minConv >= 1, "trigger gate excludes the low-conviction losers");
+ok(cs.grid.length === 3, "conv sweep returns the grid");
+// the minTrades guard: an absurdly high gate leaving <minTrades is not chosen
+const cs2 = BT.sweepMinConv(trg, predConv, { slAtr: 1, tpAtr: 2, minTrades: 5, convGrid: [0, 1, 999] });
+ok(cs2.best.minConv !== 999, "over-tight gate (too few trades) rejected");
+
 console.log(fail ? ("PUMP BACKTEST — " + pass + " passed, " + fail + " FAILED")
                  : ("OK — " + pass + " passed, 0 failed"));
 process.exit(fail ? 1 : 0);
