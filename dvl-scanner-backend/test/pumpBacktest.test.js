@@ -82,6 +82,20 @@ ok(longOnly.trades === 1 && longOnly.side === "long", "side:long takes only long
 const shortOnly = BT.run(bothSides, predBySample, { slAtr: 1, tpAtr: 2, side: "short" });
 ok(shortOnly.trades === 1 && shortOnly.side === "short", "side:short takes only short signals");
 
+// ── trading costs (fees + slippage) ───────────────────────────
+// A winning trade nets LESS with costs than without.
+const noFee = BT.run([{ f: [0], entry: 100, atr: 2, path: [[2.1, 0.1, 1.9]] }], alwaysLong, { slAtr: 1, tpAtr: 2, riskPct: 0.01, costFrac: 0 });
+const withFee = BT.run([{ f: [0], entry: 100, atr: 2, path: [[2.1, 0.1, 1.9]] }], alwaysLong, { slAtr: 1, tpAtr: 2, riskPct: 0.01, costFrac: 0.002 });
+ok(withFee.account < noFee.account, "costs reduce the net result");
+// costAtr = costFrac × entry/atr = 0.002 × 100/2 = 0.1 ATR → net pnl 2-0.1=1.9 ATR
+// account = 1000 × (1 + (1.9/1)×0.01) = 1019
+near(withFee.account, 1019, 1e-6, "cost charged as costFrac×entry/atr");
+ok(Math.abs(withFee.avgCostAtr - 0.1) < 1e-9, "avgCostAtr reported (0.1 ATR)");
+// low-volatility asset (small ATR%) pays MORE fee in ATR terms
+const hiVol = BT.run([{ f: [0], entry: 100, atr: 4, path: [[2.1, 0.1, 1.9]] }], alwaysLong, { slAtr: 1, tpAtr: 2, costFrac: 0.002 });
+const loVol = BT.run([{ f: [0], entry: 100, atr: 2, path: [[2.1, 0.1, 1.9]] }], alwaysLong, { slAtr: 1, tpAtr: 2, costFrac: 0.002 });
+ok(loVol.avgCostAtr > hiVol.avgCostAtr, "lower-volatility asset pays more fee (in ATR)");
+
 // ── sweepTp ───────────────────────────────────────────────────
 // Path runs to +3 then closes; a higher TP captures more, so best should be the
 // largest TP that still fills (3).

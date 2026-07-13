@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.126</title>
+<title>DVL — Beta 1.127</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.126';
+window.DVL_APP_VERSION = 'Beta 1.127';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.126";
+const DVL_APP_VERSION = "Beta 1.127";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.127", note: "O backtest financeiro agora desconta CUSTOS REALISTAS de cada trade (taxa + slippage), então o edge que aparece é líquido, não fantasia. O custo é uma % do notional (padrão ~0.04%/lado de taxa MEXC taker + ~0.02%/lado de slippage) e — a parte importante — ele escala com a volatilidade de CADA ativo: como pra arriscar 1% com stop de 1 ATR você usa um notional maior em moeda de baixa volatilidade, ela paga proporcionalmente mais taxa (custo em ATR = custo% × preço/ATR). O card mostra o resultado LÍQUIDO e, pra comparar, quanto daria sem custos (dá pra ver a taxa comendo o edge). O sweep do melhor take-profit também já roda com custos (fee empurra o alvo ideal pra cima). Dá pra ajustar taxa/slippage por query (feePct/slipPct). Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.126", note: "Backtest financeiro agora usa TODOS os sinais já resolvidos pelo modelo na hora (antes esperava juntar sinais novos com trajetória de preço). Como todo sinal guarda o quanto andou pra cima/baixo em ATR, dá pra simular já: sinais antigos usam aproximação conservadora (MFE — se bateu stop e alvo, assume o stop primeiro), e os novos usam a trajetória exata; o card mostra quantos já usam a exata. Além disso o resultado agora vem SEPARADO entre pré-pump (long) e pré-short (short) — cada um uma conta de $1000 própria, com retorno e taxa de acerto por lado. Também tira o SOXL e outros ETFs alavancados (SOXS, TQQQ, SQQQ, SPXL, TSLL…) que tinham escapado do filtro. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.125", note: "Novo: BACKTEST FINANCEIRO do modelo pré-pump/pré-short (novo cartão no Copilot, logo abaixo do modelo). Pega cada sinal resolvido, segue a direção que o modelo previu e simula uma conta de $1000 com gestão de risco: arrisca 1% da conta por trade, stop em 1× ATR, e o tamanho da posição se ajusta pra bater exatamente esse 1% (então a conta compõe). Mostra pra quanto os $1000 teriam ido, o retorno %, o DRAWDOWN máximo e a taxa de acerto. E responde sua pergunta do 'quanto segurar': faz um sweep do take-profit (0.5× a 5× ATR) e mostra o ponto de saída que mais rendeu no conjunto de sinais. Honesto: é estimativa in-sample (o modelo treinou nos mesmos sinais), sem corretagem/slippage — calibra, não promete; e nunca abre ordem. Precisa de sinais com trajetória de preço guardada (registrados a partir desta versão), então o cartão mostra 'coletando' até juntar uns 20. Backend (pumpBacktest + endpoint + testes) exige reiniciar o dvl-scanner. Backend + frontend." },
   { version: "Beta 1.124", note: "Tira do scanner (e do modelo pré-pump/pré-short) as AÇÕES, ÍNDICES, COMMODITIES e FOREX tokenizados da MEXC — SKHYNIXSTOCK, MUSTOCK, SAMSUNGSTOCK, NAS100, SPX500, XAU, WTI etc. Motivo: esses ativos quase não se mexem, então qualquer micro-variação vira 'muitos ATRs' e eles entupiam o topo do ranking de pré-pump/pré-short com ruído (e nem são cripto, não dava pra caçar pump neles). Filtro conservador por nome (contém STOCK + lista exata de índices/metais/energia/forex), com match EXATO pra nunca esconder cripto real tipo SPX6900 ou AAVE. Backend (novo módulo symbolFilter + teste) exige reiniciar o dvl-scanner; o card do Copilot já filtra no front como rede de segurança. Backend + frontend." },
@@ -71347,10 +71348,13 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         +'<div class="k" style="margin-top:2px">'+sign(r)+' · '+w.toFixed(0)+'% acerto</div></div>';
     }
     var exact=Number(s.exactPath)||0;
+    var costRt=Number(p.costRoundTripPct); if(!isFinite(costRt)) costRt=0;
+    var gross=Number(s.grossReturnPct);
+    var grossNote=(isFinite(gross))?(' Sem custos daria '+sign(gross)+' — a diferença é a taxa+slippage comendo o edge.'):'';
     return {on:true, html:''
       +'<h4><i class="dvlCpBt1124Dot"></i>Backtest financeiro · '+tr+' trades</h4>'
-      +'<p class="dvlCpBt1124Sub">Seguindo a direção do modelo em cada sinal, arriscando '+risk.toFixed(0)+'% da conta por trade, stop em '+sl.toFixed(1)+'× ATR.</p>'
-      +'<div class="dvlCpBt1124Big"><span class="dvlCpBt1124Eq '+eqCls+'">'+fmtUsd(acc)+'</span><span class="dvlCpBt1124From">de '+fmtUsd(acc0)+' · '+sign(ret)+'</span></div>'
+      +'<p class="dvlCpBt1124Sub">Seguindo a direção do modelo em cada sinal, arriscando '+risk.toFixed(0)+'% da conta por trade, stop em '+sl.toFixed(1)+'× ATR. Já com custos: ~'+costRt.toFixed(2)+'% por trade (taxa + slippage).</p>'
+      +'<div class="dvlCpBt1124Big"><span class="dvlCpBt1124Eq '+eqCls+'">'+fmtUsd(acc)+'</span><span class="dvlCpBt1124From">de '+fmtUsd(acc0)+' · '+sign(ret)+' líquido</span></div>'
       +'<div class="dvlCpBt1124Grid">'
         +'<div class="dvlCpBt1124Cell"><div class="k">Drawdown máx.</div><div class="v neg">-'+dd.toFixed(1)+'%</div></div>'
         +'<div class="dvlCpBt1124Cell"><div class="k">Taxa de acerto</div><div class="v">'+win.toFixed(0)+'%</div></div>'
@@ -71359,8 +71363,8 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         + sideRow(s.long, '▲ Pré-pump (long)', '#10df77')
         + sideRow(s.short, '▼ Pré-short (short)', '#ff5966')
       +'</div>'
-      +'<div class="dvlCpBt1124Exit">Melhor saída aprendida: <b>fechar ao andar '+tp.toFixed(1)+'× ATR a favor</b>. Foi o take-profit que mais rendeu no conjunto de sinais.</div>'
-      +'<div class="dvlCpBt1124Note">Cada coluna long/short é uma conta de '+fmtUsd(acc0)+' separada. Estimativa in-sample, sem corretagem/slippage — calibra, não promete. '+(exact<tr?('Sinais antigos usam aproximação conservadora (MFE); '+exact+' de '+tr+' já usam a trajetória exata. '):'')+'Não abre ordem nenhuma.</div>'};
+      +'<div class="dvlCpBt1124Exit">Melhor saída aprendida: <b>fechar ao andar '+tp.toFixed(1)+'× ATR a favor</b>. Foi o take-profit que mais rendeu já descontando os custos.</div>'
+      +'<div class="dvlCpBt1124Note">Valores LÍQUIDOS (taxa ~'+((Number(p.feePct)||0).toFixed(2))+'%/lado + slippage ~'+((Number(p.slipPct)||0).toFixed(2))+'%/lado, custo por ativo escala com a volatilidade).'+grossNote+' Cada coluna long/short é uma conta de '+fmtUsd(acc0)+' separada. Estimativa in-sample — calibra, não promete. '+(exact<tr?(exact+' de '+tr+' trades usam a trajetória exata (o resto, aproximação MFE). '):'')+'Não abre ordem nenhuma.</div>'};
   }
 
   function render(){

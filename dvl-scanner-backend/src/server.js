@@ -231,13 +231,22 @@ function createServer() {
       return res.json({ ok: true, ready: false, trained: !!st.trained, samples: samples.length, need: MIN });
     }
     const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+    /* Realistic trading cost per side, as PERCENT of notional: taker fee +
+       slippage. MEXC USDT-perp taker is ~0.02–0.04%; slippage on a market entry
+       adds a bit more. Round-trip cost fraction = 2 × (fee + slip) / 100. */
+    const feePct = Math.max(0, num(req.query.feePct, 0.04));   // per side
+    const slipPct = Math.max(0, num(req.query.slipPct, 0.02)); // per side
+    const costFrac = 2 * (feePct + slipPct) / 100;
     const opts = {
       account0: num(req.query.account0, 1000),
       riskPct: Math.min(0.2, Math.max(0.001, num(req.query.riskPct, 0.01))),
       slAtr: Math.max(0.1, num(req.query.slAtr, 1.0)),
-      minConv: Math.max(0, num(req.query.minConv, 0.5))
+      minConv: Math.max(0, num(req.query.minConv, 0.5)),
+      costFrac
     };
     const predict = pumpModel.predictFeatures;
+    /* Sweep the take-profit WITH costs — fees change the optimal exit (a bigger
+       TP amortises the fixed per-trade cost better). */
     const sweep = pumpBacktest.sweepTp(samples, predict, opts);
     const bestTp = sweep.best ? sweep.best.tpAtr : 2.0;
     const tuned = Object.assign({}, opts, { tpAtr: bestTp });
@@ -245,11 +254,15 @@ function createServer() {
     const all = pumpBacktest.run(samples, predict, tuned);
     const long = pumpBacktest.run(samples, predict, Object.assign({}, tuned, { side: "long" }));
     const short = pumpBacktest.run(samples, predict, Object.assign({}, tuned, { side: "short" }));
+    const gross = pumpBacktest.run(samples, predict, Object.assign({}, tuned, { costFrac: 0 }));
     res.json({
       ok: true, ready: true, horizon: pumpModel.HORIZON,
       samples: samples.length, withPath, exactPath: all.exactPath,
-      params: { account0: opts.account0, riskPct: opts.riskPct, slAtr: opts.slAtr, minConv: opts.minConv, tpAtr: bestTp },
-      best: strip(all), long: strip(long), short: strip(short), sweep: sweep.grid,
+      params: { account0: opts.account0, riskPct: opts.riskPct, slAtr: opts.slAtr, minConv: opts.minConv, tpAtr: bestTp,
+                feePct, slipPct, costRoundTripPct: costFrac * 100 },
+      best: strip(all), long: strip(long), short: strip(short),
+      grossReturnPct: gross.returnPct,   // same run with zero costs, for comparison
+      sweep: sweep.grid,
       equity: all.equity.filter((_, i) => i % Math.max(1, Math.ceil(all.equity.length / 120)) === 0)
     });
   });

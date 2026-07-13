@@ -64,10 +64,16 @@ function outcomeFor(s, side, slAtr, tpAtr) {
 }
 
 /* Run the full account simulation over the resolved signals.
-   samples: pumpModel dataset rows (need .f, and .path OR .up/.down).
-   predictFn(f) → {up,down} in ATR (the model).
-   opts: {account0, riskPct, slAtr, tpAtr, minConv, side}. `side` ("long"|
-   "short") restricts to just that direction — used for the long/short split. */
+   samples: pumpModel dataset rows (need .f, and .path OR .up/.down; .entry/.atr
+   let fees be charged realistically). predictFn(f) → {up,down} in ATR.
+   opts: {account0, riskPct, slAtr, tpAtr, minConv, side, costFrac}.
+   `side` restricts to one direction (long/short split). `costFrac` is the
+   ROUND-TRIP trading cost as a fraction of notional (fee + slippage, both
+   sides). It's converted to ATR per trade — costAtr = costFrac × (entry/atr) —
+   so a low-volatility asset (small ATR%) pays proportionally more, exactly as
+   in real life (you need a bigger notional to risk the same % with a 1-ATR
+   stop). Samples without entry/atr use the median ATR% of the ones that have
+   it. */
 function run(samples, predictFn, opts) {
   opts = opts || {};
   const account0 = opts.account0 != null ? opts.account0 : 1000;
@@ -76,9 +82,26 @@ function run(samples, predictFn, opts) {
   const tpAtr = opts.tpAtr != null ? opts.tpAtr : 2.0;
   const minConv = opts.minConv != null ? opts.minConv : 0;       // min favourable ATR to take a trade
   const onlySide = opts.side || null;
+  const costFrac = opts.costFrac != null ? opts.costFrac : 0;    // round-trip cost (fraction of notional)
+
+  /* Median ATR% (atr/entry) across samples that carry it, as the fallback for
+     older path-less signals — clamped to a sane crypto-perp floor so one
+     freak low-vol sample can't blow the fee up to infinity. */
+  const atrPcts = [];
+  for (const s of samples) {
+    const e = Number(s && s.entry), a = Number(s && s.atr);
+    if (e > 0 && a > 0) atrPcts.push(a / e);
+  }
+  atrPcts.sort((x, y) => x - y);
+  const medianAtrPct = atrPcts.length ? atrPcts[Math.floor(atrPcts.length / 2)] : 0.01;
+  const atrPctOf = s => {
+    const e = Number(s && s.entry), a = Number(s && s.atr);
+    const v = (e > 0 && a > 0) ? a / e : medianAtrPct;
+    return Math.max(0.0015, v);   // floor 0.15% ATR
+  };
 
   let account = account0, peak = account0, maxDD = 0;
-  let wins = 0, losses = 0, trades = 0, grossAtr = 0, exactPath = 0;
+  let wins = 0, losses = 0, trades = 0, grossAtr = 0, exactPath = 0, costAtrSum = 0;
   const equity = [account0];
 
   for (const s of samples) {
@@ -90,10 +113,13 @@ function run(samples, predictFn, opts) {
     const conv = side === "long" ? pred.up : pred.down;
     if (!(conv >= minConv)) continue;
 
-    const pnlAtr = outcomeFor(s, side, slAtr, tpAtr);
-    if (pnlAtr == null) continue;
+    const grossPnlAtr = outcomeFor(s, side, slAtr, tpAtr);
+    if (grossPnlAtr == null) continue;
     if (Array.isArray(s.path) && s.path.length) exactPath++;
-    const pnl$ = (pnlAtr / slAtr) * riskPct * account;   // risk-based sizing + compounding
+    const costAtr = costFrac > 0 ? costFrac / atrPctOf(s) : 0;   // = costFrac × entry/atr
+    const pnlAtr = grossPnlAtr - costAtr;                        // net of fees + slippage
+    costAtrSum += costAtr;
+    const pnl$ = (pnlAtr / slAtr) * riskPct * account;          // risk-based sizing + compounding
     account += pnl$;
     grossAtr += pnlAtr;
     if (pnlAtr > 0) wins++; else if (pnlAtr < 0) losses++;
@@ -111,9 +137,10 @@ function run(samples, predictFn, opts) {
     trades, wins, losses,
     winRate: trades ? (wins / trades) * 100 : 0,
     expectancyAtr: trades ? grossAtr / trades : 0,
+    avgCostAtr: trades ? costAtrSum / trades : 0,
     exactPath,                    // how many trades used the exact price path
     side: onlySide || "all",
-    slAtr, tpAtr, riskPct, minConv, equity
+    slAtr, tpAtr, riskPct, minConv, costFrac, equity
   };
 }
 
