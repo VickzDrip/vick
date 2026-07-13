@@ -237,47 +237,50 @@ function createServer() {
     const feePct = Math.max(0, num(req.query.feePct, 0.04));   // per side
     const slipPct = Math.max(0, num(req.query.slipPct, 0.02)); // per side
     const costFrac = 2 * (feePct + slipPct) / 100;
-    const opts = {
+    const base = {
       account0: num(req.query.account0, 1000),
       riskPct: Math.min(0.2, Math.max(0.001, num(req.query.riskPct, 0.01))),
-      slAtr: Math.max(0.1, num(req.query.slAtr, 1.0)),
-      minConv: 0,   // start ungated; the trigger is LEARNED below
       costFrac
     };
     const predict = pumpModel.predictFeatures;
-    /* Sweep the take-profit WITH costs — fees change the optimal exit (a bigger
-       TP amortises the fixed per-trade cost better). */
-    const sweep = pumpBacktest.sweepTp(samples, predict, opts);
-    const bestTp = sweep.best ? sweep.best.tpAtr : 2.0;
-    /* LEARN THE TRIGGER: at the best TP + real costs, find the minimum-
-       conviction gate that maximises the net result. "Only operate when the
-       model's favourable prediction ≥ this ATR." */
-    const convSweep = pumpBacktest.sweepMinConv(samples, predict, Object.assign({}, opts, { tpAtr: bestTp }));
-    const mcStar = convSweep.best ? convSweep.best.minConv : 0;
-    const tuned = Object.assign({}, opts, { tpAtr: bestTp, minConv: mcStar });
-    const strip = r => { const { equity, ...rest } = r; return rest; };
-    const all = pumpBacktest.run(samples, predict, tuned);
-    const long = pumpBacktest.run(samples, predict, Object.assign({}, tuned, { side: "long" }));
-    const short = pumpBacktest.run(samples, predict, Object.assign({}, tuned, { side: "short" }));
-    const gross = pumpBacktest.run(samples, predict, Object.assign({}, tuned, { costFrac: 0 }));
-    /* Per-side "is it worth operating this direction?" — net-positive AND a
-       positive per-trade expectancy at the learned gate. */
+    /* Different RISK MODES — one SL/TP profile is never right for everything.
+       Each is a fixed stop with its own take-profit search grid; evaluate()
+       learns the best TP + conviction gate per mode (net of costs). */
+    const MODES = [
+      { key: "scalp", label: "Scalp", slAtr: 0.8, tpGrid: [1, 1.5, 2, 2.5] },
+      { key: "normal", label: "Equilibrado", slAtr: 1.2, tpGrid: [1.5, 2, 3, 4] },
+      { key: "runner", label: "Runner", slAtr: 2.0, tpGrid: [3, 4, 5, 6, 8] }
+    ];
     const sideOk = r => (r.returnPct > 0 && r.expectancyAtr > 0);
+    const evals = MODES.map(m => ({
+      m, e: pumpBacktest.evaluate(samples, predict, Object.assign({}, base, { slAtr: m.slAtr, tpGrid: m.tpGrid }))
+    }));
+    const modes = evals.map(({ m, e }) => ({
+      key: m.key, label: m.label, slAtr: e.slAtr, tpAtr: e.tpAtr, minConv: e.minConv,
+      account: e.all.account, returnPct: e.all.returnPct, maxDrawdownPct: e.all.maxDrawdownPct,
+      winRate: e.all.winRate, trades: e.all.trades,
+      longOperate: sideOk(e.long), shortOperate: sideOk(e.short)
+    }));
+    /* Best mode = highest net final account. */
+    let bestIdx = 0;
+    for (let i = 1; i < evals.length; i++) if (evals[i].e.all.account > evals[bestIdx].e.all.account) bestIdx = i;
+    const bm = evals[bestIdx], e = bm.e;
+    const strip = r => { const { equity, ...rest } = r; return rest; };
     const trigger = {
-      minConv: mcStar,
-      long: { operate: sideOk(long), trades: long.trades, returnPct: long.returnPct, winRate: long.winRate, expectancyAtr: long.expectancyAtr },
-      short: { operate: sideOk(short), trades: short.trades, returnPct: short.returnPct, winRate: short.winRate, expectancyAtr: short.expectancyAtr }
+      minConv: e.minConv,
+      long: { operate: sideOk(e.long), trades: e.long.trades, returnPct: e.long.returnPct, winRate: e.long.winRate, expectancyAtr: e.long.expectancyAtr },
+      short: { operate: sideOk(e.short), trades: e.short.trades, returnPct: e.short.returnPct, winRate: e.short.winRate, expectancyAtr: e.short.expectancyAtr }
     };
     res.json({
       ok: true, ready: true, horizon: pumpModel.HORIZON,
-      samples: samples.length, withPath, exactPath: all.exactPath,
-      params: { account0: opts.account0, riskPct: opts.riskPct, slAtr: opts.slAtr, minConv: mcStar, tpAtr: bestTp,
-                feePct, slipPct, costRoundTripPct: costFrac * 100 },
-      trigger, convSweep: convSweep.grid,
-      best: strip(all), long: strip(long), short: strip(short),
-      grossReturnPct: gross.returnPct,   // same run with zero costs, for comparison
-      sweep: sweep.grid,
-      equity: all.equity.filter((_, i) => i % Math.max(1, Math.ceil(all.equity.length / 120)) === 0)
+      samples: samples.length, withPath, exactPath: e.all.exactPath,
+      modes, bestMode: bm.m.key,
+      params: { account0: base.account0, riskPct: base.riskPct, slAtr: e.slAtr, minConv: e.minConv, tpAtr: e.tpAtr,
+                mode: bm.m.key, modeLabel: bm.m.label, feePct, slipPct, costRoundTripPct: costFrac * 100 },
+      trigger, convSweep: e.convSweep,
+      best: strip(e.all), long: strip(e.long), short: strip(e.short),
+      grossReturnPct: e.grossReturnPct, sweep: e.sweep,
+      equity: e.all.equity.filter((_, i) => i % Math.max(1, Math.ceil(e.all.equity.length / 120)) === 0)
     });
   });
 

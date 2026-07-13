@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.128</title>
+<title>DVL — Beta 1.129</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.128';
+window.DVL_APP_VERSION = 'Beta 1.129';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.128";
+const DVL_APP_VERSION = "Beta 1.129";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.129", note: "Backtest financeiro agora testa MODOS DE RISCO diferentes em vez de um SL/TP único: Scalp (stop 0.8× ATR, alvos curtos), Equilibrado (stop 1.2×) e Runner (stop 2.0×, alvos longos). Pra cada modo ele acha o melhor take-profit + o gatilho de conviction (tudo líquido, com taxas) e mostra os três lado a lado com retorno e drawdown, destacando com ★ o que mais rendeu. O topo do card passa a operar no melhor modo. Assim dá pra ver que scalp apertado costuma morrer nas taxas enquanto deixar correr (runner) segura o edge — e escolher com base em dado, não achismo. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.128", note: "Novo GATILHO aprendido do backtest: em vez de operar todo sinal, o sistema varre o limiar de conviction (a expectativa em ATR) e descobre o ponto acima do qual dá lucro LÍQUIDO (depois das taxas). O card do backtest mostra 'só operar quando a expectativa for ≥ X× ATR na direção' e diz, por lado, se vale operar (▲ long / ▼ short) ou evitar por ora — porque abaixo do limiar as taxas comem o edge. O card do modelo pré-pump/pré-short passa a marcar com ✓ as moedas que já passam do gatilho num lado que vale operar, então bate o olho e sabe direção + se a confirmação presta. O sweep tem trava anti-overfit (exige um mínimo de trades pra escolher o limiar). Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.127", note: "O backtest financeiro agora desconta CUSTOS REALISTAS de cada trade (taxa + slippage), então o edge que aparece é líquido, não fantasia. O custo é uma % do notional (padrão ~0.04%/lado de taxa MEXC taker + ~0.02%/lado de slippage) e — a parte importante — ele escala com a volatilidade de CADA ativo: como pra arriscar 1% com stop de 1 ATR você usa um notional maior em moeda de baixa volatilidade, ela paga proporcionalmente mais taxa (custo em ATR = custo% × preço/ATR). O card mostra o resultado LÍQUIDO e, pra comparar, quanto daria sem custos (dá pra ver a taxa comendo o edge). O sweep do melhor take-profit também já roda com custos (fee empurra o alvo ideal pra cima). Dá pra ajustar taxa/slippage por query (feePct/slipPct). Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.126", note: "Backtest financeiro agora usa TODOS os sinais já resolvidos pelo modelo na hora (antes esperava juntar sinais novos com trajetória de preço). Como todo sinal guarda o quanto andou pra cima/baixo em ATR, dá pra simular já: sinais antigos usam aproximação conservadora (MFE — se bateu stop e alvo, assume o stop primeiro), e os novos usam a trajetória exata; o card mostra quantos já usam a exata. Além disso o resultado agora vem SEPARADO entre pré-pump (long) e pré-short (short) — cada um uma conta de $1000 própria, com retorno e taxa de acerto por lado. Também tira o SOXL e outros ETFs alavancados (SOXS, TQQQ, SQQQ, SPXL, TSLL…) que tinham escapado do filtro. Backend (exige reiniciar o dvl-scanner) + frontend." },
@@ -71322,6 +71323,16 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 .dvlCpBt1124 .dvlCpBt1124Trig{margin-top:8px;padding:11px 12px;border-radius:10px;background:rgba(255,211,33,.07);border:1px solid rgba(255,211,33,.28);font-size:12.5px;color:#e6dcb4;line-height:1.55;}
 .dvlCpBt1124 .dvlCpBt1124Trig b{color:#ffd321;}
 .dvlCpBt1124 .dvlCpBt1124Trig .ok{color:#10df77;} .dvlCpBt1124 .dvlCpBt1124Trig .no{color:#ff5966;}
+.dvlCpBt1124 .dvlCpBt1124Modes{margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+.dvlCpBt1124 .dvlCpBt1124ModesHd{font-size:10px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:#75827d;margin-bottom:1px;}
+.dvlCpBt1124 .dvlCpBt1124Mode{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:rgba(145,175,165,.06);border:1px solid transparent;}
+.dvlCpBt1124 .dvlCpBt1124Mode.best{border-color:rgba(16,223,119,.42);background:rgba(16,223,119,.07);}
+.dvlCpBt1124 .dvlCpBt1124Mode .nm{font-weight:900;font-size:12.5px;color:#e8f2ee;flex:0 0 auto;min-width:82px;}
+.dvlCpBt1124 .dvlCpBt1124Mode .nm small{display:block;font-weight:700;font-size:9.5px;color:#75827d;letter-spacing:.2px;}
+.dvlCpBt1124 .dvlCpBt1124Mode .rt{flex:1 1 auto;text-align:right;font-weight:900;font-size:14px;white-space:nowrap;}
+.dvlCpBt1124 .dvlCpBt1124Mode .rt.pos{color:#10df77;} .dvlCpBt1124 .dvlCpBt1124Mode .rt.neg{color:#ff5966;}
+.dvlCpBt1124 .dvlCpBt1124Mode .dd{flex:0 0 auto;font-weight:800;font-size:10.5px;color:#8fa39b;white-space:nowrap;}
+.dvlCpBt1124 .dvlCpBt1124Mode .star{flex:0 0 auto;color:#10df77;font-size:12px;}
 .dvlCpBt1124 .dvlCpBt1124Note{margin-top:10px;font-size:10.5px;color:#697570;line-height:1.45;}
 .dvlCpBt1124 .dvlCpBt1124Bar{height:7px;border-radius:999px;background:rgba(145,175,165,.14);overflow:hidden;margin:10px 0 4px;}
 .dvlCpBt1124 .dvlCpBt1124Bar i{display:block;height:100%;background:linear-gradient(90deg,#0e9c5a,#10df77);border-radius:999px;}
@@ -71335,6 +71346,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
    ponto de saída (sweep de take-profit). Estimativa in-sample, só leitura. */
 (function(){
   if(window.DVL_COPILOT_PUMP_BACKTEST_1124) return;
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
   function fmtUsd(v){ v=Number(v)||0; return "$"+v.toLocaleString("en-US",{maximumFractionDigits:0}); }
   function sign(v){ v=Number(v)||0; return (v>=0?"+":"")+v.toFixed(1)+"%"; }
 
@@ -71347,6 +71359,23 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     function tag(o){ return o&&o.operate ? '<b class="ok">vale operar</b>' : '<b class="no">evitar por ora</b>'; }
     return '<div class="dvlCpBt1124Trig">🎯 <b>Gatilho:</b> só operar quando a expectativa do modelo for <b>≥ '+mc.toFixed(1)+'× ATR</b> na direção. '
       +'▲ Long: '+tag(l)+' · ▼ Short: '+tag(s)+'. Abaixo desse limiar, as taxas comem o edge.</div>';
+  }
+
+  /* Comparação dos modos de risco (Scalp / Equilibrado / Runner), destacando o
+     que rende mais líquido. Cada modo tem seu stop e o backtest achou o melhor
+     alvo + gatilho pra ele. */
+  function modesHtml(list, bestKey){
+    if(!Array.isArray(list)||!list.length) return '';
+    var rows=list.map(function(m){
+      var r=Number(m.returnPct)||0, dd=Number(m.maxDrawdownPct)||0, best=(m.key===bestKey);
+      return '<div class="dvlCpBt1124Mode'+(best?' best':'')+'">'
+        +'<div class="nm">'+esc(m.label||m.key)+'<small>stop '+(Number(m.slAtr)||0).toFixed(1)+'× · alvo '+(Number(m.tpAtr)||0).toFixed(1)+'×</small></div>'
+        +'<div class="rt '+(r>=0?'pos':'neg')+'">'+sign(r)+'</div>'
+        +'<div class="dd">DD -'+dd.toFixed(0)+'%</div>'
+        +'<div class="star">'+(best?'★':'')+'</div>'
+      +'</div>';
+    }).join("");
+    return '<div class="dvlCpBt1124Modes"><div class="dvlCpBt1124ModesHd">Modos de risco (líquido)</div>'+rows+'</div>';
   }
 
   function bodyHtml(){
@@ -71380,9 +71409,10 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     var costRt=Number(p.costRoundTripPct); if(!isFinite(costRt)) costRt=0;
     var gross=Number(s.grossReturnPct);
     var grossNote=(isFinite(gross))?(' Sem custos daria '+sign(gross)+' — a diferença é a taxa+slippage comendo o edge.'):'';
+    var modeLbl=esc(p.modeLabel||p.mode||'');
     return {on:true, html:''
       +'<h4><i class="dvlCpBt1124Dot"></i>Backtest financeiro · '+tr+' trades</h4>'
-      +'<p class="dvlCpBt1124Sub">Seguindo a direção do modelo em cada sinal, arriscando '+risk.toFixed(0)+'% da conta por trade, stop em '+sl.toFixed(1)+'× ATR. Já com custos: ~'+costRt.toFixed(2)+'% por trade (taxa + slippage).</p>'
+      +'<p class="dvlCpBt1124Sub">Melhor modo: <b style="color:#10df77">'+modeLbl+'</b> — stop '+sl.toFixed(1)+'× ATR, arriscando '+risk.toFixed(0)+'% da conta por trade. Já com custos: ~'+costRt.toFixed(2)+'% por trade (taxa + slippage).</p>'
       +'<div class="dvlCpBt1124Big"><span class="dvlCpBt1124Eq '+eqCls+'">'+fmtUsd(acc)+'</span><span class="dvlCpBt1124From">de '+fmtUsd(acc0)+' · '+sign(ret)+' líquido</span></div>'
       +'<div class="dvlCpBt1124Grid">'
         +'<div class="dvlCpBt1124Cell"><div class="k">Drawdown máx.</div><div class="v neg">-'+dd.toFixed(1)+'%</div></div>'
@@ -71392,6 +71422,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         + sideRow(s.long, '▲ Pré-pump (long)', '#10df77')
         + sideRow(s.short, '▼ Pré-short (short)', '#ff5966')
       +'</div>'
+      + modesHtml(s.modes, s.bestMode)
       +'<div class="dvlCpBt1124Exit">Melhor saída aprendida: <b>fechar ao andar '+tp.toFixed(1)+'× ATR a favor</b>. Foi o take-profit que mais rendeu já descontando os custos.</div>'
       + trigHtml(s.trigger)
       +'<div class="dvlCpBt1124Note">Valores LÍQUIDOS (taxa ~'+((Number(p.feePct)||0).toFixed(2))+'%/lado + slippage ~'+((Number(p.slipPct)||0).toFixed(2))+'%/lado, custo por ativo escala com a volatilidade).'+grossNote+' Cada coluna long/short é uma conta de '+fmtUsd(acc0)+' separada. Estimativa in-sample — calibra, não promete. '+(exact<tr?(exact+' de '+tr+' trades usam a trajetória exata (o resto, aproximação MFE). '):'')+'Não abre ordem nenhuma.</div>'};

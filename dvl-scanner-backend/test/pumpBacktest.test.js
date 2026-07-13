@@ -121,6 +121,15 @@ ok(cs.grid.length === 3, "conv sweep returns the grid");
 const cs2 = BT.sweepMinConv(trg, predConv, { slAtr: 1, tpAtr: 2, minTrades: 5, convGrid: [0, 1, 999] });
 ok(cs2.best.minConv !== 999, "over-tight gate (too few trades) rejected");
 
+// ── evaluate (one risk mode → best TP + gate + runs) ──────────
+const evSamples = [];
+for (let i = 0; i < 40; i++) evSamples.push({ f: [0], entry: 100, atr: 2, path: [[3.1, -0.2, 2.9], [3.2, -0.3, 3.0]] });
+const ev = BT.evaluate(evSamples, alwaysLong, { slAtr: 1, tpGrid: [1, 2, 3], riskPct: 0.01, costFrac: 0 });
+ok(ev.tpAtr === 3, "evaluate picks best TP from the grid");
+ok(ev.all && ev.long && ev.all.trades === 40, "evaluate runs all/long/short");
+ok(typeof ev.minConv === "number", "evaluate returns a learned gate");
+ok(ev.slAtr === 1, "evaluate echoes the mode SL");
+
 console.log(fail ? ("PUMP BACKTEST — " + pass + " passed, " + fail + " FAILED")
                  : ("OK — " + pass + " passed, 0 failed"));
 process.exit(fail ? 1 : 0);
