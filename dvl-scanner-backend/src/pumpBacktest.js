@@ -54,9 +54,36 @@ function simulateMfe(up, down, side, slAtr, tpAtr) {
   return 0;
 }
 
-/* PnL (ATR) for one resolved signal: exact price path when we have it, else the
-   MFE/MAE approximation so EVERY already-resolved signal is usable now. */
-function outcomeFor(s, side, slAtr, tpAtr) {
+/* ADAPTIVE exit: an ATR trailing stop (no fixed target). Start with the stop
+   slAtr below entry; once the trade is up by ≥ trailAtr, ride the stop trailAtr
+   behind the best favourable excursion so far — locking profit while letting a
+   runner run. Works in favourable-signed ATR coordinates so long/short share
+   the code. Needs the real price path; the trailed stop is checked against each
+   bar using the peak from PRIOR bars only (never lets the same bar that dipped
+   also raise the stop first — conservative). Returns PnL in ATR. */
+function simulateTrail(path, side, slAtr, trailAtr) {
+  if (!Array.isArray(path) || !path.length) return 0;
+  const isLong = side === "long";
+  let maxFav = 0;
+  for (const c of path) {
+    const hi = Number(c[0]), lo = Number(c[1]);
+    const fhi = isLong ? hi : -lo;   // favourable extreme this bar
+    const flo = isLong ? lo : -hi;   // adverse extreme this bar (favourable-signed)
+    const stop = maxFav >= trailAtr ? (maxFav - trailAtr) : -slAtr;
+    if (flo <= stop) return stop;    // stopped out (stop may be > 0 = locked profit)
+    if (fhi > maxFav) maxFav = fhi;
+  }
+  const last = Number(path[path.length - 1][2]) || 0;
+  return isLong ? last : -last;
+}
+
+/* PnL (ATR) for one resolved signal. Trailing (adaptive) needs the exact path;
+   otherwise use the fixed bracket on the path, or the MFE/MAE approximation for
+   older path-less signals so EVERY resolved signal stays usable. */
+function outcomeFor(s, side, slAtr, tpAtr, trailAtr) {
+  if (trailAtr > 0) {
+    return (Array.isArray(s.path) && s.path.length) ? simulateTrail(s.path, side, slAtr, trailAtr) : null;
+  }
   if (Array.isArray(s.path) && s.path.length) return simulateTrade(s.path, side, slAtr, tpAtr);
   const up = Number(s.up), down = Number(s.down);
   if (Number.isFinite(up) && Number.isFinite(down)) return simulateMfe(up, down, side, slAtr, tpAtr);
@@ -83,6 +110,7 @@ function run(samples, predictFn, opts) {
   const minConv = opts.minConv != null ? opts.minConv : 0;       // min favourable ATR to take a trade
   const onlySide = opts.side || null;
   const costFrac = opts.costFrac != null ? opts.costFrac : 0;    // round-trip cost (fraction of notional)
+  const trailAtr = opts.trailAtr != null ? opts.trailAtr : 0;    // >0 → adaptive trailing stop (ignores tpAtr)
 
   /* Median ATR% (atr/entry) across samples that carry it, as the fallback for
      older path-less signals — clamped to a sane crypto-perp floor so one
@@ -113,7 +141,7 @@ function run(samples, predictFn, opts) {
     const conv = side === "long" ? pred.up : pred.down;
     if (!(conv >= minConv)) continue;
 
-    const grossPnlAtr = outcomeFor(s, side, slAtr, tpAtr);
+    const grossPnlAtr = outcomeFor(s, side, slAtr, tpAtr, trailAtr);
     if (grossPnlAtr == null) continue;
     if (Array.isArray(s.path) && s.path.length) exactPath++;
     const costAtr = costFrac > 0 ? costFrac / atrPctOf(s) : 0;   // = costFrac × entry/atr
@@ -140,7 +168,7 @@ function run(samples, predictFn, opts) {
     avgCostAtr: trades ? costAtrSum / trades : 0,
     exactPath,                    // how many trades used the exact price path
     side: onlySide || "all",
-    slAtr, tpAtr, riskPct, minConv, costFrac, equity
+    slAtr, tpAtr, trailAtr, riskPct, minConv, costFrac, equity
   };
 }
 
@@ -180,26 +208,70 @@ function sweepMinConv(samples, predictFn, opts) {
   return { grid: runs.map(summarize), best: summarize(best) };
 }
 
-/* Full evaluation for ONE risk profile (a fixed SL + a TP search grid): find
-   the best take-profit, then the best conviction gate, then run the tuned
-   all/long/short (net of costs) plus a gross reference. Returns everything the
-   card needs for that mode. */
+/* Sweep the trailing distance for the adaptive mode (analogous to sweepTp). */
+function sweepTrail(samples, predictFn, opts) {
+  opts = opts || {};
+  const grid = opts.trailGrid || [0.5, 1, 1.5, 2, 2.5, 3];
+  const runs = grid.map(tr => run(samples, predictFn, Object.assign({}, opts, { trailAtr: tr })));
+  let best = runs[0];
+  for (const r of runs) if (r.account > best.account) best = r;
+  const summarize = r => ({
+    trailAtr: r.trailAtr, returnPct: r.returnPct, maxDrawdownPct: r.maxDrawdownPct,
+    winRate: r.winRate, trades: r.trades, expectancyAtr: r.expectancyAtr
+  });
+  return { grid: runs.map(summarize), best: best ? summarize(best) : null };
+}
+
+/* NO-BLIND-SPOTS surface: net return for every SL × TP combination on a grid,
+   at a fixed conviction gate + real costs. Lets the whole landscape be seen
+   (heatmap) instead of a few chosen points, so the best cell can be judged for
+   robustness (is it a plateau or a lucky spike?). */
+function sweepGrid(samples, predictFn, opts) {
+  opts = opts || {};
+  const slGrid = opts.slGrid || [0.5, 0.8, 1, 1.2, 1.5, 2, 2.5, 3];
+  const tpGrid = opts.tpGrid || [1, 1.5, 2, 2.5, 3, 4, 5, 6];
+  const cells = [];
+  let best = null;
+  for (const sl of slGrid) for (const tp of tpGrid) {
+    const r = run(samples, predictFn, Object.assign({}, opts, { slAtr: sl, tpAtr: tp }));
+    const cell = { slAtr: sl, tpAtr: tp, returnPct: r.returnPct, winRate: r.winRate, trades: r.trades };
+    cells.push(cell);
+    if (!best || r.returnPct > best.returnPct) best = cell;
+  }
+  return { slGrid, tpGrid, cells, best };
+}
+
+/* Full evaluation for ONE risk profile. Fixed-bracket modes have a SL + a TP
+   search grid; the ADAPTIVE mode (opts.trail) has a SL + a trailing-distance
+   grid instead. Either way: learn the best exit, then the best conviction gate,
+   then run the tuned all/long/short (net of costs) plus a gross reference. */
 function evaluate(samples, predictFn, opts) {
   opts = Object.assign({ minConv: 0 }, opts || {});
-  const sweep = sweepTp(samples, predictFn, opts);
-  const bestTp = sweep.best ? sweep.best.tpAtr : (opts.tpAtr || 2);
-  const convSweep = sweepMinConv(samples, predictFn, Object.assign({}, opts, { tpAtr: bestTp }));
+  let exitKey, exitVal, sweepGridOut;
+  if (opts.trail) {
+    const sw = sweepTrail(samples, predictFn, opts);
+    exitVal = sw.best ? sw.best.trailAtr : (opts.trailAtr || 1.5);
+    exitKey = "trailAtr"; sweepGridOut = sw.grid;
+  } else {
+    const sw = sweepTp(samples, predictFn, opts);
+    exitVal = sw.best ? sw.best.tpAtr : (opts.tpAtr || 2);
+    exitKey = "tpAtr"; sweepGridOut = sw.grid;
+  }
+  const withExit = o => Object.assign({}, o, { [exitKey]: exitVal });
+  const convSweep = sweepMinConv(samples, predictFn, withExit(opts));
   const mcStar = convSweep.best ? convSweep.best.minConv : 0;
-  const tuned = Object.assign({}, opts, { tpAtr: bestTp, minConv: mcStar });
+  const tuned = withExit(Object.assign({}, opts, { minConv: mcStar }));
   const all = run(samples, predictFn, tuned);
   const long = run(samples, predictFn, Object.assign({}, tuned, { side: "long" }));
   const short = run(samples, predictFn, Object.assign({}, tuned, { side: "short" }));
   const gross = run(samples, predictFn, Object.assign({}, tuned, { costFrac: 0 }));
   return {
-    slAtr: opts.slAtr != null ? opts.slAtr : 1, tpAtr: bestTp, minConv: mcStar,
+    slAtr: opts.slAtr != null ? opts.slAtr : 1,
+    tpAtr: opts.trail ? 0 : exitVal, trailAtr: opts.trail ? exitVal : 0,
+    adaptive: !!opts.trail, minConv: mcStar,
     all, long, short, grossReturnPct: gross.returnPct,
-    sweep: sweep.grid, convSweep: convSweep.grid
+    sweep: sweepGridOut, convSweep: convSweep.grid
   };
 }
 
-module.exports = { simulateTrade, simulateMfe, outcomeFor, run, sweepTp, sweepMinConv, evaluate };
+module.exports = { simulateTrade, simulateMfe, simulateTrail, outcomeFor, run, sweepTp, sweepTrail, sweepMinConv, sweepGrid, evaluate };
