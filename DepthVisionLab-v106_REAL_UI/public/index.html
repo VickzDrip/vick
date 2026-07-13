@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.122</title>
+<title>DVL — Beta 1.123</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.122';
+window.DVL_APP_VERSION = 'Beta 1.123';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.122";
+const DVL_APP_VERSION = "Beta 1.123";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.123", note: "Conserta o bug do preço/escala que 'demorava pra voltar ao normal' em ativos só-MEXC (ex.: HYPE). Causa: a vela em formação só era atualizada ao vivo pelo WebSocket da Binance, que não conecta pra esses ativos — então a vela congelava no último refresh (a cada 15s) enquanto o preço ao vivo (fonte MEXC) continuava andando. O marcador verde descolava das velas e o eixo ficava com a escala velha (o mesmo sintoma no painel de OI). Agora a vela em formação é 'grudada' no preço ao vivo a cada 1s (atualiza fecho/máxima/mínima com o mesmo preço já mostrado no marcador) e, se a escala estiver travada, ela expande pra incluir o preço. Tem trava de sanidade (ignora preço absurdo, nunca mexe em vela fechada) e é no-op pra ativos da Binance. Só frontend." },
   { version: "Beta 1.122", note: "Conserta o layout do cartão pré-pump/pré-short no Copilot que estava vazando pra fora da tela: a coluna PRÉ-SHORT ficava cortada e valores como '6.6× ATR' quebravam em duas linhas quando o nome era longo (SKHYNIXSTOCK, SAMSUNGSTOCK). Agora as colunas encolhem certo, o nome trunca com '…' se precisar, o valor fica sempre numa linha (só o número + '×', a unidade ATR está no texto acima) e o cartão nunca ultrapassa a largura da tela. Só frontend." },
   { version: "Beta 1.121", note: "O modelo pré-pump/pré-short agora aparece também no Copilot (antes só estava no Scanner). Novo cartão no topo do Copilot: enquanto aprende, mostra a barra de progresso 'N/40 amostras'; quando treina, lista as moedas com maior expectativa de ALTA (pré-pump) e de QUEDA (pré-short) nas próximas 20 velas, em ATR. Só leitura, não abre ordem. Só frontend." },
   { version: "Beta 1.120", note: "Novo: modelo que aprende a pegar pré-pumps e pré-shorts SEPARADAMENTE, sem números fixos de %. Ele não usa um limite chutado — aprende sozinho o tamanho esperado do movimento nas próximas 20 velas, medido em ATR (volatilidade do próprio ativo), então 'grande' se ajusta a cada moeda. São dois modelos de regressão: um para a alta esperada (pré-pump/LONG) e outro para a queda esperada (pré-short/SHORT). Ele NÃO inventa dados: começa vazio e só aprende conforme os sinais 'spike pós-flat' disparam e resolvem 20 velas depois — leva dias/semanas de scanner rodando até prever. Enquanto aprende, o topo do scanner mostra 'Modelo aprendendo: N/40 amostras'; quando treina, cada moeda ganha uma etiqueta PUMP/SHORT com a expectativa em ATR. Backend + frontend." },
@@ -25752,6 +25753,45 @@ async function _fastPoll(){
 setInterval(_fastPoll, 2000);
 setTimeout(_fastPoll, 300); // primeiro tick logo no boot
 setInterval(drawSoon, 250);
+
+/* ── Cola a vela em formação no preço ao vivo ────────────────────────────────
+   Para ativos só-MEXC (ex.: HYPE) o WS de kline é da Binance e não conecta, e
+   o _fastPoll também é Binance — então entre os refreshes de 15s a última vela
+   "congela" enquanto o preço ao vivo (fonte MEXC) continua andando. Resultado:
+   o marcador verde descola das velas e a escala do eixo fica com o valor velho
+   ("demora pra voltar ao normal"). Aqui a gente gruda: dentro da janela da vela
+   atual, atualiza close/high/low com o MESMO preço que já é desenhado como
+   marcador, e, se a escala estiver travada, expande pra incluí-lo. Para ativos
+   da Binance o preço já bate com a vela, então isto vira no-op. */
+function _glueFormingCandle(){
+  if(!klines.length) return;
+  const p = Number(ticker?.lastPrice || marketEntryPrice || klines.at(-1)?.close);
+  if(!(p > 0)) return;
+  const last = klines[klines.length-1];
+  if(!last || !(last.close > 0)) return;
+  /* Sanidade: ignora preço absurdo (evita a "vela gigante" na troca de ativo,
+     quando o ticker do novo ativo poderia cair sobre as velas do antigo). */
+  if(Math.abs(p - last.close) / last.close > 0.5) return;
+  const step = intervalMs(interval);
+  const now = Date.now();
+  /* Só mexe na vela EM FORMAÇÃO (nunca numa vela já fechada). */
+  if(!(Number.isFinite(last.time) && now >= last.time && now < last.time + step)) return;
+  if(p === last.close) return;
+  last.close = p;
+  if(p > last.high) last.high = p;
+  if(p < last.low)  last.low  = p;
+  /* Escala travada e preço saiu da faixa → expande só o necessário. */
+  if(priceScaleLocked && Number.isFinite(priceViewCenter) && Number.isFinite(priceViewRange) && priceViewRange > 0){
+    const half = priceViewRange/2, top = priceViewCenter+half, bot = priceViewCenter-half;
+    if(p > top || p < bot){
+      const nTop = Math.max(top, p), nBot = Math.min(bot, p), pad = (nTop-nBot)*0.08;
+      priceViewCenter = ((nTop+pad)+(nBot-pad))/2;
+      priceViewRange  = (nTop+pad)-(nBot-pad);
+    }
+  }
+  drawSoon();
+}
+setInterval(_glueFormingCandle, 1000);
 
 // ── Kline WebSocket: candle em formação em tempo real ───────────────────
 let _klWs = null, _klWsSym = null, _klWsIv = null, _klWsLastDraw = 0;
