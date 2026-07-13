@@ -7,6 +7,7 @@
 const cfg = require("./config");
 const worker = require("./worker");
 const oiStore = require("./oiStore");
+const pumpModel = require("./pumpModel");
 const { mexc } = require("./exchanges");
 const { createServer } = require("./server");
 
@@ -34,6 +35,7 @@ function startOiSampler() {
   refreshDetail().finally(() => { tick(); setInterval(tick, SAMPLE_MS); });
   setInterval(refreshDetail, DETAIL_MS);
   setInterval(() => oiStore.save(), SAVE_MS);
+  setInterval(() => { try { pumpModel.save(); } catch (_) {} }, SAVE_MS);
 }
 
 (async () => {
@@ -54,7 +56,7 @@ function startOiSampler() {
 
   startOiSampler();
 
-  const shutdown = () => { try { oiStore.save(); } catch (_) {} worker.stop(); server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 2000); };
+  const shutdown = () => { try { oiStore.save(); } catch (_) {} try { pumpModel.save(); } catch (_) {} worker.stop(); server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 2000); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 })().catch(e => { console.error("[DVL] fatal:", e); process.exit(1); });

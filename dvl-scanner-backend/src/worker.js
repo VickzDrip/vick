@@ -17,6 +17,7 @@ const M = require("./metrics");
 const outcomes = require("./outcomes");
 const train = require("./train");
 const backtest = require("./backtest");
+const pumpModel = require("./pumpModel");
 
 /* Where the persistent signal registry is mirrored to disk so it survives
    restarts (deploys/reboots). Untracked by git, so `git pull` won't touch it. */
@@ -164,6 +165,7 @@ function buildRow(exKey, adapter, t, k, now, tf) {
     flatCandles: sig.flatCandles,
     barPct: sig.barPct,
     prevVolBelowHalf: sig.prevVolBelowHalf,
+    spikePrevVolRatio: sig.spikePrevVolRatio,
     priceGlueOk: sig.priceGlueOk,
     rsiOversoldOk: sig.rsiOversoldOk,
     rsiRecoveryFromLow: sig.rsiRecoveryFromLow,
@@ -304,6 +306,21 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
     row.oi = oiT.arrow; row.oiColor = oiT.color; row.oiRatio = oiT.ratio || 0; row.oiSlope = oiT.slope || 0;
     cur[cands[i].sym] = row;
     if (priceMap) priceMap[cands[i].sym] = row.price;
+
+    /* ── pré-pump / pré-short model ── predict the expected up/down move for
+       this live row (null until trained), resolve any pending outcomes for
+       this symbol from its fresh candles, and record a new spike-pós-flat
+       signal (isIgnition = the 2-block setup) for later resolution. */
+    try {
+      const pred = pumpModel.predict(row);
+      if (pred) { row.predUp = pred.up; row.predDown = pred.down; }
+      pumpModel.resolveWith(cands[i].sym, tf, k.ohlc);
+      if (row.isIgnition && Array.isArray(k.ohlc) && k.ohlc.length) {
+        const atr = M.computeAtr(k.ohlc, 14);
+        const sigT = Number(k.ohlc[k.ohlc.length - 1].time) || now;
+        if (atr > 0) pumpModel.record(cands[i].sym, tf, sigT, row.lastClose || row.price, atr, row);
+      }
+    } catch (_) { /* model is best-effort — never break a scan cycle */ }
   }
 
   /* Stash the FULL universe (all candidates, ranked by spike) for the
@@ -607,6 +624,11 @@ async function cycle() {
      runs on the manually-set weights only. Left the outcome logging above
      (harmless) but no model is ever fit. */
 
+  /* Pré-pump / pré-short model: (re)train on resolved signals. Cheap no-op
+     below MIN_SAMPLES, self-throttled to once/hour otherwise. Signals are
+     recorded + resolved inline in scanExchange as candles arrive. */
+  try { pumpModel.maybeTrain(); } catch (e) { console.warn("[DVL worker] pumpModel train:", e && e.message); }
+
   /* Mirror the registry to disk so signals survive restarts. */
   saveRegistry();
 }
@@ -666,6 +688,7 @@ async function start() {
   console.log("[DVL worker] starting 24h scan loop (every " + cfg.REFRESH_MS + "ms, " + cfg.TF_LIST.length + " timeframes)");
   loadRegistry();     // restore persisted signals so a restart doesn't reset the list
   outcomes.loadPending(); // restore pending outcome-log entries (ML groundwork)
+  try { pumpModel.load(); } catch (_) { }   // restore pré-pump/pré-short dataset + model
   const existingModel = train.loadModel();
   // Ignore a pre-LONG/SHORT-split model file (flat shape) — it has neither
   // key, so falling through to emptyModelStatus() just retrains from
