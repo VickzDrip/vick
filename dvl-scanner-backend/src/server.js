@@ -25,6 +25,7 @@ const { mexc } = require("./exchanges");
 const M = require("./metrics");
 const oiStore = require("./oiStore");
 const pumpModel = require("./pumpModel");
+const pumpBacktest = require("./pumpBacktest");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -211,6 +212,38 @@ function createServer() {
      whether it's trained enough to predict expected up/down moves (in ATR). */
   app.get("/api/dvl/scanner/pump-model", (req, res) => {
     res.json(Object.assign({ ok: true }, pumpModel.status()));
+  });
+
+  /* Financial backtest: replays the model's predicted direction over every
+     resolved signal that has a stored price path, simulating a $1000 account
+     with fixed-fractional risk + an ATR bracket, and sweeps the take-profit to
+     estimate the best exit. In-sample estimate — never a live order. Query:
+     account0, riskPct, slAtr, minConv override the defaults. */
+  app.get("/api/dvl/scanner/pump-backtest", (req, res) => {
+    const st = pumpModel.status();
+    const samples = pumpModel.getDataset();
+    const withPath = samples.filter(s => s && Array.isArray(s.path) && s.path.length).length;
+    const MIN = 20;
+    if (!st.trained || withPath < MIN) {
+      return res.json({ ok: true, ready: false, trained: !!st.trained, withPath, need: MIN, samples: st.samples });
+    }
+    const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+    const opts = {
+      account0: num(req.query.account0, 1000),
+      riskPct: Math.min(0.2, Math.max(0.001, num(req.query.riskPct, 0.01))),
+      slAtr: Math.max(0.1, num(req.query.slAtr, 1.0)),
+      minConv: Math.max(0, num(req.query.minConv, 0.5))
+    };
+    const sweep = pumpBacktest.sweepTp(samples, pumpModel.predictFeatures, opts);
+    const bestTp = sweep.best ? sweep.best.tpAtr : 2.0;
+    const best = pumpBacktest.run(samples, pumpModel.predictFeatures, Object.assign({}, opts, { tpAtr: bestTp }));
+    const { equity, ...bestSummary } = best;   // drop the raw curve from the headline object
+    res.json({
+      ok: true, ready: true, horizon: pumpModel.HORIZON, withPath,
+      params: { account0: opts.account0, riskPct: opts.riskPct, slAtr: opts.slAtr, minConv: opts.minConv, tpAtr: bestTp },
+      best: bestSummary, sweep: sweep.grid,
+      equity: equity.filter((_, i) => i % Math.max(1, Math.ceil(equity.length / 120)) === 0)  // downsampled curve
+    });
   });
 
   const server = http.createServer(app);
