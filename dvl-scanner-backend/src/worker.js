@@ -18,6 +18,7 @@ const outcomes = require("./outcomes");
 const train = require("./train");
 const backtest = require("./backtest");
 const pumpModel = require("./pumpModel");
+const { isTradableCrypto } = require("./symbolFilter");
 
 /* Where the persistent signal registry is mirrored to disk so it survives
    restarts (deploys/reboots). Untracked by git, so `git pull` won't touch it. */
@@ -261,6 +262,10 @@ function mergeRegistry(sigReg, cur, now) {
    a different data source. */
 async function scanCandidatesAndOi(adapter) {
   let cands = await adapter.tickers();
+  /* Drop tokenized stocks/indices/commodities/forex (SKHYNIXSTOCK, NAS100,
+     SPX500, XAU…). They barely move, so they'd dominate the ATR-normalised
+     pré-pump/pré-short ranking with noise — and they're not crypto. */
+  cands = cands.filter(c => isTradableCrypto(adapter.base(c.sym)));
   /* Sample the timestamped OI + funding series for EVERY MEXC symbol from the
      full ticker payload (before it's sliced down to top-volume candidates) —
      this is what lets the chart show real MEXC OI (and a funding-based proxy)
