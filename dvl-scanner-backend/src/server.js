@@ -249,14 +249,18 @@ function createServer() {
     const MODES = [
       { key: "scalp", label: "Scalp", slAtr: 0.8, tpGrid: [1, 1.5, 2, 2.5] },
       { key: "normal", label: "Equilibrado", slAtr: 1.2, tpGrid: [1.5, 2, 3, 4] },
-      { key: "runner", label: "Runner", slAtr: 2.0, tpGrid: [3, 4, 5, 6, 8] }
+      { key: "runner", label: "Runner", slAtr: 2.0, tpGrid: [3, 4, 5, 6, 8] },
+      /* Adaptive: fixed initial stop, ATR trailing exit (needs the price path). */
+      { key: "adapt", label: "Adaptativo", slAtr: 1.5, trail: true, trailGrid: [0.5, 1, 1.5, 2, 2.5, 3] }
     ];
     const sideOk = r => (r.returnPct > 0 && r.expectancyAtr > 0);
     const evals = MODES.map(m => ({
-      m, e: pumpBacktest.evaluate(samples, predict, Object.assign({}, base, { slAtr: m.slAtr, tpGrid: m.tpGrid }))
+      m, e: pumpBacktest.evaluate(samples, predict, Object.assign({}, base,
+        m.trail ? { slAtr: m.slAtr, trail: true, trailGrid: m.trailGrid } : { slAtr: m.slAtr, tpGrid: m.tpGrid }))
     }));
     const modes = evals.map(({ m, e }) => ({
-      key: m.key, label: m.label, slAtr: e.slAtr, tpAtr: e.tpAtr, minConv: e.minConv,
+      key: m.key, label: m.label, adaptive: !!e.adaptive,
+      slAtr: e.slAtr, tpAtr: e.tpAtr, trailAtr: e.trailAtr, minConv: e.minConv,
       account: e.all.account, returnPct: e.all.returnPct, maxDrawdownPct: e.all.maxDrawdownPct,
       winRate: e.all.winRate, trades: e.all.trades,
       longOperate: sideOk(e.long), shortOperate: sideOk(e.short)
@@ -271,13 +275,17 @@ function createServer() {
       long: { operate: sideOk(e.long), trades: e.long.trades, returnPct: e.long.returnPct, winRate: e.long.winRate, expectancyAtr: e.long.expectancyAtr },
       short: { operate: sideOk(e.short), trades: e.short.trades, returnPct: e.short.returnPct, winRate: e.short.winRate, expectancyAtr: e.short.expectancyAtr }
     };
+    /* No-blind-spots SL×TP surface at the learned gate — the whole landscape,
+       so the best combo can be judged for robustness (plateau vs lucky spike). */
+    const surface = pumpBacktest.sweepGrid(samples, predict, Object.assign({}, base, { minConv: e.minConv }));
     res.json({
       ok: true, ready: true, horizon: pumpModel.HORIZON,
       samples: samples.length, withPath, exactPath: e.all.exactPath,
       modes, bestMode: bm.m.key,
-      params: { account0: base.account0, riskPct: base.riskPct, slAtr: e.slAtr, minConv: e.minConv, tpAtr: e.tpAtr,
+      params: { account0: base.account0, riskPct: base.riskPct, slAtr: e.slAtr, minConv: e.minConv,
+                tpAtr: e.tpAtr, trailAtr: e.trailAtr, adaptive: !!e.adaptive,
                 mode: bm.m.key, modeLabel: bm.m.label, feePct, slipPct, costRoundTripPct: costFrac * 100 },
-      trigger, convSweep: e.convSweep,
+      trigger, convSweep: e.convSweep, surface,
       best: strip(e.all), long: strip(e.long), short: strip(e.short),
       grossReturnPct: e.grossReturnPct, sweep: e.sweep,
       equity: e.all.equity.filter((_, i) => i % Math.max(1, Math.ceil(e.all.equity.length / 120)) === 0)

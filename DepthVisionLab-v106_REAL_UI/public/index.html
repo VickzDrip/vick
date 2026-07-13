@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.129</title>
+<title>DVL — Beta 1.130</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.129';
+window.DVL_APP_VERSION = 'Beta 1.130';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.129";
+const DVL_APP_VERSION = "Beta 1.130";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.130", note: "Duas coisas no backtest: (1) modo ADAPTATIVO — um trailing stop em ATR, que em vez de alvo fixo sobe o stop atrás do preço, deixa o lucro correr e protege quando vira; entra na comparação de modos junto com Scalp/Equilibrado/Runner e costuma ganhar em drawdown. (2) MAPA DE CALOR sem pontos cegos: em vez de só alguns pontos, mostra o retorno líquido de TODA combinação de stop × alvo numa grade colorida (verde lucro, vermelho prejuízo, ★ no melhor). Assim dá pra ver se o melhor é uma ZONA robusta ou um pico sortudo — e escolher com o terreno inteiro à vista. Obs.: o modo adaptativo usa só sinais com trajetória de preço guardada (os novos), então o nº de trades dele cresce com o tempo. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.129", note: "Backtest financeiro agora testa MODOS DE RISCO diferentes em vez de um SL/TP único: Scalp (stop 0.8× ATR, alvos curtos), Equilibrado (stop 1.2×) e Runner (stop 2.0×, alvos longos). Pra cada modo ele acha o melhor take-profit + o gatilho de conviction (tudo líquido, com taxas) e mostra os três lado a lado com retorno e drawdown, destacando com ★ o que mais rendeu. O topo do card passa a operar no melhor modo. Assim dá pra ver que scalp apertado costuma morrer nas taxas enquanto deixar correr (runner) segura o edge — e escolher com base em dado, não achismo. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.128", note: "Novo GATILHO aprendido do backtest: em vez de operar todo sinal, o sistema varre o limiar de conviction (a expectativa em ATR) e descobre o ponto acima do qual dá lucro LÍQUIDO (depois das taxas). O card do backtest mostra 'só operar quando a expectativa for ≥ X× ATR na direção' e diz, por lado, se vale operar (▲ long / ▼ short) ou evitar por ora — porque abaixo do limiar as taxas comem o edge. O card do modelo pré-pump/pré-short passa a marcar com ✓ as moedas que já passam do gatilho num lado que vale operar, então bate o olho e sabe direção + se a confirmação presta. O sweep tem trava anti-overfit (exige um mínimo de trades pra escolher o limiar). Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.127", note: "O backtest financeiro agora desconta CUSTOS REALISTAS de cada trade (taxa + slippage), então o edge que aparece é líquido, não fantasia. O custo é uma % do notional (padrão ~0.04%/lado de taxa MEXC taker + ~0.02%/lado de slippage) e — a parte importante — ele escala com a volatilidade de CADA ativo: como pra arriscar 1% com stop de 1 ATR você usa um notional maior em moeda de baixa volatilidade, ela paga proporcionalmente mais taxa (custo em ATR = custo% × preço/ATR). O card mostra o resultado LÍQUIDO e, pra comparar, quanto daria sem custos (dá pra ver a taxa comendo o edge). O sweep do melhor take-profit também já roda com custos (fee empurra o alvo ideal pra cima). Dá pra ajustar taxa/slippage por query (feePct/slipPct). Backend (exige reiniciar o dvl-scanner) + frontend." },
@@ -71333,6 +71334,14 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 .dvlCpBt1124 .dvlCpBt1124Mode .rt.pos{color:#10df77;} .dvlCpBt1124 .dvlCpBt1124Mode .rt.neg{color:#ff5966;}
 .dvlCpBt1124 .dvlCpBt1124Mode .dd{flex:0 0 auto;font-weight:800;font-size:10.5px;color:#8fa39b;white-space:nowrap;}
 .dvlCpBt1124 .dvlCpBt1124Mode .star{flex:0 0 auto;color:#10df77;font-size:12px;}
+.dvlCpBt1124 .dvlCpBt1124Heat{margin-top:12px;}
+.dvlCpBt1124 .dvlCpBt1124HeatHd{font-size:10px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:#75827d;margin-bottom:6px;}
+.dvlCpBt1124 .dvlCpBt1124HeatWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.dvlCpBt1124 .dvlCpBt1124HeatGrid{display:grid;gap:2px;min-width:270px;}
+.dvlCpBt1124 .dvlCpBt1124HeatCell{height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;color:#eafff4;}
+.dvlCpBt1124 .dvlCpBt1124HeatCell.best{outline:2px solid #ffd321;outline-offset:-2px;}
+.dvlCpBt1124 .dvlCpBt1124HeatAx{height:22px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#8fa39b;}
+.dvlCpBt1124 .dvlCpBt1124HeatLeg{font-size:9.5px;color:#697570;margin-top:6px;line-height:1.4;}
 .dvlCpBt1124 .dvlCpBt1124Note{margin-top:10px;font-size:10.5px;color:#697570;line-height:1.45;}
 .dvlCpBt1124 .dvlCpBt1124Bar{height:7px;border-radius:999px;background:rgba(145,175,165,.14);overflow:hidden;margin:10px 0 4px;}
 .dvlCpBt1124 .dvlCpBt1124Bar i{display:block;height:100%;background:linear-gradient(90deg,#0e9c5a,#10df77);border-radius:999px;}
@@ -71368,14 +71377,41 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     if(!Array.isArray(list)||!list.length) return '';
     var rows=list.map(function(m){
       var r=Number(m.returnPct)||0, dd=Number(m.maxDrawdownPct)||0, best=(m.key===bestKey);
+      var exitTxt=m.adaptive ? ('trailing '+(Number(m.trailAtr)||0).toFixed(1)+'×') : ('alvo '+(Number(m.tpAtr)||0).toFixed(1)+'×');
       return '<div class="dvlCpBt1124Mode'+(best?' best':'')+'">'
-        +'<div class="nm">'+esc(m.label||m.key)+'<small>stop '+(Number(m.slAtr)||0).toFixed(1)+'× · alvo '+(Number(m.tpAtr)||0).toFixed(1)+'×</small></div>'
+        +'<div class="nm">'+esc(m.label||m.key)+'<small>stop '+(Number(m.slAtr)||0).toFixed(1)+'× · '+exitTxt+'</small></div>'
         +'<div class="rt '+(r>=0?'pos':'neg')+'">'+sign(r)+'</div>'
         +'<div class="dd">DD -'+dd.toFixed(0)+'%</div>'
         +'<div class="star">'+(best?'★':'')+'</div>'
       +'</div>';
     }).join("");
     return '<div class="dvlCpBt1124Modes"><div class="dvlCpBt1124ModesHd">Modos de risco (líquido)</div>'+rows+'</div>';
+  }
+
+  /* Mapa de calor da superfície SL×TP — o retorno líquido de CADA combinação de
+     stop×alvo, pra ver o terreno inteiro sem pontos cegos e checar se o melhor
+     é uma zona robusta ou um pico sortudo. */
+  function heatmapHtml(sf){
+    if(!sf||!Array.isArray(sf.cells)||!sf.cells.length) return '';
+    var sls=sf.slGrid||[], tps=sf.tpGrid||[], map={};
+    sf.cells.forEach(function(c){ map[c.slAtr+'|'+c.tpAtr]=c; });
+    var scale=1; sf.cells.forEach(function(c){ scale=Math.max(scale, Math.abs(Number(c.returnPct)||0)); });
+    function col(v){ var a=Math.max(0.08,Math.min(0.92,Math.abs(v)/scale)); return v>=0?'rgba(16,223,119,'+a+')':'rgba(255,89,102,'+a+')'; }
+    var bestKey=sf.best?(sf.best.slAtr+'|'+sf.best.tpAtr):'';
+    var g='<div class="dvlCpBt1124HeatGrid" style="grid-template-columns:30px repeat('+tps.length+',1fr)">';
+    g+='<div class="dvlCpBt1124HeatAx" title="linhas = stop, colunas = alvo">·</div>';
+    tps.forEach(function(tp){ g+='<div class="dvlCpBt1124HeatAx">'+tp+'×</div>'; });
+    sls.forEach(function(sl){
+      g+='<div class="dvlCpBt1124HeatAx">'+sl+'×</div>';
+      tps.forEach(function(tp){
+        var c=map[sl+'|'+tp], v=c?(Number(c.returnPct)||0):0, isBest=((sl+'|'+tp)===bestKey);
+        g+='<div class="dvlCpBt1124HeatCell'+(isBest?' best':'')+'" style="background:'+col(v)+'" title="stop '+sl+'× / alvo '+tp+'×: '+(v>=0?'+':'')+v.toFixed(0)+'%">'+(v>=0?'+':'')+v.toFixed(0)+'</div>';
+      });
+    });
+    g+='</div>';
+    return '<div class="dvlCpBt1124Heat"><div class="dvlCpBt1124HeatHd">Superfície stop × alvo — retorno líquido</div>'
+      +'<div class="dvlCpBt1124HeatWrap">'+g+'</div>'
+      +'<div class="dvlCpBt1124HeatLeg">Linhas = stop, colunas = alvo (em ATR). Verde lucro · vermelho prejuízo · ★ contorno = melhor. Procure uma ZONA verde (robusto), não uma célula solta.</div></div>';
   }
 
   function bodyHtml(){
@@ -71423,7 +71459,10 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         + sideRow(s.short, '▼ Pré-short (short)', '#ff5966')
       +'</div>'
       + modesHtml(s.modes, s.bestMode)
-      +'<div class="dvlCpBt1124Exit">Melhor saída aprendida: <b>fechar ao andar '+tp.toFixed(1)+'× ATR a favor</b>. Foi o take-profit que mais rendeu já descontando os custos.</div>'
+      + heatmapHtml(s.surface)
+      + (p.adaptive
+          ? '<div class="dvlCpBt1124Exit">Saída adaptativa: <b>trailing stop de '+(Number(p.trailAtr)||0).toFixed(1)+'× ATR</b> — o stop sobe atrás do preço, deixa o lucro correr e protege quando vira.</div>'
+          : '<div class="dvlCpBt1124Exit">Melhor saída aprendida: <b>fechar ao andar '+tp.toFixed(1)+'× ATR a favor</b>. Foi o take-profit que mais rendeu já descontando os custos.</div>')
       + trigHtml(s.trigger)
       +'<div class="dvlCpBt1124Note">Valores LÍQUIDOS (taxa ~'+((Number(p.feePct)||0).toFixed(2))+'%/lado + slippage ~'+((Number(p.slipPct)||0).toFixed(2))+'%/lado, custo por ativo escala com a volatilidade).'+grossNote+' Cada coluna long/short é uma conta de '+fmtUsd(acc0)+' separada. Estimativa in-sample — calibra, não promete. '+(exact<tr?(exact+' de '+tr+' trades usam a trajetória exata (o resto, aproximação MFE). '):'')+'Não abre ordem nenhuma.</div>'};
   }

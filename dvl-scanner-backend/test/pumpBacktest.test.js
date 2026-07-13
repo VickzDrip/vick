@@ -130,6 +130,30 @@ ok(ev.all && ev.long && ev.all.trades === 40, "evaluate runs all/long/short");
 ok(typeof ev.minConv === "number", "evaluate returns a learned gate");
 ok(ev.slAtr === 1, "evaluate echoes the mode SL");
 
+// ── simulateTrail (adaptive trailing stop) ────────────────────
+// Long runs up to +3 (bars make higher highs), never dips trailAtr back →
+// exits at horizon last close (2.9). trail never triggers mid-run.
+near(BT.simulateTrail([[1,0.5,0.9],[2,1.4,1.9],[3,2.4,2.9]], "long", 1, 1), 2.9, 1e-9, "trail rides a clean runner to close");
+// Long: peaks at +3 then a bar dips 1.4 below peak (low 1.6) with trail 1 →
+// stop trailed to 3-1=2 → low 1.6 <= 2 → exit at +2.
+near(BT.simulateTrail([[3,2.5,2.9],[3,1.6,1.8]], "long", 1, 1), 2, 1e-9, "trail locks profit at peak-trail");
+// Long: immediate drop to -1.2 before any profit → initial stop -1 hit.
+ok(BT.simulateTrail([[0.2,-1.2,-1.0]], "long", 1, 1) === -1, "trail uses initial stop before profit");
+// short mirror: favourable is down; drops to -3 then bounces up 1 → locks +2
+near(BT.simulateTrail([[ -2.5,-3,-2.9],[ -1.8,-1.6,-1.7]], "short", 1, 1), 2, 1e-9, "trail works short");
+// trailing ignores path-less samples (needs the path)
+ok(BT.outcomeFor({ up: 3, down: 0 }, "long", 1, 2, 1.5) === null, "trailing skips MFE-only signals");
+
+// sweepTrail returns a grid + best
+const trSweep = BT.sweepTrail([{ f: [0], entry: 100, atr: 2, path: [[1,0.5,0.9],[3,2.5,2.9],[3,1.9,2.1]] }], alwaysLong, { slAtr: 1, trailGrid: [0.5, 1, 2], riskPct: 0.01 });
+ok(trSweep.grid.length === 3 && trSweep.best, "sweepTrail returns grid + best");
+
+// ── sweepGrid (no blind spots) ────────────────────────────────
+const gs = BT.sweepGrid([{ f: [0], entry: 100, atr: 2, path: [[2.1, 0.1, 1.9]] }], alwaysLong, { slGrid: [1, 2], tpGrid: [1, 2, 3], riskPct: 0.01 });
+ok(gs.cells.length === 6, "grid covers every SL×TP cell (2×3)");
+ok(gs.best && typeof gs.best.returnPct === "number", "grid reports the best cell");
+ok(gs.slGrid.length === 2 && gs.tpGrid.length === 3, "grid echoes its axes");
+
 console.log(fail ? ("PUMP BACKTEST — " + pass + " passed, " + fail + " FAILED")
                  : ("OK — " + pass + " passed, 0 failed"));
 process.exit(fail ? 1 : 0);
