@@ -88,15 +88,22 @@ function resolveWith(sym, tf, ohlc) {
       keep.push(p); continue;   // not enough candles yet
     }
     let maxHigh = -Infinity, minLow = Infinity;
+    /* Forward price path over the window, ATR-normalised relative to entry:
+       [hiΔ, loΔ, clΔ] per candle. This is what lets the financial backtest
+       replay any SL/TP bracket (in ATR units) without re-fetching candles. */
+    const path = [];
     for (let i = idx + 1; i <= end; i++) {
-      const h = Number(ohlc[i].high), l = Number(ohlc[i].low);
+      const h = Number(ohlc[i].high), l = Number(ohlc[i].low), c = Number(ohlc[i].close);
       if (Number.isFinite(h) && h > maxHigh) maxHigh = h;
       if (Number.isFinite(l) && l < minLow) minLow = l;
+      if (p.atr > 0 && Number.isFinite(h) && Number.isFinite(l) && Number.isFinite(c)) {
+        path.push([(h - p.price) / p.atr, (l - p.price) / p.atr, (c - p.price) / p.atr]);
+      }
     }
     if (Number.isFinite(maxHigh) && Number.isFinite(minLow) && p.atr > 0) {
       const up = Math.max(0, (maxHigh - p.price) / p.atr);
       const down = Math.max(0, (p.price - minLow) / p.atr);
-      dataset.push({ f: p.f, up: up, down: down });
+      dataset.push({ f: p.f, up: up, down: down, entry: p.price, atr: p.atr, path: path });
       if (dataset.length > DATA_MAX) dataset.shift();
       resolved++;
     }
@@ -191,6 +198,16 @@ function predict(r) {
   return { up: predictVec(f, "up"), down: predictVec(f, "down") };
 }
 
+/* Same as predict() but from an already-extracted feature vector — used by the
+   financial backtest to re-run the model over stored resolved signals. */
+function predictFeatures(f) {
+  if (!model || !model.trained || !Array.isArray(f)) return null;
+  return { up: predictVec(f, "up"), down: predictVec(f, "down") };
+}
+
+/* Read-only handle on the resolved-signal dataset (for the backtest). */
+function getDataset() { return dataset; }
+
 function status() {
   return {
     horizon: HORIZON, minSamples: MIN_SAMPLES,
@@ -219,4 +236,4 @@ function load() {
   try { model = JSON.parse(fs.readFileSync(MODEL_FILE, "utf8")); } catch (_) { model = null; }
 }
 
-module.exports = { record, resolveWith, maybeTrain, predict, status, save, load, featuresOf, fit, gaussianSolve, FEATURES, HORIZON };
+module.exports = { record, resolveWith, maybeTrain, predict, predictFeatures, getDataset, status, save, load, featuresOf, fit, gaussianSolve, FEATURES, HORIZON };
