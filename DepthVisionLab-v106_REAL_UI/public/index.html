@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.121</title>
+<title>DVL — Beta 1.122</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.121';
+window.DVL_APP_VERSION = 'Beta 1.122';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.121";
+const DVL_APP_VERSION = "Beta 1.122";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.122", note: "Conserta o layout do cartão pré-pump/pré-short no Copilot que estava vazando pra fora da tela: a coluna PRÉ-SHORT ficava cortada e valores como '6.6× ATR' quebravam em duas linhas quando o nome era longo (SKHYNIXSTOCK, SAMSUNGSTOCK). Agora as colunas encolhem certo, o nome trunca com '…' se precisar, o valor fica sempre numa linha (só o número + '×', a unidade ATR está no texto acima) e o cartão nunca ultrapassa a largura da tela. Só frontend." },
   { version: "Beta 1.121", note: "O modelo pré-pump/pré-short agora aparece também no Copilot (antes só estava no Scanner). Novo cartão no topo do Copilot: enquanto aprende, mostra a barra de progresso 'N/40 amostras'; quando treina, lista as moedas com maior expectativa de ALTA (pré-pump) e de QUEDA (pré-short) nas próximas 20 velas, em ATR. Só leitura, não abre ordem. Só frontend." },
   { version: "Beta 1.120", note: "Novo: modelo que aprende a pegar pré-pumps e pré-shorts SEPARADAMENTE, sem números fixos de %. Ele não usa um limite chutado — aprende sozinho o tamanho esperado do movimento nas próximas 20 velas, medido em ATR (volatilidade do próprio ativo), então 'grande' se ajusta a cada moeda. São dois modelos de regressão: um para a alta esperada (pré-pump/LONG) e outro para a queda esperada (pré-short/SHORT). Ele NÃO inventa dados: começa vazio e só aprende conforme os sinais 'spike pós-flat' disparam e resolvem 20 velas depois — leva dias/semanas de scanner rodando até prever. Enquanto aprende, o topo do scanner mostra 'Modelo aprendendo: N/40 amostras'; quando treina, cada moeda ganha uma etiqueta PUMP/SHORT com a expectativa em ATR. Backend + frontend." },
   { version: "Beta 1.119", note: "Conserta o marcador 'spike pós-flat' do gráfico que ficava mudando/piscando. Causa: ele marcava também a vela AO VIVO (ainda em formação), cujo volume muda a cada tick — então o destaque aparecia e sumia. Agora ele só marca velas FECHADAS: o spike pós-flat confirma no fechamento da vela e fica fixo (não muda mais depois). Só frontend." },
@@ -71107,7 +71108,8 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 </script>
 
 <style id="DVL_COPILOT_PUMP_MODEL_1120_CSS">
-.dvlCpPm1120{margin:12px 0;border:1px solid rgba(145,175,165,.18);border-radius:16px;background:linear-gradient(135deg,rgba(6,17,15,.96),rgba(1,6,6,.96));padding:16px 18px;}
+.dvlCpPm1120{box-sizing:border-box;max-width:100%;overflow:hidden;margin:12px 0;border:1px solid rgba(145,175,165,.18);border-radius:16px;background:linear-gradient(135deg,rgba(6,17,15,.96),rgba(1,6,6,.96));padding:16px 16px;}
+.dvlCpPm1120 *{box-sizing:border-box;}
 .dvlCpPm1120 h4{margin:0 0 3px;font-size:15px;font-weight:900;color:#e8f2ee;letter-spacing:.2px;display:flex;align-items:center;gap:8px;}
 .dvlCpPm1120 h4 .dvlCpPm1120Dot{width:9px;height:9px;border-radius:50%;background:#ffd321;box-shadow:0 0 8px rgba(255,211,33,.6);}
 .dvlCpPm1120.on h4 .dvlCpPm1120Dot{background:#10df77;box-shadow:0 0 8px rgba(16,223,119,.6);}
@@ -71115,13 +71117,14 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 .dvlCpPm1120 .dvlCpPm1120Bar{height:7px;border-radius:999px;background:rgba(145,175,165,.14);overflow:hidden;margin:10px 0 4px;}
 .dvlCpPm1120 .dvlCpPm1120Bar i{display:block;height:100%;background:linear-gradient(90deg,#0e9c5a,#10df77);border-radius:999px;transition:width .4s ease;}
 .dvlCpPm1120 .dvlCpPm1120BarLbl{font-size:11px;color:#75827d;font-weight:700;}
-.dvlCpPm1120 .dvlCpPm1120Cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;}
-.dvlCpPm1120 .dvlCpPm1120Col h5{margin:0 0 8px;font-size:11px;font-weight:900;letter-spacing:.6px;text-transform:uppercase;}
+.dvlCpPm1120 .dvlCpPm1120Cols{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;}
+.dvlCpPm1120 .dvlCpPm1120Col{min-width:0;}
+.dvlCpPm1120 .dvlCpPm1120Col h5{margin:0 0 8px;font-size:11px;font-weight:900;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .dvlCpPm1120 .dvlCpPm1120Col.up h5{color:#10df77;}
 .dvlCpPm1120 .dvlCpPm1120Col.down h5{color:#ff5966;}
-.dvlCpPm1120 .dvlCpPm1120Item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border-radius:9px;background:rgba(145,175,165,.06);margin-bottom:5px;font-size:12px;}
-.dvlCpPm1120 .dvlCpPm1120Item b{font-weight:800;color:#d7e2dc;}
-.dvlCpPm1120 .dvlCpPm1120Item span{font-weight:900;}
+.dvlCpPm1120 .dvlCpPm1120Item{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 8px;border-radius:9px;background:rgba(145,175,165,.06);margin-bottom:5px;min-width:0;}
+.dvlCpPm1120 .dvlCpPm1120Item b{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;font-weight:800;color:#d7e2dc;}
+.dvlCpPm1120 .dvlCpPm1120Item span{flex:0 0 auto;white-space:nowrap;font-size:11.5px;font-weight:900;}
 .dvlCpPm1120 .dvlCpPm1120Col.up .dvlCpPm1120Item span{color:#10df77;}
 .dvlCpPm1120 .dvlCpPm1120Col.down .dvlCpPm1120Item span{color:#ff5966;}
 .dvlCpPm1120 .dvlCpPm1120Empty{font-size:12px;color:#75827d;padding:6px 2px;}
@@ -71154,8 +71157,8 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   function itemsHtml(list, key){
     if(!list.length) return '<div class="dvlCpPm1120Empty">—</div>';
     return list.map(function(r){
-      var name=esc(r.symbol||r.mexc||"—"), v=Number(r[key])||0;
-      return '<div class="dvlCpPm1120Item"><b>'+name+'</b><span>'+v.toFixed(1)+'× ATR</span></div>';
+      var name=esc(r.symbol||r.mexc||"—").replace(/\/USDT$/,""), v=Number(r[key])||0;
+      return '<div class="dvlCpPm1120Item"><b>'+name+'</b><span>'+v.toFixed(1)+'×</span></div>';
     }).join("");
   }
 
@@ -71172,10 +71175,10 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       var ups=topBy(rows,"predUp"), downs=topBy(rows,"predDown");
       return {on:true, html:''
         +'<h4><i class="dvlCpPm1120Dot"></i>Modelo pré-pump / pré-short · ativo</h4>'
-        +'<p class="dvlCpPm1120Sub">Aprendeu com '+n+' sinais resolvidos. Expectativa de movimento nas próximas 20 velas, medida em ATR (volatilidade do próprio ativo) — sem % fixo.</p>'
+        +'<p class="dvlCpPm1120Sub">Aprendeu com '+n+' sinais resolvidos. Expectativa de movimento nas próximas 20 velas, em múltiplos de ATR (volatilidade do próprio ativo) — sem % fixo.</p>'
         +'<div class="dvlCpPm1120Cols">'
-          +'<div class="dvlCpPm1120Col up"><h5>▲ Pré-pump (alta)</h5>'+itemsHtml(ups,"predUp")+'</div>'
-          +'<div class="dvlCpPm1120Col down"><h5>▼ Pré-short (queda)</h5>'+itemsHtml(downs,"predDown")+'</div>'
+          +'<div class="dvlCpPm1120Col up"><h5>▲ Pré-pump</h5>'+itemsHtml(ups,"predUp")+'</div>'
+          +'<div class="dvlCpPm1120Col down"><h5>▼ Pré-short</h5>'+itemsHtml(downs,"predDown")+'</div>'
         +'</div>'};
     }
     var pct=Math.max(0,Math.min(100,Math.round(n/Math.max(1,min)*100)));
