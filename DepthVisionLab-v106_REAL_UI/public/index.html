@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.119</title>
+<title>DVL — Beta 1.120</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.119';
+window.DVL_APP_VERSION = 'Beta 1.120';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.119";
+const DVL_APP_VERSION = "Beta 1.120";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.120", note: "Novo: modelo que aprende a pegar pré-pumps e pré-shorts SEPARADAMENTE, sem números fixos de %. Ele não usa um limite chutado — aprende sozinho o tamanho esperado do movimento nas próximas 20 velas, medido em ATR (volatilidade do próprio ativo), então 'grande' se ajusta a cada moeda. São dois modelos de regressão: um para a alta esperada (pré-pump/LONG) e outro para a queda esperada (pré-short/SHORT). Ele NÃO inventa dados: começa vazio e só aprende conforme os sinais 'spike pós-flat' disparam e resolvem 20 velas depois — leva dias/semanas de scanner rodando até prever. Enquanto aprende, o topo do scanner mostra 'Modelo aprendendo: N/40 amostras'; quando treina, cada moeda ganha uma etiqueta PUMP/SHORT com a expectativa em ATR. Backend + frontend." },
   { version: "Beta 1.119", note: "Conserta o marcador 'spike pós-flat' do gráfico que ficava mudando/piscando. Causa: ele marcava também a vela AO VIVO (ainda em formação), cujo volume muda a cada tick — então o destaque aparecia e sumia. Agora ele só marca velas FECHADAS: o spike pós-flat confirma no fechamento da vela e fica fixo (não muda mais depois). Só frontend." },
   { version: "Beta 1.118", note: "Casei o bloco 'Spike' do scanner com o marcador 'spike pós-flat' do gráfico: agora o gatilho é a vela CRUZAR acima da média (fator >1.0) após a calmaria — exatamente o que pinta as velas de volume no gráfico. Antes o scanner exigia um pouco mais (≥1.3×); agora toda vela que o gráfico marca de spike pós-flat vira um sinal no scanner. O fator continua ajustável em Filtros (sobe pra 1.15/1.3 se quiser filtrar cruzamentos fracos). Migração automática reseta esse parâmetro pro novo padrão (preservando teus outros filtros). Só frontend." },
   { version: "Beta 1.117", note: "Scanner refeito pra pré-pump — agora são só 2 bloquinhos. (1) 'Pré-volume (calmaria)': as velas antes ficaram abaixo da média (base morta) — a pré-análise. (2) 'Spike': a vela atual se destaca das menores por um fator MODERADO (padrão ≥1.3× a média — não precisa ser descomunal). O sinal 'detectado' acende quando os 2 batem juntos (calmaria → coluna que rompe). Score vira 50/50 (2 blocos = 99). Saíram do scanner os blocos de RSI, OI, LSR e prev-volume. Os dois limiares são ajustáveis em Filtros (nº de velas da base + fator do spike). Só frontend — não precisa reiniciar o backend." },
@@ -62071,6 +62072,12 @@ body.dvlScannerOpen080 #tradeNavBtn{
   display:inline-block!important;margin-top:2px!important;font-style:normal!important;font-size:10px!important;font-weight:900!important;
   color:#ffb020!important;background:rgba(255,176,32,.14)!important;border:1px solid rgba(255,176,32,.4)!important;border-radius:999px!important;padding:1px 7px!important;
 }
+#dvlScannerPanel0780 .dvlScan1013Pred{
+  display:inline-block!important;margin-top:2px!important;margin-left:5px!important;font-style:normal!important;font-size:10px!important;font-weight:900!important;
+  border-radius:999px!important;padding:1px 7px!important;letter-spacing:.3px!important;
+}
+#dvlScannerPanel0780 .dvlScan1013Pred.up{ color:#10df77!important;background:rgba(16,223,119,.13)!important;border:1px solid rgba(16,223,119,.4)!important; }
+#dvlScannerPanel0780 .dvlScan1013Pred.down{ color:#ff5966!important;background:rgba(255,89,102,.13)!important;border:1px solid rgba(255,89,102,.4)!important; }
 #dvlScannerPanel0780 .dvlScan1013Hero{
   display:grid!important;
   grid-template-columns:210px 1fr!important;
@@ -62839,6 +62846,29 @@ body.dvlScannerOpen080 #chartWrap{
       return '<i class="'+(okv?"on":"off")+'" title="'+esc(o[2])+(okv?" ✓":" ✗")+'">'+o[0]+'</i>';
     }).join("")+'</span>';
   }
+  /* Pré-pump / pré-short expectation from the learned model: expected UP move
+     (pré-pump / LONG) and DOWN move (pré-short / SHORT) over the next 20
+     candles, in ATR units. Rides along on the backend row (predUp/predDown).
+     Absent until the model has trained on enough resolved signals, so this
+     renders nothing for the first days/weeks — never fabricates a number. */
+  /* Short suffix describing the learning state of the pré-pump/pré-short model
+     (fed by the bridge's /pump-model poll into window.DVL_PUMP_MODEL_STATUS).
+     Empty until the status is known. */
+  function modelStatusText(){
+    var s=window.DVL_PUMP_MODEL_STATUS;
+    if(!s||typeof s!=="object") return '';
+    var n=Number(s.samples)||0, min=Number(s.minSamples)||40;
+    if(s.trained) return ' · Modelo pré-pump/pré-short ativo ('+n+' amostras)';
+    return ' · Modelo aprendendo: '+n+'/'+min+' amostras (previsões aparecem quando treinar)';
+  }
+  function predBadge(r){
+    var u=r.predUp, d=r.predDown;
+    if(u==null&&d==null) return '';
+    u=Math.max(0,Number(u)||0); d=Math.max(0,Number(d)||0);
+    if(u<=0&&d<=0) return '';
+    var longFav=u>=d, main=longFav?u:d, cls=longFav?"up":"down", lbl=longFav?"PUMP":"SHORT";
+    return '<i class="dvlScan1013Pred '+cls+'" title="Expectativa do modelo (próx. 20 velas, em ATR) — alta '+u.toFixed(2)+'× / baixa '+d.toFixed(2)+'×">'+lbl+' '+main.toFixed(1)+'×</i>';
+  }
   function trend(r,type){
     /* Both the client engine and the backend rows carry a real OI/LSR
        reading split into direction and colour: arrow = value vs its MA
@@ -63195,7 +63225,7 @@ body.dvlScannerOpen080 #chartWrap{
     var h=hero(rows);
     var badge=p.querySelector("#dvlScan1013Badge"), desc=p.querySelector("#dvlScan1013HeroDesc"), upd=p.querySelector("#dvlScan1013Updated");
     if(badge){ badge.textContent=h.b; badge.className="dvlScan1013Badge "+(h.c||"");}
-    if(desc) desc.textContent=h.d;
+    if(desc) desc.textContent=h.d+modelStatusText();
     if(upd) upd.innerHTML=esc(updated())+' <i></i>';
     var body=p.querySelector("#dvlScan1013Body");
     if(!body) return;
@@ -63216,7 +63246,7 @@ body.dvlScannerOpen080 #chartWrap{
       var full=allBlocksTrue(r);
       return '<div class="dvlScan1013Row'+(full?" confluence":"")+'" data-dvl-scan-analyze="'+esc(r.mexc||r.symbol||"")+'">'
         +'<div class="dvlScan1013Rank">'+(i+1)+'</div>'
-        +'<div class="dvlScan1013Asset"><b>'+esc(r.symbol||r.mexc||"—")+'</b><span>'+esc(fmtPrice(r.lastClose))+'</span>'+(full?'<i class="dvlScan1013ConfluenceTag">🔥 2/2</i>':'')+'</div>'
+        +'<div class="dvlScan1013Asset"><b>'+esc(r.symbol||r.mexc||"—")+'</b><span>'+esc(fmtPrice(r.lastClose))+'</span>'+(full?'<i class="dvlScan1013ConfluenceTag">🔥 2/2</i>':'')+predBadge(r)+'</div>'
         +'<div class="dvlScan1013Var '+varCls+'">'+(p24>=0?"+":"")+p24.toFixed(2)+'%</div>'
         +'<div class="dvlScan1013Trend '+oi.c+'">'+oi.t+'</div>'
         +'<div class="dvlScan1013Trend '+ls.c+'">'+ls.t+'</div>'
@@ -70909,6 +70939,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       oiColor: r.oiColor, lsrColor: r.lsrColor,
       spikeScore: r.spikeScore, status: r.status, blocks: r.blocks,
       volBelowMaBars: r.volBelowMaBars, crossStrength: r.crossStrength,
+      predUp: (r.predUp==null?null:Number(r.predUp)), predDown: (r.predDown==null?null:Number(r.predDown)),
       tfOrigin: r.tfOrigin,
       _backend:true
     };
@@ -70964,6 +70995,17 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       .catch(function(e){ console.warn("[DVL 1023] universe pull failed:",e&&e.message); return null; });
   }
 
+  /* Poll the pré-pump / pré-short model status so the Pro can show a small
+     "modelo aprendendo · N amostras" pill (and, once trained, per-row
+     predictions ride along on the /universe rows themselves). Best-effort. */
+  function pullModel(){
+    if(_base==null) return Promise.resolve(null);
+    return fetch(api("/api/dvl/scanner/pump-model"),{cache:"no-store"})
+      .then(function(r){ if(!r.ok) throw new Error("pump-model "+r.status); return r.json(); })
+      .then(function(s){ window.DVL_PUMP_MODEL_STATUS=s; return s; })
+      .catch(function(){ return null; });
+  }
+
   function pushConfig(patch){
     if(_base==null || !patch) return Promise.resolve(null);
     return fetch(api("/api/dvl/scanner/config"),{
@@ -71005,8 +71047,8 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
        only after a real (non-empty) backend universe arrives. Poll-based (no
        WS): the WS broadcasts the ignited-signal registry, but the Pro's table
        wants the full universe, which we fetch over REST. */
-    pull();
-    if(!_poll) _poll=setInterval(function(){ pull(); }, 30000);
+    pull(); pullModel();
+    if(!_poll) _poll=setInterval(function(){ pull(); pullModel(); }, 30000);
     return true;
   }
   function disable(){ _active=false; _enabled=false; disconnect(); if(_poll){ clearInterval(_poll); _poll=null; } try{ localStorage.removeItem(LS_URL); }catch(_){} _rows=[]; rerender(); }

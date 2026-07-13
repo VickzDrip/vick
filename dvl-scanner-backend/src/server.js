@@ -24,6 +24,7 @@ const analyze = require("./analyze");
 const { mexc } = require("./exchanges");
 const M = require("./metrics");
 const oiStore = require("./oiStore");
+const pumpModel = require("./pumpModel");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -204,6 +205,12 @@ function createServer() {
       mexc: { rows: m.rows.length, updatedAt: m.updatedAt },
       outcomes: worker.getOutcomesStats()  // ML groundwork: pending/resolved labeled signals
     });
+  });
+
+  /* Pré-pump / pré-short model status — how many resolved samples it has, and
+     whether it's trained enough to predict expected up/down moves (in ATR). */
+  app.get("/api/dvl/scanner/pump-model", (req, res) => {
+    res.json(Object.assign({ ok: true }, pumpModel.status()));
   });
 
   const server = http.createServer(app);
