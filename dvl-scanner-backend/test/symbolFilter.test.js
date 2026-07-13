@@ -11,7 +11,8 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error("FAIL: " + m); }
 
 // dropped: anything with STOCK, and the index/metal/energy/forex set
 ["SKHYNIXSTOCK", "MUSTOCK", "SAMSUNGSTOCK", "NAS100", "SPX500", "US30",
- "GER40", "JP225", "XAU", "XAG", "WTI", "USOIL", "EURUSD", "DXY"]
+ "GER40", "JP225", "XAU", "XAG", "WTI", "USOIL", "EURUSD", "DXY",
+ "SOXL", "SOXS", "TQQQ", "SQQQ", "SPXL", "TSLL", "UVXY"]
   .forEach(b => ok(!isTradableCrypto(b), b + " should be filtered out"));
 
 // kept: real crypto, including memecoins that share a ticker with equities/indices

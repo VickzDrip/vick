@@ -224,8 +224,11 @@ function createServer() {
     const samples = pumpModel.getDataset();
     const withPath = samples.filter(s => s && Array.isArray(s.path) && s.path.length).length;
     const MIN = 20;
-    if (!st.trained || withPath < MIN) {
-      return res.json({ ok: true, ready: false, trained: !!st.trained, withPath, need: MIN, samples: st.samples });
+    /* Every resolved signal is usable now (exact path when available, MFE/MAE
+       approximation otherwise), so the gate is total resolved samples — not the
+       path count. */
+    if (!st.trained || samples.length < MIN) {
+      return res.json({ ok: true, ready: false, trained: !!st.trained, samples: samples.length, need: MIN });
     }
     const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
     const opts = {
@@ -234,15 +237,20 @@ function createServer() {
       slAtr: Math.max(0.1, num(req.query.slAtr, 1.0)),
       minConv: Math.max(0, num(req.query.minConv, 0.5))
     };
-    const sweep = pumpBacktest.sweepTp(samples, pumpModel.predictFeatures, opts);
+    const predict = pumpModel.predictFeatures;
+    const sweep = pumpBacktest.sweepTp(samples, predict, opts);
     const bestTp = sweep.best ? sweep.best.tpAtr : 2.0;
-    const best = pumpBacktest.run(samples, pumpModel.predictFeatures, Object.assign({}, opts, { tpAtr: bestTp }));
-    const { equity, ...bestSummary } = best;   // drop the raw curve from the headline object
+    const tuned = Object.assign({}, opts, { tpAtr: bestTp });
+    const strip = r => { const { equity, ...rest } = r; return rest; };
+    const all = pumpBacktest.run(samples, predict, tuned);
+    const long = pumpBacktest.run(samples, predict, Object.assign({}, tuned, { side: "long" }));
+    const short = pumpBacktest.run(samples, predict, Object.assign({}, tuned, { side: "short" }));
     res.json({
-      ok: true, ready: true, horizon: pumpModel.HORIZON, withPath,
+      ok: true, ready: true, horizon: pumpModel.HORIZON,
+      samples: samples.length, withPath, exactPath: all.exactPath,
       params: { account0: opts.account0, riskPct: opts.riskPct, slAtr: opts.slAtr, minConv: opts.minConv, tpAtr: bestTp },
-      best: bestSummary, sweep: sweep.grid,
-      equity: equity.filter((_, i) => i % Math.max(1, Math.ceil(equity.length / 120)) === 0)  // downsampled curve
+      best: strip(all), long: strip(long), short: strip(short), sweep: sweep.grid,
+      equity: all.equity.filter((_, i) => i % Math.max(1, Math.ceil(all.equity.length / 120)) === 0)
     });
   });
 

@@ -27,7 +27,11 @@ const NON_CRYPTO_BASES = new Set([
   "WTI", "USOIL", "UKOIL", "BRENT", "NGAS", "NATGAS",
   // forex majors (bare-currency perps)
   "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD",
-  "EURJPY", "GBPJPY", "DXY", "USDX"
+  "EURJPY", "GBPJPY", "DXY", "USDX",
+  // leveraged ETFs (tokenised) — SOXL slipped through. Only the unambiguous
+  // 3x/inverse tickers, to avoid shadowing same-ticker memecoins.
+  "SOXL", "SOXS", "TQQQ", "SQQQ", "SPXL", "SPXS", "TSLL", "TSLS",
+  "NVDL", "NVDS", "TNA", "TZA", "UVXY"
 ]);
 
 /* true when `base` (the symbol with the USDT quote already stripped) is a
