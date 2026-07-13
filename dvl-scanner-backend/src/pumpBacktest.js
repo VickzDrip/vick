@@ -180,4 +180,26 @@ function sweepMinConv(samples, predictFn, opts) {
   return { grid: runs.map(summarize), best: summarize(best) };
 }
 
-module.exports = { simulateTrade, simulateMfe, outcomeFor, run, sweepTp, sweepMinConv };
+/* Full evaluation for ONE risk profile (a fixed SL + a TP search grid): find
+   the best take-profit, then the best conviction gate, then run the tuned
+   all/long/short (net of costs) plus a gross reference. Returns everything the
+   card needs for that mode. */
+function evaluate(samples, predictFn, opts) {
+  opts = Object.assign({ minConv: 0 }, opts || {});
+  const sweep = sweepTp(samples, predictFn, opts);
+  const bestTp = sweep.best ? sweep.best.tpAtr : (opts.tpAtr || 2);
+  const convSweep = sweepMinConv(samples, predictFn, Object.assign({}, opts, { tpAtr: bestTp }));
+  const mcStar = convSweep.best ? convSweep.best.minConv : 0;
+  const tuned = Object.assign({}, opts, { tpAtr: bestTp, minConv: mcStar });
+  const all = run(samples, predictFn, tuned);
+  const long = run(samples, predictFn, Object.assign({}, tuned, { side: "long" }));
+  const short = run(samples, predictFn, Object.assign({}, tuned, { side: "short" }));
+  const gross = run(samples, predictFn, Object.assign({}, tuned, { costFrac: 0 }));
+  return {
+    slAtr: opts.slAtr != null ? opts.slAtr : 1, tpAtr: bestTp, minConv: mcStar,
+    all, long, short, grossReturnPct: gross.returnPct,
+    sweep: sweep.grid, convSweep: convSweep.grid
+  };
+}
+
+module.exports = { simulateTrade, simulateMfe, outcomeFor, run, sweepTp, sweepMinConv, evaluate };
