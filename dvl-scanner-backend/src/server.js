@@ -241,7 +241,7 @@ function createServer() {
       account0: num(req.query.account0, 1000),
       riskPct: Math.min(0.2, Math.max(0.001, num(req.query.riskPct, 0.01))),
       slAtr: Math.max(0.1, num(req.query.slAtr, 1.0)),
-      minConv: Math.max(0, num(req.query.minConv, 0.5)),
+      minConv: 0,   // start ungated; the trigger is LEARNED below
       costFrac
     };
     const predict = pumpModel.predictFeatures;
@@ -249,17 +249,31 @@ function createServer() {
        TP amortises the fixed per-trade cost better). */
     const sweep = pumpBacktest.sweepTp(samples, predict, opts);
     const bestTp = sweep.best ? sweep.best.tpAtr : 2.0;
-    const tuned = Object.assign({}, opts, { tpAtr: bestTp });
+    /* LEARN THE TRIGGER: at the best TP + real costs, find the minimum-
+       conviction gate that maximises the net result. "Only operate when the
+       model's favourable prediction ≥ this ATR." */
+    const convSweep = pumpBacktest.sweepMinConv(samples, predict, Object.assign({}, opts, { tpAtr: bestTp }));
+    const mcStar = convSweep.best ? convSweep.best.minConv : 0;
+    const tuned = Object.assign({}, opts, { tpAtr: bestTp, minConv: mcStar });
     const strip = r => { const { equity, ...rest } = r; return rest; };
     const all = pumpBacktest.run(samples, predict, tuned);
     const long = pumpBacktest.run(samples, predict, Object.assign({}, tuned, { side: "long" }));
     const short = pumpBacktest.run(samples, predict, Object.assign({}, tuned, { side: "short" }));
     const gross = pumpBacktest.run(samples, predict, Object.assign({}, tuned, { costFrac: 0 }));
+    /* Per-side "is it worth operating this direction?" — net-positive AND a
+       positive per-trade expectancy at the learned gate. */
+    const sideOk = r => (r.returnPct > 0 && r.expectancyAtr > 0);
+    const trigger = {
+      minConv: mcStar,
+      long: { operate: sideOk(long), trades: long.trades, returnPct: long.returnPct, winRate: long.winRate, expectancyAtr: long.expectancyAtr },
+      short: { operate: sideOk(short), trades: short.trades, returnPct: short.returnPct, winRate: short.winRate, expectancyAtr: short.expectancyAtr }
+    };
     res.json({
       ok: true, ready: true, horizon: pumpModel.HORIZON,
       samples: samples.length, withPath, exactPath: all.exactPath,
-      params: { account0: opts.account0, riskPct: opts.riskPct, slAtr: opts.slAtr, minConv: opts.minConv, tpAtr: bestTp,
+      params: { account0: opts.account0, riskPct: opts.riskPct, slAtr: opts.slAtr, minConv: mcStar, tpAtr: bestTp,
                 feePct, slipPct, costRoundTripPct: costFrac * 100 },
+      trigger, convSweep: convSweep.grid,
       best: strip(all), long: strip(long), short: strip(short),
       grossReturnPct: gross.returnPct,   // same run with zero costs, for comparison
       sweep: sweep.grid,

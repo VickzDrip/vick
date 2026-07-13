@@ -159,4 +159,25 @@ function sweepTp(samples, predictFn, opts) {
   return { grid: runs.map(summarize), best: best ? summarize(best) : null };
 }
 
-module.exports = { simulateTrade, simulateMfe, outcomeFor, run, sweepTp };
+/* Sweep the minimum-conviction gate to LEARN a trigger: "only operate when the
+   model's favourable prediction is ≥ X ATR". A tighter gate = fewer, higher-
+   quality trades. Picks the threshold that maximises the net final account
+   among gates that still leave enough trades (so it can't overfit to 3 lucky
+   signals). Returns the grid + the chosen threshold. */
+function sweepMinConv(samples, predictFn, opts) {
+  opts = opts || {};
+  const grid = opts.convGrid || [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5];
+  const total = samples.length;
+  const minTrades = opts.minTrades != null ? opts.minTrades : Math.max(15, Math.round(total * 0.04));
+  const runs = grid.map(mc => run(samples, predictFn, Object.assign({}, opts, { minConv: mc })));
+  let best = null;
+  for (const r of runs) if (r.trades >= minTrades && (!best || r.account > best.account)) best = r;
+  if (!best) best = runs[0];   // nothing has enough trades → fall back to the loosest gate
+  const summarize = r => ({
+    minConv: r.minConv, trades: r.trades, returnPct: r.returnPct,
+    winRate: r.winRate, maxDrawdownPct: r.maxDrawdownPct, expectancyAtr: r.expectancyAtr
+  });
+  return { grid: runs.map(summarize), best: summarize(best) };
+}
+
+module.exports = { simulateTrade, simulateMfe, outcomeFor, run, sweepTp, sweepMinConv };
