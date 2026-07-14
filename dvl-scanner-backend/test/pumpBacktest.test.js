@@ -173,7 +173,7 @@ near(BT.simulatePathCfg([[1.1, 0.5, 0.9], [0.4, -0.5, -0.3]], "long", { slAtr: 1
 near(BT.simulatePathCfg([[1.1, 0.5, 0.9], [0.4, -0.5, -0.3]], "long", { slAtr: 1, tpAtr: 5 }), -0.3, 1e-9, "no breakeven → rides to close");
 
 // ── exitConfigs + optimize (walk-forward) ─────────────────────
-const cfgs = BT.exitConfigs({ slGrid: [1, 2], tpGrid: [2, 3], trailGrid: [1], beGrid: [0, 1] });
+const cfgs = BT.exitConfigs({ slGrid: [1, 2], tpGrid: [2, 3], trailGrid: [1], beGrid: [0, 1], timeGrid: [], tp1Grid: [] });
 ok(cfgs.length === 2 * 2 * 2 + 2 * 1, "exitConfigs enumerates bracket(+be) and trailing combos");
 ok(cfgs.some(c => c.family === "trailing") && cfgs.some(c => c.family === "bracket+be"), "config families present");
 
@@ -227,6 +227,27 @@ const mine = BT.mineConditions(mineS, alwaysLong, ["spikeStrength", "other"], { 
 ok(mine.top.length >= 1, "mineConditions returns ranked conditions");
 ok(mine.top[0].feature === "spikeStrength", "mineConditions finds the discriminating feature");
 ok(typeof mine.top[0].testReturn === "number", "mineConditions reports out-of-sample per condition");
+
+// ── time stop ─────────────────────────────────────────────────
+// runs up but we bail at bar 2 → exit at bar-2 close (1.9), not the later close.
+near(BT.simulatePathCfg([[1, 0.5, 0.9], [2, 1.4, 1.9], [3, 2.4, 2.9]], "long", { slAtr: 1, timeBars: 2 }), 1.9, 1e-9, "time stop exits at bar N close");
+// no time stop → rides to final close 2.9
+near(BT.simulatePathCfg([[1, 0.5, 0.9], [2, 1.4, 1.9], [3, 2.4, 2.9]], "long", { slAtr: 1 }), 2.9, 1e-9, "no time stop rides to close");
+
+// ── scale-out (partial TP + runner) ───────────────────────────
+// tp1 at 2 (book 50%), runner trails 1 behind peak 3 → runner exits ~2.
+// pnl = 0.5*2 + 0.5*2 = 2. Path: up to 2 (partial), up to 3, dips to lock.
+near(BT.simulateScaleOut([[2.1, 0.3, 1.9], [3.0, 2.5, 2.9], [3.0, 1.6, 1.8]], "long", { slAtr: 1, tp1Atr: 2, tp1Frac: 0.5, trailAtr: 1 }), 2, 1e-9, "scale-out books partial + trails runner");
+// never reaches tp1, stopped → whole -sl
+ok(BT.simulateScaleOut([[0.3, -1.2, -1.0]], "long", { slAtr: 1, tp1Atr: 2, tp1Frac: 0.5, trailAtr: 1 }) === -1, "scale-out whole stop before partial");
+// MFE approx: adverse-first stop
+ok(BT.simulateScaleOutMfe(3, 1.5, "long", { slAtr: 1, tp1Atr: 2, tp1Frac: 0.5, trailAtr: 1 }) === -1, "scale-out MFE adverse-first → -sl");
+// outcomeFor routes scale-out via tp1Atr
+near(BT.outcomeFor({ up: 3, down: 0.2 }, "long", 1, 0, 1, 0, { tp1Atr: 2, tp1Frac: 0.5 }), 0.5 * 2 + 0.5 * Math.max(0, 3 - 1), 1e-9, "outcomeFor uses scale-out when tp1Atr set");
+
+// exitConfigs now includes the new families
+const allCfgs = BT.exitConfigs({ slGrid: [1], tpGrid: [2], trailGrid: [1], beGrid: [0], timeGrid: [5], tp1Grid: [2] });
+ok(allCfgs.some(c => c.family === "timestop") && allCfgs.some(c => c.family === "scaleout"), "exitConfigs adds timestop + scaleout");
 
 console.log(fail ? ("PUMP BACKTEST — " + pass + " passed, " + fail + " FAILED")
                  : ("OK — " + pass + " passed, 0 failed"));
