@@ -193,6 +193,41 @@ ok(o.trainN === 30 && o.testN === 30, "optimize splits train/test");
 ok(o.best && o.best.minConv >= 1, "optimize learns a gate that filters losers");
 ok(o.test && typeof o.test.returnPct === "number", "optimize reports out-of-sample");
 
+// ── deeper run stats (profit factor, avg win/loss, streak) ────
+const stats = BT.run([
+  { f: [0], path: [[2.2, 0.1, 2.0]] },   // +2
+  { f: [0], path: [[0.2, -1.3, -1.1]] }, // -1
+  { f: [0], path: [[0.1, -1.2, -1.0]] }  // -1
+], alwaysLong, { slAtr: 1, tpAtr: 2, riskPct: 0.01 });
+near(stats.profitFactor, 1, 1e-9, "profitFactor = 2 win / (1+1) loss = 1");
+near(stats.avgWinAtr, 2, 1e-9, "avgWinAtr = 2");
+near(stats.avgLossAtr, 1, 1e-9, "avgLossAtr = 1");
+ok(stats.maxLossStreak === 2, "maxLossStreak counts consecutive losses");
+
+// ── calibrate (predicted vs realised by bucket) ───────────────
+const calSamples = [
+  { f: [1], up: 1.9, down: 0.2 },  // predicted ~2, realised 1.9
+  { f: [1], up: 2.0, down: 0.1 },
+  { f: [2], up: 0.4, down: 0.1 }   // predicted ~4, realised only 0.4 (over-predicts)
+];
+const calPred = f => (f[0] === 1 ? { up: 2, down: 0 } : { up: 4, down: 0 });
+const cal = BT.calibrate(calSamples, calPred);
+ok(Array.isArray(cal) && cal.length >= 1, "calibrate returns buckets");
+const hiBucket = cal.find(b => b.range === "≥4");
+ok(hiBucket && hiBucket.avgReal < hiBucket.avgPred, "calibrate exposes over-prediction (real < pred)");
+
+// ── mineConditions (conditional edge, out-of-sample) ──────────
+const mineS = [];
+for (let i = 0; i < 60; i++) {
+  const good = i % 2 === 0;                 // feature 0 high → winners
+  mineS.push({ f: [good ? 10 : 0, 0], entry: 100, atr: 2,
+    path: good ? [[3.2, 0.1, 3.0]] : [[0.1, -1.3, -1.1]] });
+}
+const mine = BT.mineConditions(mineS, alwaysLong, ["spikeStrength", "other"], { trainFrac: 0.5, tpAtr: 3, slAtr: 1 });
+ok(mine.top.length >= 1, "mineConditions returns ranked conditions");
+ok(mine.top[0].feature === "spikeStrength", "mineConditions finds the discriminating feature");
+ok(typeof mine.top[0].testReturn === "number", "mineConditions reports out-of-sample per condition");
+
 console.log(fail ? ("PUMP BACKTEST — " + pass + " passed, " + fail + " FAILED")
                  : ("OK — " + pass + " passed, 0 failed"));
 process.exit(fail ? 1 : 0);

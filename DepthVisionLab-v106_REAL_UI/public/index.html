@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.132</title>
+<title>DVL — Beta 1.133</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.132';
+window.DVL_APP_VERSION = 'Beta 1.133';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.132";
+const DVL_APP_VERSION = "Beta 1.133";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.133", note: "Análise MUITO mais profunda no backtest (a pedido). Duas camadas novas que um quant usa quando o backtest simples dá vermelho: (1) CALIBRAÇÃO — separa os sinais por faixa de expectativa que o modelo previu e mostra, em cada faixa, o movimento REAL médio e quantas vezes chegou no previsto. Revela se o '4× ATR' do modelo bate com a realidade (spoiler comum: ele superestima, e essa é a raiz do problema — não o TP/SL). (2) ONDE ESTÁ O EDGE — quebra os sinais por CADA feature (RSI, força do spike, barras de calmaria, OI…), acha as condições que mais melhoram o resultado e valida cada uma no teste fora da amostra; marca com ✓ as que seguram no teste. Assim você vê se o edge está escondido num subconjunto (ex.: só RSI baixo) em vez de operar tudo. Também adicionei profit factor, ganho/perda médio e maior sequência de perdas no motor. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.132", note: "Agora o backtest usa TODOS os sinais resolvidos do modelo (antes o modo Adaptativo/trailing só usava os que tinham trajetória de preço guardada — os novos — e por isso aparecia com poucos trades tipo 76 de 900+). O trailing e o breakeven passaram a rodar também nos sinais antigos via uma aproximação conservadora do resumo (subiu/desceu em ATR): quando tem a trajetória exata, usa ela; quando não tem, aproxima sem inflar o resultado. Assim todos os modos e o otimizador enxergam a base inteira. Também tirei do scanner mais ações/ETFs tokenizados que apareciam (NVIDIA, TESLA, EWY, DRAM, MICROSTRATEGY, COINBASE, MICRON…). Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.131", note: "OTIMIZADOR de saída (o 'machine learning de TP/SL' que você pediu): em vez de modos fixos, ele varre CENTENAS de combos de saída — stop × alvo, com/sem breakeven, e trailing — num motor unificado, e escolhe o melhor. E, o mais importante, com trava anti-autoengano: separa os sinais em TREINO (mais antigos) e TESTE (mais novos, nunca vistos), otimiza no treino e mostra o resultado no teste (walk-forward). Se o combo dá +34% no treino mas -8% no teste, o card diz 'não generaliza — foi curve-fitting'. Só vale confiar quando o TESTE também é verde. Novo bloco 'Melhor combo — validado fora da amostra' com treino vs teste e veredito. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.130", note: "Duas coisas no backtest: (1) modo ADAPTATIVO — um trailing stop em ATR, que em vez de alvo fixo sobe o stop atrás do preço, deixa o lucro correr e protege quando vira; entra na comparação de modos junto com Scalp/Equilibrado/Runner e costuma ganhar em drawdown. (2) MAPA DE CALOR sem pontos cegos: em vez de só alguns pontos, mostra o retorno líquido de TODA combinação de stop × alvo numa grade colorida (verde lucro, vermelho prejuízo, ★ no melhor). Assim dá pra ver se o melhor é uma ZONA robusta ou um pico sortudo — e escolher com o terreno inteiro à vista. Obs.: o modo adaptativo usa só sinais com trajetória de preço guardada (os novos), então o nº de trades dele cresce com o tempo. Backend (exige reiniciar o dvl-scanner) + frontend." },
@@ -71347,6 +71348,21 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 .dvlCpBt1124 .dvlCpBt1124Mode .rt.pos{color:#10df77;} .dvlCpBt1124 .dvlCpBt1124Mode .rt.neg{color:#ff5966;}
 .dvlCpBt1124 .dvlCpBt1124Mode .dd{flex:0 0 auto;font-weight:800;font-size:10.5px;color:#8fa39b;white-space:nowrap;}
 .dvlCpBt1124 .dvlCpBt1124Mode .star{flex:0 0 auto;color:#10df77;font-size:12px;}
+.dvlCpBt1124 .dvlCpBt1124Deep{margin-top:12px;padding:12px 13px;border-radius:12px;background:rgba(180,140,255,.05);border:1px solid rgba(180,140,255,.2);}
+.dvlCpBt1124 .dvlCpBt1124DeepHd{font-size:11px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;color:#c3a6f0;margin-bottom:7px;}
+.dvlCpBt1124 .dvlCpBt1124CalRow{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:4px;align-items:center;font-size:11px;padding:4px 0;border-bottom:1px solid rgba(145,175,165,.08);}
+.dvlCpBt1124 .dvlCpBt1124CalRow.hd{font-size:9px;font-weight:900;letter-spacing:.3px;text-transform:uppercase;color:#75827d;border-bottom:1px solid rgba(145,175,165,.16);}
+.dvlCpBt1124 .dvlCpBt1124CalRow b{font-weight:800;color:#d7e2dc;}
+.dvlCpBt1124 .dvlCpBt1124CalRow .r{color:#ffb0b0;}
+.dvlCpBt1124 .dvlCpBt1124CalTake{margin-top:8px;font-size:11.5px;color:#e6dcc4;line-height:1.5;}
+.dvlCpBt1124 .dvlCpBt1124CalTake b{color:#ffd321;}
+.dvlCpBt1124 .dvlCpBt1124Cond{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(145,175,165,.08);font-size:11.5px;}
+.dvlCpBt1124 .dvlCpBt1124Cond .nm{flex:1 1 auto;min-width:0;color:#d7e2dc;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dvlCpBt1124 .dvlCpBt1124Cond .tr{flex:0 0 auto;font-weight:800;font-size:10.5px;color:#8fa39b;white-space:nowrap;}
+.dvlCpBt1124 .dvlCpBt1124Cond .te{flex:0 0 auto;font-weight:900;white-space:nowrap;}
+.dvlCpBt1124 .dvlCpBt1124Cond .te.pos{color:#10df77;} .dvlCpBt1124 .dvlCpBt1124Cond .te.neg{color:#ff5966;}
+.dvlCpBt1124 .dvlCpBt1124Cond.win{background:rgba(16,223,119,.06);border-radius:8px;padding:7px 8px;}
+.dvlCpBt1124 .dvlCpBt1124DeepNote{margin-top:8px;font-size:10px;color:#697570;line-height:1.4;}
 .dvlCpBt1124 .dvlCpBt1124Heat{margin-top:12px;}
 .dvlCpBt1124 .dvlCpBt1124HeatHd{font-size:10px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:#75827d;margin-bottom:6px;}
 .dvlCpBt1124 .dvlCpBt1124HeatWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
@@ -71459,6 +71475,48 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     +'</div>';
   }
 
+  /* Calibração: o "X× ATR" que o modelo prevê corresponde ao movimento real? */
+  function calibHtml(cal){
+    if(!Array.isArray(cal)||!cal.length) return '';
+    var rows=cal.map(function(b){
+      var pred=Number(b.avgPred)||0, real=Number(b.avgReal)||0, reach=Number(b.reachRate)||0, n=Number(b.n)||0;
+      var under = real < pred*0.7;
+      return '<div class="dvlCpBt1124CalRow"><b>'+esc(b.range)+'× ('+n+')</b>'
+        +'<span>'+pred.toFixed(1)+'×</span>'
+        +'<span class="'+(under?'r':'')+'">'+real.toFixed(1)+'×</span>'
+        +'<span>'+reach.toFixed(0)+'%</span></div>';
+    }).join("");
+    // veredito: pega o bucket de maior expectativa
+    var top=cal[cal.length-1], tp=Number(top.avgPred)||0, tr=Number(top.avgReal)||0;
+    var take = tr < tp*0.7
+      ? ('Nas moedas que ele previu <b>'+top.range+'× ATR</b>, o movimento real médio foi só <b>'+tr.toFixed(1)+'×</b>. O modelo SUPERESTIMA — por isso o gatilho em ATR engana. A raiz é o sinal, não o TP/SL.')
+      : ('A previsão acompanha a realidade de forma razoável — dá pra confiar mais no número do modelo pra filtrar.');
+    return '<div class="dvlCpBt1124Deep"><div class="dvlCpBt1124DeepHd">Calibração — o número do modelo bate?</div>'
+      +'<div class="dvlCpBt1124CalRow hd"><span>previu (n)</span><span>prevê</span><span>real</span><span>atinge</span></div>'
+      +rows
+      +'<div class="dvlCpBt1124CalTake">'+take+'</div></div>';
+  }
+
+  var COND_LABELS={volBelowMaBars:"barras de calmaria",spike20:"força do spike",crossStrength:"força do cruzamento",maFlatness1:"MA achatada",rsi14:"RSI",rsiRecoveryFromLow:"RSI recuperando",price24hPct:"variação 24h",spikePrevVolRatio:"spike vs vol. anterior",priceGlueOk:"preço colado",oiNum:"OI direção",oiRatio:"OI força",lsrNum:"LSR direção",lsrRatio:"LSR força"};
+  /* Onde está o edge: condições (por feature) que mais melhoram o resultado,
+     validadas no teste (fora da amostra). */
+  function condHtml(cond){
+    if(!cond||!Array.isArray(cond.top)||!cond.top.length) return '';
+    var base=Number(cond.baselineReturn)||0;
+    var rows=cond.top.map(function(c){
+      var lbl=(COND_LABELS[c.feature]||c.feature)+' '+c.op+' '+(Number(c.thr)||0).toFixed(1);
+      var trR=Number(c.trainReturn)||0, teR=Number(c.testReturn)||0, teN=Number(c.testTrades)||0;
+      var win=(trR>0 && teR>0 && teN>=5);
+      return '<div class="dvlCpBt1124Cond'+(win?' win':'')+'"><span class="nm">'+(win?'✓ ':'')+esc(lbl)+'</span>'
+        +'<span class="tr">treino '+sign(trR)+'</span>'
+        +'<span class="te '+(teR>=0?'pos':'neg')+'">teste '+sign(teR)+'</span></div>';
+    }).join("");
+    return '<div class="dvlCpBt1124Deep"><div class="dvlCpBt1124DeepHd">Onde está o edge — condições (validado no teste)</div>'
+      +'<div class="dvlCpBt1124DeepNote" style="margin-top:0;margin-bottom:6px">Base (todos os sinais): '+sign(base)+'. Cada linha = filtrar por uma condição. ✓ = melhora no treino E segura no teste.</div>'
+      +rows
+      +'<div class="dvlCpBt1124DeepNote">Se nenhuma condição fica verde no teste, o sinal ainda não tem edge explorável — o próximo passo é melhorar o modelo (mais dados/features), não a saída.</div></div>';
+  }
+
   function bodyHtml(){
     var s=window.DVL_PUMP_BACKTEST;
     if(!s||typeof s!=="object"){
@@ -71510,6 +71568,8 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
           ? '<div class="dvlCpBt1124Exit">Saída adaptativa: <b>trailing stop de '+(Number(p.trailAtr)||0).toFixed(1)+'× ATR</b> — o stop sobe atrás do preço, deixa o lucro correr e protege quando vira.</div>'
           : '<div class="dvlCpBt1124Exit">Melhor saída aprendida: <b>fechar ao andar '+tp.toFixed(1)+'× ATR a favor</b>. Foi o take-profit que mais rendeu já descontando os custos.</div>')
       + trigHtml(s.trigger)
+      + calibHtml(s.calibration)
+      + condHtml(s.conditions)
       +'<div class="dvlCpBt1124Note">Valores LÍQUIDOS (taxa ~'+((Number(p.feePct)||0).toFixed(2))+'%/lado + slippage ~'+((Number(p.slipPct)||0).toFixed(2))+'%/lado, custo por ativo escala com a volatilidade).'+grossNote+' Cada coluna long/short é uma conta de '+fmtUsd(acc0)+' separada. Estimativa in-sample — calibra, não promete. '+(exact<tr?(exact+' de '+tr+' trades usam a trajetória exata (o resto, aproximação MFE). '):'')+'Não abre ordem nenhuma.</div>'};
   }
 

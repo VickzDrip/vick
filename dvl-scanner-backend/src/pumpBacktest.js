@@ -182,6 +182,7 @@ function run(samples, predictFn, opts) {
 
   let account = account0, peak = account0, maxDD = 0;
   let wins = 0, losses = 0, trades = 0, grossAtr = 0, exactPath = 0, costAtrSum = 0;
+  let sumWinAtr = 0, sumLossAtr = 0, streak = 0, maxLossStreak = 0;   // deeper stats
   const equity = [account0];
 
   for (const s of samples) {
@@ -202,7 +203,8 @@ function run(samples, predictFn, opts) {
     const pnl$ = (pnlAtr / slAtr) * riskPct * account;          // risk-based sizing + compounding
     account += pnl$;
     grossAtr += pnlAtr;
-    if (pnlAtr > 0) wins++; else if (pnlAtr < 0) losses++;
+    if (pnlAtr > 0) { wins++; sumWinAtr += pnlAtr; streak = 0; }
+    else if (pnlAtr < 0) { losses++; sumLossAtr += -pnlAtr; streak++; if (streak > maxLossStreak) maxLossStreak = streak; }
     trades++;
     equity.push(account);
     if (account > peak) peak = account;
@@ -218,6 +220,10 @@ function run(samples, predictFn, opts) {
     winRate: trades ? (wins / trades) * 100 : 0,
     expectancyAtr: trades ? grossAtr / trades : 0,
     avgCostAtr: trades ? costAtrSum / trades : 0,
+    profitFactor: sumLossAtr > 0 ? sumWinAtr / sumLossAtr : (sumWinAtr > 0 ? Infinity : 0),
+    avgWinAtr: wins ? sumWinAtr / wins : 0,
+    avgLossAtr: losses ? sumLossAtr / losses : 0,
+    maxLossStreak,
     exactPath,                    // how many trades used the exact price path
     side: onlySide || "all",
     slAtr, tpAtr, trailAtr, beAtr, riskPct, minConv, costFrac, equity
@@ -393,7 +399,73 @@ function optimize(samples, predictFn, opts) {
   };
 }
 
+/* CALIBRATION — does the model's number mean anything? Buckets signals by the
+   model's PREDICTED favourable move (in ATR) and, per bucket, shows the avg
+   predicted vs the avg REALISED move and how often reality reached the
+   prediction. If realised rises with predicted, the model has signal to exploit
+   (raise the gate); if it's flat, the prediction is noise and no exit tuning
+   saves it — the deeper root cause when the whole surface is red. */
+function calibrate(samples, predictFn) {
+  const edges = [0, 1, 2, 3, 4, Infinity];
+  const buckets = edges.slice(0, -1).map((lo, i) => ({ lo, hi: edges[i + 1], n: 0, sumPred: 0, sumReal: 0, reached: 0, wins: 0 }));
+  for (const s of samples) {
+    if (!s || !Array.isArray(s.f)) continue;
+    const pred = predictFn(s.f);
+    if (!pred) continue;
+    const long = pred.up >= pred.down;
+    const p = long ? pred.up : pred.down;
+    const realized = long ? Number(s.up) : Number(s.down);      // realised favourable excursion (ATR)
+    const adverse = long ? Number(s.down) : Number(s.up);
+    if (!Number.isFinite(realized) || !Number.isFinite(p)) continue;
+    const b = buckets.find(b => p >= b.lo && p < b.hi);
+    if (!b) continue;
+    b.n++; b.sumPred += p; b.sumReal += realized;
+    if (realized >= p) b.reached++;
+    if (realized > adverse) b.wins++;                            // moved more our way than against
+  }
+  return buckets.filter(b => b.n > 0).map(b => ({
+    range: b.hi === Infinity ? ("≥" + b.lo) : (b.lo + "–" + b.hi),
+    n: b.n, avgPred: b.sumPred / b.n, avgReal: b.sumReal / b.n,
+    reachRate: b.reached / b.n * 100, favRate: b.wins / b.n * 100
+  }));
+}
+
+/* CONDITIONAL EDGE MINING — where does the edge hide? Splits the signals at the
+   median of EACH feature and backtests both halves; ranks the conditions that
+   most improve the net result on TRAIN and reports how they hold on TEST
+   (out-of-sample). This is the deeper move when a blanket signal is unprofitable
+   — the alpha, if any, is usually in a subset (a regime / feature range). */
+function mineConditions(samples, predictFn, featureNames, opts) {
+  opts = opts || {};
+  const exit = { slAtr: opts.slAtr || 1.5, tpAtr: opts.tpAtr || 3, costFrac: opts.costFrac, account0: opts.account0, riskPct: opts.riskPct };
+  const cut = Math.max(1, Math.floor(samples.length * (opts.trainFrac || 0.7)));
+  const train = samples.slice(0, cut), test = samples.slice(cut);
+  const baseline = run(train, predictFn, exit);
+  const minTr = Math.max(8, Math.round(train.length * 0.05));
+  const P = (featureNames && featureNames.length) || 0;
+  const out = [];
+  for (let j = 0; j < P; j++) {
+    const vals = train.map(s => Number(s.f[j])).filter(Number.isFinite).sort((a, b) => a - b);
+    if (vals.length < 10) continue;
+    const med = vals[Math.floor(vals.length / 2)];
+    for (const op of [">=", "<"]) {
+      const filt = s => { const v = Number(s.f[j]); return op === ">=" ? v >= med : v < med; };
+      const tr = run(train.filter(filt), predictFn, exit);
+      if (tr.trades < minTr) continue;
+      const te = run(test.filter(filt), predictFn, exit);
+      out.push({
+        feature: featureNames[j], op, thr: med,
+        trainReturn: tr.returnPct, trainTrades: tr.trades, trainWin: tr.winRate,
+        testReturn: te.returnPct, testTrades: te.trades
+      });
+    }
+  }
+  out.sort((a, b) => b.trainReturn - a.trainReturn);
+  return { baselineReturn: baseline.returnPct, trainN: train.length, testN: test.length, top: out.slice(0, 4) };
+}
+
 module.exports = {
   simulateTrade, simulateMfe, simulateMfeCfg, simulateTrail, simulatePathCfg, outcomeFor,
-  run, sweepTp, sweepTrail, sweepMinConv, sweepGrid, evaluate, exitConfigs, optimize
+  run, sweepTp, sweepTrail, sweepMinConv, sweepGrid, evaluate, exitConfigs, optimize,
+  calibrate, mineConditions
 };
