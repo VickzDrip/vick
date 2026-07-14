@@ -286,6 +286,10 @@ function createServer() {
        anywhere) does a profitable subset hide? */
     const calibration = pumpBacktest.calibrate(samples, predict);
     const conditions = pumpBacktest.mineConditions(samples, predict, pumpModel.FEATURES, base);
+    /* The user's discovery: pré-volume+spike CONFIRMED by the 15m Exhaustion
+       RSI zone. Sweeps the RSI inputs (len, push, zones) and validates the best
+       out-of-sample. */
+    const rsiConfirm = pumpBacktest.sweepRsiConfirm(samples, predict, base);
     res.json({
       ok: true, ready: true, horizon: pumpModel.HORIZON,
       samples: samples.length, withPath, exactPath: e.all.exactPath,
@@ -293,7 +297,7 @@ function createServer() {
       params: { account0: base.account0, riskPct: base.riskPct, slAtr: e.slAtr, minConv: e.minConv,
                 tpAtr: e.tpAtr, trailAtr: e.trailAtr, adaptive: !!e.adaptive,
                 mode: bm.m.key, modeLabel: bm.m.label, feePct, slipPct, costRoundTripPct: costFrac * 100 },
-      trigger, convSweep: e.convSweep, surface, optimized, calibration, conditions,
+      trigger, convSweep: e.convSweep, surface, optimized, calibration, conditions, rsiConfirm,
       best: strip(e.all), long: strip(e.long), short: strip(e.short),
       grossReturnPct: e.grossReturnPct, sweep: e.sweep,
       equity: e.all.equity.filter((_, i) => i % Math.max(1, Math.ceil(e.all.equity.length / 120)) === 0)

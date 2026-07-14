@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.136</title>
+<title>DVL — Beta 1.137</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.136';
+window.DVL_APP_VERSION = 'Beta 1.137';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.136";
+const DVL_APP_VERSION = "Beta 1.137";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.137", note: "Sua descoberta virou sistema: RSI Exhaustion (15m) + pré-volume/spike, no backtest E no scanner. Portei o oscilador Exhaustion RSI fiel pro backend (mesma fórmula do gráfico: RSI dos closes + push de exaustão multi-TF, TF fixo em 15m). No BACKTEST tem um bloco novo que VARRE os inputs do RSI (comprimento, push e as zonas de long/short) e mostra a melhor config validada FORA da amostra, comparando com o resultado sem o filtro do RSI — assim dá pra ver se o RSI realmente adiciona edge. No SCANNER, o cartão pré-pump/pré-short marca com 'RSI' as moedas onde o Exhaustion confirma a direção (long = exausto embaixo, short = exausto no topo). O gatilho do sinal continua sendo só pré-volume+spike; o RSI entra como confirmação em cima, com os parâmetros do gráfico. Só vale pra sinais NOVOS (o RSI é lido no disparo). Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.136", note: "Corrige a taxa do backtest pro valor REAL da MEXC: taxa taker de 0.02%/lado (antes eu tinha 0.04%, o dobro). Com slippage de 0.02%/lado, o custo total por trade cai de ~0.12% pra ~0.08% round-trip — mais justo com a corretagem de verdade. Isso deixa o edge um pouco menos penalizado no backtest. (Dá pra ajustar taxa/slippage por query se você tiver desconto do token MX, que zera mais ainda.) Só backend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.135", note: "O modelo agora é PURO pré-volume + spike, a pedido. Tirei RSI, OI, LSR, variação 24h e priceGlue das features — o modelo só olha o que é volume: barras de calmaria (pré-volume), planura da base, força do spike, força do cruzamento e spike vs volume anterior (5 features, todas de pré-volume+spike). O gatilho de sinal já era só pré-volume+spike (volBelowMaBars + cruzamento acima da média); agora a previsão e a análise 'onde está o edge' também são 100% disso — nada de RSI/OI/LSR aparece mais. Os 900+ sinais já resolvidos foram migrados (o resultado deles não muda, só reencaixei as features); o modelo antigo foi descartado e retreina do zero nas 5 features. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.134", note: "Mais TIPOS de saída no otimizador (além de bracket, breakeven e trailing): (1) PARCIAL/scale-out — realiza metade no primeiro alvo e deixa a runner correr com stop no zero a zero + trailing (o 'tira metade e segura o resto'); (2) SAÍDA POR TEMPO — fecha depois de N velas se não bateu alvo/stop, em vez de segurar até o fim do horizonte. Agora o otimizador testa ~640 combos em 5 famílias diferentes e valida o melhor fora da amostra como antes. O bloco 'Melhor combo' descreve o tipo escolhido (ex.: 'parcial: 50% em 2× + trailing 1×' ou 'stop 1× / alvo 3× · sai em 8 velas'). Backend (exige reiniciar o dvl-scanner) + frontend." },
@@ -70995,6 +70996,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       spikeScore: r.spikeScore, status: r.status, blocks: r.blocks,
       volBelowMaBars: r.volBelowMaBars, crossStrength: r.crossStrength,
       predUp: (r.predUp==null?null:Number(r.predUp)), predDown: (r.predDown==null?null:Number(r.predDown)),
+      exrValue: (r.exrValue==null?null:Number(r.exrValue)), exrZone: r.exrZone||null,
       tfOrigin: r.tfOrigin,
       _backend:true
     };
@@ -71188,6 +71190,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 .dvlCpPm1120 .dvlCpPm1120Item{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 8px;border-radius:9px;background:rgba(145,175,165,.06);margin-bottom:5px;min-width:0;}
 .dvlCpPm1120 .dvlCpPm1120Item b{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;font-weight:800;color:#d7e2dc;}
 .dvlCpPm1120 .dvlCpPm1120Go{font-style:normal;color:#10df77;font-weight:900;}
+.dvlCpPm1120 .dvlCpPm1120Exr{font-style:normal;color:#8fd0ff;font-weight:900;font-size:8.5px;letter-spacing:.3px;border:1px solid rgba(120,200,255,.4);border-radius:5px;padding:0 3px;margin-left:2px;}
 .dvlCpPm1120 .dvlCpPm1120Item span{flex:0 0 auto;white-space:nowrap;font-size:11.5px;font-weight:900;}
 .dvlCpPm1120 .dvlCpPm1120Col.up .dvlCpPm1120Item span{color:#10df77;}
 .dvlCpPm1120 .dvlCpPm1120Col.down .dvlCpPm1120Item span{color:#ff5966;}
@@ -71248,7 +71251,11 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       var name=esc(r.symbol||r.mexc||"—").replace(/\/USDT$/,""), v=Number(r[key])||0;
       var go = tg && tg.mc!=null && sideOk && v>=tg.mc;
       var mark = go ? ' <i class="dvlCpPm1120Go" title="Passa do gatilho e o lado vale operar">✓</i>' : '';
-      return '<div class="dvlCpPm1120Item"><b>'+name+mark+'</b><span>'+v.toFixed(1)+'×</span></div>';
+      /* Confluência RSI Exhaustion: long confirma quando o RSI está exausto pra
+         baixo (pronto pra bounce); short quando exausto no topo. */
+      var exrOk = isLong ? (r.exrZone==="down") : (r.exrZone==="up");
+      var exrMark = exrOk ? ' <i class="dvlCpPm1120Exr" title="RSI Exhaustion (15m) confirma a direção">RSI</i>' : '';
+      return '<div class="dvlCpPm1120Item"><b>'+name+mark+exrMark+'</b><span>'+v.toFixed(1)+'×</span></div>';
     }).join("");
   }
 
@@ -71522,6 +71529,39 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       +'<div class="dvlCpBt1124DeepNote">Se nenhuma condição fica verde no teste, o sinal ainda não tem edge explorável — o próximo passo é melhorar o modelo (mais dados/features), não a saída.</div></div>';
   }
 
+  /* RSI Exhaustion (15m) como confirmação do pré-volume+spike — a descoberta.
+     Varre os inputs do RSI e valida fora da amostra. */
+  function rsiHtml(rc){
+    if(!rc||typeof rc!=="object") return '';
+    if(!rc.ready){
+      var have=Number(rc.withExr)||0, need=Number(rc.need)||20;
+      var pct=Math.max(0,Math.min(100,Math.round(have/Math.max(1,need)*100)));
+      return '<div class="dvlCpBt1124Opt" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22)">'
+        +'<div class="dvlCpBt1124OptHd" style="color:#8fd0ff">RSI Exhaustion (15m) — confirmação</div>'
+        +'<div class="dvlCpBt1124OptSub">Coletando sinais com leitura do RSI no momento do disparo (só sinais novos, a partir de agora).</div>'
+        +'<div class="dvlCpBt1124Bar"><i style="width:'+pct+'%"></i></div>'
+        +'<div class="dvlCpBt1124BarLbl">'+have+' / '+need+' sinais com RSI</div></div>';
+    }
+    var b=rc.best||{}, tr=rc.train||{}, te=rc.test||{};
+    var trR=Number(tr.returnPct)||0, teR=Number(te.returnPct)||0, teN=Number(te.trades)||0;
+    var baseTe=Number(rc.baselineTestPct);
+    var verd = teN<5 ? {t:'teste pequeno — inconclusivo', c:'#ffd321'}
+             : rc.generalizes ? {t:'✓ a confirmação do RSI segura fora da amostra', c:'#10df77'}
+                              : {t:'✗ não segura no teste — foi coincidência', c:'#ff5966'};
+    var cfg='RSI '+ (Number(b.rsiLen)||0) +' · push '+(Number(b.push)||0)+' · long ≤ '+(Number(b.lowerZone)||0)+' / short ≥ '+(Number(b.upperZone)||0);
+    return '<div class="dvlCpBt1124Opt" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22)">'
+      +'<div class="dvlCpBt1124OptHd" style="color:#8fd0ff">🔎 RSI Exhaustion (15m) + spike — melhor config</div>'
+      +'<div class="dvlCpBt1124OptCfg">'+esc(cfg)+'</div>'
+      +'<div class="dvlCpBt1124OptSub">'+ (Number(tr.trades)||0) +' sinais confirmados no treino · varreu len × push × zonas</div>'
+      +'<div class="dvlCpBt1124OptCells">'
+        +'<div class="dvlCpBt1124OptCell"><div class="k">Treino (c/ RSI)</div><div class="v '+(trR>=0?'pos':'neg')+'">'+sign(trR)+'</div></div>'
+        +'<div class="dvlCpBt1124OptCell"><div class="k">Teste (real)</div><div class="v '+(teR>=0?'pos':'neg')+'">'+sign(teR)+'</div></div>'
+      +'</div>'
+      +'<div class="dvlCpBt1124OptVerd" style="color:'+verd.c+'">'+verd.t+'</div>'
+      +'<div class="dvlCpBt1124OptNote">Sem o filtro do RSI, o teste dava '+(isFinite(baseTe)?sign(baseTe):'—')+'. Se o número COM RSI for melhor e verde, sua descoberta está confirmada com dado.</div>'
+    +'</div>';
+  }
+
   function bodyHtml(){
     var s=window.DVL_PUMP_BACKTEST;
     if(!s||typeof s!=="object"){
@@ -71567,6 +71607,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         + sideRow(s.short, '▼ Pré-short (short)', '#ff5966')
       +'</div>'
       + optHtml(s.optimized)
+      + rsiHtml(s.rsiConfirm)
       + modesHtml(s.modes, s.bestMode)
       + heatmapHtml(s.surface)
       + (p.adaptive

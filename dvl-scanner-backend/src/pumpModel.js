@@ -56,12 +56,15 @@ const seen = new Set();        // dedup key sym|tf|t
 
 /* Record a fired signal (spike pós-flat) awaiting resolution. atr = ATR at the
    signal candle (same TF); price = its close. */
-function record(sym, tf, t, price, atr, r) {
+function record(sym, tf, t, price, atr, r, exr) {
   if (!sym || !(Number(price) > 0) || !(Number(atr) > 0)) return false;
   const key = sym + "|" + tf + "|" + t;
   if (seen.has(key)) return false;
   seen.add(key);
-  pending.push({ sym: sym, tf: tf, t: Number(t), price: Number(price), atr: Number(atr), f: featuresOf(r) });
+  const e = (exr && Number.isFinite(Number(exr.value)))
+    ? { exrValue: Number(exr.value), exrPush: Number(exr.push) || 0, exrCloses: Array.isArray(exr.closes) ? exr.closes.map(Number) : null }
+    : null;
+  pending.push({ sym: sym, tf: tf, t: Number(t), price: Number(price), atr: Number(atr), f: featuresOf(r), exr: e });
   if (pending.length > 20000) pending = pending.slice(-20000);
   return true;
 }
@@ -105,7 +108,9 @@ function resolveWith(sym, tf, ohlc) {
     if (Number.isFinite(maxHigh) && Number.isFinite(minLow) && p.atr > 0) {
       const up = Math.max(0, (maxHigh - p.price) / p.atr);
       const down = Math.max(0, (p.price - minLow) / p.atr);
-      dataset.push({ f: p.f, up: up, down: down, entry: p.price, atr: p.atr, path: path });
+      const sample = { f: p.f, up: up, down: down, entry: p.price, atr: p.atr, path: path };
+      if (p.exr) { sample.exrValue = p.exr.exrValue; sample.exrPush = p.exr.exrPush; sample.exrCloses = p.exr.exrCloses; }
+      dataset.push(sample);
       if (dataset.length > DATA_MAX) dataset.shift();
       resolved++;
     }
