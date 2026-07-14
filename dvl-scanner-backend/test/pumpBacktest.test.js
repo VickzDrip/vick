@@ -141,8 +141,15 @@ near(BT.simulateTrail([[3,2.5,2.9],[3,1.6,1.8]], "long", 1, 1), 2, 1e-9, "trail 
 ok(BT.simulateTrail([[0.2,-1.2,-1.0]], "long", 1, 1) === -1, "trail uses initial stop before profit");
 // short mirror: favourable is down; drops to -3 then bounces up 1 → locks +2
 near(BT.simulateTrail([[ -2.5,-3,-2.9],[ -1.8,-1.6,-1.7]], "short", 1, 1), 2, 1e-9, "trail works short");
-// trailing ignores path-less samples (needs the path)
-ok(BT.outcomeFor({ up: 3, down: 0 }, "long", 1, 2, 1.5) === null, "trailing skips MFE-only signals");
+// trailing/breakeven now ALSO work on path-less (MFE) signals — every resolved
+// signal is usable. long up=3/down=0, sl1, no tp, trail1.5 → 3-1.5 = 1.5.
+near(BT.outcomeFor({ up: 3, down: 0 }, "long", 1, 0, 1.5), 1.5, 1e-9, "trailing approximated for MFE-only signals");
+// MFE cfg: adverse >= sl → conservative loss even with a big favourable move
+ok(BT.simulateMfeCfg(5, 2, "long", { slAtr: 1, trailAtr: 1 }) === -1, "MFE cfg: adverse-first → -sl");
+// MFE cfg reduces to plain bracket when trail/be off
+ok(BT.simulateMfeCfg(2.2, 0.3, "long", { slAtr: 1, tpAtr: 2 }) === 2, "MFE cfg == bracket TP");
+// MFE breakeven: up passed be but < tp, adverse small → exit flat (0), not a loss
+ok(BT.simulateMfeCfg(1.2, 0.4, "long", { slAtr: 1, tpAtr: 5, beAtr: 1 }) === 0, "MFE cfg breakeven → flat");
 
 // sweepTrail returns a grid + best
 const trSweep = BT.sweepTrail([{ f: [0], entry: 100, atr: 2, path: [[1,0.5,0.9],[3,2.5,2.9],[3,1.9,2.1]] }], alwaysLong, { slAtr: 1, trailGrid: [0.5, 1, 2], riskPct: 0.01 });

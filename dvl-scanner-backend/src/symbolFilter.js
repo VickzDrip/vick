@@ -31,7 +31,11 @@ const NON_CRYPTO_BASES = new Set([
   // leveraged ETFs (tokenised) — SOXL slipped through. Only the unambiguous
   // 3x/inverse tickers, to avoid shadowing same-ticker memecoins.
   "SOXL", "SOXS", "TQQQ", "SQQQ", "SPXL", "SPXS", "TSLL", "TSLS",
-  "NVDL", "NVDS", "TNA", "TZA", "UVXY"
+  "NVDL", "NVDS", "TNA", "TZA", "UVXY",
+  // tokenised single stocks by FULL name (unambiguous — no crypto uses these)
+  "NVIDIA", "TESLA", "APPLE", "AMAZON", "GOOGLE", "ALPHABET", "MICROSOFT",
+  "NETFLIX", "MICROSTRATEGY", "COINBASE", "ALIBABA", "PALANTIR", "BROADCOM",
+  "MICRON", "AMED", "EWY", "DRAM"
 ]);
 
 /* true when `base` (the symbol with the USDT quote already stripped) is a
