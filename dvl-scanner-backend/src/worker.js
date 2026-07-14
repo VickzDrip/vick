@@ -18,7 +18,31 @@ const outcomes = require("./outcomes");
 const train = require("./train");
 const backtest = require("./backtest");
 const pumpModel = require("./pumpModel");
+const exhaustionRsi = require("./exhaustionRsi");
 const { isTradableCrypto } = require("./symbolFilter");
+
+/* DVL Exhaustion RSI reading (15m, faithful port) for one MEXC symbol — used to
+   confirm the pré-volume+spike signal. Best-effort: two chart-kline fetches
+   (15m base + 1m for the multi-TF push); returns null on any hiccup so it never
+   breaks a scan. Only MEXC (contract.mexc.com) exposes klinesChart here. */
+async function exrReadingFor(adapter, sym) {
+  if (!adapter || adapter.key !== "mexc" || typeof adapter.klinesChart !== "function") return null;
+  try {
+    const [r15, r1] = await Promise.all([
+      adapter.klinesChart(sym, "15m", 160),
+      adapter.klinesChart(sym, "1m", 600)
+    ]);
+    const norm = rows => (Array.isArray(rows) ? rows : [])
+      .map(x => ({ time: +x[0], open: +x[1], high: +x[2], low: +x[3], close: +x[4], volume: +x[5] }))
+      .filter(c => Number.isFinite(c.time) && Number.isFinite(c.close));
+    const base = norm(r15), one = norm(r1);
+    if (base.length < 20) return null;
+    const reading = exhaustionRsi.readingAt(base, one, { baseTfMin: 15 });
+    if (!reading) return null;
+    return { value: reading.value, base: reading.base, push: reading.push, zone: reading.zone,
+             closes: base.slice(-40).map(c => c.close) };
+  } catch (_) { return null; }
+}
 
 /* Where the persistent signal registry is mirrored to disk so it survives
    restarts (deploys/reboots). Untracked by git, so `git pull` won't touch it. */
@@ -323,7 +347,12 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
       if (row.isIgnition && Array.isArray(k.ohlc) && k.ohlc.length) {
         const atr = M.computeAtr(k.ohlc, 14);
         const sigT = Number(k.ohlc[k.ohlc.length - 1].time) || now;
-        if (atr > 0) pumpModel.record(cands[i].sym, tf, sigT, row.lastClose || row.price, atr, row);
+        /* Confirm with the 15m Exhaustion RSI (faithful) — only on the 15m scan
+           pass, the TF the user fixed for the oscillator. */
+        let exr = null;
+        if (tf === cfg.SCAN_TF) { try { exr = await exrReadingFor(adapter, cands[i].sym); } catch (_) { } }
+        if (exr) { row.exrValue = exr.value; row.exrZone = exr.zone; }
+        if (atr > 0) pumpModel.record(cands[i].sym, tf, sigT, row.lastClose || row.price, atr, row, exr);
       }
     } catch (_) { /* model is best-effort — never break a scan cycle */ }
   }

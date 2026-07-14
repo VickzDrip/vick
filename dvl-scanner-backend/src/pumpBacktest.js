@@ -527,9 +527,72 @@ function mineConditions(samples, predictFn, featureNames, opts) {
   return { baselineReturn: baseline.returnPct, trainN: train.length, testN: test.length, top: out.slice(0, 4) };
 }
 
+const EXR = require("./exhaustionRsi");
+
+/* RSI-INPUT SWEEP — the user's discovery: pré-volume+spike CONFIRMED by the
+   Exhaustion RSI zone. Each signal stores the 15m closes + the multi-TF push
+   at fire time, so we can RECOMPUTE the faithful EXR for any (rsiLen, push,
+   upper, lower) combo and keep only the signals where the oscillator confirms
+   the model's direction (long ⇐ exhausted down ≤ lower; short ⇐ exhausted up ≥
+   upper). Sweeps a broad grid of those inputs, picks the best on TRAIN and
+   reports it on TEST (out-of-sample) vs the unfiltered baseline. Only signals
+   that carry EXR data participate (collected forward). */
+function exrValueAt(s, rsiLen, push) {
+  const cl = s && s.exrCloses;
+  if (!Array.isArray(cl) || cl.length < 3) return null;
+  const len = Math.max(2, Math.min(Math.round(rsiLen), cl.length - 1));
+  const rsi = EXR.mtfRsi(cl.map(Number), len);
+  const base = rsi[rsi.length - 1];
+  return Math.max(0, Math.min(100, base + (Number(s.exrPush) || 0) * push));
+}
+function sweepRsiConfirm(samples, predictFn, opts) {
+  opts = opts || {};
+  const exit = { slAtr: opts.slAtr || 1.5, tpAtr: opts.tpAtr || 3, costFrac: opts.costFrac, account0: opts.account0, riskPct: opts.riskPct };
+  const cut = Math.max(1, Math.floor(samples.length * (opts.trainFrac || 0.7)));
+  const train = samples.slice(0, cut), test = samples.slice(cut);
+  const nExr = samples.filter(s => Array.isArray(s.exrCloses) && s.exrCloses.length && Number.isFinite(s.exrValue)).length;
+  if (nExr < 20) return { ready: false, withExr: nExr, need: 20 };
+
+  const rsiLenGrid = opts.rsiLenGrid || [7, 10, 14, 21];
+  const pushGrid = opts.pushGrid || [0, 10, 18, 25];
+  const upperGrid = opts.upperGrid || [55, 60, 65, 70];
+  const lowerGrid = opts.lowerGrid || [30, 35, 40, 45];
+  const minTr = Math.max(6, Math.round(nExr * 0.03));
+
+  const filt = (arr, cfg) => arr.filter(s => {
+    if (!Array.isArray(s.exrCloses) || !s.exrCloses.length) return false;
+    const p = predictFn(s.f); if (!p) return false;
+    const side = p.up >= p.down ? "long" : "short";
+    const v = exrValueAt(s, cfg.rsiLen, cfg.push); if (v == null) return false;
+    return side === "long" ? v <= cfg.lower : v >= cfg.upper;
+  });
+
+  let bestRun = null, bestCfg = null;
+  for (const rsiLen of rsiLenGrid) for (const push of pushGrid)
+    for (const upper of upperGrid) for (const lower of lowerGrid) {
+      if (lower >= upper) continue;
+      const cfg = { rsiLen, push, upper, lower };
+      const tr = run(filt(train, cfg), predictFn, exit);
+      if (tr.trades < minTr) continue;
+      if (!bestRun || tr.account > bestRun.account) { bestRun = tr; bestCfg = cfg; }
+    }
+  if (!bestCfg) return { ready: false, withExr: nExr, reason: "poucos sinais confirmados no treino" };
+
+  const teRun = run(filt(test, bestCfg), predictFn, exit);
+  const baseTrain = run(train, predictFn, exit), baseTest = run(test, predictFn, exit);
+  return {
+    ready: true, withExr: nExr, trainN: train.length, testN: test.length,
+    best: { rsiLen: bestCfg.rsiLen, push: bestCfg.push, upperZone: bestCfg.upper, lowerZone: bestCfg.lower },
+    train: { returnPct: bestRun.returnPct, trades: bestRun.trades, winRate: bestRun.winRate },
+    test: { returnPct: teRun.returnPct, trades: teRun.trades, winRate: teRun.winRate },
+    baselineTrainPct: baseTrain.returnPct, baselineTestPct: baseTest.returnPct,
+    generalizes: teRun.trades >= 5 && teRun.returnPct > 0
+  };
+}
+
 module.exports = {
   simulateTrade, simulateMfe, simulateMfeCfg, simulateTrail, simulatePathCfg,
   simulateScaleOut, simulateScaleOutMfe, outcomeFor,
   run, sweepTp, sweepTrail, sweepMinConv, sweepGrid, evaluate, exitConfigs, optimize,
-  calibrate, mineConditions
+  calibrate, mineConditions, exrValueAt, sweepRsiConfirm
 };

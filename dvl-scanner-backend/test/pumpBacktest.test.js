@@ -249,6 +249,34 @@ near(BT.outcomeFor({ up: 3, down: 0.2 }, "long", 1, 0, 1, 0, { tp1Atr: 2, tp1Fra
 const allCfgs = BT.exitConfigs({ slGrid: [1], tpGrid: [2], trailGrid: [1], beGrid: [0], timeGrid: [5], tp1Grid: [2] });
 ok(allCfgs.some(c => c.family === "timestop") && allCfgs.some(c => c.family === "scaleout"), "exitConfigs adds timestop + scaleout");
 
+// ── EXR confirmation sweep (the RSI discovery) ────────────────
+// exrValueAt: RSI base + push scaling. Rising closes → high RSI; push adds.
+const risingCloses = []; for (let i = 0; i < 40; i++) risingCloses.push(1 + i);
+const vNoPush = BT.exrValueAt({ exrCloses: risingCloses, exrPush: 0 }, 14, 0);
+near(vNoPush, 100, 1e-6, "exrValueAt: all-gains → 100");
+const vNeg = BT.exrValueAt({ exrCloses: risingCloses, exrPush: -1 }, 14, 20);
+ok(vNeg < 100, "exrValueAt: negative push lowers the value");
+ok(BT.exrValueAt({ exrCloses: [] }, 14, 0) === null, "exrValueAt: no closes → null");
+
+// sweepRsiConfirm: winners (rising closes → high EXR) are shorts that pay; the
+// filter should keep the confirming subset and report out-of-sample.
+const rc = [];
+for (let i = 0; i < 60; i++) {
+  const highExr = i % 2 === 0;
+  const closes = []; for (let j = 0; j < 40; j++) closes.push(highExr ? 1 + j : 40 - j); // high or low RSI
+  rc.push({ f: [0], entry: 100, atr: 2, exrCloses: closes, exrPush: 0,
+    exrValue: highExr ? 100 : 0,
+    path: highExr ? [[0.1, -1.3, -1.1]] : [[0.1, -0.1, 0]] });   // high-EXR → drops (good short)
+}
+const predShort = () => ({ up: 0, down: 3 });   // model says short
+const rcRes = BT.sweepRsiConfirm(rc, predShort, { trainFrac: 0.5, slAtr: 1, tpAtr: 2,
+  upperGrid: [60], lowerGrid: [35], rsiLenGrid: [14], pushGrid: [0] });
+ok(rcRes.ready, "sweepRsiConfirm runs with enough EXR samples");
+ok(rcRes.best && rcRes.best.upperZone === 60, "sweepRsiConfirm returns the best RSI config");
+ok(typeof rcRes.test.returnPct === "number", "sweepRsiConfirm reports out-of-sample");
+// not-ready when too few EXR samples
+ok(BT.sweepRsiConfirm([{ f: [0], path: [[1, 0, 0.9]] }], predShort, {}).ready === false, "sweepRsiConfirm needs EXR data");
+
 console.log(fail ? ("PUMP BACKTEST — " + pass + " passed, " + fail + " FAILED")
                  : ("OK — " + pass + " passed, 0 failed"));
 process.exit(fail ? 1 : 0);
