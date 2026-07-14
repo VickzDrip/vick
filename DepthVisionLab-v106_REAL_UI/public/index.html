@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.131</title>
+<title>DVL — Beta 1.132</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.131';
+window.DVL_APP_VERSION = 'Beta 1.132';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.131";
+const DVL_APP_VERSION = "Beta 1.132";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.132", note: "Agora o backtest usa TODOS os sinais resolvidos do modelo (antes o modo Adaptativo/trailing só usava os que tinham trajetória de preço guardada — os novos — e por isso aparecia com poucos trades tipo 76 de 900+). O trailing e o breakeven passaram a rodar também nos sinais antigos via uma aproximação conservadora do resumo (subiu/desceu em ATR): quando tem a trajetória exata, usa ela; quando não tem, aproxima sem inflar o resultado. Assim todos os modos e o otimizador enxergam a base inteira. Também tirei do scanner mais ações/ETFs tokenizados que apareciam (NVIDIA, TESLA, EWY, DRAM, MICROSTRATEGY, COINBASE, MICRON…). Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.131", note: "OTIMIZADOR de saída (o 'machine learning de TP/SL' que você pediu): em vez de modos fixos, ele varre CENTENAS de combos de saída — stop × alvo, com/sem breakeven, e trailing — num motor unificado, e escolhe o melhor. E, o mais importante, com trava anti-autoengano: separa os sinais em TREINO (mais antigos) e TESTE (mais novos, nunca vistos), otimiza no treino e mostra o resultado no teste (walk-forward). Se o combo dá +34% no treino mas -8% no teste, o card diz 'não generaliza — foi curve-fitting'. Só vale confiar quando o TESTE também é verde. Novo bloco 'Melhor combo — validado fora da amostra' com treino vs teste e veredito. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.130", note: "Duas coisas no backtest: (1) modo ADAPTATIVO — um trailing stop em ATR, que em vez de alvo fixo sobe o stop atrás do preço, deixa o lucro correr e protege quando vira; entra na comparação de modos junto com Scalp/Equilibrado/Runner e costuma ganhar em drawdown. (2) MAPA DE CALOR sem pontos cegos: em vez de só alguns pontos, mostra o retorno líquido de TODA combinação de stop × alvo numa grade colorida (verde lucro, vermelho prejuízo, ★ no melhor). Assim dá pra ver se o melhor é uma ZONA robusta ou um pico sortudo — e escolher com o terreno inteiro à vista. Obs.: o modo adaptativo usa só sinais com trajetória de preço guardada (os novos), então o nº de trades dele cresce com o tempo. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.129", note: "Backtest financeiro agora testa MODOS DE RISCO diferentes em vez de um SL/TP único: Scalp (stop 0.8× ATR, alvos curtos), Equilibrado (stop 1.2×) e Runner (stop 2.0×, alvos longos). Pra cada modo ele acha o melhor take-profit + o gatilho de conviction (tudo líquido, com taxas) e mostra os três lado a lado com retorno e drawdown, destacando com ★ o que mais rendeu. O topo do card passa a operar no melhor modo. Assim dá pra ver que scalp apertado costuma morrer nas taxas enquanto deixar correr (runner) segura o edge — e escolher com base em dado, não achismo. Backend (exige reiniciar o dvl-scanner) + frontend." },

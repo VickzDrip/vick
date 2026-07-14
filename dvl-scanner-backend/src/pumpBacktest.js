@@ -107,17 +107,37 @@ function simulatePathCfg(path, side, cfg) {
   return isLong ? last : -last;
 }
 
-/* PnL (ATR) for one resolved signal. With a price path, the unified exit above
-   supports every combo (bracket / trailing / breakeven). Path-less older
-   signals only support a plain bracket via the MFE/MAE approximation, so any
-   config that needs the path (trailing or breakeven) skips them. */
+/* MFE/MAE approximation of the UNIFIED exit, so path-less OLDER signals still
+   work under any config (bracket / breakeven / trailing) — this is what lets
+   the backtest use EVERY resolved signal, not just the new ones with a path.
+   We only know the max favourable (fav) and max adverse (adv) excursions, not
+   their ORDER, so we assume the adverse extreme could have come first
+   (conservative): any initial-stop hit is taken as a loss before profit is
+   locked. If the stop was never threatened, resolve favourably by TP, then
+   trailing give-back, then breakeven, else flat. Reduces to the plain bracket
+   when trail/be are off. */
+function simulateMfeCfg(up, down, side, cfg) {
+  const sl = cfg.slAtr > 0 ? cfg.slAtr : 1;
+  const tp = cfg.tpAtr > 0 ? cfg.tpAtr : Infinity;
+  const trail = cfg.trailAtr > 0 ? cfg.trailAtr : Infinity;
+  const be = cfg.beAtr > 0 ? cfg.beAtr : Infinity;
+  const fav = side === "long" ? up : down;   // max favourable excursion (≥0)
+  const adv = side === "long" ? down : up;   // max adverse excursion (≥0)
+  if (adv >= sl) return -sl;                  // conservative: stopped before locking
+  if (fav >= tp) return tp;                   // took profit
+  if (fav >= trail) return Math.max(0, fav - trail);  // trailed give-back
+  if (fav >= be) return 0;                    // breakeven armed, gave it back
+  return 0;                                   // small move → flat
+}
+
+/* PnL (ATR) for one resolved signal: exact unified exit when we have the price
+   path, else the MFE/MAE approximation — so every resolved signal is usable
+   under every config. */
 function outcomeFor(s, side, slAtr, tpAtr, trailAtr, beAtr) {
-  if (Array.isArray(s.path) && s.path.length) {
-    return simulatePathCfg(s.path, side, { slAtr, tpAtr, trailAtr, beAtr });
-  }
-  if ((trailAtr > 0) || (beAtr > 0)) return null;   // needs the path
+  const cfg = { slAtr, tpAtr, trailAtr, beAtr };
+  if (Array.isArray(s.path) && s.path.length) return simulatePathCfg(s.path, side, cfg);
   const up = Number(s.up), down = Number(s.down);
-  if (Number.isFinite(up) && Number.isFinite(down)) return simulateMfe(up, down, side, slAtr, tpAtr);
+  if (Number.isFinite(up) && Number.isFinite(down)) return simulateMfeCfg(up, down, side, cfg);
   return null;
 }
 
@@ -374,6 +394,6 @@ function optimize(samples, predictFn, opts) {
 }
 
 module.exports = {
-  simulateTrade, simulateMfe, simulateTrail, simulatePathCfg, outcomeFor,
+  simulateTrade, simulateMfe, simulateMfeCfg, simulateTrail, simulatePathCfg, outcomeFor,
   run, sweepTp, sweepTrail, sweepMinConv, sweepGrid, evaluate, exitConfigs, optimize
 };
