@@ -91,7 +91,8 @@ function simulatePathCfg(path, side, cfg) {
   const tp = cfg.tpAtr > 0 ? cfg.tpAtr : Infinity;
   const trail = cfg.trailAtr > 0 ? cfg.trailAtr : Infinity;
   const be = cfg.beAtr > 0 ? cfg.beAtr : Infinity;
-  let maxFav = 0;
+  const timeBars = cfg.timeBars > 0 ? cfg.timeBars : Infinity;   // max bars to hold
+  let maxFav = 0, i = 0;
   for (const c of path) {
     const hi = Number(c[0]), lo = Number(c[1]);
     const fhi = isLong ? hi : -lo;   // favourable extreme this bar
@@ -102,9 +103,51 @@ function simulatePathCfg(path, side, cfg) {
     if (flo <= stop) return stop;                               // stopped (may be ≥ 0)
     if (fhi >= tp) return tp;                                   // take-profit
     if (fhi > maxFav) maxFav = fhi;
+    i++;
+    if (i >= timeBars) { const cl = Number(c[2]) || 0; return isLong ? cl : -cl; }  // time stop
   }
   const last = Number(path[path.length - 1][2]) || 0;
   return isLong ? last : -last;
+}
+
+/* SCALE-OUT exit (partial take-profit): book `tp1Frac` of the position at
+   `tp1Atr`, then run the remainder with the stop moved to breakeven and an ATR
+   trailing stop — "take some off, let the runner run". PnL is the weighted sum.
+   Needs the price path. */
+function simulateScaleOut(path, side, cfg) {
+  if (!Array.isArray(path) || !path.length) return 0;
+  const isLong = side === "long";
+  const sl = cfg.slAtr > 0 ? cfg.slAtr : 1;
+  const tp1 = cfg.tp1Atr > 0 ? cfg.tp1Atr : 2;
+  const frac = Math.min(0.9, Math.max(0.1, cfg.tp1Frac || 0.5));
+  const trail = cfg.trailAtr > 0 ? cfg.trailAtr : 1;
+  let maxFav = 0, tookPartial = false, booked = 0;
+  for (const c of path) {
+    const hi = Number(c[0]), lo = Number(c[1]);
+    const fhi = isLong ? hi : -lo, flo = isLong ? lo : -hi;
+    if (!tookPartial) {
+      if (flo <= -sl) return -sl;                       // whole position stopped
+      if (fhi >= tp1) { booked = frac * tp1; tookPartial = true; if (fhi > maxFav) maxFav = fhi; continue; }
+      if (fhi > maxFav) maxFav = fhi;
+    } else {
+      const stop = Math.max(0, maxFav - trail);         // runner: breakeven + trailing
+      if (flo <= stop) return booked + (1 - frac) * stop;
+      if (fhi > maxFav) maxFav = fhi;
+    }
+  }
+  const last = Number(path[path.length - 1][2]) || 0, lastFav = isLong ? last : -last;
+  return tookPartial ? booked + (1 - frac) * lastFav : lastFav;
+}
+
+function simulateScaleOutMfe(up, down, side, cfg) {
+  const sl = cfg.slAtr > 0 ? cfg.slAtr : 1;
+  const tp1 = cfg.tp1Atr > 0 ? cfg.tp1Atr : 2;
+  const frac = Math.min(0.9, Math.max(0.1, cfg.tp1Frac || 0.5));
+  const trail = cfg.trailAtr > 0 ? cfg.trailAtr : 1;
+  const fav = side === "long" ? up : down, adv = side === "long" ? down : up;
+  if (adv >= sl) return -sl;                            // conservative: stopped whole first
+  if (fav >= tp1) return frac * tp1 + (1 - frac) * Math.max(0, fav - trail);
+  return 0;
 }
 
 /* MFE/MAE approximation of the UNIFIED exit, so path-less OLDER signals still
@@ -132,10 +175,18 @@ function simulateMfeCfg(up, down, side, cfg) {
 
 /* PnL (ATR) for one resolved signal: exact unified exit when we have the price
    path, else the MFE/MAE approximation — so every resolved signal is usable
-   under every config. */
-function outcomeFor(s, side, slAtr, tpAtr, trailAtr, beAtr) {
-  const cfg = { slAtr, tpAtr, trailAtr, beAtr };
-  if (Array.isArray(s.path) && s.path.length) return simulatePathCfg(s.path, side, cfg);
+   under every config. `extra` carries the newer exit types: {timeBars, tp1Atr,
+   tp1Frac} (scale-out is selected by tp1Atr > 0). */
+function outcomeFor(s, side, slAtr, tpAtr, trailAtr, beAtr, extra) {
+  extra = extra || {};
+  const cfg = { slAtr, tpAtr, trailAtr, beAtr, timeBars: extra.timeBars || 0, tp1Atr: extra.tp1Atr || 0, tp1Frac: extra.tp1Frac || 0 };
+  const hasPath = Array.isArray(s.path) && s.path.length;
+  if (cfg.tp1Atr > 0) {   // scale-out (partial take-profit)
+    if (hasPath) return simulateScaleOut(s.path, side, cfg);
+    const u1 = Number(s.up), d1 = Number(s.down);
+    return (Number.isFinite(u1) && Number.isFinite(d1)) ? simulateScaleOutMfe(u1, d1, side, cfg) : null;
+  }
+  if (hasPath) return simulatePathCfg(s.path, side, cfg);
   const up = Number(s.up), down = Number(s.down);
   if (Number.isFinite(up) && Number.isFinite(down)) return simulateMfeCfg(up, down, side, cfg);
   return null;
@@ -163,6 +214,7 @@ function run(samples, predictFn, opts) {
   const costFrac = opts.costFrac != null ? opts.costFrac : 0;    // round-trip cost (fraction of notional)
   const trailAtr = opts.trailAtr != null ? opts.trailAtr : 0;    // >0 → trailing stop
   const beAtr = opts.beAtr != null ? opts.beAtr : 0;            // >0 → move stop to breakeven once up this far
+  const extra = { timeBars: opts.timeBars || 0, tp1Atr: opts.tp1Atr || 0, tp1Frac: opts.tp1Frac || 0 };
 
   /* Median ATR% (atr/entry) across samples that carry it, as the fallback for
      older path-less signals — clamped to a sane crypto-perp floor so one
@@ -194,7 +246,7 @@ function run(samples, predictFn, opts) {
     const conv = side === "long" ? pred.up : pred.down;
     if (!(conv >= minConv)) continue;
 
-    const grossPnlAtr = outcomeFor(s, side, slAtr, tpAtr, trailAtr, beAtr);
+    const grossPnlAtr = outcomeFor(s, side, slAtr, tpAtr, trailAtr, beAtr, extra);
     if (grossPnlAtr == null) continue;
     if (Array.isArray(s.path) && s.path.length) exactPath++;
     const costAtr = costFrac > 0 ? costFrac / atrPctOf(s) : 0;   // = costFrac × entry/atr
@@ -341,12 +393,22 @@ function exitConfigs(opts) {
   const tpGrid = opts.tpGrid || [1, 1.5, 2, 2.5, 3, 4, 5, 6];
   const trailGrid = opts.trailGrid || [0.5, 1, 1.5, 2, 2.5, 3];
   const beGrid = opts.beGrid || [0, 0.5, 1, 1.5];   // 0 = no breakeven
+  const timeGrid = opts.timeGrid || [5, 8, 12];        // max bars to hold (of HORIZON)
+  const tp1Grid = opts.tp1Grid || [1, 1.5, 2];         // partial take-profit level
   const cfgs = [];
   for (const sl of slGrid) for (const tp of tpGrid) for (const be of beGrid) {
     cfgs.push({ family: be > 0 ? "bracket+be" : "bracket", slAtr: sl, tpAtr: tp, trailAtr: 0, beAtr: be });
   }
   for (const sl of slGrid) for (const tr of trailGrid) {
     cfgs.push({ family: "trailing", slAtr: sl, tpAtr: 0, trailAtr: tr, beAtr: 0 });
+  }
+  /* time stop: fixed bracket that also bails after N bars */
+  for (const sl of slGrid) for (const tp of tpGrid) for (const tb of timeGrid) {
+    cfgs.push({ family: "timestop", slAtr: sl, tpAtr: tp, trailAtr: 0, beAtr: 0, timeBars: tb });
+  }
+  /* scale-out: book half at tp1, trail the runner from breakeven */
+  for (const sl of slGrid) for (const tp1 of tp1Grid) for (const tr of trailGrid) {
+    cfgs.push({ family: "scaleout", slAtr: sl, tp1Atr: tp1, tp1Frac: 0.5, trailAtr: tr });
   }
   return cfgs;
 }
@@ -393,7 +455,8 @@ function optimize(samples, predictFn, opts) {
   return {
     ready: true, trainFrac, trainN: train.length, testN: test.length,
     candidates: cfgs.length,
-    best: { family: best.family, slAtr: best.slAtr, tpAtr: best.tpAtr, trailAtr: best.trailAtr, beAtr: best.beAtr, minConv: mcStar },
+    best: { family: best.family, slAtr: best.slAtr, tpAtr: best.tpAtr, trailAtr: best.trailAtr, beAtr: best.beAtr,
+            timeBars: best.timeBars || 0, tp1Atr: best.tp1Atr || 0, tp1Frac: best.tp1Frac || 0, minConv: mcStar },
     train: summary(trainRes), test: summary(testRes),
     generalizes: testRes.trades >= 5 && testRes.returnPct > 0
   };
@@ -465,7 +528,8 @@ function mineConditions(samples, predictFn, featureNames, opts) {
 }
 
 module.exports = {
-  simulateTrade, simulateMfe, simulateMfeCfg, simulateTrail, simulatePathCfg, outcomeFor,
+  simulateTrade, simulateMfe, simulateMfeCfg, simulateTrail, simulatePathCfg,
+  simulateScaleOut, simulateScaleOutMfe, outcomeFor,
   run, sweepTp, sweepTrail, sweepMinConv, sweepGrid, evaluate, exitConfigs, optimize,
   calibrate, mineConditions
 };
