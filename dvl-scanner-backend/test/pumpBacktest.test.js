@@ -154,6 +154,38 @@ ok(gs.cells.length === 6, "grid covers every SL×TP cell (2×3)");
 ok(gs.best && typeof gs.best.returnPct === "number", "grid reports the best cell");
 ok(gs.slGrid.length === 2 && gs.tpGrid.length === 3, "grid echoes its axes");
 
+// ── simulatePathCfg (unified exit) reproduces the specialised sims ────
+// pure bracket == simulateTrade
+near(BT.simulatePathCfg([[2.1, 0.3, 1.8]], "long", { slAtr: 1, tpAtr: 2 }), 2, 1e-9, "cfg bracket == TP hit");
+near(BT.simulatePathCfg([[0.3, -1.2, -0.9]], "long", { slAtr: 1, tpAtr: 2 }), -1, 1e-9, "cfg bracket == SL hit");
+// pure trailing == simulateTrail
+near(BT.simulatePathCfg([[3, 2.5, 2.9], [3, 1.6, 1.8]], "long", { slAtr: 1, trailAtr: 1 }), 2, 1e-9, "cfg trailing locks +2");
+// breakeven: up to +1 (be triggers, stop→0) then dips to -0.5 → exit at 0, not -1
+near(BT.simulatePathCfg([[1.1, 0.5, 0.9], [0.4, -0.5, -0.3]], "long", { slAtr: 1, tpAtr: 5, beAtr: 1 }), 0, 1e-9, "breakeven saves the trade (exit at 0)");
+// without breakeven the same path would stop at -1 (dip -0.5 doesn't hit -1 → runs to close -0.3)
+near(BT.simulatePathCfg([[1.1, 0.5, 0.9], [0.4, -0.5, -0.3]], "long", { slAtr: 1, tpAtr: 5 }), -0.3, 1e-9, "no breakeven → rides to close");
+
+// ── exitConfigs + optimize (walk-forward) ─────────────────────
+const cfgs = BT.exitConfigs({ slGrid: [1, 2], tpGrid: [2, 3], trailGrid: [1], beGrid: [0, 1] });
+ok(cfgs.length === 2 * 2 * 2 + 2 * 1, "exitConfigs enumerates bracket(+be) and trailing combos");
+ok(cfgs.some(c => c.family === "trailing") && cfgs.some(c => c.family === "bracket+be"), "config families present");
+
+// optimizer: train (first half) winners vs an untouched test half. Winners run
+// to +3, losers stop out; a good TP should be profitable on both halves.
+const opt = [];
+for (let i = 0; i < 60; i++) {
+  const winner = i % 2 === 0;
+  opt.push({ f: [winner ? 1 : 0], entry: 100, atr: 2,
+    path: winner ? [[3.2, 0.2, 3.0]] : [[0.1, -1.3, -1.1]] });
+}
+const predW = f => (f[0] === 1 ? { up: 3, down: 0 } : { up: 0.5, down: 0 });
+const o = BT.optimize(opt, predW, { trainFrac: 0.5, account0: 1000, riskPct: 0.01,
+  slGrid: [1], tpGrid: [2, 3], trailGrid: [1], beGrid: [0] });
+ok(o.ready, "optimize returns a result");
+ok(o.trainN === 30 && o.testN === 30, "optimize splits train/test");
+ok(o.best && o.best.minConv >= 1, "optimize learns a gate that filters losers");
+ok(o.test && typeof o.test.returnPct === "number", "optimize reports out-of-sample");
+
 console.log(fail ? ("PUMP BACKTEST — " + pass + " passed, " + fail + " FAILED")
                  : ("OK — " + pass + " passed, 0 failed"));
 process.exit(fail ? 1 : 0);

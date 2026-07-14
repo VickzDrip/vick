@@ -77,14 +77,45 @@ function simulateTrail(path, side, slAtr, trailAtr) {
   return isLong ? last : -last;
 }
 
-/* PnL (ATR) for one resolved signal. Trailing (adaptive) needs the exact path;
-   otherwise use the fixed bracket on the path, or the MFE/MAE approximation for
-   older path-less signals so EVERY resolved signal stays usable. */
-function outcomeFor(s, side, slAtr, tpAtr, trailAtr) {
-  if (trailAtr > 0) {
-    return (Array.isArray(s.path) && s.path.length) ? simulateTrail(s.path, side, slAtr, trailAtr) : null;
+/* UNIFIED exit over a price path — one function that combines any of: initial
+   stop (slAtr), take-profit (tpAtr), trailing stop (trailAtr) and move-to-
+   breakeven (beAtr, raise stop to entry once price is up beAtr). Missing pieces
+   are disabled (tp/trail = ∞, be = ∞). The stop each bar is the HIGHEST of the
+   active protections, evaluated with the peak from PRIOR bars (conservative);
+   if stop and TP fall in the same bar the STOP wins. Favourable-signed ATR so
+   long/short share the code. This is the search space the optimiser explores. */
+function simulatePathCfg(path, side, cfg) {
+  if (!Array.isArray(path) || !path.length) return 0;
+  const isLong = side === "long";
+  const sl = cfg.slAtr > 0 ? cfg.slAtr : 1;
+  const tp = cfg.tpAtr > 0 ? cfg.tpAtr : Infinity;
+  const trail = cfg.trailAtr > 0 ? cfg.trailAtr : Infinity;
+  const be = cfg.beAtr > 0 ? cfg.beAtr : Infinity;
+  let maxFav = 0;
+  for (const c of path) {
+    const hi = Number(c[0]), lo = Number(c[1]);
+    const fhi = isLong ? hi : -lo;   // favourable extreme this bar
+    const flo = isLong ? lo : -hi;   // adverse extreme this bar (favourable-signed)
+    let stop = -sl;
+    if (maxFav >= be) stop = Math.max(stop, 0);                 // breakeven
+    if (maxFav >= trail) stop = Math.max(stop, maxFav - trail); // trailing
+    if (flo <= stop) return stop;                               // stopped (may be ≥ 0)
+    if (fhi >= tp) return tp;                                   // take-profit
+    if (fhi > maxFav) maxFav = fhi;
   }
-  if (Array.isArray(s.path) && s.path.length) return simulateTrade(s.path, side, slAtr, tpAtr);
+  const last = Number(path[path.length - 1][2]) || 0;
+  return isLong ? last : -last;
+}
+
+/* PnL (ATR) for one resolved signal. With a price path, the unified exit above
+   supports every combo (bracket / trailing / breakeven). Path-less older
+   signals only support a plain bracket via the MFE/MAE approximation, so any
+   config that needs the path (trailing or breakeven) skips them. */
+function outcomeFor(s, side, slAtr, tpAtr, trailAtr, beAtr) {
+  if (Array.isArray(s.path) && s.path.length) {
+    return simulatePathCfg(s.path, side, { slAtr, tpAtr, trailAtr, beAtr });
+  }
+  if ((trailAtr > 0) || (beAtr > 0)) return null;   // needs the path
   const up = Number(s.up), down = Number(s.down);
   if (Number.isFinite(up) && Number.isFinite(down)) return simulateMfe(up, down, side, slAtr, tpAtr);
   return null;
@@ -110,7 +141,8 @@ function run(samples, predictFn, opts) {
   const minConv = opts.minConv != null ? opts.minConv : 0;       // min favourable ATR to take a trade
   const onlySide = opts.side || null;
   const costFrac = opts.costFrac != null ? opts.costFrac : 0;    // round-trip cost (fraction of notional)
-  const trailAtr = opts.trailAtr != null ? opts.trailAtr : 0;    // >0 → adaptive trailing stop (ignores tpAtr)
+  const trailAtr = opts.trailAtr != null ? opts.trailAtr : 0;    // >0 → trailing stop
+  const beAtr = opts.beAtr != null ? opts.beAtr : 0;            // >0 → move stop to breakeven once up this far
 
   /* Median ATR% (atr/entry) across samples that carry it, as the fallback for
      older path-less signals — clamped to a sane crypto-perp floor so one
@@ -141,7 +173,7 @@ function run(samples, predictFn, opts) {
     const conv = side === "long" ? pred.up : pred.down;
     if (!(conv >= minConv)) continue;
 
-    const grossPnlAtr = outcomeFor(s, side, slAtr, tpAtr, trailAtr);
+    const grossPnlAtr = outcomeFor(s, side, slAtr, tpAtr, trailAtr, beAtr);
     if (grossPnlAtr == null) continue;
     if (Array.isArray(s.path) && s.path.length) exactPath++;
     const costAtr = costFrac > 0 ? costFrac / atrPctOf(s) : 0;   // = costFrac × entry/atr
@@ -168,7 +200,7 @@ function run(samples, predictFn, opts) {
     avgCostAtr: trades ? costAtrSum / trades : 0,
     exactPath,                    // how many trades used the exact price path
     side: onlySide || "all",
-    slAtr, tpAtr, trailAtr, riskPct, minConv, costFrac, equity
+    slAtr, tpAtr, trailAtr, beAtr, riskPct, minConv, costFrac, equity
   };
 }
 
@@ -274,4 +306,74 @@ function evaluate(samples, predictFn, opts) {
   };
 }
 
-module.exports = { simulateTrade, simulateMfe, simulateTrail, outcomeFor, run, sweepTp, sweepTrail, sweepMinConv, sweepGrid, evaluate };
+/* Build the whole exit-config search space: fixed brackets (SL×TP), those same
+   brackets with a move-to-breakeven, and trailing stops (SL×trail). This is the
+   "many combos, not just one" the optimiser tries. */
+function exitConfigs(opts) {
+  opts = opts || {};
+  const slGrid = opts.slGrid || [0.5, 0.8, 1, 1.2, 1.5, 2, 2.5, 3];
+  const tpGrid = opts.tpGrid || [1, 1.5, 2, 2.5, 3, 4, 5, 6];
+  const trailGrid = opts.trailGrid || [0.5, 1, 1.5, 2, 2.5, 3];
+  const beGrid = opts.beGrid || [0, 0.5, 1, 1.5];   // 0 = no breakeven
+  const cfgs = [];
+  for (const sl of slGrid) for (const tp of tpGrid) for (const be of beGrid) {
+    cfgs.push({ family: be > 0 ? "bracket+be" : "bracket", slAtr: sl, tpAtr: tp, trailAtr: 0, beAtr: be });
+  }
+  for (const sl of slGrid) for (const tr of trailGrid) {
+    cfgs.push({ family: "trailing", slAtr: sl, tpAtr: 0, trailAtr: tr, beAtr: 0 });
+  }
+  return cfgs;
+}
+
+function summary(r) {
+  return {
+    returnPct: r.returnPct, maxDrawdownPct: r.maxDrawdownPct,
+    winRate: r.winRate, trades: r.trades, expectancyAtr: r.expectancyAtr
+  };
+}
+
+/* THE OPTIMISER — "machine-learn the TP/SL". Splits the resolved signals into a
+   TRAIN slice (older) and a TEST slice (newer), searches the full exitConfigs()
+   space on TRAIN (max net return among configs with enough trades), learns the
+   conviction gate on TRAIN too, then reports that single chosen config's result
+   on the untouched TEST slice. If TEST is also profitable the combo generalises;
+   if only TRAIN is, it was curve-fitting. This is the guard that keeps a big
+   search honest. In-sample tuning + out-of-sample check — never a live order. */
+function optimize(samples, predictFn, opts) {
+  opts = opts || {};
+  const trainFrac = opts.trainFrac != null ? opts.trainFrac : 0.7;
+  const cut = Math.max(1, Math.floor(samples.length * trainFrac));
+  const train = samples.slice(0, cut);
+  const test = samples.slice(cut);
+  const cfgs = exitConfigs(opts);
+  const baseOpts = { account0: opts.account0, riskPct: opts.riskPct, costFrac: opts.costFrac };
+  const minTrain = Math.max(10, Math.round(train.length * 0.05));
+
+  let best = null, bestRun = null;
+  for (const cfg of cfgs) {
+    const r = run(train, predictFn, Object.assign({}, baseOpts, cfg));
+    if (r.trades < minTrain) continue;
+    if (!bestRun || r.account > bestRun.account) { best = cfg; bestRun = r; }
+  }
+  if (!best) return { ready: false, reason: "poucos trades no treino", trainN: train.length, testN: test.length };
+
+  /* Learn the conviction gate for the winning config on TRAIN. */
+  const convSweep = sweepMinConv(train, predictFn, Object.assign({}, baseOpts, best, { minTrades: minTrain }));
+  const mcStar = convSweep.best ? convSweep.best.minConv : 0;
+  const tuned = Object.assign({}, baseOpts, best, { minConv: mcStar });
+  const trainRes = run(train, predictFn, tuned);
+  const testRes = run(test, predictFn, tuned);
+
+  return {
+    ready: true, trainFrac, trainN: train.length, testN: test.length,
+    candidates: cfgs.length,
+    best: { family: best.family, slAtr: best.slAtr, tpAtr: best.tpAtr, trailAtr: best.trailAtr, beAtr: best.beAtr, minConv: mcStar },
+    train: summary(trainRes), test: summary(testRes),
+    generalizes: testRes.trades >= 5 && testRes.returnPct > 0
+  };
+}
+
+module.exports = {
+  simulateTrade, simulateMfe, simulateTrail, simulatePathCfg, outcomeFor,
+  run, sweepTp, sweepTrail, sweepMinConv, sweepGrid, evaluate, exitConfigs, optimize
+};

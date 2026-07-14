@@ -278,6 +278,9 @@ function createServer() {
     /* No-blind-spots SL×TP surface at the learned gate — the whole landscape,
        so the best combo can be judged for robustness (plateau vs lucky spike). */
     const surface = pumpBacktest.sweepGrid(samples, predict, Object.assign({}, base, { minConv: e.minConv }));
+    /* THE OPTIMISER: search hundreds of exit combos (bracket / breakeven /
+       trailing) on a TRAIN split and validate the winner out-of-sample. */
+    const optimized = pumpBacktest.optimize(samples, predict, base);
     res.json({
       ok: true, ready: true, horizon: pumpModel.HORIZON,
       samples: samples.length, withPath, exactPath: e.all.exactPath,
@@ -285,7 +288,7 @@ function createServer() {
       params: { account0: base.account0, riskPct: base.riskPct, slAtr: e.slAtr, minConv: e.minConv,
                 tpAtr: e.tpAtr, trailAtr: e.trailAtr, adaptive: !!e.adaptive,
                 mode: bm.m.key, modeLabel: bm.m.label, feePct, slipPct, costRoundTripPct: costFrac * 100 },
-      trigger, convSweep: e.convSweep, surface,
+      trigger, convSweep: e.convSweep, surface, optimized,
       best: strip(e.all), long: strip(e.long), short: strip(e.short),
       grossReturnPct: e.grossReturnPct, sweep: e.sweep,
       equity: e.all.equity.filter((_, i) => i % Math.max(1, Math.ceil(e.all.equity.length / 120)) === 0)

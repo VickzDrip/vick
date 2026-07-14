@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.130</title>
+<title>DVL — Beta 1.131</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.130';
+window.DVL_APP_VERSION = 'Beta 1.131';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.130";
+const DVL_APP_VERSION = "Beta 1.131";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.131", note: "OTIMIZADOR de saída (o 'machine learning de TP/SL' que você pediu): em vez de modos fixos, ele varre CENTENAS de combos de saída — stop × alvo, com/sem breakeven, e trailing — num motor unificado, e escolhe o melhor. E, o mais importante, com trava anti-autoengano: separa os sinais em TREINO (mais antigos) e TESTE (mais novos, nunca vistos), otimiza no treino e mostra o resultado no teste (walk-forward). Se o combo dá +34% no treino mas -8% no teste, o card diz 'não generaliza — foi curve-fitting'. Só vale confiar quando o TESTE também é verde. Novo bloco 'Melhor combo — validado fora da amostra' com treino vs teste e veredito. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.130", note: "Duas coisas no backtest: (1) modo ADAPTATIVO — um trailing stop em ATR, que em vez de alvo fixo sobe o stop atrás do preço, deixa o lucro correr e protege quando vira; entra na comparação de modos junto com Scalp/Equilibrado/Runner e costuma ganhar em drawdown. (2) MAPA DE CALOR sem pontos cegos: em vez de só alguns pontos, mostra o retorno líquido de TODA combinação de stop × alvo numa grade colorida (verde lucro, vermelho prejuízo, ★ no melhor). Assim dá pra ver se o melhor é uma ZONA robusta ou um pico sortudo — e escolher com o terreno inteiro à vista. Obs.: o modo adaptativo usa só sinais com trajetória de preço guardada (os novos), então o nº de trades dele cresce com o tempo. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.129", note: "Backtest financeiro agora testa MODOS DE RISCO diferentes em vez de um SL/TP único: Scalp (stop 0.8× ATR, alvos curtos), Equilibrado (stop 1.2×) e Runner (stop 2.0×, alvos longos). Pra cada modo ele acha o melhor take-profit + o gatilho de conviction (tudo líquido, com taxas) e mostra os três lado a lado com retorno e drawdown, destacando com ★ o que mais rendeu. O topo do card passa a operar no melhor modo. Assim dá pra ver que scalp apertado costuma morrer nas taxas enquanto deixar correr (runner) segura o edge — e escolher com base em dado, não achismo. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.128", note: "Novo GATILHO aprendido do backtest: em vez de operar todo sinal, o sistema varre o limiar de conviction (a expectativa em ATR) e descobre o ponto acima do qual dá lucro LÍQUIDO (depois das taxas). O card do backtest mostra 'só operar quando a expectativa for ≥ X× ATR na direção' e diz, por lado, se vale operar (▲ long / ▼ short) ou evitar por ora — porque abaixo do limiar as taxas comem o edge. O card do modelo pré-pump/pré-short passa a marcar com ✓ as moedas que já passam do gatilho num lado que vale operar, então bate o olho e sabe direção + se a confirmação presta. O sweep tem trava anti-overfit (exige um mínimo de trades pra escolher o limiar). Backend (exige reiniciar o dvl-scanner) + frontend." },
@@ -71321,6 +71322,17 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 .dvlCpBt1124 .dvlCpBt1124Cell .v.neg{color:#ff5966;} .dvlCpBt1124 .dvlCpBt1124Cell .v.pos{color:#10df77;}
 .dvlCpBt1124 .dvlCpBt1124Exit{margin-top:12px;padding:10px 12px;border-radius:10px;background:rgba(16,223,119,.08);border:1px solid rgba(16,223,119,.25);font-size:12px;color:#bfe9d4;line-height:1.5;}
 .dvlCpBt1124 .dvlCpBt1124Exit b{color:#10df77;}
+.dvlCpBt1124 .dvlCpBt1124Opt{margin-top:12px;padding:12px 13px;border-radius:12px;background:rgba(120,150,255,.06);border:1px solid rgba(120,150,255,.22);}
+.dvlCpBt1124 .dvlCpBt1124OptHd{font-size:11px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;color:#9fb0e6;margin-bottom:6px;}
+.dvlCpBt1124 .dvlCpBt1124OptCfg{font-size:13.5px;font-weight:900;color:#e8f2ee;margin-bottom:2px;}
+.dvlCpBt1124 .dvlCpBt1124OptSub{font-size:11px;color:#8fa39b;margin-bottom:9px;}
+.dvlCpBt1124 .dvlCpBt1124OptCells{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.dvlCpBt1124 .dvlCpBt1124OptCell{padding:8px 10px;border-radius:9px;background:rgba(145,175,165,.06);}
+.dvlCpBt1124 .dvlCpBt1124OptCell .k{font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#75827d;}
+.dvlCpBt1124 .dvlCpBt1124OptCell .v{font-size:17px;font-weight:900;margin-top:2px;white-space:nowrap;}
+.dvlCpBt1124 .dvlCpBt1124OptCell .v.pos{color:#10df77;} .dvlCpBt1124 .dvlCpBt1124OptCell .v.neg{color:#ff5966;}
+.dvlCpBt1124 .dvlCpBt1124OptVerd{margin-top:9px;font-size:12px;font-weight:900;}
+.dvlCpBt1124 .dvlCpBt1124OptNote{margin-top:6px;font-size:10px;color:#697570;line-height:1.4;}
 .dvlCpBt1124 .dvlCpBt1124Trig{margin-top:8px;padding:11px 12px;border-radius:10px;background:rgba(255,211,33,.07);border:1px solid rgba(255,211,33,.28);font-size:12.5px;color:#e6dcb4;line-height:1.55;}
 .dvlCpBt1124 .dvlCpBt1124Trig b{color:#ffd321;}
 .dvlCpBt1124 .dvlCpBt1124Trig .ok{color:#10df77;} .dvlCpBt1124 .dvlCpBt1124Trig .no{color:#ff5966;}
@@ -71414,6 +71426,38 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       +'<div class="dvlCpBt1124HeatLeg">Linhas = stop, colunas = alvo (em ATR). Verde lucro · vermelho prejuízo · ★ contorno = melhor. Procure uma ZONA verde (robusto), não uma célula solta.</div></div>';
   }
 
+  /* Otimizador (walk-forward): melhor combo de saída achado no TREINO e o
+     resultado dele no TESTE (fora da amostra) — a prova de que não é só
+     curve-fitting. */
+  function f1(v){ return (Number(v)||0).toFixed(1); }
+  function optHtml(o){
+    if(!o||typeof o!=="object") return '';
+    if(!o.ready){
+      var why=o.reason?(' — '+esc(o.reason)):'';
+      return '<div class="dvlCpBt1124Opt"><div class="dvlCpBt1124OptHd">Otimizador de saída</div>'
+        +'<div class="dvlCpBt1124OptSub">Ainda coletando sinais pra treinar/testar'+why+'.</div></div>';
+    }
+    var b=o.best||{}, tr=o.train||{}, te=o.test||{};
+    var cfg = b.family==="trailing"
+      ? ('stop '+f1(b.slAtr)+'× + trailing '+f1(b.trailAtr)+'×')
+      : ('stop '+f1(b.slAtr)+'× / alvo '+f1(b.tpAtr)+'×'+(b.beAtr>0?(' + breakeven '+f1(b.beAtr)+'×'):''));
+    var trR=Number(tr.returnPct)||0, teR=Number(te.returnPct)||0, teN=Number(te.trades)||0;
+    var verd = teN<5 ? {t:'teste pequeno — inconclusivo por ora', c:'#ffd321'}
+             : (o.generalizes ? {t:'✓ generaliza (segura fora da amostra)', c:'#10df77'}
+                              : {t:'✗ não generaliza — foi curve-fitting', c:'#ff5966'});
+    return '<div class="dvlCpBt1124Opt">'
+      +'<div class="dvlCpBt1124OptHd">🧠 Melhor combo — validado fora da amostra</div>'
+      +'<div class="dvlCpBt1124OptCfg">'+esc(cfg)+'</div>'
+      +'<div class="dvlCpBt1124OptSub">gatilho ≥ '+f1(b.minConv)+'× ATR · testou '+(o.candidates||0)+' combos</div>'
+      +'<div class="dvlCpBt1124OptCells">'
+        +'<div class="dvlCpBt1124OptCell"><div class="k">Treino</div><div class="v '+(trR>=0?'pos':'neg')+'">'+sign(trR)+'</div></div>'
+        +'<div class="dvlCpBt1124OptCell"><div class="k">Teste (real)</div><div class="v '+(teR>=0?'pos':'neg')+'">'+sign(teR)+'</div></div>'
+      +'</div>'
+      +'<div class="dvlCpBt1124OptVerd" style="color:'+verd.c+'">'+verd.t+'</div>'
+      +'<div class="dvlCpBt1124OptNote">Otimiza no treino ('+ (o.trainN||0) +' sinais), valida no teste ('+ (o.testN||0) +' sinais nunca vistos). O número que importa é o TESTE — se ele for vermelho, o combo só decorou o passado.</div>'
+    +'</div>';
+  }
+
   function bodyHtml(){
     var s=window.DVL_PUMP_BACKTEST;
     if(!s||typeof s!=="object"){
@@ -71458,6 +71502,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         + sideRow(s.long, '▲ Pré-pump (long)', '#10df77')
         + sideRow(s.short, '▼ Pré-short (short)', '#ff5966')
       +'</div>'
+      + optHtml(s.optimized)
       + modesHtml(s.modes, s.bestMode)
       + heatmapHtml(s.surface)
       + (p.adaptive
