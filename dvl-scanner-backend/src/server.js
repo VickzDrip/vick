@@ -232,9 +232,10 @@ function createServer() {
     }
     const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
     /* Realistic trading cost per side, as PERCENT of notional: taker fee +
-       slippage. MEXC USDT-perp taker is ~0.02–0.04%; slippage on a market entry
-       adds a bit more. Round-trip cost fraction = 2 × (fee + slip) / 100. */
-    const feePct = Math.max(0, num(req.query.feePct, 0.04));   // per side
+       slippage. MEXC USDT-perp fees are Maker 0.00% / Taker 0.02% — a spike
+       entry is a taker, so 0.02%/side. Slippage on a market fill adds a bit.
+       Round-trip cost fraction = 2 × (fee + slip) / 100. Tunable via query. */
+    const feePct = Math.max(0, num(req.query.feePct, 0.02));   // per side (MEXC taker)
     const slipPct = Math.max(0, num(req.query.slipPct, 0.02)); // per side
     const costFrac = 2 * (feePct + slipPct) / 100;
     const base = {
