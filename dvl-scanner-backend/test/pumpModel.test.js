@@ -11,11 +11,12 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error("FAIL: " + m); } }
 function near(a, b, tol, m) { if (Math.abs(a - b) <= tol) pass++; else { fail++; console.error("FAIL: " + m + " (got " + a + ", want ~" + b + ")"); } }
 
-// featuresOf: fixed length, oi/lsr → numeric
-const f = PM.featuresOf({ volBelowMaBars: 8, spike20: 1.4, oi: "up", lsr: "down", priceGlueOk: true });
-ok(f.length === PM.FEATURES.length, "featuresOf returns fixed-length vector");
-ok(f[9] === 1, "oi 'up' → +1");            // oiNum is index 9
-ok(f[11] === -1, "lsr 'down' → -1");        // lsrNum is index 11
+// featuresOf: fixed length, PURE pré-volume + spike (order:
+// volBelowMaBars, maFlatness1, spike20, crossStrength, spikePrevVolRatio)
+const f = PM.featuresOf({ volBelowMaBars: 8, maFlatness1: 0.3, spike20: 1.4, crossStrength: 1.6, spikePrevVolRatio: 2.1 });
+ok(f.length === PM.FEATURES.length && f.length === 5, "featuresOf returns the 5 pré-volume+spike features");
+ok(f[0] === 8 && f[2] === 1.4, "pré-volume (volBelowMaBars) and spike (spike20) in place");
+ok(PM.FEATURES.indexOf("rsi14") < 0 && PM.FEATURES.indexOf("oiNum") < 0, "no RSI/OI/LSR features");
 
 // gaussianSolve: solve a 2x2 system  [[2,1],[1,3]] x = [3,5] → x=[0.8,1.4]
 const x = PM.gaussianSolve([[2, 1], [1, 3]], [3, 5]);

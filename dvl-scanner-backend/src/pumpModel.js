@@ -28,20 +28,22 @@ const RIDGE = 1.0;                                            // L2 regularisati
 const DATA_FILE = process.env.DVL_PUMP_DATA_FILE || path.join(process.cwd(), "data", "pump-dataset.jsonl");
 const MODEL_FILE = process.env.DVL_PUMP_MODEL_FILE || path.join(process.cwd(), "data", "pump-model.json");
 
-/* Fixed feature order — the context around the spike pós-flat. */
-const FEATURES = ["volBelowMaBars", "spike20", "crossStrength", "maFlatness1", "rsi14",
+/* Fixed feature order — PURE pré-volume + spike only (all volume-based). No
+   RSI/OI/LSR/price context: the whole setup is "calmaria (pré-volume) → spike",
+   so the model looks at exactly that and nothing else. */
+const FEATURES = ["volBelowMaBars", "maFlatness1", "spike20", "crossStrength", "spikePrevVolRatio"];
+
+/* The older 13-feature order, kept only to migrate previously-saved samples
+   (their labels/paths are unchanged — we just re-slice the pré-volume+spike
+   columns out of the old vector so the 900+ resolved signals aren't lost). */
+const LEGACY_FEATURES = ["volBelowMaBars", "spike20", "crossStrength", "maFlatness1", "rsi14",
   "rsiRecoveryFromLow", "price24hPct", "spikePrevVolRatio", "priceGlueOk", "oiNum", "oiRatio", "lsrNum", "lsrRatio"];
 
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
-function pick() { for (let i = 0; i < arguments.length; i++) { const n = Number(arguments[i]); if (Number.isFinite(n)) return n; } return 0; }
 function featuresOf(r) {
   r = r || {};
-  const oiNum = r.oi === "up" ? 1 : (r.oi === "down" ? -1 : 0);
-  const lsrNum = r.lsr === "up" ? 1 : (r.lsr === "down" ? -1 : 0);
   return [
-    num(r.volBelowMaBars), num(r.spike20), num(r.crossStrength), num(r.maFlatness1),
-    num(r.rsi14), num(r.rsiRecoveryFromLow), pick(r.price24hPct, r.var24h), num(r.spikePrevVolRatio),
-    r.priceGlueOk ? 1 : 0, oiNum, num(r.oiRatio), lsrNum, num(r.lsrRatio)
+    num(r.volBelowMaBars), num(r.maFlatness1), num(r.spike20), num(r.crossStrength), num(r.spikePrevVolRatio)
   ];
 }
 
@@ -227,13 +229,27 @@ function save() {
     return true;
   } catch (_) { return false; }
 }
+/* Re-slice a legacy 13-feature vector down to the current pré-volume+spike set,
+   by name, so old resolved signals (labels/paths unchanged) stay usable. */
+function migrateFeatureVector(f) {
+  if (!Array.isArray(f)) return null;
+  if (f.length === FEATURES.length) return f;
+  if (f.length === LEGACY_FEATURES.length) {
+    return FEATURES.map(name => { const i = LEGACY_FEATURES.indexOf(name); return i >= 0 ? f[i] : 0; });
+  }
+  return null;   // unknown shape → drop
+}
 function load() {
   try {
     const raw = fs.readFileSync(DATA_FILE, "utf8");
     dataset = raw.split("\n").filter(Boolean).map(l => { try { return JSON.parse(l); } catch (_) { return null; } })
-      .filter(d => d && Array.isArray(d.f) && d.f.length === FEATURES.length).slice(-DATA_MAX);
+      .map(d => { if (!d) return null; const f = migrateFeatureVector(d.f); return f ? Object.assign({}, d, { f }) : null; })
+      .filter(Boolean).slice(-DATA_MAX);
   } catch (_) { dataset = []; }
   try { model = JSON.parse(fs.readFileSync(MODEL_FILE, "utf8")); } catch (_) { model = null; }
+  /* Drop a model trained on a different feature dimension — it'll retrain on
+     the migrated dataset on the next cycle. */
+  if (model && model.up && Array.isArray(model.up.mean) && model.up.mean.length !== FEATURES.length) model = null;
 }
 
 module.exports = { record, resolveWith, maybeTrain, predict, predictFeatures, getDataset, status, save, load, featuresOf, fit, gaussianSolve, FEATURES, HORIZON };
