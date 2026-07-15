@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.155";
+const DVL_APP_VERSION = "Beta 1.156";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.156", note: "Conserta o aviso de 'Nova versão' que ficava pedindo pra atualizar TODA HORA pra uma versão ANTERIOR. O verificador comparava a versão como texto e só olhava se era DIFERENTE — então, quando o servidor estava servindo um arquivo mais antigo por um instante (deploy no meio do caminho ou os dois caminhos servidos fora de sincronia), ele achava que 1.154 era 'nova' e insistia em te rebaixar. Agora a versão é comparada como NÚMERO (major.minor de verdade, então 1.16 não passa na frente de 1.155) e o aviso SÓ aparece pra ir pra frente — nunca pra trás. Só frontend." },
   { version: "Beta 1.155", note: "Conserta DE VERDADE a busca de ativos e o Salvar (achei a causa raiz dos dois testando a página num navegador de verdade). (1) BUSCA: o código do filtro rodava certo, mas escondia o item com um display:none COMUM — e existe uma regra CSS .assetOption{display:grid!important} que vencia o none, então a lista NUNCA sumia por mais que você digitasse. Agora escondo com prioridade !important (e mostro removendo o inline), então digita SOL e a lista filtra na hora. (2) SALVAR: a restauração da sessão (1.153) estava SOBRESCREVENDO o estado vivo com um snapshot antigo — por isso um indicador que você tirava DEPOIS do último Salvar RESSUSCITAVA ao recarregar. Os indicadores já guardam o próprio estado no localStorage (que sobrevive ao reload sozinho), então agora a restauração SÓ preenche o que está faltando e nunca passa por cima do que você mudou por último: tirou o indicador, ele fica tirado. Só frontend." },
   { version: "Beta 1.154", note: "Conserta a busca de ativos que não filtrava. A lista de ativos é re-renderizada ao vivo (os preços atualizam sozinhos), e cada re-render recriava a lista e apagava o filtro — então você digitava e a lista voltava cheia. Agora o texto da busca fica guardado e o filtro é RE-APLICADO depois de cada atualização, então ele gruda: digita SOL/Solana e a lista filtra e continua filtrada. Abre sempre com a lista completa. Só frontend." },
   { version: "Beta 1.153", note: "O botão Salvar agora SALVA de verdade a sessão. Antes ele gravava, mas nada era restaurado ao recarregar — então, por exemplo, um indicador que você tirava voltava. Agora, assim que a página carrega (antes dos indicadores ligarem), a gente restaura o último estado salvo: indicadores ligados/desligados, desenhos e configs voltam exatamente como você deixou quando clicou em Salvar. Funciona como um ponto de restauração: o que você mudar DEPOIS de salvar, sem salvar de novo, volta pro último save ao recarregar. Só frontend." },
@@ -44443,13 +44444,26 @@ document.addEventListener("touchend", function(e){
     if(document.hidden){ doReload(); return; }
     showBanner(v);
   }
+  /* "Beta 1.155" → 100155, pra comparar versão como NÚMERO (major*1e5 + minor),
+     não string. Assim "1.16" (minor 16) NÃO é tratado como maior que "1.155". */
+  function verNum(s){
+    var m = String(s || "").match(/(\d+)\s*\.\s*(\d+)/);
+    return m ? (parseInt(m[1], 10) * 100000 + parseInt(m[2], 10)) : NaN;
+  }
   function check(){
     fetch("/api/version", { cache: "no-store" })
       .then(function(r){ return r && r.ok ? r.json() : null; })
       .then(function(j){
         if(!j || !j.v) return;
         var deployed = String(j.v).trim();
-        if(deployed && deployed !== RUNNING) onNewVersion(deployed);
+        if(!deployed || deployed === RUNNING) return;
+        /* Só avisa pra ir PRA FRENTE. Se o servidor estiver momentaneamente
+           servindo um arquivo mais ANTIGO (deploy no meio, rollback, ou os dois
+           caminhos servidos fora de sincronia), NÃO fica pedindo pra rebaixar —
+           era exatamente o "fica pedindo pra atualizar pra versão anterior". */
+        var dn = verNum(deployed), rn = verNum(RUNNING);
+        if(isFinite(dn) && isFinite(rn) && dn <= rn) return;
+        onNewVersion(deployed);
       })
       .catch(function(){});
   }
