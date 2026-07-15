@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.148</title>
+<title>DVL — Beta 1.149</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.148';
+window.DVL_APP_VERSION = 'Beta 1.149';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.148";
+const DVL_APP_VERSION = "Beta 1.149";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.149", note: "Duas coisas no scanner. (1) Novo BLOQUINHO de RSI: além de pré-volume (V) e spike (S), agora tem o bloco R do RSI Exhaustion — ele acende quando o oscilador (15m) está numa zona, VERDE = sobrevendido e VERMELHO = sobrecomprado. Entra no score junto com os outros dois, então quando bate os três (pré-volume + spike + RSI na zona) o score vai a 99 e a confluência vira 🔥 3/3. O peso do bloco RSI é editável em Filtros > Pesos dos blocos. (2) As médias do scanner agora seguem À RISCA as do indicador DVL Volume: o comprimento das médias de volume (rápida e lenta) que você define no DVL Volume é empurrado pro motor do scanner, então o spike/ignição e o marcador 'spike pós-flat' usam exatamente as mesmas médias que aparecem no gráfico (antes o scanner tinha as dele, fixas). Só frontend." },
   { version: "Beta 1.148", note: "Conserta o botão 'Salvar' do cabeçalho, que não fazia NADA (nem salvava, nem avisava). Motivo: o handler do botão chamava window.saveProfile, mas a função saveProfile vivia dentro de um IIFE e nunca era exposta no window — então o clique caía no vazio. Agora saveProfile é exposta corretamente, então o botão salva a sessão (símbolo, TF, desenhos, configs e um snapshot no navegador) e mostra uma mensagem breve ('Sessão salva ✓') que some sozinha depois de ~1,8s. Só frontend." },
   { version: "Beta 1.147", note: "Estabiliza o histograma de VOLUME que ficava mudando a cada segundo. A escala do painel (volMax) incluía a vela AO VIVO: conforme o volume da vela em formação crescia, o máximo subia e TODAS as barras fechadas encolhiam — e quando abria vela nova elas voltavam, dando a impressão de que o volume inteiro ficava mexendo. Agora a escala usa só as velas FECHADAS (a vela ao vivo é detectada pelo horário de fechamento, então continua certo mesmo com scroll), e a barra ao vivo é limitada à altura do painel — ela continua visível no topo sem esmagar as outras. As barras fechadas param de balançar. Só frontend." },
   { version: "Beta 1.146", note: "Conserta o DVL Exhaustion RSI que ficava se MEXENDO sozinho (a linha inteira mudava de forma e o valor pulava 48→49→50 sem o preço andar). Causa: o oscilador reamostrava os dados de 1m em timeframes menores AGRUPANDO POR POSIÇÃO no array (fatias de N velas a partir do índice 0). Como o gráfico rebusca o 1m a cada ~25s numa janela deslizante, cada rebusca reagrupava velas diferentes → a exaustão de TODAS as barras históricas mudava e a linha do RSI balançava. Agora reamostra por RELÓGIO (cada barra de 3m/5m/15m sempre contém as mesmas velas de 1m do mesmo horário), então o oscilador fica estável entre atualizações — o valor só muda quando o preço realmente muda. Apliquei a mesma correção no RSI do backend (scanner) pra os dois continuarem batendo. Frontend + backend (exige reiniciar o dvl-scanner)." },
@@ -34157,10 +34158,29 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     catch(_){ return clone(DEFAULTS); }
   }
 
+  /* "Seguir a risca": o scanner tem que usar as MESMAS médias de volume que o
+     DVL Volume mostra. Empurra maLength/maLength2 pro motor do scanner (o
+     spike/ignição e o marcador "spike pós-flat" passam a usar exatamente essas
+     médias). Debounced pra não postar a cada tecla digitada no input. */
+  let _maSyncT = null;
+  function syncScannerMa(){
+    clearTimeout(_maSyncT);
+    _maSyncT = setTimeout(function(){
+      try{
+        const p1 = Math.max(1, Math.round(Number(state.maLength) || 20));
+        const p2 = Math.max(1, Math.round(Number(state.maLength2) || 50));
+        window.dispatchEvent(new CustomEvent("dvl:scanner-config-change", {
+          detail: { engine: { maPeriod1: p1, maPeriod2: p2 } }
+        }));
+      }catch(_){}
+    }, 400);
+  }
+
   function save(){
     state = normalize(state);
     try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(_){}
     updateItem();
+    syncScannerMa();
     if(typeof drawSoon === "function") drawSoon();
     else if(typeof draw === "function") draw();
   }
@@ -34552,6 +34572,10 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   function boot(){
     insertItem();
     updateItem();
+    /* Sincroniza as médias do scanner com as do DVL Volume no load (cobre quem
+       tem um maLength salvo diferente do padrão). Atrasado pra dar tempo do
+       bridge do scanner ficar ativo. */
+    setTimeout(syncScannerMa, 2500);
     document.addEventListener("pointerdown", ev=>{
       if(palette && !ev.target.closest(".dvl-vol-palette") && !ev.target.closest(".dvl-vol-color-btn")) closePalette();
     }, true);
@@ -62579,7 +62603,7 @@ body.dvlScannerOpen080 #chartWrap{
     /* Scanner de 2 blocos (pré-pump): calmaria + spike. spikeMin=1.0 casa
        exatamente com o marcador "spike pós-flat" do gráfico (vela cruza a MA). */
     minBaseBars:6, spikeMin:1.0, scanRulesVersion:2,
-    weights:{ preVolume:50, spike:50 },
+    weights:{ preVolume:50, spike:50, rsi:50 },
     /* Off by default — the ML-learned block weights (src/train.js on the
        backend) only ever apply when the user opts in here. */
     useLearnedWeights:false
@@ -62626,7 +62650,9 @@ body.dvlScannerOpen080 #chartWrap{
       window.dispatchEvent(new CustomEvent("dvl:scanner-config-change",{detail:{
         weights: filterState1015.weights,
         engine: {
-          maPeriod1: filterState1015.maPeriod1, maPeriod2: filterState1015.maPeriod2,
+          /* maPeriod1/maPeriod2 (as médias de volume) NÃO vão mais daqui — quem
+             manda é o indicador DVL Volume (syncScannerMa), pra o scanner seguir
+             À RISCA as médias que aparecem no gráfico. */
           spikeMaMode: filterState1015.spikeMaMode, flatVolumeBarLen: filterState1015.flatVolumeBarLen,
           rsiOversoldThreshold: filterState1015.rsiOversoldThreshold, rsiOversoldLookback: filterState1015.rsiOversoldLookback
         },
@@ -62753,12 +62779,16 @@ body.dvlScannerOpen080 #chartWrap{
       preVolume: (Number(r.volBelowMaBars)||0) >= minBase,
       /* mesma regra do marcador "spike pós-flat" do gráfico: a vela CRUZA
          acima da média (>1). spikeMin é o fator mínimo (1.0 = só cruzar). */
-      spike: spike20 > spikeMin
+      spike: spike20 > spikeMin,
+      /* Bloco do RSI Exhaustion (15m): ativo quando o oscilador está numa zona —
+         verde = sobrevendido (exausto no fundo), vermelho = sobrecomprado
+         (exausto no topo). Neutro = bloco desligado. */
+      rsi: (r.exrZone==="down" || r.exrZone==="up")
     };
   }
   function allBlocksTrue(r){
     var b=blocksOf(r);
-    return b.preVolume && b.spike;
+    return b.preVolume && b.spike && b.rsi;
   }
 
   /* ── Confluência total alerts — fires once per symbol on the FALSE→TRUE
@@ -62773,7 +62803,7 @@ body.dvlScannerOpen080 #chartWrap{
   function notifyConfluence(sym){
     try{
       if(typeof Notification!=="undefined" && Notification.permission==="granted"){
-        new Notification("DVL Scanner — Sinal", { body: sym+" bateu os 2 bloquinhos: pré-volume (calmaria) + spike.", tag:"dvl-confluence-"+sym });
+        new Notification("DVL Scanner — Sinal", { body: sym+" bateu os 3 bloquinhos: pré-volume (calmaria) + spike + RSI na zona.", tag:"dvl-confluence-"+sym });
       }
     }catch(_){}
   }
@@ -62796,7 +62826,7 @@ body.dvlScannerOpen080 #chartWrap{
   function alertMenu(){
     return '<div class="dvlScan1013FilterMenu dvlScan1015FilterMenu" id="dvlScan1013AlertMenu">'
       +'<h3>Alertas — Confluência total</h3>'
-      +'<div class="dvlScan1015FilterFoot" id="dvlScan1013AlertList">Nenhum alerta ainda. Avisamos aqui (e por notificação do navegador, se permitida) assim que um ativo bater os 2 bloquinhos (pré-volume + spike).</div>'
+      +'<div class="dvlScan1015FilterFoot" id="dvlScan1013AlertList">Nenhum alerta ainda. Avisamos aqui (e por notificação do navegador, se permitida) assim que um ativo bater os 3 bloquinhos (pré-volume + spike + RSI na zona).</div>'
       +'</div>';
   }
   function renderAlertMenu(root){
@@ -62805,7 +62835,7 @@ body.dvlScannerOpen080 #chartWrap{
     var list=root.querySelector("#dvlScan1013AlertList");
     if(list){
       if(!confluenceLog.length){
-        list.textContent="Nenhum alerta ainda. Avisamos aqui (e por notificação do navegador, se permitida) assim que um ativo bater os 2 bloquinhos (pré-volume + spike).";
+        list.textContent="Nenhum alerta ainda. Avisamos aqui (e por notificação do navegador, se permitida) assim que um ativo bater os 3 bloquinhos (pré-volume + spike + RSI na zona).";
       } else {
         list.innerHTML=confluenceLog.map(function(e){
           return '<div class="dvlScan1013AlertRow"><b>'+esc(e.symbol)+'</b><span>'+esc(ago(e.at))+'</span></div>';
@@ -62819,10 +62849,10 @@ body.dvlScannerOpen080 #chartWrap{
     var b=blocksOf(r), w=effectiveWeights(r&&r.side)||{};
     /* Default 50/50 se o peso não existir (ex.: estado antigo salvo com os 6
        blocos) — assim o score nunca zera por causa de estado persistido. */
-    var W={ preVolume:Number(w.preVolume)||50, spike:Number(w.spike)||50 };
-    var wTotal=W.preVolume+W.spike;
+    var W={ preVolume:Number(w.preVolume)||50, spike:Number(w.spike)||50, rsi:Number(w.rsi)||50 };
+    var wTotal=W.preVolume+W.spike+W.rsi;
     if(wTotal<=0) return 0;
-    var pts=(b.preVolume?W.preVolume:0)+(b.spike?W.spike:0);
+    var pts=(b.preVolume?W.preVolume:0)+(b.spike?W.spike:0)+(b.rsi?W.rsi:0);
     return Math.max(0,Math.min(99,Math.round(pts/wTotal*99)));
   }
 
@@ -62834,13 +62864,15 @@ body.dvlScannerOpen080 #chartWrap{
   function metricLabel1016(key){
     return ({
       preVolume:"Pré-volume (calmaria)",
-      spike:"Spike"
+      spike:"Spike",
+      rsi:"RSI Exhaustion (zona)"
     })[key] || key;
   }
   function metricSub1016(key){
     return ({
       preVolume:"volume baixo/uniforme antes (base morta)",
-      spike:"vela cruza acima da média após a calmaria (= marcador do gráfico)"
+      spike:"vela cruza acima da média após a calmaria (= marcador do gráfico)",
+      rsi:"RSI Exhaustion (15m) numa zona: verde=sobrevendido / vermelho=sobrecomprado"
     })[key] || "";
   }
   function metricStep1016(key){ return 1; }
@@ -62853,7 +62885,7 @@ body.dvlScannerOpen080 #chartWrap{
     next=Math.max(metricMin1016(key),Math.min(metricMax1016(key),next));
     w[key]=Math.round(next*10)/10;
   }
-  var BLOCK_KEYS_1016=["preVolume","spike"];
+  var BLOCK_KEYS_1016=["preVolume","spike","rsi"];
   function metricRows1016(){
     return BLOCK_KEYS_1016.map(function(k){
       return '<div class="dvlScan1016MetricRow" data-dvl-scan1016-row="'+k+'">'
@@ -62997,11 +63029,18 @@ body.dvlScannerOpen080 #chartWrap{
   }
   /* Per-row checklist of the 6 blocks — purely a reading aid, no priority
      between them (order shown is fixed but meaningless). */
-  var BLOCK_BADGE_ORDER=[["V","preVolume","Pré-volume (calmaria)"],["S","spike","Spike (coluna se destaca)"]];
+  var BLOCK_BADGE_ORDER=[["V","preVolume","Pré-volume (calmaria)"],["S","spike","Spike (coluna se destaca)"],["R","rsi","RSI Exhaustion na zona (verde=sobrevendido / vermelho=sobrecomprado)"]];
   function blockBadges(r){
     var b=blocksOf(r);
     return '<span class="dvlScan1013Blocks">'+BLOCK_BADGE_ORDER.map(function(o){
       var okv=!!b[o[1]];
+      /* O bloco RSI é colorido pela direção do oscilador: verde = sobrevendido
+         (zona down), vermelho = sobrecomprado (zona up). Os outros usam o estilo
+         on/off padrão. */
+      if(o[1]==="rsi" && okv){
+        var col=(r.exrZone==="up")?"#ff5966":"#10df77";
+        return '<i class="on" style="color:'+col+';border-color:'+col+'" title="'+esc(o[2])+' ✓">'+o[0]+'</i>';
+      }
       return '<i class="'+(okv?"on":"off")+'" title="'+esc(o[2])+(okv?" ✓":" ✗")+'">'+o[0]+'</i>';
     }).join("")+'</span>';
   }
@@ -63390,7 +63429,7 @@ body.dvlScannerOpen080 #chartWrap{
         : '<div class="dvlScan1013Rsi" style="color:'+(exrZ==="down"?"#10df77":(exrZ==="up"?"#ff5966":"#c4ceca"))+';font-weight:900">'+exrV.toFixed(1)+'</div>';
       return '<div class="dvlScan1013Row'+(full?" confluence":"")+'" data-dvl-scan-analyze="'+esc(r.mexc||r.symbol||"")+'">'
         +'<div class="dvlScan1013Rank">'+(i+1)+'</div>'
-        +'<div class="dvlScan1013Asset"><b>'+esc(r.symbol||r.mexc||"—")+'</b><span>'+esc(fmtPrice(r.lastClose))+'</span>'+(full?'<i class="dvlScan1013ConfluenceTag">🔥 2/2</i>':'')+predBadge(r)+'</div>'
+        +'<div class="dvlScan1013Asset"><b>'+esc(r.symbol||r.mexc||"—")+'</b><span>'+esc(fmtPrice(r.lastClose))+'</span>'+(full?'<i class="dvlScan1013ConfluenceTag">🔥 3/3</i>':'')+predBadge(r)+'</div>'
         +'<div class="dvlScan1013Var '+varCls+'">'+(p24>=0?"+":"")+p24.toFixed(2)+'%</div>'
         +rsiCell
         +'<div class="dvlScan1013Score"><b>'+sc+'</b>'+bars(sc)+blockBadges(r)+'</div>'
