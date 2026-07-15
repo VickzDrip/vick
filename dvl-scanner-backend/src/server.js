@@ -229,13 +229,17 @@ function createServer() {
     const complete = all.filter(s => s && Array.isArray(s.exrCloses) && s.exrCloses.length);
     const data = onlyComplete ? complete : all;
     const withPath = data.filter(s => s && Array.isArray(s.path) && s.path.length).length;
-    const MIN = 20;
-    /* Every resolved signal is usable now (exact path when available, MFE/MAE
-       approximation otherwise), so the gate is total resolved samples — not the
-       path count. */
-    if (!st.trained || data.length < MIN) {
+    /* Gate mínimo. No modo "só sinais completos" os completos acumulam devagar
+       (só sinais de 15m que já RESOLVERAM, ~5h depois do disparo), então deixamos
+       rodar em modo PRELIMINAR a partir de PRELIM — resultado com aviso de
+       amostra pequena — em vez de travar em "aguardando". Sem o filtro, segue
+       exigindo MIN (a amostra grande dá resultado confiável). */
+    const MIN = 20, PRELIM = 8;
+    const gate = onlyComplete ? PRELIM : MIN;
+    const preliminary = onlyComplete && data.length < MIN;
+    if (!st.trained || data.length < gate) {
       return res.json({ ok: true, ready: false, trained: !!st.trained, samples: data.length,
-                        onlyComplete, completeN: complete.length, totalN: all.length, need: MIN });
+                        onlyComplete, completeN: complete.length, totalN: all.length, need: gate });
     }
     const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
     /* Realistic trading cost per side, as PERCENT of notional: taker fee +
@@ -300,7 +304,7 @@ function createServer() {
     res.json({
       ok: true, ready: true, horizon: pumpModel.HORIZON,
       samples: data.length, withPath, exactPath: e.all.exactPath,
-      onlyComplete, completeN: complete.length, totalN: all.length,
+      onlyComplete, completeN: complete.length, totalN: all.length, preliminary, need: MIN,
       modes, bestMode: bm.m.key,
       params: { account0: base.account0, riskPct: base.riskPct, slAtr: e.slAtr, minConv: e.minConv,
                 tpAtr: e.tpAtr, trailAtr: e.trailAtr, adaptive: !!e.adaptive,
