@@ -197,6 +197,37 @@ function computeSignal(closes, vols, engine) {
   };
 }
 
+/* Spike pós-flat evaluated on the LAST CLOSED bar — the exact rule the chart's
+   marker uses (computeSpikeFlatTimes in index.html): the `minBaseBars` bars
+   right before a bar were all BELOW the volume MA (a dead/flat base), and that
+   bar is the first to cross back ABOVE it. The chart deliberately EXCLUDES the
+   live forming bar (its volume still moves every tick, so it would flicker) and
+   confirms only at candle close. computeSignal above, by contrast, runs on the
+   extrapolated forming bar so the live table has a meaningful spike score — but
+   for the actual SIGNAL (registry join + EXR record) we want the chart's
+   close-confirmed rule so the scanner's ignition matches the marker on screen.
+   `rawVols` must be the UN-extrapolated volumes (last element = forming bar). */
+function closedIgnition(closes, rawVols, engine) {
+  engine = engine || ENGINE;
+  const p1 = engine.maPeriod1 || 20;
+  const minBaseBars = engine.minBaseBars || 6;
+  const len = Array.isArray(rawVols) ? rawVols.length : 0;
+  const ci = len - 2;                       // last CLOSED bar (len-1 is forming)
+  const none = { isIgnition: false, volBelowMaBars: 0, crossStrength: 0 };
+  if (ci < minBaseBars) return none;
+  const maCi = sma(rawVols, p1, ci);
+  if (!maCi || !Number.isFinite(maCi) || maCi <= 0) return none;
+  const cross = Number(rawVols[ci] || 0) > maCi;
+  let below = 0;
+  for (let bi = ci - 1; bi >= 0; bi--) {
+    const mb = sma(rawVols, p1, bi);
+    if (!mb || !Number.isFinite(mb) || mb <= 0) break;
+    if (Number(rawVols[bi] || 0) < mb) below++; else break;
+  }
+  const crossStrength = Math.round((Number(rawVols[ci] || 0) / maCi) * 100) / 100;
+  return { isIgnition: cross && below >= minBaseBars, volBelowMaBars: below, crossStrength };
+}
+
 /* Ignition score — ranks the QUALITY of an early MEXC-pump setup. Rewards a
    long dead base, rising OI, a clean flat MA and compressed price; the size
    of the cross matters only a little (the point is to catch it small/early).
@@ -275,7 +306,10 @@ function score(r, weights, engine) {
 
 /* Port of statusPack1012 (display status from score + flat). */
 function statusOf(r, sc) {
-  if ((Number(r.flatCandles) || 0) >= 4 && sc >= 74) return "Spike pós-flat";
+  /* "Spike pós-flat" = the chart's close-confirmed marker (r.isIgnition, now
+     evaluated on the last closed bar), so the label appears exactly when the
+     highlight would on the chart — not early on the forming bar. */
+  if (r.isIgnition) return "Spike pós-flat";
   if (sc >= 72) return "Spike limpo";
   if (sc >= 54) return "Em formação";
   if (sc >= 44) return "Monitorar";
@@ -412,6 +446,6 @@ function netFlowDivergence(row, warnThreshold) {
 }
 
 module.exports = {
-  sma, pct, priceMaGlueStats, computeSignal, computeAtr,
+  sma, pct, priceMaGlueStats, computeSignal, closedIgnition, computeAtr,
   score, blocksOf, ignitionScore, statusOf, ignitionStatus, oiTrend, lsrTrend, factorsOf, trendVsMA, netFlowTrend, netFlowDivergence
 };

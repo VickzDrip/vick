@@ -163,6 +163,13 @@ function buildRow(exKey, adapter, t, k, now, tf) {
     extVols[extVols.length - 1] = extVols[extVols.length - 1] / fraction;
   }
   const sig = M.computeSignal(k.closes, extVols, cfg.ENGINE);
+  /* The SIGNAL (spike pós-flat) is confirmed on the last CLOSED bar, using the
+     RAW (un-extrapolated) volumes — exactly the chart's marker rule. So the
+     scanner's ignition lights up when the 15m candle CLOSES with the pattern,
+     matching the highlight on the chart (and the user's "no fechamento" rule),
+     instead of firing early on the still-forming bar. The live spike SCORE
+     below still uses the extrapolated `sig` so the table isn't empty mid-candle. */
+  const closedIg = M.closedIgnition(k.closes, k.vols, cfg.ENGINE);
   /* Build a row for ANY candidate (igniting or not). The signal registry in
      scanExchange decides what enters/stays: a symbol JOINS when it ignites,
      then persists and refreshes here every cycle until it's pushed out by the
@@ -195,12 +202,13 @@ function buildRow(exKey, adapter, t, k, now, tf) {
     rsiOversoldOk: sig.rsiOversoldOk,
     rsiRecoveryFromLow: sig.rsiRecoveryFromLow,
 
-    /* Ignition fields — kept for the (separate, unused-by-score) ignition
-       quality metric and the registry join gate (isIgnition). */
-    volBelowMaBars: sig.volBelowMaBars,
-    crossStrength: Math.round(sig.crossStrength * 100) / 100,
+    /* Ignition fields — CLOSE-confirmed (raw volumes, last closed bar) so the
+       signal matches the chart's spike-pós-flat marker and only fires at candle
+       close. volBelowMaBars/crossStrength come from the same closed-bar rule. */
+    volBelowMaBars: closedIg.volBelowMaBars,
+    crossStrength: closedIg.crossStrength,
     maFlatness1: sig.maFlatness1,
-    isIgnition: sig.isIgnition,
+    isIgnition: closedIg.isIgnition,
 
     /* spikeScore/status/blocks are finalized in scanExchange once the real
        OI/LSR trend is known. spikeAt is set from the registry's detection

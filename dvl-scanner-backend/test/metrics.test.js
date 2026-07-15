@@ -62,7 +62,10 @@ ok(sig.rsi14 >= 0 && sig.rsi14 <= 100, "rsi14 in [0,100]");
 ok(Array.isArray(sig.last5Closes) && sig.last5Closes.length === 5, "last5Closes has 5 entries");
 
 /* 4) status thresholds. */
-eq(M.statusOf({ flatCandles: 6 }, 80), "Spike pós-flat", "postflat status");
+/* "Spike pós-flat" now gates on the close-confirmed ignition (r.isIgnition),
+   matching the chart's marker — not the old flatCandles>=4 heuristic. */
+eq(M.statusOf({ isIgnition: true }, 80), "Spike pós-flat", "postflat status");
+eq(M.statusOf({ isIgnition: false, flatCandles: 6 }, 80), "Spike limpo", "no postflat without ignition");
 eq(M.statusOf({ flatCandles: 0 }, 80), "Spike limpo", "clean status");
 eq(M.statusOf({ flatCandles: 0 }, 50), "Monitorar", "monitor status");
 
@@ -209,6 +212,40 @@ const gapCandles = flatSpreadCandles(15, 2);
 gapCandles[10] = { high: 110, low: 108, close: 109 }; // a gap-up candle, TR = |110-100| = 10 vs the previous close of 100
 const gapAtr = M.computeAtr(gapCandles, 14);
 ok(gapAtr > 2, "a gap candle's true range (measured against the prior close) pulls ATR above the flat h-l baseline (got " + gapAtr + ")");
+
+/* ── closedIgnition: the chart's close-confirmed spike-pós-flat rule ──
+   Dead base (bars below the volume MA) then the first cross back above it,
+   evaluated on the LAST CLOSED bar (len-2) — the live forming bar (len-1) is
+   ignored, matching computeSpikeFlatTimes on the chart. */
+const ciEng = { maPeriod1: 20, minBaseBars: 6 };
+function volSeries(closedIgnitionVol, formingVol) {
+  const v = [];
+  for (let i = 0; i < 20; i++) v.push(100); // high baseline lifts the MA
+  for (let i = 0; i < 8; i++) v.push(8);     // dead base, below the elevated MA
+  v.push(closedIgnitionVol);                 // last CLOSED bar (len-2)
+  v.push(formingVol);                        // live forming bar (len-1) — ignored
+  return v;
+}
+{
+  const v = volSeries(400, 3);
+  const r = M.closedIgnition(v.map(() => 1), v, ciEng);
+  ok(r.isIgnition === true, "closedIgnition fires when the last CLOSED bar crosses above the MA after a dead base");
+  eq(r.volBelowMaBars, 8, "counts the dead-base bars before the closed ignition bar");
+  ok(r.crossStrength > 1, "crossStrength = closed ignition bar volume / its MA (got " + r.crossStrength + ")");
+}
+{
+  /* The spike is on the FORMING bar, not the closed one → must NOT fire (the
+     chart wouldn't mark it yet either). */
+  const v = volSeries(8, 400);
+  const r = M.closedIgnition(v.map(() => 1), v, ciEng);
+  ok(r.isIgnition === false, "closedIgnition ignores a spike that's only on the live forming bar");
+}
+{
+  const v = volSeries(400, 3);
+  v[22] = 200; // break the dead base (a bar above its MA mid-base)
+  const r = M.closedIgnition(v.map(() => 1), v, ciEng);
+  ok(r.isIgnition === false, "no ignition when the base isn't a clean run of below-MA bars");
+}
 
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);
