@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.159";
+const DVL_APP_VERSION = "Beta 1.160";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.160", note: "Conserta posições (demo) que continuavam ABERTAS mesmo depois do TP ou SL bater. Antes o TP/SL só era conferido no tick do PRÓPRIO ativo — se você estava vendo outro gráfico, ou o preço daquele ativo caía num slot com a chave gravada diferente, o alvo batia e a posição não fechava. Agora tem uma varredura a cada 1s que passa por TODA posição aberta, pega o último preço em cache de cada ativo e fecha na hora quem bateu TP/SL — não importa qual ativo está na tela nem por qual fonte veio o preço. E ao fechar, o pedido é removido de TODOS os slots (podia estar salvo sob uma chave crua/antiga e voltar a aparecer aberto) — então trade fechado não ressuscita. Só frontend." },
   { version: "Beta 1.159", note: "O backtest para de demorar DIAS pra achar sinais. Antes o scanner só gravava o sinal da vela ATUAL a cada ciclo, e cada um leva ~5h (20 velas de 15m) pra 'resolver' — então os sinais completos pingavam devagar e um RSI que você operou agora não aparecia tão cedo. Agora o backend faz um BACKFILL HISTÓRICO: em toda varredura ele minera TODAS as velas de 15m já baixadas (janela de ~160 velas ≈ 40h por ativo), acha cada spike pós-flat confirmado no fechamento, lê o RSI Exhaustion naquele momento e RESOLVE o sinal usando as próprias velas seguintes (o futuro já é conhecido no histórico). Resultado: centenas de sinais completos aparecem de imediato, em vez de acumular ao vivo. É idempotente (não duplica entre ciclos nem após reiniciar). Backend — EXIGE atualizar e reiniciar o dvl-scanner." },
   { version: "Beta 1.158", note: "Conserta o 'Preço atual' e o PnL que apareciam como '--' em algumas posições. Dois motivos: (1) o painel procurava o preço pela chave do símbolo SEM normalizar — uma ordem gravada como 'TRX/USDT' virava a chave 'TRX/USDT', mas o mapa de preços é indexado por 'TRXUSDT', então não achava e ainda mostrava o par com barra dupla ('TRX//USDT'). Agora o símbolo é normalizado (bate a chave e o nome sai certo). (2) O preço das posições que NÃO são o ativo do gráfico vinha só da Binance — então ativo só-MEXC (ex.: ANSEM) nunca tinha preço, e pior: um símbolo inválido no lote fazia a Binance recusar o request inteiro (aí nem o TRX vinha). Agora, pra toda posição aberta que continua sem preço, a gente puxa do mapa de preços da MEXC pelo backend — a mesma fonte que o resto do app já usa. Só frontend." },
   { version: "Beta 1.157", note: "Acha o motivo REAL do indicador que voltava sozinho: o DVL AGG OI (Open Interest) se forçava LIGADO em toda inicialização. Ele lia o estado salvo e, se estivesse desligado, reescrevia on:true no boot (e ainda regravava isso no localStorage) — então você desligava, recarregava e ele voltava, e nem o Salvar segurava. Tirei esse force-on: o padrão continua ligado pra quem nunca mexeu, mas quem DESLIGA de propósito agora fica desligado após recarregar. Junto com o 1.155 (a restauração não sobrescreve mais o que você mudou por último), os indicadores que você tira ficam tirados. Só frontend." },
@@ -46346,9 +46347,23 @@ function closePaperTradeToHistory(order,exitPrice,reason,now){
   saveDemoWallet();
   _walletHandled[order.id]=true;
   addTradeToHistoryDeduped(closed);
-  var lsOrds=readSymbolOrders(sym).filter(function(o){return o&&o.id!==order.id;});
-  writeSymbolOrders(sym,lsOrds);
-  try{var V2=window.DVL_PAPER_TRADING_V2_PRO;if(V2&&normalizeSymbol(rawCurSym())===sym){var _st=V2.getState();if(_st&&Array.isArray(_st.orders))_st.orders=_st.orders.filter(function(o){return o&&o.id!==order.id;});}}catch(_){}
+  /* Remove this order id from EVERY per-symbol slot. O pedido pode ter sido
+     gravado sob uma chave crua/legada (V2 salva por rawSym()) e não pela chave
+     normalizada — se removêssemos só de um slot, ele voltava a aparecer aberto
+     no próximo sweep. Varre todos os slots pra fechar de vez. */
+  try{
+    for(var _pk=0;_pk<localStorage.length;_pk++){
+      var _lk=localStorage.key(_pk);
+      if(!_lk||_lk.indexOf(_PFX)!==0||_lk===_PFX+'symbols')continue;
+      try{
+        var _arr=JSON.parse(localStorage.getItem(_lk)||'[]');
+        if(!Array.isArray(_arr))continue;
+        var _f=_arr.filter(function(o){return o&&o.id!==order.id;});
+        if(_f.length!==_arr.length)localStorage.setItem(_lk,JSON.stringify(_f));
+      }catch(_){}
+    }
+  }catch(_){}
+  try{var V2=window.DVL_PAPER_TRADING_V2_PRO;var _st=V2&&V2.getState();if(_st&&Array.isArray(_st.orders))_st.orders=_st.orders.filter(function(o){return o&&o.id!==order.id;});}catch(_){}
   try{if(typeof window.syncPaperStoreFromOrders==='function')window.syncPaperStoreFromOrders();}catch(_){}
   try{if(typeof window.savePaperTradeStore==='function')window.savePaperTradeStore();}catch(_){}
   renderPositionsPanelRealtime();
@@ -46593,6 +46608,26 @@ function fetchPaperPricesREST(){
   }
 }
 
+/* Sweep EVERY open position against its latest cached price so TP/SL fecha de
+   verdade — mesmo em posição de outro ativo (não o do gráfico) e independente
+   de qual feed trouxe o preço ou de qual slot o pedido está gravado. Antes o
+   TP/SL só era checado no tick do próprio símbolo; se o tick não chegasse (ou
+   caísse num slot com chave diferente), a posição ficava aberta mesmo depois de
+   bater o alvo. Aqui varremos TODOS os pedidos abertos toda vez. */
+function sweepOpenPositionsTpSl(){
+  try{
+    var open=getAllPaperOrdersSafe().filter(function(o){return o&&o.status==='open';});
+    for(var i=0;i<open.length;i++){
+      var o=open[i];
+      var nsym=normalizeSymbol(o.symbol);
+      var lp=window.DVL_LAST_PRICE_BY_SYMBOL&&window.DVL_LAST_PRICE_BY_SYMBOL[nsym];
+      var p=lp&&Number(lp.price)>0?Number(lp.price):0;
+      if(p>0) processOpenPositionExecution(o,p,Date.now());
+    }
+  }catch(_){}
+}
+window.sweepOpenPositionsTpSl=sweepOpenPositionsTpSl;
+
 // 1s: push current symbol price (via window.S.candles) + update wallet equity
 setInterval(function(){
   try{
@@ -46601,6 +46636,7 @@ setInterval(function(){
     if(curSym&&_livePrice>0){
       onPaperPriceTick(curSym,_livePrice,Date.now());
     }
+    sweepOpenPositionsTpSl();
     updateWalletEquity();
     renderPositionsPanelRealtime();
   }catch(_){}
