@@ -61,17 +61,30 @@ function mtfExh(cs, idx, dir, volMaLen, volSpikeAt) {
   return Math.max(0, Math.min(1, (last.close < prior.close ? 1 : 0) * (lw * 0.5 + strong * 0.5) * (0.15 + 0.85 * volSpike)));
 }
 
-/* Resample 1m candles up to `minutes`-bars (same grouping the frontend uses). */
+/* Resample 1m candles up to `minutes`-bars by WALL-CLOCK bucket (floor(time/msv)),
+   NOT by array index — same grouping the frontend uses. Index-based chunking
+   (one.slice(i, i+minutes) from 0) regrouped different candles whenever the 1m
+   window shifted, so the exhaustion of every historical bar moved and the RSI
+   line wobbled. Clock buckets keep each resampled bar stable across refetches.
+   `one` must be ascending, so the first candle seen in a bucket is its open and
+   the last is its close. */
 function resample(one, minutes) {
-  const out = [], msv = minutes * 60000;
-  for (let i = 0; i < one.length; i += minutes) {
-    const g = one.slice(i, i + minutes);
-    if (!g.length) break;
-    let hi = g[0].high, lo = g[0].low, vol = 0;
-    for (let j = 0; j < g.length; j++) { if (g[j].high > hi) hi = g[j].high; if (g[j].low < lo) lo = g[j].low; vol += g[j].volume; }
-    out.push({ time: Math.floor(g[0].time / msv) * msv, open: g[0].open, high: hi, low: lo, close: g[g.length - 1].close, volume: vol });
+  const msv = minutes * 60000, map = Object.create(null), order = [];
+  for (let i = 0; i < one.length; i++) {
+    const c = one[i];
+    if (!c) continue;
+    const bt = Math.floor(Number(c.time) / msv) * msv;
+    const b = map[bt];
+    if (!b) { map[bt] = { time: bt, open: c.open, high: c.high, low: c.low, close: c.close, volume: Number(c.volume) || 0 }; order.push(bt); }
+    else {
+      if (c.high > b.high) b.high = c.high;
+      if (c.low < b.low) b.low = c.low;
+      b.close = c.close;
+      b.volume += Number(c.volume) || 0;
+    }
   }
-  return out;
+  order.sort((a, b) => a - b);
+  return order.map(t => map[t]);
 }
 
 function idxAt(arr, t) {
