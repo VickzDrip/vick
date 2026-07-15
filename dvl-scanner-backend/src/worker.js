@@ -37,11 +37,78 @@ async function exrReadingFor(adapter, sym) {
       .filter(c => Number.isFinite(c.time) && Number.isFinite(c.close));
     const base = norm(r15), one = norm(r1);
     if (base.length < 20) return null;
-    const reading = exhaustionRsi.readingAt(base, one, Object.assign({ baseTfMin: 15 }, cfg.EXR));
-    if (!reading) return null;
-    return { value: reading.value, base: reading.base, push: reading.push, zone: reading.zone,
+    const opts = Object.assign({ baseTfMin: 15 }, cfg.EXR);
+    /* One EXR series over the whole 15m window (value/base/push at EVERY bar).
+       Same cost as the old readingAt (it computed the series internally), but now
+       we ALSO reuse it to backfill history — so the last point still feeds the
+       row, and every past bar feeds the backtest. */
+    const series = exhaustionRsi.computeSeries(base, one, opts);
+    if (!Array.isArray(series) || !series.length) return null;
+    const last = series[series.length - 1];
+    const zone = last.value >= opts.upperZone ? "up" : (last.value <= opts.lowerZone ? "down" : "neutral");
+    /* HISTORICAL BACKFILL — the reason the backtest was "slow to find signals":
+       it only recorded the CURRENT bar each cycle and each takes ~5h (20 bars)
+       to resolve, so it accumulated live. Here we mine every past close-confirmed
+       ignition already present in the fetched window, with its RSI reading, and
+       resolve them from the same candles — instantly seeding resolved signals.
+       Idempotent (dedup by sym|tf|barTime), so re-running each cycle only adds
+       genuinely new bars. Best-effort: never break the reading. */
+    try { backfillHistory(sym, cfg.SCAN_TF, base, series, opts); } catch (_) {}
+    return { value: last.value, base: last.base, push: last.push, zone: zone,
              closes: base.slice(-40).map(c => c.close) };
   } catch (_) { return null; }
+}
+
+/* Walk every CLOSED 15m bar in `base` (ascending {time,open,high,low,close,
+   volume}), detect the same close-confirmed spike pós-flat ignition the live
+   scan uses, attach the EXR reading at that bar (from the precomputed `series`),
+   and record it. Then resolve everything with ≥HORIZON bars after it from this
+   same window. Returns how many NEW signals were recorded. */
+function backfillHistory(sym, tf, base, series, opts) {
+  if (!Array.isArray(base) || base.length < 30) return 0;
+  const engine = cfg.ENGINE;
+  const closes = base.map(c => Number(c.close));
+  const vols = base.map(c => Number(c.volume));
+  const ohlc = base.map(c => ({ time: Number(c.time), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume) }));
+  const sByTime = new Map();
+  if (Array.isArray(series)) for (const s of series) sByTime.set(Number(s.time), s);
+  const upperZone = opts.upperZone, lowerZone = opts.lowerZone;
+  let recorded = 0;
+  /* j = the bar treated as the last CLOSED bar. Need history before (MAs) and
+     ≥1 bar after so it's actually closed; resolution needs ≥HORIZON after. */
+  for (let j = 26; j <= base.length - 2; j++) {
+    /* closedIgnition treats len-2 as the last closed bar → pass slice(0, j+2). */
+    const ig = M.closedIgnition(closes.slice(0, j + 2), vols.slice(0, j + 2), engine);
+    if (!ig.isIgnition) continue;
+    const barT = Number(base[j].time);
+    const price = Number(base[j].close);
+    if (!(price > 0)) continue;
+    const atr = M.computeAtr(ohlc.slice(0, j + 1), 14);
+    if (!(atr > 0)) continue;
+    /* Features anchored at bar j (computeSignal reads its last element). */
+    let sig = null;
+    try { sig = M.computeSignal(closes.slice(0, j + 1), vols.slice(0, j + 1), engine); } catch (_) { sig = null; }
+    const row = {
+      volBelowMaBars: ig.volBelowMaBars,
+      crossStrength: ig.crossStrength,
+      maFlatness1: sig ? sig.maFlatness1 : 0,
+      spike20: sig ? sig.spike20 : 0,
+      spikePrevVolRatio: sig ? sig.spikePrevVolRatio : 0
+    };
+    const se = sByTime.get(barT);
+    let exr = null;
+    if (se && Number.isFinite(Number(se.value))) {
+      const val = Number(se.value);
+      exr = { value: val, push: Number(se.push) || 0,
+              zone: val >= upperZone ? "up" : (val <= lowerZone ? "down" : "neutral"),
+              closes: closes.slice(Math.max(0, j - 39), j + 1) };
+    }
+    if (pumpModel.record(sym, tf, barT, price, atr, row, exr)) recorded++;
+  }
+  /* Resolve from THIS window (160 bars) so backfilled signals older than the
+     live 80-bar window still resolve immediately. */
+  pumpModel.resolveWith(sym, tf, ohlc);
+  return recorded;
 }
 
 /* Where the persistent signal registry is mirrored to disk so it survives
@@ -822,4 +889,4 @@ function getBacktestStats() {
   return result;
 }
 
-module.exports = { start, stop, cycle, getSnapshot, getUniverse, getCandidates, getMexcDerivs, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading, getBacktestStats };
+module.exports = { start, stop, cycle, getSnapshot, getUniverse, getCandidates, getMexcDerivs, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading, getBacktestStats, backfillHistory };

@@ -52,19 +52,26 @@ let pending = [];              // [{ sym, tf, t, price, atr, f:[...] }]
 let dataset = [];              // [{ f:[...], up, down }]
 let model = null;              // { up:{...}, down:{...}, trained, samples, trainedAt }
 let _lastTrain = 0;
-const seen = new Set();        // dedup key sym|tf|t
+const seen = new Set();        // dedup key sym|tf|t (pending, cleared on drop/resolve)
+/* Keys of signals ALREADY in `dataset` (resolved). `seen` is cleared when a
+   signal resolves, which is fine for the live one-bar-per-cycle path but breaks
+   the HISTORICAL backfill (which re-walks the same bars every cycle) — a resolved
+   bar would be recorded and resolved AGAIN, duplicating it. `datasetKeys` never
+   forgets a resolved bar, and is rebuilt from disk on load, so the backfill is
+   idempotent across cycles AND restarts. */
+const datasetKeys = new Set();
 
 /* Record a fired signal (spike pós-flat) awaiting resolution. atr = ATR at the
    signal candle (same TF); price = its close. */
 function record(sym, tf, t, price, atr, r, exr) {
   if (!sym || !(Number(price) > 0) || !(Number(atr) > 0)) return false;
   const key = sym + "|" + tf + "|" + t;
-  if (seen.has(key)) return false;
+  if (seen.has(key) || datasetKeys.has(key)) return false;
   seen.add(key);
   const e = (exr && Number.isFinite(Number(exr.value)))
     ? { exrValue: Number(exr.value), exrPush: Number(exr.push) || 0, exrCloses: Array.isArray(exr.closes) ? exr.closes.map(Number) : null }
     : null;
-  pending.push({ sym: sym, tf: tf, t: Number(t), price: Number(price), atr: Number(atr), f: featuresOf(r), exr: e });
+  pending.push({ sym: sym, tf: tf, t: Number(t), price: Number(price), atr: Number(atr), f: featuresOf(r), exr: e, key: key });
   if (pending.length > 20000) pending = pending.slice(-20000);
   return true;
 }
@@ -108,10 +115,11 @@ function resolveWith(sym, tf, ohlc) {
     if (Number.isFinite(maxHigh) && Number.isFinite(minLow) && p.atr > 0) {
       const up = Math.max(0, (maxHigh - p.price) / p.atr);
       const down = Math.max(0, (p.price - minLow) / p.atr);
-      const sample = { f: p.f, up: up, down: down, entry: p.price, atr: p.atr, path: path };
+      const sample = { f: p.f, up: up, down: down, entry: p.price, atr: p.atr, path: path, key: p.key };
       if (p.exr) { sample.exrValue = p.exr.exrValue; sample.exrPush = p.exr.exrPush; sample.exrCloses = p.exr.exrCloses; }
       dataset.push(sample);
-      if (dataset.length > DATA_MAX) dataset.shift();
+      if (p.key) datasetKeys.add(p.key);   // never re-record this resolved bar
+      if (dataset.length > DATA_MAX) { const drop = dataset.shift(); if (drop && drop.key) datasetKeys.delete(drop.key); }
       resolved++;
     }
     seen.delete(sym + "|" + tf + "|" + p.t);
@@ -251,6 +259,10 @@ function load() {
       .map(d => { if (!d) return null; const f = migrateFeatureVector(d.f); return f ? Object.assign({}, d, { f }) : null; })
       .filter(Boolean).slice(-DATA_MAX);
   } catch (_) { dataset = []; }
+  /* Rebuild the resolved-key index so the historical backfill stays idempotent
+     across restarts (won't re-add signals already on disk). */
+  datasetKeys.clear();
+  for (const d of dataset) { if (d && d.key) datasetKeys.add(d.key); }
   try { model = JSON.parse(fs.readFileSync(MODEL_FILE, "utf8")); } catch (_) { model = null; }
   /* Drop a model trained on a different feature dimension — it'll retrain on
      the migrated dataset on the next cycle. */
