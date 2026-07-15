@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.146</title>
+<title>DVL — Beta 1.147</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.146';
+window.DVL_APP_VERSION = 'Beta 1.147';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.146";
+const DVL_APP_VERSION = "Beta 1.147";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.147", note: "Estabiliza o histograma de VOLUME que ficava mudando a cada segundo. A escala do painel (volMax) incluía a vela AO VIVO: conforme o volume da vela em formação crescia, o máximo subia e TODAS as barras fechadas encolhiam — e quando abria vela nova elas voltavam, dando a impressão de que o volume inteiro ficava mexendo. Agora a escala usa só as velas FECHADAS (a vela ao vivo é detectada pelo horário de fechamento, então continua certo mesmo com scroll), e a barra ao vivo é limitada à altura do painel — ela continua visível no topo sem esmagar as outras. As barras fechadas param de balançar. Só frontend." },
   { version: "Beta 1.146", note: "Conserta o DVL Exhaustion RSI que ficava se MEXENDO sozinho (a linha inteira mudava de forma e o valor pulava 48→49→50 sem o preço andar). Causa: o oscilador reamostrava os dados de 1m em timeframes menores AGRUPANDO POR POSIÇÃO no array (fatias de N velas a partir do índice 0). Como o gráfico rebusca o 1m a cada ~25s numa janela deslizante, cada rebusca reagrupava velas diferentes → a exaustão de TODAS as barras históricas mudava e a linha do RSI balançava. Agora reamostra por RELÓGIO (cada barra de 3m/5m/15m sempre contém as mesmas velas de 1m do mesmo horário), então o oscilador fica estável entre atualizações — o valor só muda quando o preço realmente muda. Apliquei a mesma correção no RSI do backend (scanner) pra os dois continuarem batendo. Frontend + backend (exige reiniciar o dvl-scanner)." },
   { version: "Beta 1.145", note: "Conserta o marcador de spike pós-flat do DVL Volume que ficava PULANDO entre velas (aparecia numa vela, sumia, ia pra outra e voltava). A regra 'só velas fechadas' cortava cegamente o último item do array — mas o feed às vezes inclui a vela ao vivo e às vezes não, então a última vela FECHADA entrava e saía do destaque a cada atualização. Agora a decisão é pelo TEMPO: a última vela só é ignorada se o fechamento dela ainda não passou (duração inferida do espaçamento entre velas). Assim uma vela fechada é sempre marcada de forma consistente, com ou sem a vela em formação no array — o destaque para de pular. Só frontend." },
   { version: "Beta 1.144", note: "Conserta a RÉGUA que ficava sempre em 0%. A conta da porcentagem dividia pelo maior valor entre o preço inicial e 1 (Math.max(preço, 1)) — então em qualquer ativo abaixo de $1 (quase toda cripto da MEXC: AIOT 0.037, ZBT 0.097, DODO 0.026…) ela dividia por 1 em vez do preço real, e a % saía perto de zero, arredondando pra 0.00%. Agora divide pelo preço inicial de verdade (com proteção só contra preço exatamente zero), então a régua mostra a variação correta em qualquer faixa de preço. Só frontend." },
@@ -24612,7 +24613,23 @@ if(window.DVLSpikeZonesDraw){
   ctx.beginPath(); ctx.moveTo(x0,ly); ctx.lineTo(x1,ly); ctx.stroke();
   ctx.setLineDash([]);
 
-  const volMax = Math.max(...view.map(d=>d.volume),1);
+  /* Escala do volume só pelas velas FECHADAS. Se incluir a vela ao vivo (em
+     formação), conforme o volume dela cresce o volMax sobe e TODAS as barras
+     fechadas encolhem — e quando abre vela nova elas voltam. Isso fazia o
+     histograma inteiro "ficar mudando" a cada tick. Detecta a vela ao vivo pelo
+     TEMPO (fechamento ainda não passou) pra continuar certo mesmo com scroll; a
+     barra ao vivo é limitada à altura do painel no desenho, então segue visível
+     (no topo) sem esmagar o resto. */
+  const volMax = (function(){
+    const vs = view.map(d=>Number(d.volume)||0);
+    const n = view.length;
+    let scaleVols = vs;
+    if(n >= 2){
+      const barMs = Number(view[n-1].time) - Number(view[n-2].time);
+      if(barMs > 0 && (Number(view[n-1].time) + barMs) > Date.now()) scaleVols = vs.slice(0, -1);
+    }
+    return Math.max(...(scaleVols.length ? scaleVols : vs), 1);
+  })();
   const volH = Math.min(58, (y1-y0)*.18);
   const candleW = __dvlCandleWidthForMode((x1-x0)/Math.max(win.totalSlots, 1), candleMode, Math.max(1.8, Math.min(28, (x1-x0)/Math.max(win.totalSlots, 1)*.56)));
 
@@ -34484,7 +34501,10 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       const spikeFlat = state.highlightSpikeFlat && isSpikeFlatTime(d.time);
       const color = spikeFlat ? state.spikeFlatColor : (up ? state.bullColor : state.bearColor);
       const barOpacity = spikeFlat ? Math.max(state.opacity, 0.85) : state.opacity;
-      const vh = (Number(d.volume) || 0) / volMax * volH;
+      /* Limita à altura do painel: como a escala (volMax) ignora a vela ao
+         vivo, uma vela em formação com volume acima do máximo fechado desenharia
+         mais alta que o painel e invadiria os preços — clamp mantém no topo. */
+      const vh = Math.min(volH, (Number(d.volume) || 0) / volMax * volH);
       ctx.fillStyle = rgba(color, barOpacity);
       ctx.fillRect(cx - cfg.candleW/2, cfg.y1 - vh, cfg.candleW, vh);
     });
