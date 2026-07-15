@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.153</title>
+<title>DVL — Beta 1.154</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.153';
+window.DVL_APP_VERSION = 'Beta 1.154';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.153";
+const DVL_APP_VERSION = "Beta 1.154";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Restaura a SESSÃO salva ANTES dos indicadores inicializarem ──
@@ -20459,6 +20459,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.154", note: "Conserta a busca de ativos que não filtrava. A lista de ativos é re-renderizada ao vivo (os preços atualizam sozinhos), e cada re-render recriava a lista e apagava o filtro — então você digitava e a lista voltava cheia. Agora o texto da busca fica guardado e o filtro é RE-APLICADO depois de cada atualização, então ele gruda: digita SOL/Solana e a lista filtra e continua filtrada. Abre sempre com a lista completa. Só frontend." },
   { version: "Beta 1.153", note: "O botão Salvar agora SALVA de verdade a sessão. Antes ele gravava, mas nada era restaurado ao recarregar — então, por exemplo, um indicador que você tirava voltava. Agora, assim que a página carrega (antes dos indicadores ligarem), a gente restaura o último estado salvo: indicadores ligados/desligados, desenhos e configs voltam exatamente como você deixou quando clicou em Salvar. Funciona como um ponto de restauração: o que você mudar DEPOIS de salvar, sem salvar de novo, volta pro último save ao recarregar. Só frontend." },
   { version: "Beta 1.152", note: "Adiciona uma barra de PESQUISA no seletor de ativos (Assets): dá pra digitar o símbolo (ex.: SOL) ou o nome (ex.: Solana) e a lista filtra na hora. Mostra 'Nenhum ativo encontrado' quando não bate nada. Só frontend." },
   { version: "Beta 1.151", note: "Backtest no modo Só sinais completos agora roda em PRELIMINAR a partir de 8 sinais completos (antes travava em aguardando até 20), com um aviso amarelo de amostra pequena. Assim dá pra ir vendo a análise do RSI enquanto os sinais acumulam, sem confiar 100% ainda. Contexto: os completos sobem devagar de propósito — um sinal só conta depois de RESOLVER (20 velas = ~5h no 15m), e o spike confirma no fechamento. Backend (exige reiniciar o dvl-scanner)." },
@@ -23661,25 +23662,35 @@ function renderAssetDropdown(){
     });
   });
 
-  /* Barra de pesquisa: filtra a lista por símbolo ou nome enquanto digita.
-     Esconde as linhas que não batem (sem re-render, mantém os handlers). */
+  /* Barra de pesquisa: filtra a lista por símbolo ou nome. IMPORTANTE: o
+     dropdown é RE-RENDERIZADO ao vivo (preços atualizam), e cada re-render
+     recria a lista e apagava o filtro — por isso "não pesquisava". O texto fica
+     num GLOBAL (window.__dvlAssetSearchQ) e o filtro é RE-APLICADO no fim de
+     todo render, então ele sobrevive às atualizações de preço. */
   const assetSearch = els.assetDropdown.querySelector("#assetSearchInput");
   if(assetSearch){
     const emptyEl = els.assetDropdown.querySelector(".assetDropdownEmpty");
-    const filterAssets = () => {
-      const q = String(assetSearch.value || "").trim().toUpperCase().replace(/\s+/g, "");
+    const applyAssetFilter = () => {
+      const q = String(window.__dvlAssetSearchQ || "").trim().toUpperCase().replace(/\s+/g, "");
       const opts = els.assetDropdown.querySelectorAll(".assetOption[data-symbol]");
       let shown = 0;
       opts.forEach(el => {
-        const sym = String(el.getAttribute("data-symbol") || "").toUpperCase();
-        const name = String(symbolNames[el.getAttribute("data-symbol")] || "").toUpperCase().replace(/\s+/g, "");
+        const s = el.getAttribute("data-symbol") || "";
+        const sym = String(s).toUpperCase();
+        const name = String(symbolNames[s] || "").toUpperCase().replace(/\s+/g, "");
         const match = !q || sym.indexOf(q) >= 0 || name.indexOf(q) >= 0;
         el.style.display = match ? "" : "none";
         if(match) shown++;
       });
       if(emptyEl) emptyEl.style.display = shown ? "none" : "";
     };
-    assetSearch.addEventListener("input", filterAssets);
+    /* Restaura o texto e o filtro depois deste (re)render. */
+    if(window.__dvlAssetSearchQ) assetSearch.value = window.__dvlAssetSearchQ;
+    applyAssetFilter();
+    assetSearch.addEventListener("input", () => {
+      window.__dvlAssetSearchQ = assetSearch.value;
+      applyAssetFilter();
+    });
     /* Não deixa cliques/toques na busca fecharem o dropdown. */
     ["click","pointerdown","mousedown","touchstart"].forEach(evt =>
       assetSearch.addEventListener(evt, ev => ev.stopPropagation()));
@@ -23740,6 +23751,7 @@ function refreshAssetUi(){
 
 function openAssetDropdown(){
   assetDropdownOpen = true;
+  window.__dvlAssetSearchQ = "";   // abre sempre com a lista completa
   if(els.assetDropdown){
     renderAssetDropdown();
     els.assetDropdown.classList.add("is-open");
