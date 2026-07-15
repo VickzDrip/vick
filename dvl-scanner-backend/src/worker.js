@@ -37,7 +37,7 @@ async function exrReadingFor(adapter, sym) {
       .filter(c => Number.isFinite(c.time) && Number.isFinite(c.close));
     const base = norm(r15), one = norm(r1);
     if (base.length < 20) return null;
-    const reading = exhaustionRsi.readingAt(base, one, { baseTfMin: 15 });
+    const reading = exhaustionRsi.readingAt(base, one, Object.assign({ baseTfMin: 15 }, cfg.EXR));
     if (!reading) return null;
     return { value: reading.value, base: reading.base, push: reading.push, zone: reading.zone,
              closes: base.slice(-40).map(c => c.close) };
@@ -324,6 +324,18 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
   const freshCut = now - cfg.FRESH_MS;
   const sigReg = getSigReg(adapter.key, tf);
 
+  /* ── DVL Exhaustion RSI (the platform oscillator) for EVERY candidate, on
+     the 15m pass only (the TF the user fixed for it) ── so the scanner table
+     can show the RSI value + zone (sobrevendido/sobrecomprado) on every row,
+     not just the few that ignited. Pooled so ~80 symbols × (15m+1m) fetches
+     stay within the exchange rate limit; MEXC-only (see exrReadingFor). */
+  let exrBySym = null;
+  if (tf === cfg.SCAN_TF) {
+    const readings = await mapPool(cands, cfg.POOL, c => exrReadingFor(adapter, c.sym));
+    exrBySym = {};
+    for (let i = 0; i < cands.length; i++) exrBySym[cands[i].sym] = readings[i] || null;
+  }
+
   /* 1) Compute current data for every valid candidate (igniting or not). */
   const cur = {};
   for (let i = 0; i < cands.length; i++) {
@@ -344,14 +356,15 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
       const pred = pumpModel.predict(row);
       if (pred) { row.predUp = pred.up; row.predDown = pred.down; }
       pumpModel.resolveWith(cands[i].sym, tf, k.ohlc);
+      /* Exhaustion RSI reading for this row (15m pass, computed above in the
+         pooled batch). Attach to EVERY row so the table shows it — value,
+         raw RSI (base) and the zone (down = sobrevendido/verde, up =
+         sobrecomprado/vermelho). */
+      const exr = exrBySym ? exrBySym[cands[i].sym] : null;
+      if (exr) { row.exrValue = exr.value; row.exrBase = exr.base; row.exrZone = exr.zone; }
       if (row.isIgnition && Array.isArray(k.ohlc) && k.ohlc.length) {
         const atr = M.computeAtr(k.ohlc, 14);
         const sigT = Number(k.ohlc[k.ohlc.length - 1].time) || now;
-        /* Confirm with the 15m Exhaustion RSI (faithful) — only on the 15m scan
-           pass, the TF the user fixed for the oscillator. */
-        let exr = null;
-        if (tf === cfg.SCAN_TF) { try { exr = await exrReadingFor(adapter, cands[i].sym); } catch (_) { } }
-        if (exr) { row.exrValue = exr.value; row.exrZone = exr.zone; }
         if (atr > 0) pumpModel.record(cands[i].sym, tf, sigT, row.lastClose || row.price, atr, row, exr);
       }
     } catch (_) { /* model is best-effort — never break a scan cycle */ }
@@ -714,6 +727,19 @@ function setEngineConfig(patch) {
   if (patch.weights && typeof patch.weights === "object") Object.assign(cfg.WEIGHTS, patch.weights);
   if (Number.isFinite(patch.oiMaLen)) cfg.OI_MA_LEN = Math.max(2, Math.min(200, Math.round(patch.oiMaLen)));
   if (Number.isFinite(patch.lsrMaLen)) cfg.LSR_MA_LEN = Math.max(2, Math.min(200, Math.round(patch.lsrMaLen)));
+  /* Exhaustion RSI inputs (the platform oscillator) — editable live from the
+     Scanner Filtros. Each is clamped to a sane range; a bad value is ignored. */
+  if (patch.exr && typeof patch.exr === "object") {
+    const e = patch.exr, E = cfg.EXR;
+    if (Number.isFinite(e.mtfRsiLen))   E.mtfRsiLen   = Math.max(2,  Math.min(100, Math.round(e.mtfRsiLen)));
+    if (Number.isFinite(e.mtfPush))     E.mtfPush     = Math.max(0,  Math.min(60,  e.mtfPush));
+    if (Number.isFinite(e.mtfVolSpikeAt)) E.mtfVolSpikeAt = Math.max(1.05, Math.min(10, e.mtfVolSpikeAt));
+    if (Number.isFinite(e.mtfVolMaLen)) E.mtfVolMaLen = Math.max(3,  Math.min(200, Math.round(e.mtfVolMaLen)));
+    if (Number.isFinite(e.upperZone))   E.upperZone   = Math.max(50, Math.min(95,  e.upperZone));
+    if (Number.isFinite(e.lowerZone))   E.lowerZone   = Math.max(5,  Math.min(50,  e.lowerZone));
+    /* Never let the zones cross. */
+    if (E.lowerZone >= E.upperZone) { E.lowerZone = Math.max(5, Math.min(E.upperZone - 5, E.lowerZone)); }
+  }
 }
 
 let _timer = null;

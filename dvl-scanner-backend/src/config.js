@@ -60,6 +60,22 @@ module.exports = {
   OI_MA_LEN: 20,    // OI samples (one per cycle) kept per symbol
   LSR_MA_LEN: 20,   // Binance top-trader ratio points fetched per symbol
 
+  /* ── DVL Exhaustion RSI inputs (the platform oscillator) ──
+     These drive exhaustionRsi.js — the SAME oscillator the chart renders,
+     fixed to a 15m base (baseTfMin lives in the reader). The scanner reads
+     it on every 15m row so the table shows the RSI value + zone; the user's
+     pattern is: RSI sobrevendido (≤ lowerZone, verde) + spike pós-flat = LONG;
+     RSI sobrecomprado (≥ upperZone, vermelho) + spike pós-flat = SHORT. All
+     six are editable live from the Scanner Filtros (POST /config → patch.exr). */
+  EXR: {
+    mtfRsiLen: 14,      // RSI length (Cutler/SMA), same as the chart
+    mtfPush: 18,        // how hard the multi-TF exhaustion pushes toward 0/100
+    mtfVolSpikeAt: 2.5, // volume/MA ratio that counts as a full spike
+    mtfVolMaLen: 20,    // volume MA length used inside the exhaustion score
+    upperZone: 60,      // ≥ this = sobrecomprado (exausto no topo → short)
+    lowerZone: 35       // ≤ this = sobrevendido (exausto no fundo → long)
+  },
+
   /* Signal-engine parameters — same defaults as the in-page filterState. */
   ENGINE: {
     maPeriod1: 20,
