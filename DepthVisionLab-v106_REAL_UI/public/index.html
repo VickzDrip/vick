@@ -20434,15 +20434,19 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.154";
+const DVL_APP_VERSION = "Beta 1.155";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
-/* ── Restaura a SESSÃO salva ANTES dos indicadores inicializarem ──
-   O botão "Salvar" grava um snapshot das chaves do app (indicadores ligados/
-   desligados, desenhos, configs). Sem restaurar, ao recarregar o indicador que
-   você tirou voltava. Aqui, bem cedo (antes dos módulos de indicador lerem o
-   localStorage), reescrevemos as chaves do último snapshot salvo — então a
-   página carrega exatamente como você salvou. Só age depois do 1º "Salvar". */
+/* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
+   O botão "Salvar" grava um snapshot das chaves do app. Os indicadores já
+   guardam sozinhos o próprio estado no localStorage (ligado/desligado, configs),
+   e o localStorage sobrevive ao recarregar por conta própria. Então aqui a gente
+   NÃO sobrescreve nada que já tenha valor vivo — só restaura chaves que ESTÃO
+   FALTANDO (ex.: navegador novo/limpo). Antes a gente reescrevia por cima do
+   snapshot antigo, e isso RESSUSCITAVA um indicador que você tinha tirado depois
+   do último Salvar (você tirava, recarregava e ele voltava). Com "só preenche o
+   que falta", o que você mudou por último SEMPRE vale, e o snapshot vira só uma
+   rede de segurança pro que se perderia. */
 try{
   var _dvlSnapRaw = localStorage.getItem("DVL_USER_PROFILE_SNAPSHOT");
   if(_dvlSnapRaw){
@@ -20451,6 +20455,7 @@ try{
       Object.keys(_dvlSnap.localStorage).forEach(function(k){
         try{
           if(k === "DVL_USER_PROFILE_SNAPSHOT" || k === "DVL_USER_PROFILE_LAST_SAVE") return;
+          if(localStorage.getItem(k) != null) return;   // já tem valor vivo → NÃO sobrescreve
           var v = _dvlSnap.localStorage[k];
           if(v != null) localStorage.setItem(k, v);
         }catch(_){}
@@ -20459,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.155", note: "Conserta DE VERDADE a busca de ativos e o Salvar (achei a causa raiz dos dois testando a página num navegador de verdade). (1) BUSCA: o código do filtro rodava certo, mas escondia o item com um display:none COMUM — e existe uma regra CSS .assetOption{display:grid!important} que vencia o none, então a lista NUNCA sumia por mais que você digitasse. Agora escondo com prioridade !important (e mostro removendo o inline), então digita SOL e a lista filtra na hora. (2) SALVAR: a restauração da sessão (1.153) estava SOBRESCREVENDO o estado vivo com um snapshot antigo — por isso um indicador que você tirava DEPOIS do último Salvar RESSUSCITAVA ao recarregar. Os indicadores já guardam o próprio estado no localStorage (que sobrevive ao reload sozinho), então agora a restauração SÓ preenche o que está faltando e nunca passa por cima do que você mudou por último: tirou o indicador, ele fica tirado. Só frontend." },
   { version: "Beta 1.154", note: "Conserta a busca de ativos que não filtrava. A lista de ativos é re-renderizada ao vivo (os preços atualizam sozinhos), e cada re-render recriava a lista e apagava o filtro — então você digitava e a lista voltava cheia. Agora o texto da busca fica guardado e o filtro é RE-APLICADO depois de cada atualização, então ele gruda: digita SOL/Solana e a lista filtra e continua filtrada. Abre sempre com a lista completa. Só frontend." },
   { version: "Beta 1.153", note: "O botão Salvar agora SALVA de verdade a sessão. Antes ele gravava, mas nada era restaurado ao recarregar — então, por exemplo, um indicador que você tirava voltava. Agora, assim que a página carrega (antes dos indicadores ligarem), a gente restaura o último estado salvo: indicadores ligados/desligados, desenhos e configs voltam exatamente como você deixou quando clicou em Salvar. Funciona como um ponto de restauração: o que você mudar DEPOIS de salvar, sem salvar de novo, volta pro último save ao recarregar. Só frontend." },
   { version: "Beta 1.152", note: "Adiciona uma barra de PESQUISA no seletor de ativos (Assets): dá pra digitar o símbolo (ex.: SOL) ou o nome (ex.: Solana) e a lista filtra na hora. Mostra 'Nenhum ativo encontrado' quando não bate nada. Só frontend." },
@@ -23679,10 +23685,15 @@ function renderAssetDropdown(){
         const sym = String(s).toUpperCase();
         const name = String(symbolNames[s] || "").toUpperCase().replace(/\s+/g, "");
         const match = !q || sym.indexOf(q) >= 0 || name.indexOf(q) >= 0;
-        el.style.display = match ? "" : "none";
+        /* IMPORTANTE: a regra CSS `.assetOption{display:grid!important}` vence um
+           `style.display="none"` normal — por isso a lista NÃO filtrava mesmo o
+           código rodando. Escondemos com prioridade !important e, pra mostrar,
+           REMOVEMOS o inline pra voltar ao grid do CSS. */
+        if(match) el.style.removeProperty("display");
+        else el.style.setProperty("display", "none", "important");
         if(match) shown++;
       });
-      if(emptyEl) emptyEl.style.display = shown ? "none" : "";
+      if(emptyEl) emptyEl.style.setProperty("display", shown ? "none" : "block", "important");
     };
     /* Restaura o texto e o filtro depois deste (re)render. */
     if(window.__dvlAssetSearchQ) assetSearch.value = window.__dvlAssetSearchQ;
