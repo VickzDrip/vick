@@ -221,14 +221,21 @@ function createServer() {
      account0, riskPct, slAtr, minConv override the defaults. */
   app.get("/api/dvl/scanner/pump-backtest", (req, res) => {
     const st = pumpModel.status();
-    const samples = pumpModel.getDataset();
-    const withPath = samples.filter(s => s && Array.isArray(s.path) && s.path.length).length;
+    const all = pumpModel.getDataset();
+    /* "Só sinais completos": restrict everything to the new-format signals that
+       carry the EXR/RSI reading (they also carry the exact price path). Nothing
+       is deleted — this is a reversible VIEW, not a reset. */
+    const onlyComplete = String(req.query.onlyComplete || "") === "1";
+    const complete = all.filter(s => s && Array.isArray(s.exrCloses) && s.exrCloses.length);
+    const data = onlyComplete ? complete : all;
+    const withPath = data.filter(s => s && Array.isArray(s.path) && s.path.length).length;
     const MIN = 20;
     /* Every resolved signal is usable now (exact path when available, MFE/MAE
        approximation otherwise), so the gate is total resolved samples — not the
        path count. */
-    if (!st.trained || samples.length < MIN) {
-      return res.json({ ok: true, ready: false, trained: !!st.trained, samples: samples.length, need: MIN });
+    if (!st.trained || data.length < MIN) {
+      return res.json({ ok: true, ready: false, trained: !!st.trained, samples: data.length,
+                        onlyComplete, completeN: complete.length, totalN: all.length, need: MIN });
     }
     const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
     /* Realistic trading cost per side, as PERCENT of notional: taker fee +
@@ -256,7 +263,7 @@ function createServer() {
     ];
     const sideOk = r => (r.returnPct > 0 && r.expectancyAtr > 0);
     const evals = MODES.map(m => ({
-      m, e: pumpBacktest.evaluate(samples, predict, Object.assign({}, base,
+      m, e: pumpBacktest.evaluate(data, predict, Object.assign({}, base,
         m.trail ? { slAtr: m.slAtr, trail: true, trailGrid: m.trailGrid } : { slAtr: m.slAtr, tpGrid: m.tpGrid }))
     }));
     const modes = evals.map(({ m, e }) => ({
@@ -278,21 +285,22 @@ function createServer() {
     };
     /* No-blind-spots SL×TP surface at the learned gate — the whole landscape,
        so the best combo can be judged for robustness (plateau vs lucky spike). */
-    const surface = pumpBacktest.sweepGrid(samples, predict, Object.assign({}, base, { minConv: e.minConv }));
+    const surface = pumpBacktest.sweepGrid(data, predict, Object.assign({}, base, { minConv: e.minConv }));
     /* THE OPTIMISER: search hundreds of exit combos (bracket / breakeven /
        trailing) on a TRAIN split and validate the winner out-of-sample. */
-    const optimized = pumpBacktest.optimize(samples, predict, base);
+    const optimized = pumpBacktest.optimize(data, predict, base);
     /* DEEP DIAGNOSTICS: is the model's number calibrated, and where (if
        anywhere) does a profitable subset hide? */
-    const calibration = pumpBacktest.calibrate(samples, predict);
-    const conditions = pumpBacktest.mineConditions(samples, predict, pumpModel.FEATURES, base);
+    const calibration = pumpBacktest.calibrate(data, predict);
+    const conditions = pumpBacktest.mineConditions(data, predict, pumpModel.FEATURES, base);
     /* The user's discovery: pré-volume+spike CONFIRMED by the 15m Exhaustion
        RSI zone. Sweeps the RSI inputs (len, push, zones) and validates the best
        out-of-sample. */
-    const rsiConfirm = pumpBacktest.sweepRsiConfirm(samples, predict, base);
+    const rsiConfirm = pumpBacktest.sweepRsiConfirm(data, predict, base);
     res.json({
       ok: true, ready: true, horizon: pumpModel.HORIZON,
-      samples: samples.length, withPath, exactPath: e.all.exactPath,
+      samples: data.length, withPath, exactPath: e.all.exactPath,
+      onlyComplete, completeN: complete.length, totalN: all.length,
       modes, bestMode: bm.m.key,
       params: { account0: base.account0, riskPct: base.riskPct, slAtr: e.slAtr, minConv: e.minConv,
                 tpAtr: e.tpAtr, trailAtr: e.trailAtr, adaptive: !!e.adaptive,
