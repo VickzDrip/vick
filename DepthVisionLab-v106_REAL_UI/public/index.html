@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.143</title>
+<title>DVL — Beta 1.144</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.143';
+window.DVL_APP_VERSION = 'Beta 1.144';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.143";
+const DVL_APP_VERSION = "Beta 1.144";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.144", note: "Conserta a RÉGUA que ficava sempre em 0%. A conta da porcentagem dividia pelo maior valor entre o preço inicial e 1 (Math.max(preço, 1)) — então em qualquer ativo abaixo de $1 (quase toda cripto da MEXC: AIOT 0.037, ZBT 0.097, DODO 0.026…) ela dividia por 1 em vez do preço real, e a % saía perto de zero, arredondando pra 0.00%. Agora divide pelo preço inicial de verdade (com proteção só contra preço exatamente zero), então a régua mostra a variação correta em qualquer faixa de preço. Só frontend." },
   { version: "Beta 1.143", note: "O tempo 'Spike há' do scanner agora conta a partir do ÚLTIMO spike pré-volume+flat (a vela de ignição confirmada no fechamento), não da primeira vez que a moeda entrou na lista. Se a mesma moeda dá um novo spike pós-flat mais tarde, o tempo reseta pro spike mais recente (e ela sobe pro topo). Além disso o tempo passa a ser ancorado na hora de fechamento da própria vela de ignição (igual ao candle do gráfico), em vez da hora em que o scan rodou. Só backend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.142", note: "Faz o sinal de spike do scanner BATER com o marcador do gráfico. O gráfico só marca 'spike pós-flat' em velas FECHADAS (confirma no fechamento da vela); o scanner estava detectando na vela AO VIVO (extrapolava o volume da vela em formação), então acendia antes e divergia — e às vezes sumia se o volume não se sustentava. Agora o scanner confirma o spike pós-flat só na última vela de 15m FECHADA, com o MESMO cálculo do marcador do gráfico (calmaria abaixo da média + primeiro cruzamento acima), igual à sua regra 'no fechamento do candle'. O score de spike ao vivo continua aparecendo pra tabela não ficar vazia no meio da vela, mas o SINAL (o que entra na lista e é gravado) só dispara no fechamento. Sobre o RSI: a fórmula do scanner é idêntica à do oscilador — o que faz não bater é o input 'Calculation TF' do Exhaustion RSI do gráfico, que vem como 'Chart' (segue o TF que você está olhando). O scanner é fixo em 15m, então deixe o gráfico em 15m (ou ponha o Calculation TF do oscilador em 15m) pra os dois casarem. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.141", note: "Limpa o menu Filtros do Scanner pra bater com o novo tipo de varredura (RSI da plataforma + pré-volume/spike). Tirei tudo que era do modelo antigo: Mercado (presets), TF detecção (fica fixo em 15m), Spike mínimo, Máximo de ativos, Spike acima da média e as Entradas do motor antigas (MA rápida/lenta, RSI(14) sobrevenda/lookback, médias de OI e LSR). Ficou só o que importa agora: os inputs do RSI Exhaustion (comprimento, push, spike de volume, média de volume e as zonas de sobrecompra/sobrevenda) e, embaixo, os Pesos do score e os Pesos dos blocos do Spike Score. Os valores antigos seguem nos defaults por baixo (ainda vão pro backend), só saíram da tela. Só frontend." },
@@ -32193,7 +32194,13 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     // Beta 0.965 — label persistente do Ruler.
     // Mantém drawings da 0.958 intactos; só não deixa o label sumir ao clicar fora.
     if(true){
-      const pct = ((Number(r.p2.price) - Number(r.p1.price)) / Math.max(Math.abs(Number(r.p1.price)), 1)) * 100;
+      /* % = variação real sobre o preço inicial. NÃO usar Math.max(...,1) no
+         denominador: isso travava a conta em ativos abaixo de $1 (quase toda
+         cripto de MEXC — AIOT 0.037, ZBT 0.097…), dividindo por 1 em vez do
+         preço, então a % saía ~0 e arredondava pra 0.00%. Guarda só contra
+         preço exatamente 0. */
+      const p1p = Math.abs(Number(r.p1.price));
+      const pct = p1p > 1e-12 ? ((Number(r.p2.price) - Number(r.p1.price)) / p1p) * 100 : 0;
       const candles = Math.abs(Math.round(Number(r.p2.idx) - Number(r.p1.idx)));
       const pctLabel = `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
       const barsLabel = `${candles} bars`;
