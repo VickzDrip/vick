@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.147</title>
+<title>DVL — Beta 1.148</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.147';
+window.DVL_APP_VERSION = 'Beta 1.148';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.147";
+const DVL_APP_VERSION = "Beta 1.148";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.148", note: "Conserta o botão 'Salvar' do cabeçalho, que não fazia NADA (nem salvava, nem avisava). Motivo: o handler do botão chamava window.saveProfile, mas a função saveProfile vivia dentro de um IIFE e nunca era exposta no window — então o clique caía no vazio. Agora saveProfile é exposta corretamente, então o botão salva a sessão (símbolo, TF, desenhos, configs e um snapshot no navegador) e mostra uma mensagem breve ('Sessão salva ✓') que some sozinha depois de ~1,8s. Só frontend." },
   { version: "Beta 1.147", note: "Estabiliza o histograma de VOLUME que ficava mudando a cada segundo. A escala do painel (volMax) incluía a vela AO VIVO: conforme o volume da vela em formação crescia, o máximo subia e TODAS as barras fechadas encolhiam — e quando abria vela nova elas voltavam, dando a impressão de que o volume inteiro ficava mexendo. Agora a escala usa só as velas FECHADAS (a vela ao vivo é detectada pelo horário de fechamento, então continua certo mesmo com scroll), e a barra ao vivo é limitada à altura do painel — ela continua visível no topo sem esmagar as outras. As barras fechadas param de balançar. Só frontend." },
   { version: "Beta 1.146", note: "Conserta o DVL Exhaustion RSI que ficava se MEXENDO sozinho (a linha inteira mudava de forma e o valor pulava 48→49→50 sem o preço andar). Causa: o oscilador reamostrava os dados de 1m em timeframes menores AGRUPANDO POR POSIÇÃO no array (fatias de N velas a partir do índice 0). Como o gráfico rebusca o 1m a cada ~25s numa janela deslizante, cada rebusca reagrupava velas diferentes → a exaustão de TODAS as barras históricas mudava e a linha do RSI balançava. Agora reamostra por RELÓGIO (cada barra de 3m/5m/15m sempre contém as mesmas velas de 1m do mesmo horário), então o oscilador fica estável entre atualizações — o valor só muda quando o preço realmente muda. Apliquei a mesma correção no RSI do backend (scanner) pra os dois continuarem batendo. Frontend + backend (exige reiniciar o dvl-scanner)." },
   { version: "Beta 1.145", note: "Conserta o marcador de spike pós-flat do DVL Volume que ficava PULANDO entre velas (aparecia numa vela, sumia, ia pra outra e voltava). A regra 'só velas fechadas' cortava cegamente o último item do array — mas o feed às vezes inclui a vela ao vivo e às vezes não, então a última vela FECHADA entrava e saía do destaque a cada atualização. Agora a decisão é pelo TEMPO: a última vela só é ignorada se o fechamento dela ainda não passou (duração inferida do espaçamento entre velas). Assim uma vela fechada é sempre marcada de forma consistente, com ou sem a vela em formação no array — o destaque para de pular. Só frontend." },
@@ -37587,10 +37588,10 @@ drag = {
       if(typeof window.__dvlSave === "function") window.__dvlSave();
       else clickHidden("tbSaveBtn");
 
-      toast("Perfil salvo");
+      toast("Sessão salva ✓");
     }catch(err){
       console.warn(err);
-      toast("Erro ao salvar perfil");
+      toast("Erro ao salvar a sessão");
     }finally{
       setTimeout(() => {
         try{ btn && btn.classList.remove("is-saving"); }catch(_){}
@@ -37607,6 +37608,12 @@ drag = {
     if(typeof window.__dvlRedo === "function") window.__dvlRedo();
     else clickHidden("tbRedoBtn");
   }
+
+  /* Expor saveProfile: o botão "Salvar" do cabeçalho novo (dvl1b_saveBtn) é
+     ligado em outro script que chama window.saveProfile — mas saveProfile vive
+     dentro deste IIFE e nunca era exposto, então o clique não fazia NADA (nem
+     salvava, nem mostrava mensagem). */
+  try{ window.saveProfile = saveProfile; }catch(_){}
 
   ready(function(){
     const profile = document.getElementById("profileSaveBtn");
