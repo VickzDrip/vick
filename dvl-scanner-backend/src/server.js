@@ -144,7 +144,7 @@ function createServer() {
 
   app.post("/api/dvl/scanner/config", (req, res) => {
     worker.setEngineConfig(req.body || {});
-    res.json({ ok: true, engine: cfg.ENGINE, weights: cfg.WEIGHTS, oiMaLen: cfg.OI_MA_LEN, lsrMaLen: cfg.LSR_MA_LEN });
+    res.json({ ok: true, engine: cfg.ENGINE, weights: cfg.WEIGHTS, oiMaLen: cfg.OI_MA_LEN, lsrMaLen: cfg.LSR_MA_LEN, exr: cfg.EXR });
   });
 
   /* Manual trades (opened by hand in the app's Trade tab, not a scanner
