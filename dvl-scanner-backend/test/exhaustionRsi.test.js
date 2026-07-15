@@ -42,6 +42,18 @@ const one = [bar(0, 10, 11, 9, 10.5, 5), bar(60000, 10.5, 12, 10, 11, 7), bar(12
 const res = EXR.resample(one, 3);
 ok(res.length === 1 && res[0].high === 12 && res[0].low === 9 && res[0].volume === 15 && res[0].close === 11.2, "resample groups OHLCV correctly");
 
+// STABILITY (the fix for the wobbling RSI): a wall-clock bucket must contain the
+// SAME 1m candles regardless of where the 1m window starts. Index-based chunking
+// regrouped candles when the window shifted, moving every bar's exhaustion.
+const full = [];
+for (let t = 0; t <= 300000; t += 60000) full.push(bar(t, 1, 2, 0.5, 1.5, 1));
+const shifted = full.slice(1);            // window shifted by one 1m candle
+const bf = EXR.resample(full, 3).find(b => b.time === 180000);
+const bs = EXR.resample(shifted, 3).find(b => b.time === 180000);
+ok(bf && bs && bf.open === bs.open && bf.close === bs.close && bf.high === bs.high &&
+   bf.low === bs.low && bf.volume === bs.volume,
+   "resample bucket stays identical when the 1m window shifts (clock-aligned, not index-aligned)");
+
 console.log(fail ? ("EXHAUSTION RSI — " + pass + " passed, " + fail + " FAILED")
                  : ("OK — " + pass + " passed, 0 failed"));
 process.exit(fail ? 1 : 0);
