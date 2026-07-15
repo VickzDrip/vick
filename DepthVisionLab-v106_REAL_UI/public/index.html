@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.144</title>
+<title>DVL — Beta 1.145</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.144';
+window.DVL_APP_VERSION = 'Beta 1.145';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.144";
+const DVL_APP_VERSION = "Beta 1.145";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.145", note: "Conserta o marcador de spike pós-flat do DVL Volume que ficava PULANDO entre velas (aparecia numa vela, sumia, ia pra outra e voltava). A regra 'só velas fechadas' cortava cegamente o último item do array — mas o feed às vezes inclui a vela ao vivo e às vezes não, então a última vela FECHADA entrava e saía do destaque a cada atualização. Agora a decisão é pelo TEMPO: a última vela só é ignorada se o fechamento dela ainda não passou (duração inferida do espaçamento entre velas). Assim uma vela fechada é sempre marcada de forma consistente, com ou sem a vela em formação no array — o destaque para de pular. Só frontend." },
   { version: "Beta 1.144", note: "Conserta a RÉGUA que ficava sempre em 0%. A conta da porcentagem dividia pelo maior valor entre o preço inicial e 1 (Math.max(preço, 1)) — então em qualquer ativo abaixo de $1 (quase toda cripto da MEXC: AIOT 0.037, ZBT 0.097, DODO 0.026…) ela dividia por 1 em vez do preço real, e a % saía perto de zero, arredondando pra 0.00%. Agora divide pelo preço inicial de verdade (com proteção só contra preço exatamente zero), então a régua mostra a variação correta em qualquer faixa de preço. Só frontend." },
   { version: "Beta 1.143", note: "O tempo 'Spike há' do scanner agora conta a partir do ÚLTIMO spike pré-volume+flat (a vela de ignição confirmada no fechamento), não da primeira vez que a moeda entrou na lista. Se a mesma moeda dá um novo spike pós-flat mais tarde, o tempo reseta pro spike mais recente (e ela sobe pro topo). Além disso o tempo passa a ser ancorado na hora de fechamento da própria vela de ignição (igual ao candle do gráfico), em vez da hora em que o scan rodou. Só backend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.142", note: "Faz o sinal de spike do scanner BATER com o marcador do gráfico. O gráfico só marca 'spike pós-flat' em velas FECHADAS (confirma no fechamento da vela); o scanner estava detectando na vela AO VIVO (extrapolava o volume da vela em formação), então acendia antes e divergia — e às vezes sumia se o volume não se sustentava. Agora o scanner confirma o spike pós-flat só na última vela de 15m FECHADA, com o MESMO cálculo do marcador do gráfico (calmaria abaixo da média + primeiro cruzamento acima), igual à sua regra 'no fechamento do candle'. O score de spike ao vivo continua aparecendo pra tabela não ficar vazia no meio da vela, mas o SINAL (o que entra na lista e é gravado) só dispara no fechamento. Sobre o RSI: a fórmula do scanner é idêntica à do oscilador — o que faz não bater é o input 'Calculation TF' do Exhaustion RSI do gráfico, que vem como 'Chart' (segue o TF que você está olhando). O scanner é fixo em 15m, então deixe o gráfico em 15m (ou ponha o Calculation TF do oscilador em 15m) pra os dois casarem. Backend (exige reiniciar o dvl-scanner) + frontend." },
@@ -34427,10 +34428,21 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       const len = clamp(parseInt(state.maLength,10)||20, 1, 2000);
       const ma = volumeMa(vols, len);
       const flagged = new Set();
-      /* Só velas FECHADAS: a última (ao vivo) tem volume ainda mudando a cada
-         tick, então marcá-la faria o destaque piscar/mudar. O spike pós-flat
-         confirma no fechamento (len-1 = vela em formação, fica de fora). */
-      for(let i=SPIKE_BASE_BARS; i<vols.length-1; i++){
+      /* Só velas FECHADAS. Mas NÃO dá pra só "pular o último item do array": o
+         feed às vezes inclui a vela em formação e às vezes não, então cortar
+         cegamente o último elemento fazia a ÚLTIMA vela FECHADA entrar/sair do
+         destaque a cada atualização — o marcador ficava pulando entre velas.
+         Decide pelo TEMPO: só ignora a última vela se o fechamento dela ainda
+         não passou (duração inferida do espaçamento entre velas, sem depender
+         do TF). Assim uma vela fechada é sempre avaliada igual, com ou sem a
+         vela ao vivo no array. */
+      const n = vols.length;
+      let lastEligible = n - 1;
+      if(n >= 2){
+        const barMs = Number(src[n-1].time) - Number(src[n-2].time);
+        if(barMs > 0 && (Number(src[n-1].time) + barMs) > Date.now()) lastEligible = n - 2;
+      }
+      for(let i=SPIKE_BASE_BARS; i<=lastEligible; i++){
         if(ma[i] == null || !(vols[i] > ma[i])) continue;
         let flatBase = true;
         for(let j=i-SPIKE_BASE_BARS; j<i; j++){
