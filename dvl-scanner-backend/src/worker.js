@@ -210,6 +210,14 @@ function buildRow(exKey, adapter, t, k, now, tf) {
     maFlatness1: sig.maFlatness1,
     isIgnition: closedIg.isIgnition,
 
+    /* When the spike pós-flat is confirmed, this is the CLOSE time of the
+       ignition candle (the last closed bar = the forming bar's open time), so
+       the registry's "Spike há" counts from the actual candle — matching the
+       chart's marker — and updates every time a fresh spike pós-flat fires on
+       the same symbol. 0 when there's no ignition this cycle. */
+    igniteBarTime: (closedIg.isIgnition && Array.isArray(k.ohlc) && k.ohlc.length)
+      ? (Number(k.ohlc[k.ohlc.length - 1].time) || now) : 0,
+
     /* spikeScore/status/blocks are finalized in scanExchange once the real
        OI/LSR trend is known. spikeAt is set from the registry's detection
        time. */
@@ -254,7 +262,10 @@ function buildRow(exKey, adapter, t, k, now, tf) {
 function mergeRegistry(sigReg, cur, now) {
   for (const sym in cur) {
     if (cur[sym].isIgnition && cur[sym].side === "LONG" && !sigReg[sym]) {
-      sigReg[sym] = Object.assign({}, cur[sym], { _detectedAt: now, _missed: 0 });
+      /* "Spike há" counts from the ignition candle's close (igniteBarTime),
+         not the scan cycle — so it matches the candle on the chart. */
+      const at = Number(cur[sym].igniteBarTime) || now;
+      sigReg[sym] = Object.assign({}, cur[sym], { _detectedAt: at, _missed: 0 });
     }
   }
   for (const sym in sigReg) {
@@ -263,7 +274,12 @@ function mergeRegistry(sigReg, cur, now) {
     if (cur[sym]) {
       const detectedAt = entry._detectedAt;
       Object.assign(entry, cur[sym]);
-      entry._detectedAt = detectedAt;
+      /* Keep the original detection time — UNLESS a fresh spike pós-flat fired
+         on a newer candle (igniteBarTime advances past the last one). Then the
+         time resets to the most recent spike, which is what the user wants:
+         "o tempo do ÚLTIMO spike pré-volume". */
+      const fresh = Number(cur[sym].igniteBarTime) || 0;
+      entry._detectedAt = (cur[sym].isIgnition && fresh > detectedAt) ? fresh : detectedAt;
       entry._missed = 0;
     } else {
       entry._missed = (entry._missed || 0) + 1;

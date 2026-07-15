@@ -77,5 +77,23 @@ const reg4 = { D: { rawSymbol: "D", symbol: "DUSDT", side: "SHORT", isIgnition: 
 let rows4 = mergeRegistry(reg4, { D: row("D", true, 1, "SHORT") }, 9000000);
 ok(!reg4.D && rows4.length === 0, "a pre-existing SHORT entry (e.g. from an old persisted registry file) is purged immediately, not left to age out");
 
+/* "Spike há" follows the LAST pré-volume spike: the detection time seeds from
+   the ignition candle (igniteBarTime), stays put while the same candle is the
+   most recent one, and RESETS when a fresh spike pós-flat fires on a newer
+   candle. */
+{
+  const regT = {};
+  const bar0 = 5000000;
+  mergeRegistry(regT, { X: Object.assign(row("X", true, 1), { igniteBarTime: bar0 }) }, bar0 + 500);
+  ok(regT.X && regT.X._detectedAt === bar0, "join uses the ignition candle time, not the scan time");
+  mergeRegistry(regT, { X: Object.assign(row("X", true, 1), { igniteBarTime: bar0 }) }, bar0 + 60000);
+  ok(regT.X._detectedAt === bar0, "same ignition candle keeps the time (no repeated reset while isIgnition stays true)");
+  mergeRegistry(regT, { X: Object.assign(row("X", false, 1), { igniteBarTime: 0 }) }, bar0 + 120000);
+  ok(regT.X._detectedAt === bar0, "a non-igniting refresh keeps the last spike time");
+  const bar1 = bar0 + 900000;
+  mergeRegistry(regT, { X: Object.assign(row("X", true, 1), { igniteBarTime: bar1 }) }, bar1 + 500);
+  ok(regT.X._detectedAt === bar1, "a fresh spike pós-flat on a newer candle resets the time to the most recent spike");
+}
+
 console.log((fail === 0 ? "OK" : "FAILED") + " — " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);
