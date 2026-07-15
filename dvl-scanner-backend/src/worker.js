@@ -386,7 +386,12 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
          sobrecomprado/vermelho). */
       const exr = exrBySym ? exrBySym[cands[i].sym] : null;
       if (exr) { row.exrValue = exr.value; row.exrBase = exr.base; row.exrZone = exr.zone; }
-      if (row.isIgnition && Array.isArray(k.ohlc) && k.ohlc.length) {
+      /* Record signals ONLY on the 15m pass (SCAN_TF) — o modelo é 15m+RSI.
+         Antes gravava em TODOS os timeframes, mas só o 15m carrega a leitura do
+         RSI (exr); os sinais de 1m/3m/5m/… entravam SEM RSI e nunca ficavam
+         "completos", inflando o total e deixando a fração completa minúscula.
+         Agora TODO sinal novo é 15m e recebe o RSI → todo sinal novo é completo. */
+      if (row.isIgnition && tf === cfg.SCAN_TF && Array.isArray(k.ohlc) && k.ohlc.length) {
         const atr = M.computeAtr(k.ohlc, 14);
         const sigT = Number(k.ohlc[k.ohlc.length - 1].time) || now;
         if (atr > 0) pumpModel.record(cands[i].sym, tf, sigT, row.lastClose || row.price, atr, row, exr);

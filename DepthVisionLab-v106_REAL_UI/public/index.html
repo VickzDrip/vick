@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.149</title>
+<title>DVL — Beta 1.150</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.149';
+window.DVL_APP_VERSION = 'Beta 1.150';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.149";
+const DVL_APP_VERSION = "Beta 1.150";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.150", note: "Corrige por que só poucos sinais ficavam 'completos' (com leitura de RSI) no backtest. O scanner gravava sinais em TODOS os timeframes (1m, 3m, 5m, 15m…), mas só o 15m carrega a leitura do RSI Exhaustion — então os sinais de 1m/3m/5m entravam SEM RSI e nunca ficavam completos, inflando o total (ex.: 2818) e deixando a fração de completos minúscula (ex.: 12). Como todo o modelo é 15m + RSI, agora o scanner grava sinais SÓ no 15m: todo sinal novo já vem com a leitura do RSI, ou seja, todo sinal novo é completo. Isso NÃO adiciona os antigos de uma vez (eles vão acumulando conforme novos spikes pós-flat de 15m disparam), mas para de diluir e faz a fração de completos subir de verdade daqui pra frente. Enquanto acumula, dá pra desligar 'Só sinais completos' pra rodar o backtest com todos os sinais já resolvidos. Backend (exige reiniciar o dvl-scanner)." },
   { version: "Beta 1.149", note: "Duas coisas no scanner. (1) Novo BLOQUINHO de RSI: além de pré-volume (V) e spike (S), agora tem o bloco R do RSI Exhaustion — ele acende quando o oscilador (15m) está numa zona, VERDE = sobrevendido e VERMELHO = sobrecomprado. Entra no score junto com os outros dois, então quando bate os três (pré-volume + spike + RSI na zona) o score vai a 99 e a confluência vira 🔥 3/3. O peso do bloco RSI é editável em Filtros > Pesos dos blocos. (2) As médias do scanner agora seguem À RISCA as do indicador DVL Volume: o comprimento das médias de volume (rápida e lenta) que você define no DVL Volume é empurrado pro motor do scanner, então o spike/ignição e o marcador 'spike pós-flat' usam exatamente as mesmas médias que aparecem no gráfico (antes o scanner tinha as dele, fixas). Só frontend." },
   { version: "Beta 1.148", note: "Conserta o botão 'Salvar' do cabeçalho, que não fazia NADA (nem salvava, nem avisava). Motivo: o handler do botão chamava window.saveProfile, mas a função saveProfile vivia dentro de um IIFE e nunca era exposta no window — então o clique caía no vazio. Agora saveProfile é exposta corretamente, então o botão salva a sessão (símbolo, TF, desenhos, configs e um snapshot no navegador) e mostra uma mensagem breve ('Sessão salva ✓') que some sozinha depois de ~1,8s. Só frontend." },
   { version: "Beta 1.147", note: "Estabiliza o histograma de VOLUME que ficava mudando a cada segundo. A escala do painel (volMax) incluía a vela AO VIVO: conforme o volume da vela em formação crescia, o máximo subia e TODAS as barras fechadas encolhiam — e quando abria vela nova elas voltavam, dando a impressão de que o volume inteiro ficava mexendo. Agora a escala usa só as velas FECHADAS (a vela ao vivo é detectada pelo horário de fechamento, então continua certo mesmo com scroll), e a barra ao vivo é limitada à altura do painel — ela continua visível no topo sem esmagar as outras. As barras fechadas param de balançar. Só frontend." },
