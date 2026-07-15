@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.140</title>
+<title>DVL — Beta 1.141</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.140';
+window.DVL_APP_VERSION = 'Beta 1.141';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,11 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.140";
+const DVL_APP_VERSION = "Beta 1.141";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.141", note: "Limpa o menu Filtros do Scanner pra bater com o novo tipo de varredura (RSI da plataforma + pré-volume/spike). Tirei tudo que era do modelo antigo: Mercado (presets), TF detecção (fica fixo em 15m), Spike mínimo, Máximo de ativos, Spike acima da média e as Entradas do motor antigas (MA rápida/lenta, RSI(14) sobrevenda/lookback, médias de OI e LSR). Ficou só o que importa agora: os inputs do RSI Exhaustion (comprimento, push, spike de volume, média de volume e as zonas de sobrecompra/sobrevenda) e, embaixo, os Pesos do score e os Pesos dos blocos do Spike Score. Os valores antigos seguem nos defaults por baixo (ainda vão pro backend), só saíram da tela. Só frontend." },
   { version: "Beta 1.140", note: "Scanner refeito em cima do RSI da plataforma, a pedido. (1) Tirei as colunas OI e LSR da tabela — as setinhas não faziam mais sentido pro seu operacional. (2) A coluna RSI agora mostra o RSI Exhaustion DA PLATAFORMA (15m), com a cor do oscilador no momento da leitura: VERDE quando está sobrevendido (exausto no fundo) e VERMELHO quando sobrecomprado (exausto no topo). Agora aparece em TODAS as moedas do scanner, não só nas que dispararam — assim você vê sobrevenda/sobrecompra a todo momento. (3) Dentro de Filtros tem os MESMOS inputs do oscilador (comprimento, push, spike de volume, média de volume e as zonas de sobrecompra/sobrevenda) pra você calibrar o RSI que é calculado. (4) O card do ML parou de seguir o modelo antigo (só pré-volume+spike em ATR) e passou a seguir o RSI: pré-pump lista as sobrevendidas, pré-short as sobrecompradas, ⚡ marca quando o spike pós-flat fechou (o gatilho). Padrão: RSI sobrevendido + spike pós-flat no fechamento = compra; RSI sobrecomprado + spike pós-flat = venda. Backend (exige reiniciar o dvl-scanner) + frontend." },
   { version: "Beta 1.139", note: "Agora dá pra rodar o backtest só nos sinais NOVOS — os que já carregam a leitura do RSI Exhaustion (15m) e a trajetória exata do preço. Um botão 'Só sinais completos' no topo do cartão de backtest alterna a visão: ligado, toda a análise (modos, otimizador, heatmap, calibração, mineração e o filtro do RSI) roda apenas nesses sinais completos; desligado, volta a usar todos os ~900 sinais resolvidos. Nada é apagado — é só um filtro reversível, sua escolha fica salva. O cartão mostra quantos sinais completos existem do total. Assim você acompanha o backtest 'reiniciado' no formato novo sem perder o histórico. Backend + frontend (exige reiniciar o dvl-scanner)." },
   { version: "Beta 1.138", note: "Traz o RSI pra aba do modelo (ML) pra você acompanhar ali mesmo: cada moeda das listas pré-pump/pré-short mostra a leitura do RSI Exhaustion (15m) — ex.: [RSI 31] —, verde quando o oscilador confirma a direção (long = exausto embaixo, short = exausto no topo) e cinza quando neutro. Embaixo, uma linha de status com a melhor config aprendida no backtest (comprimento e zonas) e o resultado fora da amostra. Só aparece a leitura das moedas cujo sinal disparou no 15m (o RSI é lido no disparo). Só frontend." },
@@ -62921,16 +62922,13 @@ body.dvlScannerOpen080 #chartWrap{
     if(key==="exrUpper") next=Math.max(next, Number(filterState1015.exrLower||35)+5);
     filterState1015[key]=next;
   }
-  var NUM_KEYS_1018=["maPeriod1","maPeriod2","flatVolumeBarLen","rsiOversoldThreshold","rsiOversoldLookback","oiMaLen","lsrMaLen",
-    "exrRsiLen","exrPush","exrVolSpikeAt","exrVolMaLen","exrUpper","exrLower"];
+  /* Só os inputs do oscilador RSI Exhaustion (os do modelo antigo — MA rápida/
+     lenta, RSI(14) sobrevenda, OI/LSR MA, flat bar — saíram da tela; os valores
+     seguem nos defaults e ainda vão pro backend, só não são mais editáveis aqui). */
+  var NUM_KEYS_1018=["exrRsiLen","exrPush","exrVolSpikeAt","exrVolMaLen","exrUpper","exrLower"];
   function numRows1018(){
     return NUM_KEYS_1018.map(function(k){
-      /* Divider heading right before the Exhaustion-RSI inputs so the platform
-         oscillator's own inputs read as their own group. */
-      var head = (k==="exrRsiLen")
-        ? '<div class="dvlScan1016MetricRow" style="border-top:1px solid rgba(120,200,255,.16);margin-top:6px;padding-top:10px"><div class="dvlScan1016MetricInfo"><b style="color:#8fd0ff">RSI Exhaustion (oscilador da plataforma · 15m)</b><small>os mesmos inputs do gráfico — muda o RSI que aparece na tabela e confirma o sinal</small></div></div>'
-        : '';
-      return head+'<div class="dvlScan1016MetricRow" data-dvl-scan1015-num-row="'+k+'">'
+      return '<div class="dvlScan1016MetricRow" data-dvl-scan1015-num-row="'+k+'">'
         +'<div class="dvlScan1016MetricInfo"><b>'+numLabel1018(k)+'</b><small>'+numSub1018(k)+'</small></div>'
         +'<div class="dvlScan1016Stepper">'
           +'<button type="button" data-dvl-scan1015-num="'+k+'" data-dvl-scan1015-numdir="-1">−</button>'
@@ -63084,38 +63082,11 @@ body.dvlScannerOpen080 #chartWrap{
   function filterMenu(){
     return '<div class="dvlScan1013FilterMenu dvlScan1015FilterMenu" id="dvlScan1013FilterMenu">'
       +'<h3>Filtros</h3>'
-      +'<div class="dvlScan1015FilterBlock"><label>Mercado</label><div class="dvlScan1013FilterChips" data-dvl-scan1015-group="preset">'
-        +'<button class="is-on" type="button" data-dvl-scan1015-preset="all">Todos</button>'
-        +'<button type="button" data-dvl-scan1015-preset="usdt">USDT-M</button>'
-        +'<button type="button" data-dvl-scan1015-preset="high">Alta convicção</button>'
-        +'<button type="button" data-dvl-scan1015-preset="clean">Spike limpo</button>'
-        +'<button type="button" data-dvl-scan1015-preset="oi">OI crescente</button>'
-        +'<button type="button" data-dvl-scan1015-preset="confluence">🔥 Confluência total</button>'
-      +'</div></div>'
-      +'<div class="dvlScan1015FilterBlock"><label>TF detecção</label><div class="dvlScan1013FilterChips dvlScan1015TfChips" data-dvl-scan1015-group="tf">'
-        +'<button type="button" data-dvl-scan1015-tf="1m">1m</button>'
-        +'<button type="button" data-dvl-scan1015-tf="3m">3m</button>'
-        +'<button type="button" data-dvl-scan1015-tf="5m">5m</button>'
-        +'<button class="is-on" type="button" data-dvl-scan1015-tf="15m">15m</button>'
-        +'<button type="button" data-dvl-scan1015-tf="30m">30m</button>'
-        +'<button type="button" data-dvl-scan1015-tf="1h">1h</button>'
-      +'</div></div>'
-      +'<div class="dvlScan1015FilterBlock"><label>Spike mínimo</label><div class="dvlScan1013FilterChips" data-dvl-scan1015-group="minScore">'
-        +'<button class="is-on" type="button" data-dvl-scan1015-min="0">0</button>'
-        +'<button type="button" data-dvl-scan1015-min="40">40+</button>'
-        +'<button type="button" data-dvl-scan1015-min="55">55+</button>'
-        +'<button type="button" data-dvl-scan1015-min="70">70+</button>'
-      +'</div></div>'
-      +'<div class="dvlScan1015FilterBlock"><label>Máximo de ativos</label><div class="dvlScan1013FilterChips" data-dvl-scan1015-group="maxRows">'
-        +'<button type="button" data-dvl-scan1015-max="10">10</button>'
-        +'<button class="is-on" type="button" data-dvl-scan1015-max="20">20</button>'
-        +'<button type="button" data-dvl-scan1015-max="50">50</button>'
-      +'</div></div>'
-      +'<div class="dvlScan1015FilterBlock"><label>Spike acima da média</label><div class="dvlScan1013FilterChips" data-dvl-scan1015-group="spikeMaMode">'
-        +'<button type="button" data-dvl-scan1015-spikemode="1">1 MA (rápida)</button>'
-        +'<button class="is-on" type="button" data-dvl-scan1015-spikemode="2">2 MAs (rápida+lenta)</button>'
-      +'</div></div>'
-      +'<div class="dvlScan1015FilterBlock dvlScan1016Metrics"><div class="dvlScan1016MetricHead"><label>Entradas do motor</label></div>'+numRows1018()+'</div>'
+      /* Scanner novo = RSI da plataforma + pré-volume/spike. Aqui ficam só os
+         inputs do oscilador (RSI Exhaustion) e, no fim, os pesos do score e dos
+         blocos. Tudo que era do modelo antigo (mercado/TF/spike mín/OI-LSR/MA)
+         saiu da tela. */
+      +'<div class="dvlScan1015FilterBlock dvlScan1016Metrics"><div class="dvlScan1016MetricHead"><label>RSI Exhaustion (oscilador da plataforma · 15m)</label></div>'+numRows1018()+'</div>'
       +'<div class="dvlScan1015FilterBlock"><label>Pesos do score</label><div class="dvlScan1013FilterChips" data-dvl-scan1015-group="weightsrc">'
         +'<button class="is-on" type="button" data-dvl-scan1015-weightsrc="manual">Manual (Filtros)</button>'
         +'<button type="button" data-dvl-scan1015-weightsrc="ml">🤖 Aprendido (ML)</button>'
@@ -70456,7 +70427,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       filterOpen:!!(filter&&filter.classList.contains("is-open")),
       nativeVisible:nativeVisible,
       rows:rows,
-      customFilters:!!q("[data-dvl-scan1015-preset]"),
+      customFilters:!!q("[data-dvl-scan1015-num-row]"),
       metricFilters:!!q("[data-dvl-scan1016-metric]")
     };
   }
