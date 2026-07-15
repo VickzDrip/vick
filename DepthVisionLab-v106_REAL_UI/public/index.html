@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>DVL — Beta 1.152</title>
+<title>DVL — Beta 1.153</title>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.152';
+window.DVL_APP_VERSION = 'Beta 1.153';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20434,10 +20434,32 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.152";
+const DVL_APP_VERSION = "Beta 1.153";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
+/* ── Restaura a SESSÃO salva ANTES dos indicadores inicializarem ──
+   O botão "Salvar" grava um snapshot das chaves do app (indicadores ligados/
+   desligados, desenhos, configs). Sem restaurar, ao recarregar o indicador que
+   você tirou voltava. Aqui, bem cedo (antes dos módulos de indicador lerem o
+   localStorage), reescrevemos as chaves do último snapshot salvo — então a
+   página carrega exatamente como você salvou. Só age depois do 1º "Salvar". */
+try{
+  var _dvlSnapRaw = localStorage.getItem("DVL_USER_PROFILE_SNAPSHOT");
+  if(_dvlSnapRaw){
+    var _dvlSnap = JSON.parse(_dvlSnapRaw);
+    if(_dvlSnap && _dvlSnap.localStorage && typeof _dvlSnap.localStorage === "object"){
+      Object.keys(_dvlSnap.localStorage).forEach(function(k){
+        try{
+          if(k === "DVL_USER_PROFILE_SNAPSHOT" || k === "DVL_USER_PROFILE_LAST_SAVE") return;
+          var v = _dvlSnap.localStorage[k];
+          if(v != null) localStorage.setItem(k, v);
+        }catch(_){}
+      });
+    }
+  }
+}catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.153", note: "O botão Salvar agora SALVA de verdade a sessão. Antes ele gravava, mas nada era restaurado ao recarregar — então, por exemplo, um indicador que você tirava voltava. Agora, assim que a página carrega (antes dos indicadores ligarem), a gente restaura o último estado salvo: indicadores ligados/desligados, desenhos e configs voltam exatamente como você deixou quando clicou em Salvar. Funciona como um ponto de restauração: o que você mudar DEPOIS de salvar, sem salvar de novo, volta pro último save ao recarregar. Só frontend." },
   { version: "Beta 1.152", note: "Adiciona uma barra de PESQUISA no seletor de ativos (Assets): dá pra digitar o símbolo (ex.: SOL) ou o nome (ex.: Solana) e a lista filtra na hora. Mostra 'Nenhum ativo encontrado' quando não bate nada. Só frontend." },
   { version: "Beta 1.151", note: "Backtest no modo Só sinais completos agora roda em PRELIMINAR a partir de 8 sinais completos (antes travava em aguardando até 20), com um aviso amarelo de amostra pequena. Assim dá pra ir vendo a análise do RSI enquanto os sinais acumulam, sem confiar 100% ainda. Contexto: os completos sobem devagar de propósito — um sinal só conta depois de RESOLVER (20 velas = ~5h no 15m), e o spike confirma no fechamento. Backend (exige reiniciar o dvl-scanner)." },
   { version: "Beta 1.150", note: "Corrige por que só poucos sinais ficavam 'completos' (com leitura de RSI) no backtest. O scanner gravava sinais em TODOS os timeframes (1m, 3m, 5m, 15m…), mas só o 15m carrega a leitura do RSI Exhaustion — então os sinais de 1m/3m/5m entravam SEM RSI e nunca ficavam completos, inflando o total (ex.: 2818) e deixando a fração de completos minúscula (ex.: 12). Como todo o modelo é 15m + RSI, agora o scanner grava sinais SÓ no 15m: todo sinal novo já vem com a leitura do RSI, ou seja, todo sinal novo é completo. Isso NÃO adiciona os antigos de uma vez (eles vão acumulando conforme novos spikes pós-flat de 15m disparam), mas para de diluir e faz a fração de completos subir de verdade daqui pra frente. Enquanto acumula, dá pra desligar 'Só sinais completos' pra rodar o backtest com todos os sinais já resolvidos. Backend (exige reiniciar o dvl-scanner)." },
