@@ -61,6 +61,14 @@ const fetch15m = (sym) => Promise.resolve(makeSeries(1200, sym.length));
   ok(res.longSide && res.shortSide && res.longSide.result && res.shortSide.result, "per-side results present");
   ok(res.best && Number.isFinite(res.best.returnPct), "combined result present");
   ok(res.optimized && ("ready" in res.optimized), "optimizer ran");
+  // per-asset: each with its own $1000, long/short split, mode table
+  const withEv = res.perAsset.filter(p => p.best && p.long && p.short);
+  ok(withEv.length >= 1, "at least one asset has a full per-asset evaluation");
+  ok(withEv.every(p => p.account0 === 1000), "each asset starts with $1000");
+  ok(withEv.every(p => p.best && Number.isFinite(p.best.account) && Number.isFinite(p.best.returnPct)), "per-asset gain/loss present");
+  ok(withEv.every(p => p.long.result && p.short.result), "per-asset long AND short separated");
+  ok(withEv.every(p => Array.isArray(p.modes) && p.modes.length === 4), "per-asset shows the 4 TP/exit modes");
+  ok(res.perAssetAccounts === true, "payload flags per-asset accounts");
 
   // "poucos sinais" path
   const thin = await annual.run(["X_USDT"], 365, cfg, () => Promise.resolve(makeSeries(60, 1)));

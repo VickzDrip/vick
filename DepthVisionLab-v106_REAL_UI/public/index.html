@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.162";
+const DVL_APP_VERSION = "Beta 1.163";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.163", note: "Backtest anual agora quebra o resultado POR ATIVO, a pedido: cada um dos 5 (BTC, ETH, SOL, BNB, XRP) roda com $1000 PRÓPRIO (conta separada, não compartilhada), com LONG e SHORT separados e mostrando os vários tipos de saída testados (Scalp/Equilibrado/Runner/Adaptativo — cada um com o alvo/trailing que rendeu). Cada cartão de ativo mostra o ganho/perda ($ e %), a taxa de acerto e o drawdown do lado long e do short em separado, além da melhor saída escolhida. Continua tendo a visão agregada (os 5 juntos) com o otimizador fora da amostra e a separação long/short do 1.161. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.162", note: "Novo: BACKTEST ANUAL em 5 ativos (BTC, ETH, SOL, BNB, XRP), a pedido, usando os MESMOS critérios do backtest ao vivo (spike pós-flat confirmado no fechamento + RSI Exhaustion 15m). Um botão '📅 Backtest anual' no cartão do backtest busca ~1 ano de velas de 15m de cada ativo pelo backend, detecta cada sinal do histórico, lê o RSI e resolve o trade pelas próprias velas seguintes — e roda toda a análise (melhor modo, otimizador fora da amostra, calibração, mineração de edge e a separação long/short do 1.161) em cima disso. Mostra o resultado por ativo e no total, e dá pra voltar pro ao vivo a qualquer momento. Detalhe honesto: pra um ano inteiro não dá pra baixar o 1m, então o RSI usa a base de 15m sem o empurrão intraday (o valor fica um tiquinho diferente do gráfico, mas a zona sobrevendido/sobrecomprado fica próxima); o gatilho e o resultado dos trades são 100% fiéis. É pesado (busca muito candle), então roda em segundo plano com uma barrinha e guarda o resultado por 10 min. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.161", note: "Separa o resultado do backtest por LADO, a pedido — os shorts estavam puxando o edge do long pra baixo. Antes o melhor modo, o take-profit e o gatilho eram otimizados no conjunto MISTURADO (long+short) e depois aplicados a cada lado, então o número do long vinha diluído pelo short ruim. Agora CADA direção é otimizada SOZINHA: o long acha o melhor combo só com os trades de long, o short idem, e cada um é validado fora da amostra por conta própria. No cartão do backtest, os quadros Pré-pump (long) e Pré-short (short) passam a mostrar o resultado já separado, e aparecem dois blocos 'Melhor combo LONG' e 'Melhor combo SHORT' independentes, além do combo geral (long+short) pra comparar. Assim dá pra ver o edge real do long sem o short mascarando. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.160", note: "Conserta posições (demo) que continuavam ABERTAS mesmo depois do TP ou SL bater. Antes o TP/SL só era conferido no tick do PRÓPRIO ativo — se você estava vendo outro gráfico, ou o preço daquele ativo caía num slot com a chave gravada diferente, o alvo batia e a posição não fechava. Agora tem uma varredura a cada 1s que passa por TODA posição aberta, pega o último preço em cache de cada ativo e fecha na hora quem bateu TP/SL — não importa qual ativo está na tela nem por qual fonte veio o preço. E ao fechar, o pedido é removido de TODOS os slots (podia estar salvo sob uma chave crua/antiga e voltar a aparecer aberto) — então trade fechado não ressuscita. Só frontend." },
@@ -71667,6 +71668,28 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 .dvlCpBt1124 .dvlCpBt1124AnnualBack{flex:0 0 auto;padding:10px 12px;border-radius:10px;background:rgba(145,175,165,.12);border:1px solid rgba(145,175,165,.25);color:#bcd3e2;font:800 12px system-ui;cursor:pointer;}
 .dvlCpBt1124 .dvlCpBt1124AnnualChips{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;}
 .dvlCpBt1124 .dvlCpBt1124AnnualChip{font:800 10.5px system-ui;padding:3px 8px;border-radius:999px;background:rgba(120,200,255,.1);border:1px solid rgba(120,200,255,.24);color:#bcd8ff;}
+.dvlCpBt1124 .dvlCpBt1124PaWrap{margin:12px 0;}
+.dvlCpBt1124 .dvlCpBt1124PaTitle{font:800 12px system-ui;color:#cfe0ea;margin:0 0 8px;}
+.dvlCpBt1124 .dvlCpBt1124PaCard{background:rgba(255,255,255,.025);border:1px solid rgba(145,175,165,.16);border-radius:12px;padding:10px 12px;margin-bottom:8px;}
+.dvlCpBt1124 .dvlCpBt1124PaHd{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+.dvlCpBt1124 .dvlCpBt1124PaHd b{font:800 14px system-ui;color:#eaf2ee;}
+.dvlCpBt1124 .dvlCpBt1124PaHd span{font:700 10.5px system-ui;color:#75827d;}
+.dvlCpBt1124 .dvlCpBt1124PaBig{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:4px 0 8px;}
+.dvlCpBt1124 .dvlCpBt1124PaBig span{font:800 20px system-ui;}
+.dvlCpBt1124 .dvlCpBt1124PaBig small{font:700 10.5px system-ui;color:#75827d;}
+.dvlCpBt1124 .dvlCpBt1124PaSides{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;}
+.dvlCpBt1124 .dvlCpBt1124PaSide{background:rgba(0,0,0,.16);border-radius:9px;padding:6px 9px;}
+.dvlCpBt1124 .dvlCpBt1124PaSide .k{font:800 10.5px system-ui;}
+.dvlCpBt1124 .dvlCpBt1124PaSide b{display:block;font:800 14px system-ui;margin:1px 0;}
+.dvlCpBt1124 .dvlCpBt1124PaSide small{font:700 10px system-ui;color:#75827d;}
+.dvlCpBt1124 .dvlCpBt1124PaSub{font:700 10.5px system-ui;color:#8b98a2;margin-top:2px;}
+.dvlCpBt1124 .dvlCpBt1124PaSub b{color:#cfe0ea;}
+.dvlCpBt1124 .dvlCpBt1124PaModes{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+.dvlCpBt1124 .dvlCpBt1124PaMode{font:700 9.5px system-ui;padding:2px 7px;border-radius:999px;background:rgba(145,175,165,.1);border:1px solid rgba(145,175,165,.2);color:#aeb9b5;}
+.dvlCpBt1124 .dvlCpBt1124PaMode.pos{color:#8fe6bb;border-color:rgba(16,223,119,.28);}
+.dvlCpBt1124 .dvlCpBt1124PaMode.neg{color:#ffb0ba;border-color:rgba(255,89,102,.28);}
+.dvlCpBt1124 .dvlCpBt1124PaBig .pos,.dvlCpBt1124 .dvlCpBt1124PaSide .pos{color:#10df77;}
+.dvlCpBt1124 .dvlCpBt1124PaBig .neg,.dvlCpBt1124 .dvlCpBt1124PaSide .neg{color:#ff5966;}
 .dvlCpBt1124 .dvlCpBt1124Toggle{display:flex;align-items:center;gap:9px;margin:0 0 12px;padding:9px 11px;border-radius:10px;background:rgba(120,200,255,.05);border:1px solid rgba(120,200,255,.16);cursor:pointer;user-select:none;}
 .dvlCpBt1124 .dvlCpBt1124Toggle:hover{background:rgba(120,200,255,.09);}
 .dvlCpBt1124 .dvlCpBt1124Sw{flex:0 0 auto;width:34px;height:19px;border-radius:999px;background:rgba(145,175,165,.25);position:relative;transition:background .2s ease;}
@@ -71957,6 +71980,40 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       +(chips?('<div class="dvlCpBt1124AnnualChips">'+chips+'</div>'):'')
     +'</div>';
   }
+  /* Ganhos/perdas de CADA ativo (cada um com $1000), long e short separados,
+     e os vários tipos de saída (modos) testados. */
+  function perAssetHtml(s){
+    var pa=(s&&Array.isArray(s.perAsset))?s.perAsset:[];
+    if(!pa.length) return '';
+    var acc0=Number(s.account0)||1000;
+    function money(o){ o=o||{}; return {a:Number(o.account)||0, r:Number(o.returnPct)||0, w:Number(o.winRate)||0, n:Number(o.trades)||0, dd:Number(o.maxDrawdownPct)||0}; }
+    var cards=pa.map(function(p){
+      var nm=esc(String(p.sym||'').replace('_USDT','').replace('USDT',''));
+      if(!p.best){
+        return '<div class="dvlCpBt1124PaCard"><div class="dvlCpBt1124PaHd"><b>'+nm+'</b><span>'+(Number(p.signals)||0)+' sinais</span></div>'
+          +'<div class="dvlCpBt1124PaSub">poucos sinais no período pra avaliar</div></div>';
+      }
+      var A=money(p.best), L=money(p.long&&p.long.result), S=money(p.short&&p.short.result);
+      var modes=(Array.isArray(p.modes)?p.modes:[]).map(function(m){
+        var lbl=esc(m.label||m.key||''); var mv=Number(m.account)||0; var mr=Number(m.returnPct)||0;
+        var tp=m.adaptive?('trail '+(Number(m.trailAtr)||0).toFixed(1)+'×'):('alvo '+(Number(m.tpAtr)||0).toFixed(1)+'×');
+        return '<span class="dvlCpBt1124PaMode '+(mr>=0?'pos':'neg')+'">'+lbl+' ('+tp+') '+sign(mr)+'</span>';
+      }).join('');
+      var mLbl=esc((p.modeLabel||'')+'');
+      return '<div class="dvlCpBt1124PaCard">'
+        +'<div class="dvlCpBt1124PaHd"><b>'+nm+'</b><span>'+A.n+' trades · '+(Number(p.signals)||0)+' sinais</span></div>'
+        +'<div class="dvlCpBt1124PaBig"><span class="'+(A.r>=0?'pos':'neg')+'">'+fmtUsd(A.a)+'</span>'
+          +'<small>de '+fmtUsd(acc0)+' · '+sign(A.r)+' · '+A.w.toFixed(0)+'% acerto · dd -'+A.dd.toFixed(0)+'%</small></div>'
+        +'<div class="dvlCpBt1124PaSides">'
+          +'<div class="dvlCpBt1124PaSide"><span class="k" style="color:#10df77">▲ long</span> <b class="'+(L.r>=0?'pos':'neg')+'">'+fmtUsd(L.a)+'</b> <small>'+sign(L.r)+' · '+L.w.toFixed(0)+'% · '+L.n+'t</small></div>'
+          +'<div class="dvlCpBt1124PaSide"><span class="k" style="color:#ff5966">▼ short</span> <b class="'+(S.r>=0?'pos':'neg')+'">'+fmtUsd(S.a)+'</b> <small>'+sign(S.r)+' · '+S.w.toFixed(0)+'% · '+S.n+'t</small></div>'
+        +'</div>'
+        +(mLbl?('<div class="dvlCpBt1124PaSub">melhor saída: <b>'+mLbl+'</b></div>'):'')
+        +(modes?('<div class="dvlCpBt1124PaModes">'+modes+'</div>'):'')
+      +'</div>';
+    }).join('');
+    return '<div class="dvlCpBt1124PaWrap"><div class="dvlCpBt1124PaTitle">Por ativo — cada um com '+fmtUsd(acc0)+' próprio (long e short separados, vários tipos de saída)</div>'+cards+'</div>';
+  }
   function bodyHtml(){
     var a=annualState();
     var s;
@@ -72034,6 +72091,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         + sideRow((s.longSide&&s.longSide.result)||s.long, '▲ Pré-pump (long)', '#10df77')
         + sideRow((s.shortSide&&s.shortSide.result)||s.short, '▼ Pré-short (short)', '#ff5966')
       +'</div>'
+      + (s.annual?perAssetHtml(s):'')
       + (s.longSide?optHtml(s.longSide.optimize, '🧠 Melhor combo LONG — fora da amostra'):'')
       + (s.shortSide?optHtml(s.shortSide.optimize, '🧠 Melhor combo SHORT — fora da amostra'):'')
       + optHtml(s.optimized, '🧠 Melhor combo (long+short) — fora da amostra')
