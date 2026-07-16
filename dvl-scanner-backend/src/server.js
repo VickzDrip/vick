@@ -26,6 +26,7 @@ const M = require("./metrics");
 const oiStore = require("./oiStore");
 const pumpModel = require("./pumpModel");
 const pumpBacktest = require("./pumpBacktest");
+const annualBacktest = require("./annualBacktest");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -336,6 +337,41 @@ function createServer() {
       grossReturnPct: e.grossReturnPct, sweep: e.sweep,
       equity: e.all.equity.filter((_, i) => i % Math.max(1, Math.ceil(e.all.equity.length / 120)) === 0)
     });
+  });
+
+  /* ── ANNUAL backtest ─────────────────────────────────────────────────────
+     Same criteria (spike pós-flat + 15m Exhaustion RSI, RSI base 15m over the
+     full year) run on demand over ~365d of 15m for up to 5 assets. Heavy (many
+     paginated fetches), so: one run at a time + a short result cache. */
+  const DEFAULT_ANNUAL = ["BTC_USDT", "ETH_USDT", "SOL_USDT", "BNB_USDT", "XRP_USDT"];
+  let _annualRunning = false, _annualCache = null, _annualStartedAt = 0;
+  app.get("/api/dvl/scanner/pump-backtest-annual", (req, res) => {
+    const days = Math.max(30, Math.min(400, Number(req.query.days) || 365));
+    let symbols = String(req.query.symbols || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+    symbols = (symbols.length ? symbols : DEFAULT_ANNUAL).slice(0, 5)
+      .map(s => /_/.test(s) ? s : s.replace(/USDT$/, "") + "_USDT");
+    const cacheKey = symbols.join(",") + "|" + days;
+    /* Poll pattern: the run takes 30–60s, so we never hold the HTTP connection
+       open for it. Fresh cache → return the result; already running → report
+       progress; otherwise kick it off and report "started". Client polls. */
+    if (_annualCache && _annualCache.key === cacheKey && (Date.now() - _annualCache.at) < 600000) {
+      return res.json(Object.assign({ cached: true }, _annualCache.data));
+    }
+    if (_annualRunning) {
+      return res.json({ ok: true, ready: false, running: true, elapsedMs: Date.now() - _annualStartedAt,
+                        message: "Rodando o backtest anual… (buscando ~1 ano de 15m dos 5 ativos)" });
+    }
+    _annualRunning = true; _annualStartedAt = Date.now();
+    const runCfg = { ENGINE: cfg.ENGINE, EXR: cfg.EXR,
+      account0: Number(req.query.account0) || 1000, riskPct: Number(req.query.riskPct) || 0.01,
+      feePct: Number(req.query.feePct) || 0.02, slipPct: Number(req.query.slipPct) || 0.02 };
+    const fetch15m = (sym) => mexc.klinesHistory(sym, days);
+    annualBacktest.run(symbols, days, runCfg, fetch15m)
+      .then(out => { _annualCache = { key: cacheKey, at: Date.now(), data: out }; })
+      .catch(err => { _annualCache = { key: cacheKey, at: Date.now(), data: { ok: false, ready: false, error: String(err && err.message || err) } }; })
+      .finally(() => { _annualRunning = false; });
+    res.json({ ok: true, ready: false, running: true, started: true, symbols, days,
+               message: "Backtest anual iniciado — buscando ~1 ano de 15m dos 5 ativos. Pode levar até 1 min." });
   });
 
   const server = http.createServer(app);
