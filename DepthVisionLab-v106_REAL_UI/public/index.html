@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.160";
+const DVL_APP_VERSION = "Beta 1.161";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.161", note: "Separa o resultado do backtest por LADO, a pedido — os shorts estavam puxando o edge do long pra baixo. Antes o melhor modo, o take-profit e o gatilho eram otimizados no conjunto MISTURADO (long+short) e depois aplicados a cada lado, então o número do long vinha diluído pelo short ruim. Agora CADA direção é otimizada SOZINHA: o long acha o melhor combo só com os trades de long, o short idem, e cada um é validado fora da amostra por conta própria. No cartão do backtest, os quadros Pré-pump (long) e Pré-short (short) passam a mostrar o resultado já separado, e aparecem dois blocos 'Melhor combo LONG' e 'Melhor combo SHORT' independentes, além do combo geral (long+short) pra comparar. Assim dá pra ver o edge real do long sem o short mascarando. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.160", note: "Conserta posições (demo) que continuavam ABERTAS mesmo depois do TP ou SL bater. Antes o TP/SL só era conferido no tick do PRÓPRIO ativo — se você estava vendo outro gráfico, ou o preço daquele ativo caía num slot com a chave gravada diferente, o alvo batia e a posição não fechava. Agora tem uma varredura a cada 1s que passa por TODA posição aberta, pega o último preço em cache de cada ativo e fecha na hora quem bateu TP/SL — não importa qual ativo está na tela nem por qual fonte veio o preço. E ao fechar, o pedido é removido de TODOS os slots (podia estar salvo sob uma chave crua/antiga e voltar a aparecer aberto) — então trade fechado não ressuscita. Só frontend." },
   { version: "Beta 1.159", note: "O backtest para de demorar DIAS pra achar sinais. Antes o scanner só gravava o sinal da vela ATUAL a cada ciclo, e cada um leva ~5h (20 velas de 15m) pra 'resolver' — então os sinais completos pingavam devagar e um RSI que você operou agora não aparecia tão cedo. Agora o backend faz um BACKFILL HISTÓRICO: em toda varredura ele minera TODAS as velas de 15m já baixadas (janela de ~160 velas ≈ 40h por ativo), acha cada spike pós-flat confirmado no fechamento, lê o RSI Exhaustion naquele momento e RESOLVE o sinal usando as próprias velas seguintes (o futuro já é conhecido no histórico). Resultado: centenas de sinais completos aparecem de imediato, em vez de acumular ao vivo. É idempotente (não duplica entre ciclos nem após reiniciar). Backend — EXIGE atualizar e reiniciar o dvl-scanner." },
   { version: "Beta 1.158", note: "Conserta o 'Preço atual' e o PnL que apareciam como '--' em algumas posições. Dois motivos: (1) o painel procurava o preço pela chave do símbolo SEM normalizar — uma ordem gravada como 'TRX/USDT' virava a chave 'TRX/USDT', mas o mapa de preços é indexado por 'TRXUSDT', então não achava e ainda mostrava o par com barra dupla ('TRX//USDT'). Agora o símbolo é normalizado (bate a chave e o nome sai certo). (2) O preço das posições que NÃO são o ativo do gráfico vinha só da Binance — então ativo só-MEXC (ex.: ANSEM) nunca tinha preço, e pior: um símbolo inválido no lote fazia a Binance recusar o request inteiro (aí nem o TRX vinha). Agora, pra toda posição aberta que continua sem preço, a gente puxa do mapa de preços da MEXC pelo backend — a mesma fonte que o resto do app já usa. Só frontend." },
@@ -71801,11 +71802,12 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
      resultado dele no TESTE (fora da amostra) — a prova de que não é só
      curve-fitting. */
   function f1(v){ return (Number(v)||0).toFixed(1); }
-  function optHtml(o){
+  function optHtml(o, title){
+    var hd = title || '🧠 Melhor combo — validado fora da amostra';
     if(!o||typeof o!=="object") return '';
     if(!o.ready){
       var why=o.reason?(' — '+esc(o.reason)):'';
-      return '<div class="dvlCpBt1124Opt"><div class="dvlCpBt1124OptHd">Otimizador de saída</div>'
+      return '<div class="dvlCpBt1124Opt"><div class="dvlCpBt1124OptHd">'+esc(hd)+'</div>'
         +'<div class="dvlCpBt1124OptSub">Ainda coletando sinais pra treinar/testar'+why+'.</div></div>';
     }
     var b=o.best||{}, tr=o.train||{}, te=o.test||{};
@@ -71819,7 +71821,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
              : (o.generalizes ? {t:'✓ generaliza (segura fora da amostra)', c:'#10df77'}
                               : {t:'✗ não generaliza — foi curve-fitting', c:'#ff5966'});
     return '<div class="dvlCpBt1124Opt">'
-      +'<div class="dvlCpBt1124OptHd">🧠 Melhor combo — validado fora da amostra</div>'
+      +'<div class="dvlCpBt1124OptHd">'+esc(hd)+'</div>'
       +'<div class="dvlCpBt1124OptCfg">'+esc(cfg)+'</div>'
       +'<div class="dvlCpBt1124OptSub">gatilho ≥ '+f1(b.minConv)+'× ATR · testou '+(o.candidates||0)+' combos</div>'
       +'<div class="dvlCpBt1124OptCells">'
@@ -71969,11 +71971,14 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         +'<div class="dvlCpBt1124Cell"><div class="k">Drawdown máx.</div><div class="v neg">-'+dd.toFixed(1)+'%</div></div>'
         +'<div class="dvlCpBt1124Cell"><div class="k">Taxa de acerto</div><div class="v">'+win.toFixed(0)+'%</div></div>'
       +'</div>'
-      +'<div class="dvlCpBt1124Grid" style="margin-top:8px">'
-        + sideRow(s.long, '▲ Pré-pump (long)', '#10df77')
-        + sideRow(s.short, '▼ Pré-short (short)', '#ff5966')
+      +'<div class="dvlCpBt1124Sub" style="margin-top:10px;margin-bottom:2px"><b>Resultado separado por lado</b> — cada direção otimizada sozinha (o short deixa de diluir o edge do long).</div>'
+      +'<div class="dvlCpBt1124Grid" style="margin-top:4px">'
+        + sideRow((s.longSide&&s.longSide.result)||s.long, '▲ Pré-pump (long)', '#10df77')
+        + sideRow((s.shortSide&&s.shortSide.result)||s.short, '▼ Pré-short (short)', '#ff5966')
       +'</div>'
-      + optHtml(s.optimized)
+      + (s.longSide?optHtml(s.longSide.optimize, '🧠 Melhor combo LONG — fora da amostra'):'')
+      + (s.shortSide?optHtml(s.shortSide.optimize, '🧠 Melhor combo SHORT — fora da amostra'):'')
+      + optHtml(s.optimized, '🧠 Melhor combo (long+short) — fora da amostra')
       + rsiHtml(s.rsiConfirm)
       + modesHtml(s.modes, s.bestMode)
       + heatmapHtml(s.surface)

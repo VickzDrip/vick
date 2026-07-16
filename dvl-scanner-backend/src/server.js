@@ -293,6 +293,25 @@ function createServer() {
     /* THE OPTIMISER: search hundreds of exit combos (bracket / breakeven /
        trailing) on a TRAIN split and validate the winner out-of-sample. */
     const optimized = pumpBacktest.optimize(data, predict, base);
+    /* RESULTADO SEPARADO POR LADO — a pedido: os shorts puxavam o edge pra baixo,
+       então cada direção é otimizada SOZINHA (melhor modo + TP + gatilho só com
+       os trades daquele lado) e validada fora da amostra por conta própria. Assim
+       dá pra ver o edge real do long sem a diluição do short. */
+    const bestSideEval = (side) => {
+      const evs = MODES.map(m => ({ m, e: pumpBacktest.evaluate(data, predict, Object.assign({}, base,
+        m.trail ? { slAtr: m.slAtr, trail: true, trailGrid: m.trailGrid } : { slAtr: m.slAtr, tpGrid: m.tpGrid },
+        { side })) }));
+      let bi = 0; for (let i = 1; i < evs.length; i++) if (evs[i].e.all.account > evs[bi].e.all.account) bi = i;
+      const chosen = evs[bi];
+      return {
+        result: strip(chosen.e.all),
+        params: { mode: chosen.m.key, modeLabel: chosen.m.label, slAtr: chosen.e.slAtr,
+                  tpAtr: chosen.e.tpAtr, trailAtr: chosen.e.trailAtr, adaptive: !!chosen.e.adaptive, minConv: chosen.e.minConv },
+        optimize: pumpBacktest.optimize(data, predict, Object.assign({}, base, { side }))
+      };
+    };
+    const longSide = bestSideEval("long");
+    const shortSide = bestSideEval("short");
     /* DEEP DIAGNOSTICS: is the model's number calibrated, and where (if
        anywhere) does a profitable subset hide? */
     const calibration = pumpBacktest.calibrate(data, predict);
@@ -311,6 +330,9 @@ function createServer() {
                 mode: bm.m.key, modeLabel: bm.m.label, feePct, slipPct, costRoundTripPct: costFrac * 100 },
       trigger, convSweep: e.convSweep, surface, optimized, calibration, conditions, rsiConfirm,
       best: strip(e.all), long: strip(e.long), short: strip(e.short),
+      /* Cada lado otimizado SOZINHO (resultado final separado). */
+      longSide: { result: longSide.result, params: longSide.params, optimize: longSide.optimize },
+      shortSide: { result: shortSide.result, params: shortSide.params, optimize: shortSide.optimize },
       grossReturnPct: e.grossReturnPct, sweep: e.sweep,
       equity: e.all.equity.filter((_, i) => i % Math.max(1, Math.ceil(e.all.equity.length / 120)) === 0)
     });
