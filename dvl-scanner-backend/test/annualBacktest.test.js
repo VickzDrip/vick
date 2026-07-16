@@ -75,7 +75,7 @@ const fetch15m = (sym) => Promise.resolve(makeSeries(1200, sym.length));
   const gres = await annual.run(["BTC_USDT"], 365, cfgGrid, () => Promise.resolve(makeSeries(2500, 3)));
   const g = gres.rsiGrid;
   ok(g && g.ready, "rsi grid ready on single asset");
-  ok(g && g.combosTested > 500, "rsi grid tests a LOT of combos (" + (g && g.combosTested) + ")");
+  ok(g && g.combosTested > 50000, "rsi grid tests 50k+ combos of RSI + pré-volume (" + (g && g.combosTested) + ")");
   ok(g && g.grids && Array.isArray(g.grids.push) && Array.isArray(g.grids.volMaLen) && Array.isArray(g.grids.volSpikeAt),
      "grid sweeps push + volMaLen + volSpikeAt (todos os inputs), not just rsiLen/zone");
   const lb = g && g.long && g.long.best;

@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.165";
+const DVL_APP_VERSION = "Beta 1.166";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.166", note: "Backtest simplificado: tirei o backtest anual de VÁRIOS ativos (BTC/ETH/SOL/BNB/XRP) e deixei UM só — o Grid GIGANTE de RSI no BTC. E potencializei ao máximo: agora são 60.480 combinações de RSI + pré-volume varridas (comprimento 14 valores × push 9 × spike de volume 6 × média de volume 5 × zonas 8+8), cada uma ainda testando 8 alvos por dentro. Long e short continuam separados, cada um com $1000, ranqueados pelo teste fora da amostra, mostrando a config COMPLETA vencedora de cada lado + a tabela das melhores. Um clique só: '🔬 Grid GIGANTE de RSI · BTC'. Roda ~15–40s em background (pode sair da tela). Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.165", note: "O Grid de RSI agora varre TODOS os inputs do oscilador da plataforma, não só o comprimento. Antes só mexia no comprimento e na zona; agora testa combinações de comprimento × push × spike de volume × média de volume × zona de sobrevenda × zona de sobrecompra × alvo — os mesmos parâmetros que ficam em Filtros. Pra isso cada sinal do backtest anual passou a guardar a janela de velas de 15m, então o valor do oscilador é RECONSTRUÍDO em cada combinação (o push, o spike e a média de volume agora movem o valor de verdade). Long e short continuam separados, cada um $1000, ranqueados pelo teste fora da amostra, e o cartão mostra a config COMPLETA vencedora de cada lado (RSI, push, spike, médVol, zona, alvo) + a tabela das melhores. Obs.: no histórico anual a exaustão é calculada no próprio 15m (sem a granularidade de 1m), mas todos os parâmetros influenciam. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.164", note: "Novo: GRID DE RSI massivo em 1 ativo/1 ano, a pedido ('uma caralhada de combinação'). Um botão '🔬 Grid de RSI' no cartão do backtest varre um monte de combinações — comprimento do RSI (5,7,9,11,14,18,21,28,35) × zona (sobrevendido/sobrecomprado) × alvo — em cima de ~1 ano de 15m do ativo que está no gráfico. A direção sai da PRÓPRIA zona do RSI (sobrevendido→LONG, sobrecomprado→SHORT, sua regra), e LONG e SHORT são otimizados SEPARADAMENTE, cada um com $1000. Mostra o melhor RSI de cada lado (comprimento + zona + alvo), o resultado no TESTE fora da amostra, e uma tabelinha com as melhores combinações ranqueadas pelo teste. Ideal pra descobrir 'qual valor de RSI presta pra long e qual pra short' nesse ativo. Detalhe: no histórico anual o RSI é 15m base (sem push de 1m), então o que varia de verdade é o comprimento e a zona. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.163", note: "Backtest anual agora quebra o resultado POR ATIVO, a pedido: cada um dos 5 (BTC, ETH, SOL, BNB, XRP) roda com $1000 PRÓPRIO (conta separada, não compartilhada), com LONG e SHORT separados e mostrando os vários tipos de saída testados (Scalp/Equilibrado/Runner/Adaptativo — cada um com o alvo/trailing que rendeu). Cada cartão de ativo mostra o ganho/perda ($ e %), a taxa de acerto e o drawdown do lado long e do short em separado, além da melhor saída escolhida. Continua tendo a visão agregada (os 5 juntos) com o otimizador fora da amostra e a separação long/short do 1.161. Backend + frontend — exige reiniciar o dvl-scanner." },
@@ -71973,21 +71974,14 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   function annualBtnHtml(){
     var a=annualState();
     return '<div class="dvlCpBt1124AnnualBar">'
-      +'<button type="button" data-dvl-bt-annual="1" class="dvlCpBt1124AnnualBtn'+(a.mode?' on':'')+'">📅 Backtest anual · BTC ETH SOL BNB XRP</button>'
+      +'<button type="button" data-dvl-bt-annual-grid="1" class="dvlCpBt1124AnnualBtn'+(a.mode?' on':'')+'" style="flex-basis:100%">🔬 Grid GIGANTE de RSI · BTC · 1 ano — 50 mil+ combos (long/short, $1000 cada)</button>'
       +(a.mode?'<button type="button" data-dvl-bt-annual-back="1" class="dvlCpBt1124AnnualBack">← ao vivo</button>':'')
-      +'<button type="button" data-dvl-bt-annual-grid="1" class="dvlCpBt1124AnnualBtn" style="flex-basis:100%">🔬 Grid de RSI · '+esc(curSymLabel())+' · 1 ano (long/short, $1000 cada)</button>'
     +'</div>';
   }
   function annualBannerHtml(s){
-    var pa=(s&&Array.isArray(s.perAsset))?s.perAsset:[];
-    var chips=pa.map(function(p){
-      var nm=esc(String(p.sym||'').replace('_USDT','').replace('USDT',''));
-      return '<span class="dvlCpBt1124AnnualChip">'+nm+' · '+(Number(p.signals)||0)+'</span>';
-    }).join('');
     return '<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">'
-      +'📅 <b>Backtest anual</b> — '+(Number(s.days)||365)+' dias de 15m · '+(Number(s.samples)||0)+' sinais nos 5 ativos. '
+      +'🔬 <b>Grid gigante de RSI · BTC</b> — '+(Number(s.days)||365)+' dias de 15m · '+(Number(s.samples)||0)+' sinais. '
       +'RSI Exhaustion no 15m base (sem push de 1m no histórico); gatilho e resultado 100% fiéis.'
-      +(chips?('<div class="dvlCpBt1124AnnualChips">'+chips+'</div>'):'')
     +'</div>';
   }
   /* Ganhos/perdas de CADA ativo (cada um com $1000), long e short separados,
@@ -72022,7 +72016,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         +(modes?('<div class="dvlCpBt1124PaModes">'+modes+'</div>'):'')
       +'</div>';
     }).join('');
-    return '<div class="dvlCpBt1124PaWrap"><div class="dvlCpBt1124PaTitle">Por ativo — cada um com '+fmtUsd(acc0)+' próprio (long e short separados, vários tipos de saída)</div>'+cards+'</div>';
+    return '<div class="dvlCpBt1124PaWrap"><div class="dvlCpBt1124PaTitle">BTC — conta base de '+fmtUsd(acc0)+' (long e short separados, vários tipos de saída) — referência antes do grid</div>'+cards+'</div>';
   }
   /* Grid MASSIVO de RSI (1 ativo): melhor RSI por lado + tabela de combos. */
   function rsiGridHtml(s){
@@ -72058,8 +72052,8 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       +'</div>';
     }
     return '<div class="dvlCpBt1124PaWrap">'
-      +'<div class="dvlCpBt1124PaTitle">🔬 Grid de RSI — '+(Number(g.combosTested)||0)+' combinações varridas · long e short cada um com $1000 · ranqueado pelo TESTE (fora da amostra)</div>'
-      +'<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">Varre TODOS os inputs do oscilador: comprimento, push, spike de volume, média de volume e as zonas. Regra: RSI sobrevendido → LONG, sobrecomprado → SHORT. Cada lado acha sua própria config completa + alvo. (No histórico anual a exaustão é calculada no próprio 15m — sem a granularidade de 1m —, mas todos os parâmetros MOVEM o valor.)</div>'
+      +'<div class="dvlCpBt1124PaTitle">🔬 Grid GIGANTE de RSI — '+(Number(g.combosTested)||0).toLocaleString('pt-BR')+' combinações varridas · long e short cada um com $1000 · ranqueado pelo TESTE (fora da amostra)</div>'
+      +'<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">Varre 50 mil+ combos de TODOS os inputs do oscilador: comprimento (14 valores), push (9), spike de volume (6), média de volume (5) e as zonas (8+8) — × alvo. Regra: RSI sobrevendido → LONG, sobrecomprado → SHORT. Cada lado acha sua própria config completa + alvo. (No histórico anual a exaustão é calculada no próprio 15m — sem a granularidade de 1m —, mas todos os parâmetros MOVEM o valor.)</div>'
       + sideBlock(g.long, '▲ Melhor RSI pra LONG', '#10df77')
       + sideBlock(g.short, '▼ Melhor RSI pra SHORT', '#ff5966')
     +'</div>';
@@ -72070,8 +72064,8 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     if(a.mode){
       if(a.status==='running'){
         return {on:true, html: annualBtnHtml()
-          +'<h4><i class="dvlCpBt1124Dot"></i>Backtest anual · rodando…</h4>'
-          +'<p class="dvlCpBt1124Sub">Buscando ~1 ano de 15m de BTC, ETH, SOL, BNB e XRP e rodando os mesmos critérios. Pode levar até 1 min — pode sair da tela que ele continua.</p>'
+          +'<h4><i class="dvlCpBt1124Dot"></i>Grid gigante de RSI · rodando…</h4>'
+          +'<p class="dvlCpBt1124Sub">Buscando ~1 ano de 15m do BTC e varrendo 50 mil+ combinações de RSI + pré-volume (comprimento × push × spike × médVol × zonas × alvo), long e short separados. Pode levar ~15–40s — pode sair da tela que ele continua.</p>'
           +'<div class="dvlCpBt1124Bar"><i style="width:'+Math.max(8,Math.min(95,Number(a.pct)||20))+'%"></i></div>'};
       }
       if(a.status==='error'){
@@ -72082,13 +72076,13 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       if(a.status==='ready' && a.data && a.data.ready){ s=a.data; }
       else if(a.status==='ready' && a.data && !a.data.ready){
         return {on:false, html: annualBtnHtml()
-          +'<h4><i class="dvlCpBt1124Dot"></i>Backtest anual · poucos sinais</h4>'
+          +'<h4><i class="dvlCpBt1124Dot"></i>Grid gigante de RSI · poucos sinais</h4>'
           +'<p class="dvlCpBt1124Sub">'+esc((a.data&&a.data.reason)||'Não juntou sinais suficientes no período.')+' ('+((a.data&&a.data.samples)||0)+' sinais)</p>'};
       }
       else {
         return {on:false, html: annualBtnHtml()
-          +'<h4><i class="dvlCpBt1124Dot"></i>Backtest anual</h4>'
-          +'<p class="dvlCpBt1124Sub">Roda os mesmos critérios (spike pós-flat + RSI Exhaustion 15m) em 1 ano de BTC, ETH, SOL, BNB e XRP. Toque no botão acima pra começar.</p>'};
+          +'<h4><i class="dvlCpBt1124Dot"></i>Grid gigante de RSI · BTC</h4>'
+          +'<p class="dvlCpBt1124Sub">Varre 50 mil+ combinações de RSI + pré-volume em 1 ano de BTC (15m), long e short cada um com $1000, ranqueando pelo teste fora da amostra. Toque no botão acima pra começar.</p>'};
       }
     } else {
       s=window.DVL_PUMP_BACKTEST;
@@ -72127,7 +72121,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     var modeLbl=esc(p.modeLabel||p.mode||'');
     return {on:true, html:''
       + annualBtnHtml()
-      +'<h4><i class="dvlCpBt1124Dot"></i>Backtest '+(s.annual?'anual':'financeiro')+' · '+tr+' trades</h4>'
+      +'<h4><i class="dvlCpBt1124Dot"></i>'+(s.annual?'Grid gigante · BTC':'Backtest financeiro')+' · '+tr+' trades</h4>'
       +'<p class="dvlCpBt1124Sub">Melhor modo: <b style="color:#10df77">'+modeLbl+'</b> — stop '+sl.toFixed(1)+'× ATR, arriscando '+risk.toFixed(0)+'% da conta por trade. Já com custos: ~'+costRt.toFixed(2)+'% por trade (taxa + slippage).</p>'
       +(s.preliminary?('<div class="dvlCpBt1124Exit" style="background:rgba(255,211,33,.08);border-color:rgba(255,211,33,.3);color:#ffd88a">⚠️ <b>Preliminar — amostra pequena</b> ('+(Number(s.samples)||0)+' de '+(Number(s.need)||20)+' sinais completos). Os números vão mudar bastante até acumular mais sinais resolvidos; não confie 100% ainda.</div>'):'')
       +(s.annual?annualBannerHtml(s):toggleHtml(s))
@@ -72205,9 +72199,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   document.addEventListener("click", function(ev){
     var t=ev.target;
     var ag=t&&(t.closest?t.closest("[data-dvl-bt-annual-grid]"):null);
-    if(ag){ ev.preventDefault(); startAnnual("symbols="+encodeURIComponent(curSymForGrid())+"&rsiGrid=1"); return; }
-    var ab=t&&(t.closest?t.closest("[data-dvl-bt-annual]"):null);
-    if(ab){ ev.preventDefault(); startAnnual(""); return; }
+    if(ag){ ev.preventDefault(); startAnnual("symbols=BTCUSDT&rsiGrid=1"); return; }
     var abk=t&&(t.closest?t.closest("[data-dvl-bt-annual-back]"):null);
     if(abk){ ev.preventDefault(); var a=annualState(); a.mode=false; if(a._t)clearTimeout(a._t); refreshCard(); return; }
   });
