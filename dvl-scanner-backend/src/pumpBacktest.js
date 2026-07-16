@@ -612,12 +612,14 @@ function rsiGridSearch(samples, opts) {
   if (withBars.length < 20) return { ready: false, withExr: withBars.length, need: 20 };
   const cut = Math.max(1, Math.floor(withBars.length * (opts.trainFrac || 0.7)));
 
-  const rsiLenGrid   = opts.rsiLenGrid   || [7, 9, 11, 14, 21];
-  const pushGrid     = opts.pushGrid     || [0, 10, 18, 25];
-  const volMaGrid    = opts.volMaGrid    || [14, 20, 30];
-  const volSpikeGrid = opts.volSpikeGrid || [2, 2.5, 3];
-  const lowerGrid    = opts.lowerGrid    || [25, 30, 35, 40];
-  const upperGrid    = opts.upperGrid    || [60, 65, 70, 75];
+  /* MASSIVE sweep (1 ativo/1 ano): 60k+ full configs of RSI + pré-volume.
+     combosTested = rsiLen × (volMa×volSpike) × push × (lower+upper). */
+  const rsiLenGrid   = opts.rsiLenGrid   || [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 21, 25];
+  const pushGrid     = opts.pushGrid     || [0, 4, 8, 12, 16, 18, 20, 25, 30];
+  const volMaGrid    = opts.volMaGrid    || [10, 14, 20, 25, 30];
+  const volSpikeGrid = opts.volSpikeGrid || [1.5, 2, 2.5, 3, 3.5, 4];
+  const lowerGrid    = opts.lowerGrid    || [20, 25, 28, 30, 32, 35, 38, 40];
+  const upperGrid    = opts.upperGrid    || [60, 62, 65, 68, 70, 72, 75, 80];
   const tpGrid       = opts.tpGrid       || [1, 1.5, 2, 2.5, 3, 4, 5, 6];
   const minTr = Math.max(5, Math.round(cut * 0.03));
 
