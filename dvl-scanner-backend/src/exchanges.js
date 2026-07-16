@@ -192,6 +192,43 @@ const mexc = {
       String(r[5]), r[6], String(r[7]), 0, "0", "0", "0"
     ]);
   },
+  /* Deep 15m history for the ANNUAL backtest — paginates MEXC's native Min15
+     candles backward from now until it has ~`days` of them (or runs out).
+     Returns ascending [{time,open,high,low,close,volume}] (ms). Gentle delay
+     between pages to respect the rate limit. Only 15m (the backtest's TF). */
+  async klinesHistory(sym, days) {
+    const STEP = 900000;                     // 15m in ms
+    const want = Math.min(40000, Math.ceil((Number(days) || 365) * 96) + 60);
+    const chunkSec = 1400 * (STEP / 1000);   // window width per request
+    const byTime = new Map();
+    let endSec = Math.floor(Date.now() / 1000);
+    let oldestSec = endSec;
+    for (let guard = 0; guard < 80 && byTime.size < want; guard++) {
+      const startSec = endSec - chunkSec;
+      const url = "https://contract.mexc.com/api/v1/contract/kline/" + encodeURIComponent(sym) +
+        "?interval=Min15&start=" + Math.max(0, Math.floor(startSec)) + "&end=" + Math.floor(endSec);
+      let j;
+      try { j = await getJSON(url); } catch (_) { break; }
+      const d = (j && j.data) || null;
+      if (!d || !d.time || !d.time.length) break;
+      let added = 0, minSecThisPage = Infinity;
+      for (let i = 0; i < d.time.length; i++) {
+        const sec = Number(d.time[i]) || 0;
+        const t = sec * 1000;
+        if (sec < minSecThisPage) minSecThisPage = sec;
+        if (byTime.has(t)) continue;
+        const c = Number(d.close[i]);
+        byTime.set(t, { time: t, open: Number(d.open ? d.open[i] : c), high: Number(d.high ? d.high[i] : c),
+                        low: Number(d.low ? d.low[i] : c), close: c, volume: Number(d.vol ? d.vol[i] : 0) });
+        added++;
+      }
+      if (!added || !Number.isFinite(minSecThisPage) || minSecThisPage >= oldestSec) break; // no progress
+      oldestSec = minSecThisPage;
+      endSec = minSecThisPage - 1;
+      await new Promise(r => setTimeout(r, 120));
+    }
+    return Array.from(byTime.values()).sort((a, b) => a.time - b.time);
+  },
   /* Fresh (uncached) last-price map for every MEXC USDT perpetual, in one
      batched call — used by the frontend's Fast Bots (Bot 4) to price its
      open MEXC positions for stop/target checks, which need live data, not

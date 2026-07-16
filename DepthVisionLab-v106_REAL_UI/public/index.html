@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.161";
+const DVL_APP_VERSION = "Beta 1.162";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.162", note: "Novo: BACKTEST ANUAL em 5 ativos (BTC, ETH, SOL, BNB, XRP), a pedido, usando os MESMOS critérios do backtest ao vivo (spike pós-flat confirmado no fechamento + RSI Exhaustion 15m). Um botão '📅 Backtest anual' no cartão do backtest busca ~1 ano de velas de 15m de cada ativo pelo backend, detecta cada sinal do histórico, lê o RSI e resolve o trade pelas próprias velas seguintes — e roda toda a análise (melhor modo, otimizador fora da amostra, calibração, mineração de edge e a separação long/short do 1.161) em cima disso. Mostra o resultado por ativo e no total, e dá pra voltar pro ao vivo a qualquer momento. Detalhe honesto: pra um ano inteiro não dá pra baixar o 1m, então o RSI usa a base de 15m sem o empurrão intraday (o valor fica um tiquinho diferente do gráfico, mas a zona sobrevendido/sobrecomprado fica próxima); o gatilho e o resultado dos trades são 100% fiéis. É pesado (busca muito candle), então roda em segundo plano com uma barrinha e guarda o resultado por 10 min. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.161", note: "Separa o resultado do backtest por LADO, a pedido — os shorts estavam puxando o edge do long pra baixo. Antes o melhor modo, o take-profit e o gatilho eram otimizados no conjunto MISTURADO (long+short) e depois aplicados a cada lado, então o número do long vinha diluído pelo short ruim. Agora CADA direção é otimizada SOZINHA: o long acha o melhor combo só com os trades de long, o short idem, e cada um é validado fora da amostra por conta própria. No cartão do backtest, os quadros Pré-pump (long) e Pré-short (short) passam a mostrar o resultado já separado, e aparecem dois blocos 'Melhor combo LONG' e 'Melhor combo SHORT' independentes, além do combo geral (long+short) pra comparar. Assim dá pra ver o edge real do long sem o short mascarando. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.160", note: "Conserta posições (demo) que continuavam ABERTAS mesmo depois do TP ou SL bater. Antes o TP/SL só era conferido no tick do PRÓPRIO ativo — se você estava vendo outro gráfico, ou o preço daquele ativo caía num slot com a chave gravada diferente, o alvo batia e a posição não fechava. Agora tem uma varredura a cada 1s que passa por TODA posição aberta, pega o último preço em cache de cada ativo e fecha na hora quem bateu TP/SL — não importa qual ativo está na tela nem por qual fonte veio o preço. E ao fechar, o pedido é removido de TODOS os slots (podia estar salvo sob uma chave crua/antiga e voltar a aparecer aberto) — então trade fechado não ressuscita. Só frontend." },
   { version: "Beta 1.159", note: "O backtest para de demorar DIAS pra achar sinais. Antes o scanner só gravava o sinal da vela ATUAL a cada ciclo, e cada um leva ~5h (20 velas de 15m) pra 'resolver' — então os sinais completos pingavam devagar e um RSI que você operou agora não aparecia tão cedo. Agora o backend faz um BACKFILL HISTÓRICO: em toda varredura ele minera TODAS as velas de 15m já baixadas (janela de ~160 velas ≈ 40h por ativo), acha cada spike pós-flat confirmado no fechamento, lê o RSI Exhaustion naquele momento e RESOLVE o sinal usando as próprias velas seguintes (o futuro já é conhecido no histórico). Resultado: centenas de sinais completos aparecem de imediato, em vez de acumular ao vivo. É idempotente (não duplica entre ciclos nem após reiniciar). Backend — EXIGE atualizar e reiniciar o dvl-scanner." },
@@ -71465,7 +71466,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     setSnapshot:setSnapshot, setFeed:setSnapshot,
     updateRows:updateRows, updateAsset:updateAsset,
     connectWS:connectWS, disconnect:disconnect, pull:pull, pushConfig:pushConfig,
-    pullBacktest:pullBacktest,
+    pullBacktest:pullBacktest, api:api,
     /* "Só sinais completos" toggle for the backtest view (persisted). */
     btOnlyComplete:btOnlyComplete,
     setBtOnlyComplete:function(on){
@@ -71659,6 +71660,13 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 .dvlCpBt1124 h4 .dvlCpBt1124Dot{width:9px;height:9px;border-radius:50%;background:#ffd321;box-shadow:0 0 8px rgba(255,211,33,.6);}
 .dvlCpBt1124.on h4 .dvlCpBt1124Dot{background:#10df77;box-shadow:0 0 8px rgba(16,223,119,.6);}
 .dvlCpBt1124 .dvlCpBt1124Sub{margin:0 0 12px;font-size:12px;color:#8fa39b;line-height:1.5;}
+.dvlCpBt1124 .dvlCpBt1124AnnualBar{display:flex;align-items:center;gap:8px;margin:0 0 10px;flex-wrap:wrap;}
+.dvlCpBt1124 .dvlCpBt1124AnnualBtn{flex:1 1 auto;min-width:0;padding:10px 12px;border-radius:10px;background:rgba(120,200,255,.09);border:1px solid rgba(120,200,255,.28);color:#cfe6ff;font:800 12px system-ui;cursor:pointer;text-align:left;letter-spacing:.01em;}
+.dvlCpBt1124 .dvlCpBt1124AnnualBtn:hover{background:rgba(120,200,255,.15);}
+.dvlCpBt1124 .dvlCpBt1124AnnualBtn.on{background:rgba(47,127,255,.2);border-color:rgba(47,127,255,.5);color:#eaf3ff;}
+.dvlCpBt1124 .dvlCpBt1124AnnualBack{flex:0 0 auto;padding:10px 12px;border-radius:10px;background:rgba(145,175,165,.12);border:1px solid rgba(145,175,165,.25);color:#bcd3e2;font:800 12px system-ui;cursor:pointer;}
+.dvlCpBt1124 .dvlCpBt1124AnnualChips{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;}
+.dvlCpBt1124 .dvlCpBt1124AnnualChip{font:800 10.5px system-ui;padding:3px 8px;border-radius:999px;background:rgba(120,200,255,.1);border:1px solid rgba(120,200,255,.24);color:#bcd8ff;}
 .dvlCpBt1124 .dvlCpBt1124Toggle{display:flex;align-items:center;gap:9px;margin:0 0 12px;padding:9px 11px;border-radius:10px;background:rgba(120,200,255,.05);border:1px solid rgba(120,200,255,.16);cursor:pointer;user-select:none;}
 .dvlCpBt1124 .dvlCpBt1124Toggle:hover{background:rgba(120,200,255,.09);}
 .dvlCpBt1124 .dvlCpBt1124Sw{flex:0 0 auto;width:34px;height:19px;border-radius:999px;background:rgba(145,175,165,.25);position:relative;transition:background .2s ease;}
@@ -71928,10 +71936,58 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       +'<span class="dvlCpBt1124TgTx"><b>Só sinais completos</b> — analisa apenas os sinais novos com leitura do RSI Exhaustion (15m) e trajetória exata.'+cnt+'</span>'
     +'</div>';
   }
+  /* ── Backtest ANUAL (5 ativos, 1 ano de 15m) ── estado + controles ── */
+  function annualState(){ return window.DVL_PUMP_BT_ANNUAL || (window.DVL_PUMP_BT_ANNUAL={mode:false,status:'idle',data:null,err:'',pct:0}); }
+  function annualBtnHtml(){
+    var a=annualState();
+    return '<div class="dvlCpBt1124AnnualBar">'
+      +'<button type="button" data-dvl-bt-annual="1" class="dvlCpBt1124AnnualBtn'+(a.mode?' on':'')+'">📅 Backtest anual · BTC ETH SOL BNB XRP</button>'
+      +(a.mode?'<button type="button" data-dvl-bt-annual-back="1" class="dvlCpBt1124AnnualBack">← ao vivo</button>':'')
+    +'</div>';
+  }
+  function annualBannerHtml(s){
+    var pa=(s&&Array.isArray(s.perAsset))?s.perAsset:[];
+    var chips=pa.map(function(p){
+      var nm=esc(String(p.sym||'').replace('_USDT','').replace('USDT',''));
+      return '<span class="dvlCpBt1124AnnualChip">'+nm+' · '+(Number(p.signals)||0)+'</span>';
+    }).join('');
+    return '<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">'
+      +'📅 <b>Backtest anual</b> — '+(Number(s.days)||365)+' dias de 15m · '+(Number(s.samples)||0)+' sinais nos 5 ativos. '
+      +'RSI Exhaustion no 15m base (sem push de 1m no histórico); gatilho e resultado 100% fiéis.'
+      +(chips?('<div class="dvlCpBt1124AnnualChips">'+chips+'</div>'):'')
+    +'</div>';
+  }
   function bodyHtml(){
-    var s=window.DVL_PUMP_BACKTEST;
+    var a=annualState();
+    var s;
+    if(a.mode){
+      if(a.status==='running'){
+        return {on:true, html: annualBtnHtml()
+          +'<h4><i class="dvlCpBt1124Dot"></i>Backtest anual · rodando…</h4>'
+          +'<p class="dvlCpBt1124Sub">Buscando ~1 ano de 15m de BTC, ETH, SOL, BNB e XRP e rodando os mesmos critérios. Pode levar até 1 min — pode sair da tela que ele continua.</p>'
+          +'<div class="dvlCpBt1124Bar"><i style="width:'+Math.max(8,Math.min(95,Number(a.pct)||20))+'%"></i></div>'};
+      }
+      if(a.status==='error'){
+        return {on:false, html: annualBtnHtml()
+          +'<h4><i class="dvlCpBt1124Dot"></i>Backtest anual · erro</h4>'
+          +'<p class="dvlCpBt1124Sub">'+esc(a.err||'Falha ao rodar. Tente de novo.')+'</p>'};
+      }
+      if(a.status==='ready' && a.data && a.data.ready){ s=a.data; }
+      else if(a.status==='ready' && a.data && !a.data.ready){
+        return {on:false, html: annualBtnHtml()
+          +'<h4><i class="dvlCpBt1124Dot"></i>Backtest anual · poucos sinais</h4>'
+          +'<p class="dvlCpBt1124Sub">'+esc((a.data&&a.data.reason)||'Não juntou sinais suficientes no período.')+' ('+((a.data&&a.data.samples)||0)+' sinais)</p>'};
+      }
+      else {
+        return {on:false, html: annualBtnHtml()
+          +'<h4><i class="dvlCpBt1124Dot"></i>Backtest anual</h4>'
+          +'<p class="dvlCpBt1124Sub">Roda os mesmos critérios (spike pós-flat + RSI Exhaustion 15m) em 1 ano de BTC, ETH, SOL, BNB e XRP. Toque no botão acima pra começar.</p>'};
+      }
+    } else {
+      s=window.DVL_PUMP_BACKTEST;
+    }
     if(!s||typeof s!=="object"){
-      return {on:false, html:''
+      return {on:false, html: annualBtnHtml()
         +'<h4><i class="dvlCpBt1124Dot"></i>Backtest financeiro</h4>'
         +'<p class="dvlCpBt1124Sub">Aguardando o scanner backend responder.</p>'};
     }
@@ -71939,6 +71995,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       var need=Number(s.need)||20;
       var have=Number(s.samples)||0, pct=Math.max(0,Math.min(100,Math.round(have/Math.max(1,need)*100)));
       return {on:false, html:''
+        + annualBtnHtml()
         +'<h4><i class="dvlCpBt1124Dot"></i>Backtest financeiro · aguardando modelo</h4>'
         +'<p class="dvlCpBt1124Sub">O backtest roda assim que o modelo treinar — usa todos os sinais já resolvidos.</p>'
         + toggleHtml(s)
@@ -71962,10 +72019,11 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     var grossNote=(isFinite(gross))?(' Sem custos daria '+sign(gross)+' — a diferença é a taxa+slippage comendo o edge.'):'';
     var modeLbl=esc(p.modeLabel||p.mode||'');
     return {on:true, html:''
-      +'<h4><i class="dvlCpBt1124Dot"></i>Backtest financeiro · '+tr+' trades</h4>'
+      + annualBtnHtml()
+      +'<h4><i class="dvlCpBt1124Dot"></i>Backtest '+(s.annual?'anual':'financeiro')+' · '+tr+' trades</h4>'
       +'<p class="dvlCpBt1124Sub">Melhor modo: <b style="color:#10df77">'+modeLbl+'</b> — stop '+sl.toFixed(1)+'× ATR, arriscando '+risk.toFixed(0)+'% da conta por trade. Já com custos: ~'+costRt.toFixed(2)+'% por trade (taxa + slippage).</p>'
       +(s.preliminary?('<div class="dvlCpBt1124Exit" style="background:rgba(255,211,33,.08);border-color:rgba(255,211,33,.3);color:#ffd88a">⚠️ <b>Preliminar — amostra pequena</b> ('+(Number(s.samples)||0)+' de '+(Number(s.need)||20)+' sinais completos). Os números vão mudar bastante até acumular mais sinais resolvidos; não confie 100% ainda.</div>'):'')
-      + toggleHtml(s)
+      +(s.annual?annualBannerHtml(s):toggleHtml(s))
       +'<div class="dvlCpBt1124Big"><span class="dvlCpBt1124Eq '+eqCls+'">'+fmtUsd(acc)+'</span><span class="dvlCpBt1124From">de '+fmtUsd(acc0)+' · '+sign(ret)+' líquido</span></div>'
       +'<div class="dvlCpBt1124Grid">'
         +'<div class="dvlCpBt1124Cell"><div class="k">Drawdown máx.</div><div class="v neg">-'+dd.toFixed(1)+'%</div></div>'
@@ -72002,6 +72060,43 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     el.className='dvlCpBt1124'+(d.on?' on':'');
     el.innerHTML=d.html;
   }
+  /* ── Backtest ANUAL: dispara + poleia o endpoint até ficar pronto ── */
+  function annualApi(path){
+    try{ var br=window.DVL_SCANNER_LIVE_FEED_BRIDGE_1023; if(br&&typeof br.api==="function") return br.api(path); }catch(_){}
+    return path; /* mesma origem */
+  }
+  function pollAnnual(){
+    var a=annualState();
+    fetch(annualApi("/api/dvl/scanner/pump-backtest-annual"),{cache:"no-store"})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(!j){ a.status='error'; a.err='sem resposta'; refreshCard(); return; }
+        if(j.error){ a.status='error'; a.err=String(j.error); refreshCard(); return; }
+        if(j.ready){ a.status='ready'; a.data=j; refreshCard(); return; }
+        /* ainda rodando (started/running) — segue poleando */
+        a.status='running'; a.pct=Math.min(95,(Number(a.pct)||15)+7);
+        refreshCard();
+        a._t=setTimeout(pollAnnual, 3500);
+      })
+      .catch(function(){ a.status='error'; a.err='falha de rede'; refreshCard(); });
+  }
+  function startAnnual(){
+    var a=annualState();
+    a.mode=true;
+    if(a.status==='ready'&&a.data){ refreshCard(); return; } /* já tem resultado em cache */
+    a.status='running'; a.pct=15; a.err='';
+    refreshCard();
+    if(a._t) clearTimeout(a._t);
+    pollAnnual();
+  }
+  document.addEventListener("click", function(ev){
+    var t=ev.target;
+    var ab=t&&(t.closest?t.closest("[data-dvl-bt-annual]"):null);
+    if(ab){ ev.preventDefault(); startAnnual(); return; }
+    var abk=t&&(t.closest?t.closest("[data-dvl-bt-annual-back]"):null);
+    if(abk){ ev.preventDefault(); var a=annualState(); a.mode=false; if(a._t)clearTimeout(a._t); refreshCard(); return; }
+  });
+
   /* Delegated click on the "só sinais completos" switch: flip the bridge flag
      (persisted), re-pull the backtest, then refresh the card. */
   document.addEventListener("click", function(ev){
