@@ -153,4 +153,25 @@ function readingAt(baseCandles, oneMin, opts) {
   return { value: last.value, base: last.base, push: last.push, zone };
 }
 
-module.exports = { DEFAULTS, mtfRsi, mtfExh, resample, mtfLadder, computeSeries, readingAt };
+/* Single-TF Exhaustion RSI value at the LAST candle of `bars` ({open,high,low,
+   close,volume} ascending, ≥8 bars), from ANY oscillator config. Used by the
+   RSI grid to re-sweep every platform input (comprimento, push, spike de volume,
+   média de volume) over stored candles WITHOUT re-fetching. It's the 15m
+   self-exhaustion (ladder=[base] only) — a faithful approximation of the chart's
+   multi-TF push when sub-15m (1m) data isn't available (annual history). Returns
+   { value, base, exh } where base is the raw RSI and exh = (up-down) exhaustion. */
+function valueFrom(bars, opts) {
+  const o = Object.assign({}, DEFAULTS, opts || {});
+  if (!Array.isArray(bars) || bars.length < 8) return null;
+  const closes = bars.map(c => Number(c.close));
+  const rsi = mtfRsi(closes, Math.max(2, Math.round(o.mtfRsiLen)));
+  const base = rsi[rsi.length - 1];
+  const i = bars.length - 1;
+  const up = mtfExh(bars, i, "up", o.mtfVolMaLen, o.mtfVolSpikeAt);
+  const dn = mtfExh(bars, i, "down", o.mtfVolMaLen, o.mtfVolSpikeAt);
+  const exh = up - dn;
+  const push = Math.max(0, Number(o.mtfPush));
+  return { value: Math.max(0, Math.min(100, base + exh * push)), base, exh };
+}
+
+module.exports = { DEFAULTS, mtfRsi, mtfExh, resample, mtfLadder, computeSeries, readingAt, valueFrom };

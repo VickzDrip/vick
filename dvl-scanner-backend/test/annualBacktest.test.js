@@ -70,6 +70,19 @@ const fetch15m = (sym) => Promise.resolve(makeSeries(1200, sym.length));
   ok(withEv.every(p => Array.isArray(p.modes) && p.modes.length === 4), "per-asset shows the 4 TP/exit modes");
   ok(res.perAssetAccounts === true, "payload flags per-asset accounts");
 
+  // RSI grid (single asset): sweeps the FULL oscillator input set
+  const cfgGrid = Object.assign({ rsiGrid: true }, cfg);
+  const gres = await annual.run(["BTC_USDT"], 365, cfgGrid, () => Promise.resolve(makeSeries(2500, 3)));
+  const g = gres.rsiGrid;
+  ok(g && g.ready, "rsi grid ready on single asset");
+  ok(g && g.combosTested > 500, "rsi grid tests a LOT of combos (" + (g && g.combosTested) + ")");
+  ok(g && g.grids && Array.isArray(g.grids.push) && Array.isArray(g.grids.volMaLen) && Array.isArray(g.grids.volSpikeAt),
+     "grid sweeps push + volMaLen + volSpikeAt (todos os inputs), not just rsiLen/zone");
+  const lb = g && g.long && g.long.best;
+  ok(lb && ["rsiLen", "push", "volMaLen", "volSpikeAt", "lowerZone", "tpAtr"].every(k => (k in lb)),
+     "best long combo carries EVERY oscillator input");
+  ok(g && g.long && Array.isArray(g.long.top) && g.long.top.length >= 1, "grid returns a ranked top list");
+
   // "poucos sinais" path
   const thin = await annual.run(["X_USDT"], 365, cfg, () => Promise.resolve(makeSeries(60, 1)));
   ok(thin.ready === false, "thin dataset → not ready (graceful)");

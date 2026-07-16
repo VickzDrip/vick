@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.164";
+const DVL_APP_VERSION = "Beta 1.165";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.165", note: "O Grid de RSI agora varre TODOS os inputs do oscilador da plataforma, não só o comprimento. Antes só mexia no comprimento e na zona; agora testa combinações de comprimento × push × spike de volume × média de volume × zona de sobrevenda × zona de sobrecompra × alvo — os mesmos parâmetros que ficam em Filtros. Pra isso cada sinal do backtest anual passou a guardar a janela de velas de 15m, então o valor do oscilador é RECONSTRUÍDO em cada combinação (o push, o spike e a média de volume agora movem o valor de verdade). Long e short continuam separados, cada um $1000, ranqueados pelo teste fora da amostra, e o cartão mostra a config COMPLETA vencedora de cada lado (RSI, push, spike, médVol, zona, alvo) + a tabela das melhores. Obs.: no histórico anual a exaustão é calculada no próprio 15m (sem a granularidade de 1m), mas todos os parâmetros influenciam. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.164", note: "Novo: GRID DE RSI massivo em 1 ativo/1 ano, a pedido ('uma caralhada de combinação'). Um botão '🔬 Grid de RSI' no cartão do backtest varre um monte de combinações — comprimento do RSI (5,7,9,11,14,18,21,28,35) × zona (sobrevendido/sobrecomprado) × alvo — em cima de ~1 ano de 15m do ativo que está no gráfico. A direção sai da PRÓPRIA zona do RSI (sobrevendido→LONG, sobrecomprado→SHORT, sua regra), e LONG e SHORT são otimizados SEPARADAMENTE, cada um com $1000. Mostra o melhor RSI de cada lado (comprimento + zona + alvo), o resultado no TESTE fora da amostra, e uma tabelinha com as melhores combinações ranqueadas pelo teste. Ideal pra descobrir 'qual valor de RSI presta pra long e qual pra short' nesse ativo. Detalhe: no histórico anual o RSI é 15m base (sem push de 1m), então o que varia de verdade é o comprimento e a zona. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.163", note: "Backtest anual agora quebra o resultado POR ATIVO, a pedido: cada um dos 5 (BTC, ETH, SOL, BNB, XRP) roda com $1000 PRÓPRIO (conta separada, não compartilhada), com LONG e SHORT separados e mostrando os vários tipos de saída testados (Scalp/Equilibrado/Runner/Adaptativo — cada um com o alvo/trailing que rendeu). Cada cartão de ativo mostra o ganho/perda ($ e %), a taxa de acerto e o drawdown do lado long e do short em separado, além da melhor saída escolhida. Continua tendo a visão agregada (os 5 juntos) com o otimizador fora da amostra e a separação long/short do 1.161. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.162", note: "Novo: BACKTEST ANUAL em 5 ativos (BTC, ETH, SOL, BNB, XRP), a pedido, usando os MESMOS critérios do backtest ao vivo (spike pós-flat confirmado no fechamento + RSI Exhaustion 15m). Um botão '📅 Backtest anual' no cartão do backtest busca ~1 ano de velas de 15m de cada ativo pelo backend, detecta cada sinal do histórico, lê o RSI e resolve o trade pelas próprias velas seguintes — e roda toda a análise (melhor modo, otimizador fora da amostra, calibração, mineração de edge e a separação long/short do 1.161) em cima disso. Mostra o resultado por ativo e no total, e dá pra voltar pro ao vivo a qualquer momento. Detalhe honesto: pra um ano inteiro não dá pra baixar o 1m, então o RSI usa a base de 15m sem o empurrão intraday (o valor fica um tiquinho diferente do gráfico, mas a zona sobrevendido/sobrecomprado fica próxima); o gatilho e o resultado dos trades são 100% fiéis. É pesado (busca muito candle), então roda em segundo plano com uma barrinha e guarda o resultado por 10 min. Backend + frontend — exige reiniciar o dvl-scanner." },
@@ -72038,23 +72039,27 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       var teN=Number(b.test&&b.test.trades)||0, teW=Number(b.test&&b.test.winRate)||0;
       var verd = teN<5 ? {t:'teste pequeno — inconclusivo', c:'#ffd321'}
                : (b.generalizes ? {t:'✓ segura fora da amostra', c:'#10df77'} : {t:'✗ não generaliza', c:'#ff5966'});
+      function cfgTxt(c){
+        var z=c.side==='long'?('≤'+(Number(c.lowerZone)||0)):('≥'+(Number(c.upperZone)||0));
+        return 'RSI '+(Number(c.rsiLen)||0)+' · push '+(Number(c.push)||0)+' · spike '+(Number(c.volSpikeAt)||0)+'× · médVol '+(Number(c.volMaLen)||0)+' · zona '+z+' · alvo '+(Number(c.tpAtr)||0).toFixed(1)+'×';
+      }
       var rows=(Array.isArray(sd.top)?sd.top:[]).slice(0,8).map(function(c){
         var z=c.side==='long'?('≤'+(Number(c.lowerZone)||0)):('≥'+(Number(c.upperZone)||0));
         var tr=Number(c.train&&c.train.returnPct)||0, te=Number(c.test&&c.test.returnPct)||0;
-        return '<tr><td>RSI '+(Number(c.rsiLen)||0)+'</td><td>'+z+'</td><td>alvo '+(Number(c.tpAtr)||0).toFixed(1)+'×</td>'
+        return '<tr><td>'+(Number(c.rsiLen)||0)+'</td><td>'+(Number(c.push)||0)+'</td><td>'+(Number(c.volSpikeAt)||0)+'×</td><td>'+(Number(c.volMaLen)||0)+'</td><td>'+z+'</td><td>'+(Number(c.tpAtr)||0).toFixed(1)+'×</td>'
           +'<td class="'+(tr>=0?'pos':'neg')+'">'+sign(tr)+'</td><td class="'+(te>=0?'pos':'neg')+'">'+sign(te)+'</td><td>'+(Number(c.test&&c.test.trades)||0)+'t</td></tr>';
       }).join('');
       return '<div class="dvlCpBt1124PaCard">'
         +'<div class="dvlCpBt1124PaHd"><b style="color:'+cls+'">'+label+'</b><span>'+(Number(b.test&&b.test.trades)||0)+' trades no teste</span></div>'
         +'<div class="dvlCpBt1124PaBig"><span class="'+(teR>=0?'pos':'neg')+'">'+fmtUsd(Number(b.test&&b.test.account)||1000)+'</span><small>de '+fmtUsd(1000)+' no TESTE · '+sign(teR)+' · '+teW.toFixed(0)+'% acerto</small></div>'
-        +'<div class="dvlCpBt1124PaSub">Melhor: <b>RSI '+(Number(b.rsiLen)||0)+'</b> · '+zone+' · <b>alvo '+(Number(b.tpAtr)||0).toFixed(1)+'× ATR</b> · treino '+sign(trR)+'</div>'
+        +'<div class="dvlCpBt1124PaSub">Melhor config: <b>'+esc(cfgTxt(b))+'</b> · treino '+sign(trR)+'</div>'
         +'<div class="dvlCpBt1124OptVerd" style="color:'+verd.c+';margin:4px 0 6px">'+verd.t+'</div>'
-        +(rows?('<div style="overflow-x:auto"><table class="dvlCpBt1124GridTbl"><thead><tr><th>RSI</th><th>zona</th><th>saída</th><th>treino</th><th>teste</th><th>n</th></tr></thead><tbody>'+rows+'</tbody></table></div>'):'')
+        +(rows?('<div style="overflow-x:auto"><table class="dvlCpBt1124GridTbl"><thead><tr><th>RSI</th><th>push</th><th>spike</th><th>médVol</th><th>zona</th><th>saída</th><th>treino</th><th>teste</th><th>n</th></tr></thead><tbody>'+rows+'</tbody></table></div>'):'')
       +'</div>';
     }
     return '<div class="dvlCpBt1124PaWrap">'
       +'<div class="dvlCpBt1124PaTitle">🔬 Grid de RSI — '+(Number(g.combosTested)||0)+' combinações varridas · long e short cada um com $1000 · ranqueado pelo TESTE (fora da amostra)</div>'
-      +'<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">Regra: RSI sobrevendido → LONG, sobrecomprado → SHORT. Cada lado acha seu próprio comprimento de RSI + zona + alvo. (No histórico anual o RSI é 15m base, sem push de 1m.)</div>'
+      +'<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">Varre TODOS os inputs do oscilador: comprimento, push, spike de volume, média de volume e as zonas. Regra: RSI sobrevendido → LONG, sobrecomprado → SHORT. Cada lado acha sua própria config completa + alvo. (No histórico anual a exaustão é calculada no próprio 15m — sem a granularidade de 1m —, mas todos os parâmetros MOVEM o valor.)</div>'
       + sideBlock(g.long, '▲ Melhor RSI pra LONG', '#10df77')
       + sideBlock(g.short, '▼ Melhor RSI pra SHORT', '#ff5966')
     +'</div>';
