@@ -159,8 +159,12 @@ async function run(symbols, days, cfg, fetch15m) {
   /* AGGREGATE (todos juntos, $1000 na pool) — visão geral + diagnósticos caros
      só aqui (otimizador 640 combos, calibração, mineração, RSI). */
   const agg = evalDataset(all);
+  /* MASSIVE RSI grid — pedido pra 1 ativo/1 ano: a "caralhada de combinação"
+     de RSI, long e short cada um com $1000. Roda quando é 1 ativo (ou a pedido). */
+  const wantGrid = !!cfg.rsiGrid || symbols.length === 1;
+  const rsiGrid = wantGrid ? pumpBacktest.rsiGridSearch(all, { costFrac: base.costFrac, account0: base.account0, riskPct: base.riskPct }) : null;
   return {
-    ok: true, ready: true, annual: true, perAssetAccounts: true, horizon: HORIZON, symbols, days,
+    ok: true, ready: true, annual: true, perAssetAccounts: true, horizon: HORIZON, symbols, days, rsiGrid,
     samples: all.length, perAsset, account0: base.account0,
     params: { account0: base.account0, riskPct: base.riskPct, slAtr: agg.params.slAtr, minConv: agg.params.minConv, tpAtr: agg.params.tpAtr, trailAtr: agg.params.trailAtr, adaptive: agg.params.adaptive, mode: agg.bestMode, modeLabel: agg.modeLabel, costRoundTripPct: base.costFrac * 100 },
     modes: agg.modes, bestMode: agg.bestMode,

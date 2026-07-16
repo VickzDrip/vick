@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.163";
+const DVL_APP_VERSION = "Beta 1.164";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.164", note: "Novo: GRID DE RSI massivo em 1 ativo/1 ano, a pedido ('uma caralhada de combinação'). Um botão '🔬 Grid de RSI' no cartão do backtest varre um monte de combinações — comprimento do RSI (5,7,9,11,14,18,21,28,35) × zona (sobrevendido/sobrecomprado) × alvo — em cima de ~1 ano de 15m do ativo que está no gráfico. A direção sai da PRÓPRIA zona do RSI (sobrevendido→LONG, sobrecomprado→SHORT, sua regra), e LONG e SHORT são otimizados SEPARADAMENTE, cada um com $1000. Mostra o melhor RSI de cada lado (comprimento + zona + alvo), o resultado no TESTE fora da amostra, e uma tabelinha com as melhores combinações ranqueadas pelo teste. Ideal pra descobrir 'qual valor de RSI presta pra long e qual pra short' nesse ativo. Detalhe: no histórico anual o RSI é 15m base (sem push de 1m), então o que varia de verdade é o comprimento e a zona. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.163", note: "Backtest anual agora quebra o resultado POR ATIVO, a pedido: cada um dos 5 (BTC, ETH, SOL, BNB, XRP) roda com $1000 PRÓPRIO (conta separada, não compartilhada), com LONG e SHORT separados e mostrando os vários tipos de saída testados (Scalp/Equilibrado/Runner/Adaptativo — cada um com o alvo/trailing que rendeu). Cada cartão de ativo mostra o ganho/perda ($ e %), a taxa de acerto e o drawdown do lado long e do short em separado, além da melhor saída escolhida. Continua tendo a visão agregada (os 5 juntos) com o otimizador fora da amostra e a separação long/short do 1.161. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.162", note: "Novo: BACKTEST ANUAL em 5 ativos (BTC, ETH, SOL, BNB, XRP), a pedido, usando os MESMOS critérios do backtest ao vivo (spike pós-flat confirmado no fechamento + RSI Exhaustion 15m). Um botão '📅 Backtest anual' no cartão do backtest busca ~1 ano de velas de 15m de cada ativo pelo backend, detecta cada sinal do histórico, lê o RSI e resolve o trade pelas próprias velas seguintes — e roda toda a análise (melhor modo, otimizador fora da amostra, calibração, mineração de edge e a separação long/short do 1.161) em cima disso. Mostra o resultado por ativo e no total, e dá pra voltar pro ao vivo a qualquer momento. Detalhe honesto: pra um ano inteiro não dá pra baixar o 1m, então o RSI usa a base de 15m sem o empurrão intraday (o valor fica um tiquinho diferente do gráfico, mas a zona sobrevendido/sobrecomprado fica próxima); o gatilho e o resultado dos trades são 100% fiéis. É pesado (busca muito candle), então roda em segundo plano com uma barrinha e guarda o resultado por 10 min. Backend + frontend — exige reiniciar o dvl-scanner." },
   { version: "Beta 1.161", note: "Separa o resultado do backtest por LADO, a pedido — os shorts estavam puxando o edge do long pra baixo. Antes o melhor modo, o take-profit e o gatilho eram otimizados no conjunto MISTURADO (long+short) e depois aplicados a cada lado, então o número do long vinha diluído pelo short ruim. Agora CADA direção é otimizada SOZINHA: o long acha o melhor combo só com os trades de long, o short idem, e cada um é validado fora da amostra por conta própria. No cartão do backtest, os quadros Pré-pump (long) e Pré-short (short) passam a mostrar o resultado já separado, e aparecem dois blocos 'Melhor combo LONG' e 'Melhor combo SHORT' independentes, além do combo geral (long+short) pra comparar. Assim dá pra ver o edge real do long sem o short mascarando. Backend + frontend — exige reiniciar o dvl-scanner." },
@@ -71690,6 +71691,11 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
 .dvlCpBt1124 .dvlCpBt1124PaMode.neg{color:#ffb0ba;border-color:rgba(255,89,102,.28);}
 .dvlCpBt1124 .dvlCpBt1124PaBig .pos,.dvlCpBt1124 .dvlCpBt1124PaSide .pos{color:#10df77;}
 .dvlCpBt1124 .dvlCpBt1124PaBig .neg,.dvlCpBt1124 .dvlCpBt1124PaSide .neg{color:#ff5966;}
+.dvlCpBt1124 .dvlCpBt1124GridTbl{width:100%;border-collapse:collapse;font:700 10.5px system-ui;margin-top:4px;}
+.dvlCpBt1124 .dvlCpBt1124GridTbl th{color:#75827d;text-align:left;padding:3px 8px 3px 0;font-weight:800;white-space:nowrap;}
+.dvlCpBt1124 .dvlCpBt1124GridTbl td{color:#c6d2cd;padding:2px 8px 2px 0;white-space:nowrap;}
+.dvlCpBt1124 .dvlCpBt1124GridTbl td.pos{color:#10df77;}
+.dvlCpBt1124 .dvlCpBt1124GridTbl td.neg{color:#ff5966;}
 .dvlCpBt1124 .dvlCpBt1124Toggle{display:flex;align-items:center;gap:9px;margin:0 0 12px;padding:9px 11px;border-radius:10px;background:rgba(120,200,255,.05);border:1px solid rgba(120,200,255,.16);cursor:pointer;user-select:none;}
 .dvlCpBt1124 .dvlCpBt1124Toggle:hover{background:rgba(120,200,255,.09);}
 .dvlCpBt1124 .dvlCpBt1124Sw{flex:0 0 auto;width:34px;height:19px;border-radius:999px;background:rgba(145,175,165,.25);position:relative;transition:background .2s ease;}
@@ -71960,12 +71966,15 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     +'</div>';
   }
   /* ── Backtest ANUAL (5 ativos, 1 ano de 15m) ── estado + controles ── */
-  function annualState(){ return window.DVL_PUMP_BT_ANNUAL || (window.DVL_PUMP_BT_ANNUAL={mode:false,status:'idle',data:null,err:'',pct:0}); }
+  function annualState(){ return window.DVL_PUMP_BT_ANNUAL || (window.DVL_PUMP_BT_ANNUAL={mode:false,status:'idle',data:null,err:'',pct:0,query:''}); }
+  function curSymForGrid(){ try{ if(window.symbol) return String(window.symbol).toUpperCase(); }catch(_){} return 'BTCUSDT'; }
+  function curSymLabel(){ var s=curSymForGrid().replace('_USDT','').replace('USDT',''); return s; }
   function annualBtnHtml(){
     var a=annualState();
     return '<div class="dvlCpBt1124AnnualBar">'
       +'<button type="button" data-dvl-bt-annual="1" class="dvlCpBt1124AnnualBtn'+(a.mode?' on':'')+'">📅 Backtest anual · BTC ETH SOL BNB XRP</button>'
       +(a.mode?'<button type="button" data-dvl-bt-annual-back="1" class="dvlCpBt1124AnnualBack">← ao vivo</button>':'')
+      +'<button type="button" data-dvl-bt-annual-grid="1" class="dvlCpBt1124AnnualBtn" style="flex-basis:100%">🔬 Grid de RSI · '+esc(curSymLabel())+' · 1 ano (long/short, $1000 cada)</button>'
     +'</div>';
   }
   function annualBannerHtml(s){
@@ -72013,6 +72022,42 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       +'</div>';
     }).join('');
     return '<div class="dvlCpBt1124PaWrap"><div class="dvlCpBt1124PaTitle">Por ativo — cada um com '+fmtUsd(acc0)+' próprio (long e short separados, vários tipos de saída)</div>'+cards+'</div>';
+  }
+  /* Grid MASSIVO de RSI (1 ativo): melhor RSI por lado + tabela de combos. */
+  function rsiGridHtml(s){
+    var g=s&&s.rsiGrid; if(!g) return '';
+    if(!g.ready){
+      return '<div class="dvlCpBt1124Opt"><div class="dvlCpBt1124OptHd">🔬 Grid de RSI</div>'
+        +'<div class="dvlCpBt1124OptSub">Poucos sinais com leitura de RSI pra varrer ('+(Number(g.withExr)||0)+', precisa ~'+(Number(g.need)||20)+').</div></div>';
+    }
+    function sideBlock(sd, label, cls){
+      sd=sd||{}; var b=sd.best;
+      if(!b) return '<div class="dvlCpBt1124PaCard"><div class="dvlCpBt1124PaHd"><b style="color:'+cls+'">'+label+'</b></div><div class="dvlCpBt1124PaSub">nenhuma combinação com trades suficientes</div></div>';
+      var zone = b.side==='long' ? ('sobrevendido ≤ '+ (Number(b.lowerZone)||0)) : ('sobrecomprado ≥ '+(Number(b.upperZone)||0));
+      var trR=Number(b.train&&b.train.returnPct)||0, teR=Number(b.test&&b.test.returnPct)||0;
+      var teN=Number(b.test&&b.test.trades)||0, teW=Number(b.test&&b.test.winRate)||0;
+      var verd = teN<5 ? {t:'teste pequeno — inconclusivo', c:'#ffd321'}
+               : (b.generalizes ? {t:'✓ segura fora da amostra', c:'#10df77'} : {t:'✗ não generaliza', c:'#ff5966'});
+      var rows=(Array.isArray(sd.top)?sd.top:[]).slice(0,8).map(function(c){
+        var z=c.side==='long'?('≤'+(Number(c.lowerZone)||0)):('≥'+(Number(c.upperZone)||0));
+        var tr=Number(c.train&&c.train.returnPct)||0, te=Number(c.test&&c.test.returnPct)||0;
+        return '<tr><td>RSI '+(Number(c.rsiLen)||0)+'</td><td>'+z+'</td><td>alvo '+(Number(c.tpAtr)||0).toFixed(1)+'×</td>'
+          +'<td class="'+(tr>=0?'pos':'neg')+'">'+sign(tr)+'</td><td class="'+(te>=0?'pos':'neg')+'">'+sign(te)+'</td><td>'+(Number(c.test&&c.test.trades)||0)+'t</td></tr>';
+      }).join('');
+      return '<div class="dvlCpBt1124PaCard">'
+        +'<div class="dvlCpBt1124PaHd"><b style="color:'+cls+'">'+label+'</b><span>'+(Number(b.test&&b.test.trades)||0)+' trades no teste</span></div>'
+        +'<div class="dvlCpBt1124PaBig"><span class="'+(teR>=0?'pos':'neg')+'">'+fmtUsd(Number(b.test&&b.test.account)||1000)+'</span><small>de '+fmtUsd(1000)+' no TESTE · '+sign(teR)+' · '+teW.toFixed(0)+'% acerto</small></div>'
+        +'<div class="dvlCpBt1124PaSub">Melhor: <b>RSI '+(Number(b.rsiLen)||0)+'</b> · '+zone+' · <b>alvo '+(Number(b.tpAtr)||0).toFixed(1)+'× ATR</b> · treino '+sign(trR)+'</div>'
+        +'<div class="dvlCpBt1124OptVerd" style="color:'+verd.c+';margin:4px 0 6px">'+verd.t+'</div>'
+        +(rows?('<div style="overflow-x:auto"><table class="dvlCpBt1124GridTbl"><thead><tr><th>RSI</th><th>zona</th><th>saída</th><th>treino</th><th>teste</th><th>n</th></tr></thead><tbody>'+rows+'</tbody></table></div>'):'')
+      +'</div>';
+    }
+    return '<div class="dvlCpBt1124PaWrap">'
+      +'<div class="dvlCpBt1124PaTitle">🔬 Grid de RSI — '+(Number(g.combosTested)||0)+' combinações varridas · long e short cada um com $1000 · ranqueado pelo TESTE (fora da amostra)</div>'
+      +'<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">Regra: RSI sobrevendido → LONG, sobrecomprado → SHORT. Cada lado acha seu próprio comprimento de RSI + zona + alvo. (No histórico anual o RSI é 15m base, sem push de 1m.)</div>'
+      + sideBlock(g.long, '▲ Melhor RSI pra LONG', '#10df77')
+      + sideBlock(g.short, '▼ Melhor RSI pra SHORT', '#ff5966')
+    +'</div>';
   }
   function bodyHtml(){
     var a=annualState();
@@ -72091,6 +72136,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
         + sideRow((s.longSide&&s.longSide.result)||s.long, '▲ Pré-pump (long)', '#10df77')
         + sideRow((s.shortSide&&s.shortSide.result)||s.short, '▼ Pré-short (short)', '#ff5966')
       +'</div>'
+      + (s.annual&&s.rsiGrid?rsiGridHtml(s):'')
       + (s.annual?perAssetHtml(s):'')
       + (s.longSide?optHtml(s.longSide.optimize, '🧠 Melhor combo LONG — fora da amostra'):'')
       + (s.shortSide?optHtml(s.shortSide.optimize, '🧠 Melhor combo SHORT — fora da amostra'):'')
@@ -72125,7 +72171,8 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   }
   function pollAnnual(){
     var a=annualState();
-    fetch(annualApi("/api/dvl/scanner/pump-backtest-annual"),{cache:"no-store"})
+    var qs=a.query?("?"+a.query):"";
+    fetch(annualApi("/api/dvl/scanner/pump-backtest-annual"+qs),{cache:"no-store"})
       .then(function(r){ return r.json(); })
       .then(function(j){
         if(!j){ a.status='error'; a.err='sem resposta'; refreshCard(); return; }
@@ -72138,10 +72185,13 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       })
       .catch(function(){ a.status='error'; a.err='falha de rede'; refreshCard(); });
   }
-  function startAnnual(){
+  function startAnnual(query){
     var a=annualState();
     a.mode=true;
-    if(a.status==='ready'&&a.data){ refreshCard(); return; } /* já tem resultado em cache */
+    query=query||'';
+    /* Se trocou o alvo (5 ativos ↔ grid de RSI), reinicia; senão reaproveita. */
+    if(a.query!==query){ a.query=query; a.data=null; a.status='idle'; }
+    if(a.status==='ready'&&a.data){ refreshCard(); return; } /* já tem resultado */
     a.status='running'; a.pct=15; a.err='';
     refreshCard();
     if(a._t) clearTimeout(a._t);
@@ -72149,8 +72199,10 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   }
   document.addEventListener("click", function(ev){
     var t=ev.target;
+    var ag=t&&(t.closest?t.closest("[data-dvl-bt-annual-grid]"):null);
+    if(ag){ ev.preventDefault(); startAnnual("symbols="+encodeURIComponent(curSymForGrid())+"&rsiGrid=1"); return; }
     var ab=t&&(t.closest?t.closest("[data-dvl-bt-annual]"):null);
-    if(ab){ ev.preventDefault(); startAnnual(); return; }
+    if(ab){ ev.preventDefault(); startAnnual(""); return; }
     var abk=t&&(t.closest?t.closest("[data-dvl-bt-annual-back]"):null);
     if(abk){ ev.preventDefault(); var a=annualState(); a.mode=false; if(a._t)clearTimeout(a._t); refreshCard(); return; }
   });
