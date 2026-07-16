@@ -192,21 +192,25 @@ const mexc = {
       String(r[5]), r[6], String(r[7]), 0, "0", "0", "0"
     ]);
   },
-  /* Deep 15m history for the ANNUAL backtest — paginates MEXC's native Min15
-     candles backward from now until it has ~`days` of them (or runs out).
-     Returns ascending [{time,open,high,low,close,volume}] (ms). Gentle delay
-     between pages to respect the rate limit. Only 15m (the backtest's TF). */
-  async klinesHistory(sym, days) {
-    const STEP = 900000;                     // 15m in ms
-    const want = Math.min(40000, Math.ceil((Number(days) || 365) * 96) + 60);
+  /* Deep history for the ANNUAL backtest — paginates MEXC's native candles
+     backward from now until it has ~`days` of them (or runs out). `tfMin` picks
+     the timeframe (5/15/30/60 min → Min5/Min15/Min30/Min60); default 15. Returns
+     ascending [{time,open,high,low,close,volume}] (ms). Gentle delay between
+     pages to respect the rate limit. */
+  async klinesHistory(sym, days, tfMin) {
+    const TF = { 5: ["Min5", 300000], 15: ["Min15", 900000], 30: ["Min30", 1800000], 60: ["Min60", 3600000] };
+    const sel = TF[Number(tfMin)] || TF[15];
+    const interval = sel[0], STEP = sel[1];
+    const perDay = 86400000 / STEP;          // candles per day at this TF
+    const want = Math.min(110000, Math.ceil((Number(days) || 365) * perDay) + 60);
     const chunkSec = 1400 * (STEP / 1000);   // window width per request
     const byTime = new Map();
     let endSec = Math.floor(Date.now() / 1000);
     let oldestSec = endSec;
-    for (let guard = 0; guard < 80 && byTime.size < want; guard++) {
+    for (let guard = 0; guard < 120 && byTime.size < want; guard++) {
       const startSec = endSec - chunkSec;
       const url = "https://contract.mexc.com/api/v1/contract/kline/" + encodeURIComponent(sym) +
-        "?interval=Min15&start=" + Math.max(0, Math.floor(startSec)) + "&end=" + Math.floor(endSec);
+        "?interval=" + interval + "&start=" + Math.max(0, Math.floor(startSec)) + "&end=" + Math.floor(endSec);
       let j;
       try { j = await getJSON(url); } catch (_) { break; }
       const d = (j && j.data) || null;

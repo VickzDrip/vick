@@ -351,7 +351,8 @@ function createServer() {
     symbols = (symbols.length ? symbols : DEFAULT_ANNUAL).slice(0, 5)
       .map(s => /_/.test(s) ? s : s.replace(/USDT$/, "") + "_USDT");
     const rsiGridFlag = /^(1|true)$/i.test(String(req.query.rsiGrid || ""));
-    const cacheKey = symbols.join(",") + "|" + days + "|" + (rsiGridFlag ? "grid" : "std");
+    const tfMin = [5, 15, 30, 60].indexOf(Number(req.query.tf)) >= 0 ? Number(req.query.tf) : 15;
+    const cacheKey = symbols.join(",") + "|" + days + "|" + tfMin + "m|" + (rsiGridFlag ? "grid" : "std");
     /* Poll pattern: the run takes 30–60s, so we never hold the HTTP connection
        open for it. Fresh cache → return the result; already running → report
        progress; otherwise kick it off and report "started". Client polls. */
@@ -360,20 +361,20 @@ function createServer() {
     }
     if (_annualRunning) {
       return res.json({ ok: true, ready: false, running: true, elapsedMs: Date.now() - _annualStartedAt,
-                        message: "Rodando o backtest anual… (buscando ~1 ano de 15m dos 5 ativos)" });
+                        message: "Rodando o backtest… (buscando ~1 ano de candles)" });
     }
     _annualRunning = true; _annualStartedAt = Date.now();
     const runCfg = { ENGINE: cfg.ENGINE, EXR: cfg.EXR,
       account0: Number(req.query.account0) || 1000, riskPct: Number(req.query.riskPct) || 0.01,
       feePct: Number(req.query.feePct) || 0.02, slipPct: Number(req.query.slipPct) || 0.02,
       rsiGrid: /^(1|true)$/i.test(String(req.query.rsiGrid || "")) };
-    const fetch15m = (sym) => mexc.klinesHistory(sym, days);
-    annualBacktest.run(symbols, days, runCfg, fetch15m)
+    const fetch15m = (sym) => mexc.klinesHistory(sym, days, tfMin);
+    annualBacktest.run(symbols, days, runCfg, fetch15m, tfMin)
       .then(out => { _annualCache = { key: cacheKey, at: Date.now(), data: out }; })
       .catch(err => { _annualCache = { key: cacheKey, at: Date.now(), data: { ok: false, ready: false, error: String(err && err.message || err) } }; })
       .finally(() => { _annualRunning = false; });
-    res.json({ ok: true, ready: false, running: true, started: true, symbols, days,
-               message: "Backtest anual iniciado — buscando ~1 ano de 15m dos 5 ativos. Pode levar até 1 min." });
+    res.json({ ok: true, ready: false, running: true, started: true, symbols, days, tfMin,
+               message: "Backtest anual iniciado — buscando ~1 ano de " + tfMin + "m. Pode levar até 1 min." });
   });
 
   const server = http.createServer(app);
