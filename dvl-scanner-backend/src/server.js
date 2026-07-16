@@ -350,7 +350,8 @@ function createServer() {
     let symbols = String(req.query.symbols || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
     symbols = (symbols.length ? symbols : DEFAULT_ANNUAL).slice(0, 5)
       .map(s => /_/.test(s) ? s : s.replace(/USDT$/, "") + "_USDT");
-    const cacheKey = symbols.join(",") + "|" + days;
+    const rsiGridFlag = /^(1|true)$/i.test(String(req.query.rsiGrid || ""));
+    const cacheKey = symbols.join(",") + "|" + days + "|" + (rsiGridFlag ? "grid" : "std");
     /* Poll pattern: the run takes 30–60s, so we never hold the HTTP connection
        open for it. Fresh cache → return the result; already running → report
        progress; otherwise kick it off and report "started". Client polls. */
@@ -364,7 +365,8 @@ function createServer() {
     _annualRunning = true; _annualStartedAt = Date.now();
     const runCfg = { ENGINE: cfg.ENGINE, EXR: cfg.EXR,
       account0: Number(req.query.account0) || 1000, riskPct: Number(req.query.riskPct) || 0.01,
-      feePct: Number(req.query.feePct) || 0.02, slipPct: Number(req.query.slipPct) || 0.02 };
+      feePct: Number(req.query.feePct) || 0.02, slipPct: Number(req.query.slipPct) || 0.02,
+      rsiGrid: /^(1|true)$/i.test(String(req.query.rsiGrid || "")) };
     const fetch15m = (sym) => mexc.klinesHistory(sym, days);
     annualBacktest.run(symbols, days, runCfg, fetch15m)
       .then(out => { _annualCache = { key: cacheKey, at: Date.now(), data: out }; })

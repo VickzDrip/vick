@@ -592,9 +592,85 @@ function sweepRsiConfirm(samples, predictFn, opts) {
   };
 }
 
+/* ── MASSIVE RSI grid search (per side, RSI-DRIVEN direction) ──────────────
+   The "caralhada de combinação": sweep a big grid of RSI period × zone and, for
+   EACH combo, take the signals the RSI puts in-zone and trade them in the RSI's
+   own direction (sobrevendido→LONG, sobrecomprado→SHORT — the user's rule, not
+   the ML model). LONG and SHORT are optimised INDEPENDENTLY, each with its own
+   $1000 and its own TP sweep, and every combo is scored OUT-OF-SAMPLE (train
+   older / test newer). Returns the best RSI values per side + the full ranked
+   grid so you can see the whole landscape.
+   NOTE: on annual data exrPush is 0 (no 1m), so `push` is inert here — the RSI
+   value depends on the PERIOD and the ZONE threshold. */
+function rsiGridSearch(samples, opts) {
+  opts = opts || {};
+  const exitBase = { costFrac: opts.costFrac, account0: opts.account0 || 1000, riskPct: opts.riskPct || 0.01, minConv: 0 };
+  const slAtr = opts.slAtr || 1.2;
+  const withExr = (Array.isArray(samples) ? samples : []).filter(s => s && Array.isArray(s.exrCloses) && s.exrCloses.length);
+  if (withExr.length < 20) return { ready: false, withExr: withExr.length, need: 20 };
+  const cut = Math.max(1, Math.floor(withExr.length * (opts.trainFrac || 0.7)));
+  const train = withExr.slice(0, cut), test = withExr.slice(cut);
+
+  const rsiLenGrid = opts.rsiLenGrid || [5, 7, 9, 11, 14, 18, 21, 28, 35];
+  const lowerGrid = opts.lowerGrid || [10, 15, 20, 25, 30, 35, 40, 45];
+  const upperGrid = opts.upperGrid || [55, 60, 65, 70, 75, 80, 85, 90];
+  const tpGrid = opts.tpGrid || [1, 1.5, 2, 2.5, 3, 4, 5, 6];
+  const minTr = Math.max(5, Math.round(train.length * 0.03));
+
+  const FORCE_LONG = () => ({ up: 1, down: 0 });
+  const FORCE_SHORT = () => ({ up: 0, down: 1 });
+  const sum = r => ({ returnPct: r.returnPct, account: r.account, maxDrawdownPct: r.maxDrawdownPct, winRate: r.winRate, trades: r.trades });
+
+  /* Evaluate ONE (rsiLen, threshold) on a side: filter in-zone, sweep TP on
+     train, apply the winning TP to test. Direction is forced to `side`. */
+  function evalCombo(side, rsiLen, thr) {
+    const forced = side === "long" ? FORCE_LONG : FORCE_SHORT;
+    const inZone = s => { const v = exrValueAt(s, rsiLen, 0); return v != null && (side === "long" ? v <= thr : v >= thr); };
+    const trSet = train.filter(inZone);
+    if (trSet.length < minTr) return null;
+    let best = null;
+    for (const tp of tpGrid) {
+      const r = run(trSet, forced, Object.assign({ slAtr, tpAtr: tp, side }, exitBase));
+      if (!best || r.account > best.r.account) best = { tp, r };
+    }
+    const teSet = test.filter(inZone);
+    const te = run(teSet, forced, Object.assign({ slAtr, tpAtr: best.tp, side }, exitBase));
+    return {
+      side, rsiLen, tpAtr: best.tp,
+      lowerZone: side === "long" ? thr : null, upperZone: side === "short" ? thr : null,
+      train: sum(best.r), test: sum(te), trainN: trSet.length, testN: teSet.length,
+      generalizes: te.trades >= 5 && te.returnPct > 0
+    };
+  }
+
+  function searchSide(side, thrGrid) {
+    const combos = [];
+    for (const rsiLen of rsiLenGrid) for (const thr of thrGrid) {
+      const c = evalCombo(side, rsiLen, thr);
+      if (c) combos.push(c);
+    }
+    /* Rank by OUT-OF-SAMPLE test return (the honest score); require a minimum of
+       test trades so a 1-trade fluke can't win. Fallback to train if no combo
+       has enough test trades. */
+    const scored = combos.slice().sort((a, b) => (b.test.returnPct) - (a.test.returnPct));
+    const withTest = scored.filter(c => c.test.trades >= 5);
+    const best = withTest[0] || combos.slice().sort((a, b) => b.train.returnPct - a.train.returnPct)[0] || null;
+    return { best, top: scored.slice(0, 15), combos: combos.length };
+  }
+
+  const longR = searchSide("long", lowerGrid);
+  const shortR = searchSide("short", upperGrid);
+  return {
+    ready: true, withExr: withExr.length, trainN: train.length, testN: test.length, slAtr,
+    combosTested: (rsiLenGrid.length * lowerGrid.length) + (rsiLenGrid.length * upperGrid.length),
+    grids: { rsiLen: rsiLenGrid, lower: lowerGrid, upper: upperGrid, tp: tpGrid },
+    long: longR, short: shortR
+  };
+}
+
 module.exports = {
   simulateTrade, simulateMfe, simulateMfeCfg, simulateTrail, simulatePathCfg,
   simulateScaleOut, simulateScaleOutMfe, outcomeFor,
   run, sweepTp, sweepTrail, sweepMinConv, sweepGrid, evaluate, exitConfigs, optimize,
-  calibrate, mineConditions, exrValueAt, sweepRsiConfirm
+  calibrate, mineConditions, exrValueAt, sweepRsiConfirm, rsiGridSearch
 };
