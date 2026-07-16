@@ -88,25 +88,22 @@ function localPredictor(samples) {
 async function run(symbols, days, cfg, fetch15m) {
   const engine = cfg.ENGINE;
   const opts = Object.assign({ baseTfMin: 15 }, cfg.EXR);
-  const perAsset = [];
+  const assets = [];   // { sym, bars, fromMs, toMs, samples }
   let all = [];
   for (const sym of symbols) {
     let base = null;
     try { base = await fetch15m(sym); } catch (_) { base = null; }
-    if (!Array.isArray(base) || base.length < 30 + HORIZON) { perAsset.push({ sym, bars: base ? base.length : 0, signals: 0 }); continue; }
+    if (!Array.isArray(base) || base.length < 30 + HORIZON) { assets.push({ sym, bars: base ? base.length : 0, samples: [] }); continue; }
     let series = null;
     try { series = exhaustionRsi.computeSeries(base, null, opts); } catch (_) { series = null; }
     const samples = buildSamples(base, series || [], engine, opts);
-    perAsset.push({ sym, bars: base.length, signals: samples.length,
-                    fromMs: Number(base[0].time) || 0, toMs: Number(base[base.length - 1].time) || 0 });
+    assets.push({ sym, bars: base.length, fromMs: Number(base[0].time) || 0, toMs: Number(base[base.length - 1].time) || 0, samples });
     all = all.concat(samples);
   }
-  if (all.length < 20) {
-    return { ok: true, ready: false, reason: "poucos sinais no período", samples: all.length, perAsset, symbols, days };
-  }
-  const predict = localPredictor(all);
+
   const num2 = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
-  const base = { account0: num2(cfg.account0, 1000), riskPct: Math.min(0.2, Math.max(0.001, num2(cfg.riskPct, 0.01))),
+  /* Cada ativo com $1000 próprio (a pedido) — a conta NÃO é compartilhada. */
+  const base = { account0: 1000, riskPct: Math.min(0.2, Math.max(0.001, num2(cfg.riskPct, 0.01))),
                  costFrac: 2 * (num2(cfg.feePct, 0.02) + num2(cfg.slipPct, 0.02)) / 100 };
   const strip = r => { const { equity, ...rest } = r; return rest; };
   const MODES = [
@@ -115,32 +112,66 @@ async function run(symbols, days, cfg, fetch15m) {
     { key: "runner", label: "Runner", slAtr: 2.0, tpGrid: [3, 4, 5, 6, 8] },
     { key: "adapt", label: "Adaptativo", slAtr: 1.5, trail: true, trailGrid: [0.5, 1, 1.5, 2, 2.5, 3] }
   ];
-  const evalMode = (m, side) => pumpBacktest.evaluate(all, predict, Object.assign({}, base,
+  /* One stable predictor fit on the whole pool → consistent side/conviction
+     across assets (per-asset fits would overfit small sets). */
+  const predict = (all.length >= 8) ? localPredictor(all) : (() => null);
+  const evalMode = (samples, m, side) => pumpBacktest.evaluate(samples, predict, Object.assign({}, base,
     m.trail ? { slAtr: m.slAtr, trail: true, trailGrid: m.trailGrid } : { slAtr: m.slAtr, tpGrid: m.tpGrid },
     side ? { side } : {}));
-  const evals = MODES.map(m => ({ m, e: evalMode(m, null) }));
-  let bi = 0; for (let i = 1; i < evals.length; i++) if (evals[i].e.all.account > evals[bi].e.all.account) bi = i;
-  const bm = evals[bi], e = bm.e;
-  const bestSide = (side) => {
-    const evs = MODES.map(m => ({ m, e: evalMode(m, side) }));
-    let k = 0; for (let i = 1; i < evs.length; i++) if (evs[i].e.all.account > evs[k].e.all.account) k = i;
-    return { result: strip(evs[k].e.all),
-             params: { mode: evs[k].m.key, modeLabel: evs[k].m.label, slAtr: evs[k].e.slAtr, tpAtr: evs[k].e.tpAtr, trailAtr: evs[k].e.trailAtr, adaptive: !!evs[k].e.adaptive, minConv: evs[k].e.minConv },
-             optimize: pumpBacktest.optimize(all, predict, Object.assign({}, base, { side })) };
-  };
-  const modes = evals.map(({ m, e }) => ({ key: m.key, label: m.label, adaptive: !!e.adaptive, slAtr: e.slAtr, tpAtr: e.tpAtr, trailAtr: e.trailAtr, minConv: e.minConv, account: e.all.account, returnPct: e.all.returnPct, maxDrawdownPct: e.all.maxDrawdownPct, winRate: e.all.winRate, trades: e.all.trades }));
+  const modesOf = evals => evals.map(({ m, e }) => ({ key: m.key, label: m.label, adaptive: !!e.adaptive,
+    slAtr: e.slAtr, tpAtr: e.tpAtr, trailAtr: e.trailAtr, minConv: e.minConv,
+    account: e.all.account, returnPct: e.all.returnPct, maxDrawdownPct: e.all.maxDrawdownPct, winRate: e.all.winRate, trades: e.all.trades }));
+  /* Full evaluation of ONE dataset: best mode overall + long/short each
+     optimised on their own trades (várias saídas testadas por lado). */
+  function evalDataset(samples) {
+    if (!Array.isArray(samples) || samples.length < 8) return null;
+    const evs = MODES.map(m => ({ m, e: evalMode(samples, m, null) }));
+    let bi = 0; for (let i = 1; i < evs.length; i++) if (evs[i].e.all.account > evs[bi].e.all.account) bi = i;
+    const bm = evs[bi], e = bm.e;
+    const bestSide = (side) => {
+      const se = MODES.map(m => ({ m, e: evalMode(samples, m, side) }));
+      let k = 0; for (let i = 1; i < se.length; i++) if (se[i].e.all.account > se[k].e.all.account) k = i;
+      return { result: strip(se[k].e.all),
+               params: { mode: se[k].m.key, modeLabel: se[k].m.label, slAtr: se[k].e.slAtr, tpAtr: se[k].e.tpAtr, trailAtr: se[k].e.trailAtr, adaptive: !!se[k].e.adaptive, minConv: se[k].e.minConv },
+               modes: modesOf(se) };
+    };
+    return {
+      bestMode: bm.m.key, modeLabel: bm.m.label,
+      params: { slAtr: e.slAtr, tpAtr: e.tpAtr, trailAtr: e.trailAtr, adaptive: !!e.adaptive, minConv: e.minConv },
+      best: strip(e.all), modes: modesOf(evs),
+      long: bestSide("long"), short: bestSide("short"),
+      grossReturnPct: e.grossReturnPct
+    };
+  }
+
+  /* PER-ASSET — each with its own $1000, long/short split, várias saídas. */
+  const perAsset = assets.map(a => {
+    const ev = evalDataset(a.samples);
+    const row = { sym: a.sym, bars: a.bars, signals: a.samples.length, fromMs: a.fromMs || 0, toMs: a.toMs || 0, account0: base.account0 };
+    if (ev) Object.assign(row, ev);
+    return row;
+  });
+
+  if (all.length < 20) {
+    return { ok: true, ready: false, reason: "poucos sinais no período", samples: all.length, perAsset, symbols, days, account0: base.account0 };
+  }
+
+  /* AGGREGATE (todos juntos, $1000 na pool) — visão geral + diagnósticos caros
+     só aqui (otimizador 640 combos, calibração, mineração, RSI). */
+  const agg = evalDataset(all);
   return {
-    ok: true, ready: true, annual: true, horizon: HORIZON, symbols, days,
-    samples: all.length, perAsset,
-    params: { account0: base.account0, riskPct: base.riskPct, slAtr: e.slAtr, minConv: e.minConv, tpAtr: e.tpAtr, trailAtr: e.trailAtr, adaptive: !!e.adaptive, mode: bm.m.key, modeLabel: bm.m.label, costRoundTripPct: base.costFrac * 100 },
-    modes, bestMode: bm.m.key,
-    best: strip(e.all), long: strip(e.long), short: strip(e.short),
-    longSide: bestSide("long"), shortSide: bestSide("short"),
+    ok: true, ready: true, annual: true, perAssetAccounts: true, horizon: HORIZON, symbols, days,
+    samples: all.length, perAsset, account0: base.account0,
+    params: { account0: base.account0, riskPct: base.riskPct, slAtr: agg.params.slAtr, minConv: agg.params.minConv, tpAtr: agg.params.tpAtr, trailAtr: agg.params.trailAtr, adaptive: agg.params.adaptive, mode: agg.bestMode, modeLabel: agg.modeLabel, costRoundTripPct: base.costFrac * 100 },
+    modes: agg.modes, bestMode: agg.bestMode,
+    best: agg.best, long: agg.long.result, short: agg.short.result,
+    longSide: { result: agg.long.result, params: agg.long.params, optimize: pumpBacktest.optimize(all, predict, Object.assign({}, base, { side: "long" })) },
+    shortSide: { result: agg.short.result, params: agg.short.params, optimize: pumpBacktest.optimize(all, predict, Object.assign({}, base, { side: "short" })) },
     optimized: pumpBacktest.optimize(all, predict, base),
     calibration: pumpBacktest.calibrate(all, predict),
     conditions: pumpBacktest.mineConditions(all, predict, FEATURES, base),
     rsiConfirm: pumpBacktest.sweepRsiConfirm(all, predict, base),
-    grossReturnPct: e.grossReturnPct
+    grossReturnPct: agg.grossReturnPct
   };
 }
 
