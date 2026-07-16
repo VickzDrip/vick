@@ -91,9 +91,10 @@ function localPredictor(samples) {
    fit a local model, and run the same evaluator/optimiser (per side). `fetch15m`
    is injected (sym → ascending [{time,open,high,low,close,volume}]) so this is
    testable without network. Returns the /pump-backtest-shaped payload. */
-async function run(symbols, days, cfg, fetch15m) {
+async function run(symbols, days, cfg, fetch15m, tfMin) {
   const engine = cfg.ENGINE;
-  const opts = Object.assign({ baseTfMin: 15 }, cfg.EXR);
+  const baseTfMin = Math.max(1, Math.round(Number(tfMin) || cfg.tfMin || 15));
+  const opts = Object.assign({}, cfg.EXR, { baseTfMin });
   const assets = [];   // { sym, bars, fromMs, toMs, samples }
   let all = [];
   for (const sym of symbols) {
@@ -159,7 +160,7 @@ async function run(symbols, days, cfg, fetch15m) {
   });
 
   if (all.length < 20) {
-    return { ok: true, ready: false, reason: "poucos sinais no período", samples: all.length, perAsset, symbols, days, account0: base.account0 };
+    return { ok: true, ready: false, reason: "poucos sinais no período", samples: all.length, perAsset, symbols, days, tfMin: baseTfMin, account0: base.account0 };
   }
 
   /* AGGREGATE (todos juntos, $1000 na pool) — visão geral + diagnósticos caros
@@ -170,7 +171,7 @@ async function run(symbols, days, cfg, fetch15m) {
   const wantGrid = !!cfg.rsiGrid || symbols.length === 1;
   const rsiGrid = wantGrid ? pumpBacktest.rsiGridSearch(all, { costFrac: base.costFrac, account0: base.account0, riskPct: base.riskPct }) : null;
   return {
-    ok: true, ready: true, annual: true, perAssetAccounts: true, horizon: HORIZON, symbols, days, rsiGrid,
+    ok: true, ready: true, annual: true, perAssetAccounts: true, horizon: HORIZON, symbols, days, tfMin: baseTfMin, rsiGrid,
     samples: all.length, perAsset, account0: base.account0,
     params: { account0: base.account0, riskPct: base.riskPct, slAtr: agg.params.slAtr, minConv: agg.params.minConv, tpAtr: agg.params.tpAtr, trailAtr: agg.params.trailAtr, adaptive: agg.params.adaptive, mode: agg.bestMode, modeLabel: agg.modeLabel, costRoundTripPct: base.costFrac * 100 },
     modes: agg.modes, bestMode: agg.bestMode,
