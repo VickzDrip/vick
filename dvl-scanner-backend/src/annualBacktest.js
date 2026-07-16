@@ -65,6 +65,12 @@ function buildSamples(base, series, engine, opts) {
       sample.exrPush = Number(se.push) || 0;
       sample.exrCloses = closes.slice(Math.max(0, j - 39), j + 1);
     }
+    /* Window of 15m candles ending at the signal — lets the RSI grid re-sweep
+       EVERY oscillator input (comprimento, push, spike de volume, média de
+       volume, zonas) without re-fetching. */
+    sample.exrBars = base.slice(Math.max(0, j - 39), j + 1).map(c => ({
+      open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume)
+    }));
     out.push(sample);
   }
   return out;

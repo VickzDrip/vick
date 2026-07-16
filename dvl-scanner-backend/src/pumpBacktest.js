@@ -592,51 +592,77 @@ function sweepRsiConfirm(samples, predictFn, opts) {
   };
 }
 
-/* ── MASSIVE RSI grid search (per side, RSI-DRIVEN direction) ──────────────
-   The "caralhada de combinação": sweep a big grid of RSI period × zone and, for
-   EACH combo, take the signals the RSI puts in-zone and trade them in the RSI's
-   own direction (sobrevendido→LONG, sobrecomprado→SHORT — the user's rule, not
-   the ML model). LONG and SHORT are optimised INDEPENDENTLY, each with its own
-   $1000 and its own TP sweep, and every combo is scored OUT-OF-SAMPLE (train
-   older / test newer). Returns the best RSI values per side + the full ranked
-   grid so you can see the whole landscape.
-   NOTE: on annual data exrPush is 0 (no 1m), so `push` is inert here — the RSI
-   value depends on the PERIOD and the ZONE threshold. */
+/* ── MASSIVE RSI grid search — TODOS os inputs do oscilador da plataforma ──
+   Sweeps the FULL Exhaustion-RSI input set exactly like the chart's Filtros:
+   comprimento (rsiLen) × push × spike de volume (volSpikeAt) × média de volume
+   (volMaLen) × zona (sobrevendido/sobrecomprado). For EACH combo the RSI value
+   is REBUILT from the stored 15m candles (sample.exrBars) via EXR.valueFrom, the
+   signal is traded in the RSI's own direction (sobrevendido→LONG, sobrecomprado→
+   SHORT), and LONG/SHORT are optimised INDEPENDENTLY (each $1000, own TP sweep),
+   scored OUT-OF-SAMPLE. Per-sample base-RSI and exhaustion are PRECOMPUTED so the
+   big combo loop is cheap arithmetic.
+   NOTE: over the annual (15m-only) history the exhaustion is the 15m self-
+   exhaustion (no sub-15m push), a faithful approximation — but push, volSpike and
+   volMa now all MOVE the value, so the whole oscilador is swept. */
 function rsiGridSearch(samples, opts) {
   opts = opts || {};
   const exitBase = { costFrac: opts.costFrac, account0: opts.account0 || 1000, riskPct: opts.riskPct || 0.01, minConv: 0 };
   const slAtr = opts.slAtr || 1.2;
-  const withExr = (Array.isArray(samples) ? samples : []).filter(s => s && Array.isArray(s.exrCloses) && s.exrCloses.length);
-  if (withExr.length < 20) return { ready: false, withExr: withExr.length, need: 20 };
-  const cut = Math.max(1, Math.floor(withExr.length * (opts.trainFrac || 0.7)));
-  const train = withExr.slice(0, cut), test = withExr.slice(cut);
+  const withBars = (Array.isArray(samples) ? samples : []).filter(s => s && Array.isArray(s.exrBars) && s.exrBars.length >= 8);
+  if (withBars.length < 20) return { ready: false, withExr: withBars.length, need: 20 };
+  const cut = Math.max(1, Math.floor(withBars.length * (opts.trainFrac || 0.7)));
 
-  const rsiLenGrid = opts.rsiLenGrid || [5, 7, 9, 11, 14, 18, 21, 28, 35];
-  const lowerGrid = opts.lowerGrid || [10, 15, 20, 25, 30, 35, 40, 45];
-  const upperGrid = opts.upperGrid || [55, 60, 65, 70, 75, 80, 85, 90];
-  const tpGrid = opts.tpGrid || [1, 1.5, 2, 2.5, 3, 4, 5, 6];
-  const minTr = Math.max(5, Math.round(train.length * 0.03));
+  const rsiLenGrid   = opts.rsiLenGrid   || [7, 9, 11, 14, 21];
+  const pushGrid     = opts.pushGrid     || [0, 10, 18, 25];
+  const volMaGrid    = opts.volMaGrid    || [14, 20, 30];
+  const volSpikeGrid = opts.volSpikeGrid || [2, 2.5, 3];
+  const lowerGrid    = opts.lowerGrid    || [25, 30, 35, 40];
+  const upperGrid    = opts.upperGrid    || [60, 65, 70, 75];
+  const tpGrid       = opts.tpGrid       || [1, 1.5, 2, 2.5, 3, 4, 5, 6];
+  const minTr = Math.max(5, Math.round(cut * 0.03));
 
   const FORCE_LONG = () => ({ up: 1, down: 0 });
   const FORCE_SHORT = () => ({ up: 0, down: 1 });
   const sum = r => ({ returnPct: r.returnPct, account: r.account, maxDrawdownPct: r.maxDrawdownPct, winRate: r.winRate, trades: r.trades });
 
-  /* Evaluate ONE (rsiLen, threshold) on a side: filter in-zone, sweep TP on
-     train, apply the winning TP to test. Direction is forced to `side`. */
-  function evalCombo(side, rsiLen, thr) {
+  /* PRECOMPUTE per sample (over its stored 15m window):
+       baseRsi[rsiLen] (depends only on rsiLen) and
+       exh[volMa|volSpike] = (up-down) exhaustion (depends only on those two).
+     Then value(rsiLen,volMa,volSpike,push) = clamp(baseRsi + exh*push, 0, 100). */
+  const volCombos = [];
+  for (const vm of volMaGrid) for (const vs of volSpikeGrid) volCombos.push({ vm, vs, key: vm + "|" + vs });
+  const prep = withBars.map(s => {
+    const bars = s.exrBars, i = bars.length - 1;
+    const closes = bars.map(c => Number(c.close));
+    const baseRsi = {};
+    for (const rl of rsiLenGrid) { const r = EXR.mtfRsi(closes, Math.max(2, Math.round(rl))); baseRsi[rl] = r[r.length - 1]; }
+    const exh = {};
+    for (const vc of volCombos) {
+      const up = EXR.mtfExh(bars, i, "up", vc.vm, vc.vs);
+      const dn = EXR.mtfExh(bars, i, "down", vc.vm, vc.vs);
+      exh[vc.key] = up - dn;
+    }
+    return { s, baseRsi, exh };
+  });
+  const prepTrain = prep.slice(0, cut), prepTest = prep.slice(cut);
+  const valOf = (p, rl, vcKey, push) => Math.max(0, Math.min(100, p.baseRsi[rl] + p.exh[vcKey] * push));
+
+  /* Evaluate one FULL combo on a side: filter in-zone (by the rebuilt value),
+     sweep TP on train, apply the winner to the untouched test. */
+  function evalCombo(side, rl, vc, push, thr) {
     const forced = side === "long" ? FORCE_LONG : FORCE_SHORT;
-    const inZone = s => { const v = exrValueAt(s, rsiLen, 0); return v != null && (side === "long" ? v <= thr : v >= thr); };
-    const trSet = train.filter(inZone);
+    const inZone = p => { const v = valOf(p, rl, vc.key, push); return side === "long" ? v <= thr : v >= thr; };
+    const trSet = prepTrain.filter(inZone).map(p => p.s);
     if (trSet.length < minTr) return null;
     let best = null;
     for (const tp of tpGrid) {
       const r = run(trSet, forced, Object.assign({ slAtr, tpAtr: tp, side }, exitBase));
       if (!best || r.account > best.r.account) best = { tp, r };
     }
-    const teSet = test.filter(inZone);
+    const teSet = prepTest.filter(inZone).map(p => p.s);
     const te = run(teSet, forced, Object.assign({ slAtr, tpAtr: best.tp, side }, exitBase));
     return {
-      side, rsiLen, tpAtr: best.tp,
+      side, rsiLen: rl, push, volMaLen: vc.vm, volSpikeAt: vc.vs, tpAtr: best.tp,
       lowerZone: side === "long" ? thr : null, upperZone: side === "short" ? thr : null,
       train: sum(best.r), test: sum(te), trainN: trSet.length, testN: teSet.length,
       generalizes: te.trades >= 5 && te.returnPct > 0
@@ -645,26 +671,22 @@ function rsiGridSearch(samples, opts) {
 
   function searchSide(side, thrGrid) {
     const combos = [];
-    for (const rsiLen of rsiLenGrid) for (const thr of thrGrid) {
-      const c = evalCombo(side, rsiLen, thr);
+    for (const rl of rsiLenGrid) for (const vc of volCombos) for (const push of pushGrid) for (const thr of thrGrid) {
+      const c = evalCombo(side, rl, vc, push, thr);
       if (c) combos.push(c);
     }
-    /* Rank by OUT-OF-SAMPLE test return (the honest score); require a minimum of
-       test trades so a 1-trade fluke can't win. Fallback to train if no combo
-       has enough test trades. */
-    const scored = combos.slice().sort((a, b) => (b.test.returnPct) - (a.test.returnPct));
+    const scored = combos.slice().sort((a, b) => b.test.returnPct - a.test.returnPct);
     const withTest = scored.filter(c => c.test.trades >= 5);
     const best = withTest[0] || combos.slice().sort((a, b) => b.train.returnPct - a.train.returnPct)[0] || null;
     return { best, top: scored.slice(0, 15), combos: combos.length };
   }
 
-  const longR = searchSide("long", lowerGrid);
-  const shortR = searchSide("short", upperGrid);
+  const nCombosSide = rsiLenGrid.length * volCombos.length * pushGrid.length;
   return {
-    ready: true, withExr: withExr.length, trainN: train.length, testN: test.length, slAtr,
-    combosTested: (rsiLenGrid.length * lowerGrid.length) + (rsiLenGrid.length * upperGrid.length),
-    grids: { rsiLen: rsiLenGrid, lower: lowerGrid, upper: upperGrid, tp: tpGrid },
-    long: longR, short: shortR
+    ready: true, withExr: withBars.length, trainN: cut, testN: withBars.length - cut, slAtr,
+    combosTested: nCombosSide * (lowerGrid.length + upperGrid.length),
+    grids: { rsiLen: rsiLenGrid, push: pushGrid, volMaLen: volMaGrid, volSpikeAt: volSpikeGrid, lower: lowerGrid, upper: upperGrid, tp: tpGrid },
+    long: searchSide("long", lowerGrid), short: searchSide("short", upperGrid)
   };
 }
 
