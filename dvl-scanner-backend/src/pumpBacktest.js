@@ -434,8 +434,10 @@ function optimize(samples, predictFn, opts) {
   const train = samples.slice(0, cut);
   const test = samples.slice(cut);
   const cfgs = exitConfigs(opts);
-  const baseOpts = { account0: opts.account0, riskPct: opts.riskPct, costFrac: opts.costFrac };
-  const minTrain = Math.max(10, Math.round(train.length * 0.05));
+  /* `side` (long/short/null) flows into every run so the optimiser can search a
+     SINGLE direction — the long edge isn't diluted by losing shorts. */
+  const baseOpts = { account0: opts.account0, riskPct: opts.riskPct, costFrac: opts.costFrac, side: opts.side || null };
+  const minTrain = Math.max(5, Math.round(train.length * 0.05));
 
   let best = null, bestRun = null;
   for (const cfg of cfgs) {
