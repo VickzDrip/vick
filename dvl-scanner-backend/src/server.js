@@ -346,7 +346,7 @@ function createServer() {
   const DEFAULT_ANNUAL = ["BTC_USDT", "ETH_USDT", "SOL_USDT", "BNB_USDT", "XRP_USDT"];
   let _annualRunning = false, _annualCache = null, _annualStartedAt = 0;
   app.get("/api/dvl/scanner/pump-backtest-annual", (req, res) => {
-    const days = Math.max(30, Math.min(400, Number(req.query.days) || 365));
+    const days = Math.max(30, Math.min(760, Number(req.query.days) || 365));
     let symbols = String(req.query.symbols || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
     symbols = (symbols.length ? symbols : DEFAULT_ANNUAL).slice(0, 5)
       .map(s => /_/.test(s) ? s : s.replace(/USDT$/, "") + "_USDT");
