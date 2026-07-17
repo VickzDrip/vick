@@ -83,6 +83,21 @@ const fetch15m = (sym) => Promise.resolve(makeSeries(1200, sym.length));
      "best long combo carries EVERY oscillator input");
   ok(g && g.long && Array.isArray(g.long.top) && g.long.top.length >= 1, "grid returns a ranked top list");
 
+  // Volume Profile backtest (single asset): faithful VP + proximity sweep
+  const vpMod = require("../src/vpBacktest");
+  const vpLevels = vpMod.volumeProfile(makeSeries(120, 2), 120, 0.70);
+  ok(vpLevels && vpLevels.val < vpLevels.poc && vpLevels.poc < vpLevels.vah, "volumeProfile returns ordered VAL < POC < VAH");
+  const cfgVp = Object.assign({ vpBacktest: true }, cfg);
+  const vres = await annual.run(["BTC_USDT"], 365, cfgVp, () => Promise.resolve(makeSeries(3000, 3)), 15);
+  const vg = vres.vpGrid;
+  ok(vg && vg.ready, "vp backtest ready on single asset");
+  ok(vg && vg.combosTested > 100, "vp backtest sweeps many combos (" + (vg && vg.combosTested) + ")");
+  ok(vg && vg.grids && Array.isArray(vg.grids.line) && Array.isArray(vg.grids.prox) && Array.isArray(vg.grids.win),
+     "vp grid sweeps line + proximity + window");
+  const vlb = vg && vg.long && vg.long.best;
+  ok(vlb && ["line", "proxAtr", "pos", "vpWin", "tpAtr"].every(k => (k in vlb)), "best long VP combo carries line/prox/pos/window/tp");
+  ok(vres.rsiGrid == null, "rsiGrid NOT run when only vp requested (separate test)");
+
   // "poucos sinais" path
   const thin = await annual.run(["X_USDT"], 365, cfg, () => Promise.resolve(makeSeries(60, 1)));
   ok(thin.ready === false, "thin dataset → not ready (graceful)");

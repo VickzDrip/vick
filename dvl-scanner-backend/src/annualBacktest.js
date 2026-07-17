@@ -15,6 +15,7 @@ const M = require("./metrics");
 const exhaustionRsi = require("./exhaustionRsi");
 const pumpModel = require("./pumpModel");
 const pumpBacktest = require("./pumpBacktest");
+const vpBacktest = require("./vpBacktest");
 
 const HORIZON = pumpModel.HORIZON || 20;
 const FEATURES = pumpModel.FEATURES;
@@ -69,6 +70,12 @@ function buildSamples(base, series, engine, opts) {
        EVERY oscillator input (comprimento, push, spike de volume, média de
        volume, zonas) without re-fetching. */
     sample.exrBars = base.slice(Math.max(0, j - 39), j + 1).map(c => ({
+      open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume)
+    }));
+    /* Deeper window (up to 200 candles) ending at the signal — lets the Volume
+       Profile backtest rebuild POC/VAH/VAL over several lookbacks and measure
+       how close the entry sits to each line. */
+    sample.vpBars = base.slice(Math.max(0, j - 199), j + 1).map(c => ({
       open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume)
     }));
     out.push(sample);
@@ -168,10 +175,12 @@ async function run(symbols, days, cfg, fetch15m, tfMin) {
   const agg = evalDataset(all);
   /* MASSIVE RSI grid — pedido pra 1 ativo/1 ano: a "caralhada de combinação"
      de RSI, long e short cada um com $1000. Roda quando é 1 ativo (ou a pedido). */
-  const wantGrid = !!cfg.rsiGrid || symbols.length === 1;
+  const wantGrid = !!cfg.rsiGrid;
   const rsiGrid = wantGrid ? pumpBacktest.rsiGridSearch(all, { costFrac: base.costFrac, account0: base.account0, riskPct: base.riskPct }) : null;
+  /* Volume-Profile proximity backtest (a pedido, SEPARADO do grid de RSI). */
+  const vpGrid = cfg.vpBacktest ? vpBacktest.vpGridSearch(all, { costFrac: base.costFrac, account0: base.account0, riskPct: base.riskPct }) : null;
   return {
-    ok: true, ready: true, annual: true, perAssetAccounts: true, horizon: HORIZON, symbols, days, tfMin: baseTfMin, rsiGrid,
+    ok: true, ready: true, annual: true, perAssetAccounts: true, horizon: HORIZON, symbols, days, tfMin: baseTfMin, rsiGrid, vpGrid,
     samples: all.length, perAsset, account0: base.account0,
     params: { account0: base.account0, riskPct: base.riskPct, slAtr: agg.params.slAtr, minConv: agg.params.minConv, tpAtr: agg.params.tpAtr, trailAtr: agg.params.trailAtr, adaptive: agg.params.adaptive, mode: agg.bestMode, modeLabel: agg.modeLabel, costRoundTripPct: base.costFrac * 100 },
     modes: agg.modes, bestMode: agg.bestMode,
