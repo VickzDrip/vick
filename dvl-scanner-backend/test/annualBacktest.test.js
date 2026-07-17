@@ -94,8 +94,14 @@ const fetch15m = (sym) => Promise.resolve(makeSeries(1200, sym.length));
   ok(vg && vg.combosTested > 100, "vp backtest sweeps many combos (" + (vg && vg.combosTested) + ")");
   ok(vg && vg.grids && Array.isArray(vg.grids.line) && Array.isArray(vg.grids.prox) && Array.isArray(vg.grids.win),
      "vp grid sweeps line + proximity + window");
+  ok(vg && vg.long && Array.isArray(vg.long.top) && vg.long.top.length >= 1, "vp grid returns a ranked top list");
+  ok(vg && vg.long.top.every(c => ("robust" in c) && c.robust <= Math.min(c.train.returnPct, c.test.returnPct) + 1e-9),
+     "each combo carries robust = min(train, test)");
+  // STRICT: a "best" combo must be GREEN in BOTH train and test (no test-set cherry-picking)
   const vlb = vg && vg.long && vg.long.best;
-  ok(vlb && ["line", "proxAtr", "pos", "vpWin", "tpAtr"].every(k => (k in vlb)), "best long VP combo carries line/prox/pos/window/tp");
+  ok(!vlb || (vlb.train.returnPct > 0 && vlb.test.returnPct > 0 && vlb.test.trades >= 5),
+     "best long VP combo (if any) is green in train AND test");
+  ok(!vlb || ["line", "proxAtr", "pos", "vpWin", "tpAtr"].every(k => (k in vlb)), "best long VP combo carries line/prox/pos/window/tp");
   ok(vres.rsiGrid == null, "rsiGrid NOT run when only vp requested (separate test)");
 
   // "poucos sinais" path

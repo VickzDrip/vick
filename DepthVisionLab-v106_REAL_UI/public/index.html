@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.168";
+const DVL_APP_VERSION = "Beta 1.169";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.169", note: "Backtest de Volume Profile com critério ANTI-SORTE: antes eu ranqueava os combos só pelo resultado do TESTE, então o vencedor às vezes tinha treino vermelho e teste verde — isso é sorte de teste (escolher o melhor de 800+ combos no teste), não edge de verdade. Agora um combo só conta como 'seguro' se for VERDE no TREINO **E** no TESTE, e o ranking é pelo PIOR dos dois (o mais conservador). Se nenhum combo passa nesse filtro, o lado mostra em vermelho 'NADA confiável' em vez de te vender um falso positivo. Assim o card para de enganar. Só afeta o backtest de VP." },
   { version: "Beta 1.168", note: "Novo backtest de VOLUME PROFILE (e removi o Grid gigante de RSI): a tese do gráfico — spike pós pré-volume-baixo PERTO da região do VAL costuma correr pra cima. Agora o cartão reconstrói o mesmo Volume Profile da plataforma (POC/VAH/VAL, fiel ao gráfico) em cada sinal de 1 ano do BTC e mede quão perto o spike entrou de cada linha. Varre VÁRIAS combinações — linha (VAL/POC/VAH) × distância até a linha (em ATR) × lado (abaixo/acima/qualquer) × janela do perfil × alvo — pra cada direção, e mostra o combo MAIS LUCRATIVO de long e de short (cada um $1000), ranqueado pelo teste fora da amostra, com a tabela dos melhores. Continua com os chips de TF (5m/15m/30m/1h) — o VP é calculado no TF escolhido. É um teste SEPARADO, não mistura com o de RSI. Backend + frontend — dvl-scanner reinicia sozinho pelo deploy." },
   { version: "Beta 1.167", note: "Grid GIGANTE de RSI agora roda em vários timeframes: 5m, 15m, 30m e 1h (a pedido). Aparecem uns botõezinhos de TF em cima do botão do grid — escolhe o TF e roda; ele busca ~1 ano daquele candle no BTC e varre as mesmas 60.480 combinações (RSI + pré-volume) naquele TF, long e short cada um $1000. O oscilador é reconstruído no próprio TF escolhido (a exaustão é calculada nas velas daquele TF). Obs.: no 5m, por causa do volume de dados/tempo, o período pode ficar um pouco menor que 1 ano cheio, mas ainda é uma amostra bem grande. Backend + frontend — exige o dvl-scanner reiniciado (agora automático pelo deploy)." },
   { version: "Beta 1.166", note: "Backtest simplificado: tirei o backtest anual de VÁRIOS ativos (BTC/ETH/SOL/BNB/XRP) e deixei UM só — o Grid GIGANTE de RSI no BTC. E potencializei ao máximo: agora são 60.480 combinações de RSI + pré-volume varridas (comprimento 14 valores × push 9 × spike de volume 6 × média de volume 5 × zonas 8+8), cada uma ainda testando 8 alvos por dentro. Long e short continuam separados, cada um com $1000, ranqueados pelo teste fora da amostra, mostrando a config COMPLETA vencedora de cada lado + a tabela das melhores. Um clique só: '🔬 Grid GIGANTE de RSI · BTC'. Roda ~15–40s em background (pode sair da tela). Backend + frontend — exige reiniciar o dvl-scanner." },
@@ -72050,12 +72051,17 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       return vpLineLabel(c.line)+' · dist ≤ '+(Number(c.proxAtr)||0).toFixed(2)+'× ATR · '+vpPosLabel(c.pos)+' · janela '+(Number(c.vpWin)||0)+' velas · alvo '+(Number(c.tpAtr)||0).toFixed(1)+'×';
     }
     function sideBlock(sd, label, cls){
-      sd=sd||{}; var b=sd.best;
+      sd=sd||{};
+      /* Mostra a melhor que GENERALIZA (verde no treino E no teste). Se não tem,
+         mostra a "menos ruim" (topo do ranking) mas marcada como não-confiável. */
+      var b=sd.best, fallback=false;
+      if(!b && Array.isArray(sd.top) && sd.top.length){ b=sd.top[0]; fallback=true; }
       if(!b) return '<div class="dvlCpBt1124PaCard"><div class="dvlCpBt1124PaHd"><b style="color:'+cls+'">'+label+'</b></div><div class="dvlCpBt1124PaSub">nenhuma combinação com trades suficientes</div></div>';
       var trR=Number(b.train&&b.train.returnPct)||0, teR=Number(b.test&&b.test.returnPct)||0;
       var teN=Number(b.test&&b.test.trades)||0, teW=Number(b.test&&b.test.winRate)||0;
-      var verd = teN<5 ? {t:'teste pequeno — inconclusivo', c:'#ffd321'}
-               : (b.generalizes ? {t:'✓ segura fora da amostra', c:'#10df77'} : {t:'✗ não generaliza', c:'#ff5966'});
+      var verd = (!sd.best) ? {t:'✗ NADA confiável — nenhum combo ficou verde no treino E no teste', c:'#ff5966'}
+               : (teN<5 ? {t:'teste pequeno — inconclusivo', c:'#ffd321'}
+               : {t:'✓ segura — VERDE no treino E no teste', c:'#10df77'});
       var rows=(Array.isArray(sd.top)?sd.top:[]).slice(0,8).map(function(c){
         var tr=Number(c.train&&c.train.returnPct)||0, te=Number(c.test&&c.test.returnPct)||0;
         var pos=c.pos==='below'?'↓':(c.pos==='above'?'↑':'·');
@@ -72072,7 +72078,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     }
     return '<div class="dvlCpBt1124PaWrap">'
       +'<div class="dvlCpBt1124PaTitle">📊 Backtest Volume Profile — '+(Number(g.combosTested)||0).toLocaleString('pt-BR')+' combinações · long e short cada um com $1000 · ranqueado pelo TESTE (fora da amostra)</div>'
-      +'<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">Reconstrói o Volume Profile da plataforma (POC/VAH/VAL) em cada sinal e mede quão perto o spike pós pré-volume-baixo entrou de cada linha. Varre linha (VAL/POC/VAH) × distância (ATR) × lado da linha × janela do perfil × alvo, pra cada direção. A tese: spike perto do VAL → movimento pra cima. Cada lado acha o combo mais lucrativo fora da amostra.</div>'
+      +'<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">Reconstrói o Volume Profile da plataforma (POC/VAH/VAL) em cada sinal e mede quão perto o spike pós pré-volume-baixo entrou de cada linha. Varre linha (VAL/POC/VAH) × distância (ATR) × lado da linha × janela do perfil × alvo, pra cada direção. <b>Critério rígido:</b> um combo só é "seguro" se for VERDE no TREINO <b>E</b> no TESTE, e o ranking é pelo <b>pior dos dois</b> — assim um combo com treino vermelho e teste verde (sorte de teste) NÃO passa. Cada lado acha o combo mais confiável fora da amostra.</div>'
       + sideBlock(g.long, '▲ Melhor combo pra LONG', '#10df77')
       + sideBlock(g.short, '▼ Melhor combo pra SHORT', '#ff5966')
     +'</div>';

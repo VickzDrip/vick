@@ -154,10 +154,14 @@ function vpGridSearch(samples, opts) {
     }
     const te = prepTest.filter(p => inFilter(p, win, line, prox, pos)).map(p => p.s);
     const teR = pumpBacktest.run(te, forced, Object.assign({ slAtr, tpAtr: best.tp, side }, exitBase));
+    /* A combo só "generaliza" se for VERDE no treino E no teste (com trades
+       suficientes no teste). Treino vermelho + teste verde é sorte de teste,
+       não edge — é o falso-positivo que enganava antes. */
     return {
       side, line, vpWin: win, proxAtr: prox, pos, tpAtr: best.tp,
       train: sum(best.r), test: sum(teR), trainN: tr.length, testN: te.length,
-      generalizes: teR.trades >= 5 && teR.returnPct > 0
+      robust: Math.min(best.r.returnPct, teR.returnPct),   // pior dos dois lados
+      generalizes: teR.trades >= 5 && teR.returnPct > 0 && best.r.returnPct > 0
     };
   }
 
@@ -167,9 +171,12 @@ function vpGridSearch(samples, opts) {
       const c = evalCombo(side, win, line, prox, pos);
       if (c) combos.push(c);
     }
-    const scored = combos.slice().sort((a, b) => b.test.returnPct - a.test.returnPct);
-    const withTest = scored.filter(c => c.test.trades >= 5);
-    const best = withTest[0] || combos.slice().sort((a, b) => b.train.returnPct - a.train.returnPct)[0] || null;
+    /* Ranqueia pelo PIOR dos dois (treino vs teste) — o critério mais
+       conservador: o vencedor é o combo cujo lado mais fraco é o mais forte.
+       "best" só sai entre os que generalizam (verde nos dois); se nenhum
+       generaliza, best = null (nada confiável nesse lado). */
+    const scored = combos.slice().sort((a, b) => b.robust - a.robust);
+    const best = scored.filter(c => c.generalizes)[0] || null;
     return { best, top: scored.slice(0, 12), combos: combos.length };
   }
 
