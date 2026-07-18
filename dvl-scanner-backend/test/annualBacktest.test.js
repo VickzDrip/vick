@@ -78,10 +78,15 @@ const fetch15m = (sym) => Promise.resolve(makeSeries(1200, sym.length));
   ok(g && g.combosTested > 50000, "rsi grid tests 50k+ combos of RSI + pré-volume (" + (g && g.combosTested) + ")");
   ok(g && g.grids && Array.isArray(g.grids.push) && Array.isArray(g.grids.volMaLen) && Array.isArray(g.grids.volSpikeAt),
      "grid sweeps push + volMaLen + volSpikeAt (todos os inputs), not just rsiLen/zone");
-  const lb = g && g.long && g.long.best;
-  ok(lb && ["rsiLen", "push", "volMaLen", "volSpikeAt", "lowerZone", "tpAtr"].every(k => (k in lb)),
-     "best long combo carries EVERY oscillator input");
   ok(g && g.long && Array.isArray(g.long.top) && g.long.top.length >= 1, "grid returns a ranked top list");
+  ok(g && g.long.top.every(c => ("robust" in c) && c.robust <= Math.min(c.train.returnPct, c.test.returnPct) + 1e-9),
+     "each rsi combo carries robust = min(train, test)");
+  // STRICT: best (if any) is green in BOTH train and test
+  const lb = g && g.long && g.long.best;
+  ok(!lb || (lb.train.returnPct > 0 && lb.test.returnPct > 0 && lb.test.trades >= 5),
+     "best long rsi combo (if any) is green in train AND test");
+  ok(!lb || ["rsiLen", "push", "volMaLen", "volSpikeAt", "lowerZone", "tpAtr"].every(k => (k in lb)),
+     "best long combo carries EVERY oscillator input");
 
   // Volume Profile backtest (single asset): faithful VP + proximity sweep
   const vpMod = require("../src/vpBacktest");
