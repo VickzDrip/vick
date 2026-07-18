@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.172";
+const DVL_APP_VERSION = "Beta 1.173";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.173", note: "CONSERTA o backtest travando no 5m e não rodando em 2 anos. Causa raiz: a montagem dos sinais refazia a conta em cima de TODO o histórico a cada vela (O(n²)) — no 5m/2 anos (100 mil+ velas) isso levava mais de 3 MINUTOS, então o poll do app desistia e dava 'erro'. Agora usa uma janela fixa de 500 velas (mais que suficiente pras médias), o que deixou O(n): o RSI 5m/2anos caiu de ~211s pra ~33s e o VP pra ~1,5s. Além disso: (1) cada teste passou a usar no máximo os 1500 sinais mais recentes (o card avisa quando corta), pra o tempo ser previsível em qualquer TF; (2) a busca de candles ganhou timeout de 15s por página, pra uma página travada não pendurar o run de 2 anos pra sempre; (3) o app não desiste mais no primeiro erro de rede — tenta de novo várias vezes antes de mostrar erro. Backend + frontend." },
   { version: "Beta 1.172", note: "PERFORMANCE do backtest: agora quando você roda um grid (VP ou RSI Exaustão), ele PULA os diagnósticos caros que você nem estava olhando naquele momento (3× o otimizador de 640 combos, calibração, mineração e o RSI-confirm) — esse era o maior peso. Além disso, no BTC (1 ativo) a conta base deixou de ser calculada DUAS vezes (era per-ativo + agregado idênticos), e cada sinal só monta a janela de velas que aquele teste precisa (VP não carrega mais a janela do RSI e vice-versa). No grid de RSI, os combos com push=0 (que independem do volume) deixaram de ser recalculados 30× à toa. Resultado: bem mais rápido, mesmo resultado." },
   { version: "Beta 1.171", note: "Novo seletor de TIPO de teste no card do backtest: '📊 Volume Profile' ou '📈 RSI Exaustão'. O RSI Exaustão testa pré-volume baixo + o SEU oscilador (comprimento × push × spike × médVol × zonas × alvo), SEM Volume Profile — é a versão mais portável pro MT5, e serve pra ver se o seu RSI segura sozinho. Aplicei o MESMO critério anti-sorte do VP também no RSI: só conta como 'seguro' se for VERDE no treino E no teste, ranqueado pelo pior dos dois. Continua com os chips de TF (5m/15m/30m/1h) e Período (1/2 anos). Testes separados, não misturam." },
   { version: "Beta 1.170", note: "Backtest de Volume Profile agora aceita 2 ANOS (a pedido): novo seletor de Período (1 ano / 2 anos) abaixo dos chips de TF. 2 anos = mais sinais = teste mais robusto. O limite do backend subiu pra 760 dias. Obs.: no 5m, 2 anos pode ficar um pouco abaixo do período cheio por limite de dados/velas, mas nos outros TFs (15m/30m/1h) pega os 2 anos completos." },
@@ -72099,7 +72100,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       +'</div>';
     }
     return '<div class="dvlCpBt1124PaWrap">'
-      +'<div class="dvlCpBt1124PaTitle">📊 Backtest Volume Profile — '+(Number(g.combosTested)||0).toLocaleString('pt-BR')+' combinações · long e short cada um com $1000 · ranqueado pelo TESTE (fora da amostra)</div>'
+      +'<div class="dvlCpBt1124PaTitle">📊 Backtest Volume Profile — '+(Number(g.combosTested)||0).toLocaleString('pt-BR')+' combinações · long e short cada um com $1000 · ranqueado pelo TESTE (fora da amostra)'+((Number(g.sampleTotal)||0)>(Number(g.withVp)||0)?(' · usando os '+(Number(g.withVp)||0)+' sinais mais recentes de '+(Number(g.sampleTotal)||0)):'')+'</div>'
       +'<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">Reconstrói o Volume Profile da plataforma (POC/VAH/VAL) em cada sinal e mede quão perto o spike pós pré-volume-baixo entrou de cada linha. Varre linha (VAL/POC/VAH) × distância (ATR) × lado da linha × janela do perfil × alvo, pra cada direção. <b>Critério rígido:</b> um combo só é "seguro" se for VERDE no TREINO <b>E</b> no TESTE, e o ranking é pelo <b>pior dos dois</b> — assim um combo com treino vermelho e teste verde (sorte de teste) NÃO passa. Cada lado acha o combo mais confiável fora da amostra.</div>'
       + sideBlock(g.long, '▲ Melhor combo pra LONG', '#10df77')
       + sideBlock(g.short, '▼ Melhor combo pra SHORT', '#ff5966')
@@ -72141,7 +72142,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       +'</div>';
     }
     return '<div class="dvlCpBt1124PaWrap">'
-      +'<div class="dvlCpBt1124PaTitle">📈 Backtest RSI Exaustão — '+(Number(g.combosTested)||0).toLocaleString('pt-BR')+' combinações · pré-volume + seu oscilador · long e short cada um $1000</div>'
+      +'<div class="dvlCpBt1124PaTitle">📈 Backtest RSI Exaustão — '+(Number(g.combosTested)||0).toLocaleString('pt-BR')+' combinações · pré-volume + seu oscilador · long e short cada um $1000'+((Number(g.sampleTotal)||0)>(Number(g.withExr)||0)?(' · usando os '+(Number(g.withExr)||0)+' sinais mais recentes de '+(Number(g.sampleTotal)||0)):'')+'</div>'
       +'<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">Pré-volume baixo + o SEU Exhaustion RSI (comprimento × push × spike de volume × média de volume × zonas × alvo), SEM Volume Profile. Regra: RSI sobrevendido → LONG, sobrecomprado → SHORT. <b>Mesmo critério rígido:</b> só é "seguro" se for VERDE no TREINO E no TESTE (ranqueado pelo pior dos dois). É a versão mais portável pro MT5.</div>'
       + sideBlock(g.long, '▲ Melhor RSI pra LONG', '#10df77')
       + sideBlock(g.short, '▼ Melhor RSI pra SHORT', '#ff5966')
@@ -72261,18 +72262,28 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   function pollAnnual(){
     var a=annualState();
     var qs=a.query?("?"+a.query):"";
+    /* Uma piscada de rede NÃO deve matar um backtest longo (2 anos/5m pode levar
+       ~1 min buscando candles + varrendo). Só desiste após várias falhas
+       seguidas; qualquer resposta boa zera o contador. */
     fetch(annualApi("/api/dvl/scanner/pump-backtest-annual"+qs),{cache:"no-store"})
       .then(function(r){ return r.json(); })
       .then(function(j){
-        if(!j){ a.status='error'; a.err='sem resposta'; refreshCard(); return; }
+        if(!j){ throw new Error('sem resposta'); }
+        a._fails=0;
         if(j.error){ a.status='error'; a.err=String(j.error); refreshCard(); return; }
         if(j.ready){ a.status='ready'; a.data=j; refreshCard(); return; }
         /* ainda rodando (started/running) — segue poleando */
-        a.status='running'; a.pct=Math.min(95,(Number(a.pct)||15)+7);
+        a.status='running'; a.pct=Math.min(95,(Number(a.pct)||15)+5);
         refreshCard();
         a._t=setTimeout(pollAnnual, 3500);
       })
-      .catch(function(){ a.status='error'; a.err='falha de rede'; refreshCard(); });
+      .catch(function(){
+        a._fails=(Number(a._fails)||0)+1;
+        if(a._fails>=6){ a.status='error'; a.err='falha de rede (sem resposta após várias tentativas)'; refreshCard(); return; }
+        /* mantém como "rodando" e tenta de novo — não trava no primeiro erro */
+        a.status='running'; refreshCard();
+        a._t=setTimeout(pollAnnual, 4000);
+      });
   }
   function startAnnual(query){
     var a=annualState();
@@ -72281,7 +72292,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     /* Se trocou o alvo (5 ativos ↔ grid de RSI), reinicia; senão reaproveita. */
     if(a.query!==query){ a.query=query; a.data=null; a.status='idle'; }
     if(a.status==='ready'&&a.data){ refreshCard(); return; } /* já tem resultado */
-    a.status='running'; a.pct=15; a.err='';
+    a.status='running'; a.pct=15; a.err=''; a._fails=0;
     refreshCard();
     if(a._t) clearTimeout(a._t);
     pollAnnual();

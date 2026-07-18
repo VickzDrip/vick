@@ -105,9 +105,15 @@ function vpGridSearch(samples, opts) {
   opts = opts || {};
   const exitBase = { costFrac: opts.costFrac, account0: opts.account0 || 1000, riskPct: opts.riskPct || 0.01, minConv: 0 };
   const slAtr = opts.slAtr || 1.2;
-  const withVp = (Array.isArray(samples) ? samples : []).filter(s =>
+  const withVpAll = (Array.isArray(samples) ? samples : []).filter(s =>
     s && Array.isArray(s.vpBars) && s.vpBars.length >= 30 && Number(s.entry) > 0 && Number(s.atr) > 0);
-  if (withVp.length < 20) return { ready: false, withVp: withVp.length, need: 20 };
+  if (withVpAll.length < 20) return { ready: false, withVp: withVpAll.length, need: 20 };
+  /* Bound cost: cap to the most RECENT maxSamples (default 1500) so a 5m/2yr run
+     (milhares de sinais) não demora minutos. TFs com menos sinais ficam abaixo do
+     teto → sem mudança. */
+  const MAX = Math.max(200, opts.maxSamples || 1500);
+  const withVp = withVpAll.length > MAX ? withVpAll.slice(-MAX) : withVpAll;
+  const sampleTotal = withVpAll.length;
   const cut = Math.max(1, Math.floor(withVp.length * (opts.trainFrac || 0.7)));
 
   const winGrid  = opts.winGrid  || [40, 60, 80, 120, 160, 200];   // VP lookback (candles)
@@ -182,7 +188,7 @@ function vpGridSearch(samples, opts) {
 
   const nCombos = winGrid.length * lineGrid.length * proxGrid.length * posGrid.length;
   return {
-    ready: true, withVp: withVp.length, trainN: cut, testN: withVp.length - cut, slAtr, rows, vaPct,
+    ready: true, withVp: withVp.length, sampleTotal, trainN: cut, testN: withVp.length - cut, slAtr, rows, vaPct,
     combosTested: nCombos * 2,   // long + short
     grids: { win: winGrid, line: lineGrid, prox: proxGrid, pos: posGrid, tp: tpGrid },
     long: searchSide("long"), short: searchSide("short")

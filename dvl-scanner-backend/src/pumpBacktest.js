@@ -608,8 +608,15 @@ function rsiGridSearch(samples, opts) {
   opts = opts || {};
   const exitBase = { costFrac: opts.costFrac, account0: opts.account0 || 1000, riskPct: opts.riskPct || 0.01, minConv: 0 };
   const slAtr = opts.slAtr || 1.2;
-  const withBars = (Array.isArray(samples) ? samples : []).filter(s => s && Array.isArray(s.exrBars) && s.exrBars.length >= 8);
-  if (withBars.length < 20) return { ready: false, withExr: withBars.length, need: 20 };
+  const withBarsAll = (Array.isArray(samples) ? samples : []).filter(s => s && Array.isArray(s.exrBars) && s.exrBars.length >= 8);
+  if (withBarsAll.length < 20) return { ready: false, withExr: withBarsAll.length, need: 20 };
+  /* Bound the sweep cost: with 60k combos, time scales with sample count, so a
+     5m/2-year run (thousands of signals) would take minutes. Cap to the most
+     RECENT maxSamples (default 1500) — plenty for statistics, and keeps every
+     TF fast. Fewer-signal TFs (15m/30m/1h) are under the cap → unchanged. */
+  const MAX = Math.max(200, opts.maxSamples || 1500);
+  const withBars = withBarsAll.length > MAX ? withBarsAll.slice(-MAX) : withBarsAll;
+  const sampleTotal = withBarsAll.length;
   const cut = Math.max(1, Math.floor(withBars.length * (opts.trainFrac || 0.7)));
 
   /* MASSIVE sweep (1 ativo/1 ano): 60k+ full configs of RSI + pré-volume.
@@ -691,7 +698,7 @@ function rsiGridSearch(samples, opts) {
 
   const nCombosSide = rsiLenGrid.length * volCombos.length * pushGrid.length;
   return {
-    ready: true, withExr: withBars.length, trainN: cut, testN: withBars.length - cut, slAtr,
+    ready: true, withExr: withBars.length, sampleTotal, trainN: cut, testN: withBars.length - cut, slAtr,
     combosTested: nCombosSide * (lowerGrid.length + upperGrid.length),
     grids: { rsiLen: rsiLenGrid, push: pushGrid, volMaLen: volMaGrid, volSpikeAt: volSpikeGrid, lower: lowerGrid, upper: upperGrid, tp: tpGrid },
     long: searchSide("long", lowerGrid), short: searchSide("short", upperGrid)
