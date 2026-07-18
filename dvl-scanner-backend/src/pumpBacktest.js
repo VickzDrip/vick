@@ -667,19 +667,22 @@ function rsiGridSearch(samples, opts) {
       side, rsiLen: rl, push, volMaLen: vc.vm, volSpikeAt: vc.vs, tpAtr: best.tp,
       lowerZone: side === "long" ? thr : null, upperZone: side === "short" ? thr : null,
       train: sum(best.r), test: sum(te), trainN: trSet.length, testN: teSet.length,
-      generalizes: te.trades >= 5 && te.returnPct > 0
+      robust: Math.min(best.r.returnPct, te.returnPct),   // pior dos dois (treino vs teste)
+      generalizes: te.trades >= 5 && te.returnPct > 0 && best.r.returnPct > 0
     };
   }
 
+  /* Critério anti-sorte (igual ao VP): ranqueia pelo PIOR dos dois (treino vs
+     teste) e só elege best entre os que são VERDES nos dois. Se nenhum passa,
+     best = null (nada confiável nesse lado). */
   function searchSide(side, thrGrid) {
     const combos = [];
     for (const rl of rsiLenGrid) for (const vc of volCombos) for (const push of pushGrid) for (const thr of thrGrid) {
       const c = evalCombo(side, rl, vc, push, thr);
       if (c) combos.push(c);
     }
-    const scored = combos.slice().sort((a, b) => b.test.returnPct - a.test.returnPct);
-    const withTest = scored.filter(c => c.test.trades >= 5);
-    const best = withTest[0] || combos.slice().sort((a, b) => b.train.returnPct - a.train.returnPct)[0] || null;
+    const scored = combos.slice().sort((a, b) => b.robust - a.robust);
+    const best = scored.filter(c => c.generalizes)[0] || null;
     return { best, top: scored.slice(0, 15), combos: combos.length };
   }
 
