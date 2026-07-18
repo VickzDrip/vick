@@ -41,16 +41,23 @@ function buildSamples(base, series, engine, opts, want) {
   if (Array.isArray(series)) for (const s of series) sByTime.set(Number(s.time), s);
   const upperZone = opts.upperZone, lowerZone = opts.lowerZone;
   const out = [];
+  /* Bounded lookback window: closedIgnition/computeSignal/computeAtr only read
+     the END of the array back a small amount (vol/price MAs ≤ 50, ATR 14, the
+     dead-base count). Slicing the FULL history each bar made buildSamples O(N²)
+     — deadly at 5m over 1–2 years (100k+ candles → minutes). Windowing to the
+     last W bars makes it O(N·W) = O(N) with identical results (W ≫ any lookback). */
+  const W = 500;
   /* j = last CLOSED bar; need HORIZON bars AFTER it to resolve. */
   for (let j = 26; j <= base.length - 2 - HORIZON; j++) {
-    const ig = M.closedIgnition(closes.slice(0, j + 2), vols.slice(0, j + 2), engine);
+    const w2 = Math.max(0, j + 2 - W), w1 = Math.max(0, j + 1 - W);
+    const ig = M.closedIgnition(closes.slice(w2, j + 2), vols.slice(w2, j + 2), engine);
     if (!ig.isIgnition) continue;
     const price = Number(base[j].close);
     if (!(price > 0)) continue;
-    const atr = M.computeAtr(ohlc.slice(0, j + 1), 14);
+    const atr = M.computeAtr(ohlc.slice(w1, j + 1), 14);
     if (!(atr > 0)) continue;
     let sig = null;
-    try { sig = M.computeSignal(closes.slice(0, j + 1), vols.slice(0, j + 1), engine); } catch (_) { sig = null; }
+    try { sig = M.computeSignal(closes.slice(w1, j + 1), vols.slice(w1, j + 1), engine); } catch (_) { sig = null; }
     const f = [num(ig.volBelowMaBars), num(sig && sig.maFlatness1), num(sig && sig.spike20),
                num(ig.crossStrength), num(sig && sig.spikePrevVolRatio)];
     /* forward MFE + ATR-normalised price path over the next HORIZON bars */

@@ -14,7 +14,12 @@ const TF_MS = {
 function tfToMs(tf) { return TF_MS[tf] || 900000; }
 
 async function getJSON(url, opts) {
-  const res = await fetch(url, Object.assign({ cache: "no-store" }, opts || {}));
+  opts = opts || {};
+  /* Hard per-request timeout so a hung page can't stall a long paginated fetch
+     (e.g. the 2-year backtest history) forever. Default 15s, overridable. */
+  const timeoutMs = Number(opts.timeoutMs) || 15000;
+  const signal = opts.signal || (typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined);
+  const res = await fetch(url, Object.assign({ cache: "no-store" }, opts, signal ? { signal } : {}));
   if (!res.ok) throw new Error(url.split("?")[0] + " -> HTTP " + res.status);
   return res.json();
 }
