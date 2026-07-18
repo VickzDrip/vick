@@ -26,7 +26,13 @@ function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
    {time,open,high,low,close,volume}). Same shape the live model stores:
    { f, up, down, entry, atr, path, exrValue, exrPush, exrCloses }. Pure — no
    global state. `series` is the precomputed EXR series aligned to `base`. */
-function buildSamples(base, series, engine, opts) {
+function buildSamples(base, series, engine, opts, want) {
+  /* `want` gates the heavy per-sample candle windows so a run only builds what
+     its backtest needs: { exr } → 40-bar window for the RSI grid, { vp } →
+     200-bar window for the Volume Profile grid. Default (undefined) builds both
+     for backward-compat (tests, plain callers). */
+  const buildExr = !want || want.exr !== false;
+  const buildVp = !want || want.vp !== false;
   if (!Array.isArray(base) || base.length < 30 + HORIZON) return [];
   const closes = base.map(c => Number(c.close));
   const vols = base.map(c => Number(c.volume));
@@ -69,13 +75,14 @@ function buildSamples(base, series, engine, opts) {
     /* Window of 15m candles ending at the signal — lets the RSI grid re-sweep
        EVERY oscillator input (comprimento, push, spike de volume, média de
        volume, zonas) without re-fetching. */
-    sample.exrBars = base.slice(Math.max(0, j - 39), j + 1).map(c => ({
+    if (buildExr) sample.exrBars = base.slice(Math.max(0, j - 39), j + 1).map(c => ({
       open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume)
     }));
     /* Deeper window (up to 200 candles) ending at the signal — lets the Volume
        Profile backtest rebuild POC/VAH/VAL over several lookbacks and measure
-       how close the entry sits to each line. */
-    sample.vpBars = base.slice(Math.max(0, j - 199), j + 1).map(c => ({
+       how close the entry sits to each line. Only built for VP runs (it's the
+       biggest per-sample allocation). */
+    if (buildVp) sample.vpBars = base.slice(Math.max(0, j - 199), j + 1).map(c => ({
       open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume)
     }));
     out.push(sample);
@@ -110,7 +117,7 @@ async function run(symbols, days, cfg, fetch15m, tfMin) {
     if (!Array.isArray(base) || base.length < 30 + HORIZON) { assets.push({ sym, bars: base ? base.length : 0, samples: [] }); continue; }
     let series = null;
     try { series = exhaustionRsi.computeSeries(base, null, opts); } catch (_) { series = null; }
-    const samples = buildSamples(base, series || [], engine, opts);
+    const samples = buildSamples(base, series || [], engine, opts, { exr: !!cfg.rsiGrid, vp: !!cfg.vpBacktest });
     assets.push({ sym, bars: base.length, fromMs: Number(base[0].time) || 0, toMs: Number(base[base.length - 1].time) || 0, samples });
     all = all.concat(samples);
   }
@@ -158,39 +165,46 @@ async function run(symbols, days, cfg, fetch15m, tfMin) {
     };
   }
 
-  /* PER-ASSET — each with its own $1000, long/short split, várias saídas. */
+  const wantGrid = !!cfg.rsiGrid;
+  /* When a specific grid (VP or RSI) is requested, that grid IS the deliverable.
+     Skip the expensive generic diagnostics (3× the 640-combo optimizer,
+     calibração, mineração, RSI-confirm) — they're secondary cards the user isn't
+     looking at during a grid run. This is the single biggest speed-up. */
+  const lean = wantGrid || !!cfg.vpBacktest;
+
+  /* PER-ASSET — each with its own $1000, long/short split, várias saídas. Keep
+     the eval object so the single-asset aggregate can REUSE it (no double work). */
   const perAsset = assets.map(a => {
     const ev = evalDataset(a.samples);
     const row = { sym: a.sym, bars: a.bars, signals: a.samples.length, fromMs: a.fromMs || 0, toMs: a.toMs || 0, account0: base.account0 };
     if (ev) Object.assign(row, ev);
-    return row;
+    return { row, ev };
   });
+  const perAssetRows = perAsset.map(p => p.row);
 
   if (all.length < 20) {
-    return { ok: true, ready: false, reason: "poucos sinais no período", samples: all.length, perAsset, symbols, days, tfMin: baseTfMin, account0: base.account0 };
+    return { ok: true, ready: false, reason: "poucos sinais no período", samples: all.length, perAsset: perAssetRows, symbols, days, tfMin: baseTfMin, account0: base.account0 };
   }
 
-  /* AGGREGATE (todos juntos, $1000 na pool) — visão geral + diagnósticos caros
-     só aqui (otimizador 640 combos, calibração, mineração, RSI). */
-  const agg = evalDataset(all);
-  /* MASSIVE RSI grid — pedido pra 1 ativo/1 ano: a "caralhada de combinação"
-     de RSI, long e short cada um com $1000. Roda quando é 1 ativo (ou a pedido). */
-  const wantGrid = !!cfg.rsiGrid;
+  /* AGGREGATE (todos juntos, $1000 na pool). For a SINGLE asset, `all` IS that
+     asset's samples, so reuse its already-computed eval instead of redoing the
+     whole mode/long/short evaluation a second time. */
+  const agg = (symbols.length === 1 && perAsset[0] && perAsset[0].ev) ? perAsset[0].ev : evalDataset(all);
+  /* RSI grid (pré-volume + oscilador) e VP grid — cada um a pedido, separados. */
   const rsiGrid = wantGrid ? pumpBacktest.rsiGridSearch(all, { costFrac: base.costFrac, account0: base.account0, riskPct: base.riskPct }) : null;
-  /* Volume-Profile proximity backtest (a pedido, SEPARADO do grid de RSI). */
   const vpGrid = cfg.vpBacktest ? vpBacktest.vpGridSearch(all, { costFrac: base.costFrac, account0: base.account0, riskPct: base.riskPct }) : null;
   return {
     ok: true, ready: true, annual: true, perAssetAccounts: true, horizon: HORIZON, symbols, days, tfMin: baseTfMin, rsiGrid, vpGrid,
-    samples: all.length, perAsset, account0: base.account0,
+    samples: all.length, perAsset: perAssetRows, account0: base.account0,
     params: { account0: base.account0, riskPct: base.riskPct, slAtr: agg.params.slAtr, minConv: agg.params.minConv, tpAtr: agg.params.tpAtr, trailAtr: agg.params.trailAtr, adaptive: agg.params.adaptive, mode: agg.bestMode, modeLabel: agg.modeLabel, costRoundTripPct: base.costFrac * 100 },
     modes: agg.modes, bestMode: agg.bestMode,
     best: agg.best, long: agg.long.result, short: agg.short.result,
-    longSide: { result: agg.long.result, params: agg.long.params, optimize: pumpBacktest.optimize(all, predict, Object.assign({}, base, { side: "long" })) },
-    shortSide: { result: agg.short.result, params: agg.short.params, optimize: pumpBacktest.optimize(all, predict, Object.assign({}, base, { side: "short" })) },
-    optimized: pumpBacktest.optimize(all, predict, base),
-    calibration: pumpBacktest.calibrate(all, predict),
-    conditions: pumpBacktest.mineConditions(all, predict, FEATURES, base),
-    rsiConfirm: pumpBacktest.sweepRsiConfirm(all, predict, base),
+    longSide: { result: agg.long.result, params: agg.long.params, optimize: lean ? null : pumpBacktest.optimize(all, predict, Object.assign({}, base, { side: "long" })) },
+    shortSide: { result: agg.short.result, params: agg.short.params, optimize: lean ? null : pumpBacktest.optimize(all, predict, Object.assign({}, base, { side: "short" })) },
+    optimized: lean ? null : pumpBacktest.optimize(all, predict, base),
+    calibration: lean ? null : pumpBacktest.calibrate(all, predict),
+    conditions: lean ? null : pumpBacktest.mineConditions(all, predict, FEATURES, base),
+    rsiConfirm: lean ? null : pumpBacktest.sweepRsiConfirm(all, predict, base),
     grossReturnPct: agg.grossReturnPct
   };
 }

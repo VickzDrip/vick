@@ -678,6 +678,9 @@ function rsiGridSearch(samples, opts) {
   function searchSide(side, thrGrid) {
     const combos = [];
     for (const rl of rsiLenGrid) for (const vc of volCombos) for (const push of pushGrid) for (const thr of thrGrid) {
+      /* push=0 → value = baseRsi, independe do volCombo: avalia só uma vez
+         (evita 29/30 combos idênticos e o trabalho repetido). */
+      if (push === 0 && vc !== volCombos[0]) continue;
       const c = evalCombo(side, rl, vc, push, thr);
       if (c) combos.push(c);
     }

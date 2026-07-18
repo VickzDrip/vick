@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.171";
+const DVL_APP_VERSION = "Beta 1.172";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.172", note: "PERFORMANCE do backtest: agora quando você roda um grid (VP ou RSI Exaustão), ele PULA os diagnósticos caros que você nem estava olhando naquele momento (3× o otimizador de 640 combos, calibração, mineração e o RSI-confirm) — esse era o maior peso. Além disso, no BTC (1 ativo) a conta base deixou de ser calculada DUAS vezes (era per-ativo + agregado idênticos), e cada sinal só monta a janela de velas que aquele teste precisa (VP não carrega mais a janela do RSI e vice-versa). No grid de RSI, os combos com push=0 (que independem do volume) deixaram de ser recalculados 30× à toa. Resultado: bem mais rápido, mesmo resultado." },
   { version: "Beta 1.171", note: "Novo seletor de TIPO de teste no card do backtest: '📊 Volume Profile' ou '📈 RSI Exaustão'. O RSI Exaustão testa pré-volume baixo + o SEU oscilador (comprimento × push × spike × médVol × zonas × alvo), SEM Volume Profile — é a versão mais portável pro MT5, e serve pra ver se o seu RSI segura sozinho. Aplicei o MESMO critério anti-sorte do VP também no RSI: só conta como 'seguro' se for VERDE no treino E no teste, ranqueado pelo pior dos dois. Continua com os chips de TF (5m/15m/30m/1h) e Período (1/2 anos). Testes separados, não misturam." },
   { version: "Beta 1.170", note: "Backtest de Volume Profile agora aceita 2 ANOS (a pedido): novo seletor de Período (1 ano / 2 anos) abaixo dos chips de TF. 2 anos = mais sinais = teste mais robusto. O limite do backend subiu pra 760 dias. Obs.: no 5m, 2 anos pode ficar um pouco abaixo do período cheio por limite de dados/velas, mas nos outros TFs (15m/30m/1h) pega os 2 anos completos." },
   { version: "Beta 1.169", note: "Backtest de Volume Profile com critério ANTI-SORTE: antes eu ranqueava os combos só pelo resultado do TESTE, então o vencedor às vezes tinha treino vermelho e teste verde — isso é sorte de teste (escolher o melhor de 800+ combos no teste), não edge de verdade. Agora um combo só conta como 'seguro' se for VERDE no TREINO **E** no TESTE, e o ranking é pelo PIOR dos dois (o mais conservador). Se nenhum combo passa nesse filtro, o lado mostra em vermelho 'NADA confiável' em vez de te vender um falso positivo. Assim o card para de enganar. Só afeta o backtest de VP." },
