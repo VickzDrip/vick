@@ -16,6 +16,7 @@ const exhaustionRsi = require("./exhaustionRsi");
 const pumpModel = require("./pumpModel");
 const pumpBacktest = require("./pumpBacktest");
 const vpBacktest = require("./vpBacktest");
+const comboBacktest = require("./comboBacktest");
 
 const HORIZON = pumpModel.HORIZON || 20;
 const FEATURES = pumpModel.FEATURES;
@@ -124,7 +125,7 @@ async function run(symbols, days, cfg, fetch15m, tfMin) {
     if (!Array.isArray(base) || base.length < 30 + HORIZON) { assets.push({ sym, bars: base ? base.length : 0, samples: [] }); continue; }
     let series = null;
     try { series = exhaustionRsi.computeSeries(base, null, opts); } catch (_) { series = null; }
-    const samples = buildSamples(base, series || [], engine, opts, { exr: !!cfg.rsiGrid, vp: !!cfg.vpBacktest });
+    const samples = buildSamples(base, series || [], engine, opts, { exr: !!cfg.rsiGrid || !!cfg.comboBacktest, vp: !!cfg.vpBacktest || !!cfg.comboBacktest });
     assets.push({ sym, bars: base.length, fromMs: Number(base[0].time) || 0, toMs: Number(base[base.length - 1].time) || 0, samples });
     all = all.concat(samples);
   }
@@ -173,11 +174,11 @@ async function run(symbols, days, cfg, fetch15m, tfMin) {
   }
 
   const wantGrid = !!cfg.rsiGrid;
-  /* When a specific grid (VP or RSI) is requested, that grid IS the deliverable.
+  /* When a specific grid (VP/RSI/Combo) is requested, that grid IS the deliverable.
      Skip the expensive generic diagnostics (3× the 640-combo optimizer,
      calibração, mineração, RSI-confirm) — they're secondary cards the user isn't
      looking at during a grid run. This is the single biggest speed-up. */
-  const lean = wantGrid || !!cfg.vpBacktest;
+  const lean = wantGrid || !!cfg.vpBacktest || !!cfg.comboBacktest;
 
   /* PER-ASSET — each with its own $1000, long/short split, várias saídas. Keep
      the eval object so the single-asset aggregate can REUSE it (no double work). */
@@ -200,8 +201,9 @@ async function run(symbols, days, cfg, fetch15m, tfMin) {
   /* RSI grid (pré-volume + oscilador) e VP grid — cada um a pedido, separados. */
   const rsiGrid = wantGrid ? pumpBacktest.rsiGridSearch(all, { costFrac: base.costFrac, account0: base.account0, riskPct: base.riskPct }) : null;
   const vpGrid = cfg.vpBacktest ? vpBacktest.vpGridSearch(all, { costFrac: base.costFrac, account0: base.account0, riskPct: base.riskPct }) : null;
+  const comboGrid = cfg.comboBacktest ? comboBacktest.comboGridSearch(all, { costFrac: base.costFrac, account0: base.account0, riskPct: base.riskPct }) : null;
   return {
-    ok: true, ready: true, annual: true, perAssetAccounts: true, horizon: HORIZON, symbols, days, tfMin: baseTfMin, rsiGrid, vpGrid,
+    ok: true, ready: true, annual: true, perAssetAccounts: true, horizon: HORIZON, symbols, days, tfMin: baseTfMin, rsiGrid, vpGrid, comboGrid,
     samples: all.length, perAsset: perAssetRows, account0: base.account0,
     params: { account0: base.account0, riskPct: base.riskPct, slAtr: agg.params.slAtr, minConv: agg.params.minConv, tpAtr: agg.params.tpAtr, trailAtr: agg.params.trailAtr, adaptive: agg.params.adaptive, mode: agg.bestMode, modeLabel: agg.modeLabel, costRoundTripPct: base.costFrac * 100 },
     modes: agg.modes, bestMode: agg.bestMode,

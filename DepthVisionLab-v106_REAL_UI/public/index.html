@@ -20434,7 +20434,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.173";
+const DVL_APP_VERSION = "Beta 1.174";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20464,6 +20464,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.174", note: "Novo 3º tipo de backtest: '🎯 Combinado' — junta os TRÊS ao mesmo tempo: gatilho pré-volume + RSI na zona + entrada perto de uma linha do Volume Profile (VAL/POC/VAH). Um sinal só conta quando as três coisas batem (confluência). Varre zona × linha × distância × janela × lado × alvo, long e short cada um $1000, com o mesmo critério anti-sorte (verde no treino E no teste) e mínimo de trades REFORÇADO — porque confluência deixa os sinais raros e amostra pequena engana. Roda no volume REAL do MEXC (não tick volume). É só escolher '🎯 Combinado' no seletor de tipo. Backend + frontend." },
   { version: "Beta 1.173", note: "CONSERTA o backtest travando no 5m e não rodando em 2 anos. Causa raiz: a montagem dos sinais refazia a conta em cima de TODO o histórico a cada vela (O(n²)) — no 5m/2 anos (100 mil+ velas) isso levava mais de 3 MINUTOS, então o poll do app desistia e dava 'erro'. Agora usa uma janela fixa de 500 velas (mais que suficiente pras médias), o que deixou O(n): o RSI 5m/2anos caiu de ~211s pra ~33s e o VP pra ~1,5s. Além disso: (1) cada teste passou a usar no máximo os 1500 sinais mais recentes (o card avisa quando corta), pra o tempo ser previsível em qualquer TF; (2) a busca de candles ganhou timeout de 15s por página, pra uma página travada não pendurar o run de 2 anos pra sempre; (3) o app não desiste mais no primeiro erro de rede — tenta de novo várias vezes antes de mostrar erro. Backend + frontend." },
   { version: "Beta 1.172", note: "PERFORMANCE do backtest: agora quando você roda um grid (VP ou RSI Exaustão), ele PULA os diagnósticos caros que você nem estava olhando naquele momento (3× o otimizador de 640 combos, calibração, mineração e o RSI-confirm) — esse era o maior peso. Além disso, no BTC (1 ativo) a conta base deixou de ser calculada DUAS vezes (era per-ativo + agregado idênticos), e cada sinal só monta a janela de velas que aquele teste precisa (VP não carrega mais a janela do RSI e vice-versa). No grid de RSI, os combos com push=0 (que independem do volume) deixaram de ser recalculados 30× à toa. Resultado: bem mais rápido, mesmo resultado." },
   { version: "Beta 1.171", note: "Novo seletor de TIPO de teste no card do backtest: '📊 Volume Profile' ou '📈 RSI Exaustão'. O RSI Exaustão testa pré-volume baixo + o SEU oscilador (comprimento × push × spike × médVol × zonas × alvo), SEM Volume Profile — é a versão mais portável pro MT5, e serve pra ver se o seu RSI segura sozinho. Aplicei o MESMO critério anti-sorte do VP também no RSI: só conta como 'seguro' se for VERDE no treino E no teste, ranqueado pelo pior dos dois. Continua com os chips de TF (5m/15m/30m/1h) e Período (1/2 anos). Testes separados, não misturam." },
@@ -71986,8 +71987,8 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   function gridTf(){ var a=annualState(); var t=Number(a.tf)||15; return [5,15,30,60].indexOf(t)>=0?t:15; }
   function gridYears(){ var a=annualState(); var y=Number(a.years)||1; return [1,2].indexOf(y)>=0?y:1; }
   function gridDays(){ return gridYears()*365; }
-  function gridType(){ var a=annualState(); return a.btype==='rsi'?'rsi':'vp'; }
-  function btQuery(){ return "symbols=BTCUSDT&tf="+gridTf()+"&days="+gridDays()+(gridType()==='rsi'?"&rsiGrid=1":"&vp=1"); }
+  function gridType(){ var a=annualState(); return (a.btype==='rsi'||a.btype==='combo')?a.btype:'vp'; }
+  function btQuery(){ var t=gridType(); var flag=t==='rsi'?"&rsiGrid=1":(t==='combo'?"&combo=1":"&vp=1"); return "symbols=BTCUSDT&tf="+gridTf()+"&days="+gridDays()+flag; }
   function yearsLabel(y){ return y+(y>1?' anos':' ano'); }
   function tfLabel(t){ return t>=60?(t/60)+'h':t+'m'; }
   function tfChipsHtml(){
@@ -72000,7 +72001,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       return '<button type="button" data-dvl-bt-grid-years="'+y+'" class="dvlCpBt1124TfChip'+(y===cy?' on':'')+'">'+yearsLabel(y)+'</button>';
     }).join('');
     var bt=gridType();
-    var btypes=[['vp','📊 Volume Profile'],['rsi','📈 RSI Exaustão']].map(function(o){
+    var btypes=[['vp','📊 Volume Profile'],['rsi','📈 RSI Exaustão'],['combo','🎯 Combinado']].map(function(o){
       return '<button type="button" data-dvl-bt-grid-type="'+o[0]+'" class="dvlCpBt1124TfChip'+(o[0]===bt?' on':'')+'">'+o[1]+'</button>';
     }).join('');
     return '<div class="dvlCpBt1124TfRow"><span class="dvlCpBt1124TfLbl">Teste:</span>'+btypes+'</div>'
@@ -72009,9 +72010,12 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   }
   function annualBtnHtml(){
     var a=annualState();
-    var lbl = gridType()==='rsi'
+    var _t=gridType();
+    var lbl = _t==='rsi'
       ? '📈 Backtest RSI Exaustão · BTC · '+yearsLabel(gridYears())+' '+tfLabel(gridTf())+' — pré-volume + seu RSI (long/short, $1000 cada)'
-      : '📊 Backtest Volume Profile · BTC · '+yearsLabel(gridYears())+' '+tfLabel(gridTf())+' — proximidade de VAL/POC/VAH (long/short, $1000 cada)';
+      : (_t==='combo'
+        ? '🎯 Backtest Combinado · BTC · '+yearsLabel(gridYears())+' '+tfLabel(gridTf())+' — pré-volume + RSI + VP juntos (long/short, $1000 cada)'
+        : '📊 Backtest Volume Profile · BTC · '+yearsLabel(gridYears())+' '+tfLabel(gridTf())+' — proximidade de VAL/POC/VAH (long/short, $1000 cada)');
     return '<div class="dvlCpBt1124AnnualBar">'
       +'<button type="button" data-dvl-bt-annual-grid="1" class="dvlCpBt1124AnnualBtn'+(a.mode?' on':'')+'" style="flex-basis:100%">'+lbl+'</button>'
       +(a.mode?'<button type="button" data-dvl-bt-annual-back="1" class="dvlCpBt1124AnnualBack">← ao vivo</button>':'')
@@ -72020,10 +72024,10 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   }
   function annualBannerHtml(s){
     var tf=tfLabel(Number(s.tfMin)||15);
-    var isRsi=!!s.rsiGrid && !s.vpGrid;
+    var nm = s.comboGrid ? '🎯 <b>Backtest Combinado · BTC · '+tf+'</b>' : (s.rsiGrid ? '📈 <b>Backtest RSI Exaustão · BTC · '+tf+'</b>' : '📊 <b>Backtest Volume Profile · BTC · '+tf+'</b>');
+    var sub = s.comboGrid ? 'Pré-volume + RSI + VP juntos no '+tf : (s.rsiGrid ? 'Pré-volume + seu Exhaustion RSI no '+tf+' base' : 'VP reconstruído no '+tf+' (POC/VAH/VAL iguais aos do gráfico)');
     return '<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">'
-      +(isRsi?'📈 <b>Backtest RSI Exaustão · BTC · '+tf+'</b>':'📊 <b>Backtest Volume Profile · BTC · '+tf+'</b>')+' — '+(Number(s.days)||365)+' dias de '+tf+' · '+(Number(s.samples)||0)+' sinais. '
-      +(isRsi?'Pré-volume + seu Exhaustion RSI no '+tf+' base':'VP reconstruído no '+tf+' (POC/VAH/VAL iguais aos do gráfico)')+'; gatilho e resultado 100% fiéis.'
+      +nm+' — '+(Number(s.days)||365)+' dias de '+tf+' · '+(Number(s.samples)||0)+' sinais. '+sub+'; gatilho e resultado 100% fiéis.'
     +'</div>';
   }
   /* Ganhos/perdas de CADA ativo (cada um com $1000), long e short separados,
@@ -72148,14 +72152,55 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       + sideBlock(g.short, '▼ Melhor RSI pra SHORT', '#ff5966')
     +'</div>';
   }
+  /* Backtest COMBINADO: pré-volume + RSI (zona) + VP (proximidade) juntos. */
+  function comboGridHtml(s){
+    var g=s&&s.comboGrid; if(!g) return '';
+    if(!g.ready){
+      return '<div class="dvlCpBt1124Opt"><div class="dvlCpBt1124OptHd">🎯 Backtest Combinado</div>'
+        +'<div class="dvlCpBt1124OptSub">Poucos sinais com RSI+VP pra varrer ('+(Number(g.usable)||0)+', precisa ~'+(Number(g.need)||30)+'). A confluência deixa os sinais raros.</div></div>';
+    }
+    function cfgTxt(c){
+      var z=c.side==='long'?('RSI ≤'+(Number(c.zone)||0)):('RSI ≥'+(Number(c.zone)||0));
+      return z+' · '+vpLineLabel(c.line)+' · dist ≤ '+(Number(c.proxAtr)||0).toFixed(2)+'× ATR · '+vpPosLabel(c.pos)+' · janela '+(Number(c.vpWin)||0)+' · alvo '+(Number(c.tpAtr)||0).toFixed(1)+'×';
+    }
+    function sideBlock(sd, label, cls){
+      sd=sd||{}; var b=sd.best, fallback=false;
+      if(!b && Array.isArray(sd.top) && sd.top.length){ b=sd.top[0]; fallback=true; }
+      if(!b) return '<div class="dvlCpBt1124PaCard"><div class="dvlCpBt1124PaHd"><b style="color:'+cls+'">'+label+'</b></div><div class="dvlCpBt1124PaSub">nenhuma combinação com trades suficientes</div></div>';
+      var trR=Number(b.train&&b.train.returnPct)||0, teR=Number(b.test&&b.test.returnPct)||0;
+      var teN=Number(b.test&&b.test.trades)||0, teW=Number(b.test&&b.test.winRate)||0;
+      var verd = (!sd.best) ? {t:'✗ NADA confiável — nenhum combo ficou verde no treino E no teste', c:'#ff5966'}
+               : (teN<8 ? {t:'teste pequeno — inconclusivo', c:'#ffd321'}
+               : {t:'✓ segura — VERDE no treino E no teste', c:'#10df77'});
+      var rows=(Array.isArray(sd.top)?sd.top:[]).slice(0,8).map(function(c){
+        var tr=Number(c.train&&c.train.returnPct)||0, te=Number(c.test&&c.test.returnPct)||0;
+        var pos=c.pos==='below'?'↓':(c.pos==='above'?'↑':'·');
+        return '<tr><td>'+(Number(c.zone)||0)+'</td><td>'+String(c.line||'').toUpperCase()+'</td><td>'+(Number(c.proxAtr)||0).toFixed(2)+'×</td><td>'+pos+'</td><td>'+(Number(c.vpWin)||0)+'</td><td>'+(Number(c.tpAtr)||0).toFixed(1)+'×</td>'
+          +'<td class="'+(tr>=0?'pos':'neg')+'">'+sign(tr)+'</td><td class="'+(te>=0?'pos':'neg')+'">'+sign(te)+'</td><td>'+(Number(c.test&&c.test.trades)||0)+'t</td></tr>';
+      }).join('');
+      return '<div class="dvlCpBt1124PaCard">'
+        +'<div class="dvlCpBt1124PaHd"><b style="color:'+cls+'">'+label+'</b><span>'+(Number(b.test&&b.test.trades)||0)+' trades no teste</span></div>'
+        +'<div class="dvlCpBt1124PaBig"><span class="'+(teR>=0?'pos':'neg')+'">'+fmtUsd(Number(b.test&&b.test.account)||1000)+'</span><small>de '+fmtUsd(1000)+' no TESTE · '+sign(teR)+' · '+teW.toFixed(0)+'% acerto</small></div>'
+        +'<div class="dvlCpBt1124PaSub">Melhor combo: <b>'+esc(cfgTxt(b))+'</b> · treino '+sign(trR)+'</div>'
+        +'<div class="dvlCpBt1124OptVerd" style="color:'+verd.c+';margin:4px 0 6px">'+verd.t+'</div>'
+        +(rows?('<div style="overflow-x:auto"><table class="dvlCpBt1124GridTbl"><thead><tr><th>zona</th><th>linha</th><th>dist</th><th>lado</th><th>janela</th><th>saída</th><th>treino</th><th>teste</th><th>n</th></tr></thead><tbody>'+rows+'</tbody></table></div>'):'')
+      +'</div>';
+    }
+    return '<div class="dvlCpBt1124PaWrap">'
+      +'<div class="dvlCpBt1124PaTitle">🎯 Backtest Combinado — '+(Number(g.combosTested)||0).toLocaleString('pt-BR')+' combinações · pré-volume + RSI + VP juntos · long e short cada um $1000'+((Number(g.sampleTotal)||0)>(Number(g.usable)||0)?(' · usando os '+(Number(g.usable)||0)+' sinais mais recentes de '+(Number(g.sampleTotal)||0)):'')+'</div>'
+      +'<div class="dvlCpBt1124Exit" style="background:rgba(120,200,255,.06);border-color:rgba(120,200,255,.22);color:#bcd8ff">Confluência dos TRÊS: ignição pré-volume + RSI na zona (sobrevendido→LONG / sobrecomprado→SHORT) + entrada PERTO de uma linha do Volume Profile. Varre zona × linha (VAL/POC/VAH) × distância × janela × lado × alvo. <b>Critério rígido + mínimo de trades reforçado</b> (a confluência deixa os sinais raros — cuidado com amostra pequena). Só é "seguro" se for VERDE no treino E no teste.</div>'
+      + sideBlock(g.long, '▲ Melhor combo pra LONG', '#10df77')
+      + sideBlock(g.short, '▼ Melhor combo pra SHORT', '#ff5966')
+    +'</div>';
+  }
   function bodyHtml(){
     var a=annualState();
     var s;
     if(a.mode){
       if(a.status==='running'){
         return {on:true, html: annualBtnHtml()
-          +'<h4><i class="dvlCpBt1124Dot"></i>Backtest '+(gridType()==='rsi'?'RSI Exaustão':'Volume Profile')+' · '+yearsLabel(gridYears())+' '+tfLabel(gridTf())+' · rodando…</h4>'
-          +'<p class="dvlCpBt1124Sub">Buscando ~'+yearsLabel(gridYears())+' de '+tfLabel(gridTf())+' do BTC e varrendo '+(gridType()==='rsi'?'as combinações do seu Exhaustion RSI (comprimento × push × spike × médVol × zonas × alvo)':'as combinações de proximidade do Volume Profile (POC/VAH/VAL)')+', long e short separados. Pode levar ~15–90s — pode sair da tela que ele continua.</p>'
+          +'<h4><i class="dvlCpBt1124Dot"></i>Backtest '+(gridType()==='rsi'?'RSI Exaustão':(gridType()==='combo'?'Combinado':'Volume Profile'))+' · '+yearsLabel(gridYears())+' '+tfLabel(gridTf())+' · rodando…</h4>'
+          +'<p class="dvlCpBt1124Sub">Buscando ~'+yearsLabel(gridYears())+' de '+tfLabel(gridTf())+' do BTC e varrendo '+(gridType()==='rsi'?'as combinações do seu Exhaustion RSI':(gridType()==='combo'?'a confluência RSI + Volume Profile (zona × linha × distância × janela × alvo)':'as combinações de proximidade do Volume Profile (POC/VAH/VAL)'))+', long e short separados. Pode levar ~15–90s — pode sair da tela que ele continua.</p>'
           +'<div class="dvlCpBt1124Bar"><i style="width:'+Math.max(8,Math.min(95,Number(a.pct)||20))+'%"></i></div>'};
       }
       if(a.status==='error'){
@@ -72211,7 +72256,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
     var modeLbl=esc(p.modeLabel||p.mode||'');
     return {on:true, html:''
       + annualBtnHtml()
-      +'<h4><i class="dvlCpBt1124Dot"></i>'+(s.annual?((s.rsiGrid&&!s.vpGrid?'RSI Exaustão':'Volume Profile')+' · BTC'):'Backtest financeiro')+' · '+tr+' trades</h4>'
+      +'<h4><i class="dvlCpBt1124Dot"></i>'+(s.annual?((s.comboGrid?'Combinado':(s.rsiGrid?'RSI Exaustão':'Volume Profile'))+' · BTC'):'Backtest financeiro')+' · '+tr+' trades</h4>'
       +'<p class="dvlCpBt1124Sub">Melhor modo: <b style="color:#10df77">'+modeLbl+'</b> — stop '+sl.toFixed(1)+'× ATR, arriscando '+risk.toFixed(0)+'% da conta por trade. Já com custos: ~'+costRt.toFixed(2)+'% por trade (taxa + slippage).</p>'
       +(s.preliminary?('<div class="dvlCpBt1124Exit" style="background:rgba(255,211,33,.08);border-color:rgba(255,211,33,.3);color:#ffd88a">⚠️ <b>Preliminar — amostra pequena</b> ('+(Number(s.samples)||0)+' de '+(Number(s.need)||20)+' sinais completos). Os números vão mudar bastante até acumular mais sinais resolvidos; não confie 100% ainda.</div>'):'')
       +(s.annual?annualBannerHtml(s):toggleHtml(s))
@@ -72227,6 +72272,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
       +'</div>'
       + (s.annual&&s.vpGrid?vpGridHtml(s):'')
       + (s.annual&&s.rsiGrid?rsiGridHtml(s):'')
+      + (s.annual&&s.comboGrid?comboGridHtml(s):'')
       + (s.annual?perAssetHtml(s):'')
       + (s.longSide?optHtml(s.longSide.optimize, '🧠 Melhor combo LONG — fora da amostra'):'')
       + (s.shortSide?optHtml(s.shortSide.optimize, '🧠 Melhor combo SHORT — fora da amostra'):'')
@@ -72300,7 +72346,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   document.addEventListener("click", function(ev){
     var t=ev.target;
     var abt=t&&(t.closest?t.closest("[data-dvl-bt-grid-type]"):null);
-    if(abt){ ev.preventDefault(); var at=annualState(); at.btype=(abt.getAttribute("data-dvl-bt-grid-type")==='rsi')?'rsi':'vp';
+    if(abt){ ev.preventDefault(); var at=annualState(); var _bt=abt.getAttribute("data-dvl-bt-grid-type"); at.btype=(_bt==='rsi'||_bt==='combo')?_bt:'vp';
       if(at.mode){ startAnnual(btQuery()); } else { refreshCard(); } return; }
     var atf=t&&(t.closest?t.closest("[data-dvl-bt-grid-tf]"):null);
     if(atf){ ev.preventDefault(); var a=annualState(); a.tf=Number(atf.getAttribute("data-dvl-bt-grid-tf"))||15;

@@ -109,6 +109,18 @@ const fetch15m = (sym) => Promise.resolve(makeSeries(1200, sym.length));
   ok(!vlb || ["line", "proxAtr", "pos", "vpWin", "tpAtr"].every(k => (k in vlb)), "best long VP combo carries line/prox/pos/window/tp");
   ok(vres.rsiGrid == null, "rsiGrid NOT run when only vp requested (separate test)");
 
+  // Combined backtest (RSI + VP confluence): sweeps and honours the strict rule
+  const cfgCombo = Object.assign({ comboBacktest: true }, cfg);
+  const cres = await annual.run(["BTC_USDT"], 365, cfgCombo, () => Promise.resolve(makeSeries(4000, 3)), 15);
+  const cg = cres.comboGrid;
+  ok(cg && cg.ready, "combo backtest ready");
+  ok(cg && cg.combosTested > 200, "combo sweeps zone×line×prox×window×pos (" + (cg && cg.combosTested) + ")");
+  ok(cg && cg.grids && Array.isArray(cg.grids.line) && Array.isArray(cg.grids.lower) && Array.isArray(cg.grids.prox), "combo grid sweeps RSI zone + VP line + proximity");
+  const cb = cg && cg.long && cg.long.best;
+  ok(!cb || (cb.train.returnPct > 0 && cb.test.returnPct > 0 && cb.test.trades >= 8 && ("zone" in cb) && ("line" in cb)),
+     "combo best long (if any) is green in train AND test and carries zone+line");
+  ok(cres.rsiGrid == null && cres.vpGrid == null, "rsiGrid/vpGrid NOT run when only combo requested");
+
   // "poucos sinais" path
   const thin = await annual.run(["X_USDT"], 365, cfg, () => Promise.resolve(makeSeries(60, 1)));
   ok(thin.ready === false, "thin dataset → not ready (graceful)");
