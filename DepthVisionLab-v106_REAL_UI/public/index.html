@@ -423,32 +423,43 @@ body{
   overflow:hidden!important;
 }
 
-/* ── DESKTOP FRAME (Beta 1.175) — SÓ telas largas (min-width:900px) ─────────
-   O app é mobile-first; no PC estica tudo (header, gráfico, footer) na largura
-   inteira e fica feio. Aqui centralizamos numa coluna com proporção de app e
-   colocamos um fundo em volta. TODO o CSS mobile usa max-width, então esta
-   media query NUNCA dispara no celular — o mobile fica 100% intacto. */
-@media (min-width:900px){
-  html{ background:#04060a!important; }
-  body::before{
-    content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-    background:radial-gradient(1100px 760px at 50% -12%, rgba(16,223,119,.07), transparent 62%), #04060a;
+/* ── DESKTOP TERMINAL (Beta 1.176) — layout 2 colunas SÓ em telas grandes ───
+   No PC: gráfico GRANDE em largura cheia + as páginas (Copilot/Scanner/Positions/
+   Watchlist) docam num PAINEL LATERAL fixo à DIREITA, ao lado do gráfico (sem
+   cobrir). O rodapé fica na base da coluna do gráfico. TODO o CSS mobile usa
+   max-width, então este @media (min-width:1000px) NUNCA dispara no celular —
+   o mobile continua 100% igual. */
+@media (min-width:1000px){
+  :root{ --dvl-pc-panel:440px; }
+  html{ background:#05070a!important; }
+
+  /* Gráfico usa a tela toda; quando um painel abre, ele fica à direita por cima
+     da borda direita do gráfico (que continua enorme à esquerda). */
+  .app{ width:100vw!important;max-width:none!important;margin:0!important; }
+
+  /* Páginas → painel lateral direito (altura cheia), não mais tela cheia.
+     Prefixo `html` eleva a especificidade (1,0,1) pra vencer as regras
+     `#id` (1,0,0) definidas bem depois no arquivo (que docavam à esquerda). */
+  html #dvlCopilotPage0974,
+  html #dvlScannerPanel0780,
+  html #dvlPositionsPanelV2,
+  html #dvlWatchlistPanel{
+    left:auto!important; right:0!important;
+    top:0!important; bottom:0!important;
+    width:var(--dvl-pc-panel)!important; max-width:var(--dvl-pc-panel)!important;
+    max-height:100svh!important; height:100svh!important;
+    margin:0!important; border-radius:0!important;
+    border-left:1px solid rgba(145,175,165,.16)!important;
+    box-shadow:-26px 0 70px rgba(0,0,0,.55)!important;
   }
-  .app{
-    width:480px!important;max-width:480px!important;
-    margin-left:auto!important;margin-right:auto!important;
-    box-shadow:0 0 0 1px rgba(255,255,255,.05), 0 24px 70px rgba(0,0,0,.65)!important;
+
+  /* Rodapé de navegação: na base da COLUNA DO GRÁFICO (não atrás do painel). */
+  #dvlBottomNavV2{
+    left:14px!important; right:auto!important;
+    width:min(640px, calc(100vw - var(--dvl-pc-panel) - 44px))!important; max-width:none!important;
+    margin:0!important;
   }
-  /* Elementos FIXOS centralizados por margin:auto (left/right:0 + width fixa) —
-     NÃO uso transform aqui, pra não quebrar as animações de slide (que usam
-     transform). Assim rodapé, Copilot, Scanner e Positions ficam na coluna. */
-  #dvlBottomNavV2{ left:0!important;right:0!important;width:460px!important;max-width:460px!important;margin-left:auto!important;margin-right:auto!important; }
-  .bottomNav{ left:0!important;right:0!important;width:480px!important;max-width:480px!important;margin-left:auto!important;margin-right:auto!important; }
-  #dvlCopilotPage0974,
-  #dvlScannerPanel0780{ left:0!important;right:0!important;width:480px!important;max-width:480px!important;margin-left:auto!important;margin-right:auto!important; }
-  #dvlPositionsPanelV2{ left:0!important;right:0!important;width:462px!important;max-width:462px!important;margin-left:auto!important;margin-right:auto!important; }
-  .navInner{width:100%!important;max-width:100%!important;}
-  .homeLine{display:none!important;}  /* barra de "home" do celular não faz sentido no PC */
+  .homeLine{ display:none!important; }  /* indicador de "home" do celular não faz sentido no PC */
 }
 
 .canvasWrap{
@@ -20462,7 +20473,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.175";
+const DVL_APP_VERSION = "Beta 1.176";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20492,6 +20503,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.176", note: "PORT DESKTOP DE VERDADE (substitui a coluna centralizada da 1.175): agora em telas grandes (a partir de 1000px) o app vira um TERMINAL de 2 colunas — o gráfico ocupa a tela toda (grande de verdade) e as páginas (Copilot, Scanner, Positions, Watchlist) docam num PAINEL LATERAL fixo à DIREITA, ao lado do gráfico, em vez de cobrir tudo em tela cheia como no celular. O rodapé de navegação fica na base da coluna do gráfico. Assim dá pra ver o gráfico E o Copilot/Scanner ao mesmo tempo, tipo TradingView/Binance. Verificado por render real no navegador (gráfico à esquerda + painel à direita). Continua tudo dentro de @media (min-width:1000px) — no CELULAR nada muda. Só frontend." },
   { version: "Beta 1.175", note: "PC: o app parou de esticar feio na tela larga. Antes, no computador, cabeçalho/gráfico/rodapé espalhavam na largura inteira (era 100% mobile). Agora, em telas grandes (a partir de 900px), o app fica centralizado numa coluna com proporção de aplicativo (480px), com um fundo suave em volta e uma sombra de moldura — cabeçalho, gráfico, rodapé, Copilot, Scanner e Positions todos alinhados na mesma coluna. A centralização usa margin (não transform), então as animações de abrir/fechar continuam funcionando. Importante: TUDO isso está dentro de um @media (min-width:900px) — no CELULAR nada muda, continua igualzinho. Só frontend." },
   { version: "Beta 1.174", note: "Novo 3º tipo de backtest: '🎯 Combinado' — junta os TRÊS ao mesmo tempo: gatilho pré-volume + RSI na zona + entrada perto de uma linha do Volume Profile (VAL/POC/VAH). Um sinal só conta quando as três coisas batem (confluência). Varre zona × linha × distância × janela × lado × alvo, long e short cada um $1000, com o mesmo critério anti-sorte (verde no treino E no teste) e mínimo de trades REFORÇADO — porque confluência deixa os sinais raros e amostra pequena engana. Roda no volume REAL do MEXC (não tick volume). É só escolher '🎯 Combinado' no seletor de tipo. Backend + frontend." },
   { version: "Beta 1.173", note: "CONSERTA o backtest travando no 5m e não rodando em 2 anos. Causa raiz: a montagem dos sinais refazia a conta em cima de TODO o histórico a cada vela (O(n²)) — no 5m/2 anos (100 mil+ velas) isso levava mais de 3 MINUTOS, então o poll do app desistia e dava 'erro'. Agora usa uma janela fixa de 500 velas (mais que suficiente pras médias), o que deixou O(n): o RSI 5m/2anos caiu de ~211s pra ~33s e o VP pra ~1,5s. Além disso: (1) cada teste passou a usar no máximo os 1500 sinais mais recentes (o card avisa quando corta), pra o tempo ser previsível em qualquer TF; (2) a busca de candles ganhou timeout de 15s por página, pra uma página travada não pendurar o run de 2 anos pra sempre; (3) o app não desiste mais no primeiro erro de rede — tenta de novo várias vezes antes de mostrar erro. Backend + frontend." },
