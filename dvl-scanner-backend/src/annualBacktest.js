@@ -146,10 +146,16 @@ async function run(symbols, days, cfg, fetch15m, tfMin) {
     const acc0 = 1000;
     const risk = Math.min(0.2, Math.max(0.001, num2(cfg.riskPct, 0.01)));
     const cost = 2 * (num2(cfg.feePct, 0.02) + num2(cfg.slipPct, 0.02)) / 100;
-    const vg = (vBase && vBase.length >= 80)
-      ? vSignal.vSignalGridSearch(vBase, vSeries || [], { costFrac: cost, account0: acc0, riskPct: risk, upperZone: opts.upperZone, lowerZone: opts.lowerZone })
-      : { ready: false, reason: "poucos candles no período" };
-    return { ok: true, ready: !!(vg && vg.ready), annual: true, vSignalOnly: true, horizon: HORIZON, symbols, days, tfMin: baseTfMin, vSignalGrid: vg, account0: acc0 };
+    let vg;
+    try {
+      vg = (vBase && vBase.length >= 80)
+        ? vSignal.vSignalGridSearch(vBase, vSeries || [], { costFrac: cost, account0: acc0, riskPct: risk, upperZone: opts.upperZone, lowerZone: opts.lowerZone })
+        : { ready: false, reason: "poucos candles no período (" + (vBase ? vBase.length : 0) + ")" };
+    } catch (e) { vg = { ready: false, reason: "erro ao rodar: " + (e && e.message || e) }; }
+    /* ready SEMPRE true quando o run TERMINA — senão o poll do front acha que
+       ainda está rodando e fica preso pra sempre ("demora e não mostra nada").
+       O status do grid em si vai em vSignalGrid.ready (o card mostra a mensagem). */
+    return { ok: true, ready: true, annual: true, vSignalOnly: true, horizon: HORIZON, symbols, days, tfMin: baseTfMin, vSignalGrid: vg, account0: acc0 };
   }
   /* Cada ativo com $1000 próprio (a pedido) — a conta NÃO é compartilhada. */
   const base = { account0: 1000, riskPct: Math.min(0.2, Math.max(0.001, num2(cfg.riskPct, 0.01))),
