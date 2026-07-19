@@ -353,8 +353,9 @@ function createServer() {
     const rsiGridFlag = /^(1|true)$/i.test(String(req.query.rsiGrid || ""));
     const vpFlag = /^(1|true)$/i.test(String(req.query.vp || ""));
     const comboFlag = /^(1|true)$/i.test(String(req.query.combo || ""));
+    const vSigFlag = /^(1|true)$/i.test(String(req.query.vsignal || ""));
     const tfMin = [5, 15, 30, 60].indexOf(Number(req.query.tf)) >= 0 ? Number(req.query.tf) : 15;
-    const cacheKey = symbols.join(",") + "|" + days + "|" + tfMin + "m|" + (rsiGridFlag ? "grid" : "std") + (vpFlag ? "|vp" : "") + (comboFlag ? "|combo" : "");
+    const cacheKey = symbols.join(",") + "|" + days + "|" + tfMin + "m|" + (rsiGridFlag ? "grid" : "std") + (vpFlag ? "|vp" : "") + (comboFlag ? "|combo" : "") + (vSigFlag ? "|vsig" : "");
     /* Poll pattern: the run takes 30–60s, so we never hold the HTTP connection
        open for it. Fresh cache → return the result; already running → report
        progress; otherwise kick it off and report "started". Client polls. */
@@ -369,7 +370,7 @@ function createServer() {
     const runCfg = { ENGINE: cfg.ENGINE, EXR: cfg.EXR,
       account0: Number(req.query.account0) || 1000, riskPct: Number(req.query.riskPct) || 0.01,
       feePct: Number(req.query.feePct) || 0.02, slipPct: Number(req.query.slipPct) || 0.02,
-      rsiGrid: rsiGridFlag, vpBacktest: vpFlag, comboBacktest: comboFlag };
+      rsiGrid: rsiGridFlag, vpBacktest: vpFlag, comboBacktest: comboFlag, vSignalBacktest: vSigFlag };
     const fetch15m = (sym) => mexc.klinesHistory(sym, days, tfMin);
     annualBacktest.run(symbols, days, runCfg, fetch15m, tfMin)
       .then(out => { _annualCache = { key: cacheKey, at: Date.now(), data: out }; })

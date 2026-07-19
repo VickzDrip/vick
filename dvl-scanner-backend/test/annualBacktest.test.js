@@ -121,6 +121,21 @@ const fetch15m = (sym) => Promise.resolve(makeSeries(1200, sym.length));
      "combo best long (if any) is green in train AND test and carries zone+line");
   ok(cres.rsiGrid == null && cres.vpGrid == null, "rsiGrid/vpGrid NOT run when only combo requested");
 
+  // "Sinais V" backtest (RSI exhaustion excursions): standalone, no ignition samples
+  const cfgV = Object.assign({ vSignalBacktest: true }, cfg);
+  const vsres = await annual.run(["BTC_USDT"], 365, cfgV, () => Promise.resolve(makeSeries(3000, 3)), 15);
+  ok(vsres.vSignalOnly === true, "vSignal run is standalone (vSignalOnly flag)");
+  ok(vsres.rsiGrid == null && vsres.vpGrid == null && vsres.comboGrid == null, "vSignal run does NOT run the other grids");
+  const vsgrid = vsres.vSignalGrid;
+  ok(vsgrid && vsgrid.ready, "vSignal backtest ready");
+  ok(vsgrid && vsgrid.combosTested === vsgrid.grids.upper.length * vsgrid.grids.lower.length, "vSignal sweeps upper×lower zones (" + (vsgrid && vsgrid.combosTested) + ")");
+  ok(vsgrid && vsgrid.configured && Number.isFinite(vsgrid.configured.buys) && Number.isFinite(vsgrid.configured.sells), "vSignal reports configured buy/sell counts");
+  ok(vsgrid && vsgrid.long && Array.isArray(vsgrid.long.top) && vsgrid.long.top.every(c => ("robust" in c) && c.robust <= Math.min(c.train.returnPct, c.test.returnPct) + 1e-9),
+     "each vSignal combo carries robust = min(train, test)");
+  const vslb = vsgrid && vsgrid.long && vsgrid.long.best;
+  ok(!vslb || (vslb.train.returnPct > 0 && vslb.test.returnPct > 0 && ("upper" in vslb) && ("lower" in vslb) && ("tpAtr" in vslb)),
+     "best vSignal long (if any) is green in train AND test and carries zone+target");
+
   // "poucos sinais" path
   const thin = await annual.run(["X_USDT"], 365, cfg, () => Promise.resolve(makeSeries(60, 1)));
   ok(thin.ready === false, "thin dataset → not ready (graceful)");

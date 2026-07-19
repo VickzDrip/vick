@@ -17,6 +17,7 @@ const pumpModel = require("./pumpModel");
 const pumpBacktest = require("./pumpBacktest");
 const vpBacktest = require("./vpBacktest");
 const comboBacktest = require("./comboBacktest");
+const vSignal = require("./vSignalBacktest");
 
 const HORIZON = pumpModel.HORIZON || 20;
 const FEATURES = pumpModel.FEATURES;
@@ -119,18 +120,37 @@ async function run(symbols, days, cfg, fetch15m, tfMin) {
   const opts = Object.assign({}, cfg.EXR, { baseTfMin });
   const assets = [];   // { sym, bars, fromMs, toMs, samples }
   let all = [];
+  let vBase = null, vSeries = null;   // candles+RSI do 1º ativo, p/ o backtest de Sinais V
   for (const sym of symbols) {
     let base = null;
     try { base = await fetch15m(sym); } catch (_) { base = null; }
     if (!Array.isArray(base) || base.length < 30 + HORIZON) { assets.push({ sym, bars: base ? base.length : 0, samples: [] }); continue; }
     let series = null;
     try { series = exhaustionRsi.computeSeries(base, null, opts); } catch (_) { series = null; }
-    const samples = buildSamples(base, series || [], engine, opts, { exr: !!cfg.rsiGrid || !!cfg.comboBacktest, vp: !!cfg.vpBacktest || !!cfg.comboBacktest });
+    if (!vBase) { vBase = base; vSeries = series || []; }
+    /* Sinais V só precisa dos candles+RSI (não das amostras de ignição), então
+       quando é SÓ ele, nem monta as janelas caras por amostra. */
+    const samples = cfg.vSignalBacktest && !(cfg.rsiGrid || cfg.vpBacktest || cfg.comboBacktest)
+      ? []
+      : buildSamples(base, series || [], engine, opts, { exr: !!cfg.rsiGrid || !!cfg.comboBacktest, vp: !!cfg.vpBacktest || !!cfg.comboBacktest });
     assets.push({ sym, bars: base.length, fromMs: Number(base[0].time) || 0, toMs: Number(base[base.length - 1].time) || 0, samples });
     all = all.concat(samples);
   }
 
   const num2 = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+
+  /* ── Backtest SÓ dos "Sinais V" (exaustão por excursão do RSI) ──────────────
+     Não depende das amostras de ignição, então roda direto no candle+RSI e
+     retorna cedo (é um teste separado, como o usuário pediu "só disso"). */
+  if (cfg.vSignalBacktest) {
+    const acc0 = 1000;
+    const risk = Math.min(0.2, Math.max(0.001, num2(cfg.riskPct, 0.01)));
+    const cost = 2 * (num2(cfg.feePct, 0.02) + num2(cfg.slipPct, 0.02)) / 100;
+    const vg = (vBase && vBase.length >= 80)
+      ? vSignal.vSignalGridSearch(vBase, vSeries || [], { costFrac: cost, account0: acc0, riskPct: risk, upperZone: opts.upperZone, lowerZone: opts.lowerZone })
+      : { ready: false, reason: "poucos candles no período" };
+    return { ok: true, ready: !!(vg && vg.ready), annual: true, vSignalOnly: true, horizon: HORIZON, symbols, days, tfMin: baseTfMin, vSignalGrid: vg, account0: acc0 };
+  }
   /* Cada ativo com $1000 próprio (a pedido) — a conta NÃO é compartilhada. */
   const base = { account0: 1000, riskPct: Math.min(0.2, Math.max(0.001, num2(cfg.riskPct, 0.01))),
                  costFrac: 2 * (num2(cfg.feePct, 0.02) + num2(cfg.slipPct, 0.02)) / 100 };
