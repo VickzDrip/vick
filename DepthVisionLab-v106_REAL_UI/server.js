@@ -4,6 +4,8 @@ const cors = require("cors");
 const WebSocket = require("ws");
 const path = require("path");
 const fs = require("fs");
+const zlib = require("zlib");
+const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,21 +27,100 @@ const MAX_TRADES_IN_MEM  = 250000;                // cap memory use
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 app.use(cors());
+
+// ── Cache policy ────────────────────────────────────────────────────────────
+// HTML: "no-cache" (NOT "no-store") so the browser MUST revalidate on every
+// load but can answer with a 304 when the ETag is unchanged — repeat loads /
+// refreshes cost ~0 bytes instead of re-downloading 3.16MB, while a new deploy
+// (new ETag) is picked up instantly. Static assets (icons/logo) get a short
+// max-age so they stop revalidating on every navigation.
 app.use((req, res, next) => {
   if (req.path === "/" || req.path.endsWith(".html")) {
-    res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    res.set("Pragma", "no-cache");
-    res.set("Expires", "0");
-    res.set("Surrogate-Control", "no-store");
+    res.set("Cache-Control", "no-cache, must-revalidate");
+    res.set("Vary", "Accept-Encoding");
   } else if (req.path === "/manifest.json") {
     res.set("Content-Type", "application/manifest+json");
-    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
-  } else {
     res.set("Cache-Control", "no-cache, must-revalidate");
+  } else {
+    res.set("Cache-Control", "public, max-age=600");
   }
   next();
 });
-app.use(express.static(path.join(__dirname, "public"), { etag: false, lastModified: false }));
+
+// ── Transparent gzip for JSON API responses ─────────────────────────────────
+// klines / trades / footprint / depth_history can be hundreds of KB of highly
+// compressible JSON. Gzip them when the client accepts it (typically 5–10x
+// smaller). Tiny payloads pass through untouched to avoid pointless CPU.
+app.use((req, res, next) => {
+  const ae = req.headers["accept-encoding"] || "";
+  if (!/\bgzip\b/.test(ae)) return next();
+  const _json = res.json.bind(res);
+  res.json = (obj) => {
+    try {
+      const buf = Buffer.from(JSON.stringify(obj));
+      if (buf.length < 1400) { res.set("Content-Type", "application/json; charset=utf-8"); return res.end(buf); }
+      const gz = zlib.gzipSync(buf);
+      res.set("Content-Type", "application/json; charset=utf-8");
+      res.set("Content-Encoding", "gzip");
+      res.set("Vary", "Accept-Encoding");
+      return res.end(gz);
+    } catch (e) { return _json(obj); }
+  };
+  next();
+});
+
+// ── index.html: pre-built gzip buffer + content ETag (rebuilt on file change) ─
+// The 3.16MB single-file app is by far the dominant payload. We compress it
+// ONCE (not per request) and serve the cached buffer; the ETag is a content
+// hash so it changes exactly when the HTML changes. Built-in zlib/crypto — no
+// new dependency, no npm install needed on deploy.
+const INDEX_FILE = path.join(__dirname, "public", "index.html");
+let indexVersion = "Beta 0.047";
+let idxRaw = null, idxGz = null, idxBr = null, idxEtag = "", idxMtime = 0, idxBrToken = 0;
+function buildIndexCache() {
+  try {
+    const st = fs.statSync(INDEX_FILE);
+    if (idxRaw && st.mtimeMs === idxMtime) return;
+    const raw = fs.readFileSync(INDEX_FILE);
+    idxRaw = raw;
+    idxGz = zlib.gzipSync(raw, { level: 9 });   // fast (~100ms), always ready
+    idxBr = null;                               // invalidate until async brotli catches up
+    idxEtag = '"' + crypto.createHash("sha1").update(raw).digest("hex").slice(0, 20) + '"';
+    idxMtime = st.mtimeMs;
+    const m = raw.toString("utf8").match(/DVL_APP_VERSION\s*=\s*["']([^"']+)["']/);
+    if (m) indexVersion = m[1];
+    // Max-quality brotli (~500KB) is expensive; run it on the libuv threadpool so
+    // it never blocks the event loop. Swap in only if the file hasn't changed
+    // again meanwhile (token guards against a stale buffer under a new ETag).
+    const token = ++idxBrToken;
+    if (typeof zlib.brotliCompress === "function") {
+      zlib.brotliCompress(raw, { params: {
+        [zlib.constants.BROTLI_PARAM_QUALITY]: 11,
+        [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length
+      } }, (err, out) => { if (!err && token === idxBrToken) idxBr = out; });
+    }
+  } catch (e) { /* keep last good cache */ }
+}
+buildIndexCache();
+setInterval(buildIndexCache, 15000);
+
+function serveIndex(req, res) {
+  buildIndexCache();
+  if (!idxRaw) return res.status(500).send("index unavailable");
+  res.set("Cache-Control", "no-cache, must-revalidate");
+  res.set("ETag", idxEtag);
+  res.set("Content-Type", "text/html; charset=utf-8");
+  res.set("Vary", "Accept-Encoding");
+  if (req.headers["if-none-match"] === idxEtag) return res.status(304).end();
+  const ae = req.headers["accept-encoding"] || "";
+  if (idxBr && /\bbr\b/.test(ae)) { res.set("Content-Encoding", "br"); return res.end(idxBr); }
+  if (/\bgzip\b/.test(ae)) { res.set("Content-Encoding", "gzip"); return res.end(idxGz); }
+  return res.end(idxRaw);
+}
+app.get("/", serveIndex);
+app.get("/index.html", serveIndex);
+
+app.use(express.static(path.join(__dirname, "public"), { etag: false, lastModified: false, index: false }));
 
 const state = {
   price: 0,
@@ -231,18 +312,7 @@ function connectDepth(){
   ws.on("error", () => ws.close());
 }
 
-// ── Version detection — reads DVL_APP_VERSION from index.html ────────────
-const INDEX_FILE = path.join(__dirname, "public", "index.html");
-let indexVersion = "Beta 0.047";
-function refreshVersion(){
-  try {
-    const html = fs.readFileSync(INDEX_FILE, "utf8");
-    const m = html.match(/DVL_APP_VERSION\s*=\s*["']([^"']+)["']/);
-    if (m) indexVersion = m[1];
-  } catch(e){}
-}
-refreshVersion();
-setInterval(refreshVersion, 15000);
+// ── Version detection — indexVersion is kept fresh by buildIndexCache() above ─
 
 // ── HTTP API ───────────────────────────────────────────────────────────────
 app.get("/api/version", (req, res) => {

@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.184';
+window.DVL_APP_VERSION = 'Beta 1.185';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20496,7 +20496,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.184";
+const DVL_APP_VERSION = "Beta 1.185";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20526,6 +20526,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.185", note: "PERFORMANCE (carregamento) — servidor: antes o app (HTML único de 3,16 MB) era enviado SEM compressão e com 'no-store', então TODA abertura/refresh rebaixava os 3,16 MB inteiros de novo, sem cache. Agora o servidor: (1) manda o HTML comprimido — brotli ~523 KB (6× menor) para navegadores modernos, gzip ~700 KB de fallback; (2) usa cache com revalidação por ETag de conteúdo, então recarregar a mesma versão responde 304 (~0 byte) em vez de rebaixar tudo — e um deploy novo (ETag muda) aparece na hora; (3) comprime também as respostas JSON grandes da API (klines/trades/footprint/depth_history). O brotli é gerado UMA vez fora do event loop, então não trava o servidor. Nada do HTML/1.184 foi reescrito — o render (já otimizado com um único frame por paint desde a 1.181) ficou intacto de propósito, porque a fluidez de interação precisa ser medida no site no ar antes de mexer no código frágil do gráfico. Só servidor (+ este changelog)." },
   { version: "Beta 1.184", note: "Oscillator Divider Release Fix: corrige o divisor vertical dos osciladores que continuava preso ao mouse depois de soltar; o drag agora encerra por pointerup, mouseup, pointercancel, lostpointercapture, blur, troca de aba e também automaticamente quando o mouse já está sem botão pressionado. Um novo clique encerra qualquer drag residual, o canvas libera o pointer capture e os eventos do gráfico não disputam mais o mesmo gesto. Visual e mobile preservados. Só frontend." },
   { version: "Beta 1.183", note: "Desktop Positions Detail + Trade Labels Fix: mantém as estatísticas/detalhes da posição dentro da própria aba Positions, encaixadas na parte inferior sem cobrir o gráfico; corrige o X do trade aberto com captura de pointerup antes do canvas; amplia novamente labels TP/ENTRY/SL, tipografia, X e controles no desktop; preserva o mobile. Só frontend." },
   { version: "Beta 1.182", note: "Desktop Paper Trade Controls Fix: torna os botões de confirmar/cancelar do TP, SL e ordens draft realmente clicáveis no mouse ao executar a ação no pointerup antes dos handlers do gráfico; impede o canvas de engolir o clique; aumenta no desktop os labels TP/ENTRY/SL e os botões de confirmação para leitura e uso confortáveis, preservando o tamanho mobile. Só frontend." },
