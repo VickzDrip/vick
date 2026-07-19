@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.193';
+window.DVL_APP_VERSION = 'Beta 1.194';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20496,7 +20496,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.193";
+const DVL_APP_VERSION = "Beta 1.194";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20526,6 +20526,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.194", note: "Conserta o botão '🔺 Sinais V' do backtest que não ativava: o clique no seletor de tipo tinha uma lista que só aceitava vp/rsi/combo, então 'vsignal' caía de volta pra Volume Profile. Agora seleciona certo e dispara o backtest de Sinais V. Só frontend." },
   { version: "Beta 1.193", note: "NOVO tipo de backtest: '🔺 Sinais V' — testa SÓ os triângulos do gráfico (a exaustão por excursão do RSI), a pedido. Regra idêntica à do gráfico: quando o RSI SAI de uma zona, entra o trade — saiu da sobrevenda = COMPRA (long), saiu da sobrecompra = VENDA (short) — e o resultado é resolvido pelas velas seguintes com SL/TP em ATR (o mesmo simulador dos outros backtests). Varre as zonas (upper/lower) × alvo, COMPRA e VENDA separadas cada uma com $1000, com o mesmo critério anti-sorte: só conta como 'segura' se for VERDE no TREINO E no TESTE (ranking pelo pior dos dois). Mostra também quantas compras/vendas o indicador gerou nas suas zonas atuais no período. É só escolher '🔺 Sinais V' no seletor de tipo do card de backtest, com os chips de TF (5m/15m/30m/1h) e período (1/2 anos). Backend + frontend — o dvl-scanner reinicia sozinho pelo deploy." },
   { version: "Beta 1.192", note: "Reescreve a regra do V do RSI pra ser EXAUSTÃO de verdade (os falsos continuavam porque numa subida em escada o RSI faz vários topinhos com pullback, e todos passavam como 'pivô'). Agora o sinal é uma EXCURSÃO na zona: o RSI ENTRA na zona (sobrecompra/sobrevenda), guarda o extremo, e o triângulo só CONFIRMA quando ele SAI da zona — ou seja, a reversão realmente aconteceu. Resultado: enquanto o RSI fica subindo dentro do vermelho, NÃO aparece venda nenhuma; quando ele finalmente cai e sai do vermelho, aparece UM triângulo de venda no topo daquela excursão (e o espelho pro verde/compra). Um sinal por excursão, no vértice do Λ/V, sem repintar (só confirma ao sair). Muito mais limpo em tendência. Só frontend." },
   { version: "Beta 1.191", note: "Conserta os sinais de V do RSI: antes qualquer 'engasgada' de 1 vela dentro da zona virava triângulo (você marcou os microkinks que NÃO são V de verdade no meio da tendência). Agora só conta V DE VERDADE: o pivô precisa ser o extremo numa janela de 2 velas de cada lado E ter profundidade mínima nas DUAS pernas do V (o RSI tem que cair/subir de forma relevante entrando E saindo do pivô), senão é tremidinha e é ignorado. Isso derruba os falsos positivos de subida/descida contínua. O pivô agora confirma na 2ª vela seguinte (continua sem repintar). Dá pra calibrar ao vivo pelo console: window.__dvlRsiVMinDepth (profundidade mínima em pontos de RSI, padrão 3 — aumente pra ter menos sinais e só os fortes) e window.__dvlRsiVWindow (velas de cada lado, padrão 2). Me diga o valor que ficar bom que eu fixo. Só frontend." },
@@ -72774,7 +72775,7 @@ body.dvlScannerOpen080 #dvlCopilotPage0974{
   document.addEventListener("click", function(ev){
     var t=ev.target;
     var abt=t&&(t.closest?t.closest("[data-dvl-bt-grid-type]"):null);
-    if(abt){ ev.preventDefault(); var at=annualState(); var _bt=abt.getAttribute("data-dvl-bt-grid-type"); at.btype=(_bt==='rsi'||_bt==='combo')?_bt:'vp';
+    if(abt){ ev.preventDefault(); var at=annualState(); var _bt=abt.getAttribute("data-dvl-bt-grid-type"); at.btype=(_bt==='rsi'||_bt==='combo'||_bt==='vsignal')?_bt:'vp';
       if(at.mode){ startAnnual(btQuery()); } else { refreshCard(); } return; }
     var atf=t&&(t.closest?t.closest("[data-dvl-bt-grid-tf]"):null);
     if(atf){ ev.preventDefault(); var a=annualState(); a.tf=Number(atf.getAttribute("data-dvl-bt-grid-tf"))||15;
