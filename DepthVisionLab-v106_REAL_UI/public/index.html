@@ -430,7 +430,7 @@ body{
    max-width, então este @media (min-width:1000px) NUNCA dispara no celular —
    o mobile continua 100% igual. */
 @media (min-width:1000px){
-  :root{ --dvl-pc-panel:440px; }
+  :root{ --dvl-pc-panel:440px; --dvl-pc-rail:66px; --dvl-pc-hd:64px; }
   html{ background:#05070a!important; }
 
   /* Gráfico usa a tela toda; quando um painel abre, ele fica à direita por cima
@@ -453,11 +453,23 @@ body{
     box-shadow:-26px 0 70px rgba(0,0,0,.55)!important;
   }
 
-  /* Rodapé de navegação: na base da COLUNA DO GRÁFICO (não atrás do painel). */
-  #dvlBottomNavV2{
-    left:14px!important; right:auto!important;
-    width:min(640px, calc(100vw - var(--dvl-pc-panel) - 44px))!important; max-width:none!important;
-    margin:0!important;
+  /* ── ETAPA 2: rodapé vira BARRA DE ÍCONES VERTICAL na lateral direita
+     (sidebar do TradingView). Os painéis acima docam à ESQUERDA dela.
+     Prefixo `html` pra vencer as regras #id definidas depois no arquivo. */
+  html #dvlBottomNavV2{
+    left:0!important; right:auto!important; top:var(--dvl-pc-hd)!important; bottom:0!important;
+    width:var(--dvl-pc-rail)!important; max-width:var(--dvl-pc-rail)!important;
+    height:auto!important; max-height:none!important;
+    display:flex!important; flex-direction:column!important;
+    justify-content:flex-start!important; align-items:stretch!important;
+    gap:4px!important; padding:12px 7px!important; margin:0!important;
+    border-radius:0!important; border:0!important; border-left:1px solid rgba(145,175,165,.16)!important;
+    grid-template-columns:none!important; grid-template-rows:none!important;
+    transform:none!important;
+  }
+  html #dvlBottomNavV2 .dvlNavV2Btn{
+    height:auto!important; min-height:58px!important; max-height:none!important; flex:0 0 auto!important;
+    border-radius:12px!important; width:auto!important;
   }
   .homeLine{ display:none!important; }  /* indicador de "home" do celular não faz sentido no PC */
 
@@ -20484,7 +20496,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.177";
+const DVL_APP_VERSION = "Beta 1.178";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20514,6 +20526,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.178", note: "Desktop estilo TradingView — ETAPA 2 (navegação lateral): no PC o rodapé (Copilot/Scanner/Trade/Positions/Watchlist) deixou de ser uma pílula embaixo e virou uma BARRA DE ÍCONES VERTICAL na lateral esquerda, começando abaixo do cabeçalho — igual ao sidebar do TradingView. O gráfico fica grande no centro e a página escolhida abre no painel à direita. Agora dá pra navegar entre Copilot/Scanner/Positions com o gráfico sempre visível. Verificado renderizando de verdade. Mobile intacto (só min-width:1000px)." },
   { version: "Beta 1.177", note: "Desktop estilo TradingView — ETAPA 1 (barra de cima): antes os botões inchavam no PC porque o cabeçalho escala por uma unidade (var(--px)) que no PC batia no teto e aumentava tudo ~38%. Agora, em telas grandes, essa unidade fica travada num tamanho compacto e o seletor de ativo para de esticar na largura toda — a barra superior fica enxuta e encostada à esquerda (símbolo + timeframes + Velas/Indicadores/Desenhos), em tamanho normal de desktop, com o gráfico grande embaixo. Verificado renderizando de verdade. Próximas etapas: rodapé virar abas de ícone na lateral, régua de ferramentas de desenho à esquerda. Mobile intacto (só min-width:1000px)." },
   { version: "Beta 1.176", note: "PORT DESKTOP DE VERDADE (substitui a coluna centralizada da 1.175): agora em telas grandes (a partir de 1000px) o app vira um TERMINAL de 2 colunas — o gráfico ocupa a tela toda (grande de verdade) e as páginas (Copilot, Scanner, Positions, Watchlist) docam num PAINEL LATERAL fixo à DIREITA, ao lado do gráfico, em vez de cobrir tudo em tela cheia como no celular. O rodapé de navegação fica na base da coluna do gráfico. Assim dá pra ver o gráfico E o Copilot/Scanner ao mesmo tempo, tipo TradingView/Binance. Verificado por render real no navegador (gráfico à esquerda + painel à direita). Continua tudo dentro de @media (min-width:1000px) — no CELULAR nada muda. Só frontend." },
   { version: "Beta 1.175", note: "PC: o app parou de esticar feio na tela larga. Antes, no computador, cabeçalho/gráfico/rodapé espalhavam na largura inteira (era 100% mobile). Agora, em telas grandes (a partir de 900px), o app fica centralizado numa coluna com proporção de aplicativo (480px), com um fundo suave em volta e uma sombra de moldura — cabeçalho, gráfico, rodapé, Copilot, Scanner e Positions todos alinhados na mesma coluna. A centralização usa margin (não transform), então as animações de abrir/fechar continuam funcionando. Importante: TUDO isso está dentro de um @media (min-width:900px) — no CELULAR nada muda, continua igualzinho. Só frontend." },
