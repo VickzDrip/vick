@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.190';
+window.DVL_APP_VERSION = 'Beta 1.191';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20496,7 +20496,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.190";
+const DVL_APP_VERSION = "Beta 1.191";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20526,6 +20526,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.191", note: "Conserta os sinais de V do RSI: antes qualquer 'engasgada' de 1 vela dentro da zona virava triângulo (você marcou os microkinks que NÃO são V de verdade no meio da tendência). Agora só conta V DE VERDADE: o pivô precisa ser o extremo numa janela de 2 velas de cada lado E ter profundidade mínima nas DUAS pernas do V (o RSI tem que cair/subir de forma relevante entrando E saindo do pivô), senão é tremidinha e é ignorado. Isso derruba os falsos positivos de subida/descida contínua. O pivô agora confirma na 2ª vela seguinte (continua sem repintar). Dá pra calibrar ao vivo pelo console: window.__dvlRsiVMinDepth (profundidade mínima em pontos de RSI, padrão 3 — aumente pra ter menos sinais e só os fortes) e window.__dvlRsiVWindow (velas de cada lado, padrão 2). Me diga o valor que ficar bom que eu fixo. Só frontend." },
   { version: "Beta 1.190", note: "NOVO: sinais de COMPRA/VENDA no preço a partir dos 'vzinhos' (pivôs) do DVL Exhaustion RSI. Quando o RSI faz um V dentro das zonas, aparece um triângulo no gráfico de preço, na direção da cor do RSI: RSI VERDE (sobrevendido, exausto no fundo) fazendo um vale (V) → triângulo VERDE pra CIMA abaixo da mínima = compra; RSI VERMELHO (sobrecomprado, exausto no topo) fazendo um pico (Λ) → triângulo VERMELHO pra BAIXO acima da máxima = venda. O pivô só confirma na vela seguinte (usa a vela i+1), então o sinal NÃO repinta. Aparece só com o Exhaustion RSI ligado, usa as suas zonas (Upper/Lower) e as cores do próprio oscilador. Custo ~zero: o oscilador já calcula os valores, então só detecto o pivô e publico; o gráfico de preço lê e desenha. Só frontend. Obs.: as cores casam com o RSI quando o Calculation TF do oscilador está em 'Chart' (padrão)." },
   { version: "Beta 1.189", note: "PERFORMANCE (render) — batch dos pavios das velas: com o glow já desligado no arraste (1.188), o HUD ainda mostrava ~50ms/frame no zoom out (centenas de velas). Motivo: cada vela desenhava o pavio (wick) com um ctx.stroke() próprio — centenas de 'flushes' de rasterização por frame. Agora os pavios são acumulados por cor num Path2D e desenhados em ~2 strokes no lugar de centenas. Truque pra não mudar NADA visual nem a ordem: só as partes do pavio que ficam FORA do corpo entram no batch (o corpo nunca as cobre, então tanto faz desenhar depois). Cores exatas (agrupadas pela cor real de cada vela, inclusive as amarelas de spike), footprint intocado (continua no render bridge). Verificado renderizando de verdade: arrasta/zoom sem erro. Só frontend. (Se ainda faltar no zoom out, próximo alvo é a linha do RSI de exaustão, que também desenha centenas de segmentos.)" },
   { version: "Beta 1.188", note: "PERFORMANCE (render) — glow off durante o arraste/zoom: o HUD mostrou que, mesmo com o layout-thrash já morto (1.187), o gráfico ficava a 12 FPS movendo de um lado pro outro — cada redesenho completo custa ~83ms. Causa nº1: shadowBlur (o brilho/glow das velas, linhas e do RSI de exaustão) é o op MAIS caro do canvas — recalcula uma sombra borrada do caminho inteiro a cada traço, ainda por cima em retina (2,5× os pixels). Solução sem perder o visual: um interceptor no shadowBlur do canvas desliga o glow APENAS enquanto você está arrastando/dando zoom/pinça (ninguém admira brilho no meio do gesto) e, ao soltar, repinta uma vez COM o glow de volta — parado fica 100% igual. Não precisei tocar nos 37 pontos de glow: é um único hook, reversível, que não muda o valor lógico lido pelo código. Bônus de diagnóstico: ?glow=0 na URL força o glow desligado sempre (pra medir o custo dele no HUD), ?glow=1 desfaz. Verificado renderizando de verdade: hook instalado, leitura/escrita do shadowBlur intactas, arraste sem erro, glow volta ao soltar. Só frontend. (Se ainda faltar, próximos alvos: alocação por frame e memória/GC de 222–270MB.)" },
@@ -67765,11 +67766,32 @@ body.dvl-osc-divider-dragging *{
        O pivô confirma na vela seguinte (precisa de i+1), então nunca "repinta". */
     try{
       var _vsig = {};
-      for(var _pi=1;_pi<values.length-1;_pi++){
-        var _va=values[_pi-1].value, _vb=values[_pi].value, _vc=values[_pi+1].value;
-        if(!(Number.isFinite(_va)&&Number.isFinite(_vb)&&Number.isFinite(_vc))) continue;
-        if(_vb<=lower && _vb<_va && _vb<=_vc)      _vsig[values[_pi].time]="up";    // compra
-        else if(_vb>=upper && _vb>_va && _vb>=_vc) _vsig[values[_pi].time]="down";  // venda
+      /* Beta 1.191 — só V de VERDADE (não microkink de tendência). O pivô tem
+         que ser o extremo numa janela de _K velas de cada lado E ter
+         profundidade mínima _MIND (as DUAS pernas do V precisam ter tamanho),
+         senão qualquer engasgada de 1 vela dentro da zona virava sinal.
+         Ajustável ao vivo: window.__dvlRsiVMinDepth e window.__dvlRsiVWindow. */
+      var _K = (typeof window.__dvlRsiVWindow === "number" && window.__dvlRsiVWindow >= 1) ? (window.__dvlRsiVWindow|0) : 2;
+      var _MIND = (typeof window.__dvlRsiVMinDepth === "number" && window.__dvlRsiVMinDepth >= 0) ? window.__dvlRsiVMinDepth : 3;
+      var _finV = function(x){ return Number.isFinite(x); };
+      for(var _pi=_K; _pi<values.length-_K; _pi++){
+        var _vb = values[_pi].value; if(!_finV(_vb)) continue;
+        var _lMax=-Infinity,_lMin=Infinity,_rMax=-Infinity,_rMin=Infinity,_okW=true;
+        for(var _k=1;_k<=_K;_k++){
+          var _lv=values[_pi-_k].value, _rv=values[_pi+_k].value;
+          if(!_finV(_lv)||!_finV(_rv)){ _okW=false; break; }
+          if(_lv>_lMax)_lMax=_lv; if(_lv<_lMin)_lMin=_lv;
+          if(_rv>_rMax)_rMax=_rv; if(_rv<_rMin)_rMin=_rv;
+        }
+        if(!_okW) continue;
+        // Vale (V) na zona sobrevendida (verde) → COMPRA: menor da janela + as 2 pernas com profundidade
+        if(_vb<=lower && _vb<_lMin && _vb<_rMin && (_lMax-_vb)>=_MIND && (_rMax-_vb)>=_MIND){
+          _vsig[values[_pi].time]="up";
+        }
+        // Pico (Λ) na zona sobrecomprada (vermelho) → VENDA: maior da janela + as 2 pernas com profundidade
+        else if(_vb>=upper && _vb>_lMax && _vb>_rMax && (_vb-_lMin)>=_MIND && (_vb-_rMin)>=_MIND){
+          _vsig[values[_pi].time]="down";
+        }
       }
       window.__dvlRsiVSignals = _vsig;
       window.__dvlRsiVColors  = { up: state.bearExhaustionColor, down: state.bullExhaustionColor };
