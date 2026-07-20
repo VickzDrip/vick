@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.200';
+window.DVL_APP_VERSION = 'Beta 1.199';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20496,7 +20496,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.200";
+const DVL_APP_VERSION = "Beta 1.199";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20526,7 +20526,6 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: "Beta 1.200", note: "PERFORMANCE — crosshair desktop trocado de canvas full-screen DPR 2.5 por camada DOM composta (linhas, ponto e labels via transform). O overlay antigo limpava e repintava milhões de pixels a cada frame só ao mover o mouse, causando travadas mesmo com draw() principal baixo. Agora não há clearRect/rasterização full-screen no hover; texto só recalcula quando candle/preço exibido muda; estados de cursor só alteram DOM quando mudam. Mobile e cálculos preservados." },
   { version: "Beta 1.199", note: "PERFORMANCE — o CULPADO do 'trava só mexendo o mouse': o handler de hover (cursor + crosshair) estava ligado direto no pointermove, que dispara na TAXA DO MOUSE (mouse gamer = até 1000 eventos por segundo), não nos 60fps da tela. Rodar isso 1000x/s (cada vez mexendo classes/estado do cursor) era o 'algo sendo reescrito' que fritava a CPU só passando o mouse — mesmo com gráfico parado e sem osciladores. O 1.197 até criou uma variável (hoverRAF) pra jogar isso num requestAnimationFrame, mas ela NUNCA foi ligada. Agora liguei: o hover é coalescido pra no máximo 1 processamento por frame (60fps), usando o último evento. O crosshair continua acompanhando o mouse igual, mas a CPU despenca. Só frontend." },
   { version: "Beta 1.198", note: "PERFORMANCE: limita o recomputo do Exhaustion RSI. O cache da 1.196 incluía o último preço na assinatura, então a cada tick do preço ao vivo o RSI refazia o resample multi-TF inteiro — caro, ainda mais com o RSI ligado o tempo todo pros sinais de V. Agora separo 'estrutura' (vela nova / mudança de 1m / parâmetro → recomputa na hora) do preço ao vivo (mesma vela, só o close mexendo → recomputa no máximo ~3x/s). Arrastar/zoom continua cache hit. O RSI fica no máximo ~300ms atrás do preço, imperceptível. Só frontend." },
   { version: "Beta 1.197", note: "PERFORMANCE CORE: crosshair desktop agora usa canvas overlay próprio e não redesenha candles/volume/osciladores a cada movimento do mouse; cache único do rect do canvas no hover; redraw ocioso cai de 4x/s para 1x/s; resolução dinâmica durante pan/zoom reduz pixels rasterizados e volta nítida ao soltar; linha do Exhaustion RSI é batched em 3 paths durante interação; polls visuais e observer desktop foram desacelerados/coalescidos. Sem mudar cálculos, dados, paper trading ou layout. Mobile preservado visualmente." },
@@ -78516,141 +78515,4 @@ schedule();
 })();
 </script>
 
-
-
-<style id="DVL_BETA_1200_DOM_CROSSHAIR_CSS">
-/* Beta 1.200 — desktop crosshair compositor: no full-canvas clear/repaint on hover. */
-#dvlCrosshairOverlay1197{display:none!important;}
-#dvlCrosshairDom1200{
-  position:absolute!important; inset:0!important; z-index:13!important;
-  pointer-events:none!important; overflow:hidden!important; contain:strict!important;
-  display:none;
-}
-html.dvl-desktop-pro-1179 #dvlCrosshairDom1200{display:block;}
-#dvlCrosshairDom1200 .dvl-x-v,
-#dvlCrosshairDom1200 .dvl-x-h,
-#dvlCrosshairDom1200 .dvl-x-dot,
-#dvlCrosshairDom1200 .dvl-x-price,
-#dvlCrosshairDom1200 .dvl-x-time{
-  position:absolute; left:0; top:0; will-change:transform; backface-visibility:hidden;
-}
-#dvlCrosshairDom1200 .dvl-x-v{
-  width:1px; height:100%; border-left:1px dashed rgba(16,223,119,.52);
-  transform:translate3d(-9999px,0,0);
-}
-#dvlCrosshairDom1200 .dvl-x-h{
-  width:100%; height:1px; border-top:1px dashed rgba(16,223,119,.52);
-  transform:translate3d(0,-9999px,0);
-}
-#dvlCrosshairDom1200 .dvl-x-dot{
-  width:6px; height:6px; margin:-3px 0 0 -3px; border-radius:50%;
-  background:rgba(16,223,119,.94); box-shadow:0 0 5px rgba(16,223,119,.28);
-  transform:translate3d(-9999px,-9999px,0);
-}
-#dvlCrosshairDom1200 .dvl-x-price{
-  min-width:54px; height:24px; padding:0 7px; border-radius:6px;
-  display:flex; align-items:center; justify-content:center;
-  background:#10df77; color:#020806; font:900 9px/1 system-ui;
-  white-space:nowrap; transform:translate3d(-9999px,-9999px,0);
-}
-#dvlCrosshairDom1200 .dvl-x-time{
-  height:18px; padding:0 7px; border-radius:6px;
-  display:flex; align-items:center; justify-content:center;
-  border:1px solid rgba(16,223,119,.42); background:rgba(4,12,8,.96);
-  color:#f4f6f4; font:850 9px/1 system-ui; white-space:nowrap;
-  transform:translate3d(-9999px,-9999px,0);
-}
-#dvlCrosshairDom1200.dvl-hidden{visibility:hidden;}
-</style>
-<script id="DVL_BETA_1200_DOM_CROSSHAIR_JS">
-(function(){
-"use strict";
-if(window.DVL_DOM_CROSSHAIR_1200) return;
-var base=document.getElementById("chart"), wrap=document.getElementById("chartWrap");
-if(!base||!wrap) return;
-var old=document.getElementById("dvlCrosshairOverlay1197");
-if(old){ old.style.display="none"; old.width=1; old.height=1; }
-var root=document.getElementById("dvlCrosshairDom1200");
-if(!root){
-  root=document.createElement("div"); root.id="dvlCrosshairDom1200"; root.className="dvl-hidden";
-  root.innerHTML='<i class="dvl-x-v"></i><i class="dvl-x-h"></i><i class="dvl-x-dot"></i><span class="dvl-x-price"></span><span class="dvl-x-time"></span>';
-  base.insertAdjacentElement("afterend",root);
-}
-var v=root.children[0], h=root.children[1], dot=root.children[2], price=root.children[3], time=root.children[4];
-var raf=0, pendingX=0, pendingY=0, rectCache=null, rectAt=0;
-var lastCandle=-2147483648, lastTime="", lastPrice="", lastVisible=false;
-function now(){return (window.performance&&performance.now)?performance.now():Date.now();}
-function rect(){ var n=now(); if(rectCache&&n-rectAt<400) return rectCache; rectCache=base.getBoundingClientRect(); rectAt=n; return rectCache; }
-function invalidate(){rectCache=null;}
-function hide(){
-  if(!lastVisible) return; lastVisible=false; root.classList.add("dvl-hidden");
-}
-function setText(el, txt, cacheName){ if(cacheName==="price"){if(txt===lastPrice)return;lastPrice=txt;}else{if(txt===lastTime)return;lastTime=txt;} el.textContent=txt; }
-function paint(){
-  raf=0;
-  try{
-    if(!window.crosshair||!crosshair.visible){hide();return;}
-    var r=rect(), cfg=window.__dvlLastCrossCfg;
-    if(!cfg){hide();return;}
-    var x=Math.max(0,Math.min(r.width-(typeof PRICE_SCALE_W==="number"?PRICE_SCALE_W:55),pendingX));
-    var fullBottom=(typeof dvlCrossPanelBottom==="function"?dvlCrossPanelBottom(r.height):r.height);
-    var y=Math.max(0,Math.min(fullBottom,pendingY));
-    if(!lastVisible){lastVisible=true;root.classList.remove("dvl-hidden");}
-    v.style.height=Math.max(0,fullBottom)+"px"; v.style.transform="translate3d("+Math.round(x)+"px,0,0)";
-    h.style.width=Math.max(0,r.width-(typeof PRICE_SCALE_W==="number"?PRICE_SCALE_W:55))+"px"; h.style.transform="translate3d(0,"+Math.round(y)+"px,0)";
-    dot.style.transform="translate3d("+Math.round(x)+"px,"+Math.round(y)+"px,0)";
-
-    var inside=y>=cfg.y0&&y<=cfg.y1;
-    if(inside){
-      var p=cfg.max-((y-cfg.y0)/Math.max(cfg.y1-cfg.y0,1))*(cfg.max-cfg.min);
-      var pt=(typeof fmtPrice==="function"?fmtPrice(p):String(p)); setText(price,pt,"price");
-      var px=(cfg.x1||0)+4, py=y-12;
-      price.style.display="flex"; price.style.transform="translate3d("+Math.round(px)+"px,"+Math.round(py)+"px,0)";
-    }else price.style.display="none";
-
-    var slotRaw=((x-cfg.x0)/Math.max(cfg.x1-cfg.x0,1))*Math.max(cfg.win.totalSlots-1,1);
-    var candleIdx=Math.round(slotRaw-cfg.slotOffset), tt="";
-    if(candleIdx!==lastCandle){
-      lastCandle=candleIdx;
-      if(candleIdx>=0&&candleIdx<cfg.view.length) tt=chartDateTimeLabel(cfg.view[candleIdx].time);
-      else if(candleIdx>=cfg.view.length&&cfg.view.length){
-        var futureSteps=candleIdx-cfg.view.length+1;
-        tt=chartDateTimeLabel(cfg.view[cfg.view.length-1].time+futureSteps*intervalMs(interval));
-      }
-      setText(time,tt,"time");
-    } else tt=lastTime;
-    if(tt){
-      time.style.display="flex";
-      var tw=time.offsetWidth||56, scaleH=(typeof dvlMainTimeScaleHeight==="function"?dvlMainTimeScaleHeight():20);
-      var tx=Math.max((cfg.x0||0)+2,Math.min((cfg.x1||r.width)-tw-2,x-tw/2));
-      var ty=(cfg.y1||0)+Math.max(0,(scaleH-18)/2);
-      time.style.transform="translate3d("+Math.round(tx)+"px,"+Math.round(ty)+"px,0)";
-    }else time.style.display="none";
-  }catch(_){hide();}
-}
-function schedule(x,y){pendingX=x;pendingY=y;if(!raf)raf=requestAnimationFrame(paint);}
-/* Replace the expensive canvas overlay compositor. Main chart draw still skips crosshair. */
-window.drawCrosshair=function(){ schedule(crosshair&&crosshair.x||0,crosshair&&crosshair.y||0); };
-setCrosshairFromClient=function(clientX,clientY){
-  var r=rect(), ps=(typeof PRICE_SCALE_W==="number"?PRICE_SCALE_W:55);
-  crosshair.x=clamp(clientX-r.left,0,Math.max(0,r.width-ps));
-  crosshair.y=clamp(clientY-r.top,0,Math.max(80,dvlCrossPanelBottom(r.height)));
-  crosshair.visible=true; if(window.S)S._cross={cx:crosshair.x,cy:crosshair.y}; schedule(crosshair.x,crosshair.y);
-};
-window.setCrosshairFromClient=setCrosshairFromClient;
-moveCrosshairByDelta=function(dx,dy){
-  var r=rect(), maxX=Math.max(0,r.width-(typeof PRICE_SCALE_W==="number"?PRICE_SCALE_W:55)), maxY=Math.max(80,dvlCrossPanelBottom(r.height));
-  crosshair.x=clamp(crossDragState.startCrossX+dx,0,maxX); crosshair.y=clamp(crossDragState.startCrossY+dy,0,maxY);
-  crosshair.visible=true; if(window.S)S._cross={cx:crosshair.x,cy:crosshair.y}; schedule(crosshair.x,crosshair.y);
-};
-window.moveCrosshairByDelta=moveCrosshairByDelta;
-hideCrosshair=function(){
-  crosshair.visible=false;crosshair.active=false;crossDragState=null;if(window.S){S._cross=null;S.cursor=null;}hide();
-};
-window.hideCrosshair=hideCrosshair;
-try{new ResizeObserver(function(){invalidate();schedule(crosshair.x||0,crosshair.y||0);}).observe(base);}catch(_){}
-window.addEventListener("resize",invalidate,{passive:true}); window.addEventListener("scroll",invalidate,{passive:true,capture:true});
-window.DVL_DOM_CROSSHAIR_1200={version:"1.200",root:root,paint:paint,invalidate:invalidate};
-})();
-</script>
 </html>
