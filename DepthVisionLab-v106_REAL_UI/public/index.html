@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.198';
+window.DVL_APP_VERSION = 'Beta 1.199';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20496,7 +20496,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.198";
+const DVL_APP_VERSION = "Beta 1.199";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20526,6 +20526,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.199", note: "PERFORMANCE — o CULPADO do 'trava só mexendo o mouse': o handler de hover (cursor + crosshair) estava ligado direto no pointermove, que dispara na TAXA DO MOUSE (mouse gamer = até 1000 eventos por segundo), não nos 60fps da tela. Rodar isso 1000x/s (cada vez mexendo classes/estado do cursor) era o 'algo sendo reescrito' que fritava a CPU só passando o mouse — mesmo com gráfico parado e sem osciladores. O 1.197 até criou uma variável (hoverRAF) pra jogar isso num requestAnimationFrame, mas ela NUNCA foi ligada. Agora liguei: o hover é coalescido pra no máximo 1 processamento por frame (60fps), usando o último evento. O crosshair continua acompanhando o mouse igual, mas a CPU despenca. Só frontend." },
   { version: "Beta 1.198", note: "PERFORMANCE: limita o recomputo do Exhaustion RSI. O cache da 1.196 incluía o último preço na assinatura, então a cada tick do preço ao vivo o RSI refazia o resample multi-TF inteiro — caro, ainda mais com o RSI ligado o tempo todo pros sinais de V. Agora separo 'estrutura' (vela nova / mudança de 1m / parâmetro → recomputa na hora) do preço ao vivo (mesma vela, só o close mexendo → recomputa no máximo ~3x/s). Arrastar/zoom continua cache hit. O RSI fica no máximo ~300ms atrás do preço, imperceptível. Só frontend." },
   { version: "Beta 1.197", note: "PERFORMANCE CORE: crosshair desktop agora usa canvas overlay próprio e não redesenha candles/volume/osciladores a cada movimento do mouse; cache único do rect do canvas no hover; redraw ocioso cai de 4x/s para 1x/s; resolução dinâmica durante pan/zoom reduz pixels rasterizados e volta nítida ao soltar; linha do Exhaustion RSI é batched em 3 paths durante interação; polls visuais e observer desktop foram desacelerados/coalescidos. Sem mudar cálculos, dados, paper trading ou layout. Mobile preservado visualmente." },
   { version: "Beta 1.196", note: "PERFORMANCE (o vilão do heap/GC): o DVL Exhaustion RSI recalculava TUDO a cada frame — resamplava o 1m inteiro em 5 timeframes e recomputava a exaustão de cada barra de cada TF, sem cache. Com o RSI ligado o tempo todo (pros sinais de V), isso enchia a memória de lixo (heap chegando a 277MB) e causava pausas de GC gigantes — inclusive um frame de 36 SEGUNDOS no HUD. Agora o cálculo é CACHEADO: só refaz quando os dados ou os parâmetros realmente mudam. Arrastando/zoomando (dados parados) vira cache hit e a EXR fica de graça; quando o preço anda, recalcula uma vez. Deve derrubar o heap, matar as travadas de GC e melhorar o FPS com o RSI ligado. Só frontend. (Se ainda travar, o próximo alvo é a linha do RSI e as barras de volume, que ainda desenham segmento a segmento.)" },
@@ -76868,6 +76869,8 @@ window.DVL_COPILOT_BACKTEST_1040={
   var PANEL_KEY = "DVL_DESKTOP_PANEL_WIDTH_1179";
   var resizeState = null;
   var hoverRAF = 0;
+  var _dvlLastHoverEv = null;
+  function _dvlHoverFlush(){ hoverRAF = 0; var e = _dvlLastHoverEv; if(e) { try{ onHover(e); }catch(_){} } }
   /* Beta 1.197 — one rect read for the whole hover event. Previously
      updateCursor() + priceScaleHit() + timeScaleHit() + crosshair each called
      getBoundingClientRect(), forcing multiple synchronous layouts per mousemove. */
@@ -77087,8 +77090,17 @@ window.DVL_COPILOT_BACKTEST_1040={
     try{ if(window.ResizeObserver) new ResizeObserver(invalidateDesktopRect).observe(c); }catch(_){ }
 
     window.addEventListener("wheel",onWheel,{capture:true,passive:false});
-    c.addEventListener("pointermove",onHover,{passive:true});
-    c.addEventListener("pointerleave",clearHover,{passive:true});
+    /* Beta 1.199 — COALESCE o hover em rAF. onHover roda o cursor + crosshair,
+       e o pointermove dispara na TAXA DO MOUSE (mouse gamer = até 1000 eventos/s),
+       NÃO nos 60fps da tela. Rodar isso 1000x/s (cada um mexendo classes/estado)
+       era o "algo sendo reescrito" que travava só ao mover o mouse. O hoverRAF já
+       existia pra isso mas nunca foi ligado — agora processamos no máximo 1 evento
+       por frame, usando o último. O crosshair continua acompanhando (60fps). */
+    c.addEventListener("pointermove", function(ev){
+      _dvlLastHoverEv = ev;
+      if(!hoverRAF) hoverRAF = requestAnimationFrame(_dvlHoverFlush);
+    }, {passive:true});
+    c.addEventListener("pointerleave",function(){ hoverRAF=0; _dvlLastHoverEv=null; clearHover(); },{passive:true});
     c.addEventListener("pointerdown",function(ev){
       if(active()&&ev.pointerType==="mouse"&&ev.button===0) document.body.classList.add("dvl-desktop-chart-dragging");
       closeContext();
