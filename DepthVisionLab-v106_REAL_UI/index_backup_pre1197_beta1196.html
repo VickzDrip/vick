@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.197';
+window.DVL_APP_VERSION = 'Beta 1.196';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -20496,7 +20496,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = "Beta 1.197";
+const DVL_APP_VERSION = "Beta 1.196";
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -20526,7 +20526,6 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: "Beta 1.197", note: "PERFORMANCE CORE: crosshair desktop agora usa canvas overlay próprio e não redesenha candles/volume/osciladores a cada movimento do mouse; cache único do rect do canvas no hover; redraw ocioso cai de 4x/s para 1x/s; resolução dinâmica durante pan/zoom reduz pixels rasterizados e volta nítida ao soltar; linha do Exhaustion RSI é batched em 3 paths durante interação; polls visuais e observer desktop foram desacelerados/coalescidos. Sem mudar cálculos, dados, paper trading ou layout. Mobile preservado visualmente." },
   { version: "Beta 1.196", note: "PERFORMANCE (o vilão do heap/GC): o DVL Exhaustion RSI recalculava TUDO a cada frame — resamplava o 1m inteiro em 5 timeframes e recomputava a exaustão de cada barra de cada TF, sem cache. Com o RSI ligado o tempo todo (pros sinais de V), isso enchia a memória de lixo (heap chegando a 277MB) e causava pausas de GC gigantes — inclusive um frame de 36 SEGUNDOS no HUD. Agora o cálculo é CACHEADO: só refaz quando os dados ou os parâmetros realmente mudam. Arrastando/zoomando (dados parados) vira cache hit e a EXR fica de graça; quando o preço anda, recalcula uma vez. Deve derrubar o heap, matar as travadas de GC e melhorar o FPS com o RSI ligado. Só frontend. (Se ainda travar, o próximo alvo é a linha do RSI e as barras de volume, que ainda desenham segmento a segmento.)" },
   { version: "Beta 1.195", note: "Conserta o backtest de Sinais V que 'demorava e não mostrava nada': quando o run terminava mas o grid vinha sem sinais suficientes (ex.: TF/período pesado com poucos candles), o backend devolvia ready:false e o app ficava POLANDO pra sempre achando que ainda estava rodando. Agora, quando o run TERMINA, ele sempre devolve ready:true — o status do grid em si vai à parte, e o card mostra o resultado OU uma mensagem clara ('poucos candles no período'), em vez de girar sem fim. Também protege o cálculo com try/catch pra um erro não pendurar o run. Obs.: no BTC 15m/1 ano o sinal cru de exaustão deu NEGATIVO (long ~-42%, short ~-22% no teste), então o card mostra 'NADA confiável' — é resultado real, não bug. Backend (dvl-scanner reinicia sozinho)." },
   { version: "Beta 1.194", note: "Conserta o botão '🔺 Sinais V' do backtest que não ativava: o clique no seletor de tipo tinha uma lista que só aceitava vp/rsi/combo, então 'vsignal' caía de volta pra Volume Profile. Agora seleciona certo e dispara o backtest de Sinais V. Só frontend." },
@@ -24287,13 +24286,7 @@ refreshAssetUi();
 function resizeCanvas(){
   const c = els.canvas;
   const rect = c.getBoundingClientRect();
-  /* Beta 1.197 — dynamic interaction resolution. A retina canvas at DPR 2.5
-     rasterizes 6.25x more pixels. While the finger/mouse is actively panning or
-     zooming, cap DPR at 1.35; when the gesture ends, 1.188 already requests a
-     final repaint and the chart returns to full sharpness automatically. */
-  const __dvlDeviceDpr = window.devicePixelRatio || 1;
-  const __dvlDprCap = window.__dvlChartInteracting ? 1.35 : 2.5;
-  const dpr = Math.max(1, Math.min(__dvlDeviceDpr, __dvlDprCap));
+  const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2.5));
   const w = Math.floor(rect.width * dpr);
   const h = Math.floor(rect.height * dpr);
   if(c.width !== w || c.height !== h){
@@ -26124,13 +26117,7 @@ async function _fastPoll(){
 }
 setInterval(_fastPoll, 2000);
 setTimeout(_fastPoll, 300); // primeiro tick logo no boot
-/* Beta 1.197 — the countdown only needs one-second precision. The old 250ms
-   loop forced a COMPLETE chart + every oscillator redraw four times per second
-   even when nothing changed. Event-driven WS/pointer renders remain unchanged. */
-setInterval(function(){
-  if(document.hidden || window.__dvlChartInteracting) return;
-  drawSoon();
-}, 1000);
+setInterval(drawSoon, 250);
 
 /* ── Cola a vela em formação no preço ao vivo ────────────────────────────────
    Para ativos só-MEXC (ex.: HYPE) o WS de kline é da Binance e não conecta, e
@@ -29529,7 +29516,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       settingsBtn.setAttribute("aria-label", "Drawing settings");
     }
 
-    setInterval(syncCtxBarVisibility, 500);
+    setInterval(syncCtxBarVisibility, 120);
     setTimeout(syncCtxBarVisibility, 300);
   }
 
@@ -35003,7 +34990,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   function boot(){
     updateDock();
     window.addEventListener("resize", updateDock, {passive:true});
-    setInterval(updateDock, 2000);
+    setInterval(updateDock, 450);
 
     const old = window.DVLScaleControlsDockUpdate;
     window.DVLScaleControlsDockUpdate = function(){
@@ -41644,7 +41631,7 @@ if(typeof _orig0634 === 'function'){
 }
 
 /* Catch oscillator toggles that don't go through drawSoon */
-setInterval(function(){ if(!document.hidden) dvlSyncLayerBounds(); }, 2000);
+setInterval(dvlSyncLayerBounds, 600);
 window.addEventListener('resize', dvlSyncLayerBounds, {passive:true});
 
 if(document.readyState === 'loading'){
@@ -67892,56 +67879,34 @@ body.dvl-osc-divider-dragging *{
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
 
-        if(window.__dvlChartInteracting && typeof Path2D !== "undefined"){
-          /* Beta 1.197 — during pan/zoom the glow is already disabled by 1.188,
-             so hundreds of one-segment stroke() calls bought no visible value.
-             Group the exact same segments into the three real EXR colors and
-             rasterize them in at most three strokes. Stationary rendering below
-             remains byte-for-byte equivalent, including strength glow/alpha. */
-          var _exrPaths=Object.create(null);
-          for(var sidx=1;sidx<pts.length;sidx++){
-            var a=pts[sidx-1], b=pts[sidx];
-            var segMax=Math.max(a.v,b.v), segMin=Math.min(a.v,b.v);
-            var col=segMax>=state.upperZoneLevel ? state.bullExhaustionColor
-                   : segMin<=state.lowerZoneLevel ? state.bearExhaustionColor
+        for(var sidx=1;sidx<pts.length;sidx++){
+          var a=pts[sidx-1], b=pts[sidx];
+          /* Colorir pelo extremo do segmento, não pela média: se qualquer
+             ponta cruza a zona (upper/lower), o segmento inteiro conta como
+             sobrecompra/sobrevenda — antes a média dos dois pontos podia
+             ficar dentro da faixa neutra mesmo com a linha visivelmente
+             ultrapassando a zona. */
+          var segMax = Math.max(a.v,b.v), segMin = Math.min(a.v,b.v);
+          var col = segMax >= state.upperZoneLevel ? state.bullExhaustionColor
+                   : segMin <= state.lowerZoneLevel ? state.bearExhaustionColor
                    : colorAt((a.v+b.v)/2);
-            var p=_exrPaths[col]||(_exrPaths[col]=new Path2D());
-            p.moveTo(a.x,a.y); p.lineTo(b.x,b.y);
+          var strong = Math.max(a.buy,a.sell,b.buy,b.sell);
+          /* A exaustão bruta raramente passa de ~0.45, então amplia pra usar
+             toda a faixa: assim o "estouro" dos TFs rápidos fica ÓBVIO. */
+          var viz = Math.max(0, Math.min(1, strong * 2.4));
+          ctx.strokeStyle = col;
+          ctx.lineWidth = state.lineWidth;
+          ctx.globalAlpha = 0.85 + 0.15 * viz;
+          if(viz > 0.05){
+            ctx.shadowColor = col;
+            ctx.shadowBlur = 4 + 26 * viz;               /* e BRILHA proporcional à força */
+          }else{
+            ctx.shadowBlur = 0;
           }
-          ctx.lineWidth=state.lineWidth;
-          ctx.globalAlpha=.94;
-          ctx.shadowBlur=0;
-          Object.keys(_exrPaths).forEach(function(col){ ctx.strokeStyle=col; ctx.stroke(_exrPaths[col]); });
-        }else{
-          for(var sidx=1;sidx<pts.length;sidx++){
-            var a=pts[sidx-1], b=pts[sidx];
-            /* Colorir pelo extremo do segmento, não pela média: se qualquer
-               ponta cruza a zona (upper/lower), o segmento inteiro conta como
-               sobrecompra/sobrevenda — antes a média dos dois pontos podia
-               ficar dentro da faixa neutra mesmo com a linha visivelmente
-               ultrapassando a zona. */
-            var segMax = Math.max(a.v,b.v), segMin = Math.min(a.v,b.v);
-            var col = segMax >= state.upperZoneLevel ? state.bullExhaustionColor
-                     : segMin <= state.lowerZoneLevel ? state.bearExhaustionColor
-                     : colorAt((a.v+b.v)/2);
-            var strong = Math.max(a.buy,a.sell,b.buy,b.sell);
-            /* A exaustão bruta raramente passa de ~0.45, então amplia pra usar
-               toda a faixa: assim o "estouro" dos TFs rápidos fica ÓBVIO. */
-            var viz = Math.max(0, Math.min(1, strong * 2.4));
-            ctx.strokeStyle = col;
-            ctx.lineWidth = state.lineWidth;
-            ctx.globalAlpha = 0.85 + 0.15 * viz;
-            if(viz > 0.05){
-              ctx.shadowColor = col;
-              ctx.shadowBlur = 4 + 26 * viz;
-            }else{
-              ctx.shadowBlur = 0;
-            }
-            ctx.beginPath();
-            ctx.moveTo(a.x,a.y);
-            ctx.lineTo(b.x,b.y);
-            ctx.stroke();
-          }
+          ctx.beginPath();
+          ctx.moveTo(a.x,a.y);
+          ctx.lineTo(b.x,b.y);
+          ctx.stroke();
         }
         ctx.restore();
 
@@ -76859,25 +76824,13 @@ window.DVL_COPILOT_BACKTEST_1040={
   var PANEL_KEY = "DVL_DESKTOP_PANEL_WIDTH_1179";
   var resizeState = null;
   var hoverRAF = 0;
-  /* Beta 1.197 — one rect read for the whole hover event. Previously
-     updateCursor() + priceScaleHit() + timeScaleHit() + crosshair each called
-     getBoundingClientRect(), forcing multiple synchronous layouts per mousemove. */
-  var __dvlDesktopRectCache = null, __dvlDesktopRectAt = 0;
-  function desktopRect(c){
-    var now=(window.performance&&performance.now)?performance.now():Date.now();
-    if(__dvlDesktopRectCache && now-__dvlDesktopRectAt<250) return __dvlDesktopRectCache;
-    __dvlDesktopRectCache=c.getBoundingClientRect();
-    __dvlDesktopRectAt=now;
-    return __dvlDesktopRectCache;
-  }
-  function invalidateDesktopRect(){ __dvlDesktopRectCache=null; }
 
   function active(){ return !!MQ.matches; }
   function canvas(){ return document.getElementById("chart"); }
   function isEditableTarget(t){
     return !!(t && (t.closest && t.closest("input,textarea,select,[contenteditable='true']")));
   }
-  function localY(ev,c){ var r=desktopRect(c); return ev.clientY-r.top; }
+  function localY(ev,c){ var r=c.getBoundingClientRect(); return ev.clientY-r.top; }
   function inOscillatorPanel(ev,c){
     try{
       var y=localY(ev,c), b=window.__dvlOscillatorPanelBounds||{};
@@ -76890,12 +76843,12 @@ window.DVL_COPILOT_BACKTEST_1040={
     }catch(_){ return false; }
   }
   function priceScaleHit(ev,c){
-    var r=desktopRect(c);
+    var r=c.getBoundingClientRect();
     var w=(typeof window.DVL_PRICE_SCALE_W==="number"?window.DVL_PRICE_SCALE_W:70);
     return ev.clientX>=r.right-w;
   }
   function timeScaleHit(ev,c){
-    var r=desktopRect(c);
+    var r=c.getBoundingClientRect();
     var h=24;
     try{ if(typeof dvlMainTimeScaleHeight==="function") h=Math.max(20,Number(dvlMainTimeScaleHeight())||24); }catch(_){ }
     return ev.clientY>=r.bottom-h;
@@ -76963,7 +76916,7 @@ window.DVL_COPILOT_BACKTEST_1040={
 
     try{
       if(ev.shiftKey){
-        var r=desktopRect(c);
+        var r=c.getBoundingClientRect();
         var scale=(typeof window.DVL_PRICE_SCALE_W==="number"?window.DVL_PRICE_SCALE_W:70);
         var count=(typeof chartViewCount==="number"?chartViewCount:140);
         var spacing=Math.max(.25,(r.width-scale)/Math.max(1,count-1));
@@ -77073,9 +77026,6 @@ window.DVL_COPILOT_BACKTEST_1040={
     if(!c || c.dataset.dvlDesktop1179Bound) return;
     c.dataset.dvlDesktop1179Bound="1";
     window.__dvlDesktopHoverCrosshair=true;
-    try{ window.addEventListener("resize",invalidateDesktopRect,{passive:true}); }catch(_){ }
-    try{ window.addEventListener("scroll",invalidateDesktopRect,{passive:true,capture:true}); }catch(_){ }
-    try{ if(window.ResizeObserver) new ResizeObserver(invalidateDesktopRect).observe(c); }catch(_){ }
 
     window.addEventListener("wheel",onWheel,{capture:true,passive:false});
     c.addEventListener("pointermove",onHover,{passive:true});
@@ -77130,15 +77080,7 @@ window.DVL_COPILOT_BACKTEST_1040={
     requestDraw();
   }
 
-  var __dvlDesktopMoRAF=0;
-  var mo=new MutationObserver(function(){
-    if(!active() || __dvlDesktopMoRAF) return;
-    __dvlDesktopMoRAF=requestAnimationFrame(function(){
-      __dvlDesktopMoRAF=0;
-      ensureResizeHandles();
-      enhanceNavTitles();
-    });
-  });
+  var mo=new MutationObserver(function(){ if(active()){ ensureResizeHandles(); enhanceNavTitles(); } });
   mo.observe(document.documentElement,{childList:true,subtree:true});
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",init,{once:true});
   else init();
@@ -78399,98 +78341,6 @@ window.DVL_COPILOT_BACKTEST_1040={
   else window.addEventListener("DOMContentLoaded", function(){ setTimeout(boot,900); });
 
   window.DVLPerfHUD={ start:start, stop:stop, toggle:toggle, get on(){return on;} };
-})();
-</script>
-
-
-<style id="DVL_BETA_1197_CROSSHAIR_LAYER_CSS">
-#dvlCrosshairOverlay1197{
-  position:absolute!important;
-  inset:0!important;
-  width:100%!important;
-  height:100%!important;
-  display:block!important;
-  pointer-events:none!important;
-  touch-action:none!important;
-  z-index:12!important;
-  background:transparent!important;
-}
-#chartWrap{position:relative!important;}
-#chart{position:relative!important;z-index:1!important;}
-</style>
-<script id="DVL_BETA_1197_CROSSHAIR_LAYER_JS">
-(function(){
-"use strict";
-if(window.DVL_CROSSHAIR_LAYER_1197) return;
-var base=document.getElementById("chart"), wrap=document.getElementById("chartWrap");
-if(!base||!wrap||typeof drawCrosshair!=="function") return;
-var layer=document.getElementById("dvlCrosshairOverlay1197");
-if(!layer){ layer=document.createElement("canvas"); layer.id="dvlCrosshairOverlay1197"; layer.setAttribute("aria-hidden","true"); base.insertAdjacentElement("afterend",layer); }
-var ctx=layer.getContext("2d"), raf=0, rectCache=null, rectAt=0;
-var originalDrawCrosshair=drawCrosshair;
-function invalidate(){ rectCache=null; }
-function rect(){
-  var now=(window.performance&&performance.now)?performance.now():Date.now();
-  if(rectCache&&now-rectAt<250) return rectCache;
-  rectCache=base.getBoundingClientRect(); rectAt=now; return rectCache;
-}
-function syncSize(){
-  var r=rect(), dpr=Math.max(1,Math.min(window.devicePixelRatio||1,2.5));
-  var w=Math.max(1,Math.round(r.width*dpr)), h=Math.max(1,Math.round(r.height*dpr));
-  if(layer.width!==w||layer.height!==h){ layer.width=w; layer.height=h; }
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  return {w:r.width,h:r.height};
-}
-function clear(){ var z=syncSize(); ctx.clearRect(0,0,z.w,z.h); }
-function paint(){
-  raf=0; var z=syncSize(); ctx.clearRect(0,0,z.w,z.h);
-  try{
-    if(!crosshair||!crosshair.visible||!window.__dvlLastCrossCfg) return;
-    var cfg=Object.assign({},window.__dvlLastCrossCfg,{
-      fullY0:0,
-      fullY1:(typeof dvlCrossPanelBottom==="function"?dvlCrossPanelBottom(z.h):z.h),
-      fullX0:0,
-      fullX1:z.w-(typeof PRICE_SCALE_W==="number"?PRICE_SCALE_W:55)
-    });
-    originalDrawCrosshair(ctx,cfg);
-  }catch(_){ }
-}
-function schedule(){ if(!raf) raf=requestAnimationFrame(paint); }
-/* Main canvas redraws no longer bake a crosshair into the expensive base layer. */
-drawCrosshair=function(targetCtx,cfg){
-  if(targetCtx&&targetCtx.canvas===layer) return originalDrawCrosshair(targetCtx,cfg);
-  schedule();
-};
-window.drawCrosshair=drawCrosshair;
-setCrosshairFromClient=function(clientX,clientY){
-  var r=rect();
-  crosshair.x=clamp(clientX-r.left,0,Math.max(0,r.width-PRICE_SCALE_W));
-  crosshair.y=clamp(clientY-r.top,0,Math.max(80,dvlCrossPanelBottom(r.height)));
-  crosshair.visible=true;
-  if(window.S) S._cross={cx:crosshair.x,cy:crosshair.y};
-  schedule();
-};
-window.setCrosshairFromClient=setCrosshairFromClient;
-moveCrosshairByDelta=function(dx,dy){
-  var r=rect(), maxX=Math.max(0,r.width-PRICE_SCALE_W), maxY=Math.max(80,dvlCrossPanelBottom(r.height));
-  crosshair.x=clamp(crossDragState.startCrossX+dx,0,maxX);
-  crosshair.y=clamp(crossDragState.startCrossY+dy,0,maxY);
-  crosshair.visible=true;
-  if(window.S) S._cross={cx:crosshair.x,cy:crosshair.y};
-  schedule();
-};
-window.moveCrosshairByDelta=moveCrosshairByDelta;
-hideCrosshair=function(){
-  crosshair.visible=false; crosshair.active=false; crossDragState=null;
-  if(window.S){ S._cross=null; S.cursor=null; }
-  clear();
-};
-window.hideCrosshair=hideCrosshair;
-try{ new ResizeObserver(function(){invalidate();schedule();}).observe(base); }catch(_){ }
-window.addEventListener("resize",function(){invalidate();schedule();},{passive:true});
-window.addEventListener("scroll",invalidate,{passive:true,capture:true});
-window.DVL_CROSSHAIR_LAYER_1197={version:"1.197",layer:layer,paint:paint,invalidate:invalidate};
-schedule();
 })();
 </script>
 
