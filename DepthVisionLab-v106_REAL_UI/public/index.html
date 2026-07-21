@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.232';
+window.DVL_APP_VERSION = 'Beta 1.233';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16019,6 +16019,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.233", note: "Smart Delta (visual): a barra do histograma agora BRILHA de verdade quando é um extremo/spike — cor bem mais forte e saturada (tipo o pico verde-limão do TradingView), opacidade cheia sem escurecer por confiança e um leve glow, enquanto as barras normais seguem em tom médio. Só aparência; o motor e os cálculos não mudaram. Só frontend." },
   { version: "Beta 1.232", note: "Refinamento visual do histograma DVL Smart Delta (só aparência, o motor e os cálculos permanecem intactos): barras mais largas, opacidade proporcional à confiança da leitura, escala automática do painel, intensidade de cor por extremidade (média × extrema), média móvel mais espessa, linha zero mais clara e cabeçalho com Δ e MA. O painel do histograma ficou totalmente independente, desacoplado do oscilador Exhaustion RSI. Novas configs no painel de configuração: Largura da barra, Escala automática, Opacidade por confiança (com máx./mín.) e Espessura da média. Só frontend." },
   { version: "Beta 1.231", note: "Separated DVL Smart Delta into a chart overlay summary and a dedicated histogram oscillator while preserving a single Smart Delta Engine. Correção visual: o histograma NÃO fica mais em cima dos candles — a tabela Smart Delta continua como overlay no canto do gráfico, e o histograma (verde acima / vermelho abaixo da linha zero, mais intenso nos spikes, com média móvel amarela e escala independente) foi movido para um PAINEL PRÓPRIO de oscilador, separado do painel de Volume, e acompanha zoom/pan como os demais osciladores (uma coluna por candle). Ambos consomem o mesmo motor, sem duplicar cálculo. Novas configs: Histograma on/off, Média (MA) on/off + MA Length, Spike ×, Linha zero, e Tabela detalhada (compacta/detalhada). Registrado na lista real de osciladores. Só frontend." },
   { version: "Beta 1.230", note: "DVL Smart Delta Engine — Stage 3 (fonte única de leitura + Smart Alerts): o motor agora publica a leitura atual num único lugar — window.DVL_SMART_DELTA_LAST e o evento dvl:smart-delta (símbolo, timeframe, delta, confidence, continuation, exhaustion, classe e componentes) — mais DVL_SMART_DELTA_ENGINE_API.getSnapshot(), para Scanner, Copilot, Market Matrix e Smart Alerts consumirem SEM duplicar lógica. Adicionado o Smart Alerts: quando o candle cruza os limiares configurados (|Delta| ≥, Confidence ≥, ou Exhaustion ≥), dispara um alerta (toast + evento dvl:smart-delta-alert), uma vez por candle. Novos controles no painel de configuração (Alertas on/off e limiares). Observação: Market Matrix e Smart Alerts ainda não existiam como telas no app — o Smart Alerts foi criado agora; a coluna do Scanner por símbolo depende de cálculo no backend (footprint por símbolo) e fica para um próximo passo. Só frontend." },
@@ -31242,6 +31243,8 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   function oscOn(){ return !!state.on && state.histogram!==false; }
   // Beta 1.232 — cores por extremidade (média x extrema)
   function dimHex(hex,f){ hex=String(hex||"").replace("#",""); if(hex.length!==6) return hex; var r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16); r=Math.round(r*f);g=Math.round(g*f);b=Math.round(b*f); function h2(x){x=Math.max(0,Math.min(255,x)).toString(16);return x.length<2?"0"+x:x;} return "#"+h2(r)+h2(g)+h2(b); }
+  // Beta 1.233 — barra extrema BRILHA (pop tipo TV): satura + clareia levemente
+  function litHex(hex,f,w){ hex=String(hex||"").replace("#",""); if(hex.length!==6) return hex; var r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16); w=w||0; r=r*f+(255-r*f)*w; g=g*f+(255-g*f)*w; b=b*f+(255-b*f)*w; function h2(x){x=Math.round(Math.max(0,Math.min(255,x))).toString(16);return x.length<2?"0"+x:x;} return "#"+h2(r)+h2(g)+h2(b); }
   function oscDraw(ctx, padL, padR, top, h, w){
     try{ window.__dvlOscillatorPanelBounds=window.__dvlOscillatorPanelBounds||{}; window.__dvlOscillatorPanelBounds.DVLSmartDelta={top:top,bottom:top+h}; }catch(_){}
     if(!oscOn()) return;
@@ -31265,6 +31268,8 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     if(state.zeroLine!==false){ ctx.strokeStyle="rgba(190,205,200,.5)"; ctx.lineWidth=1; ctx.setLineDash([5,4]); ctx.beginPath(); ctx.moveTo(m.x0,zy); ctx.lineTo(m.x1,zy); ctx.stroke(); ctx.setLineDash([]); }
     var posS=state.posColor||"#16c784", negS=state.negColor||"#ff4a61";
     var posM=dimHex(posS,0.62), negM=dimHex(negS,0.62);
+    // extremos: cor bem mais forte/brilhante (satura + clareia) tipo o pico verde-limão do TV
+    var posX=litHex(posS,1.35,0.22), negX=litHex(negS,1.15,0.14);
     var spikeMult=Math.max(1.2,+state.spikeMult||2), spikeTh=(state.thNeutral||18)*spikeMult;
     var maxOp=clamp(state.maxOpacity||0.95,0.4,1), minOp=clamp(state.minOpacity||0.28,0.05,maxOp);
     var useCO=state.useConfOpacity!==false;
@@ -31279,11 +31284,20 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       var yy=yFor(d,m.y0,m.y1,lo,hi);
       var up=d>=0, extreme=Math.abs(d)>=spikeTh;
       // ALTURA = delta ; COR = extremidade ; OPACIDADE = confidence
-      ctx.fillStyle = up ? (extreme?posS:posM) : (extreme?negS:negM);
-      ctx.globalAlpha = useCO ? (minOp+(maxOp-minOp)*clamp(sc.confidence/100,0,1)) : maxOp;
-      ctx.fillRect(xx-bw/2, Math.min(yy,zy), bw, Math.max(0.8,Math.abs(zy-yy)));
+      if(extreme){
+        // extremo BRILHA: cor forte, opacidade cheia (não escurece por confidence) + leve glow
+        ctx.fillStyle = up?posX:negX;
+        ctx.globalAlpha = Math.max(maxOp,0.92);
+        ctx.shadowColor = up?posX:negX; ctx.shadowBlur = 7;
+        ctx.fillRect(xx-bw/2, Math.min(yy,zy), bw, Math.max(0.8,Math.abs(zy-yy)));
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = up?posM:negM;
+        ctx.globalAlpha = useCO ? (minOp+(maxOp-minOp)*clamp(sc.confidence/100,0,1)) : maxOp;
+        ctx.fillRect(xx-bw/2, Math.min(yy,zy), bw, Math.max(0.8,Math.abs(zy-yy)));
+      }
     }
-    ctx.globalAlpha=1;
+    ctx.globalAlpha=1; ctx.shadowBlur=0;
     // média móvel amarela — 2–2.5px, sempre acima das barras
     if(state.maOn!==false){
       ctx.beginPath(); ctx.strokeStyle=state.maColor||"#f3c768"; ctx.lineWidth=clamp(+state.maThick||2.2,1,3); ctx.lineJoin="round"; ctx.lineCap="round";
