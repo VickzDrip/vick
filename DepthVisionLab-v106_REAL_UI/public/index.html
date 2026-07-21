@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.222';
+window.DVL_APP_VERSION = 'Beta 1.223';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -15985,7 +15985,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = String(window.DVL_APP_VERSION || "Beta 1.222");
+const DVL_APP_VERSION = String(window.DVL_APP_VERSION || "Beta 1.223");
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -16015,6 +16015,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.223", note: "DVL Volume Profile Avançado — Stage 1 (customização de linha): cada grupo de níveis (Current e Sessão 2) agora tem estilo de linha configurável (Sólida, Tracejada, Pontilhada, Traço-ponto) e espessura de 1 a 4 px, e os labels ganharam modos Full / Short / Price Only / Hidden com opção de mostrar o preço ao lado do nome. Tudo aplicado no renderizador real do Volume Profile existente, sem tocar no cálculo de distribuição, sessões ou Value Area — Current e Previous (Sessão 2) permanecem intactos, sem regressão. Próximos estágios: Developing e Overnight profiles, timezone, POC trail e zonas de confluência. Só frontend." },
   { version: "Beta 1.222", note: "Fix DVL FVG Firewall not showing in the Indicadores menu: the app has two indicator menus, and the live UI is built from the modules() registry (dvl1bIndicatorMenu0813), not the legacy #indicatorDropdown the module was inserting into. Registered DVL FVG Firewall in the real modules() registry (VOLUME & FLOW section) and added the api methods the menu drives it with — on(), setOn(), openPanel()/open() — so the toggle, the settings gear and the ON/OFF state all work from the menu you actually see. Frontend only." },
   { version: "Beta 1.221", note: "Fix DVL FVG Firewall: zones never appeared because the module read the app candles via window.klines, but klines/interval/symbol/ticker are declared with let (global lexical scope, not on window), so it always saw an empty candle set and detected nothing. Now it reads them by bare identifier with a typeof guard — the same pattern the rest of the app uses — so detection runs on the real candles and VALID/WEAK/FAKE zones draw. Verified end-to-end: bull and bear FVGs detected and rendered, 0 console errors. Frontend only." },
   { version: "Beta 1.220", note: "Added DVL FVG Firewall with real-trade footprint aggregation, flow-based FVG scoring, VALID/WEAK/FAKE classification, mitigation tracking, cached rendering and performance-safe worker processing." },
@@ -34570,7 +34571,12 @@ drag = {
     s2on: false,
     s2tf: '4h',
     s2showPOC: true, s2showVAH: true, s2showVAL: true,
-    s2colorPOC: "#ffd700", s2colorVAH: "#00e5cc", s2colorVAL: "#b44fff"
+    s2colorPOC: "#ffd700", s2colorVAH: "#00e5cc", s2colorVAL: "#b44fff",
+    // Beta 1.223 — customização de linha (Stage 1 do VP Avançado)
+    lineStyleCur: 'dashed',  lineWidthCur: 1.4,
+    lineStyleS2:  'dashdot', lineWidthS2:  1.4,
+    labelMode: 'short',      // full | short | price | hidden
+    labelPrice: false        // acrescenta o preço ao lado do nome
   };
 
   let state = Object.assign({}, DEFAULTS);
@@ -34767,6 +34773,39 @@ drag = {
     return next;
   }
 
+  // ── Line style helpers (Beta 1.223) ─────────────────────────────────────
+  // Estilo/espessura por grupo (Current, Sessão 2) + modo de label. Não mexe
+  // no cálculo de distribuição/sessão — só na renderização das linhas.
+  function vpDashFor(style, w){
+    w = Math.max(1, +w || 1.4);
+    if(style === 'solid')   return [];
+    if(style === 'dotted')  return [1, Math.max(3, Math.round(w*2.5))];
+    if(style === 'dashdot') return [Math.round(w*5), Math.round(w*3), 1, Math.round(w*3)];
+    return [Math.round(w*4), Math.round(w*3)]; // dashed (default)
+  }
+  function vpSetLevelStyle(ctx, grp){
+    const w = grp==='s2' ? (+state.lineWidthS2||1.4) : (+state.lineWidthCur||1.4);
+    const s = grp==='s2' ? (state.lineStyleS2||'dashdot') : (state.lineStyleCur||'dashed');
+    ctx.lineWidth = w;
+    ctx.setLineDash(vpDashFor(s, w));
+  }
+  function vpFmtPrice(p){
+    p = +p; if(!isFinite(p)) return '';
+    if(p >= 1000) return p.toFixed(1);
+    if(p >= 1)    return p.toFixed(2);
+    return p.toPrecision(4);
+  }
+  // Retorna o texto do label conforme o modo, ou null se não deve mostrar.
+  function vpLevelLabel(shortName, price){
+    if(state.showLabels === false) return null;
+    const m = state.labelMode || 'short';
+    if(m === 'hidden') return null;
+    if(m === 'price')  return vpFmtPrice(price);
+    let t = shortName;                 // full e short usam o nome (POC/VAH/VAL)
+    if(state.labelPrice) t += ' ' + vpFmtPrice(price);
+    return t;
+  }
+
   // ── Draw ──────────────────────────────────────────────────────────────────
   function draw(ctx, cfg){
     if(!on()) return;
@@ -34873,17 +34912,17 @@ drag = {
       const pocY = rowP(vpStableLevels.poc);
       const pocDom = buyB[pocIdx] >= sellB[pocIdx] ? cBuy : cSell;
       ctx.strokeStyle = state.colorPOC || pocDom;
-      ctx.lineWidth   = 1.5;
-      ctx.setLineDash([5, 4]);
+      vpSetLevelStyle(ctx, 'cur');
       ctx.beginPath(); ctx.moveTo(x0, pocY); ctx.lineTo(x1, pocY); ctx.stroke();
       ctx.setLineDash([]);
-      if(state.showLabels !== false){
+      const _lPOC = vpLevelLabel("POC", vpStableLevels.poc);
+      if(_lPOC){
         ctx.fillStyle    = state.colorPOC || "#f3c768";
         ctx.font         = "700 7.5px system-ui";
         ctx.textAlign    = "right";
         ctx.textBaseline = "bottom";
         ctx.globalAlpha  = 0.9;
-        ctx.fillText("POC", vpX0 - 2, pocY);
+        ctx.fillText(_lPOC, vpX0 - 2, pocY);
         ctx.globalAlpha  = 1;
       }
     }
@@ -34892,17 +34931,17 @@ drag = {
     if(state.showVAH !== false){
       const vahY = rowP(vpStableLevels.vah);
       ctx.strokeStyle = state.colorVAH || "#13dc8d";
-      ctx.lineWidth   = 1;
-      ctx.setLineDash([3, 5]);
+      vpSetLevelStyle(ctx, 'cur');
       ctx.beginPath(); ctx.moveTo(x0, vahY); ctx.lineTo(x1, vahY); ctx.stroke();
       ctx.setLineDash([]);
-      if(state.showLabels !== false){
+      const _lVAH = vpLevelLabel("VAH", vpStableLevels.vah);
+      if(_lVAH){
         ctx.fillStyle    = state.colorVAH || "#13dc8d";
         ctx.font         = "700 7.5px system-ui";
         ctx.textAlign    = "right";
         ctx.textBaseline = "bottom";
         ctx.globalAlpha  = 0.9;
-        ctx.fillText("VAH", vpX0 - 2, vahY);
+        ctx.fillText(_lVAH, vpX0 - 2, vahY);
         ctx.globalAlpha  = 1;
       }
     }
@@ -34911,17 +34950,17 @@ drag = {
     if(state.showVAL !== false){
       const valY = rowP(vpStableLevels.val);
       ctx.strokeStyle = state.colorVAL || "#ff4a61";
-      ctx.lineWidth   = 1;
-      ctx.setLineDash([3, 5]);
+      vpSetLevelStyle(ctx, 'cur');
       ctx.beginPath(); ctx.moveTo(x0, valY); ctx.lineTo(x1, valY); ctx.stroke();
       ctx.setLineDash([]);
-      if(state.showLabels !== false){
+      const _lVAL = vpLevelLabel("VAL", vpStableLevels.val);
+      if(_lVAL){
         ctx.fillStyle    = state.colorVAL || "#ff4a61";
         ctx.font         = "700 7.5px system-ui";
         ctx.textAlign    = "right";
         ctx.textBaseline = "top";
         ctx.globalAlpha  = 0.9;
-        ctx.fillText("VAL", vpX0 - 2, valY);
+        ctx.fillText(_lVAL, vpX0 - 2, valY);
         ctx.globalAlpha  = 1;
       }
     }
@@ -34978,17 +35017,17 @@ drag = {
         if(state.s2showPOC !== false){
           const poc2Y = rowP(vpStableLevels2.poc);
           ctx.strokeStyle = state.s2colorPOC || "#ffd700";
-          ctx.lineWidth   = 1.5;
-          ctx.setLineDash([2, 7]);
+          vpSetLevelStyle(ctx, 's2');
           ctx.beginPath(); ctx.moveTo(x0, poc2Y); ctx.lineTo(x1, poc2Y); ctx.stroke();
           ctx.setLineDash([]);
-          if(state.showLabels !== false){
+          const _lPOC2 = vpLevelLabel("POC·2", vpStableLevels2.poc);
+          if(_lPOC2){
             ctx.fillStyle    = state.s2colorPOC || "#ffd700";
             ctx.font         = "700 7.5px system-ui";
             ctx.textAlign    = "left";
             ctx.textBaseline = "bottom";
             ctx.globalAlpha  = 0.9;
-            ctx.fillText("POC·2", x0 + 3, poc2Y);
+            ctx.fillText(_lPOC2, x0 + 3, poc2Y);
             ctx.globalAlpha  = 1;
           }
         }
@@ -34996,17 +35035,17 @@ drag = {
         if(state.s2showVAH !== false){
           const vah2Y = rowP(vpStableLevels2.vah);
           ctx.strokeStyle = state.s2colorVAH || "#00e5cc";
-          ctx.lineWidth   = 1;
-          ctx.setLineDash([1, 7]);
+          vpSetLevelStyle(ctx, 's2');
           ctx.beginPath(); ctx.moveTo(x0, vah2Y); ctx.lineTo(x1, vah2Y); ctx.stroke();
           ctx.setLineDash([]);
-          if(state.showLabels !== false){
+          const _lVAH2 = vpLevelLabel("VAH·2", vpStableLevels2.vah);
+          if(_lVAH2){
             ctx.fillStyle    = state.s2colorVAH || "#00e5cc";
             ctx.font         = "700 7.5px system-ui";
             ctx.textAlign    = "left";
             ctx.textBaseline = "bottom";
             ctx.globalAlpha  = 0.9;
-            ctx.fillText("VAH·2", x0 + 3, vah2Y);
+            ctx.fillText(_lVAH2, x0 + 3, vah2Y);
             ctx.globalAlpha  = 1;
           }
         }
@@ -35014,17 +35053,17 @@ drag = {
         if(state.s2showVAL !== false){
           const val2Y = rowP(vpStableLevels2.val);
           ctx.strokeStyle = state.s2colorVAL || "#b44fff";
-          ctx.lineWidth   = 1;
-          ctx.setLineDash([1, 7]);
+          vpSetLevelStyle(ctx, 's2');
           ctx.beginPath(); ctx.moveTo(x0, val2Y); ctx.lineTo(x1, val2Y); ctx.stroke();
           ctx.setLineDash([]);
-          if(state.showLabels !== false){
+          const _lVAL2 = vpLevelLabel("VAL·2", vpStableLevels2.val);
+          if(_lVAL2){
             ctx.fillStyle    = state.s2colorVAL || "#b44fff";
             ctx.font         = "700 7.5px system-ui";
             ctx.textAlign    = "left";
             ctx.textBaseline = "top";
             ctx.globalAlpha  = 0.9;
-            ctx.fillText("VAL·2", x0 + 3, val2Y);
+            ctx.fillText(_lVAL2, x0 + 3, val2Y);
             ctx.globalAlpha  = 1;
           }
         }
@@ -35055,6 +35094,8 @@ drag = {
   function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderPanel(); }
   function closePanel(){ if(panel) panel.classList.remove("is-open"); }
 
+  const VP_STYLE_OPTS=[["solid","Sólida"],["dashed","Tracejada"],["dotted","Pontilhada"],["dashdot","Traço-ponto"]];
+  const VP_LABEL_OPTS=[["full","Full"],["short","Short"],["price","Price Only"],["hidden","Hidden"]];
   const VP_PALETTE=["#10df77","#13dc8d","#2ee6a6","#a7f542","#f3c768","#ffcf5a",
                     "#ff9f43","#ff4a61","#ff3037","#ff6b8f","#b86cff","#9a5cff",
                     "#ffffff","#c9f7de","#ffd700","#c0c0c0"];
@@ -35110,6 +35151,8 @@ drag = {
           <div class="dvl-vt-field"><label>Largura %</label>${vpStepFld("dvlVPWPct",Math.round((state.widthPct||0.18)*100),5,40,1,0)}</div>
           <div class="dvl-vt-field"><label>Opacidade %</label>${vpStepFld("dvlVPOp",Math.round((state.opacity||0.46)*100),5,100,5,0)}</div>
           <div class="dvl-vt-field"><label>Value Area %</label>${vpStepFld("dvlVPVAPct",Math.round((state.valueAreaPct||0.70)*100),10,100,5,0)}</div>
+          <div class="dvl-vt-field"><label>Preço no label</label><label class="dvl-switch"><input id="dvlVPLabelPrice" type="checkbox" ${state.labelPrice?"checked":""}><i></i><b></b></label></div>
+          <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label style="white-space:nowrap">Label</label>${vpDropFld("dvlVPLabelMode",VP_LABEL_OPTS,(state.labelMode||'short'))}</div>
           <div class="dvl-vt-field" style="grid-column:1/-1;flex-direction:column;align-items:flex-start;gap:4px"><label style="white-space:nowrap">Timeframe do VP</label>${vpDropFld("dvlVPTF",VP_TF_OPTS.map(o=>[o.v,o.l]),(state.vpTF||'visible'))}</div>
         </div>
       </div>
@@ -35129,6 +35172,8 @@ drag = {
           ${cField("dvlVPCVAH","Cor VAH","colorVAH")}
           <div class="dvl-vt-field"><label>VAL</label><label class="dvl-switch"><input id="dvlVPVAL" type="checkbox" ${state.showVAL!==false?"checked":""}><i></i><b></b></label></div>
           ${cField("dvlVPCVAL","Cor VAL","colorVAL")}
+          <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label>Estilo</label>${vpDropFld("dvlVPStyleCur",VP_STYLE_OPTS,(state.lineStyleCur||'dashed'))}</div>
+          <div class="dvl-vt-field"><label>Espessura</label>${vpStepFld("dvlVPWCur",(+state.lineWidthCur||1.4),1,4,0.5,1)}</div>
         </div>
       </div>
       <div class="dvl-vt-section">
@@ -35141,6 +35186,8 @@ drag = {
           ${cField("dvlVPCS2VAH","Cor VAH·2","s2colorVAH")}
           <div class="dvl-vt-field"><label>VAL·2</label><label class="dvl-switch"><input id="dvlVPS2VAL" type="checkbox" ${state.s2showVAL!==false?"checked":""}><i></i><b></b></label></div>
           ${cField("dvlVPCS2VAL","Cor VAL·2","s2colorVAL")}
+          <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label>Estilo</label>${vpDropFld("dvlVPStyleS2",VP_STYLE_OPTS,(state.lineStyleS2||'dashdot'))}</div>
+          <div class="dvl-vt-field"><label>Espessura</label>${vpStepFld("dvlVPWS2",(+state.lineWidthS2||1.4),1,4,0.5,1)}</div>
           <div class="dvl-vt-field" style="grid-column:1/-1;flex-direction:column;align-items:flex-start;gap:4px"><label style="white-space:nowrap">Timeframe da Sessão 2</label>${vpDropFld("dvlVPS2TF",VP_TF_OPTS_S2.map(o=>[o.v,o.l]),(state.s2tf||'4h'))}</div>
         </div>
       </div>
@@ -35157,12 +35204,15 @@ drag = {
     bSw("dvlVPS2POC", v=>{state.s2showPOC=v;});
     bSw("dvlVPS2VAH", v=>{state.s2showVAH=v;});
     bSw("dvlVPS2VAL", v=>{state.s2showVAL=v;});
+    bSw("dvlVPLabelPrice", v=>{state.labelPrice=v;});
     // Steppers
     const VP_STEP={
       dvlVPRows: v=>{state.rows=Math.max(20,Math.min(500,v));},
       dvlVPWPct: v=>{state.widthPct=Math.max(0.05,Math.min(0.40,v/100));},
       dvlVPOp:   v=>{state.opacity=Math.max(0.05,Math.min(1,v/100));},
-      dvlVPVAPct:v=>{state.valueAreaPct=Math.max(0.10,Math.min(1,v/100));}
+      dvlVPVAPct:v=>{state.valueAreaPct=Math.max(0.10,Math.min(1,v/100));},
+      dvlVPWCur: v=>{state.lineWidthCur=Math.max(1,Math.min(4,v));},
+      dvlVPWS2:  v=>{state.lineWidthS2 =Math.max(1,Math.min(4,v));}
     };
     body.querySelectorAll(".dvl-feb-step-btn").forEach(btn=>{
       btn.addEventListener("click",e=>{
@@ -35200,6 +35250,9 @@ drag = {
         listEl.classList.remove("is-open");
         if(btnId==="dvlVPTF"){state.vpTF=val;vpKCache=null;vpStableLevels={poc:null,vah:null,val:null,sym:null,tf:null};}
         if(btnId==="dvlVPS2TF"){state.s2tf=val;vpKCache2=null;vpStableLevels2={poc:null,vah:null,val:null,sym:null,tf:null};}
+        if(btnId==="dvlVPLabelMode"){state.labelMode=val;}
+        if(btnId==="dvlVPStyleCur"){state.lineStyleCur=val;}
+        if(btnId==="dvlVPStyleS2"){state.lineStyleS2=val;}
         save();if(typeof drawSoon==="function")drawSoon();
       });
     });
