@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.230';
+window.DVL_APP_VERSION = 'Beta 1.231';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16019,6 +16019,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.231", note: "Separated DVL Smart Delta into a chart overlay summary and a dedicated histogram oscillator while preserving a single Smart Delta Engine. Correção visual: o histograma NÃO fica mais em cima dos candles — a tabela Smart Delta continua como overlay no canto do gráfico, e o histograma (verde acima / vermelho abaixo da linha zero, mais intenso nos spikes, com média móvel amarela e escala independente) foi movido para um PAINEL PRÓPRIO de oscilador, separado do painel de Volume, e acompanha zoom/pan como os demais osciladores (uma coluna por candle). Ambos consomem o mesmo motor, sem duplicar cálculo. Novas configs: Histograma on/off, Média (MA) on/off + MA Length, Spike ×, Linha zero, e Tabela detalhada (compacta/detalhada). Registrado na lista real de osciladores. Só frontend." },
   { version: "Beta 1.230", note: "DVL Smart Delta Engine — Stage 3 (fonte única de leitura + Smart Alerts): o motor agora publica a leitura atual num único lugar — window.DVL_SMART_DELTA_LAST e o evento dvl:smart-delta (símbolo, timeframe, delta, confidence, continuation, exhaustion, classe e componentes) — mais DVL_SMART_DELTA_ENGINE_API.getSnapshot(), para Scanner, Copilot, Market Matrix e Smart Alerts consumirem SEM duplicar lógica. Adicionado o Smart Alerts: quando o candle cruza os limiares configurados (|Delta| ≥, Confidence ≥, ou Exhaustion ≥), dispara um alerta (toast + evento dvl:smart-delta-alert), uma vez por candle. Novos controles no painel de configuração (Alertas on/off e limiares). Observação: Market Matrix e Smart Alerts ainda não existiam como telas no app — o Smart Alerts foi criado agora; a coluna do Scanner por símbolo depende de cálculo no backend (footprint por símbolo) e fica para um próximo passo. Só frontend." },
   { version: "Beta 1.229", note: "DVL Smart Delta Engine — Stage 2 (confluência institucional externa): o motor agora incorpora Open Interest + variação do OI, Long/Short Ratio e os níveis do Volume Profile (POC/VAH/VAL) na pontuação, lendo os indicadores/VP que já existem no DVL (sem duplicar cálculo). OI confirmando a direção (OI subindo junto com o preço) aumenta Confidence e Continuation; OI caindo eleva o Exhaustion (desmontagem de posição); LSR confirmando soma continuação; e a proximidade do candle a VAL/VAH/POC entra como suporte/resistência/equilíbrio. O delta do candle continua intrínseco — a confluência ajusta só Confidence/Continuation/Exhaustion, e quando os dados não estão disponíveis nada é penalizado. Painel ganha uma linha de confluência (OI · LSR · VP). Adicionado DVLVolumeProfile.getLevels() para expor POC/VAH/VAL atuais. Só frontend." },
   { version: "Beta 1.228", note: "Added DVL Smart Delta Engine with institutional confidence scoring, continuation probability, exhaustion analysis and unified confluence model. Motor proprietário (não é Footprint, não simula Bid x Ask): a partir de volume/spike, corpo, pavios, posição do fechamento, velocidade, flat/spike, absorção, rejeição e do delta real do footprint (quando disponível), calcula Institutional Confidence (0–100), Smart Delta assinado (histograma leve: verde compra, vermelho venda, cinza neutro, amarelo indecisão), Continuation Probability (0–100) e Exhaustion Score (0–100). Painel compacto no gráfico (Delta / Confidence / Continuation / Exhaustion do candle atual) e API window.DVL_SMART_DELTA_ENGINE_API (latest/at/series) pronta para Scanner, Copilot, Market Matrix e Smart Alerts nos próximos estágios. Módulos CORE/SCORE/ENGINE/RENDER/STORAGE, cache incremental por candle fechado. Registrado no menu real de indicadores (VOLUME & FLOW). Só frontend." },
@@ -20016,6 +20017,7 @@ function __dvlCollectActiveOscillators(){
   add("Net Delta", window.DVLNetDeltaOscillator);
   add("Delta Volume", window.DVLDeltaVolume);
   add("Tick Volume", window.DVLTickVolume);
+  add("Smart Delta", window.DVL_SMART_DELTA_OSC);
   add("Exhaustion RSI", window.DVLExhaustionRSI);
   add("Teste", window.DVLTestOscillator);
   add("Teste 2", window.DVLTestOscillator2);
@@ -30998,7 +31000,10 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   /* ── STORAGE ──────────────────────────────────────────────────────────── */
   var KEY = "dvl_smart_delta_1228";
   var DEFAULTS = { on:false, panel:true, height:38, lookback:20, thNeutral:18, opacity:0.9,
-    alertOn:false, alertDelta:60, alertConf:70, alertExh:75 };
+    alertOn:false, alertDelta:60, alertConf:70, alertExh:75,
+    // Beta 1.231 — histograma em painel próprio (oscilador) + tabela overlay
+    histogram:true, maOn:true, maLen:9, zeroLine:true, spikeMult:2, detailed:false,
+    posColor:"#16c784", negColor:"#ff4a61", maColor:"#f3c768" };
   var state = (function(){ var s={}; try{ s=JSON.parse(localStorage.getItem(KEY)||"{}"); }catch(_){}
     var o={}; for(var k in DEFAULTS) o[k]=DEFAULTS[k]; if(s&&typeof s==="object") for(var k2 in s){ if(k2 in DEFAULTS) o[k2]=s[k2]; } return o; })();
   var saveT=0; function save(){ clearTimeout(saveT); saveT=setTimeout(function(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(_){} },120); }
@@ -31191,36 +31196,86 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   }
   function latest(){ compute(); for(var i=cache.length-1;i>=0;i--){ if(cache[i]) return { i:i, s:cache[i] }; } return null; }
 
-  /* ── RENDER — histograma leve (topo do painel) + painel compacto ──────── */
+  /* ── RENDER ───────────────────────────────────────────────────────────────
+     Beta 1.231 — SEPARAÇÃO: a tabela (overlay) fica no gráfico principal; o
+     HISTOGRAMA sai de cima dos candles e vai para um PAINEL PRÓPRIO (oscilador).
+     Nada de barras sobre os candles, nada de misturar com o Volume. */
   var COL={ buy:[22,199,132], sell:[255,74,97], neutral:[130,150,145], indef:[243,199,104] };
+  // Hook do painel de PREÇO: agora só cuida da tabela overlay (DOM), sem desenhar
+  // barras no canvas dos candles.
   function draw(ctx, cfg){
     if(!state.on){ hidePanel(); return; }
     compute();
-    var view=cfg.view, x=cfg.x, x0=cfg.x0, x1=cfg.x1, y0=cfg.y0, slotOffset=cfg.slotOffset, candleW=cfg.candleW;
-    if(!view||!view.length||!cache.length) return;
-    var band=Math.max(18,Math.min(80,state.height||38));
-    var base=y0+2;                       // barras crescem pra baixo a partir do topo
-    // mapear tempo do candle visível → índice no cache (por tempo)
-    var cs=candles(); var byT={}; // últimos ~ (view+buffer)
-    for(var j=0;j<cache.length;j++){ if(cache[j]) byT[T(cs[j])]=cache[j]; }
-    ctx.save();
-    ctx.globalAlpha = clamp(state.opacity||0.9,0.1,1);
-    for(var k=0;k<view.length;k++){
-      var sc=byT[T(view[k])]; if(!sc) continue;
-      var cx=x(slotOffset+k);
-      var w=Math.max(1,Math.min(candleW*0.7,6));
-      var hgt=Math.abs(sc.delta)/100*band;
-      var col=COL[sc.cls]||COL.neutral;
-      ctx.fillStyle="rgba("+col[0]+","+col[1]+","+col[2]+",0.85)";
-      ctx.fillRect(cx-w/2, base, w, Math.max(0.5,hgt));
-    }
-    // linha de base fina
-    ctx.globalAlpha=0.35; ctx.strokeStyle="rgba(150,160,158,0.6)"; ctx.lineWidth=0.6;
-    ctx.beginPath(); ctx.moveTo(x0,base); ctx.lineTo(x1,base); ctx.stroke();
-    ctx.globalAlpha=1; ctx.restore();
-    if(state.panel!==false) renderPanel();
+    if(state.panel!==false) renderPanel(); else hidePanel();
   }
   window.DVLSmartDeltaDraw=function(ctx,cfg){ try{ draw(ctx,cfg); }catch(_){} };
+
+  /* ── Painel próprio (oscilador): histograma verde/vermelho + zero + MA ──── */
+  function panelMetrics(padL, padR, top, h, w){ var x0=padL,x1=w-padR,y0=top+4,y1=top+h-6; return {padL:padL,padR:padR,top:top,h:h,w:w,x0:x0,x1:x1,y0:y0,y1:y1}; }
+  function oscWindow(){ try{ if(typeof visibleWindow==="function") return visibleWindow(); }catch(_){} return { candles:[], totalSlots:(typeof chartViewCount!=="undefined"?chartViewCount:140), futureSlots:0 }; }
+  function xForIndex(i, m, win){ var slots=Math.max(2,win.totalSlots||2); var so=(typeof __dvlSlotOffset==="function")?__dvlSlotOffset(win, win.candles||[]):0; return m.x0+(so+i)/(slots-1)*(m.x1-m.x0); }
+  function yFor(v, y0, y1, lo, hi){ var span=(hi-lo)||1; return y1-(v-lo)/span*(y1-y0); }
+  function basePanel(ctx, m, title, right, kind){
+    ctx.save();
+    ctx.fillStyle="#020806"; ctx.fillRect(0,m.top,m.w,m.h);
+    ctx.strokeStyle="rgba(64,105,145,.22)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,m.top+.5); ctx.lineTo(m.w,m.top+.5); ctx.stroke();
+    ctx.fillStyle="#020806"; ctx.fillRect(m.x1,m.top,m.w-m.x1,m.h);
+    ctx.strokeStyle="rgba(64,105,145,.26)"; ctx.beginPath(); ctx.moveTo(m.x1+.5,m.top); ctx.lineTo(m.x1+.5,m.top+m.h); ctx.stroke();
+    var headY=m.y0+12;
+    ctx.font="850 9px system-ui"; ctx.textAlign="left"; ctx.textBaseline="middle";
+    ctx.fillStyle="rgba(223,238,255,.84)"; ctx.fillText(title, m.x0+8, headY);
+    ctx.font="800 8px system-ui"; ctx.textAlign="right";
+    ctx.fillStyle=kind==="bear"?"rgba(255,95,110,.9)":kind==="bull"?"rgba(0,220,190,.9)":"rgba(135,155,185,.86)";
+    ctx.fillText(right||"", m.x1-8, headY);
+    ctx.restore();
+  }
+  function deltaMA(){
+    var len=Math.max(2,Math.round(state.maLen)||9), out=new Array(cache.length).fill(null);
+    var buf=[], sum=0;
+    for(var i=0;i<cache.length;i++){ if(!cache[i]){ out[i]=null; continue; } var v=cache[i].delta; buf.push(v); sum+=v; if(buf.length>len) sum-=buf.shift(); out[i]=sum/buf.length; }
+    return out;
+  }
+  function oscOn(){ return !!state.on && state.histogram!==false; }
+  function oscDraw(ctx, padL, padR, top, h, w){
+    try{ window.__dvlOscillatorPanelBounds=window.__dvlOscillatorPanelBounds||{}; window.__dvlOscillatorPanelBounds.DVLSmartDelta={top:top,bottom:top+h}; }catch(_){}
+    if(!oscOn()) return;
+    compute();
+    var m=panelMetrics(padL,padR,top,h,w);
+    var win=oscWindow(), view=win.candles||[];
+    var cs=candles(), byIdx={}; for(var j=0;j<cache.length;j++){ if(cache[j]) byIdx[T(cs[j])]=j; }
+    var lo=-100, hi=100;                        // escala independente e fixa
+    var L=null; for(var q=cache.length-1;q>=0;q--){ if(cache[q]){ L=cache[q]; break; } }
+    var kind=L?(L.cls==="buy"?"bull":(L.cls==="sell"?"bear":"neutral")):"neutral";
+    var rightTxt=L?((L.delta>0?"+":"")+L.delta):"";
+    basePanel(ctx, m, "Smart Delta", rightTxt, kind);
+    ctx.save(); ctx.beginPath(); ctx.rect(m.x0,m.y0,m.x1-m.x0,Math.max(1,m.y1-m.y0)); ctx.clip();
+    var zy=yFor(0,m.y0,m.y1,lo,hi);
+    if(state.zeroLine!==false){ ctx.strokeStyle="rgba(150,180,168,.30)"; ctx.setLineDash([4,6]); ctx.beginPath(); ctx.moveTo(m.x0,zy); ctx.lineTo(m.x1,zy); ctx.stroke(); ctx.setLineDash([]); }
+    var pos=state.posColor||"#16c784", neg=state.negColor||"#ff4a61", spikeMult=Math.max(1.2,+state.spikeMult||2);
+    var op=clamp(state.opacity||0.9,0.15,1);
+    var slotW=(m.x1-m.x0)/Math.max(2,win.totalSlots||2), bw=Math.max(1,Math.min(slotW*0.62,7));
+    ctx.globalAlpha=op;
+    for(var k=0;k<view.length;k++){
+      var idx=byIdx[T(view[k])]; if(idx==null||!cache[idx]) continue;
+      var sc=cache[idx], d=sc.delta;
+      var xx=xForIndex(k,m,win); if(xx<m.x0-10||xx>m.x1+10) continue;
+      var yy=yFor(d,m.y0,m.y1,lo,hi);
+      var up=d>=0, spike=Math.abs(d)>=(state.thNeutral||18)*spikeMult;
+      ctx.fillStyle=up?pos:neg; ctx.globalAlpha=op*(spike?1:0.62);
+      ctx.fillRect(xx-bw/2, Math.min(yy,zy), bw, Math.max(0.6,Math.abs(zy-yy)));
+    }
+    ctx.globalAlpha=1;
+    // média móvel amarela
+    if(state.maOn!==false){
+      var ma=deltaMA(); ctx.beginPath(); ctx.strokeStyle=state.maColor||"#f3c768"; ctx.lineWidth=1.3; ctx.lineJoin="round";
+      var started=false;
+      for(var p=0;p<view.length;p++){ var ix=byIdx[T(view[p])]; if(ix==null||ma[ix]==null) continue; var mx=xForIndex(p,m,win), my=yFor(ma[ix],m.y0,m.y1,lo,hi); if(!started){ctx.moveTo(mx,my);started=true;}else ctx.lineTo(mx,my); }
+      if(started) ctx.stroke();
+    }
+    ctx.restore();
+  }
+  window.DVL_SMART_DELTA_OSC={ on:oscOn, draw:oscDraw, name:"Smart Delta" };
 
   var panelEl=null;
   function ensurePanel(){
@@ -31240,14 +31295,14 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     var col=COL[s.cls]||COL.neutral; var hex="rgb("+col[0]+","+col[1]+","+col[2]+")";
     var sign=s.delta>0?"+":"";
     function row(lbl,val,c){ return '<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#7f9c8e">'+lbl+'</span><b style="color:'+(c||"#dcebe4")+'">'+val+'</b></div>'; }
+    var detailed=!!state.detailed;
     el.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:3px"><b style="color:'+hex+'">Smart Delta</b><span style="font-size:8px;color:#6f8b80">'+s.cls.toUpperCase()+'</span></div>'+
       row("Delta", sign+s.delta, hex)+
       row("Confidence", s.confidence+"%")+
-      row("Continuation", s.continuation+"%")+
-      row("Exhaustion", s.exhaustion+"%", s.exhaustion>=60?"#f3c768":"#dcebe4");
+      (detailed? row("Continuation", s.continuation+"%")+row("Exhaustion", s.exhaustion+"%", s.exhaustion>=60?"#f3c768":"#dcebe4") : "");
     var cp=s.components||{};
-    if(cp.oi!=null||cp.lsr!=null||cp.vp){
+    if(detailed && (cp.oi!=null||cp.lsr!=null||cp.vp)){
       function dot(lbl,v,active){ var col=!active?"#455":(v>=55?"#16c784":(v<=45?"#ff4a61":"#7f9c8e")); return '<span style="color:'+col+'">'+lbl+'</span>'; }
       el.innerHTML += '<div style="margin-top:4px;padding-top:3px;border-top:1px solid rgba(129,166,151,.14);display:flex;gap:10px;font-size:8.5px">'+
         dot("OI", cp.oi, cp.oi!=null)+dot("LSR", cp.lsr, cp.lsr!=null)+dot("VP", cp.vp, cp.vp>0)+
@@ -31298,6 +31353,14 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       '<div class="dvl-vt-field"><label>Painel</label><label class="dvl-switch"><input id="sdPanel" type="checkbox" '+(state.panel!==false?"checked":"")+'><i></i><b></b></label></div>'+
       '<div class="dvl-vt-field"><label>Altura</label><input id="sdHeight" class="dvl-vt-input" type="number" min="18" max="80" step="2" value="'+(state.height||38)+'"></div>'+
       '<div class="dvl-vt-field"><label>Neutro ±</label><input id="sdTh" class="dvl-vt-input" type="number" min="2" max="60" step="1" value="'+(state.thNeutral||18)+'"></div>'+
+      '<div class="dvl-vt-field"><label>Tabela detalhada</label><label class="dvl-switch"><input id="sdDetailed" type="checkbox" '+(state.detailed?"checked":"")+'><i></i><b></b></label></div>'+
+      '</div></div>'+
+      '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Histograma (painel próprio)</span></div><div class="dvl-vt-grid">'+
+      '<div class="dvl-vt-field"><label>Histograma</label><label class="dvl-switch"><input id="sdHist" type="checkbox" '+(state.histogram!==false?"checked":"")+'><i></i><b></b></label></div>'+
+      '<div class="dvl-vt-field"><label>Média (MA)</label><label class="dvl-switch"><input id="sdMaOn" type="checkbox" '+(state.maOn!==false?"checked":"")+'><i></i><b></b></label></div>'+
+      '<div class="dvl-vt-field"><label>MA Length</label><input id="sdMaLen" class="dvl-vt-input" type="number" min="2" max="100" step="1" value="'+(state.maLen||9)+'"></div>'+
+      '<div class="dvl-vt-field"><label>Spike ×</label><input id="sdSpike" class="dvl-vt-input" type="number" min="1.2" max="6" step="0.1" value="'+(state.spikeMult||2)+'"></div>'+
+      '<div class="dvl-vt-field"><label>Linha zero</label><label class="dvl-switch"><input id="sdZero" type="checkbox" '+(state.zeroLine!==false?"checked":"")+'><i></i><b></b></label></div>'+
       '</div></div>'+
       '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Smart Alerts</span></div><div class="dvl-vt-grid">'+
       '<div class="dvl-vt-field"><label>Alertas</label><label class="dvl-switch"><input id="sdAlertOn" type="checkbox" '+(state.alertOn?"checked":"")+'><i></i><b></b></label></div>'+
@@ -31306,7 +31369,8 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       '<div class="dvl-vt-field"><label>Exhaustion ≥</label><input id="sdAlExh" class="dvl-vt-input" type="number" min="40" max="100" step="5" value="'+(state.alertExh||75)+'"></div>'+
       '</div></div>';
     function bind(id,key,type){ var el=b.querySelector("#"+id); if(!el) return; var fn=function(){ if(type==="check") state[key]=!!el.checked; else state[key]=Number(el.value)||DEFAULTS[key]; if(id==="sdOn") updateRow(); if(id==="sdPanel"&&!state.panel) hidePanel(); save(); try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){} }; el.addEventListener("change",fn); el.addEventListener("input",fn); }
-    bind("sdOn","on","check"); bind("sdPanel","panel","check"); bind("sdHeight","height","num"); bind("sdTh","thNeutral","num");
+    bind("sdOn","on","check"); bind("sdPanel","panel","check"); bind("sdHeight","height","num"); bind("sdTh","thNeutral","num"); bind("sdDetailed","detailed","check");
+    bind("sdHist","histogram","check"); bind("sdMaOn","maOn","check"); bind("sdMaLen","maLen","num"); bind("sdSpike","spikeMult","num"); bind("sdZero","zeroLine","check");
     bind("sdAlertOn","alertOn","check"); bind("sdAlDelta","alertDelta","num"); bind("sdAlConf","alertConf","num"); bind("sdAlExh","alertExh","num");
     try{ if(window.DVLIndicatorCustomControls&&window.DVLIndicatorCustomControls.upgrade) window.DVLIndicatorCustomControls.upgrade(settings); }catch(_){}
     settings.classList.add("is-open");
