@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.234';
+window.DVL_APP_VERSION = 'Beta 1.235';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16019,6 +16019,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.235", note: "Correção GLOBAL do piscar de indicadores presos a preço (POC, VAH, VAL e demais níveis/linhas que saltavam de posição por alguns frames e voltavam sozinhos). Causa raiz: a escala vertical do gráfico (centro/alcance do autoscale) é recalculada por percentil a cada frame; um valor transitório errado de 1 frame deslocava a escala inteira — e como TODO indicador ancorado a preço deriva dessa mesma escala, todos saltavam juntos e retornavam. A correção é no NÚCLEO de renderização, não por indicador: um salto grande e súbito da escala SEM gatilho estrutural (troca de ativo/timeframe, zoom, pan, nova vela, lock ou interação) só é adotado após confirmar por 2 frames; assim um glitch de 1 frame nunca chega a ser desenhado, enquanto mudanças legítimas passam na hora. Escala inválida nunca substitui a última válida. Só frontend." },
   { version: "Beta 1.234", note: "Correção: ao remover outros osciladores do gráfico, o Smart Delta (e o Net Long) sumia junto. A visibilidade do painel inferior era decidida por uma lista fixa que esquecia esses dois — então, sem nenhum dos osciladores 'antigos' ligado, o painel inteiro fechava. Agora essa visibilidade vem da MESMA lista que realmente desenha os osciladores, então qualquer oscilador ativo (atual ou futuro) mantém o painel aberto e o Smart Delta continua sozinho no gráfico se for o único ligado. Só frontend." },
   { version: "Beta 1.233", note: "Smart Delta (visual): a barra do histograma agora BRILHA de verdade quando é um extremo/spike — cor bem mais forte e saturada (tipo o pico verde-limão do TradingView), opacidade cheia sem escurecer por confiança e um leve glow, enquanto as barras normais seguem em tom médio. Só aparência; o motor e os cálculos não mudaram. Só frontend." },
   { version: "Beta 1.232", note: "Refinamento visual do histograma DVL Smart Delta (só aparência, o motor e os cálculos permanecem intactos): barras mais largas, opacidade proporcional à confiança da leitura, escala automática do painel, intensidade de cor por extremidade (média × extrema), média móvel mais espessa, linha zero mais clara e cabeçalho com Δ e MA. O painel do histograma ficou totalmente independente, desacoplado do oscilador Exhaustion RSI. Novas configs no painel de configuração: Largura da barra, Escala automática, Opacidade por confiança (com máx./mín.) e Espessura da média. Só frontend." },
@@ -20397,6 +20398,64 @@ function __dvlAutoScalePercentiles1210(drawView,win){
   return __dvlAutoScaleCache1210;
 }
 
+/* Beta 1.235 — ESTABILIZADOR GLOBAL DA ESCALA DE PREÇO.
+   Causa raiz do "piscar" de POC/VAH/VAL e demais níveis presos a preço: a escala
+   vertical (priceViewCenter/priceViewRange) é recalculada por percentil a cada
+   frame de autoscale. Um valor transitório errado (glitch de 1 frame vindo de um
+   tick fora da curva, recomputo parcial, etc.) desloca a escala por poucos frames
+   e volta sozinho — e como TODO indicador ancorado a preço deriva dessa mesma
+   escala, todos saltam juntos e retornam. A correção é no NÚCLEO, não por
+   indicador: um salto grande e súbito da escala SEM gatilho estrutural (troca de
+   ativo/timeframe, zoom, pan, nova vela, lock, interação) só é adotado depois de
+   se confirmar por 2 frames. Assim, um glitch de 1 frame nunca chega a ser
+   desenhado, enquanto mudanças legítimas passam na hora. */
+var __dvlAutoScaleStab1235 = { center:null, range:null, sig:"", pendC:null, pendR:null, pendN:0 };
+function __dvlAutoScaleSig1235(win){
+  try{
+    var sym = (typeof symbol!=="undefined") ? symbol : "";
+    var itv = (typeof interval!=="undefined") ? interval : "";
+    var kl  = (typeof klines!=="undefined" && klines) ? klines.length : 0;
+    var vc  = (typeof chartViewCount!=="undefined") ? chartViewCount : 0;
+    var oc  = (typeof chartOffsetCandles!=="undefined") ? chartOffsetCandles : 0;
+    var lk  = (typeof priceScaleLocked!=="undefined" && priceScaleLocked) ? 1 : 0;
+    return [String(sym),String(itv),kl,Math.round(Number(vc||0)*1000),Math.round(Number(oc||0)*1000),lk,
+            win?win.start:0, win?win.end:0].join("|");
+  }catch(_){ return ""; }
+}
+function __dvlStabilizeAutoScale1235(center, range, win){
+  var S = __dvlAutoScaleStab1235;
+  // candidato inválido → segura a última escala válida (nunca desenha lixo)
+  if(!Number.isFinite(center) || !Number.isFinite(range) || range<=0){
+    if(Number.isFinite(S.center) && Number.isFinite(S.range) && S.range>0) return {center:S.center, range:S.range};
+    return {center:center, range:range};
+  }
+  var sig = __dvlAutoScaleSig1235(win);
+  var interacting = !!(typeof window!=="undefined" && window.__dvlChartInteracting);
+  // 1ª vez, mudança estrutural (ativo/TF/zoom/pan/nova vela/lock) ou interação → adota já
+  if(S.center===null || sig!==S.sig || interacting){
+    S.center=center; S.range=range; S.sig=sig; S.pendC=null; S.pendR=null; S.pendN=0;
+    return {center:center, range:range};
+  }
+  // sem gatilho estrutural: variação pequena (respiração normal do autoscale) → adota suave
+  var big = Math.abs(range-S.range) > S.range*0.22 || Math.abs(center-S.center) > S.range*0.22;
+  if(!big){
+    S.center=center; S.range=range; S.pendC=null; S.pendR=null; S.pendN=0;
+    return {center:center, range:range};
+  }
+  // salto grande e súbito SEM gatilho → provável glitch de 1 frame: exige confirmação
+  if(S.pendC!==null && Math.abs(range-S.pendR)<=S.pendR*0.08 && Math.abs(center-S.pendC)<=S.pendR*0.08){
+    S.pendN++;
+  } else {
+    S.pendC=center; S.pendR=range; S.pendN=1;
+  }
+  if(S.pendN>=2){                      // persistiu 2 frames → mudança real, adota
+    S.center=center; S.range=range; S.pendC=null; S.pendR=null; S.pendN=0;
+    return {center:center, range:range};
+  }
+  return {center:S.center, range:S.range};   // ainda não confirmado → mantém a última escala válida
+}
+try{ if(typeof window!=="undefined"){ window.__dvlStabilizeAutoScale1235=__dvlStabilizeAutoScale1235; window.__dvlAutoScaleStab1235=__dvlAutoScaleStab1235; } }catch(_){}
+
 function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
   const win = visibleWindow();
   const view = win.candles;
@@ -20416,8 +20475,9 @@ function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
     const candleMin=q.min;
     const candleMax=q.max;
     const candleRange=(candleMax-candleMin)||Math.max(candleMax*.002,1);
-    priceViewRange=candleRange*1.16;
-    priceViewCenter=(candleMax+candleMin)/2;
+    const __stab=__dvlStabilizeAutoScale1235((candleMax+candleMin)/2, candleRange*1.16, win);
+    priceViewRange=__stab.range;
+    priceViewCenter=__stab.center;
   }
 
   let min = priceViewCenter - priceViewRange / 2;
