@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.221';
+window.DVL_APP_VERSION = 'Beta 1.222';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -15985,7 +15985,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = String(window.DVL_APP_VERSION || "Beta 1.221");
+const DVL_APP_VERSION = String(window.DVL_APP_VERSION || "Beta 1.222");
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -16015,6 +16015,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.222", note: "Fix DVL FVG Firewall not showing in the Indicadores menu: the app has two indicator menus, and the live UI is built from the modules() registry (dvl1bIndicatorMenu0813), not the legacy #indicatorDropdown the module was inserting into. Registered DVL FVG Firewall in the real modules() registry (VOLUME & FLOW section) and added the api methods the menu drives it with — on(), setOn(), openPanel()/open() — so the toggle, the settings gear and the ON/OFF state all work from the menu you actually see. Frontend only." },
   { version: "Beta 1.221", note: "Fix DVL FVG Firewall: zones never appeared because the module read the app candles via window.klines, but klines/interval/symbol/ticker are declared with let (global lexical scope, not on window), so it always saw an empty candle set and detected nothing. Now it reads them by bare identifier with a typeof guard — the same pattern the rest of the app uses — so detection runs on the real candles and VALID/WEAK/FAKE zones draw. Verified end-to-end: bull and bear FVGs detected and rendered, 0 console errors. Frontend only." },
   { version: "Beta 1.220", note: "Added DVL FVG Firewall with real-trade footprint aggregation, flow-based FVG scoring, VALID/WEAK/FAKE classification, mitigation tracking, cached rendering and performance-safe worker processing." },
   { version: "Beta 1.219", note: "Added commission-aware CFT MT5 risk sizing over the Beta 1.218 base, including verified BTCUSDT.cft contract specifications, entry and exit fees, safe lot rounding, net profit, technical and net R:R, and estimated margin." },
@@ -30804,6 +30805,12 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     getBestZones:function(limit){ var b=zonesByKey[keyOf()]; if(!b) return []; return b.list.slice().sort(function(a,c){return c.score-a.score;}).slice(0,limit||5).map(cloneZone); },
     getZoneById:function(id){ var b=zonesByKey[keyOf()]; if(!b) return null; for(var i=0;i<b.list.length;i++) if(b.list[i].id===id) return cloneZone(b.list[i]); return null; },
     isOn:function(){ return !!state.on; },
+    on:function(){ return !!state.on; },
+    setOn:function(v){ state.on = (v===undefined? !state.on : !!v); save(); },
+    openPanel:function(){ try{ openPanel(); }catch(_){} },
+    open:function(){ try{ openPanel(); }catch(_){} },
+    refresh:function(){ requestRecompute(); },
+    get state(){ return state; },
     getState:function(){ var o={}; for(var k in state) o[k]=state[k]; return o; }
   };
   function cloneZone(z){ return { id:z.id, dir:z.dir, top:z.top, bottom:z.bottom, mid:z.mid, size:z.size, score:z.score, cls:z.cls, state:z.state, quality:z.quality, createdTime:z.createdTime, metrics:z.metrics }; }
@@ -62114,6 +62121,7 @@ body.dvl-osc-divider-dragging *{
       {key:"exr",mark:"EXR",title:"DVL Exhaustion RSI",sub:"price exhaustion oscillator · 0–100",api:"DVLExhaustionRSI",pill:"dvlExhaustionRSIState",row:"dvlExhaustionRSIItem"},
       {key:"vp",mark:"VP",title:"Volume Profile",sub:"range visível · POC / VAH / VAL",api:"DVLVolumeProfile",pill:"dvlVPState",row:"dvlVolProfileItem"},
       {key:"sz",mark:"SZ",title:"DVL Spike Zones",sub:"overlay",api:"DVLSpikeZones",pill:"dvlSzState",row:"dvlSpikeZonesItem"},
+      {key:"fvg",mark:"FV",title:"DVL FVG Firewall",sub:"order flow · smart money",api:"DVL_FVG_FIREWALL_API",pill:"dvlFvgState",row:"dvlFvgFirewallItem"},
       {key:"ma",mark:"MA",title:"Moving Averages",sub:"10 médias · overlay",api:"DVLMovingAverages",pill:"dvlMaState",row:"dvlMovingAveragesItem"},
       {key:"bookmap",mark:"BM",title:"DVL Bookmap Zones",sub:"Order book heatmap · Bookmap style",api:"DVL_BOOKMAP_ZONES_0813"},
       {key:"tv",mark:"TV",title:"DVL Tick Volume",sub:"tick volume oscillator",api:"DVLTickVolume",pill:"dvlTickVolumeState",row:"dvlTickVolumeItem"}
