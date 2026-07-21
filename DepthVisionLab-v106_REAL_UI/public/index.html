@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.225';
+window.DVL_APP_VERSION = 'Beta 1.226';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -15753,6 +15753,10 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
               <button class="dvlRiskValueBtn" id="dvlRiskStopBtn" type="button"><span>Stop</span><strong id="dvlRiskStopValue">--</strong></button>
               <button class="dvlRiskValueBtn" id="dvlRiskTpBtn" type="button"><span>Take Profit</span><strong id="dvlRiskTpValue">--</strong></button>
             </div>
+            <div class="dvlRiskLineRow">
+              <button type="button" class="dvlRiskLineToggle" id="dvlRiskShowLinesBtn" aria-pressed="false"><i></i><span>Mostrar no gráfico</span></button>
+              <button type="button" class="dvlRiskTpAutoBtn" id="dvlRiskTpAutoBtn">TP Auto R:R</button>
+            </div>
           </div>
 
           <div class="dvlRiskSection">
@@ -16015,6 +16019,8 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.226", note: "Risk Engine — linhas interativas de planejamento no gráfico (Stage 1): Entry, Take Profit e Stop Loss viram três linhas arrastáveis, ligadas ao MESMO estado central do Risk Engine (sem cópia dupla). Arrastar a linha atualiza o painel e vice-versa. Ao mover Entry ou Stop, o lote MT5 e o risco real são recalculados ao vivo pelas specs da corretora; mover só o TP muda o R:R e mantém o lote. Entry começa no último preço (market) e vira fixa (manual) na primeira interação; TP segue R:R 1:1 automático (botão 'TP Auto R:R' religa) e vira manual se você arrastar o TP; estrutura inválida (Stop/TP do lado errado) mostra as linhas mas bloqueia o lote, sem inverter a direção sozinho. Botão 'Mostrar no gráfico' cria/remove as linhas sem apagar valores. Desenhadas no canvas (acompanham pan/zoom) com faixa de toque generosa e trava de pan no arrasto (mobile), via novo módulo DVL_RISK_ENGINE_CHART_LINES. Não são ordens nem Paper Trading. Só frontend." },
+  { version: "Beta 1.225", note: "DVL Volume Profile Avançado — Stage 3 (Overnight Profile + timezone): novo perfil Overnight com POC/VAH/VAL de uma janela configurável (hora/minuto de início e fim) num timezone à escolha (UTC / Exchange / Local / Bruxelas / New York), tratando janelas que cruzam a meia-noite e horário de verão. Sessão Atual ou Anterior; modo Developing calcula ao vivo enquanto a janela está aberta e congela quando ela fecha. Cada linha (O-POC / O-VAH / O-VAL) com cor, estilo e espessura próprios. Reaproveita o motor de distribuição do VP; Current, Previous, Developing e Value Area intactos. Só frontend." },
   { version: "Beta 1.224", note: "DVL Volume Profile Avançado — Stage 2 (Developing Profile + POC Trail): novo perfil Developing que mostra POC/VAH/VAL da SESSÃO em curso (timeframe configurável, padrão 1 dia) e se atualiza ao vivo conforme entram velas/volume — independente do Current (range visível) e da Sessão 2. Cada linha tem cor, estilo e espessura próprios (D-POC / D-VAH / D-VAL). Adicionado o Developing POC Trail: o caminho histórico do POC dentro da sessão, desenhado como polilinha, com cor/estilo/espessura/opacidade e máximo de pontos (padrão 300, cria ponto só quando o POC muda). Reaproveita o mesmo motor de distribuição/fetch por período já existente; Current, Previous e Value Area intactos. Só frontend." },
   { version: "Beta 1.223", note: "DVL Volume Profile Avançado — Stage 1 (customização de linha): cada grupo de níveis (Current e Sessão 2) agora tem estilo de linha configurável (Sólida, Tracejada, Pontilhada, Traço-ponto) e espessura de 1 a 4 px, e os labels ganharam modos Full / Short / Price Only / Hidden com opção de mostrar o preço ao lado do nome. Tudo aplicado no renderizador real do Volume Profile existente, sem tocar no cálculo de distribuição, sessões ou Value Area — Current e Previous (Sessão 2) permanecem intactos, sem regressão. Próximos estágios: Developing e Overnight profiles, timezone, POC trail e zonas de confluência. Só frontend." },
   { version: "Beta 1.222", note: "Fix DVL FVG Firewall not showing in the Indicadores menu: the app has two indicator menus, and the live UI is built from the modules() registry (dvl1bIndicatorMenu0813), not the legacy #indicatorDropdown the module was inserting into. Registered DVL FVG Firewall in the real modules() registry (VOLUME & FLOW section) and added the api methods the menu drives it with — on(), setOn(), openPanel()/open() — so the toggle, the settings gear and the ON/OFF state all work from the menu you actually see. Frontend only." },
@@ -20485,6 +20491,10 @@ if(window.DVLSpikeZonesDraw){
 
   if(window.DVLFvgFirewallDraw){
     try{window.DVLFvgFirewallDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,priceBottom,priceH});}catch(_dvlFvg_e){}
+  }
+
+  if(window.DVLRiskLinesDraw){
+    try{window.DVLRiskLinesDraw(ctx,{view,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlRiskLn_e){}
   }
 
   draw24hStatsOverlay(ctx, { x0, x1, y0, y1 });
@@ -38580,6 +38590,9 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     tolerancePct:2,
     costMode:"priceCommission",
     defaultRR:1,
+    entryMode:"market",
+    tpMode:"autoRR",
+    linesVisible:false,
     trade:{side:"buy",entry:null,stop:null,tp:null,graphOrderId:null},
     overrides:{}
   };
@@ -38740,7 +38753,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function closePad(){$("dvlRiskPadOverlay").classList.remove("open");$("dvlRiskPadOverlay").setAttribute("aria-hidden","true");pad={field:null,value:"",apply:null,title:""};}
   function padKey(k){if(k==="cancel")return closePad();if(k==="ok"){var v=Specs.parseNumber(pad.value);if(pad.apply)pad.apply(v);return closePad();}if(k==="clear")pad.value="";else if(k==="back")pad.value=pad.value.slice(0,-1);else if(k==="."){if(pad.value.indexOf(".")<0)pad.value=(pad.value||"0")+".";}else if(/^\d$/.test(k)){if(pad.value==="0")pad.value=k;else if(pad.value.length<18)pad.value+=k;}$("dvlRiskPadDisplay").textContent=pad.value||"0";}
   function editTrade(field,title){var initial=state.trade[field];if(field==="entry"&&!sourceOrder()){var live=latestMarketPrice();if(live>0){initial=live;state.trade.entry=live;applyOneToOneToState();Storage.patch({trade:state.trade,defaultRR:1});}}openPad(title,initial,function(v){if(!(v>0))return;updateGraph(field,v);state.trade[field]=v;if(field==="entry"||field==="stop")applyOneToOneToState();Storage.patch({trade:state.trade,defaultRR:1});schedule();});}
-  function renderTrade(){all(".dvlRiskSide").forEach(function(b){b.classList.toggle("active",b.dataset.riskSide===state.trade.side);});$("dvlRiskEntryValue").textContent=fmt(state.trade.entry,6);$("dvlRiskStopValue").textContent=fmt(state.trade.stop,6);$("dvlRiskTpValue").textContent=fmt(state.trade.tp,6);var o=sourceOrder();$("dvlRiskGraphSource").textContent=o?(String(o.symbol||state.symbolKey)+" · "+String(o.status||"trade")):(latestMarketPrice()>0?"Último preço: "+fmt(latestMarketPrice(),6):"Sem trade selecionado");$("dvlRiskSyncState").textContent=o?"Sincronizado com Entry / SL / TP":"Entry pelo último preço · R:R padrão 1:1";}
+  function renderTrade(){all(".dvlRiskSide").forEach(function(b){b.classList.toggle("active",b.dataset.riskSide===state.trade.side);});$("dvlRiskEntryValue").textContent=fmt(state.trade.entry,6);$("dvlRiskStopValue").textContent=fmt(state.trade.stop,6);$("dvlRiskTpValue").textContent=fmt(state.trade.tp,6);var o=sourceOrder();$("dvlRiskGraphSource").textContent=o?(String(o.symbol||state.symbolKey)+" · "+String(o.status||"trade")):(latestMarketPrice()>0?"Último preço: "+fmt(latestMarketPrice(),6):"Sem trade selecionado");$("dvlRiskSyncState").textContent=o?"Sincronizado com Entry / SL / TP":"Entry pelo último preço · R:R padrão 1:1";var _slb=$("dvlRiskShowLinesBtn");if(_slb){_slb.classList.toggle("active",!!state.linesVisible);_slb.setAttribute("aria-pressed",state.linesVisible?"true":"false");}var _tab=$("dvlRiskTpAutoBtn");if(_tab)_tab.classList.toggle("active",(state.tpMode||"autoRR")==="autoRR");}
   function renderRiskControls(){all(".dvlRiskMode").forEach(function(b){b.classList.toggle("active",b.dataset.riskMode===state.riskMode);});var cash=state.riskMode==="percent"?Number(state.accountSize)*Number(state.riskValue)/100:Number(state.riskValue),pct=Number(state.accountSize)>0?cash/Number(state.accountSize)*100:0;$("dvlRiskValueText").textContent=state.riskMode==="percent"?fmt(state.riskValue,4)+"%":money(state.riskValue,"USD");$("dvlRiskEquivalent").textContent=money(cash,"USD")+" · "+fmt(pct,4)+"%";all("#dvlRiskPresetRow button").forEach(function(b){b.classList.toggle("active",b.dataset.riskMode===state.riskMode&&Math.abs(Number(b.dataset.riskValue)-Number(state.riskValue))<1e-9);});var cmode=state.costMode==="priceOnly"?"priceOnly":"priceCommission";all("#dvlRiskCostRow .dvlRiskCost").forEach(function(b){b.classList.toggle("active",b.dataset.costMode===cmode);});$("dvlRiskToleranceValue").textContent=fmt(state.tolerancePct,2)+"%";}
   function specFieldValue(k){var v=workingSpec&&workingSpec[k];return v==null||v===""?"--":fmt(v,10);}
   function renderSpecs(){if(!workingSpec)loadWorkingSpec();$("dvlRiskBrokerSymbolInput").value=workingSpec.brokerSymbol||state.symbolKey;$("dvlRiskCurrencyInput").value=workingSpec.currency||"USD";["contractSize","tickSize","tickValue","volumeMin","volumeMax","volumeStep","digits","marginLeverage"].forEach(function(k){var id="dvlRiskSpec"+k.charAt(0).toUpperCase()+k.slice(1);$(id).textContent=specFieldValue(k);});$("dvlRiskVerifiedToggle").classList.toggle("active",!!workingSpec.verified);$("dvlRiskVerifiedToggle").setAttribute("aria-pressed",workingSpec.verified?"true":"false");}
@@ -38775,6 +38788,8 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     document.addEventListener("click",function(ev){if(!ev.target.closest(".dvlRiskSelect"))closeSelects();});
     all(".dvlRiskSide").forEach(function(b){b.addEventListener("click",function(){setSide(b.dataset.riskSide);});});
     $("dvlRiskEntryBtn").addEventListener("click",function(){editTrade("entry","Entry");});$("dvlRiskStopBtn").addEventListener("click",function(){editTrade("stop","Stop Loss");});$("dvlRiskTpBtn").addEventListener("click",function(){editTrade("tp","Take Profit");});
+    var _slb=$("dvlRiskShowLinesBtn");if(_slb)_slb.addEventListener("click",function(){setLinesVisible(!state.linesVisible);});
+    var _tab=$("dvlRiskTpAutoBtn");if(_tab)_tab.addEventListener("click",function(){resetTpAuto();});
     all(".dvlRiskMode").forEach(function(b){b.addEventListener("click",function(){state.riskMode=b.dataset.riskMode;Storage.patch({riskMode:state.riskMode});schedule();});});
     all("#dvlRiskCostRow .dvlRiskCost").forEach(function(b){b.addEventListener("click",function(){state.costMode=b.dataset.costMode==="priceOnly"?"priceOnly":"priceCommission";Storage.patch({costMode:state.costMode});schedule();});});
     $("dvlRiskValueBtn").addEventListener("click",function(){openPad(state.riskMode==="percent"?"Risco em porcentagem":"Risco em dinheiro",state.riskValue,function(v){if(v>0){state.riskValue=v;Storage.patch({riskValue:v});schedule();}});});
@@ -38791,10 +38806,207 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     window.addEventListener("dvl:risk-source-change",function(ev){var d=ev&&ev.detail||{};if(d.order)syncTradeFromOrder(d.order);schedule();},{passive:true});window.addEventListener("dvl:paper-position",schedule,{passive:true});window.addEventListener("dvl:paper-v2-close",schedule,{passive:true});window.addEventListener("dvl:paper-price",function(ev){var d=ev&&ev.detail||{};if(Number(d.price)>0)lastMarketPrice=Number(d.price);if(!sourceOrder()&&!(Number(state.trade.entry)>0)){seedManualEntryFromMarket(false);schedule();}},{passive:true});window.addEventListener("dvl-safe-asset-selected-0804",function(){state.symbolKey=brokerSymbolFromApp(appSymbol());state.trade.graphOrderId=null;Storage.patch({symbolKey:state.symbolKey,trade:state.trade});loadWorkingSpec();seedManualEntryFromMarket(true);schedule();},{passive:true});
   }
   function install(){state=Storage.get();state.defaultRR=1;ensureSymbol();bind();if(!graphSync(false))seedManualEntryFromMarket(!(Number(state.trade.entry)>0));Storage.patch({defaultRR:1});renderAll();}
-  window.DVL_RISK_ENGINE_UI={open:openRisk,close:back,refresh:schedule,getState:function(){return state;},getLastResult:function(){return lastResult;}};
+  /* Beta 1.226 — API das linhas de planejamento (Entry/TP/SL) do gráfico.
+     As linhas leem/escrevem o MESMO estado central (state.trade). Não são
+     ordens nem posições — apenas o planejamento visual do Risk Engine. */
+  function _riskValidSide(){var e=Number(state.trade.entry),s=Number(state.trade.stop),t=Number(state.trade.tp),side=state.trade.side==="sell"?"sell":"buy";if(!(e>0))return false;if(side==="buy")return s>0&&t>0&&t>e&&e>s;return s>0&&t>0&&s>e&&e>t;}
+  function planDragLine(field,price){price=Number(price);if(!(price>0))return;state.entryMode="manual";if(field==="entry"){state.trade.entry=price;if((state.tpMode||"autoRR")==="autoRR")applyOneToOneToState();}else if(field==="stop"){state.trade.stop=price;if((state.tpMode||"autoRR")==="autoRR")applyOneToOneToState();}else if(field==="tp"){state.trade.tp=price;state.tpMode="manual";}Storage.patch({trade:state.trade,entryMode:state.entryMode,tpMode:state.tpMode,defaultRR:1});try{renderTrade();}catch(_){}try{calculate();}catch(_){}try{if(typeof drawSoon==="function")drawSoon();}catch(_){}}
+  function commitPlan(){try{sanitizeManualStop();}catch(_){}try{renderTrade();}catch(_){}try{calculate();}catch(_){}Storage.patch({trade:state.trade});try{if(typeof drawSoon==="function")drawSoon();}catch(_){}}
+  function resetTpAuto(){state.tpMode="autoRR";applyOneToOneToState();Storage.patch({trade:state.trade,tpMode:state.tpMode,defaultRR:1});try{renderTrade();}catch(_){}try{calculate();}catch(_){}try{if(typeof drawSoon==="function")drawSoon();}catch(_){}}
+  function setLinesVisible(v){state.linesVisible=!!v;if(v&&!(Number(state.trade.entry)>0))seedManualEntryFromMarket(true);Storage.patch({linesVisible:state.linesVisible,trade:state.trade});schedule();try{if(typeof drawSoon==="function")drawSoon();}catch(_){}try{window.dispatchEvent(new CustomEvent("dvl:risk-lines-visible",{detail:{visible:state.linesVisible}}));}catch(_){}}
+  function getPlan(){var r=lastResult||{};var hasOrder=false;try{hasOrder=!!sourceOrder();}catch(_){}return {active:state.executionProfile!=="paper",visible:!!state.linesVisible&&!hasOrder,hasOrder:hasOrder,side:state.trade.side==="sell"?"sell":"buy",entry:Number(state.trade.entry)>0?Number(state.trade.entry):null,stop:Number(state.trade.stop)>0?Number(state.trade.stop):null,tp:Number(state.trade.tp)>0?Number(state.trade.tp):null,entryMode:state.entryMode||"market",tpMode:state.tpMode||"autoRR",lot:r.ok?Number(r.lot):null,lotDecimals:r.ok?r.lotDecimals:2,requestedRisk:r.requestedRisk!=null?Number(r.requestedRisk):null,actualRisk:r.ok?(r.totalRisk!=null?Number(r.totalRisk):Number(r.realRisk)):null,rr:r.rr!=null?Number(r.rr):null,profit:r.profit!=null?Number(r.profit):null,valid:_riskValidSide()&&r.ok===true,currency:(workingSpec&&workingSpec.currency)||"USD"};}
+  window.DVL_RISK_ENGINE_UI={open:openRisk,close:back,refresh:schedule,getState:function(){return state;},getLastResult:function(){return lastResult;},getPlan:getPlan,dragLine:planDragLine,commitLine:commitPlan,resetTpAuto:resetTpAuto,setLinesVisible:setLinesVisible,linesVisible:function(){return !!state.linesVisible;}};
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else install();
 })();
 </script>
+
+<script id="DVL_RISK_ENGINE_CHART_LINES_1226">
+/* ============================================================================
+   DVL_RISK_ENGINE_CHART_LINES — Beta 1.226
+   Linhas interativas de planejamento (Entry / Take Profit / Stop Loss) do DVL
+   Risk Engine. Lêem e escrevem o MESMO estado central (window.DVL_RISK_ENGINE_UI
+   .getPlan / dragLine / commitLine) — não são ordens nem posições.
+
+   Render: as linhas são desenhadas no CANVAS do gráfico via o hook
+   window.DVLRiskLinesDraw (alinhadas ao preço, acompanham pan/zoom).
+   Drag: faixas DOM invisíveis (grab strips) sobre cada linha capturam o ponteiro
+   (área de toque generosa no mobile), travam o pan durante o arrasto e convertem
+   a posição em preço pela MESMA escala legada do gráfico.
+   ==========================================================================*/
+(function(){
+  "use strict";
+  if(window.__DVL_RISK_LINES_1226__) return;
+  window.__DVL_RISK_LINES_1226__ = true;
+
+  var COLORS = { entry:"#4ea3ff", tp:"#16c784", stop:"#ff4a61" };
+  var GRAB_PX = 14;                 // meia-altura da faixa de toque
+  var lastLines = null;             // {entry:{y,price},stop,tp} da última render (CSS px)
+  var drag = null;                  // {field, pointerId}
+  var layer = null, strips = {};
+
+  function api(){ return window.DVL_RISK_ENGINE_UI || null; }
+  function wrap(){ return document.getElementById("chartWrap") || document.querySelector(".canvasWrap"); }
+
+  // Escala de preço legada (mesma que o Paper Trading usa) — CSS px.
+  function scaleInfo(){
+    var w = wrap(); if(!w) return null;
+    var H = w.clientHeight||1, W = w.clientWidth||1;
+    var a = { y0:4, y1:Math.max(40,H-24) };
+    try{ if(typeof __dvlLegacyPriceArea==="function") a = __dvlLegacyPriceArea(H); }catch(_){}
+    var sc=null; try{ if(typeof visible==="function" && typeof scale==="function") sc = scale(visible().cs, H); }catch(_){}
+    if(!sc || typeof sc.y!=="function") return null;
+    var rw=70; try{ if(typeof RP==="function") rw = Math.max(70, Number(RP())||70); }catch(_){}
+    function priceToY(p){ var y=sc.y(Number(p)); return Number.isFinite(y)?y:null; }
+    function yToPrice(y){ try{ if(typeof priceFromY==="function") return priceFromY(y,H,sc); }catch(_){} var span=Math.max(1,a.y1-a.y0); return sc.lo+(1-(Number(y)-a.y0)/span)*(sc.hi-sc.lo); }
+    return { wrap:w, W:W, H:H, top:a.y0, bottom:a.y1, rightW:rw, plotRight:Math.max(1,W-rw), priceToY:priceToY, yToPrice:yToPrice };
+  }
+
+  function fmtP(v){ v=Number(v); if(!Number.isFinite(v)) return "--"; if(Math.abs(v)>=1000) return v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); if(Math.abs(v)>=1) return v.toFixed(2); return v.toPrecision(5); }
+  function fmtMoney(v){ v=Number(v); if(!Number.isFinite(v)) return ""; var s=v>0?"+":(v<0?"-":""); return s+Math.abs(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+  /* ── Canvas draw hook (chamado dentro do drawPriceSection) ─────────────── */
+  function draw(ctx, cfg){
+    lastLines = null;
+    var A = api(); if(!A || typeof A.getPlan!=="function") return;
+    var plan = A.getPlan();
+    if(!plan || !plan.visible) return;
+    if(!(plan.entry>0)) return;
+    var x0=cfg.x0, x1=cfg.x1, y=cfg.y, min=cfg.min, max=cfg.max;
+    if(min===undefined || max===undefined || max<=min) return;
+    var vpX0 = x1;  // labels na direita, antes da escala
+    var cur = { };
+    var rows = [
+      { f:"entry", price:plan.entry, color:COLORS.entry, name:"ENTRY", sub: plan.lot!=null ? ("LOT "+Number(plan.lot).toFixed(plan.lotDecimals)) : null },
+      { f:"tp",    price:plan.tp,    color:COLORS.tp,    name:"TP",    sub: (plan.tp>0 && plan.profit!=null) ? (fmtMoney(plan.profit)) : null },
+      { f:"stop",  price:plan.stop,  color:COLORS.stop,  name:"SL",    sub: (plan.stop>0 && plan.actualRisk!=null) ? (fmtMoney(-Math.abs(plan.actualRisk))) : null }
+    ];
+    ctx.save();
+    ctx.font = "700 8px system-ui";
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i]; if(!(r.price>0)) continue;
+      var yy = y(r.price); if(!Number.isFinite(yy)) continue;
+      var alpha = plan.valid ? 0.92 : 0.55;
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash(r.f==="entry" ? [] : [6,4]);
+      ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke();
+      ctx.setLineDash([]);
+      // label compacto à esquerda da escala
+      var label = r.name + " " + fmtP(r.price);
+      ctx.textAlign="right"; ctx.textBaseline="bottom";
+      ctx.fillStyle=r.color;
+      ctx.fillText(label, x1-4, yy-1);
+      if(r.sub){ ctx.textBaseline="top"; ctx.globalAlpha=alpha*0.85; ctx.fillText(r.sub, x1-4, yy+1); ctx.globalAlpha=alpha; }
+      cur[r.f] = { price:r.price, color:r.color };
+    }
+    ctx.globalAlpha=1;
+    ctx.restore();
+    // grava posições em CSS px (via escala legada) para os grab strips
+    var si = scaleInfo();
+    if(si){
+      lastLines = {};
+      ["entry","tp","stop"].forEach(function(f){
+        if(cur[f]){ var cy=si.priceToY(cur[f].price); if(cy!=null) lastLines[f]={ y:cy, price:cur[f].price, color:cur[f].color }; }
+      });
+      positionStrips(si);
+    }
+  }
+
+  /* ── DOM grab strips (alvo de toque + drag) ───────────────────────────── */
+  function ensureLayer(){
+    if(layer && document.body.contains(layer)) return layer;
+    var w=wrap(); if(!w) return null;
+    layer = document.createElement("div");
+    layer.id = "dvlRiskLinesLayer";
+    layer.style.cssText = "position:absolute;inset:0;z-index:46;pointer-events:none;overflow:hidden";
+    ["entry","tp","stop"].forEach(function(f){
+      var s=document.createElement("div");
+      s.className="dvlRiskGrab"; s.dataset.field=f;
+      s.style.cssText="position:absolute;left:0;right:0;height:"+(GRAB_PX*2)+"px;transform:translateY(-50%);pointer-events:none;cursor:ns-resize;touch-action:none;display:none";
+      layer.appendChild(s); strips[f]=s;
+      s.addEventListener("pointerdown", onDown, {passive:false});
+    });
+    if(getComputedStyle(w).position==="static") w.style.position="relative";
+    w.appendChild(layer);
+    return layer;
+  }
+  function positionStrips(si){
+    if(!ensureLayer()) return;
+    ["entry","tp","stop"].forEach(function(f){
+      var s=strips[f]; if(!s) return;
+      var ln = lastLines && lastLines[f];
+      if(ln && Number.isFinite(ln.y) && ln.y>=si.top-GRAB_PX && ln.y<=si.bottom+GRAB_PX){
+        s.style.display="block"; s.style.top=ln.y+"px";
+        s.style.pointerEvents = "auto";
+        s.style.right = si.rightW+"px";  // não cobrir a escala de preço
+      } else {
+        s.style.display="none"; s.style.pointerEvents="none";
+      }
+    });
+  }
+  function hideStrips(){ ["entry","tp","stop"].forEach(function(f){ if(strips[f]){ strips[f].style.display="none"; strips[f].style.pointerEvents="none"; } }); }
+
+  function onDown(ev){
+    var A=api(); if(!A) return;
+    var f=ev.currentTarget.dataset.field;
+    drag = { field:f, pointerId:ev.pointerId };
+    try{ ev.currentTarget.setPointerCapture(ev.pointerId); }catch(_){}
+    try{ window.__dvlChartInteracting = true; }catch(_){}
+    window.__dvlRiskLineDragging = true;
+    ev.preventDefault(); ev.stopPropagation();
+    document.addEventListener("pointermove", onMove, {passive:false, capture:true});
+    document.addEventListener("pointerup", onUp, {passive:false, capture:true});
+    document.addEventListener("pointercancel", onUp, {passive:false, capture:true});
+  }
+  var moveRAF=0, pendingPrice=null;
+  function onMove(ev){
+    if(!drag) return;
+    ev.preventDefault(); ev.stopPropagation();
+    var si=scaleInfo(); if(!si) return;
+    var rect=si.wrap.getBoundingClientRect();
+    var yy = ev.clientY - rect.top;
+    yy = Math.max(si.top, Math.min(si.bottom, yy));
+    pendingPrice = si.yToPrice(yy);
+    if(moveRAF) return;
+    moveRAF = requestAnimationFrame(function(){
+      moveRAF=0;
+      var A=api(); if(A && drag && pendingPrice>0){ try{ A.dragLine(drag.field, pendingPrice); }catch(_){} }
+    });
+  }
+  function onUp(ev){
+    if(!drag) return;
+    ev.preventDefault(); ev.stopPropagation();
+    if(moveRAF){ cancelAnimationFrame(moveRAF); moveRAF=0; }
+    var A=api();
+    if(A && pendingPrice>0){ try{ A.dragLine(drag.field, pendingPrice); }catch(_){} }
+    if(A){ try{ A.commitLine(); }catch(_){} }
+    try{ ev.currentTarget && ev.currentTarget.releasePointerCapture && ev.currentTarget.releasePointerCapture(drag.pointerId); }catch(_){}
+    drag=null; pendingPrice=null;
+    window.__dvlRiskLineDragging = false;
+    try{ window.__dvlChartInteracting = false; }catch(_){}
+    document.removeEventListener("pointermove", onMove, {capture:true});
+    document.removeEventListener("pointerup", onUp, {capture:true});
+    document.removeEventListener("pointercancel", onUp, {capture:true});
+    try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){}
+  }
+
+  window.DVLRiskLinesDraw = function(ctx,cfg){ try{ draw(ctx,cfg); }catch(_){} };
+
+  // esconder as faixas quando as linhas somem
+  try{ window.addEventListener("dvl:risk-lines-visible", function(e){ if(e&&e.detail&&!e.detail.visible) hideStrips(); if(typeof drawSoon==="function") drawSoon(); }, {passive:true}); }catch(_){}
+  try{ window.addEventListener("dvl-safe-asset-selected-0804", function(){ if(typeof drawSoon==="function") drawSoon(); }, {passive:true}); }catch(_){}
+
+  // API pública mínima (para o painel / testes)
+  window.DVL_RISK_ENGINE_CHART_LINES = {
+    version: "1.226",
+    lastLines: function(){ return lastLines; },
+    isDragging: function(){ return !!drag; },
+    hide: hideStrips
+  };
+})();
+</script>
+
 
 
 <script id="DVL_PAPER_V2_CLEAN_INTEGRATION_AUDIT_MODULE_0698">
@@ -74005,6 +74217,7 @@ window.DVL_COPILOT_BACKTEST_1040={
 .dvlRiskSelect{position:relative;min-width:0}.dvlRiskSelectBtn{width:100%;height:38px;padding:0 9px;border:1px solid rgba(129,166,151,.18);border-radius:9px;background:rgba(3,15,10,.72);display:flex;align-items:center;justify-content:space-between;gap:6px;color:#edf8f3;font-size:10px;font-weight:850;white-space:nowrap;overflow:hidden}.dvlRiskSelectBtn span{min-width:0;overflow:hidden;text-overflow:ellipsis}.dvlRiskSelectBtn svg{width:12px;height:12px;flex:0 0 auto;color:#85a79a}.dvlRiskSelect.is-open .dvlRiskSelectBtn{border-color:rgba(19,220,141,.45)}
 .dvlRiskSelectMenu{display:none;position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:100450;padding:5px;border:1px solid rgba(19,220,141,.25);border-radius:10px;background:#06150f;box-shadow:0 16px 34px rgba(0,0,0,.45);max-height:230px;overflow:auto}.dvlRiskSelect.is-open .dvlRiskSelectMenu{display:grid;gap:3px}.dvlRiskSelectMenu button{min-height:34px;padding:6px 8px;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#bcd2c8;font-size:10px;font-weight:800;text-align:left}.dvlRiskSelectMenu button:hover,.dvlRiskSelectMenu button.active{background:rgba(19,220,141,.1);color:#eafff4}.dvlRiskSelectMenu button:disabled{opacity:.38;cursor:not-allowed}.dvlRiskSelectMenu small{font-size:8px;color:#718d80}
 .dvlRiskSection{padding:10px;border:1px solid rgba(129,166,151,.14);border-radius:11px;background:rgba(3,14,10,.62);display:flex;flex-direction:column;gap:9px}.dvlRiskSectionTitle{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}.dvlRiskSectionTitle>span{font-size:10px;font-weight:900}.dvlRiskSectionTitle>small{font-size:8px;color:#718f82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dvlRiskLineRow{display:grid;grid-template-columns:1.4fr 1fr;gap:6px;margin-top:6px}.dvlRiskLineToggle{height:32px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid rgba(78,163,255,.28);border-radius:8px;background:rgba(2,11,8,.7);color:#8aa99b;font-size:9px;font-weight:850}.dvlRiskLineToggle i{width:12px;height:12px;border-radius:4px;border:1px solid rgba(78,163,255,.5);background:transparent;flex:0 0 auto}.dvlRiskLineToggle.active{color:#9fd0ff;border-color:rgba(78,163,255,.6);background:rgba(78,163,255,.12)}.dvlRiskLineToggle.active i{background:#4ea3ff;border-color:#4ea3ff}.dvlRiskTpAutoBtn{height:32px;border:1px solid rgba(19,220,141,.24);border-radius:8px;background:rgba(2,11,8,.7);color:#8aa99b;font-size:9px;font-weight:850}.dvlRiskTpAutoBtn.active{color:#46eda8;border-color:rgba(19,220,141,.5);background:rgba(19,220,141,.1)}
 .dvlRiskSideRow{display:grid;grid-template-columns:1fr 1fr;gap:6px}.dvlRiskSide{height:34px;border:1px solid rgba(129,166,151,.18);border-radius:8px;background:rgba(2,11,8,.7);color:#8aa99b;font-size:10px;font-weight:900}.dvlRiskSide[data-risk-side="buy"].active{background:rgba(19,220,141,.16);border-color:rgba(19,220,141,.5);color:#46eda8}.dvlRiskSide[data-risk-side="sell"].active{background:rgba(255,74,97,.14);border-color:rgba(255,74,97,.48);color:#ff7486}
 .dvlRiskPriceGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.dvlRiskValueBtn{min-width:0;min-height:54px;padding:7px 6px;border:1px solid rgba(129,166,151,.16);border-radius:9px;background:rgba(2,11,8,.76);display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;text-align:left}.dvlRiskValueBtn span{font-size:8px;font-weight:800;color:#718f82}.dvlRiskValueBtn strong{max-width:100%;font-size:11px;font-weight:900;color:#f0faf5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dvlRiskModeRow{display:grid;grid-template-columns:1fr 1fr minmax(92px,1.15fr);gap:6px}.dvlRiskMode,.dvlRiskValueInline{height:34px;border:1px solid rgba(129,166,151,.17);border-radius:8px;background:rgba(2,11,8,.72);font-size:9px;font-weight:850;color:#819e91}.dvlRiskMode.active{color:#16e295;border-color:rgba(19,220,141,.42);background:rgba(19,220,141,.09)}.dvlRiskValueInline{color:#effaf5;font-size:10px}
