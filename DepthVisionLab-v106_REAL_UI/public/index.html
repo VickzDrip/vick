@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.218';
+window.DVL_APP_VERSION = 'Beta 1.220';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -15770,6 +15770,10 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
               <button type="button" data-risk-mode="percent" data-risk-value="0.5">0,50%</button>
               <button type="button" data-risk-mode="percent" data-risk-value="1">1%</button>
             </div>
+            <div class="dvlRiskCostRow" id="dvlRiskCostRow">
+              <button type="button" class="dvlRiskCost active" data-cost-mode="priceCommission">Preço + comissões</button>
+              <button type="button" class="dvlRiskCost" data-cost-mode="priceOnly">Preço apenas</button>
+            </div>
           </div>
 
           <div class="dvlRiskResult" id="dvlRiskResultCard">
@@ -15784,8 +15788,15 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
           </div>
 
           <div class="dvlRiskMetrics">
+            <div><span>Risco no preço</span><b id="dvlRiskPriceRisk">--</b></div>
+            <div><span>Comissão de entrada</span><b id="dvlRiskEntryComm">--</b></div>
+            <div><span>Comissão no stop</span><b id="dvlRiskExitComm">--</b></div>
+            <div><span>Taxas totais</span><b id="dvlRiskTotalFees">--</b></div>
+            <div><span>Risco total</span><b id="dvlRiskTotalRisk">--</b></div>
             <div><span>R:R</span><b id="dvlRiskRR">--</b></div>
+            <div><span>R:R líquido</span><b id="dvlRiskNetRR">--</b></div>
             <div><span>Lucro no TP</span><b id="dvlRiskProfit">--</b></div>
+            <div><span>Lucro líquido</span><b id="dvlRiskNetProfit">--</b></div>
             <div><span>Distância do stop</span><b id="dvlRiskStopDistance">--</b></div>
             <div><span>Ticks até o stop</span><b id="dvlRiskTicks">--</b></div>
             <div><span>Tamanho nominal</span><b id="dvlRiskNominalSize">--</b></div>
@@ -15974,7 +15985,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = String(window.DVL_APP_VERSION || "Beta 1.218");
+const DVL_APP_VERSION = String(window.DVL_APP_VERSION || "Beta 1.220");
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -16004,6 +16015,8 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.220", note: "Added DVL FVG Firewall with real-trade footprint aggregation, flow-based FVG scoring, VALID/WEAK/FAKE classification, mitigation tracking, cached rendering and performance-safe worker processing." },
+  { version: "Beta 1.219", note: "Added commission-aware CFT MT5 risk sizing over the Beta 1.218 base, including verified BTCUSDT.cft contract specifications, entry and exit fees, safe lot rounding, net profit, technical and net R:R, and estimated margin." },
   { version: "Beta 1.218", note: "Risk Engine — conserta o Stop mostrando lixo tipo '-44,3' no modo 'entrada pelo último preço' (e o TP ficando '--' por causa disso). Causa: sem trade selecionado, um Stop inválido salvo no navegador (negativo, do lado errado da entrada, ou absurdamente longe) passava direto e nunca era corrigido — e sem stop válido o TP 1:1 não conseguia ser derivado, então RR e Profit também sumiam. Agora o Risk Engine SANEIA o stop: se ele não for um preço válido do lado certo da entrada, entra um default de 0,3% da entrada (ex.: entry 65.190 → stop 64.994), o TP 1:1 é recalculado e RR/Profit voltam a aparecer. Stop válido que você já pôs NÃO é alterado. É só um ponto de partida coerente — arraste/edite o stop pro seu nível real normalmente. Só frontend." },
   { version: "Beta 1.217", note: "Risk Engine — conserta o R:R e o Profit no TP que apareciam como '--'. Causa: o cálculo só computava R:R e lucro quando havia um TP explícito; em trade manual (ou ordem sem TP definido), o TP vinha vazio e ambos ficavam em branco, mesmo com Entry e Stop preenchidos. Agora, quando falta o TP, o cálculo DERIVA o TP no padrão do app (R:R 1:1) a partir do Entry e do Stop, então R:R e Profit sempre aparecem. Se você definir um TP manual, ele é respeitado normalmente (ex.: TP 2:1 mostra R:R 1:2 e o dobro do lucro). Só frontend." },
   { version: "Beta 1.216", note: "Risk Engine — perfil da Crypto Fund Trader (CFT) já vem PREENCHIDO de fábrica pro BTC, então não aparece mais 'Contract Size ausente / Lote mínimo ausente / …'. Valores reais do MT5 da CFT (símbolo BTCUSDT.cft): Contract Size 1, Tick Size 0.1, Tick Value 0.1, Volume min 0.001, max 10.000.000.000, step 0.001, Digits 1, moeda USD, cálculo por Tick Value, comissão 0,0325% por lado (guardada no perfil). O perfil abre como 'validado' e o cálculo de lote funciona na hora — ex.: risco US$100 com stop de US$500 dá lote 0.200. Se ainda aparecer 'ausente' no seu navegador (perfil salvo antigo em cache), toque em 'Restaurar perfil' pra carregar o padrão novo. Obs.: a comissão fica gravada no perfil mas ainda NÃO entra no cálculo do lote (o risco do stop é separado da comissão sobre o nominal) — se quiser que ela entre, é o próximo passo. Só frontend." },
@@ -20464,6 +20477,10 @@ if(window.DVLSpikeZonesDraw){
 
   if(window.DVLOrderBookImbalanceZonesDraw){
     try{window.DVLOrderBookImbalanceZonesDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,priceBottom,priceH});}catch(_obiz_e){}
+  }
+
+  if(window.DVLFvgFirewallDraw){
+    try{window.DVLFvgFirewallDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,priceBottom,priceH});}catch(_dvlFvg_e){}
   }
 
   draw24hStatsOverlay(ctx, { x0, x1, y0, y1 });
@@ -30322,6 +30339,611 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
 </script>
 
 
+<script id="DVL_FVG_FIREWALL_1220">
+/* ============================================================================
+   DVL FVG Firewall — Beta 1.220
+   Order-Flow FVG indicator: geometry + flow-based scoring (VALID/WEAK/FAKE) +
+   mitigation tracking. Plugs into the REAL indicator registry, the REAL
+   drawPriceSection overlay pipeline and the DVL settings-standard shell.
+
+   Performance contract (must not regress vs 1.215):
+     • detect new FVGs only on candle close (incremental, cached by id)
+     • footprint from real server data (window._dvlFpCache) or honest OHLCV
+       reconstruction — cached per source-candle
+     • classify once per source candle; score cached on the zone
+     • mitigation updated only for zones near price, on close / throttled tick
+     • renderer draws only visible zones, reuses geometry, one central rAF
+     • no polling timers, no mutation observers, no draw()/drawSoon() wrappers,
+       no recompute on pan / zoom / crosshair
+   ==========================================================================*/
+(function(){
+  "use strict";
+  if(window.DVL_FVG_FIREWALL_API) return;
+
+  /* ── DVL_FVG_SETTINGS — all defaults in one place ─────────────────────── */
+  var DEFAULTS = {
+    on:false,
+    /* Core */
+    sourceCandle:"middle",      // middle | displacement | three
+    sizeMode:"atr",             // atr | ticks | percent
+    minSize:"small",            // all | tiny | small | medium | large | custom
+    customSize:0.5,
+    extendBars:60,
+    maxActiveZones:80,
+    barsToScan:600,
+    /* Flow */
+    dataSource:"auto",          // auto | aggTrades | lowerTf | reconstructed
+    cellMode:"auto",            // auto | ticks | price | atrFraction
+    cellSize:0,
+    maxCells:20,
+    lowerTf:"1m",
+    useReconstruction:true,
+    /* Classification */
+    validThreshold:75,
+    weakThreshold:50,
+    minRelVol:0.8,
+    minDominance:1.3,
+    maxOppositeShare:0.45,
+    useDelta:true,
+    wDominance:25, wDelta:20, wOpposite:15, wDisplace:15, wRelVol:10, wAbsorb:10, wPoc:5,
+    qualityPenalty:8,
+    /* Mitigation */
+    mitigationMode:"fill50",    // touch | fill50 | closeMid | fullFill
+    respectAtr:0.5,
+    hideMitigated:false,
+    stopExtend:true,
+    /* Visual */
+    showValid:true, showWeak:true, showFake:false,
+    showLabels:true, showMidline:true, showTooltip:true, extendRight:true,
+    opacity:0.14, border:0.5
+  };
+
+  var SIZE_PRESET = { all:0, tiny:0.1, small:0.35, medium:0.8, large:1.6 };
+  var EPS = 1e-9;
+
+  /* ── pure helpers (shared by worker + main thread) ────────────────────── */
+  function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+  function fmtVol(v){
+    v = Number(v)||0; var s = v<0?"-":""; v=Math.abs(v);
+    if(v>=1e9) return s+(v/1e9).toFixed(1)+"B";
+    if(v>=1e6) return s+(v/1e6).toFixed(1)+"M";
+    if(v>=1e3) return s+(v/1e3).toFixed(1)+"K";
+    return s+v.toFixed(0);
+  }
+
+  /* Reconstruct / read flow for one source candle. Returns cells + volumes +
+     dataQuality. `cacheBS` is the real {b,s} from _dvlFpCache when present. */
+  function buildFlow(payload){
+    var c = payload.candle, cfg = payload.cfg, cacheBS = payload.cacheBS;
+    var maxCells = Math.max(4, Math.min(120, cfg.maxCells||20));
+    var high=+c.high, low=+c.low, open=+c.open, close=+c.close, vol=+c.volume||0;
+    var range = Math.max(high-low, EPS);
+    var body = Math.abs(close-open);
+    var closeLoc = clamp((close-low)/range, 0, 1);
+    var buy, sell, quality, tradeCount;
+    if(cacheBS && (cacheBS.b>0 || cacheBS.s>0)){
+      buy = +cacheBS.b||0; sell = +cacheBS.s||0;
+      if(!(vol>0)) vol = buy+sell;
+      quality = "AGG_TRADES";
+      tradeCount = cacheBS.n>0 ? cacheBS.n : Math.max(1, Math.round((buy+sell)/Math.max(range,EPS)));
+    }else{
+      // honest reconstruction from OHLCV: buyers dominate when close near high
+      var buyFrac = clamp(0.15 + 0.7*closeLoc, 0.05, 0.95);
+      buy = vol*buyFrac; sell = vol*(1-buyFrac);
+      quality = "RECONSTRUCTED";
+      tradeCount = 0;
+    }
+    var total = buy+sell;
+    // adaptive price cells with a close-weighted profile (volume clusters near
+    // the aggressive close); POC = densest cell.
+    var nCells = maxCells;
+    if(cfg.cellMode==="auto") nCells = Math.max(6, Math.min(maxCells, Math.round(range/(range/maxCells))));
+    nCells = Math.max(4, Math.min(120, nCells));
+    var cells = new Array(nCells), sumW=0, i;
+    var pocPrice = low + closeLoc*range;
+    var spread = range*0.35 + EPS;
+    for(i=0;i<nCells;i++){
+      var pLow = low + range*(i/nCells), pHigh = low + range*((i+1)/nCells), pMid=(pLow+pHigh)/2;
+      var d = (pMid-pocPrice)/spread;
+      var w = Math.exp(-0.5*d*d) + 0.08;   // gaussian around POC + floor
+      sumW += w;
+      cells[i] = { priceLow:pLow, priceHigh:pHigh, w:w, buyVolume:0, sellVolume:0, delta:0, totalVolume:0, tradeCount:0 };
+    }
+    var pocIdx=0, pocVol=-1;
+    for(i=0;i<nCells;i++){
+      var frac = cells[i].w/sumW;
+      cells[i].buyVolume = buy*frac;
+      cells[i].sellVolume = sell*frac;
+      cells[i].totalVolume = total*frac;
+      cells[i].delta = cells[i].buyVolume - cells[i].sellVolume;
+      cells[i].tradeCount = Math.round((tradeCount||0)*frac);
+      delete cells[i].w;
+      if(cells[i].totalVolume>pocVol){ pocVol=cells[i].totalVolume; pocIdx=i; }
+    }
+    var pocPos = pocIdx < nCells/3 ? "Lower" : (pocIdx >= 2*nCells/3 ? "Upper" : "Middle");
+    return { buy:buy, sell:sell, total:total, delta:buy-sell, quality:quality, tradeCount:tradeCount,
+             cells:cells, poc:pocPos, pocIdx:pocIdx, closeLoc:closeLoc, body:body, range:range };
+  }
+
+  /* Full per-zone metric + score computation. Pure: same code path on worker
+     and main thread. payload = {dir, candle, cacheBS, atr, avgVol, cfg}. */
+  function computeZone(payload){
+    var cfg = payload.cfg, dir = payload.dir, c = payload.candle;
+    var flow = buildFlow(payload);
+    var atr = Math.max(+payload.atr||0, EPS);
+    var avgVol = Math.max(+payload.avgVol||0, EPS);
+    var range = flow.range, body = flow.body, total = flow.total, delta = flow.delta;
+    var bull = dir==="bull";
+
+    var dominance = bull ? flow.buy/Math.max(flow.sell,EPS) : flow.sell/Math.max(flow.buy,EPS);
+    var oppositeShare = total>0 ? (bull ? flow.sell/total : flow.buy/total) : 1;
+    var relativeVolume = total/avgVol;
+    var bodyRatio = body/Math.max(range,EPS);
+    var closeLocation = bull ? flow.closeLoc : (1-flow.closeLoc);
+    var bodyAtr = body/atr, rangeAtr = range/atr;
+    var displacement = clamp((bodyAtr/1.5)*0.5 + bodyRatio*0.3 + clamp(relativeVolume/2,0,1)*0.2, 0, 1);
+    var displacementAtr = bodyAtr;
+    // absorption: opposite-side wick with the close finishing the right way
+    var upperWick = (c.high - Math.max(c.open,c.close))/Math.max(range,EPS);
+    var lowerWick = (Math.min(c.open,c.close) - c.low)/Math.max(range,EPS);
+    var absorption = bull ? clamp(lowerWick*1.6*closeLocation,0,1) : clamp(upperWick*1.6*closeLocation,0,1);
+    var deltaRatio = total>0 ? delta/total : 0;         // [-1,1]
+    var favDelta = bull ? deltaRatio : -deltaRatio;      // positive = supportive
+
+    // weighted score
+    var pDom = cfg.wDominance * clamp((dominance-1)/(Math.max(cfg.minDominance,1.01)*2-1),0,1);
+    var pDelta = cfg.useDelta ? cfg.wDelta * clamp(favDelta/0.5,0,1) : cfg.wDelta*0.5;
+    var pOpp = cfg.wOpposite * clamp((cfg.maxOppositeShare-oppositeShare)/Math.max(cfg.maxOppositeShare,EPS),0,1);
+    var pDisp = cfg.wDisplace * displacement;
+    var pRel = cfg.wRelVol * clamp((relativeVolume-cfg.minRelVol)/Math.max(2-cfg.minRelVol,EPS),0,1);
+    var pAbs = cfg.wAbsorb * absorption;
+    var pocFav = (flow.poc==="Middle") ? 0.6 : ((bull && flow.poc==="Upper")||(!bull && flow.poc==="Lower") ? 1 : 0.2);
+    var pPoc = cfg.wPoc * pocFav;
+    var score = pDom+pDelta+pOpp+pDisp+pRel+pAbs+pPoc;
+
+    // penalties
+    if(favDelta < 0) score -= Math.abs(favDelta)*15;                 // delta contrário
+    if(relativeVolume < 0.6) score -= (0.6-relativeVolume)*12;       // volume muito baixo
+    var advWick = bull ? upperWick : lowerWick;                      // pavio contra a direção
+    if(advWick > 0.5) score -= (advWick-0.5)*16;
+    if(dominance < cfg.minDominance) score -= (cfg.minDominance-dominance)*6;
+    if(flow.quality==="RECONSTRUCTED") score -= cfg.qualityPenalty;  // fonte estimada
+    if((flow.tradeCount||0)>0 && flow.tradeCount < 20) score -= 3;   // poucos trades reais
+
+    score = Math.round(clamp(score,0,100));
+    var cls = score>=cfg.validThreshold ? "VALID" : (score>=cfg.weakThreshold ? "WEAK" : "FAKE");
+
+    return {
+      metrics:{
+        buyVolume:flow.buy, sellVolume:flow.sell, totalVolume:total, delta:delta,
+        dominance:dominance, oppositeShare:oppositeShare, relativeVolume:relativeVolume,
+        displacement:displacement, displacementAtr:displacementAtr, bodyRatio:bodyRatio,
+        closeLocation:closeLocation, pocPosition:flow.poc, absorptionScore:absorption,
+        fillSpeed:null, tradeCount:flow.tradeCount
+      },
+      cells:flow.cells, quality:flow.quality, score:score, cls:cls
+    };
+  }
+
+  window.__DVL_FVG_PURE = { buildFlow:buildFlow, computeZone:computeZone, clamp:clamp, fmtVol:fmtVol };
+
+  /* ── DVL_FVG_STORAGE ──────────────────────────────────────────────────── */
+  var KEY = "dvl_fvg_firewall_1220";
+  var state = (function(){
+    var s = {}; try{ s = JSON.parse(localStorage.getItem(KEY)||"{}"); }catch(_){}
+    var out = {}; for(var k in DEFAULTS) out[k]=DEFAULTS[k];
+    if(s && typeof s==="object") for(var k2 in s){ if(k2 in DEFAULTS) out[k2]=s[k2]; }
+    return out;
+  })();
+  var saveT=0;
+  function save(){ clearTimeout(saveT); saveT=setTimeout(function(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(_){} },120); onStateChanged(); }
+  function reset(){ for(var k in DEFAULTS) state[k]=DEFAULTS[k]; try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(_){} onStateChanged(); if(panel) renderPanel(); }
+
+  /* ── engine data (per symbol+tf cache) ────────────────────────────────── */
+  var zonesByKey = {};        // "SYM|TF" -> { list:[zones], scannedTo:time }
+  var curKey = "";
+  var recomputeRAF = 0, dirty = false, lastTickMitig = 0;
+
+  function symbol(){ try{ return String(window.currentSymbol||window.symbol||(window.ticker&&window.ticker.symbol)||"?"); }catch(_){ return "?"; } }
+  function tf(){ try{ return String(window.interval||"1m"); }catch(_){ return "1m"; } }
+  function keyOf(){ return symbol()+"|"+tf(); }
+  function candles(){ try{ return Array.isArray(window.klines)?window.klines:[]; }catch(_){ return []; } }
+  function bucket(){ var k=keyOf(); if(!zonesByKey[k]) zonesByKey[k]={ list:[], scannedTo:0 }; return zonesByKey[k]; }
+
+  function minSizeValue(cfg,atr,price){
+    var base = cfg.minSize==="custom" ? (+cfg.customSize||0) : (SIZE_PRESET[cfg.minSize]||0);
+    if(cfg.sizeMode==="atr") return base*atr;
+    if(cfg.sizeMode==="percent") return (base/100)*price;   // base treated as %
+    if(cfg.sizeMode==="ticks"){ var tick=Math.max(price*0.00001,EPS); return base*100*tick; }
+    return base*atr;
+  }
+
+  function atrAt(cs,i,len){
+    len = len||14; var s=Math.max(1,i-len+1), n=0, sum=0;
+    for(var k=s;k<=i;k++){ var p=cs[k-1]||cs[k]; var tr=Math.max(cs[k].high-cs[k].low, Math.abs(cs[k].high-p.close), Math.abs(cs[k].low-p.close)); sum+=tr; n++; }
+    return n? sum/n : (cs[i].high-cs[i].low);
+  }
+  function avgVolAt(cs,i,len){ len=len||20; var s=Math.max(0,i-len), n=0, sum=0; for(var k=s;k<i;k++){ sum+=(+cs[k].volume||0); n++; } return n? sum/n : (+cs[i].volume||1); }
+
+  /* DVL_FVG_DETECTOR + orchestration: scan only NEW closed candles. */
+  function scan(){
+    if(!state.on) return;
+    var cs = candles(); var n = cs.length;
+    if(n<3) return;
+    var b = bucket();
+    var cfg = state;
+    // only scan closed candles (exclude the forming last candle)
+    var lastClosed = n-1;
+    var barMs = n>=2 ? (+cs[n-1].time - +cs[n-2].time) : 0;
+    if(barMs>0 && (+cs[n-1].time + barMs) > Date.now()) lastClosed = n-2;
+    if(lastClosed < 2) return;
+    var startIdx = 2;
+    var scanFloor = Math.max(2, n - (cfg.barsToScan||600));
+    if(b.scannedTo>0){
+      // resume just after the last scanned source candle
+      for(var j=lastClosed;j>=2;j--){ if(+cs[j].time <= b.scannedTo){ startIdx=j+1; break; } }
+    }
+    if(startIdx < scanFloor) startIdx = scanFloor;
+    var existing = {}; for(var e=0;e<b.list.length;e++) existing[b.list[e].id]=1;
+    for(var i=Math.max(2,startIdx); i<=lastClosed; i++){
+      var a2=cs[i-2], mid=cs[i-1], cur=cs[i];
+      if(!a2||!mid||!cur) continue;
+      var atr = atrAt(cs,i,14) || (cur.high-cur.low) || EPS;
+      var price = +cur.close||+cur.high||1;
+      var minSz = minSizeValue(cfg,atr,price);
+      var dir=null, top=0, bottom=0;
+      if(+cur.low > +a2.high){ dir="bull"; top=+cur.low; bottom=+a2.high; }
+      else if(+cur.high < +a2.low){ dir="bear"; top=+a2.low; bottom=+cur.high; }
+      if(!dir) continue;
+      var size = top-bottom;
+      if(size <= 0) continue;
+      if(cfg.minSize!=="all" && size < minSz) continue;
+      var id = dir+"|"+(+cur.time);
+      if(existing[id]) continue;
+      var srcCandle = cfg.sourceCandle==="displacement" ? cur : (cfg.sourceCandle==="three" ? mid : mid);
+      var cacheBS = null;
+      try{ if(window._dvlFpCache && window._dvlFpCache.get) cacheBS = window._dvlFpCache.get(+srcCandle.time)||window._dvlFpCache.get(+cur.time)||null; }catch(_){}
+      var res = computeZone({ dir:dir, candle:srcCandle, cacheBS:cacheBS, atr:atr, avgVol:avgVolAt(cs,i,20), cfg:cfg });
+      var zone = {
+        id:id, dir:dir, top:top, bottom:bottom, mid:(top+bottom)/2, size:size,
+        createdIdx:i, createdTime:+cur.time, srcTime:+srcCandle.time, atr:atr,
+        metrics:res.metrics, cells:res.cells, quality:res.quality, score:res.score, cls:res.cls,
+        state:"ACTIVE", touched:false, touchIdx:null, extendStop:null, reScored:false
+      };
+      b.list.push(zone);
+      existing[id]=1;
+    }
+    b.scannedTo = +cs[lastClosed].time;
+    // prune to maxActiveZones (keep newest by createdTime)
+    if(b.list.length > cfg.maxActiveZones){
+      b.list.sort(function(x,y){ return x.createdTime-y.createdTime; });
+      b.list.splice(0, b.list.length-cfg.maxActiveZones);
+    }
+    mitigateAll(cs, lastClosed, true);
+  }
+
+  /* DVL_FVG_MITIGATION_ENGINE — only zones near price, cheap state machine. */
+  function mitigateAll(cs, lastClosed, onClose){
+    if(!state.on) return;
+    var b = bucket(); var cfg = state;
+    var price = 0; try{ price = Number((window.ticker&&window.ticker.lastPrice)||cs[lastClosed].close); }catch(_){ price = +cs[lastClosed].close; }
+    if(!(price>0)) price = +cs[lastClosed].close;
+    var atr = cs.length? atrAt(cs,lastClosed,14): 0;
+    for(var i=0;i<b.list.length;i++){
+      var z=b.list[i];
+      if(z.state==="MITIGATED"||z.state==="FAILED") continue;
+      var near = price >= z.bottom-atr*3 && price <= z.top+atr*3;
+      if(!near && !onClose) continue;
+      var inside = price>=z.bottom && price<=z.top;
+      var bull = z.dir==="bull";
+      if(inside && !z.touched){ z.touched=true; z.touchIdx=lastClosed; if(z.state==="ACTIVE") z.state="TOUCHED";
+        var age = lastClosed - z.createdIdx;
+        if(!z.reScored && age<=1){ z.score=Math.max(0,z.score-6); z.cls = z.score>=cfg.validThreshold?"VALID":(z.score>=cfg.weakThreshold?"WEAK":"FAKE"); z.metrics.fillSpeed=age; z.reScored=true; }
+      }
+      // mitigation by mode
+      var mitig=false;
+      if(cfg.mitigationMode==="touch") mitig = inside;
+      else if(cfg.mitigationMode==="fill50") mitig = bull ? price<=z.mid : price>=z.mid;
+      else if(cfg.mitigationMode==="closeMid") mitig = onClose && (bull ? +cs[lastClosed].close<=z.mid : +cs[lastClosed].close>=z.mid);
+      else if(cfg.mitigationMode==="fullFill") mitig = bull ? price<=z.bottom : price>=z.top;
+      // failed: a close fully through the zone against its direction
+      var failed = onClose && (bull ? +cs[lastClosed].close < z.bottom : +cs[lastClosed].close > z.top);
+      if(failed){ z.state="FAILED"; continue; }
+      if(mitig){ z.state="MITIGATED"; continue; }
+      // respected: touched then reacted respectAtr in favour
+      if(z.touched && z.state==="TOUCHED"){
+        var react = bull ? (price - z.top) : (z.bottom - price);
+        if(react >= (cfg.respectAtr||0.5)*atr) z.state="RESPECTED";
+      }
+    }
+  }
+
+  /* ── recompute scheduling (single rAF, coalesced) ─────────────────────── */
+  function requestRecompute(){ dirty=true; if(recomputeRAF) return; recomputeRAF=requestAnimationFrame(function(){ recomputeRAF=0; if(!dirty) return; dirty=false; try{ scan(); }catch(_){} try{ if(typeof window.drawSoon==="function") window.drawSoon(); }catch(_){} }); }
+
+  function onStateChanged(){ updateItem(); if(state.on){ maybeFetchFlow(); requestRecompute(); } else { try{ if(typeof window.drawSoon==="function") window.drawSoon(); }catch(_){} } }
+
+  /* opportunistically upgrade flow quality to real footprint when ON */
+  var lastFlowFetch=0;
+  function maybeFetchFlow(){
+    if(!state.on) return;
+    try{
+      var hasReal = window._dvlFpCache && window._dvlFpCache.size>0;
+      if(hasReal) return;
+      if(typeof window.fetchFootprintData!=="function") return;
+      var now=Date.now(); if(now-lastFlowFetch < 15000) return; lastFlowFetch=now;
+      Promise.resolve(window.fetchFootprintData()).then(function(){ var b=bucket(); b.list=[]; b.scannedTo=0; requestRecompute(); }).catch(function(){});
+    }catch(_){}
+  }
+
+  /* ── DVL_FVG_RENDERER — overlay hook, visible-only, cached geometry ────── */
+  var hitRects = [];  // {x0,y0,x1,y1,zone} for tooltip hit-testing
+  function bsearchTime(view, t){
+    var lo=0, hi=view.length-1, ans=-1;
+    while(lo<=hi){ var m=(lo+hi)>>1; if(+view[m].time<=t){ ans=m; lo=m+1; } else hi=m-1; }
+    return ans;
+  }
+  function classColors(dir,cls){
+    var bull = dir==="bull";
+    var base = bull ? [22,199,132] : [235,80,90];
+    var a = cls==="VALID"?1 : (cls==="WEAK"?0.8:0.45);
+    return { rgb:base, a:a };
+  }
+  function draw(ctx, o){
+    hitRects.length = 0;
+    if(!state.on) return;
+    if(keyOf()!==curKey){ curKey=keyOf(); requestRecompute(); }
+    var b = zonesByKey[curKey]; if(!b || !b.list.length) return;
+    var view=o.view, x=o.x, y=o.y, x0=o.x0, x1=o.x1, y0=o.y0, y1=o.y1, slotOffset=o.slotOffset, cfg=state;
+    if(!view.length) return;
+    var vFirst=+view[0].time, vLast=+view[view.length-1].time;
+    ctx.save();
+    ctx.font = "700 9px -apple-system,Segoe UI,Roboto,sans-serif";
+    ctx.textBaseline="middle";
+    var shown=0;
+    for(var i=b.list.length-1;i>=0;i--){
+      var z=b.list[i];
+      if(z.cls==="VALID" && !cfg.showValid) continue;
+      if(z.cls==="WEAK" && !cfg.showWeak) continue;
+      if(z.cls==="FAKE" && !cfg.showFake) continue;
+      if(cfg.hideMitigated && (z.state==="MITIGATED"||z.state==="FAILED")) continue;
+      if(z.createdTime > vLast) continue;
+      // left x: locate created candle in view (clamp if scrolled off left)
+      var lx;
+      if(z.createdTime < vFirst) lx = x0;
+      else { var vi=bsearchTime(view, z.createdTime); lx = vi>=0 ? x(slotOffset+vi) : x0; }
+      var rx;
+      if(cfg.extendRight && !(cfg.stopExtend && (z.state==="MITIGATED"||z.state==="FAILED"))) rx = x1;
+      else { var endT=z.createdTime; var evi=bsearchTime(view,endT); var extra=Math.min(cfg.extendBars, view.length-1-(evi<0?0:evi)); rx = x(slotOffset+((evi<0?0:evi)+Math.max(2,extra))); if(rx>x1)rx=x1; }
+      if(rx<=x0 || lx>=x1) continue;
+      if(lx<x0) lx=x0; if(rx>x1) rx=x1;
+      var ty=y(z.top), by=y(z.bottom);
+      if(ty>by){ var tmp=ty; ty=by; by=tmp; }
+      if(by<y0 || ty>y1) continue;
+      var cc=classColors(z.dir,z.cls);
+      var fillA = cfg.opacity * (z.cls==="FAKE"?0.5:1) * ((z.state==="MITIGATED"||z.state==="FAILED")?0.5:1);
+      ctx.fillStyle = "rgba("+cc.rgb[0]+","+cc.rgb[1]+","+cc.rgb[2]+","+fillA+")";
+      ctx.fillRect(lx, ty, rx-lx, Math.max(1,by-ty));
+      ctx.lineWidth = z.cls==="VALID"?1.1:0.6;
+      ctx.strokeStyle = "rgba("+cc.rgb[0]+","+cc.rgb[1]+","+cc.rgb[2]+","+(cfg.border*cc.a)+")";
+      ctx.strokeRect(lx+0.5, ty+0.5, Math.max(1,rx-lx-1), Math.max(1,by-ty-1));
+      if(cfg.showMidline){ var my=y(z.mid); ctx.save(); ctx.setLineDash([3,3]); ctx.strokeStyle="rgba("+cc.rgb[0]+","+cc.rgb[1]+","+cc.rgb[2]+","+(0.4*cc.a)+")"; ctx.beginPath(); ctx.moveTo(lx,my); ctx.lineTo(rx,my); ctx.stroke(); ctx.restore(); }
+      if(cfg.showLabels && (by-ty)>12){
+        var sign=z.dir==="bull"?"+":"-";
+        var lbl="FVG"+sign+" "+z.score;
+        ctx.fillStyle = "rgba("+cc.rgb[0]+","+cc.rgb[1]+","+cc.rgb[2]+",0.95)";
+        ctx.fillText(lbl, lx+4, ty+8);
+        if((by-ty)>26){ ctx.fillStyle="rgba(200,214,208,0.75)"; ctx.fillText("Δ "+(z.metrics.delta>=0?"+":"")+fmtVol(z.metrics.delta), lx+4, ty+19); }
+      }
+      hitRects.push({ x0:lx, y0:ty, x1:rx, y1:by, zone:z });
+      shown++;
+      if(shown>=cfg.maxActiveZones) break;
+    }
+    ctx.restore();
+  }
+  window.DVLFvgFirewallDraw = draw;
+
+  /* ── tooltip (hover desktop / tap mobile) — hit-test cached rects only ──── */
+  var tipEl=null, tipRAF=0;
+  function ensureTip(){ if(tipEl) return tipEl; tipEl=document.createElement("div"); tipEl.id="dvlFvgTooltip"; tipEl.style.cssText="position:fixed;z-index:100050;pointer-events:none;display:none;min-width:150px;max-width:230px;padding:8px 9px;border-radius:9px;background:rgba(6,16,12,.96);border:1px solid rgba(129,166,151,.28);color:#dcebe4;font:600 10px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.5)"; document.body.appendChild(tipEl); return tipEl; }
+  function hideTip(){ if(tipEl) tipEl.style.display="none"; }
+  function fmtTip(z){
+    var m=z.metrics, bull=z.dir==="bull";
+    var q = z.quality==="AGG_TRADES"?"AggTrades":(z.quality==="LOWER_TF"?"Lower TF":(z.quality==="REAL_TRADES"?"Real Trades":"Estimated flow"));
+    var rows = [
+      (bull?"Bullish":"Bearish")+" FVG",
+      "Score: "+z.score+"/100 · "+z.cls,
+      "Buy: "+fmtVol(m.buyVolume)+"  Sell: "+fmtVol(m.sellVolume),
+      "Delta: "+(m.delta>=0?"+":"")+fmtVol(m.delta),
+      "Dominance: "+m.dominance.toFixed(2)+"  Opp: "+Math.round(m.oppositeShare*100)+"%",
+      "Rel Vol: "+m.relativeVolume.toFixed(1)+"x  Disp: "+m.displacementAtr.toFixed(1)+" ATR",
+      "POC: "+m.pocPosition+"  Data: "+q,
+      "Status: "+z.state.charAt(0)+z.state.slice(1).toLowerCase()
+    ];
+    return rows.map(function(r,i){ return i===0?("<b style=\"color:"+(bull?"#16c784":"#eb5560")+"\">"+r+"</b>"):("<div>"+r+"</div>"); }).join("");
+  }
+  function onMove(ev){
+    if(!state.on || !state.showTooltip){ hideTip(); return; }
+    if(window.__dvlDragging || (window.crosshair&&window.crosshair.dragging)) return;
+    if(tipRAF) return;
+    tipRAF=requestAnimationFrame(function(){
+      tipRAF=0;
+      var cv=canvasEl(); if(!cv){ hideTip(); return; }
+      var r=cv.getBoundingClientRect();
+      var px=ev.clientX-r.left, py=ev.clientY-r.top, hit=null;
+      for(var i=hitRects.length-1;i>=0;i--){ var h=hitRects[i]; if(px>=h.x0&&px<=h.x1&&py>=h.y0&&py<=h.y1){ hit=h.zone; break; } }
+      if(!hit){ hideTip(); return; }
+      var t=ensureTip(); t.innerHTML=fmtTip(hit); t.style.display="block";
+      var tx=ev.clientX+14, ty=ev.clientY+14;
+      var tw=t.offsetWidth, th=t.offsetHeight, vw=window.innerWidth, vh=window.innerHeight;
+      if(tx+tw>vw-6) tx=ev.clientX-tw-14; if(ty+th>vh-6) ty=vh-th-6;
+      t.style.left=tx+"px"; t.style.top=ty+"px";
+    });
+  }
+  function canvasEl(){ try{ return document.getElementById("chart")||document.querySelector("canvas.chart")||document.querySelector("#chartCanvas")||document.querySelector("canvas"); }catch(_){ return null; } }
+  function bindTooltip(){ var cv=canvasEl(); if(!cv||cv.__dvlFvgTip) return; cv.__dvlFvgTip=1; cv.addEventListener("pointermove", onMove, {passive:true}); cv.addEventListener("pointerleave", hideTip, {passive:true}); }
+
+  /* ── event wiring into the app's existing event bus (no new timers) ────── */
+  function hookEvents(){
+    try{ window.addEventListener("chart:draw", function(){ if(state.on && keyOf()!==curKey){ curKey=keyOf(); requestRecompute(); } }, {passive:true}); }catch(_){}
+    try{ window.addEventListener("dvl-safe-asset-selected-0804", function(){ if(state.on){ curKey=""; maybeFetchFlow(); requestRecompute(); } hideTip(); }, {passive:true}); }catch(_){}
+    try{ window.addEventListener("dvl:paper-price", function(){ if(!state.on) return; var now=Date.now(); if(now-lastTickMitig<400) return; lastTickMitig=now; var cs=candles(); if(cs.length>=3) try{ mitigateAll(cs, cs.length-1, false); }catch(_){} }, {passive:true}); }catch(_){}
+    try{ document.addEventListener("visibilitychange", function(){ if(!document.hidden && state.on) requestRecompute(); }, {passive:true}); }catch(_){}
+  }
+
+  /* ── public API ───────────────────────────────────────────────────────── */
+  window.DVL_FVG_FIREWALL_API = {
+    getActiveZones:function(){ var b=zonesByKey[keyOf()]; return b?b.list.filter(function(z){return z.state!=="MITIGATED"&&z.state!=="FAILED";}).map(cloneZone):[]; },
+    getZonesForSymbol:function(sym,timeframe){ var b=zonesByKey[(sym||symbol())+"|"+(timeframe||tf())]; return b?b.list.map(cloneZone):[]; },
+    getNearestZone:function(price){ var b=zonesByKey[keyOf()]; if(!b) return null; var best=null,bd=Infinity; for(var i=0;i<b.list.length;i++){ var z=b.list[i]; var d=Math.min(Math.abs(price-z.top),Math.abs(price-z.bottom),Math.abs(price-z.mid)); if(d<bd){bd=d;best=z;} } return best?cloneZone(best):null; },
+    getBestZones:function(limit){ var b=zonesByKey[keyOf()]; if(!b) return []; return b.list.slice().sort(function(a,c){return c.score-a.score;}).slice(0,limit||5).map(cloneZone); },
+    getZoneById:function(id){ var b=zonesByKey[keyOf()]; if(!b) return null; for(var i=0;i<b.list.length;i++) if(b.list[i].id===id) return cloneZone(b.list[i]); return null; },
+    isOn:function(){ return !!state.on; },
+    getState:function(){ var o={}; for(var k in state) o[k]=state[k]; return o; }
+  };
+  function cloneZone(z){ return { id:z.id, dir:z.dir, top:z.top, bottom:z.bottom, mid:z.mid, size:z.size, score:z.score, cls:z.cls, state:z.state, quality:z.quality, createdTime:z.createdTime, metrics:z.metrics }; }
+
+  /* ── indicator menu item (matches Spike Zones registration) ───────────── */
+  var panel=null;
+  function updateItem(){ var st=document.getElementById("dvlFvgState"); if(st){ st.textContent=state.on?"ON":"OFF"; st.setAttribute("aria-label", state.on?"DVL FVG Firewall ON":"DVL FVG Firewall OFF"); st.classList.toggle("is-on", !!state.on); } }
+  function insertItem(){
+    var menu=document.getElementById("indicatorDropdown");
+    if(!menu || document.getElementById("dvlFvgFirewallItem")) return;
+    var item=document.createElement("div");
+    item.id="dvlFvgFirewallItem";
+    item.className="indicatorItem dvl-fvg-indicator-item";
+    item.innerHTML='<span class="indicatorFxMark">FV</span><span><b>DVL FVG Firewall</b><small>order flow · smart money</small></span><i class="dvl-vt-state" id="dvlFvgState">OFF</i>';
+    var sz=document.getElementById("dvlSpikeZonesItem");
+    if(sz && sz.parentNode) sz.parentNode.insertBefore(item, sz.nextSibling);
+    else { var head=menu.querySelector(".indicatorDropHead"); if(head && head.nextSibling) menu.insertBefore(item, head.nextSibling); else menu.appendChild(item); }
+    var pill=item.querySelector("#dvlFvgState");
+    if(pill) pill.addEventListener("click", function(ev){ ev.preventDefault(); ev.stopPropagation(); state.on=!state.on; save(); });
+    item.addEventListener("click", function(ev){ ev.stopPropagation(); openPanel(); });
+    updateItem();
+  }
+
+  /* ── settings panel (DVL standard shell + custom-control upgrade) ─────── */
+  function ensurePanel(){
+    if(panel) return panel;
+    panel=document.createElement("div");
+    panel.id="dvlFvgPanel";
+    panel.className="dvl-vt-panel dvl-fvg-panel";
+    panel.innerHTML='<div class="dvl-vt-head"><div class="dvl-vt-title"><b>DVL FVG Firewall</b><small>order flow FVG scoring</small></div><div class="dvl-vt-head-actions"><button class="dvl-vt-reset-icon" id="dvlFvgReset" type="button" aria-label="Reset DVL FVG Firewall">↻</button><button class="dvl-vt-close" id="dvlFvgClose" type="button">×</button></div></div><div class="dvl-vt-body" id="dvlFvgBody"></div>';
+    document.body.appendChild(panel);
+    panel.addEventListener("pointerdown", function(ev){ ev.stopPropagation(); }, true);
+    panel.querySelector("#dvlFvgClose").addEventListener("click", closePanel);
+    panel.querySelector("#dvlFvgReset").addEventListener("click", reset);
+    return panel;
+  }
+  function openPanel(){ ensurePanel(); try{ var wrap=document.getElementById("fxIndicatorWrap"); if(wrap) wrap.classList.remove("is-open"); }catch(_){} panel.classList.add("is-open"); renderPanel(); }
+  function closePanel(){ if(panel) panel.classList.remove("is-open"); }
+
+  function optSel(id,key,list){ var o=list.map(function(v){ return '<option value="'+v.v+'" '+(state[key]===v.v?"selected":"")+'>'+v.l+'</option>'; }).join(""); return '<select id="'+id+'" class="dvl-vt-select">'+o+'</select>'; }
+  function fnum(id,key,mn,mx,step){ return '<input id="'+id+'" class="dvl-vt-input" type="number" min="'+mn+'" max="'+mx+'" step="'+step+'" value="'+state[key]+'">'; }
+  function fld(label,ctrl){ return '<div class="dvl-vt-field"><label>'+label+'</label>'+ctrl+'</div>'; }
+
+  function renderPanel(){
+    ensurePanel();
+    var body=panel.querySelector("#dvlFvgBody");
+    body.innerHTML=''+
+      section("Core",
+        fld("Indicator",'<label class="dvl-switch"><input id="fvgOn" type="checkbox" '+(state.on?"checked":"")+'><i></i><b></b></label>')+
+        fld("Source",optSel("fvgSource","sourceCandle",[{v:"middle",l:"Middle Candle"},{v:"displacement",l:"Displacement"},{v:"three",l:"Three Candle"}]))+
+        fld("Size Mode",optSel("fvgSizeMode","sizeMode",[{v:"atr",l:"ATR"},{v:"ticks",l:"Ticks"},{v:"percent",l:"Percent"}]))+
+        fld("Min Size",optSel("fvgMinSize","minSize",[{v:"all",l:"All"},{v:"tiny",l:"Tiny+"},{v:"small",l:"Small+"},{v:"medium",l:"Medium+"},{v:"large",l:"Large+"},{v:"custom",l:"Custom"}]))+
+        fld("Custom Size",fnum("fvgCustomSize","customSize",0,50,0.05))+
+        fld("Extend Bars",fnum("fvgExtendBars","extendBars",5,500,5))+
+        fld("Max Zones",fnum("fvgMaxActiveZones","maxActiveZones",5,400,5))+
+        fld("Bars Scan",fnum("fvgBarsToScan","barsToScan",100,5000,50))
+      )+
+      section("Flow",
+        fld("Data Source",optSel("fvgDataSource","dataSource",[{v:"auto",l:"Auto"},{v:"aggTrades",l:"AggTrades"},{v:"lowerTf",l:"Lower TF"},{v:"reconstructed",l:"Reconstructed"}]))+
+        fld("Cell Mode",optSel("fvgCellMode","cellMode",[{v:"auto",l:"Auto"},{v:"ticks",l:"Ticks"},{v:"price",l:"Price"},{v:"atrFraction",l:"ATR Fraction"}]))+
+        fld("Max Cells",fnum("fvgMaxCells","maxCells",4,120,1))+
+        fld("Reconstruction",'<label class="dvl-switch"><input id="fvgUseReconstruction" type="checkbox" '+(state.useReconstruction?"checked":"")+'><i></i><b></b></label>')
+      )+
+      section("Classification",
+        fld("Valid ≥",fnum("fvgValidThreshold","validThreshold",50,100,1))+
+        fld("Weak ≥",fnum("fvgWeakThreshold","weakThreshold",1,90,1))+
+        fld("Min Rel Vol",fnum("fvgMinRelVol","minRelVol",0.1,5,0.1))+
+        fld("Min Dominance",fnum("fvgMinDominance","minDominance",1,10,0.1))+
+        fld("Max Opp Share",fnum("fvgMaxOppositeShare","maxOppositeShare",0.1,1,0.05))+
+        fld("Use Delta",'<label class="dvl-switch"><input id="fvgUseDelta" type="checkbox" '+(state.useDelta?"checked":"")+'><i></i><b></b></label>')
+      )+
+      section("Weights",
+        fld("Dominance",fnum("fvgWDominance","wDominance",0,50,1))+
+        fld("Delta",fnum("fvgWDelta","wDelta",0,50,1))+
+        fld("Opposite",fnum("fvgWOpposite","wOpposite",0,50,1))+
+        fld("Displace",fnum("fvgWDisplace","wDisplace",0,50,1))+
+        fld("Rel Vol",fnum("fvgWRelVol","wRelVol",0,50,1))+
+        fld("Absorption",fnum("fvgWAbsorb","wAbsorb",0,50,1))+
+        fld("POC",fnum("fvgWPoc","wPoc",0,50,1))
+      )+
+      section("Mitigation",
+        fld("Mode",optSel("fvgMitigationMode","mitigationMode",[{v:"touch",l:"Touch"},{v:"fill50",l:"50% Fill"},{v:"closeMid",l:"Close Mid"},{v:"fullFill",l:"Full Fill"}]))+
+        fld("Respect ATR",fnum("fvgRespectAtr","respectAtr",0,3,0.05))+
+        fld("Hide Mitigated",'<label class="dvl-switch"><input id="fvgHideMitigated" type="checkbox" '+(state.hideMitigated?"checked":"")+'><i></i><b></b></label>')+
+        fld("Stop Extend",'<label class="dvl-switch"><input id="fvgStopExtend" type="checkbox" '+(state.stopExtend?"checked":"")+'><i></i><b></b></label>')
+      )+
+      section("Visual",
+        fld("Show VALID",'<label class="dvl-switch"><input id="fvgShowValid" type="checkbox" '+(state.showValid?"checked":"")+'><i></i><b></b></label>')+
+        fld("Show WEAK",'<label class="dvl-switch"><input id="fvgShowWeak" type="checkbox" '+(state.showWeak?"checked":"")+'><i></i><b></b></label>')+
+        fld("Show FAKE",'<label class="dvl-switch"><input id="fvgShowFake" type="checkbox" '+(state.showFake?"checked":"")+'><i></i><b></b></label>')+
+        fld("Labels",'<label class="dvl-switch"><input id="fvgShowLabels" type="checkbox" '+(state.showLabels?"checked":"")+'><i></i><b></b></label>')+
+        fld("Midline",'<label class="dvl-switch"><input id="fvgShowMidline" type="checkbox" '+(state.showMidline?"checked":"")+'><i></i><b></b></label>')+
+        fld("Tooltip",'<label class="dvl-switch"><input id="fvgShowTooltip" type="checkbox" '+(state.showTooltip?"checked":"")+'><i></i><b></b></label>')+
+        fld("Extend Right",'<label class="dvl-switch"><input id="fvgExtendRight" type="checkbox" '+(state.extendRight?"checked":"")+'><i></i><b></b></label>')+
+        fld("Opacity",fnum("fvgOpacity","opacity",0.02,0.6,0.01))+
+        fld("Border",fnum("fvgBorder","border",0.05,1,0.05))
+      )+
+      '<div class="dvl-sz-mini-note">Real footprint via server aggTrades when available; otherwise honest reconstruction (Estimated flow). Detection on candle close, cached scoring, visible-only render.</div>';
+    bindPanel();
+    try{ if(window.DVLIndicatorCustomControls && typeof window.DVLIndicatorCustomControls.upgrade==="function") window.DVLIndicatorCustomControls.upgrade(panel); }catch(_){}
+  }
+  function section(title,inner){ return '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>'+title+'</span></div><div class="dvl-vt-grid">'+inner+'</div></div>'; }
+
+  function bindPanel(){
+    var map={
+      fvgOn:["on","check"], fvgSource:["sourceCandle","text"], fvgSizeMode:["sizeMode","text"], fvgMinSize:["minSize","text"],
+      fvgCustomSize:["customSize","num"], fvgExtendBars:["extendBars","int"], fvgMaxActiveZones:["maxActiveZones","int"], fvgBarsToScan:["barsToScan","int"],
+      fvgDataSource:["dataSource","text"], fvgCellMode:["cellMode","text"], fvgMaxCells:["maxCells","int"], fvgUseReconstruction:["useReconstruction","check"],
+      fvgValidThreshold:["validThreshold","int"], fvgWeakThreshold:["weakThreshold","int"], fvgMinRelVol:["minRelVol","num"], fvgMinDominance:["minDominance","num"],
+      fvgMaxOppositeShare:["maxOppositeShare","num"], fvgUseDelta:["useDelta","check"],
+      fvgWDominance:["wDominance","int"], fvgWDelta:["wDelta","int"], fvgWOpposite:["wOpposite","int"], fvgWDisplace:["wDisplace","int"], fvgWRelVol:["wRelVol","int"], fvgWAbsorb:["wAbsorb","int"], fvgWPoc:["wPoc","int"],
+      fvgMitigationMode:["mitigationMode","text"], fvgRespectAtr:["respectAtr","num"], fvgHideMitigated:["hideMitigated","check"], fvgStopExtend:["stopExtend","check"],
+      fvgShowValid:["showValid","check"], fvgShowWeak:["showWeak","check"], fvgShowFake:["showFake","check"], fvgShowLabels:["showLabels","check"],
+      fvgShowMidline:["showMidline","check"], fvgShowTooltip:["showTooltip","check"], fvgExtendRight:["extendRight","check"], fvgOpacity:["opacity","num"], fvgBorder:["border","num"]
+    };
+    var rescanKeys={ sourceCandle:1,sizeMode:1,minSize:1,customSize:1,barsToScan:1,dataSource:1,cellMode:1,maxCells:1,useReconstruction:1,
+      validThreshold:1,weakThreshold:1,minRelVol:1,minDominance:1,maxOppositeShare:1,useDelta:1,
+      wDominance:1,wDelta:1,wOpposite:1,wDisplace:1,wRelVol:1,wAbsorb:1,wPoc:1,qualityPenalty:1,mitigationMode:1,respectAtr:1 };
+    Object.keys(map).forEach(function(id){
+      var el=panel.querySelector("#"+id); if(!el) return;
+      var key=map[id][0], type=map[id][1];
+      var sync=function(){
+        if(type==="check") state[key]=!!el.checked;
+        else if(type==="int") state[key]=parseInt(el.value,10)||DEFAULTS[key]||0;
+        else if(type==="num") state[key]=Number(el.value)||DEFAULTS[key]||0;
+        else state[key]=el.value;
+        if(rescanKeys[key]){ var b=bucket(); b.list=[]; b.scannedTo=0; }
+        save();
+        requestRecompute();
+      };
+      el.addEventListener("change", sync);
+      el.addEventListener("input", sync);
+    });
+  }
+
+  /* ── boot ─────────────────────────────────────────────────────────────── */
+  function boot(){ insertItem(); hookEvents(); bindTooltip(); if(state.on){ maybeFetchFlow(); requestRecompute(); } }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", function(){ setTimeout(boot,0); }, {once:true});
+  else setTimeout(boot,0);
+  // re-insert item if the dropdown is rebuilt after boot
+  try{ window.addEventListener("dvl:indicators-rendered", insertItem, {passive:true}); }catch(_){}
+})();
+</script>
+
+
 <script id="DVL_BETA_0528_DVL_VOLUME_JS">
 (function(){
   "use strict";
@@ -37588,6 +38210,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     riskMode:"cash",
     riskValue:100,
     tolerancePct:2,
+    costMode:"priceCommission",
     defaultRR:1,
     trade:{side:"buy",entry:null,stop:null,tp:null,graphOrderId:null},
     overrides:{}
@@ -37680,7 +38303,25 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function decimals(step){var s=String(step);if(s.indexOf("e-")>0)return Number(s.split("e-")[1])||0;var p=s.indexOf(".");return p<0?0:s.length-p-1;}
   function floorStep(raw,step){var d=Math.min(12,Math.max(0,decimals(step)));var units=Math.floor((Number(raw)+1e-12)/Number(step));return Number((units*Number(step)).toFixed(d));}
   function money(v,c){if(!Number.isFinite(Number(v)))return "--";return Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})+" "+String(c||"USD");}
-  function calculate(input,spec){var sv=V.validateSpec(spec),tv=V.validateTrade(input);if(!sv.ok)return {ok:false,code:"PROFILE_INCOMPLETE",errors:sv.errors};if(!tv.ok)return {ok:false,code:"TRADE_INVALID",errors:tv.errors};var entry=Number(input.entry),stop=Number(input.stop),tp=Number(input.tp),distance=Math.abs(entry-stop),lossPerLot=0,ticks=null;if(spec.calculationMode==="tickValue"){ticks=distance/Number(spec.tickSize);lossPerLot=ticks*Number(spec.tickValue);}else if(spec.calculationMode==="contractSizeLinear")lossPerLot=distance*Number(spec.contractSize);if(!(lossPerLot>0))return {ok:false,code:"LOSS_INVALID",errors:["Perda por lote inválida"]};var requested=tv.requestedRisk,raw=requested/lossPerLot,min=Number(spec.volumeMin),max=Number(spec.volumeMax),step=Number(spec.volumeStep);var minimumRisk=lossPerLot*min;if(raw<min-1e-12)return {ok:false,code:"BELOW_MIN",errors:["O risco solicitado exige um lote menor que o mínimo permitido."],rawLot:raw,minimumLot:min,minimumRisk:minimumRisk,requestedRisk:requested,lossPerLot:lossPerLot,stopDistance:distance,ticks:ticks};var capped=raw>max;var lot=floorStep(Math.min(raw,max),step);if(lot<min)lot=min;if(lot>max)lot=max;var real=lossPerLot*lot,diff=real-requested,tolerance=Math.max(0,Number(input.tolerancePct)||0),limit=requested*(1+tolerance/100);if(real>limit+1e-8)return {ok:false,code:"TOLERANCE",errors:["Resultado bloqueado: risco acima da tolerância."],lot:lot,realRisk:real,requestedRisk:requested,tolerancePct:tolerance};var tpDistance=Number.isFinite(tp)&&tp>0?Math.abs(tp-entry):null,profit=null,rr=null;if(tpDistance!=null){rr=distance>0?tpDistance/distance:null;if(spec.calculationMode==="tickValue")profit=(tpDistance/Number(spec.tickSize))*Number(spec.tickValue)*lot;else profit=tpDistance*Number(spec.contractSize)*lot;}var nominalUnits=Number(spec.contractSize)>0?lot*Number(spec.contractSize):null,nominalValue=nominalUnits!=null?nominalUnits*entry:null,margin=(nominalValue!=null&&Number(spec.marginLeverage)>0)?nominalValue/Number(spec.marginLeverage):null;return {ok:true,code:capped?"CAPPED_MAX":"OK",warning:capped?"Lote limitado ao máximo permitido.":null,lot:lot,rawLot:raw,requestedRisk:requested,realRisk:real,difference:diff,lossPerLot:lossPerLot,stopDistance:distance,ticks:ticks,rr:rr,profit:profit,nominalUnits:nominalUnits,nominalValue:nominalValue,accountRiskPct:Number(input.accountBalance)>0?real/Number(input.accountBalance)*100:null,margin:margin,minimumRisk:minimumRisk,currency:spec.currency||"USD",lotDecimals:decimals(step)};}
+  /* Beta 1.219 — dimensionamento CIENTE DE COMISSÕES da CFT.
+     A perda por lote no PREÇO (lossPerLot) continua igual. Sobre ela somamos as
+     comissões estimadas de entrada e saída (0,0325%/lado da CFT) para que o LOTE
+     seguro caiba no risco solicitado JÁ com as taxas embutidas.
+       • entrada: preço de entrada × contractSize × comissão
+       • saída (orçamento): usa o MAIOR entre entrada e stop (conservador — pro
+         buy o stop está abaixo, pro sell acima), então o risco real exibido
+         (comissão de saída no stop real) nunca ultrapassa o orçamento.
+     costMode "priceCommission" (padrão) dimensiona por preço+comissões; costMode
+     "priceOnly" dimensiona só pelo preço (lote maior) e avisa que ignora taxas. */
+  function calculate(input,spec){var sv=V.validateSpec(spec),tv=V.validateTrade(input);if(!sv.ok)return {ok:false,code:"PROFILE_INCOMPLETE",errors:sv.errors};if(!tv.ok)return {ok:false,code:"TRADE_INVALID",errors:tv.errors};var entry=Number(input.entry),stop=Number(input.stop),tp=Number(input.tp),distance=Math.abs(entry-stop),lossPerLot=0,ticks=null;if(spec.calculationMode==="tickValue"){ticks=distance/Number(spec.tickSize);lossPerLot=ticks*Number(spec.tickValue);}else if(spec.calculationMode==="contractSizeLinear")lossPerLot=distance*Number(spec.contractSize);if(!(lossPerLot>0))return {ok:false,code:"LOSS_INVALID",errors:["Perda por lote inválida"]};
+    var costMode=input.costMode==="priceOnly"?"priceOnly":"priceCommission";
+    var cs=Number(spec.contractSize)>0?Number(spec.contractSize):1;
+    var commPct=Number(spec.commissionPct)>0?Number(spec.commissionPct):0,commFrac=commPct/100;
+    var entryCommPerLot=commFrac>0?entry*cs*commFrac:0,exitCommStopPerLot=commFrac>0?stop*cs*commFrac:0,exitCommBudgetPerLot=commFrac>0?Math.max(entry,stop)*cs*commFrac:0;
+    var feePerLotBudget=entryCommPerLot+exitCommBudgetPerLot,perLotForSizing=costMode==="priceCommission"?lossPerLot+feePerLotBudget:lossPerLot;
+    var requested=tv.requestedRisk,raw=requested/perLotForSizing,min=Number(spec.volumeMin),max=Number(spec.volumeMax),step=Number(spec.volumeStep);var minimumRisk=perLotForSizing*min;if(raw<min-1e-12)return {ok:false,code:"BELOW_MIN",errors:["O risco solicitado exige um lote menor que o mínimo permitido."],rawLot:raw,minimumLot:min,minimumRisk:minimumRisk,requestedRisk:requested,lossPerLot:lossPerLot,stopDistance:distance,ticks:ticks};var capped=raw>max;var lot=floorStep(Math.min(raw,max),step);if(lot<min)lot=min;if(lot>max)lot=max;
+    var priceRisk=lossPerLot*lot,entryCommission=entryCommPerLot*lot,exitCommission=exitCommStopPerLot*lot,totalFees=entryCommission+exitCommission,totalRisk=priceRisk+totalFees;
+    var real=costMode==="priceCommission"?totalRisk:priceRisk,diff=real-requested,tolerance=Math.max(0,Number(input.tolerancePct)||0),limit=requested*(1+tolerance/100);if(real>limit+1e-8)return {ok:false,code:"TOLERANCE",errors:["Resultado bloqueado: risco acima da tolerância."],lot:lot,realRisk:real,requestedRisk:requested,tolerancePct:tolerance};var tpDistance=Number.isFinite(tp)&&tp>0?Math.abs(tp-entry):null,profit=null,rr=null,netProfit=null,netRR=null;if(tpDistance!=null){rr=distance>0?tpDistance/distance:null;if(spec.calculationMode==="tickValue")profit=(tpDistance/Number(spec.tickSize))*Number(spec.tickValue)*lot;else profit=tpDistance*Number(spec.contractSize)*lot;var tpExitCommission=commFrac>0?tp*cs*commFrac*lot:0;netProfit=profit-entryCommission-tpExitCommission;netRR=totalRisk>0?netProfit/totalRisk:null;}var nominalUnits=Number(spec.contractSize)>0?lot*Number(spec.contractSize):null,nominalValue=nominalUnits!=null?nominalUnits*entry:null,margin=(nominalValue!=null&&Number(spec.marginLeverage)>0)?nominalValue/Number(spec.marginLeverage):null;return {ok:true,code:capped?"CAPPED_MAX":"OK",warning:capped?"Lote limitado ao máximo permitido.":(costMode==="priceOnly"?"O lote não considera as comissões de entrada e saída.":null),costMode:costMode,commissionPct:commPct,lot:lot,rawLot:raw,requestedRisk:requested,realRisk:real,difference:diff,lossPerLot:lossPerLot,priceRisk:priceRisk,entryCommission:entryCommission,exitCommission:exitCommission,totalFees:totalFees,totalRisk:totalRisk,netProfit:netProfit,netRR:netRR,stopDistance:distance,ticks:ticks,rr:rr,profit:profit,nominalUnits:nominalUnits,nominalValue:nominalValue,accountRiskPct:Number(input.accountBalance)>0?real/Number(input.accountBalance)*100:null,margin:margin,minimumRisk:minimumRisk,currency:spec.currency||"USD",lotDecimals:decimals(step)};}
   window.DVL_RISK_ENGINE={calculate:calculate,floorStep:floorStep,formatMoney:money};
 })();
 </script>
@@ -37732,12 +38373,12 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function padKey(k){if(k==="cancel")return closePad();if(k==="ok"){var v=Specs.parseNumber(pad.value);if(pad.apply)pad.apply(v);return closePad();}if(k==="clear")pad.value="";else if(k==="back")pad.value=pad.value.slice(0,-1);else if(k==="."){if(pad.value.indexOf(".")<0)pad.value=(pad.value||"0")+".";}else if(/^\d$/.test(k)){if(pad.value==="0")pad.value=k;else if(pad.value.length<18)pad.value+=k;}$("dvlRiskPadDisplay").textContent=pad.value||"0";}
   function editTrade(field,title){var initial=state.trade[field];if(field==="entry"&&!sourceOrder()){var live=latestMarketPrice();if(live>0){initial=live;state.trade.entry=live;applyOneToOneToState();Storage.patch({trade:state.trade,defaultRR:1});}}openPad(title,initial,function(v){if(!(v>0))return;updateGraph(field,v);state.trade[field]=v;if(field==="entry"||field==="stop")applyOneToOneToState();Storage.patch({trade:state.trade,defaultRR:1});schedule();});}
   function renderTrade(){all(".dvlRiskSide").forEach(function(b){b.classList.toggle("active",b.dataset.riskSide===state.trade.side);});$("dvlRiskEntryValue").textContent=fmt(state.trade.entry,6);$("dvlRiskStopValue").textContent=fmt(state.trade.stop,6);$("dvlRiskTpValue").textContent=fmt(state.trade.tp,6);var o=sourceOrder();$("dvlRiskGraphSource").textContent=o?(String(o.symbol||state.symbolKey)+" · "+String(o.status||"trade")):(latestMarketPrice()>0?"Último preço: "+fmt(latestMarketPrice(),6):"Sem trade selecionado");$("dvlRiskSyncState").textContent=o?"Sincronizado com Entry / SL / TP":"Entry pelo último preço · R:R padrão 1:1";}
-  function renderRiskControls(){all(".dvlRiskMode").forEach(function(b){b.classList.toggle("active",b.dataset.riskMode===state.riskMode);});var cash=state.riskMode==="percent"?Number(state.accountSize)*Number(state.riskValue)/100:Number(state.riskValue),pct=Number(state.accountSize)>0?cash/Number(state.accountSize)*100:0;$("dvlRiskValueText").textContent=state.riskMode==="percent"?fmt(state.riskValue,4)+"%":money(state.riskValue,"USD");$("dvlRiskEquivalent").textContent=money(cash,"USD")+" · "+fmt(pct,4)+"%";all("#dvlRiskPresetRow button").forEach(function(b){b.classList.toggle("active",b.dataset.riskMode===state.riskMode&&Math.abs(Number(b.dataset.riskValue)-Number(state.riskValue))<1e-9);});$("dvlRiskToleranceValue").textContent=fmt(state.tolerancePct,2)+"%";}
+  function renderRiskControls(){all(".dvlRiskMode").forEach(function(b){b.classList.toggle("active",b.dataset.riskMode===state.riskMode);});var cash=state.riskMode==="percent"?Number(state.accountSize)*Number(state.riskValue)/100:Number(state.riskValue),pct=Number(state.accountSize)>0?cash/Number(state.accountSize)*100:0;$("dvlRiskValueText").textContent=state.riskMode==="percent"?fmt(state.riskValue,4)+"%":money(state.riskValue,"USD");$("dvlRiskEquivalent").textContent=money(cash,"USD")+" · "+fmt(pct,4)+"%";all("#dvlRiskPresetRow button").forEach(function(b){b.classList.toggle("active",b.dataset.riskMode===state.riskMode&&Math.abs(Number(b.dataset.riskValue)-Number(state.riskValue))<1e-9);});var cmode=state.costMode==="priceOnly"?"priceOnly":"priceCommission";all("#dvlRiskCostRow .dvlRiskCost").forEach(function(b){b.classList.toggle("active",b.dataset.costMode===cmode);});$("dvlRiskToleranceValue").textContent=fmt(state.tolerancePct,2)+"%";}
   function specFieldValue(k){var v=workingSpec&&workingSpec[k];return v==null||v===""?"--":fmt(v,10);}
   function renderSpecs(){if(!workingSpec)loadWorkingSpec();$("dvlRiskBrokerSymbolInput").value=workingSpec.brokerSymbol||state.symbolKey;$("dvlRiskCurrencyInput").value=workingSpec.currency||"USD";["contractSize","tickSize","tickValue","volumeMin","volumeMax","volumeStep","digits","marginLeverage"].forEach(function(k){var id="dvlRiskSpec"+k.charAt(0).toUpperCase()+k.slice(1);$(id).textContent=specFieldValue(k);});$("dvlRiskVerifiedToggle").classList.toggle("active",!!workingSpec.verified);$("dvlRiskVerifiedToggle").setAttribute("aria-pressed",workingSpec.verified?"true":"false");}
-  function clearResult(){lastResult=null;$("dvlRiskLotValue").textContent="--";$("dvlRiskCopyLotBtn").disabled=true;["dvlRiskRequested","dvlRiskReal","dvlRiskDifference","dvlRiskRR","dvlRiskProfit","dvlRiskStopDistance","dvlRiskTicks","dvlRiskNominalSize","dvlRiskNominalValue","dvlRiskAccountRisk","dvlRiskMargin"].forEach(function(id){$(id).textContent="--";});}
+  function clearResult(){lastResult=null;$("dvlRiskLotValue").textContent="--";$("dvlRiskCopyLotBtn").disabled=true;["dvlRiskRequested","dvlRiskReal","dvlRiskDifference","dvlRiskPriceRisk","dvlRiskEntryComm","dvlRiskExitComm","dvlRiskTotalFees","dvlRiskTotalRisk","dvlRiskNetRR","dvlRiskNetProfit","dvlRiskRR","dvlRiskProfit","dvlRiskStopDistance","dvlRiskTicks","dvlRiskNominalSize","dvlRiskNominalValue","dvlRiskAccountRisk","dvlRiskMargin"].forEach(function(id){$(id).textContent="--";});}
   function message(txt,type){var el=$("dvlRiskMessage");el.textContent=txt||"";el.className="dvlRiskMessage"+(type?" "+type:"");}
-  function calculate(){clearResult();if(state.executionProfile==="paper"){message("DVL Paper continua usando a lógica interna atual. Selecione um perfil MT5 para calcular o lote.","");return;}var _tpc=Number(state.trade.tp);if(!(_tpc>0)&&Number(state.trade.entry)>0&&Number(state.trade.stop)>0){var _dtp=oneToOneTp(state.trade.entry,state.trade.stop,state.trade.side);if(_dtp>0)_tpc=_dtp;}var result=Engine.calculate({accountBalance:state.accountSize,side:state.trade.side,entry:state.trade.entry,stop:state.trade.stop,tp:_tpc,riskMode:state.riskMode,riskValue:state.riskValue,tolerancePct:state.tolerancePct},workingSpec);lastResult=result;var c=workingSpec&&workingSpec.currency||"USD";if(!result.ok){if(result.requestedRisk!=null)$("dvlRiskRequested").textContent=money(result.requestedRisk,c);if(result.code==="BELOW_MIN"){message("O risco solicitado exige um lote menor que o mínimo permitido. Lote mínimo: "+fmt(result.minimumLot,8)+". Risco mínimo possível: "+money(result.minimumRisk,c),"error");}else message((result.errors||["Não foi possível calcular."]).join(" · "),"error");return;}$("dvlRiskLotValue").textContent=Number(result.lot).toFixed(result.lotDecimals);$("dvlRiskCopyLotBtn").disabled=false;$("dvlRiskRequested").textContent=money(result.requestedRisk,c);$("dvlRiskReal").textContent=money(result.realRisk,c);$("dvlRiskDifference").textContent=(result.difference>0?"+":"")+money(result.difference,c);$("dvlRiskRR").textContent=result.rr!=null?"1:"+fmt(result.rr,2):"--";$("dvlRiskProfit").textContent=result.profit!=null?money(result.profit,c):"--";$("dvlRiskStopDistance").textContent=fmt(result.stopDistance,8);$("dvlRiskTicks").textContent=result.ticks!=null?fmt(result.ticks,2):"--";$("dvlRiskNominalSize").textContent=result.nominalUnits!=null?fmt(result.nominalUnits,8):"--";$("dvlRiskNominalValue").textContent=result.nominalValue!=null?money(result.nominalValue,c):"--";$("dvlRiskAccountRisk").textContent=result.accountRiskPct!=null?fmt(result.accountRiskPct,4)+"%":"--";$("dvlRiskMargin").textContent=result.margin!=null?money(result.margin,c):"--";message(result.warning||"Cálculo concluído com arredondamento seguro para baixo.","ok");}
+  function calculate(){clearResult();if(state.executionProfile==="paper"){message("DVL Paper continua usando a lógica interna atual. Selecione um perfil MT5 para calcular o lote.","");return;}var _tpc=Number(state.trade.tp);if(!(_tpc>0)&&Number(state.trade.entry)>0&&Number(state.trade.stop)>0){var _dtp=oneToOneTp(state.trade.entry,state.trade.stop,state.trade.side);if(_dtp>0)_tpc=_dtp;}var result=Engine.calculate({accountBalance:state.accountSize,side:state.trade.side,entry:state.trade.entry,stop:state.trade.stop,tp:_tpc,riskMode:state.riskMode,riskValue:state.riskValue,tolerancePct:state.tolerancePct,costMode:state.costMode==="priceOnly"?"priceOnly":"priceCommission"},workingSpec);lastResult=result;var c=workingSpec&&workingSpec.currency||"USD";if(!result.ok){if(result.requestedRisk!=null)$("dvlRiskRequested").textContent=money(result.requestedRisk,c);if(result.code==="BELOW_MIN"){message("O risco solicitado exige um lote menor que o mínimo permitido. Lote mínimo: "+fmt(result.minimumLot,8)+". Risco mínimo possível: "+money(result.minimumRisk,c),"error");}else message((result.errors||["Não foi possível calcular."]).join(" · "),"error");return;}$("dvlRiskLotValue").textContent=Number(result.lot).toFixed(result.lotDecimals);$("dvlRiskCopyLotBtn").disabled=false;$("dvlRiskRequested").textContent=money(result.requestedRisk,c);$("dvlRiskReal").textContent=money(result.realRisk,c);$("dvlRiskDifference").textContent=(result.difference>0?"+":"")+money(result.difference,c);$("dvlRiskPriceRisk").textContent=result.priceRisk!=null?money(result.priceRisk,c):"--";$("dvlRiskEntryComm").textContent=result.entryCommission!=null?money(result.entryCommission,c):"--";$("dvlRiskExitComm").textContent=result.exitCommission!=null?money(result.exitCommission,c):"--";$("dvlRiskTotalFees").textContent=result.totalFees!=null?money(result.totalFees,c):"--";$("dvlRiskTotalRisk").textContent=result.totalRisk!=null?money(result.totalRisk,c):"--";$("dvlRiskRR").textContent=result.rr!=null?"1:"+fmt(result.rr,2):"--";$("dvlRiskNetRR").textContent=result.netRR!=null?"1:"+fmt(result.netRR,2):"--";$("dvlRiskProfit").textContent=result.profit!=null?money(result.profit,c):"--";$("dvlRiskNetProfit").textContent=result.netProfit!=null?money(result.netProfit,c):"--";$("dvlRiskStopDistance").textContent=fmt(result.stopDistance,8);$("dvlRiskTicks").textContent=result.ticks!=null?fmt(result.ticks,2):"--";$("dvlRiskNominalSize").textContent=result.nominalUnits!=null?fmt(result.nominalUnits,8):"--";$("dvlRiskNominalValue").textContent=result.nominalValue!=null?money(result.nominalValue,c):"--";$("dvlRiskAccountRisk").textContent=result.accountRiskPct!=null?fmt(result.accountRiskPct,4)+"%":"--";$("dvlRiskMargin").textContent=result.margin!=null?money(result.margin,c):"--";message(result.warning||(result.costMode==="priceCommission"?"Lote seguro com comissões de entrada e saída embutidas · arredondado para baixo.":"Cálculo concluído com arredondamento seguro para baixo."),(result.code==="CAPPED_MAX"||result.costMode==="priceOnly")?"warn":"ok");}
   /* Beta 1.218 — saneia o Stop no modo "entrada pelo último preço". Sem trade
      selecionado, um Stop inválido persistido (negativo, do lado errado da
      entrada, NaN, ou absurdamente longe — o "-44,3" do print) passava direto e
@@ -37767,6 +38408,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     all(".dvlRiskSide").forEach(function(b){b.addEventListener("click",function(){setSide(b.dataset.riskSide);});});
     $("dvlRiskEntryBtn").addEventListener("click",function(){editTrade("entry","Entry");});$("dvlRiskStopBtn").addEventListener("click",function(){editTrade("stop","Stop Loss");});$("dvlRiskTpBtn").addEventListener("click",function(){editTrade("tp","Take Profit");});
     all(".dvlRiskMode").forEach(function(b){b.addEventListener("click",function(){state.riskMode=b.dataset.riskMode;Storage.patch({riskMode:state.riskMode});schedule();});});
+    all("#dvlRiskCostRow .dvlRiskCost").forEach(function(b){b.addEventListener("click",function(){state.costMode=b.dataset.costMode==="priceOnly"?"priceOnly":"priceCommission";Storage.patch({costMode:state.costMode});schedule();});});
     $("dvlRiskValueBtn").addEventListener("click",function(){openPad(state.riskMode==="percent"?"Risco em porcentagem":"Risco em dinheiro",state.riskValue,function(v){if(v>0){state.riskValue=v;Storage.patch({riskValue:v});schedule();}});});
     all("#dvlRiskPresetRow button").forEach(function(b){b.addEventListener("click",function(){state.riskMode=b.dataset.riskMode;state.riskValue=Number(b.dataset.riskValue);Storage.patch({riskMode:state.riskMode,riskValue:state.riskValue});schedule();});});
     $("dvlRiskCopyLotBtn").addEventListener("click",function(){if(!lastResult||!lastResult.ok)return;var v=Number(lastResult.lot).toFixed(lastResult.lotDecimals);var done=function(){message("Lote copiado","ok");};if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(v).then(done).catch(function(){});else{var ta=document.createElement("textarea");ta.value=v;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");done();}catch(_){}ta.remove();}});
@@ -72997,9 +73639,10 @@ window.DVL_COPILOT_BACKTEST_1040={
 .dvlRiskSideRow{display:grid;grid-template-columns:1fr 1fr;gap:6px}.dvlRiskSide{height:34px;border:1px solid rgba(129,166,151,.18);border-radius:8px;background:rgba(2,11,8,.7);color:#8aa99b;font-size:10px;font-weight:900}.dvlRiskSide[data-risk-side="buy"].active{background:rgba(19,220,141,.16);border-color:rgba(19,220,141,.5);color:#46eda8}.dvlRiskSide[data-risk-side="sell"].active{background:rgba(255,74,97,.14);border-color:rgba(255,74,97,.48);color:#ff7486}
 .dvlRiskPriceGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.dvlRiskValueBtn{min-width:0;min-height:54px;padding:7px 6px;border:1px solid rgba(129,166,151,.16);border-radius:9px;background:rgba(2,11,8,.76);display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;text-align:left}.dvlRiskValueBtn span{font-size:8px;font-weight:800;color:#718f82}.dvlRiskValueBtn strong{max-width:100%;font-size:11px;font-weight:900;color:#f0faf5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dvlRiskModeRow{display:grid;grid-template-columns:1fr 1fr minmax(92px,1.15fr);gap:6px}.dvlRiskMode,.dvlRiskValueInline{height:34px;border:1px solid rgba(129,166,151,.17);border-radius:8px;background:rgba(2,11,8,.72);font-size:9px;font-weight:850;color:#819e91}.dvlRiskMode.active{color:#16e295;border-color:rgba(19,220,141,.42);background:rgba(19,220,141,.09)}.dvlRiskValueInline{color:#effaf5;font-size:10px}
+.dvlRiskCostRow{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}.dvlRiskCost{height:32px;border:1px solid rgba(129,166,151,.17);border-radius:8px;background:rgba(2,11,8,.72);font-size:9px;font-weight:850;color:#819e91}.dvlRiskCost.active{color:#16e295;border-color:rgba(19,220,141,.42);background:rgba(19,220,141,.09)}
 .dvlRiskPresetRow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}.dvlRiskPresetRow button{height:29px;padding:0 3px;border:1px solid rgba(129,166,151,.14);border-radius:7px;background:rgba(2,11,8,.66);color:#79978a;font-size:8px;font-weight:850}.dvlRiskPresetRow button.active{border-color:rgba(19,220,141,.42);color:#1fe49a;background:rgba(19,220,141,.08)}
 .dvlRiskResult{padding:13px;border:1px solid rgba(19,220,141,.28);border-radius:12px;background:linear-gradient(180deg,rgba(8,34,24,.92),rgba(3,18,12,.92));display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;align-items:center}.dvlRiskResult>span{font-size:8px;font-weight:900;color:#78a290;letter-spacing:.09em}.dvlRiskResult>strong{grid-column:1;font-size:31px;line-height:1;font-weight:1000;color:#42eca6;letter-spacing:.02em}.dvlRiskResult>button{grid-column:2;grid-row:1/3;min-width:92px;height:42px;border:1px solid rgba(19,220,141,.35);border-radius:9px;background:rgba(19,220,141,.11);color:#5cf0b2;font-size:9px;font-weight:900}.dvlRiskResult>button:disabled{opacity:.35}.dvlRiskResultLines{grid-column:1/-1;margin-top:7px;padding-top:8px;border-top:1px solid rgba(129,166,151,.13);display:grid;gap:5px}.dvlRiskResultLines div{display:flex;justify-content:space-between;gap:10px;font-size:8.5px}.dvlRiskResultLines span{color:#79978a}.dvlRiskResultLines b{font-weight:850;color:#d7e8e0}
-.dvlRiskMetrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.dvlRiskMetrics div{min-height:48px;padding:8px 9px;border:1px solid rgba(129,166,151,.13);border-radius:9px;background:rgba(2,11,8,.62);display:flex;flex-direction:column;gap:6px}.dvlRiskMetrics span{font-size:7.8px;color:#708d80}.dvlRiskMetrics b{font-size:10px;color:#dbeae3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dvlRiskMessage{min-height:36px;padding:9px 10px;border:1px solid rgba(243,199,104,.22);border-radius:9px;background:rgba(243,199,104,.055);color:#d7bc79;font-size:9px;line-height:1.35}.dvlRiskMessage.error{border-color:rgba(255,74,97,.28);background:rgba(255,74,97,.07);color:#ff94a2}.dvlRiskMessage.ok{border-color:rgba(19,220,141,.22);background:rgba(19,220,141,.055);color:#66d9a4}
+.dvlRiskMetrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.dvlRiskMetrics div{min-height:48px;padding:8px 9px;border:1px solid rgba(129,166,151,.13);border-radius:9px;background:rgba(2,11,8,.62);display:flex;flex-direction:column;gap:6px}.dvlRiskMetrics span{font-size:7.8px;color:#708d80}.dvlRiskMetrics b{font-size:10px;color:#dbeae3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dvlRiskMessage{min-height:36px;padding:9px 10px;border:1px solid rgba(243,199,104,.22);border-radius:9px;background:rgba(243,199,104,.055);color:#d7bc79;font-size:9px;line-height:1.35}.dvlRiskMessage.error{border-color:rgba(255,74,97,.28);background:rgba(255,74,97,.07);color:#ff94a2}.dvlRiskMessage.ok{border-color:rgba(19,220,141,.22);background:rgba(19,220,141,.055);color:#66d9a4}.dvlRiskMessage.warn{border-color:rgba(243,199,104,.32);background:rgba(243,199,104,.08);color:#e6c876}
 .dvlRiskAdvanced{border:1px solid rgba(129,166,151,.14);border-radius:11px;background:rgba(3,14,10,.62);overflow:visible}.dvlRiskAdvancedToggle{width:100%;min-height:48px;padding:0 11px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#dbe9e2;text-align:left}.dvlRiskAdvancedToggle>span{display:flex;flex-direction:column;gap:4px}.dvlRiskAdvancedToggle strong{font-size:10px}.dvlRiskAdvancedToggle small{font-size:8px;color:#718f82}.dvlRiskAdvancedToggle svg{transition:transform .18s ease}.dvlRiskAdvanced.open .dvlRiskAdvancedToggle svg{transform:rotate(180deg)}.dvlRiskAdvancedBody{display:none;padding:0 10px 12px;border-top:1px solid rgba(129,166,151,.12)}.dvlRiskAdvanced.open .dvlRiskAdvancedBody{display:flex;flex-direction:column;gap:10px}.dvlRiskAdvancedHeader{height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#718f82;font-size:8px}.dvlRiskResetBtn{width:29px;height:29px;border:1px solid rgba(129,166,151,.17);border-radius:50%;display:grid;place-items:center;color:#9db6aa}.dvlRiskResetBtn svg{width:15px;height:15px}
 .dvlRiskSpecGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.dvlRiskSpecGrid label,.dvlRiskSpecGrid button{min-width:0;min-height:48px;padding:7px 8px;border:1px solid rgba(129,166,151,.14);border-radius:8px;background:rgba(2,11,8,.64);display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;text-align:left}.dvlRiskSpecGrid span{font-size:7.5px;color:#708d80}.dvlRiskSpecGrid b{font-size:10px;color:#dcebe4;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dvlRiskSpecGrid input{width:100%;height:18px;padding:0;border:0;outline:0;background:transparent;color:#dcebe4;font-size:10px;font-weight:850;text-transform:uppercase}.dvlRiskCalcModeField{margin-top:1px}
 .dvlRiskVerifyToggle{min-height:38px;padding:0 9px;border:1px solid rgba(129,166,151,.14);border-radius:8px;background:rgba(2,11,8,.62);display:flex;align-items:center;gap:8px;color:#8aa79a;font-size:8.5px;font-weight:800;text-align:left}.dvlRiskVerifyToggle i{width:28px;height:16px;border-radius:999px;background:#263b32;position:relative;flex:0 0 auto}.dvlRiskVerifyToggle i:after{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:#84998f;transition:transform .16s ease}.dvlRiskVerifyToggle.active{color:#70dbae;border-color:rgba(19,220,141,.28)}.dvlRiskVerifyToggle.active i{background:rgba(19,220,141,.28)}.dvlRiskVerifyToggle.active i:after{transform:translateX(12px);background:#24e099}
