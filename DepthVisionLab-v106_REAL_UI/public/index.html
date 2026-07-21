@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.229';
+window.DVL_APP_VERSION = 'Beta 1.230';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16019,6 +16019,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.230", note: "DVL Smart Delta Engine — Stage 3 (fonte única de leitura + Smart Alerts): o motor agora publica a leitura atual num único lugar — window.DVL_SMART_DELTA_LAST e o evento dvl:smart-delta (símbolo, timeframe, delta, confidence, continuation, exhaustion, classe e componentes) — mais DVL_SMART_DELTA_ENGINE_API.getSnapshot(), para Scanner, Copilot, Market Matrix e Smart Alerts consumirem SEM duplicar lógica. Adicionado o Smart Alerts: quando o candle cruza os limiares configurados (|Delta| ≥, Confidence ≥, ou Exhaustion ≥), dispara um alerta (toast + evento dvl:smart-delta-alert), uma vez por candle. Novos controles no painel de configuração (Alertas on/off e limiares). Observação: Market Matrix e Smart Alerts ainda não existiam como telas no app — o Smart Alerts foi criado agora; a coluna do Scanner por símbolo depende de cálculo no backend (footprint por símbolo) e fica para um próximo passo. Só frontend." },
   { version: "Beta 1.229", note: "DVL Smart Delta Engine — Stage 2 (confluência institucional externa): o motor agora incorpora Open Interest + variação do OI, Long/Short Ratio e os níveis do Volume Profile (POC/VAH/VAL) na pontuação, lendo os indicadores/VP que já existem no DVL (sem duplicar cálculo). OI confirmando a direção (OI subindo junto com o preço) aumenta Confidence e Continuation; OI caindo eleva o Exhaustion (desmontagem de posição); LSR confirmando soma continuação; e a proximidade do candle a VAL/VAH/POC entra como suporte/resistência/equilíbrio. O delta do candle continua intrínseco — a confluência ajusta só Confidence/Continuation/Exhaustion, e quando os dados não estão disponíveis nada é penalizado. Painel ganha uma linha de confluência (OI · LSR · VP). Adicionado DVLVolumeProfile.getLevels() para expor POC/VAH/VAL atuais. Só frontend." },
   { version: "Beta 1.228", note: "Added DVL Smart Delta Engine with institutional confidence scoring, continuation probability, exhaustion analysis and unified confluence model. Motor proprietário (não é Footprint, não simula Bid x Ask): a partir de volume/spike, corpo, pavios, posição do fechamento, velocidade, flat/spike, absorção, rejeição e do delta real do footprint (quando disponível), calcula Institutional Confidence (0–100), Smart Delta assinado (histograma leve: verde compra, vermelho venda, cinza neutro, amarelo indecisão), Continuation Probability (0–100) e Exhaustion Score (0–100). Painel compacto no gráfico (Delta / Confidence / Continuation / Exhaustion do candle atual) e API window.DVL_SMART_DELTA_ENGINE_API (latest/at/series) pronta para Scanner, Copilot, Market Matrix e Smart Alerts nos próximos estágios. Módulos CORE/SCORE/ENGINE/RENDER/STORAGE, cache incremental por candle fechado. Registrado no menu real de indicadores (VOLUME & FLOW). Só frontend." },
   { version: "Beta 1.227", note: "Risk Engine — linhas de planejamento, dois ajustes: (1) o gráfico NÃO se move mais ao arrastar Entry/TP/SL — o handler de pan agora ignora o toque quando ele começa numa linha do Risk Engine (mesma trava que o Paper Trading já usa), então no mobile a linha arrasta sem levar o gráfico junto; (2) ao FECHAR o Risk Engine as linhas somem do gráfico (e as faixas de toque também), reaparecendo quando você reabre — os valores de Entry/Stop/TP continuam salvos. Só frontend." },
@@ -30996,7 +30997,8 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
 
   /* ── STORAGE ──────────────────────────────────────────────────────────── */
   var KEY = "dvl_smart_delta_1228";
-  var DEFAULTS = { on:false, panel:true, height:38, lookback:20, thNeutral:18, opacity:0.9 };
+  var DEFAULTS = { on:false, panel:true, height:38, lookback:20, thNeutral:18, opacity:0.9,
+    alertOn:false, alertDelta:60, alertConf:70, alertExh:75 };
   var state = (function(){ var s={}; try{ s=JSON.parse(localStorage.getItem(KEY)||"{}"); }catch(_){}
     var o={}; for(var k in DEFAULTS) o[k]=DEFAULTS[k]; if(s&&typeof s==="object") for(var k2 in s){ if(k2 in DEFAULTS) o[k2]=s[k2]; } return o; })();
   var saveT=0; function save(){ clearTimeout(saveT); saveT=setTimeout(function(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(_){} },120); }
@@ -31160,6 +31162,32 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       prevVol=f.vol; prevVel=f.velocity;
     }
     cache=out; cacheKey=key;
+    try{ publish(); }catch(_){}
+  }
+  /* Beta 1.230 — Stage 3: fonte única de leitura (bridge) + Smart Alerts.
+     Publica a leitura atual num único lugar (window.DVL_SMART_DELTA_LAST + evento
+     dvl:smart-delta) para Scanner/Copilot/Market Matrix/Smart Alerts consumirem
+     SEM duplicar lógica. */
+  var lastPubTime=0, lastSnap=null;
+  function publish(){
+    var L=null; for(var i=cache.length-1;i>=0;i--){ if(cache[i]){ L={i:i,s:cache[i]}; break; } }
+    if(!L) return;
+    var cs=candles(); var t=T(cs[L.i]);
+    var snap={ symbol:symbolTf().split("|")[0], tf:symbolTf().split("|")[1], time:t, index:L.i,
+      delta:L.s.delta, confidence:L.s.confidence, continuation:L.s.continuation, exhaustion:L.s.exhaustion, cls:L.s.cls, components:L.s.components, ts:Date.now() };
+    lastSnap=snap; window.DVL_SMART_DELTA_LAST=snap;
+    try{ window.dispatchEvent(new CustomEvent("dvl:smart-delta",{detail:snap})); }catch(_){}
+    if(t!==lastPubTime){ lastPubTime=t; try{ evalAlerts(snap); }catch(_){} }
+  }
+  function evalAlerts(s){
+    if(!state.alertOn) return;
+    var msg=null;
+    if(Math.abs(s.delta)>=(state.alertDelta||60) && s.confidence>=(state.alertConf||70) && (s.cls==="buy"||s.cls==="sell")){
+      msg="Smart Delta "+(s.cls==="buy"?"COMPRA":"VENDA")+" forte · "+(s.delta>0?"+":"")+s.delta+" · Conf "+s.confidence+"% · Cont "+s.continuation+"%";
+    } else if(s.exhaustion>=(state.alertExh||75)){
+      msg="Smart Delta · exaustão "+s.exhaustion+"% ("+s.symbol+" "+s.tf+")";
+    }
+    if(msg){ try{ if(typeof showToast==="function") showToast(msg); }catch(_){} try{ window.dispatchEvent(new CustomEvent("dvl:smart-delta-alert",{detail:{message:msg,snap:s}})); }catch(_){} }
   }
   function latest(){ compute(); for(var i=cache.length-1;i>=0;i--){ if(cache[i]) return { i:i, s:cache[i] }; } return null; }
 
@@ -31236,6 +31264,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     setOn:function(v){ state.on=(v===undefined?!state.on:!!v); save(); updateRow(); try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){} if(!state.on) hidePanel(); },
     getState:function(){ var o={}; for(var k in state) o[k]=state[k]; return o; },
     latest:function(){ var L=latest(); return L?Object.assign({index:L.i},L.s):null; },
+    getSnapshot:function(){ compute(); return lastSnap; },
     at:function(time){ compute(); var cs=candles(); for(var i=0;i<cs.length;i++){ if(T(cs[i])===Number(time)) return cache[i]||null; } return null; },
     series:function(){ compute(); return cache.slice(); },
     openPanel:function(){ openSettings(); },
@@ -31269,9 +31298,16 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       '<div class="dvl-vt-field"><label>Painel</label><label class="dvl-switch"><input id="sdPanel" type="checkbox" '+(state.panel!==false?"checked":"")+'><i></i><b></b></label></div>'+
       '<div class="dvl-vt-field"><label>Altura</label><input id="sdHeight" class="dvl-vt-input" type="number" min="18" max="80" step="2" value="'+(state.height||38)+'"></div>'+
       '<div class="dvl-vt-field"><label>Neutro ±</label><input id="sdTh" class="dvl-vt-input" type="number" min="2" max="60" step="1" value="'+(state.thNeutral||18)+'"></div>'+
+      '</div></div>'+
+      '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Smart Alerts</span></div><div class="dvl-vt-grid">'+
+      '<div class="dvl-vt-field"><label>Alertas</label><label class="dvl-switch"><input id="sdAlertOn" type="checkbox" '+(state.alertOn?"checked":"")+'><i></i><b></b></label></div>'+
+      '<div class="dvl-vt-field"><label>|Delta| ≥</label><input id="sdAlDelta" class="dvl-vt-input" type="number" min="20" max="100" step="5" value="'+(state.alertDelta||60)+'"></div>'+
+      '<div class="dvl-vt-field"><label>Confidence ≥</label><input id="sdAlConf" class="dvl-vt-input" type="number" min="40" max="100" step="5" value="'+(state.alertConf||70)+'"></div>'+
+      '<div class="dvl-vt-field"><label>Exhaustion ≥</label><input id="sdAlExh" class="dvl-vt-input" type="number" min="40" max="100" step="5" value="'+(state.alertExh||75)+'"></div>'+
       '</div></div>';
     function bind(id,key,type){ var el=b.querySelector("#"+id); if(!el) return; var fn=function(){ if(type==="check") state[key]=!!el.checked; else state[key]=Number(el.value)||DEFAULTS[key]; if(id==="sdOn") updateRow(); if(id==="sdPanel"&&!state.panel) hidePanel(); save(); try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){} }; el.addEventListener("change",fn); el.addEventListener("input",fn); }
     bind("sdOn","on","check"); bind("sdPanel","panel","check"); bind("sdHeight","height","num"); bind("sdTh","thNeutral","num");
+    bind("sdAlertOn","alertOn","check"); bind("sdAlDelta","alertDelta","num"); bind("sdAlConf","alertConf","num"); bind("sdAlExh","alertExh","num");
     try{ if(window.DVLIndicatorCustomControls&&window.DVLIndicatorCustomControls.upgrade) window.DVLIndicatorCustomControls.upgrade(settings); }catch(_){}
     settings.classList.add("is-open");
   }
