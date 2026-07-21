@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.228';
+window.DVL_APP_VERSION = 'Beta 1.229';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16019,6 +16019,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.229", note: "DVL Smart Delta Engine — Stage 2 (confluência institucional externa): o motor agora incorpora Open Interest + variação do OI, Long/Short Ratio e os níveis do Volume Profile (POC/VAH/VAL) na pontuação, lendo os indicadores/VP que já existem no DVL (sem duplicar cálculo). OI confirmando a direção (OI subindo junto com o preço) aumenta Confidence e Continuation; OI caindo eleva o Exhaustion (desmontagem de posição); LSR confirmando soma continuação; e a proximidade do candle a VAL/VAH/POC entra como suporte/resistência/equilíbrio. O delta do candle continua intrínseco — a confluência ajusta só Confidence/Continuation/Exhaustion, e quando os dados não estão disponíveis nada é penalizado. Painel ganha uma linha de confluência (OI · LSR · VP). Adicionado DVLVolumeProfile.getLevels() para expor POC/VAH/VAL atuais. Só frontend." },
   { version: "Beta 1.228", note: "Added DVL Smart Delta Engine with institutional confidence scoring, continuation probability, exhaustion analysis and unified confluence model. Motor proprietário (não é Footprint, não simula Bid x Ask): a partir de volume/spike, corpo, pavios, posição do fechamento, velocidade, flat/spike, absorção, rejeição e do delta real do footprint (quando disponível), calcula Institutional Confidence (0–100), Smart Delta assinado (histograma leve: verde compra, vermelho venda, cinza neutro, amarelo indecisão), Continuation Probability (0–100) e Exhaustion Score (0–100). Painel compacto no gráfico (Delta / Confidence / Continuation / Exhaustion do candle atual) e API window.DVL_SMART_DELTA_ENGINE_API (latest/at/series) pronta para Scanner, Copilot, Market Matrix e Smart Alerts nos próximos estágios. Módulos CORE/SCORE/ENGINE/RENDER/STORAGE, cache incremental por candle fechado. Registrado no menu real de indicadores (VOLUME & FLOW). Só frontend." },
   { version: "Beta 1.227", note: "Risk Engine — linhas de planejamento, dois ajustes: (1) o gráfico NÃO se move mais ao arrastar Entry/TP/SL — o handler de pan agora ignora o toque quando ele começa numa linha do Risk Engine (mesma trava que o Paper Trading já usa), então no mobile a linha arrasta sem levar o gráfico junto; (2) ao FECHAR o Risk Engine as linhas somem do gráfico (e as faixas de toque também), reaparecendo quando você reabre — os valores de Entry/Stop/TP continuam salvos. Só frontend." },
   { version: "Beta 1.226", note: "Risk Engine — linhas interativas de planejamento no gráfico (Stage 1): Entry, Take Profit e Stop Loss viram três linhas arrastáveis, ligadas ao MESMO estado central do Risk Engine (sem cópia dupla). Arrastar a linha atualiza o painel e vice-versa. Ao mover Entry ou Stop, o lote MT5 e o risco real são recalculados ao vivo pelas specs da corretora; mover só o TP muda o R:R e mantém o lote. Entry começa no último preço (market) e vira fixa (manual) na primeira interação; TP segue R:R 1:1 automático (botão 'TP Auto R:R' religa) e vira manual se você arrastar o TP; estrutura inválida (Stop/TP do lado errado) mostra as linhas mas bloqueia o lote, sem inverter a direção sozinho. Botão 'Mostrar no gráfico' cria/remove as linhas sem apagar valores. Desenhadas no canvas (acompanham pan/zoom) com faixa de toque generosa e trava de pan no arrasto (mobile), via novo módulo DVL_RISK_ENGINE_CHART_LINES. Não são ordens nem Paper Trading. Só frontend." },
@@ -31049,8 +31050,9 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   features._vel=[];
 
   /* ── SCORE — as quatro medidas (puras) ────────────────────────────────── */
-  function score(f, prevVol, prevVel){
+  function score(f, prevVol, prevVel, ext){
     if(!f) return null;
+    ext = ext || {};
     var dirSign = f.deltaRatio>0?1:(f.deltaRatio<0?-1:f.dir);
     // componentes 0..100 (força institucional do candle)
     var cVolume = clamp((f.volSpike-1)/2,0,1)*100;                 // volume acima da média
@@ -31065,8 +31067,8 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     function add(v,w){ acc+=v*w; wsum+=w; }
     add(cVolume,0.20); add(cBody,0.16); add(cClose,0.16); add(cDelta,0.18);
     add(cAbsorb,0.10); add(cSpike,0.10); add(cOppWick,0.10);
-    var confidence=Math.round(clamp(acc/Math.max(wsum,1e-9),0,100));
-    if(!f.hasFp) confidence=Math.round(confidence*0.92);            // dado estimado → leve desconto
+    var confidenceRaw=clamp(acc/Math.max(wsum,1e-9),0,100);
+    if(!f.hasFp) confidenceRaw=confidenceRaw*0.92;                   // dado estimado → leve desconto
     // Smart Delta assinado (−100..+100)
     var mag = clamp((cBody*0.3 + cClose*0.25 + cDelta*0.3 + cVolume*0.15)/100,0,1);
     var delta = Math.round(dirSign * mag * 100);
@@ -31080,12 +31082,35 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     conf+=clamp(f.bodyPct/0.7,0,1)*100*0.20; cw+=0.20;
     conf+=clamp(f.postFlatSpike,0,1)*100*0.14; cw+=0.14;
     conf+=clamp(f.absorption,0,1)*100*0.14; cw+=0.14;
-    var continuation=Math.round(clamp(conf/Math.max(cw,1e-9),0,100) * (conflict?0.7:1));
+    var continuationRaw=clamp(conf/Math.max(cw,1e-9),0,100) * (conflict?0.7:1);
     // Exhaustion — pavio exagerado + perda de volume + rejeição + desaceleração
     var volDrop = prevVol? clamp((prevVol - f.vol)/Math.max(prevVol,1e-9),0,1) : 0;
     var velDrop = prevVel? clamp((prevVel - f.velocity)/Math.max(prevVel,1e-9),0,1) : 0;
     var bigWick = clamp(Math.max(f.upWick,f.dnWick)/0.5,0,1);
-    var exhaustion=Math.round(clamp( bigWick*0.34 + volDrop*0.24 + f.rejection*0.24 + velDrop*0.18, 0,1)*100);
+    var exhaustionRaw=clamp( bigWick*0.34 + volDrop*0.24 + f.rejection*0.24 + velDrop*0.18, 0,1)*100;
+
+    /* Beta 1.229 — confluência institucional externa (OI/ΔOI, LSR, VP POC/VAH/VAL).
+       Só ajusta Confidence/Continuation/Exhaustion (não o delta do candle). Quando
+       ausente, não penaliza. */
+    var vpC=0;
+    if(ext.hasOI){
+      if(ext.oiDir===dirSign){ confidenceRaw+=6*ext.oiMag+2; continuationRaw+=12*ext.oiMag; }
+      else if(ext.oiDir!==0){ continuationRaw-=7*ext.oiMag; }
+      if(ext.oiDir<0){ exhaustionRaw+=9*ext.oiMag; }        // OI caindo → desmontagem
+    }
+    if(ext.hasLSR){
+      if(ext.lsrDir===dirSign) continuationRaw+=6; else if(ext.lsrDir!==0) continuationRaw-=4;
+    }
+    if(ext.hasVP && ext.vp){
+      if(dirSign>=0 && ext.vp.atVAL){ confidenceRaw+=6; continuationRaw+=8; vpC=70; }
+      else if(dirSign<0 && ext.vp.atVAH){ confidenceRaw+=6; continuationRaw+=8; vpC=70; }
+      else if(ext.vp.atPOC){ continuationRaw-=4; vpC=30; }
+      else if((dirSign>=0&&ext.vp.atVAH)||(dirSign<0&&ext.vp.atVAL)){ continuationRaw-=6; vpC=20; } // contra o nível
+    }
+
+    var confidence=Math.round(clamp(confidenceRaw,0,100));
+    var continuation=Math.round(clamp(continuationRaw,0,100));
+    var exhaustion=Math.round(clamp(exhaustionRaw,0,100));
     // classe de cor
     var cls;
     if(conflict) cls="indef";
@@ -31093,23 +31118,45 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     else if(delta <= -state.thNeutral) cls="sell";
     else cls="neutral";
     return { delta:delta, confidence:confidence, continuation:continuation, exhaustion:exhaustion, cls:cls,
-      components:{ volume:Math.round(cVolume), body:Math.round(cBody), close:Math.round(cClose), delta:Math.round(cDelta), absorption:Math.round(cAbsorb), spike:Math.round(cSpike), vp:0 } };
+      components:{ volume:Math.round(cVolume), body:Math.round(cBody), close:Math.round(cClose), delta:Math.round(cDelta), absorption:Math.round(cAbsorb), spike:Math.round(cSpike),
+        oi:ext.hasOI?Math.round(clamp(ext.oiDir===dirSign?50+50*ext.oiMag:50-50*ext.oiMag,0,100)):null,
+        lsr:ext.hasLSR?(ext.lsrDir===dirSign?70:(ext.lsrDir!==0?30:50)):null, vp:vpC } };
   }
   window.__DVL_SMART_DELTA_PURE = { features:features, score:score, clamp:clamp };
 
   /* ── ENGINE — cálculo por candle fechado, cache incremental ───────────── */
   var cacheKey="", cache=[];     // cache[i] = score
   function symbolTf(){ var s="?",tf="?"; try{ if(typeof symbol!=="undefined"&&symbol) s=String(symbol); }catch(_){} try{ if(typeof interval!=="undefined"&&interval) tf=String(interval); }catch(_){} return s+"|"+tf; }
+  /* Beta 1.229 — confluência externa: OI/ΔOI, LSR e níveis do Volume Profile.
+     Lê os osciladores/VP já existentes (não duplica cálculo). */
+  function readSeries(apiObj){ try{ var d=apiObj&&apiObj.cache&&apiObj.cache.data; if(Array.isArray(d)&&d.length){ return d.map(function(x){ return {t:Number(x.time!=null?x.time:x.t), v:Number(x.value!=null?x.value:(x.usd!=null?x.usd:(x.ratio!=null?x.ratio:x.close))) }; }).filter(function(x){ return isFinite(x.t)&&isFinite(x.v); }).sort(function(a,b){ return a.t-b.t; }); } }catch(_){} return []; }
+  function nearIdx(arr,t){ var lo=0,hi=arr.length-1,ans=-1; while(lo<=hi){ var m=(lo+hi)>>1; if(arr[m].t<=t){ans=m;lo=m+1;}else hi=m-1; } return ans; }
+  function confluence(){
+    var oi=[],lsr=[],vp=null;
+    try{ oi=readSeries(window.DVLOpenInterestOscillator); }catch(_){}
+    try{ lsr=readSeries(window.DVLLongShortOscillator); }catch(_){}
+    try{ var L=window.DVLVolumeProfile&&window.DVLVolumeProfile.getLevels&&window.DVLVolumeProfile.getLevels(); vp=(L&&L.current)||null; }catch(_){}
+    var sig=(oi.length?oi[oi.length-1].v:0)+"|"+(lsr.length?lsr[lsr.length-1].v:0)+"|"+(vp?Math.round(vp.poc):0);
+    return { oi:oi, lsr:lsr, vp:vp, sig:sig };
+  }
+  function extFor(conf, cs, i){
+    var t=T(cs[i]), c=C(cs[i]), ext={};
+    if(conf.oi.length){ var oidx=nearIdx(conf.oi,t); if(oidx>=1){ var d=conf.oi[oidx].v-conf.oi[oidx-1].v; ext.hasOI=true; ext.oiDir=d>0?1:(d<0?-1:0); ext.oiMag=clamp(Math.abs(d)/Math.max(Math.abs(conf.oi[oidx].v)*0.01,1e-9),0,1); } }
+    if(conf.lsr.length){ var lidx=nearIdx(conf.lsr,t); if(lidx>=1){ var dl=conf.lsr[lidx].v-conf.lsr[lidx-1].v; ext.hasLSR=true; ext.lsrDir=dl>0?1:(dl<0?-1:0); } }
+    if(conf.vp && conf.vp.poc!=null){ var rng=Math.max(H(cs[i])-L(cs[i]),1e-9), tol=rng*0.6; ext.hasVP=true; ext.vp={ atVAL:Math.abs(c-conf.vp.val)<=tol, atVAH:Math.abs(c-conf.vp.vah)<=tol, atPOC:Math.abs(c-conf.vp.poc)<=tol }; }
+    return ext;
+  }
   function compute(){
     var cs=candles(); var n=cs.length; if(n<3){ cache=[]; return; }
-    var key=symbolTf()+"|"+n+"|"+T(cs[n-1]);
+    var conf=confluence();
+    var key=symbolTf()+"|"+n+"|"+T(cs[n-1])+"|"+conf.sig;
     if(key===cacheKey && cache.length===n) return;
     features._vel=new Array(n).fill(0);
     var out=new Array(n).fill(null), prevVol=0, prevVel=0;
     for(var i=1;i<n;i++){
       var f=features(cs,i); if(!f){ continue; }
       features._vel[i]=f.velocity;
-      out[i]=score(f, prevVol, prevVel);
+      out[i]=score(f, prevVol, prevVel, extFor(conf, cs, i));
       prevVol=f.vol; prevVel=f.velocity;
     }
     cache=out; cacheKey=key;
@@ -31171,6 +31218,13 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       row("Confidence", s.confidence+"%")+
       row("Continuation", s.continuation+"%")+
       row("Exhaustion", s.exhaustion+"%", s.exhaustion>=60?"#f3c768":"#dcebe4");
+    var cp=s.components||{};
+    if(cp.oi!=null||cp.lsr!=null||cp.vp){
+      function dot(lbl,v,active){ var col=!active?"#455":(v>=55?"#16c784":(v<=45?"#ff4a61":"#7f9c8e")); return '<span style="color:'+col+'">'+lbl+'</span>'; }
+      el.innerHTML += '<div style="margin-top:4px;padding-top:3px;border-top:1px solid rgba(129,166,151,.14);display:flex;gap:10px;font-size:8.5px">'+
+        dot("OI", cp.oi, cp.oi!=null)+dot("LSR", cp.lsr, cp.lsr!=null)+dot("VP", cp.vp, cp.vp>0)+
+        '<span style="margin-left:auto;color:#6f8b80">confluência</span></div>';
+    }
     el.style.display="block";
   }
 
@@ -35879,7 +35933,9 @@ drag = {
   else boot();
 
   window.DVLVolumeProfile = { version:"0.631", on, setOn, draw, openPanel,
-    get state(){ return Object.assign({}, state); }
+    get state(){ return Object.assign({}, state); },
+    // Beta 1.229 — níveis atuais para confluência (Smart Delta etc.)
+    getLevels:function(){ function pk(o){ return o&&o.poc!=null?{poc:o.poc,vah:o.vah,val:o.val}:null; } return { current:pk(vpStableLevels), previous:(state.s2on!==false?pk(vpStableLevels2):null), developing:(state.devOn?pk(vpStableLevelsDev):null), overnight:(state.onOn?pk(vpStableLevelsON):null) }; }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
 
