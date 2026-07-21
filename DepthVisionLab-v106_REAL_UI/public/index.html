@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.231';
+window.DVL_APP_VERSION = 'Beta 1.232';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16019,6 +16019,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.232", note: "Refinamento visual do histograma DVL Smart Delta (só aparência, o motor e os cálculos permanecem intactos): barras mais largas, opacidade proporcional à confiança da leitura, escala automática do painel, intensidade de cor por extremidade (média × extrema), média móvel mais espessa, linha zero mais clara e cabeçalho com Δ e MA. O painel do histograma ficou totalmente independente, desacoplado do oscilador Exhaustion RSI. Novas configs no painel de configuração: Largura da barra, Escala automática, Opacidade por confiança (com máx./mín.) e Espessura da média. Só frontend." },
   { version: "Beta 1.231", note: "Separated DVL Smart Delta into a chart overlay summary and a dedicated histogram oscillator while preserving a single Smart Delta Engine. Correção visual: o histograma NÃO fica mais em cima dos candles — a tabela Smart Delta continua como overlay no canto do gráfico, e o histograma (verde acima / vermelho abaixo da linha zero, mais intenso nos spikes, com média móvel amarela e escala independente) foi movido para um PAINEL PRÓPRIO de oscilador, separado do painel de Volume, e acompanha zoom/pan como os demais osciladores (uma coluna por candle). Ambos consomem o mesmo motor, sem duplicar cálculo. Novas configs: Histograma on/off, Média (MA) on/off + MA Length, Spike ×, Linha zero, e Tabela detalhada (compacta/detalhada). Registrado na lista real de osciladores. Só frontend." },
   { version: "Beta 1.230", note: "DVL Smart Delta Engine — Stage 3 (fonte única de leitura + Smart Alerts): o motor agora publica a leitura atual num único lugar — window.DVL_SMART_DELTA_LAST e o evento dvl:smart-delta (símbolo, timeframe, delta, confidence, continuation, exhaustion, classe e componentes) — mais DVL_SMART_DELTA_ENGINE_API.getSnapshot(), para Scanner, Copilot, Market Matrix e Smart Alerts consumirem SEM duplicar lógica. Adicionado o Smart Alerts: quando o candle cruza os limiares configurados (|Delta| ≥, Confidence ≥, ou Exhaustion ≥), dispara um alerta (toast + evento dvl:smart-delta-alert), uma vez por candle. Novos controles no painel de configuração (Alertas on/off e limiares). Observação: Market Matrix e Smart Alerts ainda não existiam como telas no app — o Smart Alerts foi criado agora; a coluna do Scanner por símbolo depende de cálculo no backend (footprint por símbolo) e fica para um próximo passo. Só frontend." },
   { version: "Beta 1.229", note: "DVL Smart Delta Engine — Stage 2 (confluência institucional externa): o motor agora incorpora Open Interest + variação do OI, Long/Short Ratio e os níveis do Volume Profile (POC/VAH/VAL) na pontuação, lendo os indicadores/VP que já existem no DVL (sem duplicar cálculo). OI confirmando a direção (OI subindo junto com o preço) aumenta Confidence e Continuation; OI caindo eleva o Exhaustion (desmontagem de posição); LSR confirmando soma continuação; e a proximidade do candle a VAL/VAH/POC entra como suporte/resistência/equilíbrio. O delta do candle continua intrínseco — a confluência ajusta só Confidence/Continuation/Exhaustion, e quando os dados não estão disponíveis nada é penalizado. Painel ganha uma linha de confluência (OI · LSR · VP). Adicionado DVLVolumeProfile.getLevels() para expor POC/VAH/VAL atuais. Só frontend." },
@@ -31003,7 +31004,9 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     alertOn:false, alertDelta:60, alertConf:70, alertExh:75,
     // Beta 1.231 — histograma em painel próprio (oscilador) + tabela overlay
     histogram:true, maOn:true, maLen:9, zeroLine:true, spikeMult:2, detailed:false,
-    posColor:"#16c784", negColor:"#ff4a61", maColor:"#f3c768" };
+    posColor:"#16c784", negColor:"#ff4a61", maColor:"#f3c768",
+    // Beta 1.232 — refinamento visual
+    barWidth:0.86, autoScale:true, useConfOpacity:true, maxOpacity:0.95, minOpacity:0.28, maThick:2.2 };
   var state = (function(){ var s={}; try{ s=JSON.parse(localStorage.getItem(KEY)||"{}"); }catch(_){}
     var o={}; for(var k in DEFAULTS) o[k]=DEFAULTS[k]; if(s&&typeof s==="object") for(var k2 in s){ if(k2 in DEFAULTS) o[k2]=s[k2]; } return o; })();
   var saveT=0; function save(){ clearTimeout(saveT); saveT=setTimeout(function(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(_){} },120); }
@@ -31237,6 +31240,8 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     return out;
   }
   function oscOn(){ return !!state.on && state.histogram!==false; }
+  // Beta 1.232 — cores por extremidade (média x extrema)
+  function dimHex(hex,f){ hex=String(hex||"").replace("#",""); if(hex.length!==6) return hex; var r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16); r=Math.round(r*f);g=Math.round(g*f);b=Math.round(b*f); function h2(x){x=Math.max(0,Math.min(255,x)).toString(16);return x.length<2?"0"+x:x;} return "#"+h2(r)+h2(g)+h2(b); }
   function oscDraw(ctx, padL, padR, top, h, w){
     try{ window.__dvlOscillatorPanelBounds=window.__dvlOscillatorPanelBounds||{}; window.__dvlOscillatorPanelBounds.DVLSmartDelta={top:top,bottom:top+h}; }catch(_){}
     if(!oscOn()) return;
@@ -31244,34 +31249,49 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     var m=panelMetrics(padL,padR,top,h,w);
     var win=oscWindow(), view=win.candles||[];
     var cs=candles(), byIdx={}; for(var j=0;j<cache.length;j++){ if(cache[j]) byIdx[T(cs[j])]=j; }
-    var lo=-100, hi=100;                        // escala independente e fixa
+    // autoscale: barras fortes ocupam mais altura; escala mínima evita amplificar ruído
+    var vis=[]; for(var v0=0;v0<view.length;v0++){ var i0=byIdx[T(view[v0])]; if(i0!=null&&cache[i0]) vis.push(Math.abs(cache[i0].delta)); }
+    var maxAbs=vis.length?Math.max.apply(null,vis):100;
+    var rng=(state.autoScale!==false)?Math.max(35,Math.min(100,maxAbs*1.08)):100;
+    var lo=-rng, hi=rng;
     var L=null; for(var q=cache.length-1;q>=0;q--){ if(cache[q]){ L=cache[q]; break; } }
+    var maArr=deltaMA(); var maLast=null; for(var mq=maArr.length-1;mq>=0;mq--){ if(maArr[mq]!=null){ maLast=Math.round(maArr[mq]); break; } }
     var kind=L?(L.cls==="buy"?"bull":(L.cls==="sell"?"bear":"neutral")):"neutral";
-    var rightTxt=L?((L.delta>0?"+":"")+L.delta):"";
-    basePanel(ctx, m, "Smart Delta", rightTxt, kind);
+    var rightTxt=L?("Δ "+(L.delta>0?"+":"")+L.delta+(maLast!=null?"   MA "+(maLast>0?"+":"")+maLast:"")):"";
+    basePanel(ctx, m, "SMART DELTA", rightTxt, kind);
     ctx.save(); ctx.beginPath(); ctx.rect(m.x0,m.y0,m.x1-m.x0,Math.max(1,m.y1-m.y0)); ctx.clip();
     var zy=yFor(0,m.y0,m.y1,lo,hi);
-    if(state.zeroLine!==false){ ctx.strokeStyle="rgba(150,180,168,.30)"; ctx.setLineDash([4,6]); ctx.beginPath(); ctx.moveTo(m.x0,zy); ctx.lineTo(m.x1,zy); ctx.stroke(); ctx.setLineDash([]); }
-    var pos=state.posColor||"#16c784", neg=state.negColor||"#ff4a61", spikeMult=Math.max(1.2,+state.spikeMult||2);
-    var op=clamp(state.opacity||0.9,0.15,1);
-    var slotW=(m.x1-m.x0)/Math.max(2,win.totalSlots||2), bw=Math.max(1,Math.min(slotW*0.62,7));
-    ctx.globalAlpha=op;
+    // linha zero — cinza clara, tracejada, mais visível
+    if(state.zeroLine!==false){ ctx.strokeStyle="rgba(190,205,200,.5)"; ctx.lineWidth=1; ctx.setLineDash([5,4]); ctx.beginPath(); ctx.moveTo(m.x0,zy); ctx.lineTo(m.x1,zy); ctx.stroke(); ctx.setLineDash([]); }
+    var posS=state.posColor||"#16c784", negS=state.negColor||"#ff4a61";
+    var posM=dimHex(posS,0.62), negM=dimHex(negS,0.62);
+    var spikeMult=Math.max(1.2,+state.spikeMult||2), spikeTh=(state.thNeutral||18)*spikeMult;
+    var maxOp=clamp(state.maxOpacity||0.95,0.4,1), minOp=clamp(state.minOpacity||0.28,0.05,maxOp);
+    var useCO=state.useConfOpacity!==false;
+    // largura ~85–90% da vela, com pequeno espaçamento
+    var slotW=(m.x1-m.x0)/Math.max(2,win.totalSlots||2);
+    var bwFrac=clamp(+state.barWidth||0.86,0.3,0.98);
+    var bw=Math.max(1.5, slotW*bwFrac - Math.max(0.5, slotW*0.06));
     for(var k=0;k<view.length;k++){
       var idx=byIdx[T(view[k])]; if(idx==null||!cache[idx]) continue;
       var sc=cache[idx], d=sc.delta;
-      var xx=xForIndex(k,m,win); if(xx<m.x0-10||xx>m.x1+10) continue;
+      var xx=xForIndex(k,m,win); if(xx<m.x0-bw||xx>m.x1+bw) continue;
       var yy=yFor(d,m.y0,m.y1,lo,hi);
-      var up=d>=0, spike=Math.abs(d)>=(state.thNeutral||18)*spikeMult;
-      ctx.fillStyle=up?pos:neg; ctx.globalAlpha=op*(spike?1:0.62);
-      ctx.fillRect(xx-bw/2, Math.min(yy,zy), bw, Math.max(0.6,Math.abs(zy-yy)));
+      var up=d>=0, extreme=Math.abs(d)>=spikeTh;
+      // ALTURA = delta ; COR = extremidade ; OPACIDADE = confidence
+      ctx.fillStyle = up ? (extreme?posS:posM) : (extreme?negS:negM);
+      ctx.globalAlpha = useCO ? (minOp+(maxOp-minOp)*clamp(sc.confidence/100,0,1)) : maxOp;
+      ctx.fillRect(xx-bw/2, Math.min(yy,zy), bw, Math.max(0.8,Math.abs(zy-yy)));
     }
     ctx.globalAlpha=1;
-    // média móvel amarela
+    // média móvel amarela — 2–2.5px, sempre acima das barras
     if(state.maOn!==false){
-      var ma=deltaMA(); ctx.beginPath(); ctx.strokeStyle=state.maColor||"#f3c768"; ctx.lineWidth=1.3; ctx.lineJoin="round";
+      ctx.beginPath(); ctx.strokeStyle=state.maColor||"#f3c768"; ctx.lineWidth=clamp(+state.maThick||2.2,1,3); ctx.lineJoin="round"; ctx.lineCap="round";
+      ctx.shadowColor="rgba(0,0,0,.35)"; ctx.shadowBlur=1.5;
       var started=false;
-      for(var p=0;p<view.length;p++){ var ix=byIdx[T(view[p])]; if(ix==null||ma[ix]==null) continue; var mx=xForIndex(p,m,win), my=yFor(ma[ix],m.y0,m.y1,lo,hi); if(!started){ctx.moveTo(mx,my);started=true;}else ctx.lineTo(mx,my); }
+      for(var p=0;p<view.length;p++){ var ix=byIdx[T(view[p])]; if(ix==null||maArr[ix]==null) continue; var mx=xForIndex(p,m,win), my=yFor(maArr[ix],m.y0,m.y1,lo,hi); if(!started){ctx.moveTo(mx,my);started=true;}else ctx.lineTo(mx,my); }
       if(started) ctx.stroke();
+      ctx.shadowBlur=0;
     }
     ctx.restore();
   }
@@ -31361,6 +31381,12 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       '<div class="dvl-vt-field"><label>MA Length</label><input id="sdMaLen" class="dvl-vt-input" type="number" min="2" max="100" step="1" value="'+(state.maLen||9)+'"></div>'+
       '<div class="dvl-vt-field"><label>Spike ×</label><input id="sdSpike" class="dvl-vt-input" type="number" min="1.2" max="6" step="0.1" value="'+(state.spikeMult||2)+'"></div>'+
       '<div class="dvl-vt-field"><label>Linha zero</label><label class="dvl-switch"><input id="sdZero" type="checkbox" '+(state.zeroLine!==false?"checked":"")+'><i></i><b></b></label></div>'+
+      '<div class="dvl-vt-field"><label>Largura barra</label><input id="sdBarW" class="dvl-vt-input" type="number" min="0.3" max="0.98" step="0.02" value="'+(state.barWidth||0.86)+'"></div>'+
+      '<div class="dvl-vt-field"><label>Auto escala</label><label class="dvl-switch"><input id="sdAuto" type="checkbox" '+(state.autoScale!==false?"checked":"")+'><i></i><b></b></label></div>'+
+      '<div class="dvl-vt-field"><label>Opac. p/ Confidence</label><label class="dvl-switch"><input id="sdCO" type="checkbox" '+(state.useConfOpacity!==false?"checked":"")+'><i></i><b></b></label></div>'+
+      '<div class="dvl-vt-field"><label>Opac. máx</label><input id="sdOpMax" class="dvl-vt-input" type="number" min="0.4" max="1" step="0.05" value="'+(state.maxOpacity||0.95)+'"></div>'+
+      '<div class="dvl-vt-field"><label>Opac. mín</label><input id="sdOpMin" class="dvl-vt-input" type="number" min="0.05" max="0.8" step="0.05" value="'+(state.minOpacity||0.28)+'"></div>'+
+      '<div class="dvl-vt-field"><label>Espessura MA</label><input id="sdMaTh" class="dvl-vt-input" type="number" min="1" max="3" step="0.1" value="'+(state.maThick||2.2)+'"></div>'+
       '</div></div>'+
       '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Smart Alerts</span></div><div class="dvl-vt-grid">'+
       '<div class="dvl-vt-field"><label>Alertas</label><label class="dvl-switch"><input id="sdAlertOn" type="checkbox" '+(state.alertOn?"checked":"")+'><i></i><b></b></label></div>'+
@@ -31371,6 +31397,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     function bind(id,key,type){ var el=b.querySelector("#"+id); if(!el) return; var fn=function(){ if(type==="check") state[key]=!!el.checked; else state[key]=Number(el.value)||DEFAULTS[key]; if(id==="sdOn") updateRow(); if(id==="sdPanel"&&!state.panel) hidePanel(); save(); try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){} }; el.addEventListener("change",fn); el.addEventListener("input",fn); }
     bind("sdOn","on","check"); bind("sdPanel","panel","check"); bind("sdHeight","height","num"); bind("sdTh","thNeutral","num"); bind("sdDetailed","detailed","check");
     bind("sdHist","histogram","check"); bind("sdMaOn","maOn","check"); bind("sdMaLen","maLen","num"); bind("sdSpike","spikeMult","num"); bind("sdZero","zeroLine","check");
+    bind("sdBarW","barWidth","num"); bind("sdAuto","autoScale","check"); bind("sdCO","useConfOpacity","check"); bind("sdOpMax","maxOpacity","num"); bind("sdOpMin","minOpacity","num"); bind("sdMaTh","maThick","num");
     bind("sdAlertOn","alertOn","check"); bind("sdAlDelta","alertDelta","num"); bind("sdAlConf","alertConf","num"); bind("sdAlExh","alertExh","num");
     try{ if(window.DVLIndicatorCustomControls&&window.DVLIndicatorCustomControls.upgrade) window.DVLIndicatorCustomControls.upgrade(settings); }catch(_){}
     settings.classList.add("is-open");
