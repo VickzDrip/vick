@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.227';
+window.DVL_APP_VERSION = 'Beta 1.228';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16019,6 +16019,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.228", note: "Added DVL Smart Delta Engine with institutional confidence scoring, continuation probability, exhaustion analysis and unified confluence model. Motor proprietário (não é Footprint, não simula Bid x Ask): a partir de volume/spike, corpo, pavios, posição do fechamento, velocidade, flat/spike, absorção, rejeição e do delta real do footprint (quando disponível), calcula Institutional Confidence (0–100), Smart Delta assinado (histograma leve: verde compra, vermelho venda, cinza neutro, amarelo indecisão), Continuation Probability (0–100) e Exhaustion Score (0–100). Painel compacto no gráfico (Delta / Confidence / Continuation / Exhaustion do candle atual) e API window.DVL_SMART_DELTA_ENGINE_API (latest/at/series) pronta para Scanner, Copilot, Market Matrix e Smart Alerts nos próximos estágios. Módulos CORE/SCORE/ENGINE/RENDER/STORAGE, cache incremental por candle fechado. Registrado no menu real de indicadores (VOLUME & FLOW). Só frontend." },
   { version: "Beta 1.227", note: "Risk Engine — linhas de planejamento, dois ajustes: (1) o gráfico NÃO se move mais ao arrastar Entry/TP/SL — o handler de pan agora ignora o toque quando ele começa numa linha do Risk Engine (mesma trava que o Paper Trading já usa), então no mobile a linha arrasta sem levar o gráfico junto; (2) ao FECHAR o Risk Engine as linhas somem do gráfico (e as faixas de toque também), reaparecendo quando você reabre — os valores de Entry/Stop/TP continuam salvos. Só frontend." },
   { version: "Beta 1.226", note: "Risk Engine — linhas interativas de planejamento no gráfico (Stage 1): Entry, Take Profit e Stop Loss viram três linhas arrastáveis, ligadas ao MESMO estado central do Risk Engine (sem cópia dupla). Arrastar a linha atualiza o painel e vice-versa. Ao mover Entry ou Stop, o lote MT5 e o risco real são recalculados ao vivo pelas specs da corretora; mover só o TP muda o R:R e mantém o lote. Entry começa no último preço (market) e vira fixa (manual) na primeira interação; TP segue R:R 1:1 automático (botão 'TP Auto R:R' religa) e vira manual se você arrastar o TP; estrutura inválida (Stop/TP do lado errado) mostra as linhas mas bloqueia o lote, sem inverter a direção sozinho. Botão 'Mostrar no gráfico' cria/remove as linhas sem apagar valores. Desenhadas no canvas (acompanham pan/zoom) com faixa de toque generosa e trava de pan no arrasto (mobile), via novo módulo DVL_RISK_ENGINE_CHART_LINES. Não são ordens nem Paper Trading. Só frontend." },
   { version: "Beta 1.225", note: "DVL Volume Profile Avançado — Stage 3 (Overnight Profile + timezone): novo perfil Overnight com POC/VAH/VAL de uma janela configurável (hora/minuto de início e fim) num timezone à escolha (UTC / Exchange / Local / Bruxelas / New York), tratando janelas que cruzam a meia-noite e horário de verão. Sessão Atual ou Anterior; modo Developing calcula ao vivo enquanto a janela está aberta e congela quando ela fecha. Cada linha (O-POC / O-VAH / O-VAL) com cor, estilo e espessura próprios. Reaproveita o motor de distribuição do VP; Current, Previous, Developing e Value Area intactos. Só frontend." },
@@ -20496,6 +20497,10 @@ if(window.DVLSpikeZonesDraw){
 
   if(window.DVLRiskLinesDraw){
     try{window.DVLRiskLinesDraw(ctx,{view,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlRiskLn_e){}
+  }
+
+  if(window.DVLSmartDeltaDraw){
+    try{window.DVLSmartDeltaDraw(ctx,{view,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlSD_e){}
   }
 
   draw24hStatsOverlay(ctx, { x0, x1, y0, y1 });
@@ -30969,6 +30974,259 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   try{ window.addEventListener("dvl:indicators-rendered", insertItem, {passive:true}); }catch(_){}
 })();
 </script>
+
+<script id="DVL_SMART_DELTA_ENGINE_1228">
+/* ============================================================================
+   DVL Smart Delta Engine — Beta 1.228 (Stage 1)
+   Motor PROPRIETÁRIO de confluência institucional. Não é Footprint e não simula
+   Bid x Ask: calcula, a partir dos dados que o DVL já tem (volume, spike, corpo,
+   pavios, posição do fechamento, velocidade, flat/spike, absorção, rejeição,
+   delta real do footprint quando disponível, POC/VAH/VAL), quatro medidas:
+     • Institutional Confidence (0–100)
+     • Smart Delta (força institucional assinada, −100..+100 → histograma)
+     • Continuation Probability (0–100)
+     • Exhaustion Score (0–100)
+   Módulos lógicos: CORE (features) · SCORE · ENGINE (cache incremental) ·
+   RENDER (histograma leve + painel compacto) · STORAGE.
+   ==========================================================================*/
+(function(){
+  "use strict";
+  if(window.DVL_SMART_DELTA_ENGINE_API) return;
+
+  /* ── STORAGE ──────────────────────────────────────────────────────────── */
+  var KEY = "dvl_smart_delta_1228";
+  var DEFAULTS = { on:false, panel:true, height:38, lookback:20, thNeutral:18, opacity:0.9 };
+  var state = (function(){ var s={}; try{ s=JSON.parse(localStorage.getItem(KEY)||"{}"); }catch(_){}
+    var o={}; for(var k in DEFAULTS) o[k]=DEFAULTS[k]; if(s&&typeof s==="object") for(var k2 in s){ if(k2 in DEFAULTS) o[k2]=s[k2]; } return o; })();
+  var saveT=0; function save(){ clearTimeout(saveT); saveT=setTimeout(function(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(_){} },120); }
+
+  /* ── helpers / data access (globais `let` → por identificador com guarda) ─ */
+  function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+  function candles(){ try{ if(Array.isArray(window.klines)) return window.klines; }catch(_){} try{ if(typeof klines!=="undefined"&&Array.isArray(klines)) return klines; }catch(_){} return []; }
+  function fpAt(t){ try{ if(window._dvlFpCache&&window._dvlFpCache.get){ var r=window._dvlFpCache.get(Number(t)); if(r&&(r.b>0||r.s>0)) return r; } }catch(_){} return null; }
+  function O(c){return Number(c.open!=null?c.open:c.o);} function H(c){return Number(c.high!=null?c.high:c.h);}
+  function L(c){return Number(c.low!=null?c.low:c.l);} function C(c){return Number(c.close!=null?c.close:c.c);}
+  function V(c){return Number(c.volume!=null?c.volume:c.v)||0;} function T(c){return Number(c.time!=null?c.time:c.t);}
+
+  /* ── CORE — extração de features por candle ───────────────────────────── */
+  function features(cs, i){
+    var c=cs[i]; if(!c) return null;
+    var o=O(c),h=H(c),l=L(c),cl=C(c),vol=V(c);
+    var range=Math.max(h-l,1e-9), body=Math.abs(cl-o);
+    var bodyPct=body/range;
+    var upWick=(h-Math.max(o,cl))/range, dnWick=(Math.min(o,cl)-l)/range;
+    var closePos=(cl-l)/range;                 // 0 fundo … 1 topo
+    var dir = cl>o?1:(cl<o?-1:0);
+    // volume médio e spike
+    var n=Math.max(1,Math.min(20,i)), s=0; for(var k=i-n;k<i;k++){ if(cs[k]) s+=V(cs[k]); } var avgVol=n?s/n:vol||1;
+    var volSpike=vol/Math.max(avgVol,1e-9);
+    // velocidade e ATR simples
+    var prev=cs[i-1], prevC=prev?C(prev):cl;
+    var atr=0,an=0; for(var a=Math.max(1,i-13);a<=i;a++){ var pc=cs[a-1]||cs[a]; atr+=Math.max(H(cs[a])-L(cs[a]),Math.abs(H(cs[a])-C(pc)),Math.abs(L(cs[a])-C(pc))); an++; } atr=an?atr/an:range;
+    var velocity=Math.abs(cl-prevC)/Math.max(atr,1e-9);
+    // flat anterior (consolidação) + spike pós-flat
+    var fr=6, hi=-Infinity, lo=Infinity, fv=0, fn=0;
+    for(var f=Math.max(0,i-fr);f<i;f++){ if(!cs[f])continue; hi=Math.max(hi,H(cs[f])); lo=Math.min(lo,L(cs[f])); fv+=V(cs[f]); fn++; }
+    var flatRange=(isFinite(hi)&&isFinite(lo))?(hi-lo):range;
+    var flatPrior=clamp(1-(flatRange/Math.max(atr*fr*0.5,1e-9)),0,1);   // 1 = muito flat
+    var postFlatSpike=clamp((volSpike-1)/2,0,1)*flatPrior;
+    // footprint real (delta) quando houver
+    var fp=fpAt(T(c)); var deltaRatio=0, hasFp=false, tradeQ=0;
+    if(fp){ var tot=(fp.b||0)+(fp.s||0); if(tot>0){ deltaRatio=((fp.b||0)-(fp.s||0))/tot; hasFp=true; tradeQ=1; } }
+    else { deltaRatio = clamp((closePos-0.5)*2 + dir*0.2, -1, 1); }
+    // absorção: muito volume, pouco avanço de preço (corpo pequeno + spike)
+    var absorption=clamp(volSpike/2,0,1)*clamp(1-bodyPct,0,1);
+    // rejeição: pavio grande contra o corpo
+    var rejUp=upWick*clamp(volSpike/1.5,0,1), rejDn=dnWick*clamp(volSpike/1.5,0,1);
+    var rejection=Math.max(rejUp,rejDn);
+    // desaceleração: velocidade caindo vs candle anterior
+    var pf=(i>0)?features._vel[i-1]:velocity; // preenchido pelo engine
+    return { o:o,h:h,l:l,c:cl,vol:vol,range:range,bodyPct:bodyPct,upWick:upWick,dnWick:dnWick,
+      closePos:closePos,dir:dir,avgVol:avgVol,volSpike:volSpike,velocity:velocity,atr:atr,
+      flatPrior:flatPrior,postFlatSpike:postFlatSpike,deltaRatio:deltaRatio,hasFp:hasFp,tradeQ:tradeQ,
+      absorption:absorption,rejection:rejection,rejUp:rejUp,rejDn:rejDn };
+  }
+  features._vel=[];
+
+  /* ── SCORE — as quatro medidas (puras) ────────────────────────────────── */
+  function score(f, prevVol, prevVel){
+    if(!f) return null;
+    var dirSign = f.deltaRatio>0?1:(f.deltaRatio<0?-1:f.dir);
+    // componentes 0..100 (força institucional do candle)
+    var cVolume = clamp((f.volSpike-1)/2,0,1)*100;                 // volume acima da média
+    var cBody   = clamp(f.bodyPct/0.7,0,1)*100;                    // corpo dominante
+    var cClose  = (dirSign>=0? f.closePos : (1-f.closePos))*100;   // fechou a favor
+    var cDelta  = clamp((Math.abs(f.deltaRatio))/0.6,0,1)*100;     // delta forte
+    var cAbsorb = clamp(f.absorption,0,1)*100;                      // absorção
+    var cSpike  = clamp(f.postFlatSpike + clamp((f.volSpike-1)/2,0,1)*0.5,0,1)*100;
+    var cOppWick= (100 - clamp((dirSign>=0? f.upWick : f.dnWick)/0.5,0,1)*100); // pavio contra pequeno = bom
+    // Institutional Confidence — média ponderada
+    var wsum=0, acc=0;
+    function add(v,w){ acc+=v*w; wsum+=w; }
+    add(cVolume,0.20); add(cBody,0.16); add(cClose,0.16); add(cDelta,0.18);
+    add(cAbsorb,0.10); add(cSpike,0.10); add(cOppWick,0.10);
+    var confidence=Math.round(clamp(acc/Math.max(wsum,1e-9),0,100));
+    if(!f.hasFp) confidence=Math.round(confidence*0.92);            // dado estimado → leve desconto
+    // Smart Delta assinado (−100..+100)
+    var mag = clamp((cBody*0.3 + cClose*0.25 + cDelta*0.3 + cVolume*0.15)/100,0,1);
+    var delta = Math.round(dirSign * mag * 100);
+    // indecisão: sinais conflitando (delta vs corpo/close divergem, ou pavios grandes dos dois lados)
+    var conflict = (Math.sign(f.deltaRatio||f.dir) !== Math.sign(f.c - f.o) && f.bodyPct>0.2) ||
+                   (f.upWick>0.33 && f.dnWick>0.33);
+    // Continuation Probability — confirmações a favor da direção
+    var conf=0, cw=0;
+    conf+=clamp((f.volSpike-1)/2,0,1)*100*0.28; cw+=0.28;
+    conf+=clamp(Math.abs(f.deltaRatio)/0.6,0,1)*100*0.24; cw+=0.24;
+    conf+=clamp(f.bodyPct/0.7,0,1)*100*0.20; cw+=0.20;
+    conf+=clamp(f.postFlatSpike,0,1)*100*0.14; cw+=0.14;
+    conf+=clamp(f.absorption,0,1)*100*0.14; cw+=0.14;
+    var continuation=Math.round(clamp(conf/Math.max(cw,1e-9),0,100) * (conflict?0.7:1));
+    // Exhaustion — pavio exagerado + perda de volume + rejeição + desaceleração
+    var volDrop = prevVol? clamp((prevVol - f.vol)/Math.max(prevVol,1e-9),0,1) : 0;
+    var velDrop = prevVel? clamp((prevVel - f.velocity)/Math.max(prevVel,1e-9),0,1) : 0;
+    var bigWick = clamp(Math.max(f.upWick,f.dnWick)/0.5,0,1);
+    var exhaustion=Math.round(clamp( bigWick*0.34 + volDrop*0.24 + f.rejection*0.24 + velDrop*0.18, 0,1)*100);
+    // classe de cor
+    var cls;
+    if(conflict) cls="indef";
+    else if(delta >= state.thNeutral) cls="buy";
+    else if(delta <= -state.thNeutral) cls="sell";
+    else cls="neutral";
+    return { delta:delta, confidence:confidence, continuation:continuation, exhaustion:exhaustion, cls:cls,
+      components:{ volume:Math.round(cVolume), body:Math.round(cBody), close:Math.round(cClose), delta:Math.round(cDelta), absorption:Math.round(cAbsorb), spike:Math.round(cSpike), vp:0 } };
+  }
+  window.__DVL_SMART_DELTA_PURE = { features:features, score:score, clamp:clamp };
+
+  /* ── ENGINE — cálculo por candle fechado, cache incremental ───────────── */
+  var cacheKey="", cache=[];     // cache[i] = score
+  function symbolTf(){ var s="?",tf="?"; try{ if(typeof symbol!=="undefined"&&symbol) s=String(symbol); }catch(_){} try{ if(typeof interval!=="undefined"&&interval) tf=String(interval); }catch(_){} return s+"|"+tf; }
+  function compute(){
+    var cs=candles(); var n=cs.length; if(n<3){ cache=[]; return; }
+    var key=symbolTf()+"|"+n+"|"+T(cs[n-1]);
+    if(key===cacheKey && cache.length===n) return;
+    features._vel=new Array(n).fill(0);
+    var out=new Array(n).fill(null), prevVol=0, prevVel=0;
+    for(var i=1;i<n;i++){
+      var f=features(cs,i); if(!f){ continue; }
+      features._vel[i]=f.velocity;
+      out[i]=score(f, prevVol, prevVel);
+      prevVol=f.vol; prevVel=f.velocity;
+    }
+    cache=out; cacheKey=key;
+  }
+  function latest(){ compute(); for(var i=cache.length-1;i>=0;i--){ if(cache[i]) return { i:i, s:cache[i] }; } return null; }
+
+  /* ── RENDER — histograma leve (topo do painel) + painel compacto ──────── */
+  var COL={ buy:[22,199,132], sell:[255,74,97], neutral:[130,150,145], indef:[243,199,104] };
+  function draw(ctx, cfg){
+    if(!state.on){ hidePanel(); return; }
+    compute();
+    var view=cfg.view, x=cfg.x, x0=cfg.x0, x1=cfg.x1, y0=cfg.y0, slotOffset=cfg.slotOffset, candleW=cfg.candleW;
+    if(!view||!view.length||!cache.length) return;
+    var band=Math.max(18,Math.min(80,state.height||38));
+    var base=y0+2;                       // barras crescem pra baixo a partir do topo
+    // mapear tempo do candle visível → índice no cache (por tempo)
+    var cs=candles(); var byT={}; // últimos ~ (view+buffer)
+    for(var j=0;j<cache.length;j++){ if(cache[j]) byT[T(cs[j])]=cache[j]; }
+    ctx.save();
+    ctx.globalAlpha = clamp(state.opacity||0.9,0.1,1);
+    for(var k=0;k<view.length;k++){
+      var sc=byT[T(view[k])]; if(!sc) continue;
+      var cx=x(slotOffset+k);
+      var w=Math.max(1,Math.min(candleW*0.7,6));
+      var hgt=Math.abs(sc.delta)/100*band;
+      var col=COL[sc.cls]||COL.neutral;
+      ctx.fillStyle="rgba("+col[0]+","+col[1]+","+col[2]+",0.85)";
+      ctx.fillRect(cx-w/2, base, w, Math.max(0.5,hgt));
+    }
+    // linha de base fina
+    ctx.globalAlpha=0.35; ctx.strokeStyle="rgba(150,160,158,0.6)"; ctx.lineWidth=0.6;
+    ctx.beginPath(); ctx.moveTo(x0,base); ctx.lineTo(x1,base); ctx.stroke();
+    ctx.globalAlpha=1; ctx.restore();
+    if(state.panel!==false) renderPanel();
+  }
+  window.DVLSmartDeltaDraw=function(ctx,cfg){ try{ draw(ctx,cfg); }catch(_){} };
+
+  var panelEl=null;
+  function ensurePanel(){
+    if(panelEl && document.body.contains(panelEl)) return panelEl;
+    var w=document.getElementById("chartWrap")||document.querySelector(".canvasWrap"); if(!w) return null;
+    if(getComputedStyle(w).position==="static") w.style.position="relative";
+    panelEl=document.createElement("div"); panelEl.id="dvlSmartDeltaPanel";
+    panelEl.style.cssText="position:absolute;left:8px;top:8px;z-index:44;pointer-events:none;display:none;min-width:150px;padding:7px 9px;border-radius:9px;background:rgba(6,16,12,.9);border:1px solid rgba(129,166,151,.24);color:#dcebe4;font:700 10px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.4)";
+    w.appendChild(panelEl);
+    return panelEl;
+  }
+  function hidePanel(){ if(panelEl) panelEl.style.display="none"; }
+  function renderPanel(){
+    var el=ensurePanel(); if(!el) return;
+    var L=latest(); if(!L){ el.style.display="none"; return; }
+    var s=L.s;
+    var col=COL[s.cls]||COL.neutral; var hex="rgb("+col[0]+","+col[1]+","+col[2]+")";
+    var sign=s.delta>0?"+":"";
+    function row(lbl,val,c){ return '<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#7f9c8e">'+lbl+'</span><b style="color:'+(c||"#dcebe4")+'">'+val+'</b></div>'; }
+    el.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:3px"><b style="color:'+hex+'">Smart Delta</b><span style="font-size:8px;color:#6f8b80">'+s.cls.toUpperCase()+'</span></div>'+
+      row("Delta", sign+s.delta, hex)+
+      row("Confidence", s.confidence+"%")+
+      row("Continuation", s.continuation+"%")+
+      row("Exhaustion", s.exhaustion+"%", s.exhaustion>=60?"#f3c768":"#dcebe4");
+    el.style.display="block";
+  }
+
+  /* ── API pública (para Scanner/Copilot/Market Matrix/Alerts — próximos) ── */
+  window.DVL_SMART_DELTA_ENGINE_API = {
+    version:"1.228",
+    isOn:function(){ return !!state.on; },
+    on:function(){ return !!state.on; },
+    setOn:function(v){ state.on=(v===undefined?!state.on:!!v); save(); updateRow(); try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){} if(!state.on) hidePanel(); },
+    getState:function(){ var o={}; for(var k in state) o[k]=state[k]; return o; },
+    latest:function(){ var L=latest(); return L?Object.assign({index:L.i},L.s):null; },
+    at:function(time){ compute(); var cs=candles(); for(var i=0;i<cs.length;i++){ if(T(cs[i])===Number(time)) return cache[i]||null; } return null; },
+    series:function(){ compute(); return cache.slice(); },
+    openPanel:function(){ openSettings(); },
+    open:function(){ openSettings(); }
+  };
+
+  /* ── indicator menu registration (registro real modules()) ────────────── */
+  function updateRow(){ var st=document.getElementById("dvlSmartDeltaState"); if(st){ st.textContent=state.on?"ON":"OFF"; st.classList.toggle("is-on",!!state.on); } }
+  function insertRow(){
+    var menu=document.getElementById("indicatorDropdown"); if(!menu||document.getElementById("dvlSmartDeltaItem")) return;
+    var item=document.createElement("div"); item.id="dvlSmartDeltaItem"; item.className="indicatorItem";
+    item.innerHTML='<span class="indicatorFxMark">SD</span><span><b>DVL Smart Delta</b><small>institutional confluence</small></span><i class="dvl-vt-state" id="dvlSmartDeltaState">OFF</i>';
+    menu.appendChild(item);
+    var pill=item.querySelector("#dvlSmartDeltaState");
+    if(pill) pill.addEventListener("click",function(ev){ ev.preventDefault(); ev.stopPropagation(); window.DVL_SMART_DELTA_ENGINE_API.setOn(); });
+    item.addEventListener("click",function(ev){ ev.stopPropagation(); openSettings(); });
+    updateRow();
+  }
+  var settings=null;
+  function openSettings(){
+    if(!settings){
+      settings=document.createElement("div"); settings.id="dvlSmartDeltaSettings"; settings.className="dvl-vt-panel";
+      settings.innerHTML='<div class="dvl-vt-head"><div class="dvl-vt-title"><b>DVL Smart Delta</b><small>institutional confluence</small></div><div class="dvl-vt-head-actions"><button class="dvl-vt-close" id="dvlSDClose" type="button">×</button></div></div><div class="dvl-vt-body" id="dvlSDBody"></div>';
+      document.body.appendChild(settings);
+      settings.addEventListener("pointerdown",function(e){ e.stopPropagation(); },true);
+      settings.querySelector("#dvlSDClose").addEventListener("click",function(){ settings.classList.remove("is-open"); });
+    }
+    var b=settings.querySelector("#dvlSDBody");
+    b.innerHTML='<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Geral</span></div><div class="dvl-vt-grid">'+
+      '<div class="dvl-vt-field"><label>Ativo</label><label class="dvl-switch"><input id="sdOn" type="checkbox" '+(state.on?"checked":"")+'><i></i><b></b></label></div>'+
+      '<div class="dvl-vt-field"><label>Painel</label><label class="dvl-switch"><input id="sdPanel" type="checkbox" '+(state.panel!==false?"checked":"")+'><i></i><b></b></label></div>'+
+      '<div class="dvl-vt-field"><label>Altura</label><input id="sdHeight" class="dvl-vt-input" type="number" min="18" max="80" step="2" value="'+(state.height||38)+'"></div>'+
+      '<div class="dvl-vt-field"><label>Neutro ±</label><input id="sdTh" class="dvl-vt-input" type="number" min="2" max="60" step="1" value="'+(state.thNeutral||18)+'"></div>'+
+      '</div></div>';
+    function bind(id,key,type){ var el=b.querySelector("#"+id); if(!el) return; var fn=function(){ if(type==="check") state[key]=!!el.checked; else state[key]=Number(el.value)||DEFAULTS[key]; if(id==="sdOn") updateRow(); if(id==="sdPanel"&&!state.panel) hidePanel(); save(); try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){} }; el.addEventListener("change",fn); el.addEventListener("input",fn); }
+    bind("sdOn","on","check"); bind("sdPanel","panel","check"); bind("sdHeight","height","num"); bind("sdTh","thNeutral","num");
+    try{ if(window.DVLIndicatorCustomControls&&window.DVLIndicatorCustomControls.upgrade) window.DVLIndicatorCustomControls.upgrade(settings); }catch(_){}
+    settings.classList.add("is-open");
+  }
+
+  function boot(){ insertRow(); if(state.on){ try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){} } }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",function(){ setTimeout(boot,0); },{once:true}); else setTimeout(boot,0);
+})();
+</script>
+
 
 
 <script id="DVL_BETA_0528_DVL_VOLUME_JS">
@@ -62693,6 +62951,7 @@ body.dvl-osc-divider-dragging *{
       {key:"vp",mark:"VP",title:"Volume Profile",sub:"range visível · POC / VAH / VAL",api:"DVLVolumeProfile",pill:"dvlVPState",row:"dvlVolProfileItem"},
       {key:"sz",mark:"SZ",title:"DVL Spike Zones",sub:"overlay",api:"DVLSpikeZones",pill:"dvlSzState",row:"dvlSpikeZonesItem"},
       {key:"fvg",mark:"FV",title:"DVL FVG Firewall",sub:"order flow · smart money",api:"DVL_FVG_FIREWALL_API",pill:"dvlFvgState",row:"dvlFvgFirewallItem"},
+      {key:"smartdelta",mark:"SD",title:"DVL Smart Delta",sub:"institutional confluence",api:"DVL_SMART_DELTA_ENGINE_API",pill:"dvlSmartDeltaState",row:"dvlSmartDeltaItem"},
       {key:"ma",mark:"MA",title:"Moving Averages",sub:"10 médias · overlay",api:"DVLMovingAverages",pill:"dvlMaState",row:"dvlMovingAveragesItem"},
       {key:"bookmap",mark:"BM",title:"DVL Bookmap Zones",sub:"Order book heatmap · Bookmap style",api:"DVL_BOOKMAP_ZONES_0813"},
       {key:"tv",mark:"TV",title:"DVL Tick Volume",sub:"tick volume oscillator",api:"DVLTickVolume",pill:"dvlTickVolumeState",row:"dvlTickVolumeItem"}
