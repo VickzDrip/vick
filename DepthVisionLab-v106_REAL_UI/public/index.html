@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.224';
+window.DVL_APP_VERSION = 'Beta 1.225';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -15985,7 +15985,7 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
 <div class="toast" id="toast"></div>
 
 <script>
-const DVL_APP_VERSION = String(window.DVL_APP_VERSION || "Beta 1.224");
+const DVL_APP_VERSION = String(window.DVL_APP_VERSION || "Beta 1.225");
 window.DVL_APP_VERSION = DVL_APP_VERSION;
 try{ var _dvlVB = document.getElementById("versionBadge"); if(_dvlVB) _dvlVB.textContent = String(DVL_APP_VERSION).toUpperCase(); var _dvlVB1b = document.getElementById("dvl1b_versionBadge"); if(_dvlVB1b) _dvlVB1b.textContent = String(DVL_APP_VERSION).toUpperCase(); }catch(_){}
 /* ── Rede de segurança da SESSÃO salva (só PREENCHE o que falta) ──
@@ -34584,7 +34584,13 @@ drag = {
     devColorPOC: "#38e0ff", devColorVAH: "#7ad7ff", devColorVAL: "#4aa8ff",
     devStyle: 'solid', devWidth: 1.6,
     trailOn: false, trailColor: "#38e0ff", trailWidth: 1, trailStyle: 'solid',
-    trailOpacity: 0.6, trailMaxPts: 300
+    trailOpacity: 0.6, trailMaxPts: 300,
+    // Beta 1.225 — Overnight Profile + timezone (Stage 3)
+    onOn: false, onStartH: 0, onStartM: 0, onEndH: 8, onEndM: 0,
+    onTZ: 'UTC', onSession: 'current', onDeveloping: true,
+    onShowPOC: true, onShowVAH: true, onShowVAL: true,
+    onColorPOC: "#c08bff", onColorVAH: "#9a6cff", onColorVAL: "#7a4fff",
+    onStyle: 'dashed', onWidth: 1.4
   };
 
   let state = Object.assign({}, DEFAULTS);
@@ -34733,6 +34739,70 @@ drag = {
       if(nHi>=nLo){ hi++; vol+=buy[hi]+sell[hi]; } else { lo--; vol+=buy[lo]+sell[lo]; }
     }
     return {pocIdx, lo, hi};
+  }
+
+  // ── Overnight Profile (Beta 1.225) — janela por timezone, cruza meia-noite ─
+  function vpResolveTZ(){
+    const z=state.onTZ||'UTC';
+    if(z==='UTC'||z==='Exchange') return 'UTC';
+    if(z==='Local'){ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'; }catch(_){ return 'UTC'; } }
+    return z;
+  }
+  // partes Y/M/D/H/M da data local do timezone para um timestamp
+  function vpTzParts(tz, at){
+    try{
+      const dtf=new Intl.DateTimeFormat('en-US',{timeZone:tz,hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      const m={}; dtf.formatToParts(new Date(at)).forEach(p=>{ if(p.type!=='literal') m[p.type]=+p.value; });
+      return {y:m.year,mo:m.month,d:m.day,h:m.hour,mi:m.minute,s:m.second};
+    }catch(_){ const dd=new Date(at); return {y:dd.getUTCFullYear(),mo:dd.getUTCMonth()+1,d:dd.getUTCDate(),h:dd.getUTCHours(),mi:dd.getUTCMinutes(),s:dd.getUTCSeconds()}; }
+  }
+  function vpTzOffsetMs(tz, at){ const p=vpTzParts(tz,at); const asUTC=Date.UTC(p.y,p.mo-1,p.d,p.h,p.mi,p.s); return asUTC-at; }
+  // converte "data local do tz (y/mo/d hh:mm)" para timestamp absoluto
+  function vpTzLocalToTs(tz,y,mo,d,hh,mm){ const naive=Date.UTC(y,mo-1,d,hh,mm); const off=vpTzOffsetMs(tz,naive); return naive-off; }
+  function vpOvernightWindow(){
+    const tz=vpResolveTZ();
+    const sh=Math.max(0,Math.min(23,+state.onStartH||0)), sm=Math.max(0,Math.min(59,+state.onStartM||0));
+    const eh=Math.max(0,Math.min(23,+state.onEndH||0)),  em=Math.max(0,Math.min(59,+state.onEndM||0));
+    const now=Date.now(), p=vpTzParts(tz,now);
+    let start=vpTzLocalToTs(tz,p.y,p.mo,p.d,sh,sm);
+    let end  =vpTzLocalToTs(tz,p.y,p.mo,p.d,eh,em);
+    if(end<=start) end+=86400000;                 // cruza a meia-noite
+    if(now<start){ start-=86400000; end-=86400000; } // ainda não começou hoje → sessão de ontem
+    if((state.onSession||'current')==='previous'){ start-=86400000; end-=86400000; }
+    const inProgress=now>=start && now<end;
+    return {start,end,inProgress,tz};
+  }
+  async function fetchVPRange(sym, baseTF, start, end){
+    const url='https://fapi.binance.com/fapi/v1/klines?symbol='+sym+'&interval='+baseTF
+             +'&startTime='+start+'&endTime='+(end+1)+'&limit=1000';
+    try{
+      const r=await fetch(url); if(!r.ok) return null;
+      const d=await r.json(); if(!Array.isArray(d)) return null;
+      return d.map(x=>({time:+x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5],buyVolume:+x[9]}));
+    }catch(_){ return null; }
+  }
+  let vpKCacheON=null, vpKFetchingON=false;
+  let vpStableLevelsON={poc:null,vah:null,val:null,key:null};
+  function vpOvernightBaseTF(durMs){ if(durMs<=6*3600000) return '3m'; if(durMs<=12*3600000) return '5m'; return '15m'; }
+  function resolveVPKlinesOvernight(sym){
+    sym=sym||'';
+    const w=vpOvernightWindow();
+    const endEff=(state.onDeveloping!==false && w.inProgress)?Date.now():w.end;
+    const baseTF=vpOvernightBaseTF(w.end-w.start);
+    const key=sym+'|'+w.start+'|'+w.end+'|'+baseTF+'|'+(w.inProgress&&state.onDeveloping!==false?'live':'frozen');
+    const now=Date.now();
+    const fresh=vpKCacheON && vpKCacheON.key===key && (now-vpKCacheON.ts)<30000;
+    if(!fresh && !vpKFetchingON && sym){
+      vpKFetchingON=true;
+      fetchVPRange(sym, baseTF, w.start, endEff).then(kl=>{
+        const filt=(kl||[]).filter(c=>c.time>=w.start && c.time<=endEff);
+        vpKCacheON={key, klines:filt, ts:Date.now(), w};
+        vpKFetchingON=false;
+        if(filt.length && typeof drawSoon==='function') drawSoon();
+      }).catch(()=>{ vpKFetchingON=false; });
+    }
+    if(vpKCacheON && vpKCacheON.key===key && vpKCacheON.klines.length) return {klines:vpKCacheON.klines, w, key};
+    return {klines:null, w, key};
   }
 
   // ── Volume Profile computation (triangular close-peaked) ─────────────────
@@ -35195,6 +35265,42 @@ drag = {
       }
     }
 
+    // ── Overnight Profile (Beta 1.225) — janela por timezone ────────────────
+    if(state.onOn){
+      const ov=resolveVPKlinesOvernight(sym);
+      const oView=ov.klines;
+      if(oView && oView.length){
+        let oMin=Infinity,oMax=-Infinity;
+        for(const c of oView){ if(+c.low<oMin)oMin=+c.low; if(+c.high>oMax)oMax=+c.high; }
+        if(isFinite(oMin) && isFinite(oMax) && oMax>oMin){
+          const pad=(oMax-oMin)*0.005; oMin-=pad; oMax+=pad;
+          const oc=computeVP(oView, oMin, oMax, rows);
+          const va=vpValueArea(oc.buy, oc.sell, rows, state.valueAreaPct||0.70);
+          if(va){
+            const ppr=(oMax-oMin)/rows;
+            if(vpStableLevelsON.key!==ov.key){ vpStableLevelsON={poc:null,vah:null,val:null,key:ov.key}; }
+            const hy=ppr*1.5;
+            const nP=oMin+(va.pocIdx+0.5)*ppr, nH=oMin+(va.hi+1)*ppr, nL=oMin+va.lo*ppr;
+            if(vpStableLevelsON.poc===null||Math.abs(nP-vpStableLevelsON.poc)>hy) vpStableLevelsON.poc=nP;
+            if(vpStableLevelsON.vah===null||Math.abs(nH-vpStableLevelsON.vah)>hy) vpStableLevelsON.vah=nH;
+            if(vpStableLevelsON.val===null||Math.abs(nL-vpStableLevelsON.val)>hy) vpStableLevelsON.val=nL;
+            const oW=Math.max(1,+state.onWidth||1.4), oDash=vpDashFor(state.onStyle||'dashed', oW);
+            const drawOnLine=(show,color,price,name,baseline)=>{
+              if(show===false) return;
+              const yy=rowP(price);
+              ctx.strokeStyle=color; ctx.lineWidth=oW; ctx.setLineDash(oDash);
+              ctx.beginPath(); ctx.moveTo(x0,yy); ctx.lineTo(x1,yy); ctx.stroke(); ctx.setLineDash([]);
+              const l=vpLevelLabel(name, price);
+              if(l){ ctx.fillStyle=color; ctx.font="700 7.5px system-ui"; ctx.textAlign="left"; ctx.textBaseline=baseline; ctx.globalAlpha=0.9; ctx.fillText(l, x0+40, yy); ctx.globalAlpha=1; }
+            };
+            drawOnLine(state.onShowPOC, state.onColorPOC||"#c08bff", vpStableLevelsON.poc, "O-POC", "bottom");
+            drawOnLine(state.onShowVAH, state.onColorVAH||"#9a6cff", vpStableLevelsON.vah, "O-VAH", "bottom");
+            drawOnLine(state.onShowVAL, state.onColorVAL||"#7a4fff", vpStableLevelsON.val, "O-VAL", "top");
+          }
+        }
+      }
+    }
+
     } finally { ctx.restore(); }
   }
 
@@ -35342,6 +35448,27 @@ drag = {
           <div class="dvl-vt-field"><label>Máx. pontos</label>${vpStepFld("dvlVPTrailMax",Math.round(state.trailMaxPts||300),50,2000,50,0)}</div>
         </div>
       </div>
+      <div class="dvl-vt-section">
+        <div class="dvl-vt-section-title"><span>Overnight — janela por timezone</span></div>
+        <div class="dvl-vt-grid">
+          <div class="dvl-vt-field"><label>Ativo</label><label class="dvl-switch"><input id="dvlVPOnOn" type="checkbox" ${state.onOn?"checked":""}><i></i><b></b></label></div>
+          <div class="dvl-vt-field"><label>Developing</label><label class="dvl-switch"><input id="dvlVPOnDev" type="checkbox" ${state.onDeveloping!==false?"checked":""}><i></i><b></b></label></div>
+          <div class="dvl-vt-field"><label>Início — hora</label>${vpStepFld("dvlVPOnSH",Math.round(state.onStartH||0),0,23,1,0)}</div>
+          <div class="dvl-vt-field"><label>Início — min</label>${vpStepFld("dvlVPOnSM",Math.round(state.onStartM||0),0,55,5,0)}</div>
+          <div class="dvl-vt-field"><label>Fim — hora</label>${vpStepFld("dvlVPOnEH",Math.round(state.onEndH||8),0,23,1,0)}</div>
+          <div class="dvl-vt-field"><label>Fim — min</label>${vpStepFld("dvlVPOnEM",Math.round(state.onEndM||0),0,55,5,0)}</div>
+          <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label>Timezone</label>${vpDropFld("dvlVPOnTZ",[["UTC","UTC"],["Exchange","Exchange"],["Local","Local"],["Europe/Brussels","Bruxelas"],["America/New_York","New York"]],(state.onTZ||'UTC'))}</div>
+          <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label>Sessão</label>${vpDropFld("dvlVPOnSess",[["current","Atual"],["previous","Anterior"]],(state.onSession||'current'))}</div>
+          <div class="dvl-vt-field"><label>O-POC</label><label class="dvl-switch"><input id="dvlVPOnPOC" type="checkbox" ${state.onShowPOC!==false?"checked":""}><i></i><b></b></label></div>
+          ${cField("dvlVPCOnPOC","Cor O-POC","onColorPOC")}
+          <div class="dvl-vt-field"><label>O-VAH</label><label class="dvl-switch"><input id="dvlVPOnVAH" type="checkbox" ${state.onShowVAH!==false?"checked":""}><i></i><b></b></label></div>
+          ${cField("dvlVPCOnVAH","Cor O-VAH","onColorVAH")}
+          <div class="dvl-vt-field"><label>O-VAL</label><label class="dvl-switch"><input id="dvlVPOnVAL" type="checkbox" ${state.onShowVAL!==false?"checked":""}><i></i><b></b></label></div>
+          ${cField("dvlVPCOnVAL","Cor O-VAL","onColorVAL")}
+          <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label>Estilo</label>${vpDropFld("dvlVPStyleOn",VP_STYLE_OPTS,(state.onStyle||'dashed'))}</div>
+          <div class="dvl-vt-field"><label>Espessura</label>${vpStepFld("dvlVPWOn",(+state.onWidth||1.4),1,4,0.5,1)}</div>
+        </div>
+      </div>
     `;
 
     // Toggles
@@ -35361,6 +35488,11 @@ drag = {
     bSw("dvlVPDevVAH", v=>{state.devShowVAH=v;});
     bSw("dvlVPDevVAL", v=>{state.devShowVAL=v;});
     bSw("dvlVPTrailOn",v=>{state.trailOn=v; if(!v){vpDevTrail=[];vpDevTrailKey="";}});
+    bSw("dvlVPOnOn",  v=>{state.onOn=v; vpKCacheON=null; vpStableLevelsON={poc:null,vah:null,val:null,key:null};});
+    bSw("dvlVPOnDev", v=>{state.onDeveloping=v; vpKCacheON=null;});
+    bSw("dvlVPOnPOC", v=>{state.onShowPOC=v;});
+    bSw("dvlVPOnVAH", v=>{state.onShowVAH=v;});
+    bSw("dvlVPOnVAL", v=>{state.onShowVAL=v;});
     // Steppers
     const VP_STEP={
       dvlVPRows: v=>{state.rows=Math.max(20,Math.min(500,v));},
@@ -35372,7 +35504,12 @@ drag = {
       dvlVPWDev: v=>{state.devWidth=Math.max(1,Math.min(4,v));},
       dvlVPWTrail:v=>{state.trailWidth=Math.max(1,Math.min(4,v));},
       dvlVPTrailOp:v=>{state.trailOpacity=Math.max(0.10,Math.min(1,v/100));},
-      dvlVPTrailMax:v=>{state.trailMaxPts=Math.max(50,Math.min(2000,v));}
+      dvlVPTrailMax:v=>{state.trailMaxPts=Math.max(50,Math.min(2000,v));},
+      dvlVPWOn:v=>{state.onWidth=Math.max(1,Math.min(4,v));},
+      dvlVPOnSH:v=>{state.onStartH=Math.max(0,Math.min(23,Math.round(v)));vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};},
+      dvlVPOnSM:v=>{state.onStartM=Math.max(0,Math.min(59,Math.round(v)));vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};},
+      dvlVPOnEH:v=>{state.onEndH=Math.max(0,Math.min(23,Math.round(v)));vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};},
+      dvlVPOnEM:v=>{state.onEndM=Math.max(0,Math.min(59,Math.round(v)));vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};}
     };
     body.querySelectorAll(".dvl-feb-step-btn").forEach(btn=>{
       btn.addEventListener("click",e=>{
@@ -35416,11 +35553,14 @@ drag = {
         if(btnId==="dvlVPStyleDev"){state.devStyle=val;}
         if(btnId==="dvlVPStyleTrail"){state.trailStyle=val;}
         if(btnId==="dvlVPDevTF"){state.devTF=val;vpKCacheDev=null;vpStableLevelsDev={poc:null,vah:null,val:null,sym:null,tf:null};vpDevTrail=[];vpDevTrailKey="";}
+        if(btnId==="dvlVPStyleOn"){state.onStyle=val;}
+        if(btnId==="dvlVPOnTZ"){state.onTZ=val;vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};}
+        if(btnId==="dvlVPOnSess"){state.onSession=val;vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};}
         save();if(typeof drawSoon==="function")drawSoon();
       });
     });
     // Color palette
-    const VP_CLR={dvlVPCBuy:"colorBuy",dvlVPCSell:"colorSell",dvlVPCPOC:"colorPOC",dvlVPCVAH:"colorVAH",dvlVPCVAL:"colorVAL",dvlVPCS2POC:"s2colorPOC",dvlVPCS2VAH:"s2colorVAH",dvlVPCS2VAL:"s2colorVAL",dvlVPCDevPOC:"devColorPOC",dvlVPCDevVAH:"devColorVAH",dvlVPCDevVAL:"devColorVAL",dvlVPCTrail:"trailColor"};
+    const VP_CLR={dvlVPCBuy:"colorBuy",dvlVPCSell:"colorSell",dvlVPCPOC:"colorPOC",dvlVPCVAH:"colorVAH",dvlVPCVAL:"colorVAL",dvlVPCS2POC:"s2colorPOC",dvlVPCS2VAH:"s2colorVAH",dvlVPCS2VAL:"s2colorVAL",dvlVPCDevPOC:"devColorPOC",dvlVPCDevVAH:"devColorVAH",dvlVPCDevVAL:"devColorVAL",dvlVPCTrail:"trailColor",dvlVPCOnPOC:"onColorPOC",dvlVPCOnVAH:"onColorVAH",dvlVPCOnVAL:"onColorVAL"};
     body.querySelectorAll(".dvl-feb-clr-swatch").forEach(btn=>{
       const key=VP_CLR[btn.id];if(!key)return;
       btn.addEventListener("click",()=>openVPPalette(btn,key));
