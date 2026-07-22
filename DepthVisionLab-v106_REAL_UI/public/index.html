@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.240';
+window.DVL_APP_VERSION = 'Beta 1.241';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.241", note: "Cor do glow do DVL Volume Memory trocada: era âmbar (#ffe08a), que se confundia com a linha dourada do POC. Agora o padrão é ciano elétrico (#35e0ff), que contrasta com as barras verde/vermelho e com o POC. Quem estava no padrão antigo é migrado automaticamente; cor personalizada é preservada. Dá pra mudar em Volume Profile → DVL Volume Memory → Glow Color. Só frontend." },
   { version: "Beta 1.240", note: "Volume Profile mais profissional + novo DVL Volume Memory (só apresentação — os cálculos do VP não mudaram). (1) Colunas mais robustas: largura vai até 60% (cap maior) e cantos levemente arredondados na ponta externa (Corner Radius). (2) DVL Volume Memory: quando um nível recebe volume NOVO relevante, só a ponta recém-crescida acende um glow; o glow degrada por EVENTOS de crescimento (nível 5→4→3→2→cor base), criando uma memória visual dos últimos crescimentos. Se o MESMO nível continua crescendo, ele segue no topo (não reinicia). Filtro anti-ruído (Minimum Growth %) e Memory Depth (3/5/10 eventos). Reutiliza os buckets do VP (sem recalcular), detecta só em range estável (ignora pan/zoom) e sem flicker. Novas configs: Ativar, Memory Depth, Glow Strength, Glow Color, Minimum Growth, Corner Radius. Só frontend." },
   { version: "Beta 1.239", note: "As linhas Entry/TP/SL do Risk Manager agora CONTINUAM visíveis mesmo com o painel fechado (antes sumiam ao fechar). No mobile o painel cobre o gráfico, então agora dá pra planejar, fechar o painel e ver as linhas no gráfico. A visibilidade passa a depender só do toggle 'Mostrar no gráfico' — ligou, as linhas ficam (aberto ou fechado); desligou, somem. Só frontend." },
   { version: "Beta 1.238", note: "Ajuste do acesso mobile ao Risk Manager: na 1.237 a barra no topo empurrava o conteúdo e as linhas do painel (Wallet/Entry/Lev e Buy/Sell) se sobrepunham. Agora o acesso é um botão 🛡 INLINE na linha de cima do Trade Panel, ao lado do ✕ — sem adicionar altura, então nada colide. A linha de cima vira 6 colunas pra encaixar o 🛡. Abre o Risk Manager sem fechar o painel e mantém os valores. Desktop inalterado (botão escondido, launcher flutuante intacto). Só frontend." },
@@ -35139,12 +35140,15 @@ drag = {
     onStyle: 'dashed', onWidth: 1.4,
     // Beta 1.240 — colunas robustas + DVL Volume Memory
     colRadius: 2,
-    vmOn: true, vmDepth: 5, vmGlow: 0.85, vmColor: "#ffe08a",
+    vmOn: true, vmDepth: 5, vmGlow: 0.85, vmColor: "#35e0ff",
     vmMinGrowth: 8, vmMinDelta: 0
   };
 
   let state = Object.assign({}, DEFAULTS);
   try{ Object.assign(state, JSON.parse(localStorage.getItem(STOR_KEY)||"{}")); }catch(_){}
+  // Beta 1.241 — nova cor padrão do glow (o âmbar conflitava com o POC dourado).
+  // Migra quem ainda estava no âmbar; preserva cor personalizada.
+  if(!state.vmColor || state.vmColor==="#ffe08a") state.vmColor="#35e0ff";
 
   function save(){ try{ localStorage.setItem(STOR_KEY, JSON.stringify(state)); }catch(_){} }
   function on(){ return !!state.on; }
