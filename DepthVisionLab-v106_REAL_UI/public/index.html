@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.239';
+window.DVL_APP_VERSION = 'Beta 1.240';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.240", note: "Volume Profile mais profissional + novo DVL Volume Memory (só apresentação — os cálculos do VP não mudaram). (1) Colunas mais robustas: largura vai até 60% (cap maior) e cantos levemente arredondados na ponta externa (Corner Radius). (2) DVL Volume Memory: quando um nível recebe volume NOVO relevante, só a ponta recém-crescida acende um glow; o glow degrada por EVENTOS de crescimento (nível 5→4→3→2→cor base), criando uma memória visual dos últimos crescimentos. Se o MESMO nível continua crescendo, ele segue no topo (não reinicia). Filtro anti-ruído (Minimum Growth %) e Memory Depth (3/5/10 eventos). Reutiliza os buckets do VP (sem recalcular), detecta só em range estável (ignora pan/zoom) e sem flicker. Novas configs: Ativar, Memory Depth, Glow Strength, Glow Color, Minimum Growth, Corner Radius. Só frontend." },
   { version: "Beta 1.239", note: "As linhas Entry/TP/SL do Risk Manager agora CONTINUAM visíveis mesmo com o painel fechado (antes sumiam ao fechar). No mobile o painel cobre o gráfico, então agora dá pra planejar, fechar o painel e ver as linhas no gráfico. A visibilidade passa a depender só do toggle 'Mostrar no gráfico' — ligou, as linhas ficam (aberto ou fechado); desligou, somem. Só frontend." },
   { version: "Beta 1.238", note: "Ajuste do acesso mobile ao Risk Manager: na 1.237 a barra no topo empurrava o conteúdo e as linhas do painel (Wallet/Entry/Lev e Buy/Sell) se sobrepunham. Agora o acesso é um botão 🛡 INLINE na linha de cima do Trade Panel, ao lado do ✕ — sem adicionar altura, então nada colide. A linha de cima vira 6 colunas pra encaixar o 🛡. Abre o Risk Manager sem fechar o painel e mantém os valores. Desktop inalterado (botão escondido, launcher flutuante intacto). Só frontend." },
   { version: "Beta 1.237", note: "Acesso ao Risk Manager no mobile resolvido. Antes o botão ficava no rodapé do Trade Panel e escorregava pra trás da barra inferior, ficando inacessível. Agora, no mobile, existe uma barra '🛡 Risk Manager' no TOPO do Trade Panel — sempre visível, sem posição fixa, nunca atrás do rodapé. Abre o Risk Management sem fechar o Trade Panel e mantém todos os valores preenchidos. O desktop NÃO muda: continua com o launcher flutuante de sempre. Só frontend." },
@@ -35135,7 +35136,11 @@ drag = {
     onTZ: 'UTC', onSession: 'current', onDeveloping: true,
     onShowPOC: true, onShowVAH: true, onShowVAL: true,
     onColorPOC: "#c08bff", onColorVAH: "#9a6cff", onColorVAL: "#7a4fff",
-    onStyle: 'dashed', onWidth: 1.4
+    onStyle: 'dashed', onWidth: 1.4,
+    // Beta 1.240 — colunas robustas + DVL Volume Memory
+    colRadius: 2,
+    vmOn: true, vmDepth: 5, vmGlow: 0.85, vmColor: "#ffe08a",
+    vmMinGrowth: 8, vmMinDelta: 0
   };
 
   let state = Object.assign({}, DEFAULTS);
@@ -35170,6 +35175,24 @@ drag = {
   let vpKCache2     = null;
   let vpKFetching2  = false;
   let vpStableLevels2 = {poc:null, vah:null, val:null, sym:null, tf:null};
+
+  /* Beta 1.240 — DVL Volume Memory: memória visual de crescimento do VP.
+     Reutiliza os mesmos buckets do VP (não recalcula nada). Detecta, num RANGE
+     estável (sem pan/zoom), qual nível de preço recebeu volume NOVO relevante e
+     acende um glow na ponta que cresceu. O glow degrada por EVENTOS: cada novo
+     crescimento em outro nível empurra os anteriores um passo abaixo até voltar
+     à cor base. Se o MESMO nível continua crescendo, ele segue no topo. */
+  let vpMem = { sig:"", prevTot:null, events:[], _sym:"", _tf:"" };
+  let vpMemLastDetect = 0;
+  try{ window.__DVL_VP_MEM = vpMem; }catch(_){}
+  function vpMemDepth(){ var d=Number(state.vmDepth)||5; return d===3||d===10?d:5; }
+  function pathRoundLeft(ctx,x,y,w,h,r){
+    r=Math.max(0,Math.min(r||0,h/2,w/2));
+    ctx.beginPath();
+    if(r<=0.5){ ctx.rect(x,y,w,h); return; }
+    ctx.moveTo(x+r,y); ctx.lineTo(x+w,y); ctx.lineTo(x+w,y+h); ctx.lineTo(x+r,y+h);
+    ctx.arcTo(x,y+h,x,y+h-r,r); ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+  }
 
   async function fetchVPKlines(sym, tf){
     const cfg = VP_BASE_TF[tf];
@@ -35498,6 +35521,7 @@ drag = {
   function draw(ctx, cfg){
     if(!on()) return;
     const { view, x0, x1, y0, y1, min, max } = cfg;
+    const vpWin = cfg.win || {};
     if(!view || !view.length || min === undefined || max === undefined) return;
     const priceRange = max - min;
     if(priceRange <= 0) return;
@@ -35539,7 +35563,7 @@ drag = {
       else           { vaLo--; vaVol += buyB[vaLo]+sellB[vaLo]; }
     }
 
-    const vpW  = Math.min(150, Math.max(40, (x1-x0) * (state.widthPct||0.18)));
+    const vpW  = Math.min(220, Math.max(40, (x1-x0) * (state.widthPct||0.18)));
     const vpX0 = x1 - vpW;
     const chartRange  = max - min;
     const pricePerRow = vpRange / rows;
@@ -35562,10 +35586,57 @@ drag = {
     if(vpStableLevels.vah===null||Math.abs(newVah-vpStableLevels.vah)>hyst) vpStableLevels.vah=newVah;
     if(vpStableLevels.val===null||Math.abs(newVal-vpStableLevels.val)>hyst) vpStableLevels.val=newVal;
 
+    /* ── DVL Volume Memory (Beta 1.240): detecção de crescimento por EVENTOS.
+       Reutiliza buyB/sellB (não recalcula). Só detecta num range estável (sem
+       pan/zoom, com throttle) pra não confundir mudança de dado com mudança de
+       vista. Guarda os eventos por PREÇO, então o glow permanece no nível certo
+       mesmo depois de arrastar o gráfico. */
+    const vmEnabled = state.vmOn !== false;
+    let vmEvents = null; const vmDepth = vpMemDepth();
+    if(vmEnabled){
+      if(vpMem._sym!==sym || vpMem._tf!==curTF){ vpMem._sym=sym; vpMem._tf=curTF; vpMem.events=[]; vpMem.prevTot=null; vpMem.sig=""; }
+      const sig = [vpWin.start, vpWin.end, sym, curTF, rows].join("|");
+      const interacting = !!(typeof window!=="undefined" && window.__dvlChartInteracting);
+      const nowMs = (typeof performance!=="undefined" && performance.now) ? performance.now() : Date.now();
+      const sameView = (sig===vpMem.sig && vpMem.prevTot && vpMem.prevTot.length===rows);
+      if(sameView && !interacting && (nowMs - vpMemLastDetect) > 380){
+        vpMemLastDetect = nowMs;
+        const minPct = Math.max(0, Number(state.vmMinGrowth)||0)/100;
+        const minDelta = Number(state.vmMinDelta)>0 ? Number(state.vmMinDelta) : maxBucket*0.04;
+        let topI=-1, topD=0;
+        for(let i=0;i<rows;i++){
+          const cur=buyB[i]+sellB[i], prev=vpMem.prevTot[i], d=cur-prev;
+          if(d<minDelta) continue;
+          const pct = prev>0 ? d/prev : 1;
+          if(pct<minPct) continue;
+          if(d>topD){ topD=d; topI=i; }
+        }
+        if(topI>=0){
+          const gp = vpMin + (topI+0.5)*pricePerRow, tol = pricePerRow*0.75;
+          if(vpMem.events.length && Math.abs(vpMem.events[0].price-gp)<=tol){
+            vpMem.events[0].price = gp;                 // mesmo nível ainda crescendo → segue no topo
+          } else {
+            vpMem.events = vpMem.events.filter(e=>Math.abs(e.price-gp)>tol);
+            vpMem.events.unshift({price:gp});
+            if(vpMem.events.length>vmDepth) vpMem.events.length=vmDepth;
+          }
+        }
+        for(let i=0;i<rows;i++) vpMem.prevTot[i]=buyB[i]+sellB[i];
+      } else if(!sameView){
+        vpMem.sig = sig;
+        if(!vpMem.prevTot || vpMem.prevTot.length!==rows) vpMem.prevTot=new Float64Array(rows);
+        for(let i=0;i<rows;i++) vpMem.prevTot[i]=buyB[i]+sellB[i];
+      }
+      vmEvents = vpMem.events;
+    }
+    const vmGlow = Math.max(0.1, Math.min(1, Number(state.vmGlow)||0.85));
+    const vmColor = state.vmColor || "#ffe08a";
+    const colR = Math.max(0, Math.min(8, Number(state.colRadius)||0));
+
     ctx.save();
     try {
 
-    // ── Bars: split buy (direita) / sell (esquerda) ───────────────────────
+    // ── Bars: split buy (direita) / sell (esquerda) — cantos arredondados ──
     for(let i = 0; i < rows; i++){
       const total = buyB[i] + sellB[i];
       if(!total) continue;
@@ -35580,19 +35651,37 @@ drag = {
       const pyBot = y0 + (max - Math.max(priceLo, min)) / chartRange * (y1 - y0);
       const py  = pyTop;
       const bH  = Math.max(0.5, pyBot - pyTop);
+      const r   = Math.min(colR, bH/2, bw/2);
       const inVA  = i >= vaLo && i <= vaHi;
       ctx.globalAlpha = inVA ? op : op * 0.55;
-      // Sell (esquerda, vermelho)
+      // Sell (esquerda, vermelho) — ponta externa arredondada
       if(sellW > 0){
         ctx.fillStyle = cSell;
-        ctx.fillRect(x1 - bw, py, sellW, bH);
+        pathRoundLeft(ctx, x1 - bw, py, sellW, bH, r); ctx.fill();
       }
       // Buy (direita, verde — mais perto da escala)
       if(buyW > 0){
         ctx.fillStyle = cBuy;
-        ctx.fillRect(x1 - buyW, py, buyW, bH);
+        pathRoundLeft(ctx, x1 - buyW, py, buyW, bH, sellW>0?0:r); ctx.fill();
+      }
+      // ── Volume Memory glow: só na PONTA recém-crescida (borda externa) ──
+      if(vmEvents && vmEvents.length){
+        const pc = vpMin + (i+0.5)*pricePerRow;
+        let k=-1; for(let e=0;e<vmEvents.length;e++){ if(Math.abs(vmEvents[e].price-pc) <= pricePerRow*0.6){ k=e; break; } }
+        if(k>=0){
+          const inten = ((vmDepth - k)/vmDepth) * vmGlow;   // 5→1 (evento mais novo = mais forte)
+          const tipW = Math.min(bw, Math.max(4, bw*0.32));
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, 0.30 + 0.6*inten);
+          ctx.fillStyle = vmColor;
+          ctx.shadowColor = vmColor;
+          ctx.shadowBlur = 4 + 13*inten;
+          pathRoundLeft(ctx, x1 - bw, py, tipW, bH, r); ctx.fill();
+          ctx.restore();
+        }
       }
     }
+    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
 
     // ── POC ───────────────────────────────────────────────────────────────
@@ -35924,7 +36013,7 @@ drag = {
           <div class="dvl-vt-field"><label>Ativo</label><label class="dvl-switch"><input id="dvlVPOn" type="checkbox" ${state.on?"checked":""}><i></i><b></b></label></div>
           <div class="dvl-vt-field"><label>Labels</label><label class="dvl-switch"><input id="dvlVPLabels" type="checkbox" ${state.showLabels!==false?"checked":""}><i></i><b></b></label></div>
           <div class="dvl-vt-field"><label>Rows</label>${vpStepFld("dvlVPRows",Math.round(state.rows||120),20,500,10,0)}</div>
-          <div class="dvl-vt-field"><label>Largura %</label>${vpStepFld("dvlVPWPct",Math.round((state.widthPct||0.18)*100),5,40,1,0)}</div>
+          <div class="dvl-vt-field"><label>Largura %</label>${vpStepFld("dvlVPWPct",Math.round((state.widthPct||0.18)*100),5,60,1,0)}</div>
           <div class="dvl-vt-field"><label>Opacidade %</label>${vpStepFld("dvlVPOp",Math.round((state.opacity||0.46)*100),5,100,5,0)}</div>
           <div class="dvl-vt-field"><label>Value Area %</label>${vpStepFld("dvlVPVAPct",Math.round((state.valueAreaPct||0.70)*100),10,100,5,0)}</div>
           <div class="dvl-vt-field"><label>Preço no label</label><label class="dvl-switch"><input id="dvlVPLabelPrice" type="checkbox" ${state.labelPrice?"checked":""}><i></i><b></b></label></div>
@@ -36014,6 +36103,17 @@ drag = {
           <div class="dvl-vt-field"><label>Espessura</label>${vpStepFld("dvlVPWOn",(+state.onWidth||1.4),1,4,0.5,1)}</div>
         </div>
       </div>
+      <div class="dvl-vt-section">
+        <div class="dvl-vt-section-title"><span>DVL Volume Memory — glow de crescimento</span></div>
+        <div class="dvl-vt-grid">
+          <div class="dvl-vt-field"><label>Ativar</label><label class="dvl-switch"><input id="dvlVPVmOn" type="checkbox" ${state.vmOn!==false?"checked":""}><i></i><b></b></label></div>
+          <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label>Memory Depth</label>${vpDropFld("dvlVPVmDepth",[["3","3 eventos"],["5","5 eventos"],["10","10 eventos"]],String(vpMemDepth()))}</div>
+          <div class="dvl-vt-field"><label>Glow Strength %</label>${vpStepFld("dvlVPVmGlow",Math.round((state.vmGlow||0.85)*100),10,100,5,0)}</div>
+          ${cField("dvlVPCVm","Glow Color","vmColor")}
+          <div class="dvl-vt-field"><label>Minimum Growth %</label>${vpStepFld("dvlVPVmMinGrowth",Math.round(state.vmMinGrowth||8),0,100,1,0)}</div>
+          <div class="dvl-vt-field"><label>Corner Radius</label>${vpStepFld("dvlVPVmRadius",Math.round(state.colRadius||0),0,8,1,0)}</div>
+        </div>
+      </div>
     `;
 
     // Toggles
@@ -36038,10 +36138,14 @@ drag = {
     bSw("dvlVPOnPOC", v=>{state.onShowPOC=v;});
     bSw("dvlVPOnVAH", v=>{state.onShowVAH=v;});
     bSw("dvlVPOnVAL", v=>{state.onShowVAL=v;});
+    bSw("dvlVPVmOn",  v=>{state.vmOn=v; if(!v){vpMem.events=[];}});
     // Steppers
     const VP_STEP={
       dvlVPRows: v=>{state.rows=Math.max(20,Math.min(500,v));},
-      dvlVPWPct: v=>{state.widthPct=Math.max(0.05,Math.min(0.40,v/100));},
+      dvlVPWPct: v=>{state.widthPct=Math.max(0.05,Math.min(0.60,v/100));},
+      dvlVPVmGlow: v=>{state.vmGlow=Math.max(0.10,Math.min(1,v/100));},
+      dvlVPVmMinGrowth: v=>{state.vmMinGrowth=Math.max(0,Math.min(100,Math.round(v)));},
+      dvlVPVmRadius: v=>{state.colRadius=Math.max(0,Math.min(8,Math.round(v)));},
       dvlVPOp:   v=>{state.opacity=Math.max(0.05,Math.min(1,v/100));},
       dvlVPVAPct:v=>{state.valueAreaPct=Math.max(0.10,Math.min(1,v/100));},
       dvlVPWCur: v=>{state.lineWidthCur=Math.max(1,Math.min(4,v));},
@@ -36099,13 +36203,14 @@ drag = {
         if(btnId==="dvlVPStyleTrail"){state.trailStyle=val;}
         if(btnId==="dvlVPDevTF"){state.devTF=val;vpKCacheDev=null;vpStableLevelsDev={poc:null,vah:null,val:null,sym:null,tf:null};vpDevTrail=[];vpDevTrailKey="";}
         if(btnId==="dvlVPStyleOn"){state.onStyle=val;}
+        if(btnId==="dvlVPVmDepth"){state.vmDepth=Number(val)||5;}
         if(btnId==="dvlVPOnTZ"){state.onTZ=val;vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};}
         if(btnId==="dvlVPOnSess"){state.onSession=val;vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};}
         save();if(typeof drawSoon==="function")drawSoon();
       });
     });
     // Color palette
-    const VP_CLR={dvlVPCBuy:"colorBuy",dvlVPCSell:"colorSell",dvlVPCPOC:"colorPOC",dvlVPCVAH:"colorVAH",dvlVPCVAL:"colorVAL",dvlVPCS2POC:"s2colorPOC",dvlVPCS2VAH:"s2colorVAH",dvlVPCS2VAL:"s2colorVAL",dvlVPCDevPOC:"devColorPOC",dvlVPCDevVAH:"devColorVAH",dvlVPCDevVAL:"devColorVAL",dvlVPCTrail:"trailColor",dvlVPCOnPOC:"onColorPOC",dvlVPCOnVAH:"onColorVAH",dvlVPCOnVAL:"onColorVAL"};
+    const VP_CLR={dvlVPCBuy:"colorBuy",dvlVPCSell:"colorSell",dvlVPCPOC:"colorPOC",dvlVPCVAH:"colorVAH",dvlVPCVAL:"colorVAL",dvlVPCS2POC:"s2colorPOC",dvlVPCS2VAH:"s2colorVAH",dvlVPCS2VAL:"s2colorVAL",dvlVPCDevPOC:"devColorPOC",dvlVPCDevVAH:"devColorVAH",dvlVPCDevVAL:"devColorVAL",dvlVPCTrail:"trailColor",dvlVPCOnPOC:"onColorPOC",dvlVPCOnVAH:"onColorVAH",dvlVPCOnVAL:"onColorVAL",dvlVPCVm:"vmColor"};
     body.querySelectorAll(".dvl-feb-clr-swatch").forEach(btn=>{
       const key=VP_CLR[btn.id];if(!key)return;
       btn.addEventListener("click",()=>openVPPalette(btn,key));
