@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.254';
+window.DVL_APP_VERSION = 'Beta 1.255';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.255", note: "Tabela institucional do Smart Delta agora é RESPONSIVA. No MOBILE ela encolhe ao máximo pra não estorvar o gráfico: fonte menor, padding e largura mínimos (até ~56% da tela), rodapé abreviado (Conf/Cont/Exh) e cada linha só com rótulo + setinha (▲/▼) + tempo. No PC/desktop ela fica maior e mais completa — volta a mostrar a palavra Acima/Abaixo, o valor (ex.: 1.44B) e a distância % ao lado da setinha e do tempo, com fonte e espaçamento maiores pra leitura confortável. O toque numa linha continua abrindo o detalhe completo em qualquer tela. Só frontend." },
   { version: "Beta 1.254", note: "Tabela institucional do Smart Delta enxuta a pedido: cada linha agora mostra só RÓTULO + SETINHA (▲/▼) + TEMPO no estado. Removidos da linha a palavra 'Acima/Abaixo', o valor (ex.: 1.44B) e a distância % — o que importa na leitura rápida é a direção e há quanto tempo. O valor e o detalhe completo (valor, média, distância %, estado, duração, tendência) continuam a um TOQUE de distância: tocar na linha abre o mini-painel. Rodapé Confidence/Continuation/Exhaustion mantido. Só frontend." },
   { version: "Beta 1.253", note: "Tabela institucional do Smart Delta: leitura imediata ao carregar. Antes, logo após abrir, todas as linhas mostravam '– Média / 0c' mesmo com o valor claramente acima/abaixo da própria média — porque o estado só é CONFIRMADO no fechamento do candle (regra anti-flicker) e nenhum candle tinha fechado ainda desde que os dados carregaram. Agora, quando um estado é visto pela PRIMEIRA vez (símbolo|TF novo), ele já é semeado com o estado atual (Acima/Abaixo) na hora, em vez de esperar até 1 minuto no 1m. Estados já persistidos (ao recarregar) continuam intactos, mantendo a duração acumulada — o seed só vale pra estados realmente novos. Mudanças posteriores seguem exigindo confirmação no candle. Só frontend." },
   { version: "Beta 1.252", note: "Corrige a tabela institucional do Smart Delta que aparecia VAZIA (só cabeçalho + Confidence/Continuation/Exhaustion, sem as linhas Net Delta/Net Long/Net Short/OI/LSR). Eram dois problemas: (1) o leitor procurava um campo genérico 'value' que esses osciladores não têm — cada motor guarda o número no próprio campo (netDelta/netLong/netShort no Net*, close no OI, ratio no Long/Short); agora lê o campo certo por módulo. (2) os osciladores só buscavam dados quando LIGADOS no gráfico, então com eles desligados a tabela ficava sem fonte; adicionamos um método prime() que faz cada motor buscar seus dados em segundo plano (sem desenhar painel, sem ocupar espaço) e a tabela passa a preencher sozinha mesmo sem ligar OI/LSR/Net* na mão. OI é buscado primeiro (Net Delta/Long/Short derivam dele). Throttle de 8s por módulo + 45s de cache evita flood de rede; se a busca falhar (offline) não repete a cada segundo. Enquanto carrega, mostra 'carregando dados institucionais…' em vez de painel vazio. Continua sem recalcular nada (consome os motores existentes). Só frontend." },
@@ -31535,14 +31536,25 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     var s=L.s;
     var col=COL[s.cls]||COL.neutral; var hex="rgb("+col[0]+","+col[1]+","+col[2]+")";
     var ST=window.DVL_SMART_DELTA_STATE;
-    var head='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px"><b style="color:'+hex+'">SMART DELTA</b><span style="font-size:9px;color:'+hex+'">'+s.cls.toUpperCase()+' '+s.confidence+'</span></div>';
-    if(!ST){
+    var ST_null = !ST;
+    /* Beta 1.255 — tabela responsiva: MOBILE = mínima (rótulo + setinha + tempo),
+       fontes/padding/largura reduzidos ao máximo pra não estorvar o gráfico; PC =
+       maior e mais completa (rótulo + setinha + palavra + valor + distância + tempo). */
+    var isMobile = (typeof matchMedia!=="undefined" && matchMedia("(max-width:640px)").matches);
+    if(isMobile){
+      el.style.minWidth="0px"; el.style.maxWidth="min(56vw,220px)"; el.style.padding="4px 6px";
+      el.style.font="700 8.5px/1.32 -apple-system,Segoe UI,Roboto,sans-serif"; el.style.borderRadius="7px";
+    } else {
+      el.style.minWidth="244px"; el.style.maxWidth="360px"; el.style.padding="9px 12px";
+      el.style.font="700 11px/1.55 -apple-system,Segoe UI,Roboto,sans-serif"; el.style.borderRadius="10px";
+    }
+    var head='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:'+(isMobile?"2px":"5px")+'"><b style="color:'+hex+';font-size:'+(isMobile?"9px":"12px")+'">SMART DELTA</b><span style="font-size:'+(isMobile?"7.5px":"9.5px")+';color:'+hex+'">'+s.cls.toUpperCase()+' '+s.confidence+'</span></div>';
+    if(ST_null){
       var sign=s.delta>0?"+":"";
       el.innerHTML=head+'<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#7f9c8e">Delta</span><b style="color:'+hex+'">'+sign+s.delta+'</b></div>';
       el.style.display="block"; return;
     }
     var cfg=ST.cfg(), all=ST.getAll(), mods=ST.MODS;
-    var compact = cfg.mode==="compact" || (cfg.mode!=="detailed" && typeof matchMedia!=="undefined" && matchMedia("(max-width:640px)").matches);
     var collapsed = cfg.mode==="collapsed";
     var arr=function(rel){ return rel==="above"?"▲":(rel==="below"?"▼":"–"); };
     var rc=function(rel){ return rel==="above"?"#16c784":(rel==="below"?"#ff4a61":"#7f9c8e"); };
@@ -31551,17 +31563,24 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       for(var i=0;i<mods.length;i++){
         var m=mods[i]; if(cfg.modules && cfg.modules[m.k]===false) continue;
         var sn=all[m.k]; if(!sn||sn.value==null) continue;
-        var dur=ST.fmtDuration(sn);
-        /* Beta 1.254 — linha mínima: só rótulo + setinha (▲/▼) + tempo no estado.
-           Sem palavra Acima/Abaixo, sem valor, sem distância %. O valor/detalhe
-           completo continua a um toque de distância (abre o mini-painel). */
-        rows+='<div data-sd-mod="'+m.k+'" style="display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:2.5px 0;cursor:pointer"><span style="color:#9fb6ab">'+m.label+'</span><span style="color:'+rc(sn.relationToAverage)+';font-size:12px;line-height:1">'+arr(sn.relationToAverage)+'</span><span style="color:#8aa99b;text-align:right;min-width:50px">'+dur+'</span></div>';
+        var dur=ST.fmtDuration(sn), rel=sn.relationToAverage;
+        if(isMobile){
+          /* linha mínima: rótulo + setinha + tempo. Valor completo a um toque. */
+          rows+='<div data-sd-mod="'+m.k+'" style="display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:center;padding:1px 0;cursor:pointer"><span style="color:#9fb6ab">'+m.label+'</span><span style="color:'+rc(rel)+';font-size:10px;line-height:1">'+arr(rel)+'</span><span style="color:#8aa99b;text-align:right;white-space:nowrap">'+dur+'</span></div>';
+        } else {
+          var valTxt=ST.fmtVal(m,sn);
+          var dist=(sn.distanceFromAveragePercent>=0?"+":"")+sn.distanceFromAveragePercent.toFixed(2)+"%";
+          var word=(rel==="above"?"Acima":rel==="below"?"Abaixo":"Média");
+          rows+='<div data-sd-mod="'+m.k+'" style="display:grid;grid-template-columns:66px 74px 1fr auto;gap:8px;align-items:center;padding:2px 0;cursor:pointer"><span style="color:#9fb6ab">'+m.label+'</span><span style="color:'+rc(rel)+'">'+arr(rel)+' '+word+'</span><b style="color:#dcebe4">'+valTxt+' <span style="color:#7f9c8e;font-weight:600;font-size:9px">'+dist+'</span></b><span style="color:#8aa99b;text-align:right">'+dur+'</span></div>';
+        }
       }
     }
     if(!collapsed && rows===""){
-      rows='<div style="padding:4px 0;font-size:9px;color:#8aa99b">carregando dados institucionais…</div>';
+      rows='<div style="padding:'+(isMobile?"2px":"4px")+' 0;font-size:'+(isMobile?"8px":"9px")+';color:#8aa99b">carregando…</div>';
     }
-    var footer='<div style="margin-top:5px;padding-top:4px;border-top:1px solid rgba(129,166,151,.16);font-size:8.6px;color:#8aa99b">Confidence '+s.confidence+'% · Continuation '+s.continuation+'% · Exh '+s.exhaustion+'%</div>';
+    var footTxt = isMobile ? ('Conf '+s.confidence+' · Cont '+s.continuation+' · Exh '+s.exhaustion)
+                           : ('Confidence '+s.confidence+'% · Continuation '+s.continuation+'% · Exh '+s.exhaustion+'%');
+    var footer='<div style="margin-top:'+(isMobile?"3px":"6px")+';padding-top:'+(isMobile?"3px":"5px")+';border-top:1px solid rgba(129,166,151,.16);font-size:'+(isMobile?"7.5px":"9px")+';color:#8aa99b">'+footTxt+'</div>';
     el.innerHTML=head+rows+footer;
     el.style.display="block";
   }
