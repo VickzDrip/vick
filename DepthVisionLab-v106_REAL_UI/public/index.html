@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.251';
+window.DVL_APP_VERSION = 'Beta 1.252';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.252", note: "Corrige a tabela institucional do Smart Delta que aparecia VAZIA (só cabeçalho + Confidence/Continuation/Exhaustion, sem as linhas Net Delta/Net Long/Net Short/OI/LSR). Eram dois problemas: (1) o leitor procurava um campo genérico 'value' que esses osciladores não têm — cada motor guarda o número no próprio campo (netDelta/netLong/netShort no Net*, close no OI, ratio no Long/Short); agora lê o campo certo por módulo. (2) os osciladores só buscavam dados quando LIGADOS no gráfico, então com eles desligados a tabela ficava sem fonte; adicionamos um método prime() que faz cada motor buscar seus dados em segundo plano (sem desenhar painel, sem ocupar espaço) e a tabela passa a preencher sozinha mesmo sem ligar OI/LSR/Net* na mão. OI é buscado primeiro (Net Delta/Long/Short derivam dele). Throttle de 8s por módulo + 45s de cache evita flood de rede; se a busca falhar (offline) não repete a cada segundo. Enquanto carrega, mostra 'carregando dados institucionais…' em vez de painel vazio. Continua sem recalcular nada (consome os motores existentes). Só frontend." },
   { version: "Beta 1.251", note: "Tabela institucional do Smart Delta com TEMPO NO ESTADO. A tabela overlay agora mostra Net Delta, Net Long, Net Short, OI e LSR — cada um com estado (acima/abaixo da própria média), valor e HÁ QUANTO TEMPO está nesse estado (candles + tempo), além de Confidence/Continuation/Exhaustion no rodapé. Consome os osciladores já existentes (sem recalcular). Histerese (banda neutra) + confirmação no fechamento do candle evitam reset falso ao tocar a média; rastreia dois tempos independentes (estado vs média e tendência). Persiste por símbolo|timeframe (não mistura ativo/TF) e restaura ao recarregar. Toque numa linha abre um mini-painel com valor, média, distância %, estado, duração e tendência. Um ticker central único atualiza as durações (sem timer por linha). Novo bridge window.DVL_SMART_DELTA_STATE pra Copilot/Alerts consumirem o mesmo contexto temporal. Osciladores originais seguem funcionando. Só frontend." },
   { version: "Beta 1.250", note: "Volume Profile: (1) novo input 'Fonte dos textos (px)' em Geral pra controlar o tamanho da fonte de TODOS os labels do VP (POC/VAH/VAL e das demais sessões). (2) Nova sessão Previous Day (dia anterior): 3 linhas — PD POC, PD VAH e PD VAL — calculadas sobre o VP do dia anterior inteiro (00:00→24:00). Com liga/desliga por linha, cores próprias, estilo/espessura e timezone (UTC/Exchange/Local/NY/Bruxelas). Reaproveita o mesmo cálculo de VP das outras sessões. Só frontend." },
   { version: "Beta 1.249", note: "Ultra Low Latency (fase 1) — foco em TF baixo (1s–1m). O último preço vira prioridade e o desenho passa por um scheduler único de frame com GAP ADAPTATIVO: o app mede o custo real de cada render e ajusta a cadência sozinho (render rápido → até ~60fps; render pesado → recua pra não congelar), em vez do teto fixo de ~14fps. O último tick do WebSocket é sempre o que vale (os intermediários são descartados naturalmente entre frames). Adicionada instrumentação de performance (window.DVL_PERF: FPS, frame, render, latência do tick e atraso do WS) com um HUD opcional no canto (DVL_PERF_HUD(true) ou ?perf=1 na URL). Não altera nenhum indicador — só a cadência e a priorização do desenho. Só frontend." },
@@ -31557,6 +31558,9 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
         }
       }
     }
+    if(!collapsed && rows===""){
+      rows='<div style="padding:4px 0;font-size:9px;color:#8aa99b">carregando dados institucionais…</div>';
+    }
     var footer='<div style="margin-top:5px;padding-top:4px;border-top:1px solid rgba(129,166,151,.16);font-size:8.6px;color:#8aa99b">Confidence '+s.confidence+'% · Continuation '+s.continuation+'% · Exh '+s.exhaustion+'%</div>';
     el.innerHTML=head+rows+footer;
     el.style.display="block";
@@ -31655,11 +31659,11 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   if(window.DVL_SMART_DELTA_STATE) return;
   var STOR="dvl_sd_state_v1", CFG_STOR="dvl_sd_table_cfg_v1";
   var MODS=[
-    {k:"netDelta", label:"Net Delta", osc:"DVLNetDeltaOscillator",      fmt:"big"},
-    {k:"netLong",  label:"Net Long",  osc:"DVLNetLongOscillator",       fmt:"big"},
-    {k:"netShort", label:"Net Short", osc:"DVLNetShortOscillator",      fmt:"big"},
-    {k:"oi",       label:"OI",        osc:"DVLOpenInterestOscillator",  fmt:"big"},
-    {k:"lsr",      label:"LSR",       osc:"DVLLongShortOscillator",     fmt:"ratio"}
+    {k:"netDelta", label:"Net Delta", osc:"DVLNetDeltaOscillator",      fmt:"big",   field:"netDelta"},
+    {k:"netLong",  label:"Net Long",  osc:"DVLNetLongOscillator",       fmt:"big",   field:"netLong"},
+    {k:"netShort", label:"Net Short", osc:"DVLNetShortOscillator",      fmt:"big",   field:"netShort"},
+    {k:"oi",       label:"OI",        osc:"DVLOpenInterestOscillator",  fmt:"big",   field:"close"},
+    {k:"lsr",      label:"LSR",       osc:"DVLLongShortOscillator",     fmt:"ratio", field:"ratio"}
   ];
   var cfg={ confirm:"close", tolPct:0.15, maLen:20, durMode:"both", showTime:true, showCandles:true, showDist:true, mode:"detailed",
             modules:{netDelta:true,netLong:true,netShort:true,oi:true,lsr:true} };
@@ -31676,10 +31680,34 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   function candleTime(){ try{ if(typeof klines!=="undefined"&&klines&&klines.length) return +klines[klines.length-1].time; }catch(_){} return 0; }
   function sma(arr,n){ if(!arr||!arr.length) return null; var m=Math.min(n,arr.length),s=0,c=0; for(var i=arr.length-m;i<arr.length;i++){ var v=+arr[i]; if(isFinite(v)){s+=v;c++;} } return c?s/c:null; }
 
+  /* Cada oscilador guarda o valor num campo próprio (netDelta/netLong/netShort no
+     Net*, close no OI, ratio no Long/Short) — NÃO num campo genérico "value". Lê o
+     campo do módulo com fallback pros nomes usados pelos motores existentes. */
+  function readVal(x, field){
+    if(x==null) return NaN;
+    if(typeof x==="number") return x;
+    var cand=[field,"value","usd","ratio","close","v","longShortRatio"];
+    for(var j=0;j<cand.length;j++){ if(cand[j]==null) continue; var v=+x[cand[j]]; if(isFinite(v)) return v; }
+    return NaN;
+  }
+  /* Faz o motor buscar seus dados MESMO desligado (via método prime, adicionado aos
+     osciladores). Já tem dados frescos? não repete. O motor tem throttle de 45s no
+     sucesso; aqui limitamos a 1 tentativa/8s por módulo pra não floodar rede se a
+     busca falhar em sequência (ex.: offline). */
+  var _primeAt={};
+  function primeModule(m){
+    try{
+      var osc=window[m.osc]; if(!osc||typeof osc.prime!=="function") return;
+      var c=osc.cache, fresh=!!(c&&Array.isArray(c.data)&&c.data.length&&c.ts&&(Date.now()-c.ts<45000));
+      if(fresh) return;
+      var now=Date.now(), last=_primeAt[m.osc]||0; if(now-last<8000) return; _primeAt[m.osc]=now;
+      osc.prime();
+    }catch(_){}
+  }
   function readModule(m){
     try{
       var osc=window[m.osc]; var d=osc&&osc.cache&&osc.cache.data; if(!d||!d.length) return null;
-      var vals=[]; for(var i=0;i<d.length;i++){ var x=d[i]; var v=+((x&&x.value!=null)?x.value:x); if(isFinite(v)) vals.push(v); }
+      var vals=[]; for(var i=0;i<d.length;i++){ var v=readVal(d[i], m.field); if(isFinite(v)) vals.push(v); }
       if(!vals.length) return null;
       return {value:vals[vals.length-1], series:vals};
     }catch(_){ return null; }
@@ -31691,6 +31719,11 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   function tick(){
     var s=sym(),t=tf(),ct=candleTime(),now=Date.now();
     if(!s||!t) return;
+    /* garante que os motores tenham dados mesmo sem o indicador ligado no gráfico —
+       assim a tabela institucional aparece sem precisar ligar OI/LSR/Net* na mão.
+       OI primeiro: Net Delta/Long/Short derivam do OI já buscado. */
+    primeModule({osc:"DVLOpenInterestOscillator"});
+    for(var pi=0;pi<MODS.length;pi++){ if(MODS[pi].k!=="oi" && cfg.modules[MODS[pi].k]!==false) primeModule(MODS[pi]); }
     var newCandle = !!(ct && ct!==lastGlobalCandle); if(ct) lastGlobalCandle=ct;
     for(var i=0;i<MODS.length;i++){
       var m=MODS[i]; var rd=readModule(m); if(!rd||rd.value==null) continue;
@@ -32512,8 +32545,8 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     }catch(_){ return []; }
   }
 
-  async function ensureData(force=false){
-    if(!on()) return;
+  async function ensureData(force=false, allowOff=false){
+    if(!on() && !allowOff) return;
     const p = period();
     /* include the chart interval so switching TF always refetches — the MEXC
        OI candles are aggregated to the CHART timeframe, and two intervals can
@@ -33358,6 +33391,7 @@ drag = {
     openPanel:openPanel,
     close:closePanel,
     refresh:function(){ return ensureData(true); },
+    prime:function(){ return ensureData(false, true); },
     fitToCurrent,
     reset:fitToCurrent,
     get state(){ return Object.assign({}, state); },
@@ -33510,8 +33544,8 @@ if(state.center != null && !Number.isFinite(Number(state.center))) state.center 
     }catch(_){ return []; }
   }
 
-  async function ensureData(force=false){
-    if(!on()) return;
+  async function ensureData(force=false, allowOff=false){
+    if(!on() && !allowOff) return;
 
     const p = period();
     const mode = state.mode === "top" ? "top" : "global";
@@ -34255,6 +34289,7 @@ drag = {
     openPanel:openPanel,
     close:closePanel,
     refresh:function(){ return ensureData(true); },
+    prime:function(){ return ensureData(false, true); },
     fitToCurrent,
     reset:fitToCurrent,
     get state(){ return Object.assign({}, state); },
@@ -34449,8 +34484,8 @@ drag = {
     function on(){ return !!state.on; }
     function setOn(v){ state.on = !!v; save(); if(state.on) ensureData(true); }
 
-    async function ensureData(force){
-      if(!on()) return;
+    async function ensureData(force, allowOff){
+      if(!on() && !allowOff) return;
       const p = period();
       const key = ["binance", sym(), p].join("|");
       if(!force && CACHE.key === key && CACHE.data.length && Date.now() - CACHE.ts < 45000) return;
@@ -34668,6 +34703,7 @@ drag = {
       on, setOn, draw,
       open:openPanel, openPanel, close:closePanel,
       refresh:function(){ return ensureData(true); },
+      prime:function(){ return ensureData(false, true); },
       get state(){ return Object.assign({}, state); },
       get cache(){ return Object.assign({}, CACHE, { data:(CACHE.data||[]).slice() }); }
     };
