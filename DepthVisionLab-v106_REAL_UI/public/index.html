@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.257';
+window.DVL_APP_VERSION = 'Beta 1.258';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.258", note: "Contexto temporal institucional no Copilot (§13 do spec). O motor da tabela (DVL_SMART_DELTA_STATE) agora expõe getConfluence() e narrative(): a confluência de Net Delta/Net Long/Net Short/OI/LSR ordenada por HÁ MAIS TEMPO no estado, com viés compra/venda — sem recalcular nada. O Chat IA do Copilot passa a EXPLICAR essa ordem temporal: pergunte 'institucional', 'net delta', 'ordem temporal' ou toque no atalho 'Institucional' e ele responde algo como 'OI acima da média há 30m · LSR abaixo há 25m · Net Delta acima há 5m — viés institucional de compra', ajudando a ver se a confluência está nascendo, madura ou exausta. Mesmo bridge fica disponível pra Market Matrix/Alerts futuros. Só frontend." },
   { version: "Beta 1.257", note: "Tabela institucional do Smart Delta — modo de exibição e opacidade (§10 do spec). Novo seletor 'Exibição' na config: Auto (mobile mínima / PC completa, como estava), Detalhado (força a versão completa com palavra+valor+distância em qualquer tela), Compacto (força só setinha+tempo em qualquer tela) e Colapsado (só cabeçalho + rodapé Confidence/Continuation/Exh, sem linhas). Novo controle de Opacidade (0.4–1) pra tabela ficar mais translúcida e não tapar as velas. Usa uma chave nova (view) — quem já usava continua no Auto, sem regressão. Só frontend." },
   { version: "Beta 1.256", note: "Config da tabela institucional do Smart Delta: nova seção 'Tabela institucional (overlay)' dentro das configurações do indicador (toque no ⚙ / no item DVL Smart Delta). Dá pra ajustar: Confirmação (Fechamento do candle × Intrabar — quando o estado é confirmado, evitando reset falso), Banda neutra % (tolerância pra considerar 'na média' antes de virar Acima/Abaixo), Média (MA) usada como referência de cada módulo, e Duração exibida (Candles + tempo / só candles / só tempo). Também dá pra escolher quais Módulos aparecem (Net Delta, Net Long, Net Short, OI, LSR). Tudo aplica na hora e persiste (a config já era salva por trás; agora tem UI). Consome o motor de estado existente (DVL_SMART_DELTA_STATE) sem recalcular. Só frontend." },
   { version: "Beta 1.255", note: "Tabela institucional do Smart Delta agora é RESPONSIVA. No MOBILE ela encolhe ao máximo pra não estorvar o gráfico: fonte menor, padding e largura mínimos (até ~56% da tela), rodapé abreviado (Conf/Cont/Exh) e cada linha só com rótulo + setinha (▲/▼) + tempo. No PC/desktop ela fica maior e mais completa — volta a mostrar a palavra Acima/Abaixo, o valor (ex.: 1.44B) e a distância % ao lado da setinha e do tempo, com fonte e espaçamento maiores pra leitura confortável. O toque numa linha continua abrindo o detalhe completo em qualquer tela. Só frontend." },
@@ -31827,7 +31828,44 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   function fmtBig(v){ v=+v; if(!isFinite(v)) return "--"; var a=Math.abs(v),sg=v<0?"-":""; if(a>=1e9) return sg+(a/1e9).toFixed(2)+"B"; if(a>=1e6) return sg+(a/1e6).toFixed(2)+"M"; if(a>=1e3) return sg+(a/1e3).toFixed(2)+"K"; return sg+a.toFixed(2); }
   function fmtVal(m,sn){ if(m.fmt==="big") return fmtBig(sn.value); if(m.fmt==="ratio") return (+sn.value).toFixed(2); return (sn.value>0?"+":"")+Math.round(sn.value); }
 
-  window.DVL_SMART_DELTA_STATE={ MODS:MODS, getSnapshot:snapshot, getAll:getAll, cfg:function(){return cfg;}, setCfg:function(o){ Object.assign(cfg,o||{}); saveCfg(); }, saveCfg:saveCfg, fmtDur:fmtDur, fmtDuration:fmtDuration, fmtVal:fmtVal, fmtBig:fmtBig, tick:tick, reset:function(){ states={}; try{ localStorage.removeItem(STOR); }catch(_){} } };
+  /* ── Beta 1.258 — CONTEXTO TEMPORAL P/ COPILOT / ALERTS (§13) ─────────────
+     Expõe a confluência institucional já calculada (sem recalcular): cada módulo
+     com estado, há quanto tempo, tendência; ordenada por duração (o que está ativo
+     há mais tempo primeiro); + um viés compra/venda e uma narrativa em texto que o
+     Copilot usa pra EXPLICAR a ordem temporal da confluência. */
+  var _relWord={above:"acima",below:"abaixo",neutral:"na média"};
+  function getConfluence(){
+    var out={ symbol:sym(), tf:tf(), modules:[], biasScore:0, bias:"neutro", narrative:"" };
+    var all=getAll();
+    for(var i=0;i<MODS.length;i++){
+      var m=MODS[i]; if(cfg.modules && cfg.modules[m.k]===false) continue;
+      var sn=all[m.k]; if(!sn||sn.value==null) continue;
+      out.modules.push({ key:m.k, label:m.label, relation:sn.relationToAverage, stateMs:sn.stateMs, stateBars:sn.stateBars,
+        trend:sn.trend, trendMs:sn.trendMs, distancePct:sn.distanceFromAveragePercent, value:sn.value, average:sn.average });
+    }
+    /* ordena por há mais tempo no estado (só quem não está neutro conta na ordem) */
+    out.modules.sort(function(a,b){
+      var an=a.relation==="neutral"?-1:(a.stateMs||0), bn=b.relation==="neutral"?-1:(b.stateMs||0);
+      return bn-an;
+    });
+    /* viés simples: delta/long acima = compra; short acima = venda */
+    function lean(k,rel){ if(rel==="neutral") return 0; var s=rel==="above"?1:-1;
+      if(k==="netShort") return -s; return (k==="netDelta"||k==="netLong")?s:0; }
+    for(var j=0;j<out.modules.length;j++){ out.biasScore += lean(out.modules[j].key,out.modules[j].relation); }
+    out.bias = out.biasScore>0?"compra":(out.biasScore<0?"venda":"neutro");
+    var parts=out.modules.map(function(mm){
+      var w=_relWord[mm.relation]||"na média";
+      return mm.label+" "+w+(mm.relation!=="neutral"?" há "+fmtDur(mm.stateMs):"");
+    });
+    out.narrative = parts.length ? parts.join(" · ") : "";
+    return out;
+  }
+  /* narrativa curta pronta pro Copilot/Alerts explicarem sem recalcular */
+  function narrative(){ var c=getConfluence(); if(!c.modules.length) return "";
+    var viés = c.bias==="neutro" ? "sem viés institucional dominante" : ("viés institucional de "+c.bias);
+    return c.narrative + " — " + viés + "."; }
+
+  window.DVL_SMART_DELTA_STATE={ MODS:MODS, getSnapshot:snapshot, getAll:getAll, getConfluence:getConfluence, narrative:narrative, cfg:function(){return cfg;}, setCfg:function(o){ Object.assign(cfg,o||{}); saveCfg(); }, saveCfg:saveCfg, fmtDur:fmtDur, fmtDuration:fmtDuration, fmtVal:fmtVal, fmtBig:fmtBig, tick:tick, reset:function(){ states={}; try{ localStorage.removeItem(STOR); }catch(_){} } };
 })();
 </script>
 
@@ -56233,7 +56271,8 @@ function opp(p){var out=[];try{p.querySelectorAll("[data-dvl-cp-section='opportu
 function pm(p){var out=[];try{p.querySelectorAll("[data-dvl-cp-section='decision'] .dvlCp0986PMRow").forEach(function(r){var pair=r.querySelector(".dvlCp0986PMAssetName b"),stage=r.querySelector(".dvlCp0986PMStage b"),force=r.querySelector(".dvlCp0986PMForce b"),spike=r.querySelector(".dvlCp0986PMSpike b"),score=r.querySelector(".dvlCp0986PMConfTop b");if(pair)out.push({pair:(pair.textContent||"").trim(),stage:(stage?stage.textContent:""),force:(force?force.textContent:""),spike:(spike?spike.textContent:""),score:(score?score.textContent:"")})})}catch(_){}return out}
 function topLine(list){return list&&list.length?list.slice(0,3).map(function(x){return x.pair+" "+(x.side||"")+" "+(x.pct?x.pct+"%":"")+" · "+(x.age||"")}).join(" | "):"Ainda não encontrei uma lista ativa nesta tela."}
 function answer(q){var txt=norm(q),p=page()||document,ctx=live(),sym=(ctx&&ctx.symbol)||currentSymbol(),op=opp(p),pre=pm(p);if(!txt.trim())return"Pergunte sobre <b>Copilot, Scanner, Oportunidades, Pré-Momentum, Trade, Positions, Watchlist, indicadores ou tools</b>.";
-if(/(bot|automatic|automatico|automat|ordem|opera sozinho|executa|robo)/.test(txt))return"O <b>DVL BOT</b> está bloqueado. O Copilot explica leitura, risco e contexto, mas <b>não executa ordens</b>, não envia trades e não mexe em API automaticamente.";
+if(/(bot|automatic|automatico|automat|opera sozinho|executa|robo)/.test(txt))return"O <b>DVL BOT</b> está bloqueado. O Copilot explica leitura, risco e contexto, mas <b>não executa ordens</b>, não envia trades e não mexe em API automaticamente.";
+if(/(institucional|smart delta|net delta|net long|net short|ordem temporal|confluencia temporal|ha quanto tempo|quanto tempo o oi|tabela institucional)/.test(txt)){var SD=window.DVL_SMART_DELTA_STATE;var nar=(SD&&typeof SD.narrative==="function")?SD.narrative():"";if(nar)return"Leitura <b>institucional temporal</b> (Smart Delta) de <b>"+esc(sym)+"</b>: "+esc(nar)+" Quem está no estado há mais tempo aparece primeiro — ajuda a ver se a confluência está <b>nascendo</b>, <b>madura</b> ou possivelmente <b>exausta</b>. Não é ordem: é contexto.";return"A <b>tabela institucional</b> do Smart Delta mostra Net Delta, Net Long, Net Short, OI e LSR com <b>há quanto tempo</b> cada um está acima/abaixo da média. Ligue o indicador <b>DVL Smart Delta</b> pra eu ler a ordem temporal aqui.";}
 if(/(pre|pré|momentum|alinhando|confluencia|confluência|early|ficar de olho)/.test(txt)){var t=pre.length?pre.slice(0,3).map(function(x){return x.pair+" · "+x.stage+" · "+x.force+" · spike "+x.spike+" · "+x.score}).join(" | "):"sem leitura de Pré-Momentum ativa";return"O <b>Pré-Momentum</b> mostra ativos antes da confirmação. Usa confluência DVL: VT, SZ, CS, OI, LS e EX. Verde alinhado, amarelo neutro, vermelho contra. Agora: "+esc(t)+". É observação antecipada, não entrada."}
 if(/(oportunidade|top 3|sinal|tempo|agora|ja foi|já foi|atrasad|fresco|velho)/.test(txt))return"Em <b>Oportunidades da IA</b>, o campo <b>Tempo</b> mostra se o sinal está fresco ou atrasado. 'agora' é recente; 2m/5m ainda merece observação; tempo alto ou antigo pede cuidado contra FOMO. Top atual: "+esc(topLine(op));
 if(/(scanner|scan|filtro|rank|ranking|status)/.test(txt))return"O <b>Scanner</b> ranqueia ativos por força, limpeza e tempo do spike. Use idade do sinal junto com status: limpo, formando, acúmulo, pré-break ou observar. Ele acha foco; a entrada precisa de confirmação no gráfico.";
@@ -56244,7 +56283,7 @@ if(/(indicador|volume trace|spike zone|spike zones|open interest|\boi\b|lsr|long
 if(/(tool|tools|desenho|regua|régua|linha|retangulo|retângulo|texto|seta|long|short)/.test(txt))return"As <b>Tools</b> marcam leitura no gráfico: linha, retângulo, texto, seta, régua e Long/Short. Seleciona a ferramenta, usa o crosshair, clica para iniciar e clica para finalizar, sem invadir escala.";
 if(/(risco|fomo|perigo|evitar|nao operar|não operar|armadilha|fake)/.test(txt))return"Para evitar FOMO: confira <b>Tempo</b> do sinal, confluência mínima 3/6, candle confirmando e spike ainda fresco. Sinal antigo com preço já andando muito vira risco alto.";
 var c=ctx?("Contexto atual: <b>"+esc(ctx.symbol)+"</b>, "+esc(ctx.title||"leitura neutra")+", score "+esc(ctx.score||"-")+"/10. "):"";return c+"Posso responder sobre <b>Copilot, Oportunidades, Pré-Momentum, Scanner, Trade, Positions, Watchlist, indicadores e tools</b>. Pergunte: 'esse sinal ainda vale?', 'como usar o Pré-Momentum?' ou 'o que significa 5/6?'."}
-function html(){return '<section class="dvlCp0976Panel dvlCp0988ChatPanel" data-dvl-cp-section="ai-chat" data-dvl-cp-section-version="0988"><div class="dvlCp0988ChatHead"><i class="dvlCp0988ChatIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.8" y="6.8" width="14.4" height="11" rx="4"/><path d="M12 6.8V4.4"/><circle cx="12" cy="3.7" r="1"/><circle cx="9.2" cy="12" r="1"/><circle cx="14.8" cy="12" r="1"/><path d="M9.8 15c1.25.8 3.15.8 4.4 0"/><path d="M19.2 11h1.3M3.5 11h1.3"/></g></svg></i><div class="dvlCp0988ChatTitle"><b>Chat IA DVL</b><span>Pergunte sobre qualquer painel, indicador ou função do site</span></div><span class="dvlCp0988ChatChip">Site helper</span></div><div class="dvlCp0988ChatMsgs" data-dvl-ai-chat-msgs><div class="dvlCp0988Msg is-bot">Sou o <b>Chat IA do DVL</b>. Pergunte sobre Oportunidades, Pré-Momentum, Scanner, Trade, Positions, Watchlist, indicadores ou tools.</div></div><div class="dvlCp0988Quick"><button type="button" data-dvl-ai-chat-q="Como usar o Pré-Momentum?">Pré-Momentum</button><button type="button" data-dvl-ai-chat-q="O sinal das oportunidades ainda vale?">Tempo do sinal</button><button type="button" data-dvl-ai-chat-q="O bot opera sozinho?">Bot</button><button type="button" data-dvl-ai-chat-q="Explique os indicadores alinhados">Indicadores</button></div><div class="dvlCp0988Composer"><input class="dvlCp0988Input" data-dvl-ai-chat-input type="text" autocomplete="off" autocapitalize="sentences" placeholder="Pergunte sobre o DVL..."/><button class="dvlCp0988Send" type="button" data-dvl-ai-chat-send>Enviar</button></div><div class="dvlCp0988ChatFoot"><span>Respostas locais sobre o site. Sem enviar ordens.</span><b>Bot bloqueado</b></div></section>'}
+function html(){return '<section class="dvlCp0976Panel dvlCp0988ChatPanel" data-dvl-cp-section="ai-chat" data-dvl-cp-section-version="0988"><div class="dvlCp0988ChatHead"><i class="dvlCp0988ChatIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.8" y="6.8" width="14.4" height="11" rx="4"/><path d="M12 6.8V4.4"/><circle cx="12" cy="3.7" r="1"/><circle cx="9.2" cy="12" r="1"/><circle cx="14.8" cy="12" r="1"/><path d="M9.8 15c1.25.8 3.15.8 4.4 0"/><path d="M19.2 11h1.3M3.5 11h1.3"/></g></svg></i><div class="dvlCp0988ChatTitle"><b>Chat IA DVL</b><span>Pergunte sobre qualquer painel, indicador ou função do site</span></div><span class="dvlCp0988ChatChip">Site helper</span></div><div class="dvlCp0988ChatMsgs" data-dvl-ai-chat-msgs><div class="dvlCp0988Msg is-bot">Sou o <b>Chat IA do DVL</b>. Pergunte sobre Oportunidades, Pré-Momentum, Scanner, Trade, Positions, Watchlist, indicadores ou tools.</div></div><div class="dvlCp0988Quick"><button type="button" data-dvl-ai-chat-q="Leitura institucional temporal">Institucional</button><button type="button" data-dvl-ai-chat-q="Como usar o Pré-Momentum?">Pré-Momentum</button><button type="button" data-dvl-ai-chat-q="O sinal das oportunidades ainda vale?">Tempo do sinal</button><button type="button" data-dvl-ai-chat-q="Explique os indicadores alinhados">Indicadores</button></div><div class="dvlCp0988Composer"><input class="dvlCp0988Input" data-dvl-ai-chat-input type="text" autocomplete="off" autocapitalize="sentences" placeholder="Pergunte sobre o DVL..."/><button class="dvlCp0988Send" type="button" data-dvl-ai-chat-send>Enviar</button></div><div class="dvlCp0988ChatFoot"><span>Respostas locais sobre o site. Sem enviar ordens.</span><b>Bot bloqueado</b></div></section>'}
 function addMsg(panel,cls,content){var box=panel.querySelector("[data-dvl-ai-chat-msgs]");if(!box)return;var div=document.createElement("div");div.className="dvlCp0988Msg "+cls;div.innerHTML=content;box.appendChild(div);while(box.children.length>8)box.removeChild(box.firstElementChild);box.scrollTop=box.scrollHeight}
 function send(panel,q){q=String(q||"").trim();if(!q)return;addMsg(panel,"is-user",esc(q));addMsg(panel,"is-bot",answer(q));var inp=panel.querySelector("[data-dvl-ai-chat-input]");if(inp)inp.value=""}
 function bind(panel){if(!panel||panel.dataset.dvlAiChatBound0988)return;panel.dataset.dvlAiChatBound0988="1";panel.addEventListener("click",function(ev){var quick=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-ai-chat-q]"):null;if(quick){send(panel,quick.getAttribute("data-dvl-ai-chat-q")||quick.textContent);return}var btn=ev.target&&ev.target.closest?ev.target.closest("[data-dvl-ai-chat-send]"):null;if(btn){var inp=panel.querySelector("[data-dvl-ai-chat-input]");send(panel,inp?inp.value:"")}},true);var inp=panel.querySelector("[data-dvl-ai-chat-input]");if(inp)inp.addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();send(panel,inp.value)}},true)}
