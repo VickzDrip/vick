@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.242';
+window.DVL_APP_VERSION = 'Beta 1.243';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.243", note: "DVL Volume Memory agora tem HISTÓRICO e não some ao recarregar: o glow passou a degradar por TEMPO (janela configurável, padrão 10 min) em vez de sumir em ~2s, e o mapa é salvo no navegador e RESTAURADO ao recarregar a página (mostrando o crescimento dos últimos ~10 min na hora). A config 'Memory Depth' virou 'Histórico (min)' com 3/5/10/20 min. Também adicionei tons de AZUL na paleta de cores do VP (servem pra Buy, Sell e todos os níveis). Só frontend." },
   { version: "Beta 1.242", note: "DVL Volume Memory agora é um MAPA CONTÍNUO: em vez de acender só 1 coluna por evento, ele marca TODAS as colunas que recebem volume novo e vai apagando conforme o volume cessa (frescor decai por ciclo; Memory Depth = quantos ciclos até apagar). E o glow passa a ter COR POR LADO: verde quando o volume novo foi majoritariamente comprador (agressor de compra) e vermelho quando foi vendedor — usando o buyVolume (taker buy) da Binance, o mesmo dado do CVD/Delta. Novo toggle 'Cor por lado (compra/venda)' (ligado por padrão); desligado, usa a Glow Color neutra. Continua reutilizando os buckets do VP, sem recalcular, sem flicker. Só frontend." },
   { version: "Beta 1.241", note: "Cor do glow do DVL Volume Memory trocada: era âmbar (#ffe08a), que se confundia com a linha dourada do POC. Agora o padrão é ciano elétrico (#35e0ff), que contrasta com as barras verde/vermelho e com o POC. Quem estava no padrão antigo é migrado automaticamente; cor personalizada é preservada. Dá pra mudar em Volume Profile → DVL Volume Memory → Glow Color. Só frontend." },
   { version: "Beta 1.240", note: "Volume Profile mais profissional + novo DVL Volume Memory (só apresentação — os cálculos do VP não mudaram). (1) Colunas mais robustas: largura vai até 60% (cap maior) e cantos levemente arredondados na ponta externa (Corner Radius). (2) DVL Volume Memory: quando um nível recebe volume NOVO relevante, só a ponta recém-crescida acende um glow; o glow degrada por EVENTOS de crescimento (nível 5→4→3→2→cor base), criando uma memória visual dos últimos crescimentos. Se o MESMO nível continua crescendo, ele segue no topo (não reinicia). Filtro anti-ruído (Minimum Growth %) e Memory Depth (3/5/10 eventos). Reutiliza os buckets do VP (sem recalcular), detecta só em range estável (ignora pan/zoom) e sem flicker. Novas configs: Ativar, Memory Depth, Glow Strength, Glow Color, Minimum Growth, Corner Radius. Só frontend." },
@@ -35141,7 +35142,7 @@ drag = {
     onStyle: 'dashed', onWidth: 1.4,
     // Beta 1.240 — colunas robustas + DVL Volume Memory
     colRadius: 2,
-    vmOn: true, vmDepth: 5, vmGlow: 0.85, vmColor: "#35e0ff",
+    vmOn: true, vmDepth: 10, vmGlow: 0.85, vmColor: "#35e0ff",
     vmMinGrowth: 8, vmMinDelta: 0, vmBySide: true
   };
 
@@ -35188,9 +35189,29 @@ drag = {
      crescimento em outro nível empurra os anteriores um passo abaixo até voltar
      à cor base. Se o MESMO nível continua crescendo, ele segue no topo. */
   let vpMem = { sig:"", prevBuy:null, prevSell:null, fresh:[], _sym:"", _tf:"" };
-  let vpMemLastDetect = 0;
+  let vpMemLastDetect = 0, vpMemLastSave = 0;
   try{ window.__DVL_VP_MEM = vpMem; }catch(_){}
-  function vpMemDepth(){ var d=Number(state.vmDepth)||5; return d===3||d===10?d:5; }
+  // Beta 1.243 — janela de HISTÓRICO em minutos (o glow persiste e degrada por TEMPO).
+  function vpMemWinMin(){ var d=Number(state.vmDepth)||10; return (d===3||d===5||d===10||d===20)?d:10; }
+  const VP_MEM_STOR = "dvl_vp_mem_v1";
+  function vpMemSave(sym,tf){
+    try{
+      const now=Date.now(), winMs=vpMemWinMin()*60000;
+      const fresh=vpMem.fresh.filter(e=>e&&isFinite(e.price)&&isFinite(e.t)&&(now-e.t)<winMs)
+        .map(e=>({price:e.price,t:e.t,side:e.side,mag:e.mag}));
+      localStorage.setItem(VP_MEM_STOR, JSON.stringify({sym,tf,at:now,fresh}));
+    }catch(_){}
+  }
+  function vpMemLoad(sym,tf){
+    try{
+      const o=JSON.parse(localStorage.getItem(VP_MEM_STOR)||"null");
+      if(!o||o.sym!==sym||o.tf!==tf||!Array.isArray(o.fresh)) return [];
+      const now=Date.now(), winMs=vpMemWinMin()*60000;
+      return o.fresh.filter(e=>e&&isFinite(e.price)&&isFinite(e.t)&&(now-e.t)<winMs)
+        .map(e=>({price:+e.price,t:+e.t,side:+e.side||0,mag:+e.mag||0}));
+    }catch(_){ return []; }
+  }
+  try{ window.addEventListener("beforeunload", function(){ try{ if(vpMem._sym) vpMemSave(vpMem._sym, vpMem._tf); }catch(_){} }, {passive:true}); }catch(_){}
   function pathRoundLeft(ctx,x,y,w,h,r){
     r=Math.max(0,Math.min(r||0,h/2,w/2));
     ctx.beginPath();
@@ -35600,10 +35621,14 @@ drag = {
        espalhado pelas colunas e vai apagando conforme o volume novo cessa.
        Guarda por PREÇO, então o mapa segue os níveis mesmo ao arrastar. */
     const vmEnabled = state.vmOn !== false;
-    let vmFresh = null; const vmDepth = vpMemDepth();
+    let vmFresh = null; const vmWinMs = vpMemWinMin()*60000;
     const vmBySide = state.vmBySide !== false;
+    const vmNowT = Date.now();
     if(vmEnabled){
-      if(vpMem._sym!==sym || vpMem._tf!==curTF){ vpMem._sym=sym; vpMem._tf=curTF; vpMem.fresh=[]; vpMem.prevBuy=null; vpMem.prevSell=null; vpMem.sig=""; }
+      if(vpMem._sym!==sym || vpMem._tf!==curTF){
+        vpMem._sym=sym; vpMem._tf=curTF; vpMem.prevBuy=null; vpMem.prevSell=null; vpMem.sig="";
+        vpMem.fresh = vpMemLoad(sym, curTF);   // restaura histórico persistido (< janela) ao trocar/abrir
+      }
       const sig = [vpWin.start, vpWin.end, sym, curTF, rows].join("|");
       const interacting = !!(typeof window!=="undefined" && window.__dvlChartInteracting);
       const nowMs = (typeof performance!=="undefined" && performance.now) ? performance.now() : Date.now();
@@ -35612,8 +35637,6 @@ drag = {
         vpMemLastDetect = nowMs;
         const minPct = Math.max(0, Number(state.vmMinGrowth)||0)/100;
         const minDelta = Number(state.vmMinDelta)>0 ? Number(state.vmMinDelta) : maxBucket*0.03;
-        const decay = 1/vmDepth;
-        for(let e=0;e<vpMem.fresh.length;e++) vpMem.fresh[e].f -= decay;   // decai 1 ciclo
         const tol = pricePerRow*0.6;
         for(let i=0;i<rows;i++){
           const db=buyB[i]-vpMem.prevBuy[i], ds=sellB[i]-vpMem.prevSell[i], d=db+ds;
@@ -35624,12 +35647,14 @@ drag = {
           const side = db>ds?1:(ds>db?-1:0);        // lado que trouxe o volume NOVO
           const gp = vpMin + (i+0.5)*pricePerRow;
           let ex=null; for(let e=0;e<vpMem.fresh.length;e++){ if(Math.abs(vpMem.fresh[e].price-gp)<=tol){ ex=vpMem.fresh[e]; break; } }
-          if(ex){ ex.f=1; ex.side=side; ex.price=gp; ex.mag=d; }
-          else vpMem.fresh.push({price:gp, f:1, side:side, mag:d});
+          if(ex){ ex.t=vmNowT; ex.side=side; ex.price=gp; ex.mag=d; }
+          else vpMem.fresh.push({price:gp, t:vmNowT, side:side, mag:d});
         }
-        vpMem.fresh = vpMem.fresh.filter(e=>e.f>0.02);
-        if(vpMem.fresh.length>80){ vpMem.fresh.sort((a,b)=>b.f-a.f); vpMem.fresh.length=80; }
+        // degrada por TEMPO: solta o que passou da janela
+        vpMem.fresh = vpMem.fresh.filter(e=>(vmNowT - e.t) < vmWinMs);
+        if(vpMem.fresh.length>240){ vpMem.fresh.sort((a,b)=>b.t-a.t); vpMem.fresh.length=240; }
         for(let i=0;i<rows;i++){ vpMem.prevBuy[i]=buyB[i]; vpMem.prevSell[i]=sellB[i]; }
+        if(nowMs - vpMemLastSave > 2000){ vpMemLastSave=nowMs; vpMemSave(sym, curTF); }   // persiste (throttle 2s)
       } else if(!sameView){
         vpMem.sig = sig;
         if(!vpMem.prevBuy || vpMem.prevBuy.length!==rows){ vpMem.prevBuy=new Float64Array(rows); vpMem.prevSell=new Float64Array(rows); }
@@ -35640,6 +35665,16 @@ drag = {
     const vmGlow = Math.max(0.1, Math.min(1, Number(state.vmGlow)||0.85));
     const vmColor = state.vmColor || "#35e0ff";
     const colR = Math.max(0, Math.min(8, Number(state.colRadius)||0));
+    // índice bucket→entrada (O(1) na hora de desenhar; a busca linear seria pesada)
+    let vmFreshIdx = null;
+    if(vmFresh && vmFresh.length){
+      vmFreshIdx = {};
+      for(let e=0;e<vmFresh.length;e++){
+        const en=vmFresh[e]; const bi=Math.round((en.price - vpMin)/pricePerRow - 0.5);
+        if(bi<0||bi>=rows) continue;
+        const cur=vmFreshIdx[bi]; if(!cur || en.t>cur.t) vmFreshIdx[bi]=en;
+      }
+    }
 
     ctx.save();
     try {
@@ -35672,21 +35707,23 @@ drag = {
         ctx.fillStyle = cBuy;
         pathRoundLeft(ctx, x1 - buyW, py, buyW, bH, sellW>0?0:r); ctx.fill();
       }
-      // ── Volume Memory glow: ponta recém-crescida, cor por lado (compra/venda) ──
-      if(vmFresh && vmFresh.length){
-        const pc = vpMin + (i+0.5)*pricePerRow;
-        let fe=null; for(let e=0;e<vmFresh.length;e++){ if(Math.abs(vmFresh[e].price-pc) <= pricePerRow*0.6){ fe=vmFresh[e]; break; } }
-        if(fe && fe.f>0.02){
-          const inten = Math.max(0,Math.min(1,fe.f)) * vmGlow;
-          const gcol = vmBySide ? (fe.side>0?cBuy:(fe.side<0?cSell:vmColor)) : vmColor;
-          const tipW = Math.min(bw, Math.max(4, bw*0.34));
-          ctx.save();
-          ctx.globalAlpha = Math.min(1, 0.28 + 0.62*inten);
-          ctx.fillStyle = gcol;
-          ctx.shadowColor = gcol;
-          ctx.shadowBlur = 4 + 13*inten;
-          pathRoundLeft(ctx, x1 - bw, py, tipW, bH, r); ctx.fill();
-          ctx.restore();
+      // ── Volume Memory glow: ponta recém-crescida, cor por lado, fade por TEMPO ──
+      if(vmFreshIdx){
+        const fe = vmFreshIdx[i];
+        if(fe){
+          const f = Math.max(0, Math.min(1, 1 - (vmNowT - fe.t)/vmWinMs));   // frescor = quão recente foi o crescimento
+          if(f>0.02){
+            const inten = f * vmGlow;
+            const gcol = vmBySide ? (fe.side>0?cBuy:(fe.side<0?cSell:vmColor)) : vmColor;
+            const tipW = Math.min(bw, Math.max(4, bw*0.34));
+            ctx.save();
+            ctx.globalAlpha = Math.min(1, 0.28 + 0.62*inten);
+            ctx.fillStyle = gcol;
+            ctx.shadowColor = gcol;
+            ctx.shadowBlur = 4 + 13*inten;
+            pathRoundLeft(ctx, x1 - bw, py, tipW, bH, r); ctx.fill();
+            ctx.restore();
+          }
         }
       }
     }
@@ -35972,6 +36009,7 @@ drag = {
   const VP_LABEL_OPTS=[["full","Full"],["short","Short"],["price","Price Only"],["hidden","Hidden"]];
   const VP_PALETTE=["#10df77","#13dc8d","#2ee6a6","#a7f542","#f3c768","#ffcf5a",
                     "#ff9f43","#ff4a61","#ff3037","#ff6b8f","#b86cff","#9a5cff",
+                    "#38e0ff","#3fa9ff","#1e6bff","#2a4bff","#7fb8ff","#00c2d1",
                     "#ffffff","#c9f7de","#ffd700","#c0c0c0"];
   function openVPPalette(btn,key){
     document.querySelectorAll(".dvl-feb-pal").forEach(p=>p.remove());
@@ -36117,7 +36155,7 @@ drag = {
         <div class="dvl-vt-grid">
           <div class="dvl-vt-field"><label>Ativar</label><label class="dvl-switch"><input id="dvlVPVmOn" type="checkbox" ${state.vmOn!==false?"checked":""}><i></i><b></b></label></div>
           <div class="dvl-vt-field"><label>Cor por lado (compra/venda)</label><label class="dvl-switch"><input id="dvlVPVmBySide" type="checkbox" ${state.vmBySide!==false?"checked":""}><i></i><b></b></label></div>
-          <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label>Memory Depth (ciclos)</label>${vpDropFld("dvlVPVmDepth",[["3","3 ciclos"],["5","5 ciclos"],["10","10 ciclos"]],String(vpMemDepth()))}</div>
+          <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label>Histórico (min)</label>${vpDropFld("dvlVPVmDepth",[["3","3 min"],["5","5 min"],["10","10 min"],["20","20 min"]],String(vpMemWinMin()))}</div>
           <div class="dvl-vt-field"><label>Glow Strength %</label>${vpStepFld("dvlVPVmGlow",Math.round((state.vmGlow||0.85)*100),10,100,5,0)}</div>
           ${cField("dvlVPCVm","Glow Color (neutro)","vmColor")}
           <div class="dvl-vt-field"><label>Minimum Growth %</label>${vpStepFld("dvlVPVmMinGrowth",Math.round(state.vmMinGrowth||8),0,100,1,0)}</div>
@@ -36214,7 +36252,7 @@ drag = {
         if(btnId==="dvlVPStyleTrail"){state.trailStyle=val;}
         if(btnId==="dvlVPDevTF"){state.devTF=val;vpKCacheDev=null;vpStableLevelsDev={poc:null,vah:null,val:null,sym:null,tf:null};vpDevTrail=[];vpDevTrailKey="";}
         if(btnId==="dvlVPStyleOn"){state.onStyle=val;}
-        if(btnId==="dvlVPVmDepth"){state.vmDepth=Number(val)||5;}
+        if(btnId==="dvlVPVmDepth"){state.vmDepth=Number(val)||10;}
         if(btnId==="dvlVPOnTZ"){state.onTZ=val;vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};}
         if(btnId==="dvlVPOnSess"){state.onSession=val;vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};}
         save();if(typeof drawSoon==="function")drawSoon();
