@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.247';
+window.DVL_APP_VERSION = 'Beta 1.248';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.248", note: "O glow do Volume Memory agora vem por padrão com as cores de compra/venda (verde comprador / vermelho vendedor). Migração única liga o 'Cor por lado' pra quem estava com ele desligado; dá pra desligar de novo depois (volta pra Glow Color neutra). Só frontend." },
   { version: "Beta 1.247", note: "Volume Memory: o glow agora é pintado pela FORÇA do fluxo. A cor continua indicando o lado (verde comprador / vermelho vendedor), mas a intensidade do brilho passa a refletir o quão UNILATERAL foi o fluxo naquele nível — fluxo bem de um lado só = glow forte; fluxo equilibrado = quase apagado. Assim só os níveis com força de verdade se destacam. Só frontend." },
   { version: "Beta 1.246", note: "Volume Memory agora acompanha o MOVIMENTO ao vivo. Antes o gatilho do glow era relativo ao POC (volume acumulado de horas), então o fluxo que entra em tempo real — minúsculo perto do POC — quase nunca acendia. Agora a referência é o volume NOVO de cada ciclo: acende os níveis que estão absorvendo o fluxo agora (verde comprador / vermelho vendedor), atualizando ~4,5x por segundo. A config 'Minimum Growth %' virou 'Sensibilidade % (fluxo)' = fração mínima do fluxo do ciclo pra um nível acender (menor = mais sensível; padrão 5%). Continua reutilizando os buckets do VP, com histórico por tempo e persistência. Só frontend." },
   { version: "Beta 1.245", note: "Preço em tempo real muito mais fluido (essencial pra TF baixo). Causa do 'salto': a linha/etiqueta de preço usava o ticker, que só era atualizado por REST a cada ~2s — então o preço pulava de 2 em 2 segundos. Agora: (1) a linha de preço usa o close da vela em formação (atualizado por WebSocket), não o ticker lento; (2) adicionei um stream @aggTrade que traz CADA negócio e move o preço/vela em tempo real entre as mensagens de kline; (3) o render ao vivo ficou um pouco mais fluido (~14fps). O @kline continua como fonte autoritativa de OHLC/volume no fechamento. Só frontend." },
@@ -35197,6 +35198,10 @@ drag = {
   // Beta 1.241 — nova cor padrão do glow (o âmbar conflitava com o POC dourado).
   // Migra quem ainda estava no âmbar; preserva cor personalizada.
   if(!state.vmColor || state.vmColor==="#ffe08a") state.vmColor="#35e0ff";
+  // Beta 1.248 — o glow deve vir por padrão com as cores de compra/venda. Migração
+  // ÚNICA: liga "Cor por lado" pra quem estava com ela desligada; depois disso o
+  // usuário pode desligar de novo normalmente (a flag impede re-migrar).
+  if(state.__vmBySideMig!==1){ state.vmBySide=true; state.__vmBySideMig=1; try{ localStorage.setItem(STOR_KEY, JSON.stringify(state)); }catch(_){} }
 
   function save(){ try{ localStorage.setItem(STOR_KEY, JSON.stringify(state)); }catch(_){} }
   function on(){ return !!state.on; }
