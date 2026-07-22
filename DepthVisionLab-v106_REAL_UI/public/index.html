@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.244';
+window.DVL_APP_VERSION = 'Beta 1.245';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.245", note: "Preço em tempo real muito mais fluido (essencial pra TF baixo). Causa do 'salto': a linha/etiqueta de preço usava o ticker, que só era atualizado por REST a cada ~2s — então o preço pulava de 2 em 2 segundos. Agora: (1) a linha de preço usa o close da vela em formação (atualizado por WebSocket), não o ticker lento; (2) adicionei um stream @aggTrade que traz CADA negócio e move o preço/vela em tempo real entre as mensagens de kline; (3) o render ao vivo ficou um pouco mais fluido (~14fps). O @kline continua como fonte autoritativa de OHLC/volume no fechamento. Só frontend." },
   { version: "Beta 1.244", note: "Correção do glow do Volume Memory quando o profile usa uma COR ÚNICA (Buy e Sell na mesma cor): antes o glow saía exatamente na cor da barra e se fundia nela, parecendo que não funcionava. Agora o núcleo do glow é sempre uma versão mais clara (mistura pro branco) da cor, então ele salta mesmo em profile monocromático; o halo mantém a cor original (verde/vermelho no modo por lado, ou a Glow Color neutra). Só frontend." },
   { version: "Beta 1.243", note: "DVL Volume Memory agora tem HISTÓRICO e não some ao recarregar: o glow passou a degradar por TEMPO (janela configurável, padrão 10 min) em vez de sumir em ~2s, e o mapa é salvo no navegador e RESTAURADO ao recarregar a página (mostrando o crescimento dos últimos ~10 min na hora). A config 'Memory Depth' virou 'Histórico (min)' com 3/5/10/20 min. Também adicionei tons de AZUL na paleta de cores do VP (servem pra Buy, Sell e todos os níveis). Só frontend." },
   { version: "Beta 1.242", note: "DVL Volume Memory agora é um MAPA CONTÍNUO: em vez de acender só 1 coluna por evento, ele marca TODAS as colunas que recebem volume novo e vai apagando conforme o volume cessa (frescor decai por ciclo; Memory Depth = quantos ciclos até apagar). E o glow passa a ter COR POR LADO: verde quando o volume novo foi majoritariamente comprador (agressor de compra) e vermelho quando foi vendedor — usando o buyVolume (taker buy) da Binance, o mesmo dado do CVD/Delta. Novo toggle 'Cor por lado (compra/venda)' (ligado por padrão); desligado, usa a Glow Color neutra. Continua reutilizando os buckets do VP, sem recalcular, sem flicker. Só frontend." },
@@ -19134,6 +19135,7 @@ async function loadAll(silent=false){
     drawSoon();
     if(typeof _klWsConnect==='function') _klWsConnect();
     if(typeof _nnWsConnect==='function') _nnWsConnect();
+    if(typeof _agWsConnect==='function') _agWsConnect();
     try{if(window.DVL_PAPER_TRADING_V2_PRO&&typeof window.DVL_PAPER_TRADING_V2_PRO.render==='function')window.DVL_PAPER_TRADING_V2_PRO.render();}catch(_){}
 
     /* ── 2) SIDE DATA (real ticker + OI + LSR) ── best-effort, applied when it
@@ -20598,7 +20600,11 @@ if(window.DVLSpikeZonesDraw){
   const lastVisible = view.at(-1);
   // Current price line must stay anchored to the real/latest price,
   // even when the user pans backward through historical candles.
-  const currentMarketPrice = Number(ticker?.lastPrice || marketEntryPrice || klines.at(-1)?.close || lastVisible.close);
+  // Beta 1.245 — usa o close da vela em formação (atualizado por WS/@aggTrade em
+  // tempo real) ANTES do ticker (que só é atualizado por REST a cada ~2s), pra o
+  // preço/linha andarem fluido em TF baixo em vez de saltar de 2 em 2 segundos.
+  const currentMarketPrice = Number((klines.length ? klines[klines.length-1].close : 0) || ticker?.lastPrice || marketEntryPrice || lastVisible.close);
+  try{ window.__dvlLiveChartPrice = currentMarketPrice; }catch(_){}
   const last = currentMarketPrice;
   const ly = y(last);
 
@@ -21846,7 +21852,7 @@ setupChartMiniControls();
 let __dvlLiveRenderTimer1204 = 0;
 let __dvlLiveRenderPending1204 = false;
 let __dvlLiveRenderLast1204 = 0;
-const __DVL_LIVE_RENDER_GAP_1204 = 90;
+const __DVL_LIVE_RENDER_GAP_1204 = 70;   // Beta 1.245 — um pouco mais fluido (≈14fps) pra TF baixo
 
 function __dvlFlushLiveRender1204(force){
   if(document.hidden){ __dvlLiveRenderPending1204 = true; return; }
@@ -22090,6 +22096,43 @@ function _klWsConnect(){
 
 _klWsConnect();
 setInterval(_klWsConnect, 10000);
+
+// ── Beta 1.245 — Live price por TRADE (@aggTrade): fluidez em TF baixo ──────
+// O @kline atualiza a vela em lotes; o @aggTrade traz CADA negócio, então o
+// preço e a linha andam em tempo real em vez de saltar de 2 em 2s (o ticker era
+// REST a cada ~2s). Atualiza close/high/low da vela em formação e agenda um
+// render (throttle interno). O @kline continua como fonte autoritativa no
+// fechamento (OHLC/volume).
+let _agWs=null, _agSym=null, _agLastPub=0, _agLastHdr=0;
+function _agWsConnect(){
+  const s=(symbol||'BTCUSDT').toUpperCase();
+  if(_agSym===s && _agWs && _agWs.readyState<2) return;
+  if(_agWs){ try{ _agWs.close(); }catch(_){} _agWs=null; }
+  _agSym=s;
+  try{
+    _agWs=new WebSocket('wss://fstream.binance.com/ws/'+s.toLowerCase()+'@aggTrade');
+    _agWs.onmessage=ev=>{
+      try{
+        const d=JSON.parse(ev.data);
+        if(d.e!=='aggTrade' || d.s!==(symbol||'BTCUSDT').toUpperCase()) return;
+        const p=+d.p; if(!(p>0) || !klines.length) return;
+        const last=klines[klines.length-1];
+        last.close=p;
+        if(p>last.high) last.high=p;
+        if(p<last.low)  last.low=p;
+        marketEntryPrice=p;
+        const now=Date.now();
+        if(els && els.lastPrice && now-_agLastHdr>100){ _agLastHdr=now; try{ els.lastPrice.textContent=fmtPrice(p); }catch(_){} }
+        if(now-_agLastPub>120){ _agLastPub=now; publishDvlChartPrice1204(p,'aggtrade-ws',now); }
+        requestLiveChartRender(false);   // render com throttle (~70ms)
+      }catch(_){}
+    };
+    _agWs.onerror=()=>{};
+    _agWs.onclose=()=>{ _agWs=null; };
+  }catch(_){}
+}
+_agWsConnect();
+setInterval(_agWsConnect, 10000);
 
 // ── Live candle para TFs não-nativos (WS do intervalo base) ─────────────────
 let _nnWs=null, _nnWsSym=null, _nnWsBase=null;
