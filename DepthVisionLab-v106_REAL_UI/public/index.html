@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.246';
+window.DVL_APP_VERSION = 'Beta 1.247';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.247", note: "Volume Memory: o glow agora é pintado pela FORÇA do fluxo. A cor continua indicando o lado (verde comprador / vermelho vendedor), mas a intensidade do brilho passa a refletir o quão UNILATERAL foi o fluxo naquele nível — fluxo bem de um lado só = glow forte; fluxo equilibrado = quase apagado. Assim só os níveis com força de verdade se destacam. Só frontend." },
   { version: "Beta 1.246", note: "Volume Memory agora acompanha o MOVIMENTO ao vivo. Antes o gatilho do glow era relativo ao POC (volume acumulado de horas), então o fluxo que entra em tempo real — minúsculo perto do POC — quase nunca acendia. Agora a referência é o volume NOVO de cada ciclo: acende os níveis que estão absorvendo o fluxo agora (verde comprador / vermelho vendedor), atualizando ~4,5x por segundo. A config 'Minimum Growth %' virou 'Sensibilidade % (fluxo)' = fração mínima do fluxo do ciclo pra um nível acender (menor = mais sensível; padrão 5%). Continua reutilizando os buckets do VP, com histórico por tempo e persistência. Só frontend." },
   { version: "Beta 1.245", note: "Preço em tempo real muito mais fluido (essencial pra TF baixo). Causa do 'salto': a linha/etiqueta de preço usava o ticker, que só era atualizado por REST a cada ~2s — então o preço pulava de 2 em 2 segundos. Agora: (1) a linha de preço usa o close da vela em formação (atualizado por WebSocket), não o ticker lento; (2) adicionei um stream @aggTrade que traz CADA negócio e move o preço/vela em tempo real entre as mensagens de kline; (3) o render ao vivo ficou um pouco mais fluido (~14fps). O @kline continua como fonte autoritativa de OHLC/volume no fechamento. Só frontend." },
   { version: "Beta 1.244", note: "Correção do glow do Volume Memory quando o profile usa uma COR ÚNICA (Buy e Sell na mesma cor): antes o glow saía exatamente na cor da barra e se fundia nela, parecendo que não funcionava. Agora o núcleo do glow é sempre uma versão mais clara (mistura pro branco) da cor, então ele salta mesmo em profile monocromático; o halo mantém a cor original (verde/vermelho no modo por lado, ou a Glow Color neutra). Só frontend." },
@@ -35243,7 +35244,7 @@ drag = {
     try{
       const now=Date.now(), winMs=vpMemWinMin()*60000;
       const fresh=vpMem.fresh.filter(e=>e&&isFinite(e.price)&&isFinite(e.t)&&(now-e.t)<winMs)
-        .map(e=>({price:e.price,t:e.t,side:e.side,mag:e.mag}));
+        .map(e=>({price:e.price,t:e.t,side:e.side,mag:e.mag,force:e.force}));
       localStorage.setItem(VP_MEM_STOR, JSON.stringify({sym,tf,at:now,fresh}));
     }catch(_){}
   }
@@ -35253,7 +35254,7 @@ drag = {
       if(!o||o.sym!==sym||o.tf!==tf||!Array.isArray(o.fresh)) return [];
       const now=Date.now(), winMs=vpMemWinMin()*60000;
       return o.fresh.filter(e=>e&&isFinite(e.price)&&isFinite(e.t)&&(now-e.t)<winMs)
-        .map(e=>({price:+e.price,t:+e.t,side:+e.side||0,mag:+e.mag||0}));
+        .map(e=>({price:+e.price,t:+e.t,side:+e.side||0,mag:+e.mag||0,force:(isFinite(+e.force)?+e.force:1)}));
     }catch(_){ return []; }
   }
   try{ window.addEventListener("beforeunload", function(){ try{ if(vpMem._sym) vpMemSave(vpMem._sym, vpMem._tf); }catch(_){} }, {passive:true}); }catch(_){}
@@ -35700,10 +35701,12 @@ drag = {
             if(d<=floor) continue;
             if(d < shareTh*cycleNew) continue;          // recebeu fração relevante do fluxo do ciclo
             const side = db>ds?1:(ds>db?-1:0);          // lado que trouxe o volume NOVO
+            // Beta 1.247 — FORÇA do fluxo no nível: quão unilateral foi (0=equilíbrio, 1=um lado só)
+            const force = (db+ds)>0 ? Math.abs(db-ds)/(db+ds) : 0;
             const gp = vpMin + (i+0.5)*pricePerRow;
             let ex=null; for(let e=0;e<vpMem.fresh.length;e++){ if(Math.abs(vpMem.fresh[e].price-gp)<=tol){ ex=vpMem.fresh[e]; break; } }
-            if(ex){ ex.t=vmNowT; ex.side=side; ex.price=gp; ex.mag=d; }
-            else vpMem.fresh.push({price:gp, t:vmNowT, side:side, mag:d});
+            if(ex){ ex.t=vmNowT; ex.side=side; ex.price=gp; ex.mag=d; ex.force=force; }
+            else vpMem.fresh.push({price:gp, t:vmNowT, side:side, mag:d, force:force});
           }
         }
         // degrada por TEMPO: solta o que passou da janela
@@ -35768,13 +35771,17 @@ drag = {
         const fe = vmFreshIdx[i];
         if(fe){
           const f = Math.max(0, Math.min(1, 1 - (vmNowT - fe.t)/vmWinMs));   // frescor = quão recente foi o crescimento
-          if(f>0.02){
-            const inten = f * vmGlow;
+          // Beta 1.247 — pinta pela FORÇA: o glow acende na medida do quão
+          // unilateral foi o fluxo (força 0=equilíbrio → quase apagado; 1=um lado
+          // só → glow forte). Recência só faz esmaecer com o tempo.
+          const force = (typeof fe.force==='number') ? Math.max(0, Math.min(1, fe.force)) : 1;
+          const inten = f * vmGlow * (0.12 + 0.88*force);
+          if(inten>0.03){
             const gbase = vmBySide ? (fe.side>0?cBuy:(fe.side<0?cSell:vmColor)) : vmColor;
             const gcol = vpLighten(gbase, 0.45);   // núcleo mais claro → salta mesmo em profile de cor única
             const tipW = Math.min(bw, Math.max(4, bw*0.34));
             ctx.save();
-            ctx.globalAlpha = Math.min(1, 0.34 + 0.6*inten);
+            ctx.globalAlpha = Math.min(1, 0.30 + 0.65*inten);
             ctx.fillStyle = gcol;
             ctx.shadowColor = gbase;
             ctx.shadowBlur = 5 + 14*inten;
