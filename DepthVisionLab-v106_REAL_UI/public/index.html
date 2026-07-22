@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.249';
+window.DVL_APP_VERSION = 'Beta 1.250';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.250", note: "Volume Profile: (1) novo input 'Fonte dos textos (px)' em Geral pra controlar o tamanho da fonte de TODOS os labels do VP (POC/VAH/VAL e das demais sessões). (2) Nova sessão Previous Day (dia anterior): 3 linhas — PD POC, PD VAH e PD VAL — calculadas sobre o VP do dia anterior inteiro (00:00→24:00). Com liga/desliga por linha, cores próprias, estilo/espessura e timezone (UTC/Exchange/Local/NY/Bruxelas). Reaproveita o mesmo cálculo de VP das outras sessões. Só frontend." },
   { version: "Beta 1.249", note: "Ultra Low Latency (fase 1) — foco em TF baixo (1s–1m). O último preço vira prioridade e o desenho passa por um scheduler único de frame com GAP ADAPTATIVO: o app mede o custo real de cada render e ajusta a cadência sozinho (render rápido → até ~60fps; render pesado → recua pra não congelar), em vez do teto fixo de ~14fps. O último tick do WebSocket é sempre o que vale (os intermediários são descartados naturalmente entre frames). Adicionada instrumentação de performance (window.DVL_PERF: FPS, frame, render, latência do tick e atraso do WS) com um HUD opcional no canto (DVL_PERF_HUD(true) ou ?perf=1 na URL). Não altera nenhum indicador — só a cadência e a priorização do desenho. Só frontend." },
   { version: "Beta 1.248", note: "O glow do Volume Memory agora vem por padrão com as cores de compra/venda (verde comprador / vermelho vendedor). Migração única liga o 'Cor por lado' pra quem estava com ele desligado; dá pra desligar de novo depois (volta pra Glow Color neutra). Só frontend." },
   { version: "Beta 1.247", note: "Volume Memory: o glow agora é pintado pela FORÇA do fluxo. A cor continua indicando o lado (verde comprador / vermelho vendedor), mas a intensidade do brilho passa a refletir o quão UNILATERAL foi o fluxo naquele nível — fluxo bem de um lado só = glow forte; fluxo equilibrado = quase apagado. Assim só os níveis com força de verdade se destacam. Só frontend." },
@@ -35231,6 +35232,12 @@ drag = {
     onShowPOC: true, onShowVAH: true, onShowVAL: true,
     onColorPOC: "#c08bff", onColorVAH: "#9a6cff", onColorVAL: "#7a4fff",
     onStyle: 'dashed', onWidth: 1.4,
+    // Beta 1.250 — tamanho da fonte dos labels + sessão Previous Day (dia anterior)
+    labelFontPx: 8,
+    pdOn: false, pdTZ: 'UTC',
+    pdShowPOC: true, pdShowVAH: true, pdShowVAL: true,
+    pdColorPOC: "#ffa94d", pdColorVAH: "#ffd08a", pdColorVAL: "#ff924d",
+    pdStyle: 'dashed', pdWidth: 1.4,
     // Beta 1.240 — colunas robustas + DVL Volume Memory
     colRadius: 2,
     vmOn: true, vmDepth: 10, vmGlow: 0.85, vmColor: "#35e0ff",
@@ -35497,6 +35504,44 @@ drag = {
     return {klines:null, w, key};
   }
 
+  // ── Previous Day Profile (Beta 1.250) — VP do DIA ANTERIOR (00:00→24:00) ──
+  function vpPrevDayTZ(){
+    const z=state.pdTZ||'UTC';
+    if(z==='UTC'||z==='Exchange') return 'UTC';
+    if(z==='Local'){ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'; }catch(_){ return 'UTC'; } }
+    return z;
+  }
+  function vpPrevDayWindow(){
+    const tz=vpPrevDayTZ();
+    const now=Date.now(), p=vpTzParts(tz,now);
+    const todayStart=vpTzLocalToTs(tz,p.y,p.mo,p.d,0,0);   // hoje 00:00 (tz)
+    const yp=vpTzParts(tz, todayStart-3600000);            // 1h antes → ontem (robusto a DST)
+    const start=vpTzLocalToTs(tz,yp.y,yp.mo,yp.d,0,0);     // ontem 00:00
+    const end=todayStart;                                  // ontem 24:00 = hoje 00:00
+    return {start,end,tz};
+  }
+  let vpKCachePD=null, vpKFetchingPD=false;
+  let vpStableLevelsPD={poc:null,vah:null,val:null,key:null};
+  function resolveVPKlinesPrevDay(sym){
+    sym=sym||'';
+    const w=vpPrevDayWindow();
+    const baseTF=vpOvernightBaseTF(w.end-w.start);   // ~24h → 15m
+    const key=sym+'|PD|'+w.start+'|'+w.end+'|'+baseTF;
+    const now=Date.now();
+    const fresh=vpKCachePD && vpKCachePD.key===key && (now-vpKCachePD.ts)<120000;   // dia fechado → cache longo
+    if(!fresh && !vpKFetchingPD && sym){
+      vpKFetchingPD=true;
+      fetchVPRange(sym, baseTF, w.start, w.end).then(kl=>{
+        const filt=(kl||[]).filter(c=>c.time>=w.start && c.time<w.end);
+        vpKCachePD={key, klines:filt, ts:Date.now(), w};
+        vpKFetchingPD=false;
+        if(filt.length && typeof drawSoon==='function') drawSoon();
+      }).catch(()=>{ vpKFetchingPD=false; });
+    }
+    if(vpKCachePD && vpKCachePD.key===key && vpKCachePD.klines.length) return {klines:vpKCachePD.klines, w, key};
+    return {klines:null, w, key};
+  }
+
   // ── Volume Profile computation (triangular close-peaked) ─────────────────
   function computeVP(view, priceMin, priceMax, rows){
     const buy  = new Float64Array(rows);
@@ -35610,6 +35655,8 @@ drag = {
     return p.toPrecision(4);
   }
   // Retorna o texto do label conforme o modo, ou null se não deve mostrar.
+  // Beta 1.250 — tamanho da fonte dos labels do VP (configurável)
+  function vpLabelFont(){ var s=Math.max(6,Math.min(20,+state.labelFontPx||8)); return "700 "+s+"px system-ui"; }
   function vpLevelLabel(shortName, price){
     if(state.showLabels === false) return null;
     const m = state.labelMode || 'short';
@@ -35854,7 +35901,7 @@ drag = {
       const _lPOC = vpLevelLabel("POC", vpStableLevels.poc);
       if(_lPOC){
         ctx.fillStyle    = state.colorPOC || "#f3c768";
-        ctx.font         = "700 7.5px system-ui";
+        ctx.font         = vpLabelFont();
         ctx.textAlign    = "right";
         ctx.textBaseline = "bottom";
         ctx.globalAlpha  = 0.9;
@@ -35873,7 +35920,7 @@ drag = {
       const _lVAH = vpLevelLabel("VAH", vpStableLevels.vah);
       if(_lVAH){
         ctx.fillStyle    = state.colorVAH || "#13dc8d";
-        ctx.font         = "700 7.5px system-ui";
+        ctx.font         = vpLabelFont();
         ctx.textAlign    = "right";
         ctx.textBaseline = "bottom";
         ctx.globalAlpha  = 0.9;
@@ -35892,7 +35939,7 @@ drag = {
       const _lVAL = vpLevelLabel("VAL", vpStableLevels.val);
       if(_lVAL){
         ctx.fillStyle    = state.colorVAL || "#ff4a61";
-        ctx.font         = "700 7.5px system-ui";
+        ctx.font         = vpLabelFont();
         ctx.textAlign    = "right";
         ctx.textBaseline = "top";
         ctx.globalAlpha  = 0.9;
@@ -35959,7 +36006,7 @@ drag = {
           const _lPOC2 = vpLevelLabel("POC·2", vpStableLevels2.poc);
           if(_lPOC2){
             ctx.fillStyle    = state.s2colorPOC || "#ffd700";
-            ctx.font         = "700 7.5px system-ui";
+            ctx.font         = vpLabelFont();
             ctx.textAlign    = "left";
             ctx.textBaseline = "bottom";
             ctx.globalAlpha  = 0.9;
@@ -35977,7 +36024,7 @@ drag = {
           const _lVAH2 = vpLevelLabel("VAH·2", vpStableLevels2.vah);
           if(_lVAH2){
             ctx.fillStyle    = state.s2colorVAH || "#00e5cc";
-            ctx.font         = "700 7.5px system-ui";
+            ctx.font         = vpLabelFont();
             ctx.textAlign    = "left";
             ctx.textBaseline = "bottom";
             ctx.globalAlpha  = 0.9;
@@ -35995,7 +36042,7 @@ drag = {
           const _lVAL2 = vpLevelLabel("VAL·2", vpStableLevels2.val);
           if(_lVAL2){
             ctx.fillStyle    = state.s2colorVAL || "#b44fff";
-            ctx.font         = "700 7.5px system-ui";
+            ctx.font         = vpLabelFont();
             ctx.textAlign    = "left";
             ctx.textBaseline = "top";
             ctx.globalAlpha  = 0.9;
@@ -36048,7 +36095,7 @@ drag = {
               ctx.strokeStyle=color; ctx.lineWidth=dW; ctx.setLineDash(dDash);
               ctx.beginPath(); ctx.moveTo(x0,yy); ctx.lineTo(x1,yy); ctx.stroke(); ctx.setLineDash([]);
               const l=vpLevelLabel(name, price);
-              if(l){ ctx.fillStyle=color; ctx.font="700 7.5px system-ui"; ctx.textAlign="right"; ctx.textBaseline=baseline; ctx.globalAlpha=0.9; ctx.fillText(l, x1-2, yy); ctx.globalAlpha=1; }
+              if(l){ ctx.fillStyle=color; ctx.font=vpLabelFont(); ctx.textAlign="right"; ctx.textBaseline=baseline; ctx.globalAlpha=0.9; ctx.fillText(l, x1-2, yy); ctx.globalAlpha=1; }
             };
             drawDevLine(state.devShowPOC, state.devColorPOC||"#38e0ff", vpStableLevelsDev.poc, "D-POC", "bottom");
             drawDevLine(state.devShowVAH, state.devColorVAH||"#7ad7ff", vpStableLevelsDev.vah, "D-VAH", "bottom");
@@ -36084,11 +36131,47 @@ drag = {
               ctx.strokeStyle=color; ctx.lineWidth=oW; ctx.setLineDash(oDash);
               ctx.beginPath(); ctx.moveTo(x0,yy); ctx.lineTo(x1,yy); ctx.stroke(); ctx.setLineDash([]);
               const l=vpLevelLabel(name, price);
-              if(l){ ctx.fillStyle=color; ctx.font="700 7.5px system-ui"; ctx.textAlign="left"; ctx.textBaseline=baseline; ctx.globalAlpha=0.9; ctx.fillText(l, x0+40, yy); ctx.globalAlpha=1; }
+              if(l){ ctx.fillStyle=color; ctx.font=vpLabelFont(); ctx.textAlign="left"; ctx.textBaseline=baseline; ctx.globalAlpha=0.9; ctx.fillText(l, x0+40, yy); ctx.globalAlpha=1; }
             };
             drawOnLine(state.onShowPOC, state.onColorPOC||"#c08bff", vpStableLevelsON.poc, "O-POC", "bottom");
             drawOnLine(state.onShowVAH, state.onColorVAH||"#9a6cff", vpStableLevelsON.vah, "O-VAH", "bottom");
             drawOnLine(state.onShowVAL, state.onColorVAL||"#7a4fff", vpStableLevelsON.val, "O-VAL", "top");
+          }
+        }
+      }
+    }
+
+    // ── Previous Day Profile (Beta 1.250) — PD POC / PD VAH / PD VAL ─────────
+    if(state.pdOn){
+      const pd=resolveVPKlinesPrevDay(sym);
+      const pView=pd.klines;
+      if(pView && pView.length){
+        let pMin=Infinity,pMax=-Infinity;
+        for(const c of pView){ if(+c.low<pMin)pMin=+c.low; if(+c.high>pMax)pMax=+c.high; }
+        if(isFinite(pMin) && isFinite(pMax) && pMax>pMin){
+          const pad=(pMax-pMin)*0.005; pMin-=pad; pMax+=pad;
+          const pc=computeVP(pView, pMin, pMax, rows);
+          const va=vpValueArea(pc.buy, pc.sell, rows, state.valueAreaPct||0.70);
+          if(va){
+            const ppr=(pMax-pMin)/rows;
+            if(vpStableLevelsPD.key!==pd.key){ vpStableLevelsPD={poc:null,vah:null,val:null,key:pd.key}; }
+            const hy=ppr*1.5;
+            const nP=pMin+(va.pocIdx+0.5)*ppr, nH=pMin+(va.hi+1)*ppr, nL=pMin+va.lo*ppr;
+            if(vpStableLevelsPD.poc===null||Math.abs(nP-vpStableLevelsPD.poc)>hy) vpStableLevelsPD.poc=nP;
+            if(vpStableLevelsPD.vah===null||Math.abs(nH-vpStableLevelsPD.vah)>hy) vpStableLevelsPD.vah=nH;
+            if(vpStableLevelsPD.val===null||Math.abs(nL-vpStableLevelsPD.val)>hy) vpStableLevelsPD.val=nL;
+            const pW=Math.max(1,+state.pdWidth||1.4), pDash=vpDashFor(state.pdStyle||'dashed', pW);
+            const drawPdLine=(show,color,price,name,baseline)=>{
+              if(show===false || !(price>0)) return;
+              const yy=rowP(price);
+              ctx.strokeStyle=color; ctx.lineWidth=pW; ctx.setLineDash(pDash);
+              ctx.beginPath(); ctx.moveTo(x0,yy); ctx.lineTo(x1,yy); ctx.stroke(); ctx.setLineDash([]);
+              const l=vpLevelLabel(name, price);
+              if(l){ ctx.fillStyle=color; ctx.font=vpLabelFont(); ctx.textAlign="left"; ctx.textBaseline=baseline; ctx.globalAlpha=0.92; ctx.fillText(l, x0+3, yy); ctx.globalAlpha=1; }
+            };
+            drawPdLine(state.pdShowPOC, state.pdColorPOC||"#ffa94d", vpStableLevelsPD.poc, "PD POC", "bottom");
+            drawPdLine(state.pdShowVAH, state.pdColorVAH||"#ffd08a", vpStableLevelsPD.vah, "PD VAH", "bottom");
+            drawPdLine(state.pdShowVAL, state.pdColorVAL||"#ff924d", vpStableLevelsPD.val, "PD VAL", "top");
           }
         }
       }
@@ -36176,6 +36259,7 @@ drag = {
           <div class="dvl-vt-field"><label>Largura %</label>${vpStepFld("dvlVPWPct",Math.round((state.widthPct||0.18)*100),5,60,1,0)}</div>
           <div class="dvl-vt-field"><label>Opacidade %</label>${vpStepFld("dvlVPOp",Math.round((state.opacity||0.46)*100),5,100,5,0)}</div>
           <div class="dvl-vt-field"><label>Value Area %</label>${vpStepFld("dvlVPVAPct",Math.round((state.valueAreaPct||0.70)*100),10,100,5,0)}</div>
+          <div class="dvl-vt-field"><label>Fonte dos textos (px)</label>${vpStepFld("dvlVPLabelFont",Math.round(state.labelFontPx||8),6,20,1,0)}</div>
           <div class="dvl-vt-field"><label>Preço no label</label><label class="dvl-switch"><input id="dvlVPLabelPrice" type="checkbox" ${state.labelPrice?"checked":""}><i></i><b></b></label></div>
           <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label style="white-space:nowrap">Label</label>${vpDropFld("dvlVPLabelMode",VP_LABEL_OPTS,(state.labelMode||'short'))}</div>
           <div class="dvl-vt-field" style="grid-column:1/-1;flex-direction:column;align-items:flex-start;gap:4px"><label style="white-space:nowrap">Timeframe do VP</label>${vpDropFld("dvlVPTF",VP_TF_OPTS.map(o=>[o.v,o.l]),(state.vpTF||'visible'))}</div>
@@ -36264,6 +36348,21 @@ drag = {
         </div>
       </div>
       <div class="dvl-vt-section">
+        <div class="dvl-vt-section-title"><span>Previous Day — dia anterior (PD POC/VAH/VAL)</span></div>
+        <div class="dvl-vt-grid">
+          <div class="dvl-vt-field"><label>Ativo</label><label class="dvl-switch"><input id="dvlVPPdOn" type="checkbox" ${state.pdOn?"checked":""}><i></i><b></b></label></div>
+          <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label>Timezone</label>${vpDropFld("dvlVPPdTZ",[["UTC","UTC"],["Exchange","Exchange"],["Local","Local"],["America/New_York","New York"],["Europe/Brussels","Bruxelas"]],(state.pdTZ||'UTC'))}</div>
+          <div class="dvl-vt-field"><label>PD POC</label><label class="dvl-switch"><input id="dvlVPPdPOC" type="checkbox" ${state.pdShowPOC!==false?"checked":""}><i></i><b></b></label></div>
+          ${cField("dvlVPCPdPOC","Cor PD POC","pdColorPOC")}
+          <div class="dvl-vt-field"><label>PD VAH</label><label class="dvl-switch"><input id="dvlVPPdVAH" type="checkbox" ${state.pdShowVAH!==false?"checked":""}><i></i><b></b></label></div>
+          ${cField("dvlVPCPdVAH","Cor PD VAH","pdColorVAH")}
+          <div class="dvl-vt-field"><label>PD VAL</label><label class="dvl-switch"><input id="dvlVPPdVAL" type="checkbox" ${state.pdShowVAL!==false?"checked":""}><i></i><b></b></label></div>
+          ${cField("dvlVPCPdVAL","Cor PD VAL","pdColorVAL")}
+          <div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label>Estilo</label>${vpDropFld("dvlVPStylePd",VP_STYLE_OPTS,(state.pdStyle||'dashed'))}</div>
+          <div class="dvl-vt-field"><label>Espessura</label>${vpStepFld("dvlVPWPd",(+state.pdWidth||1.4),1,4,0.5,1)}</div>
+        </div>
+      </div>
+      <div class="dvl-vt-section">
         <div class="dvl-vt-section-title"><span>DVL Volume Memory — glow de crescimento</span></div>
         <div class="dvl-vt-grid">
           <div class="dvl-vt-field"><label>Ativar</label><label class="dvl-switch"><input id="dvlVPVmOn" type="checkbox" ${state.vmOn!==false?"checked":""}><i></i><b></b></label></div>
@@ -36301,6 +36400,10 @@ drag = {
     bSw("dvlVPOnVAL", v=>{state.onShowVAL=v;});
     bSw("dvlVPVmOn",  v=>{state.vmOn=v; if(!v){vpMem.fresh=[];}});
     bSw("dvlVPVmBySide", v=>{state.vmBySide=v;});
+    bSw("dvlVPPdOn",  v=>{state.pdOn=v; vpKCachePD=null; vpStableLevelsPD={poc:null,vah:null,val:null,key:null};});
+    bSw("dvlVPPdPOC", v=>{state.pdShowPOC=v;});
+    bSw("dvlVPPdVAH", v=>{state.pdShowVAH=v;});
+    bSw("dvlVPPdVAL", v=>{state.pdShowVAL=v;});
     // Steppers
     const VP_STEP={
       dvlVPRows: v=>{state.rows=Math.max(20,Math.min(500,v));},
@@ -36308,6 +36411,8 @@ drag = {
       dvlVPVmGlow: v=>{state.vmGlow=Math.max(0.10,Math.min(1,v/100));},
       dvlVPVmMinGrowth: v=>{state.vmMinGrowth=Math.max(0,Math.min(100,Math.round(v)));},
       dvlVPVmRadius: v=>{state.colRadius=Math.max(0,Math.min(8,Math.round(v)));},
+      dvlVPLabelFont: v=>{state.labelFontPx=Math.max(6,Math.min(20,Math.round(v)));},
+      dvlVPWPd: v=>{state.pdWidth=Math.max(1,Math.min(4,v));},
       dvlVPOp:   v=>{state.opacity=Math.max(0.05,Math.min(1,v/100));},
       dvlVPVAPct:v=>{state.valueAreaPct=Math.max(0.10,Math.min(1,v/100));},
       dvlVPWCur: v=>{state.lineWidthCur=Math.max(1,Math.min(4,v));},
@@ -36365,6 +36470,8 @@ drag = {
         if(btnId==="dvlVPStyleTrail"){state.trailStyle=val;}
         if(btnId==="dvlVPDevTF"){state.devTF=val;vpKCacheDev=null;vpStableLevelsDev={poc:null,vah:null,val:null,sym:null,tf:null};vpDevTrail=[];vpDevTrailKey="";}
         if(btnId==="dvlVPStyleOn"){state.onStyle=val;}
+        if(btnId==="dvlVPStylePd"){state.pdStyle=val;}
+        if(btnId==="dvlVPPdTZ"){state.pdTZ=val;vpKCachePD=null;vpStableLevelsPD={poc:null,vah:null,val:null,key:null};}
         if(btnId==="dvlVPVmDepth"){state.vmDepth=Number(val)||10;}
         if(btnId==="dvlVPOnTZ"){state.onTZ=val;vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};}
         if(btnId==="dvlVPOnSess"){state.onSession=val;vpKCacheON=null;vpStableLevelsON={poc:null,vah:null,val:null,key:null};}
@@ -36372,7 +36479,7 @@ drag = {
       });
     });
     // Color palette
-    const VP_CLR={dvlVPCBuy:"colorBuy",dvlVPCSell:"colorSell",dvlVPCPOC:"colorPOC",dvlVPCVAH:"colorVAH",dvlVPCVAL:"colorVAL",dvlVPCS2POC:"s2colorPOC",dvlVPCS2VAH:"s2colorVAH",dvlVPCS2VAL:"s2colorVAL",dvlVPCDevPOC:"devColorPOC",dvlVPCDevVAH:"devColorVAH",dvlVPCDevVAL:"devColorVAL",dvlVPCTrail:"trailColor",dvlVPCOnPOC:"onColorPOC",dvlVPCOnVAH:"onColorVAH",dvlVPCOnVAL:"onColorVAL",dvlVPCVm:"vmColor"};
+    const VP_CLR={dvlVPCBuy:"colorBuy",dvlVPCSell:"colorSell",dvlVPCPOC:"colorPOC",dvlVPCVAH:"colorVAH",dvlVPCVAL:"colorVAL",dvlVPCS2POC:"s2colorPOC",dvlVPCS2VAH:"s2colorVAH",dvlVPCS2VAL:"s2colorVAL",dvlVPCDevPOC:"devColorPOC",dvlVPCDevVAH:"devColorVAH",dvlVPCDevVAL:"devColorVAL",dvlVPCTrail:"trailColor",dvlVPCOnPOC:"onColorPOC",dvlVPCOnVAH:"onColorVAH",dvlVPCOnVAL:"onColorVAL",dvlVPCVm:"vmColor",dvlVPCPdPOC:"pdColorPOC",dvlVPCPdVAH:"pdColorVAH",dvlVPCPdVAL:"pdColorVAL"};
     body.querySelectorAll(".dvl-feb-clr-swatch").forEach(btn=>{
       const key=VP_CLR[btn.id];if(!key)return;
       btn.addEventListener("click",()=>openVPPalette(btn,key));
@@ -36422,7 +36529,7 @@ drag = {
   window.DVLVolumeProfile = { version:"0.631", on, setOn, draw, openPanel,
     get state(){ return Object.assign({}, state); },
     // Beta 1.229 — níveis atuais para confluência (Smart Delta etc.)
-    getLevels:function(){ function pk(o){ return o&&o.poc!=null?{poc:o.poc,vah:o.vah,val:o.val}:null; } return { current:pk(vpStableLevels), previous:(state.s2on!==false?pk(vpStableLevels2):null), developing:(state.devOn?pk(vpStableLevelsDev):null), overnight:(state.onOn?pk(vpStableLevelsON):null) }; }
+    getLevels:function(){ function pk(o){ return o&&o.poc!=null?{poc:o.poc,vah:o.vah,val:o.val}:null; } return { current:pk(vpStableLevels), previous:(state.s2on!==false?pk(vpStableLevels2):null), developing:(state.devOn?pk(vpStableLevelsDev):null), overnight:(state.onOn?pk(vpStableLevelsON):null), previousDay:(state.pdOn?pk(vpStableLevelsPD):null) }; }
   };
   window.DVLVolumeProfileDraw = function(ctx, cfg){ try{ draw(ctx, cfg); }catch(_){} };
 
