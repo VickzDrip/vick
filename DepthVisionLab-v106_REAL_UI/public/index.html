@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.250';
+window.DVL_APP_VERSION = 'Beta 1.251';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.251", note: "Tabela institucional do Smart Delta com TEMPO NO ESTADO. A tabela overlay agora mostra Net Delta, Net Long, Net Short, OI e LSR — cada um com estado (acima/abaixo da própria média), valor e HÁ QUANTO TEMPO está nesse estado (candles + tempo), além de Confidence/Continuation/Exhaustion no rodapé. Consome os osciladores já existentes (sem recalcular). Histerese (banda neutra) + confirmação no fechamento do candle evitam reset falso ao tocar a média; rastreia dois tempos independentes (estado vs média e tendência). Persiste por símbolo|timeframe (não mistura ativo/TF) e restaura ao recarregar. Toque numa linha abre um mini-painel com valor, média, distância %, estado, duração e tendência. Um ticker central único atualiza as durações (sem timer por linha). Novo bridge window.DVL_SMART_DELTA_STATE pra Copilot/Alerts consumirem o mesmo contexto temporal. Osciladores originais seguem funcionando. Só frontend." },
   { version: "Beta 1.250", note: "Volume Profile: (1) novo input 'Fonte dos textos (px)' em Geral pra controlar o tamanho da fonte de TODOS os labels do VP (POC/VAH/VAL e das demais sessões). (2) Nova sessão Previous Day (dia anterior): 3 linhas — PD POC, PD VAH e PD VAL — calculadas sobre o VP do dia anterior inteiro (00:00→24:00). Com liga/desliga por linha, cores próprias, estilo/espessura e timezone (UTC/Exchange/Local/NY/Bruxelas). Reaproveita o mesmo cálculo de VP das outras sessões. Só frontend." },
   { version: "Beta 1.249", note: "Ultra Low Latency (fase 1) — foco em TF baixo (1s–1m). O último preço vira prioridade e o desenho passa por um scheduler único de frame com GAP ADAPTATIVO: o app mede o custo real de cada render e ajusta a cadência sozinho (render rápido → até ~60fps; render pesado → recua pra não congelar), em vez do teto fixo de ~14fps. O último tick do WebSocket é sempre o que vale (os intermediários são descartados naturalmente entre frames). Adicionada instrumentação de performance (window.DVL_PERF: FPS, frame, render, latência do tick e atraso do WS) com um HUD opcional no canto (DVL_PERF_HUD(true) ou ?perf=1 na URL). Não altera nenhum indicador — só a cadência e a priorização do desenho. Só frontend." },
   { version: "Beta 1.248", note: "O glow do Volume Memory agora vem por padrão com as cores de compra/venda (verde comprador / vermelho vendedor). Migração única liga o 'Cor por lado' pra quem estava com ele desligado; dá pra desligar de novo depois (volta pra Glow Color neutra). Só frontend." },
@@ -31492,33 +31493,76 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     var w=document.getElementById("chartWrap")||document.querySelector(".canvasWrap"); if(!w) return null;
     if(getComputedStyle(w).position==="static") w.style.position="relative";
     panelEl=document.createElement("div"); panelEl.id="dvlSmartDeltaPanel";
-    panelEl.style.cssText="position:absolute;left:8px;top:8px;z-index:44;pointer-events:none;display:none;min-width:150px;padding:7px 9px;border-radius:9px;background:rgba(6,16,12,.9);border:1px solid rgba(129,166,151,.24);color:#dcebe4;font:700 10px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.4)";
+    panelEl.style.cssText="position:absolute;left:8px;top:8px;z-index:44;pointer-events:auto;display:none;min-width:184px;max-width:min(74vw,320px);padding:7px 9px;border-radius:9px;background:rgba(6,16,12,.92);border:1px solid rgba(129,166,151,.24);color:#dcebe4;font:700 10px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.4);touch-action:pan-y";
+    // Beta 1.251 — toque numa linha abre o mini-painel de detalhe do módulo
+    panelEl.addEventListener("click", function(ev){ var r=ev.target&&ev.target.closest?ev.target.closest("[data-sd-mod]"):null; if(!r) return; ev.stopPropagation(); showModuleDetail(r.getAttribute("data-sd-mod")); });
     w.appendChild(panelEl);
     return panelEl;
   }
-  function hidePanel(){ if(panelEl) panelEl.style.display="none"; }
+  var sdDetailEl=null;
+  function showModuleDetail(k){
+    var ST=window.DVL_SMART_DELTA_STATE; if(!ST) return;
+    var m=null, mods=ST.MODS; for(var i=0;i<mods.length;i++){ if(mods[i].k===k){ m=mods[i]; break; } } if(!m) return;
+    var sn=ST.getSnapshot(k); if(!sn){ return; }
+    if(!sdDetailEl){
+      sdDetailEl=document.createElement("div"); sdDetailEl.id="dvlSmartDeltaDetail";
+      sdDetailEl.style.cssText="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:100650;min-width:210px;max-width:86vw;padding:12px 14px;border-radius:12px;background:linear-gradient(180deg,#07160f,#04100b);border:1px solid rgba(19,220,141,.28);color:#e6f4ec;font:700 11px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 20px 60px rgba(0,0,0,.6)";
+      document.body.appendChild(sdDetailEl);
+      sdDetailEl.addEventListener("click", function(e){ if(e.target===sdDetailEl||e.target.getAttribute("data-close")!=null){ sdDetailEl.style.display="none"; } });
+    }
+    var rel=sn.relationToAverage, relTxt=rel==="above"?"Acima da média":(rel==="below"?"Abaixo da média":"Na média");
+    var relC=rel==="above"?"#16c784":(rel==="below"?"#ff4a61":"#7f9c8e");
+    var trTxt=sn.trend==="rising"?"Subindo":(sn.trend==="falling"?"Caindo":"Estável");
+    function r(l,v,c){ return '<div style="display:flex;justify-content:space-between;gap:16px"><span style="color:#84a394">'+l+'</span><b style="color:'+(c||"#e6f4ec")+'">'+v+'</b></div>'; }
+    sdDetailEl.innerHTML=
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:6px"><b style="font-size:13px">'+m.label+'</b><span data-close style="cursor:pointer;color:#9db6aa;font-size:14px">✕</span></div>'+
+      r("Atual", ST.fmtVal(m,sn))+
+      r("Média", ST.fmtBig(sn.average))+
+      r("Distância", (sn.distanceFromAveragePercent>=0?"+":"")+sn.distanceFromAveragePercent.toFixed(2)+"%", relC)+
+      r("Estado", relTxt, relC)+
+      r("Duração do estado", (sn.stateBars||0)+"c / "+ST.fmtDur(sn.stateMs))+
+      r("Tendência", trTxt)+
+      r("Duração da tendência", (sn.trendBars||0)+"c / "+ST.fmtDur(sn.trendMs));
+    sdDetailEl.style.display="block";
+  }
+  function hidePanel(){ if(panelEl) panelEl.style.display="none"; if(sdDetailEl) sdDetailEl.style.display="none"; }
   function renderPanel(){
     var el=ensurePanel(); if(!el) return;
     var L=latest(); if(!L){ el.style.display="none"; return; }
     var s=L.s;
     var col=COL[s.cls]||COL.neutral; var hex="rgb("+col[0]+","+col[1]+","+col[2]+")";
-    var sign=s.delta>0?"+":"";
-    function row(lbl,val,c){ return '<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#7f9c8e">'+lbl+'</span><b style="color:'+(c||"#dcebe4")+'">'+val+'</b></div>'; }
-    var detailed=!!state.detailed;
-    el.innerHTML =
-      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:3px"><b style="color:'+hex+'">Smart Delta</b><span style="font-size:8px;color:#6f8b80">'+s.cls.toUpperCase()+'</span></div>'+
-      row("Delta", sign+s.delta, hex)+
-      row("Confidence", s.confidence+"%")+
-      (detailed? row("Continuation", s.continuation+"%")+row("Exhaustion", s.exhaustion+"%", s.exhaustion>=60?"#f3c768":"#dcebe4") : "");
-    var cp=s.components||{};
-    if(detailed && (cp.oi!=null||cp.lsr!=null||cp.vp)){
-      function dot(lbl,v,active){ var col=!active?"#455":(v>=55?"#16c784":(v<=45?"#ff4a61":"#7f9c8e")); return '<span style="color:'+col+'">'+lbl+'</span>'; }
-      el.innerHTML += '<div style="margin-top:4px;padding-top:3px;border-top:1px solid rgba(129,166,151,.14);display:flex;gap:10px;font-size:8.5px">'+
-        dot("OI", cp.oi, cp.oi!=null)+dot("LSR", cp.lsr, cp.lsr!=null)+dot("VP", cp.vp, cp.vp>0)+
-        '<span style="margin-left:auto;color:#6f8b80">confluência</span></div>';
+    var ST=window.DVL_SMART_DELTA_STATE;
+    var head='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px"><b style="color:'+hex+'">SMART DELTA</b><span style="font-size:9px;color:'+hex+'">'+s.cls.toUpperCase()+' '+s.confidence+'</span></div>';
+    if(!ST){
+      var sign=s.delta>0?"+":"";
+      el.innerHTML=head+'<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#7f9c8e">Delta</span><b style="color:'+hex+'">'+sign+s.delta+'</b></div>';
+      el.style.display="block"; return;
     }
+    var cfg=ST.cfg(), all=ST.getAll(), mods=ST.MODS;
+    var compact = cfg.mode==="compact" || (cfg.mode!=="detailed" && typeof matchMedia!=="undefined" && matchMedia("(max-width:640px)").matches);
+    var collapsed = cfg.mode==="collapsed";
+    var arr=function(rel){ return rel==="above"?"▲":(rel==="below"?"▼":"–"); };
+    var rc=function(rel){ return rel==="above"?"#16c784":(rel==="below"?"#ff4a61":"#7f9c8e"); };
+    var rows="";
+    if(!collapsed){
+      for(var i=0;i<mods.length;i++){
+        var m=mods[i]; if(cfg.modules && cfg.modules[m.k]===false) continue;
+        var sn=all[m.k]; if(!sn||sn.value==null) continue;
+        var dur=ST.fmtDuration(sn), valTxt=ST.fmtVal(m,sn);
+        var dist = cfg.showDist ? ((sn.distanceFromAveragePercent>=0?"+":"")+sn.distanceFromAveragePercent.toFixed(2)+"%") : "";
+        if(compact){
+          rows+='<div data-sd-mod="'+m.k+'" style="display:flex;align-items:center;gap:8px;padding:1.5px 0"><span style="width:60px;color:#9fb6ab">'+m.label+'</span><span style="color:'+rc(sn.relationToAverage)+'">'+arr(sn.relationToAverage)+'</span><b style="flex:1;color:#dcebe4">'+valTxt+'</b><span style="color:#8aa99b">'+dur+'</span></div>';
+        } else {
+          rows+='<div data-sd-mod="'+m.k+'" style="display:grid;grid-template-columns:60px 58px 1fr auto;gap:6px;align-items:center;padding:1.5px 0"><span style="color:#9fb6ab">'+m.label+'</span><span style="color:'+rc(sn.relationToAverage)+'">'+arr(sn.relationToAverage)+' '+(sn.relationToAverage==="above"?"Acima":sn.relationToAverage==="below"?"Abaixo":"Média")+'</span><b style="color:#dcebe4">'+valTxt+(dist?' <span style="color:#7f9c8e;font-weight:600;font-size:8.5px">'+dist+'</span>':'')+'</b><span style="color:#8aa99b;text-align:right">'+dur+'</span></div>';
+        }
+      }
+    }
+    var footer='<div style="margin-top:5px;padding-top:4px;border-top:1px solid rgba(129,166,151,.16);font-size:8.6px;color:#8aa99b">Confidence '+s.confidence+'% · Continuation '+s.continuation+'% · Exh '+s.exhaustion+'%</div>';
+    el.innerHTML=head+rows+footer;
     el.style.display="block";
   }
+  /* Beta 1.251 — ticker central: re-renderiza a tabela ~1x/s (durações vivas) sem timer por linha */
+  try{ window.addEventListener("dvl:sd-state", function(){ try{ if(state.on && state.panel!==false && latest()) renderPanel(); }catch(_){} }, {passive:true}); }catch(_){}
 
   /* ── API pública (para Scanner/Copilot/Market Matrix/Alerts — próximos) ── */
   window.DVL_SMART_DELTA_ENGINE_API = {
@@ -31594,6 +31638,95 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
 
   function boot(){ insertRow(); if(state.on){ try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){} } }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",function(){ setTimeout(boot,0); },{once:true}); else setTimeout(boot,0);
+})();
+</script>
+
+<script id="DVL_SMART_DELTA_STATE_1251">
+/* DVL Smart Delta — Tabela Institucional com Tempo no Estado (Beta 1.251).
+   Rastreia, por módulo (Smart Delta / Net Delta / Net Long / Net Short / OI / LSR),
+   há quanto tempo o valor está ACIMA/ABAIXO da própria média e há quanto tempo a
+   tendência atual está ativa. NÃO recalcula nada dos motores — só consome os
+   estados/valores dos osciladores já existentes (.cache.data) e do Smart Delta
+   (getSnapshot/series). Histerese (banda neutra) + confirmação por candle (ou
+   intrabar) evitam reset falso. Persiste por símbolo|timeframe. Um ticker central
+   único atualiza tudo. */
+(function(){
+  "use strict";
+  if(window.DVL_SMART_DELTA_STATE) return;
+  var STOR="dvl_sd_state_v1", CFG_STOR="dvl_sd_table_cfg_v1";
+  var MODS=[
+    {k:"netDelta", label:"Net Delta", osc:"DVLNetDeltaOscillator",      fmt:"big"},
+    {k:"netLong",  label:"Net Long",  osc:"DVLNetLongOscillator",       fmt:"big"},
+    {k:"netShort", label:"Net Short", osc:"DVLNetShortOscillator",      fmt:"big"},
+    {k:"oi",       label:"OI",        osc:"DVLOpenInterestOscillator",  fmt:"big"},
+    {k:"lsr",      label:"LSR",       osc:"DVLLongShortOscillator",     fmt:"ratio"}
+  ];
+  var cfg={ confirm:"close", tolPct:0.15, maLen:20, durMode:"both", showTime:true, showCandles:true, showDist:true, mode:"detailed",
+            modules:{netDelta:true,netLong:true,netShort:true,oi:true,lsr:true} };
+  try{ Object.assign(cfg, JSON.parse(localStorage.getItem(CFG_STOR)||"{}")); }catch(_){}
+  function saveCfg(){ try{ localStorage.setItem(CFG_STOR, JSON.stringify(cfg)); }catch(_){} }
+
+  var states={};
+  try{ states=JSON.parse(localStorage.getItem(STOR)||"{}")||{}; }catch(_){ states={}; }
+  var saveT=0;
+  function saveStates(){ var now=Date.now(); if(now-saveT<1500) return; saveT=now; try{ localStorage.setItem(STOR, JSON.stringify(states)); }catch(_){} }
+
+  function sym(){ try{ return String((typeof symbol!=="undefined"&&symbol)||"").toUpperCase(); }catch(_){ return ""; } }
+  function tf(){ try{ return String((typeof interval!=="undefined"&&interval)||""); }catch(_){ return ""; } }
+  function candleTime(){ try{ if(typeof klines!=="undefined"&&klines&&klines.length) return +klines[klines.length-1].time; }catch(_){} return 0; }
+  function sma(arr,n){ if(!arr||!arr.length) return null; var m=Math.min(n,arr.length),s=0,c=0; for(var i=arr.length-m;i<arr.length;i++){ var v=+arr[i]; if(isFinite(v)){s+=v;c++;} } return c?s/c:null; }
+
+  function readModule(m){
+    try{
+      var osc=window[m.osc]; var d=osc&&osc.cache&&osc.cache.data; if(!d||!d.length) return null;
+      var vals=[]; for(var i=0;i<d.length;i++){ var x=d[i]; var v=+((x&&x.value!=null)?x.value:x); if(isFinite(v)) vals.push(v); }
+      if(!vals.length) return null;
+      return {value:vals[vals.length-1], series:vals};
+    }catch(_){ return null; }
+  }
+  function relation(val,avg,tol){ if(val==null||avg==null||!isFinite(val)||!isFinite(avg)) return "neutral"; var band=Math.abs(avg)*(tol/100)||0; if(val>avg+band) return "above"; if(val<avg-band) return "below"; return "neutral"; }
+  function trendOf(series){ if(!series||series.length<6) return "stable"; var n=series.length,recent=(series[n-1]+series[n-2]+series[n-3])/3,older=(series[n-4]+series[n-5]+series[n-6])/3; var r=(recent-older)/Math.max(1e-9,Math.abs(older)); if(r>0.001) return "rising"; if(r<-0.001) return "falling"; return "stable"; }
+
+  var lastGlobalCandle=0;
+  function tick(){
+    var s=sym(),t=tf(),ct=candleTime(),now=Date.now();
+    if(!s||!t) return;
+    var newCandle = !!(ct && ct!==lastGlobalCandle); if(ct) lastGlobalCandle=ct;
+    for(var i=0;i<MODS.length;i++){
+      var m=MODS[i]; var rd=readModule(m); if(!rd||rd.value==null) continue;
+      var avg=sma(rd.series,cfg.maLen); if(avg==null) avg=rd.value;
+      var key=s+"|"+t+"|"+m.k;
+      var st=states[key]; if(!st){ st={relation:"neutral",stateSince:now,stateBars:0,trend:"stable",trendSince:now,trendBars:0,value:rd.value,avg:avg}; states[key]=st; }
+      var raw=relation(rd.value,avg,cfg.tolPct), tr=trendOf(rd.series);
+      var confirm=(cfg.confirm==="intrabar")||newCandle;
+      if(confirm){
+        var rc = raw!=="neutral"?raw:st.relation;   // dentro da banda neutra mantém o último estado confirmado
+        if(rc!==st.relation && rc!=="neutral"){ st.relation=rc; st.stateSince=now; st.stateBars=1; }
+        else if(newCandle){ st.stateBars=(st.stateBars||0)+1; }
+        if(tr!==st.trend && tr!=="stable"){ st.trend=tr; st.trendSince=now; st.trendBars=1; }
+        else if(newCandle){ st.trendBars=(st.trendBars||0)+1; }
+      }
+      st.value=rd.value; st.avg=avg;
+    }
+    saveStates();
+    try{ window.dispatchEvent(new CustomEvent("dvl:sd-state")); }catch(_){}
+  }
+  setInterval(tick,1000);
+  try{ window.addEventListener("dvl:smart-delta",tick,{passive:true}); }catch(_){}
+
+  function snapshot(k){ var st=states[sym()+"|"+tf()+"|"+k]; if(!st) return null; var now=Date.now();
+    return { module:k, value:st.value, average:st.avg, relationToAverage:st.relation,
+      stateSince:st.stateSince, stateBars:st.stateBars||0, stateMs:now-(st.stateSince||now),
+      trend:st.trend, trendSince:st.trendSince, trendBars:st.trendBars||0, trendMs:now-(st.trendSince||now),
+      distanceFromAveragePercent:(st.avg?((st.value-st.avg)/Math.abs(st.avg)*100):0) }; }
+  function getAll(){ var o={}; for(var i=0;i<MODS.length;i++) o[MODS[i].k]=snapshot(MODS[i].k); return o; }
+
+  function fmtDur(ms){ ms=Math.max(0,ms||0); var s=Math.floor(ms/1000); if(s<60) return s+"s"; var mn=Math.floor(s/60); if(mn<60) return mn+"m"; var h=Math.floor(mn/60); if(h<24) return h+"h "+(mn%60)+"m"; var d=Math.floor(h/24); return d+"d "+(h%24)+"h"; }
+  function fmtDuration(sn){ var p=[]; if(cfg.durMode!=="time" && cfg.showCandles) p.push((sn.stateBars||0)+"c"); if(cfg.durMode!=="candles" && cfg.showTime) p.push(fmtDur(sn.stateMs)); return p.join(" / "); }
+  function fmtBig(v){ v=+v; if(!isFinite(v)) return "--"; var a=Math.abs(v),sg=v<0?"-":""; if(a>=1e9) return sg+(a/1e9).toFixed(2)+"B"; if(a>=1e6) return sg+(a/1e6).toFixed(2)+"M"; if(a>=1e3) return sg+(a/1e3).toFixed(2)+"K"; return sg+a.toFixed(2); }
+  function fmtVal(m,sn){ if(m.fmt==="big") return fmtBig(sn.value); if(m.fmt==="ratio") return (+sn.value).toFixed(2); return (sn.value>0?"+":"")+Math.round(sn.value); }
+
+  window.DVL_SMART_DELTA_STATE={ MODS:MODS, getSnapshot:snapshot, getAll:getAll, cfg:function(){return cfg;}, setCfg:function(o){ Object.assign(cfg,o||{}); saveCfg(); }, saveCfg:saveCfg, fmtDur:fmtDur, fmtDuration:fmtDuration, fmtVal:fmtVal, fmtBig:fmtBig, tick:tick, reset:function(){ states={}; try{ localStorage.removeItem(STOR); }catch(_){} } };
 })();
 </script>
 
