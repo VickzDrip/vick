@@ -612,30 +612,32 @@ async function cycle() {
      logger below so it can resolve pending signals' return horizons. */
   const mexcPriceMap = {}, binPriceMap = {};
 
-  /* 2) Scan every timeframe against that candidate list. Sequential (not
-     Promise.all across TFs) to keep peak network concurrency bounded to
-     cfg.POOL regardless of how many timeframes are configured. */
-  for (const tf of cfg.TF_LIST) {
-    let mexcRows = null, binRows = null;
-    try { if (mexcData) mexcRows = await scanExchange(mexc, tf, mexcData.cands, mexcData.oiTrends, mexcPriceMap); } catch (e) { logErr("mexc:" + tf, e); }
-    try { if (binData) binRows = await scanExchange(binance, tf, binData.cands, binData.oiTrends, binPriceMap); } catch (e) { logErr("binance:" + tf, e); }
+  /* 2) Scan every timeframe against that candidate list — UNLESS the scanner is
+     paused (cfg.SCAN_ENABLED=false). When paused we publish EMPTY snapshots so the
+     Scanner page shows no assets, but candidates are still fetched above (the
+     VP+RSI-V model needs the symbol list). Sequential to bound concurrency. */
+  const nowCycle = Date.now();
+  if (cfg.SCAN_ENABLED) {
+    for (const tf of cfg.TF_LIST) {
+      let mexcRows = null, binRows = null;
+      try { if (mexcData) mexcRows = await scanExchange(mexc, tf, mexcData.cands, mexcData.oiTrends, mexcPriceMap); } catch (e) { logErr("mexc:" + tf, e); }
+      try { if (binData) binRows = await scanExchange(binance, tf, binData.cands, binData.oiTrends, binPriceMap); } catch (e) { logErr("binance:" + tf, e); }
 
-    const now = Date.now();
-    if (mexcRows) updateSnapshot("mexc", tf, { rows: mexcRows, activeSource: "mexc", fallback: false, updatedAt: now });
-    if (binRows) {
-      updateSnapshot("binance", tf, { rows: binRows, activeSource: "binance", fallback: false, updatedAt: now });
-    } else if (mexcRows) {
-      updateSnapshot("binance", tf, { rows: mexcRows, activeSource: "mexc", fallback: true, updatedAt: now });
+      const now = Date.now();
+      if (mexcRows) updateSnapshot("mexc", tf, { rows: mexcRows, activeSource: "mexc", fallback: false, updatedAt: now });
+      if (binRows) {
+        updateSnapshot("binance", tf, { rows: binRows, activeSource: "binance", fallback: false, updatedAt: now });
+      } else if (mexcRows) {
+        updateSnapshot("binance", tf, { rows: mexcRows, activeSource: "mexc", fallback: true, updatedAt: now });
+      }
+    }
+  } else {
+    /* paused: clear both exchanges' snapshots for every TF */
+    for (const tf of cfg.TF_LIST) {
+      updateSnapshot("mexc", tf, { rows: [], activeSource: "paused", fallback: false, updatedAt: nowCycle });
+      updateSnapshot("binance", tf, { rows: [], activeSource: "paused", fallback: false, updatedAt: nowCycle });
     }
   }
-
-  /* VP + RSI-V adaptive model: sample a rotating batch this cycle, then re-learn
-     on a cooldown. Guarded — never breaks the scan. */
-  try {
-    const n = await ingestVrsi(mexc, mexcData && mexcData.cands);
-    vrsiStore.learn({});
-    if (n) console.log("[DVL worker] vrsi: +" + n + " samples");
-  } catch (e) { console.warn("[DVL worker] vrsi:", e && e.message); }
 
   /* VP + RSI-V adaptive model: sample a rotating batch this cycle, then re-learn
      on a cooldown. Guarded — never breaks the scan. */
