@@ -16,40 +16,80 @@
    — os acentos ficam sempre na família verde/teal pra não confundir compra. */
 (function(){
   "use strict";
+  /* Cada tema define: tokens (variáveis CSS que o app JÁ declara — bg/superfície/borda/
+     texto/muted + as dvl-*), canvasBg (a cor com que o GRÁFICO é pintado no <canvas> via
+     JS — não dá pra trocar por CSS, então usamos um hook no fillStyle) e domBg (fundo do
+     body). Acentos/verde-vermelho/velas NÃO mudam: só o fundo/superfícies/chrome. */
   var P = window.DVL_THEME_PRESETS = {
-    teal: { name:"DVL Teal", swatch:["#061017","#0b1721","#14d8a0"], tokens:{
-      "--bg0":"#061017","--bg1":"#08141d","--bg2":"#0b1721",
-      "--panel":"rgba(11,23,33,.94)","--panel-soft":"rgba(9,20,29,.72)",
-      "--text":"#f4f8fb","--muted":"#8ea0af","--accent":"#14d8a0",
-      "--b-accent":"#14d8a0","--b-text":"#f4f8fb","--b-muted":"#8ea0af","--b-border":"rgba(142,174,190,.16)",
+    teal: { name:"DVL Teal", swatch:["#020806","#0b1721","#10df77"], canvasBg:"#020806", domBg:"#020806", tokens:{
+      "--bg0":"#020806","--bg1":"#030d0a","--bg2":"#0b1721","--card":"#03100c","--card2":"#040e0c",
+      "--text":"#f4f8fb","--muted":"#8ea0af","--muted2":"#5f6d80",
+      "--b-text":"#f4f8fb","--b-muted":"#8ea0af","--b-border":"rgba(142,174,190,.16)",
       "--dvl-panel-line":"rgba(142,174,190,.20)","--dvl-panel-line-strong":"rgba(142,174,190,.30)",
       "--dvl-desktop-surface":"#0b1721","--dvl-desktop-border":"rgba(142,174,190,.16)",
       "--dvl-pos-text":"#f4f8fb","--dvl-pos-muted":"#8ea0af",
-      "--dvl-bg-0":"#061017","--dvl-bg-1":"#08141d","--dvl-surface-1":"#0b1721","--dvl-surface-2":"#0e1c27","--dvl-border":"rgba(142,174,190,.14)","--dvl-text":"#f4f8fb","--dvl-muted":"#8ea0af","--dvl-accent":"#14d8a0","--dvl-accent-2":"#28b7ff" } },
-    ocean: { name:"Ocean", swatch:["#04101c","#0a1c30","#2ad4c0"], tokens:{
-      "--bg0":"#04101c","--bg1":"#061726","--bg2":"#0a1c30",
-      "--panel":"rgba(10,28,48,.94)","--panel-soft":"rgba(7,22,40,.72)",
-      "--text":"#eef4fb","--muted":"#90a4bd","--accent":"#2ad4c0",
-      "--b-accent":"#2ad4c0","--b-text":"#eef4fb","--b-muted":"#90a4bd","--b-border":"rgba(120,160,205,.18)",
-      "--dvl-panel-line":"rgba(120,160,205,.22)","--dvl-panel-line-strong":"rgba(120,160,205,.34)",
-      "--dvl-desktop-surface":"#0a1c30","--dvl-desktop-border":"rgba(120,160,205,.18)",
+      "--dvl-bg-0":"#020806","--dvl-bg-1":"#030d0a","--dvl-surface-1":"#0b1721","--dvl-surface-2":"#0e1c27","--dvl-border":"rgba(142,174,190,.14)","--dvl-text":"#f4f8fb","--dvl-muted":"#8ea0af" } },
+    ocean: { name:"Ocean", swatch:["#04101c","#0a1c30","#2ad4c0"], canvasBg:"#04101c", domBg:"#04101c", tokens:{
+      "--bg0":"#04101c","--bg1":"#061726","--bg2":"#0a1c30","--card":"#0a1c30","--card2":"#0c2033",
+      "--text":"#eef4fb","--muted":"#90a4bd","--muted2":"#63758c",
+      "--b-text":"#eef4fb","--b-muted":"#90a4bd","--b-border":"rgba(120,160,205,.20)",
+      "--dvl-panel-line":"rgba(120,160,205,.24)","--dvl-panel-line-strong":"rgba(120,160,205,.36)",
+      "--dvl-desktop-surface":"#0a1c30","--dvl-desktop-border":"rgba(120,160,205,.20)",
       "--dvl-pos-text":"#eef4fb","--dvl-pos-muted":"#90a4bd",
-      "--dvl-bg-0":"#04101c","--dvl-bg-1":"#061726","--dvl-surface-1":"#0a1c30","--dvl-surface-2":"#0e2338","--dvl-border":"rgba(120,160,205,.16)","--dvl-text":"#eef4fb","--dvl-muted":"#90a4bd","--dvl-accent":"#2ad4c0","--dvl-accent-2":"#3aa0ff" } },
-    carbon: { name:"Carbon", swatch:["#0b0e11","#14181d","#3fb98f"], tokens:{
-      "--bg0":"#0b0e11","--bg1":"#0e1216","--bg2":"#14181d",
-      "--panel":"rgba(20,24,29,.94)","--panel-soft":"rgba(14,18,22,.72)",
-      "--text":"#eef1f4","--muted":"#98a0a8","--accent":"#3fb98f",
-      "--b-accent":"#3fb98f","--b-text":"#eef1f4","--b-muted":"#98a0a8","--b-border":"rgba(160,170,180,.15)",
-      "--dvl-panel-line":"rgba(160,170,180,.18)","--dvl-panel-line-strong":"rgba(160,170,180,.28)",
-      "--dvl-desktop-surface":"#14181d","--dvl-desktop-border":"rgba(160,170,180,.15)",
+      "--dvl-bg-0":"#04101c","--dvl-bg-1":"#061726","--dvl-surface-1":"#0a1c30","--dvl-surface-2":"#0e2338","--dvl-border":"rgba(120,160,205,.18)","--dvl-text":"#eef4fb","--dvl-muted":"#90a4bd" } },
+    carbon: { name:"Carbon", swatch:["#0b0e11","#1a1f25","#3fb98f"], canvasBg:"#0d1116", domBg:"#0b0e11", tokens:{
+      "--bg0":"#0b0e11","--bg1":"#0e1216","--bg2":"#14181d","--card":"#14181d","--card2":"#1a1f25",
+      "--text":"#eef1f4","--muted":"#98a0a8","--muted2":"#6b7178",
+      "--b-text":"#eef1f4","--b-muted":"#98a0a8","--b-border":"rgba(160,170,180,.16)",
+      "--dvl-panel-line":"rgba(160,170,180,.20)","--dvl-panel-line-strong":"rgba(160,170,180,.30)",
+      "--dvl-desktop-surface":"#14181d","--dvl-desktop-border":"rgba(160,170,180,.16)",
       "--dvl-pos-text":"#eef1f4","--dvl-pos-muted":"#98a0a8",
-      "--dvl-bg-0":"#0b0e11","--dvl-bg-1":"#0e1216","--dvl-surface-1":"#14181d","--dvl-surface-2":"#1a1f25","--dvl-border":"rgba(160,170,180,.14)","--dvl-text":"#eef1f4","--dvl-muted":"#98a0a8","--dvl-accent":"#3fb98f","--dvl-accent-2":"#5aa0ff" } }
+      "--dvl-bg-0":"#0b0e11","--dvl-bg-1":"#0e1216","--dvl-surface-1":"#14181d","--dvl-surface-2":"#1a1f25","--dvl-border":"rgba(160,170,180,.15)","--dvl-text":"#eef1f4","--dvl-muted":"#98a0a8" } }
   };
+
+  /* ── hook do <canvas>: o gráfico é limpo com fillStyle="#020806"; fillRect(0,…) a cada
+     frame, então CSS não pega. Aqui trocamos APENAS os near-blacks de fundo conhecidos
+     pela cor de fundo do tema; qualquer outra cor (velas verde/vermelho, textos, acentos,
+     zonas) passa intacta. Um único hook global no protótipo, instalado uma vez. */
+  var BG_REMAP = { "#020806":1, "#010806":1, "#010705":1, "#020710":1, "#021018":1 };
+  window.__DVL_THEME_CANVAS_BG = "#020806";
+  (function installCanvasHook(){
+    try{
+      if(window.__DVL_CANVAS_HOOK_ON) return;
+      var C = window.CanvasRenderingContext2D; if(!C || !C.prototype) return;
+      var d = Object.getOwnPropertyDescriptor(C.prototype, "fillStyle"); if(!d || !d.set || !d.get) return;
+      /* caminho quente (chamado por vela/frame): só toca strings hex "#…"; lookup direto */
+      function remap(v){ if(typeof v==="string" && v.charCodeAt(0)===35 && BG_REMAP[v]) return window.__DVL_THEME_CANVAS_BG; return v; }
+      Object.defineProperty(C.prototype, "fillStyle", {
+        configurable:true, enumerable:d.enumerable,
+        get:function(){ return d.get.call(this); },
+        set:function(v){ d.set.call(this, remap(v)); }
+      });
+      window.__DVL_CANVAS_HOOK_ON = true;
+    }catch(_){}
+  })();
+
   window.DVL_THEME_APPLY_TOKENS = function(themeId){
-    var t = P[themeId] && P[themeId].tokens; if(!t) return;
+    var P2 = window.DVL_THEME_PRESETS, th = P2 && P2[themeId]; if(!th) return;
+    var t = th.tokens || {};
     var root=document.documentElement.style;
     for(var k in t){ try{ root.setProperty(k, t[k], "important"); }catch(_){ try{ root.setProperty(k,t[k]); }catch(__){} } }
-    try{ var m=document.querySelector('meta[name="theme-color"]'); if(!m){ m=document.createElement("meta"); m.setAttribute("name","theme-color"); document.head.appendChild(m);} m.setAttribute("content", t["--bg0"]); }catch(_){}
+    /* fundo do gráfico (canvas) */
+    window.__DVL_THEME_CANVAS_BG = th.canvasBg || t["--bg0"] || "#020806";
+    /* folha de override das superfícies estruturais hardcoded (fundo/gráfico) */
+    try{
+      var st=document.getElementById("dvlThemeSurface");
+      if(!st){ st=document.createElement("style"); st.id="dvlThemeSurface"; (document.head||document.documentElement).appendChild(st); }
+      var bg=th.domBg||t["--bg0"], cbg=window.__DVL_THEME_CANVAS_BG;
+      st.textContent =
+        'html,body{background-color:'+bg+' !important}'+
+        'html,body{background-image:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.10),transparent 64%),linear-gradient(180deg,'+t["--bg0"]+','+t["--bg1"]+' 46%,'+bg+') !important}'+
+        '#chart,.canvasWrap,#chartWrap{background-color:'+cbg+' !important}';
+    }catch(_){}
+    try{ var m=document.querySelector('meta[name="theme-color"]'); if(!m){ m=document.createElement("meta"); m.setAttribute("name","theme-color"); document.head.appendChild(m);} m.setAttribute("content", bg); }catch(_){}
+    /* repinta o gráfico com o novo fundo (sem resetar zoom) */
+    try{ if(typeof window.drawSoon==="function") window.drawSoon(); }catch(_){}
+    try{ if(typeof window.draw==="function") window.draw(); }catch(_){}
   };
   try{
     var saved=JSON.parse(localStorage.getItem("dvl.themeStudio.v1")||"null");
@@ -70,7 +110,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.268';
+window.DVL_APP_VERSION = 'Beta 1.269';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16070,6 +16110,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.269", note: "Theme Studio AGORA MUDA AS CORES DE VERDADE. Na 1.267/1.268 a troca de tema era quase invisível: o app não usa as variáveis CSS que eu re-apontava — as cores estão hardcoded, inclusive o FUNDO DO GRÁFICO, que é pintado no <canvas> por JS (fillStyle='#020806') e por isso CSS nenhum pegava. Correção: (1) um hook único no canvas troca SÓ os near-blacks de fundo conhecidos pela cor de fundo do tema — velas verde/vermelho, textos, acentos e zonas passam intactos (semântica preservada); (2) as variáveis agora usam os nomes REAIS que o app declara (--bg0/1/2, --card, --text, --muted, --dvl-desktop-surface/-border, --dvl-panel-line…), retintando header, trilhos e superfícies que são baseadas em variável; (3) uma folha de override força o fundo do body e a moldura do gráfico. Três paletas bem distintas: DVL Teal (padrão, igual a hoje), Ocean (azul-marinho) e Carbon (grafite neutro). O fundo do gráfico — a maior área da tela — muda claramente entre elas. Painéis profundos ainda seguem por fases. Só frontend." },
   { version: "Beta 1.268", note: "Theme Studio agora tem botão APLICAR. Antes o tema/fundo mudava e já salvava no clique; agora mexer nos controles (paleta, cenário, opacidade, escurecimento, blur, saturação, contraste, posição, ligar/desligar fundo) faz só uma PRÉ-VISUALIZAÇÃO ao vivo — você vê o resultado na hora, mas nada é salvo até clicar em 'Aplicar' no rodapé do painel. O botão fica aceso ('Aplicar') quando há alterações pendentes e vira 'Aplicado ✓' quando está tudo salvo. Fechar o painel (×) sem aplicar DESCARTA a pré-visualização e volta pro último estado aplicado. 'Restaurar padrão' (⟲) continua aplicando na hora. Só frontend." },
   { version: "Beta 1.267", note: "DVL THEME STUDIO (v1): sistema central de tema global + fundos. Novo painel 'Aparência' (botão 🎨 no cabeçalho, ao lado do ⚙) com 3 paletas — DVL Teal, Ocean e Carbon — que trocam o app INTEIRO de uma vez (fundo, painéis, textos, bordas, acentos) re-apontando as variáveis CSS que o app já usa, com !important, então nada fica na paleta antiga. Compra/venda, TP/SL e velas mantêm o significado (não recoloram). Camada de fundo cinematográfico atrás do gráfico com controles completos (ativar, cenário, opacidade, escurecimento, nitidez/blur, saturação, contraste, posição) + Restaurar no cabeçalho. Persiste por localStorage e aplica ANTES do primeiro paint (sem flash). As fotos reais (WebP) entram em DVL_THEME_BG_IMAGES quando você enviar; enquanto isso o fundo mostra um véu discreto na cor do tema. Migração das superfícies principais nesta v1; componentes profundos seguem por fases. Só frontend." },
   { version: "Beta 1.266", note: "Novo card ALERTAS no Copilot: histórico de todos os alertas disparados (recentes primeiro), com o TEMPO relativo em que foram gerados ('há 4h', 'há 10 min') e o TF quando o alerta é de um timeframe específico (ex.: 'TF 5m'). Um capturador global grava cada alerta (hoje os Smart Alerts do Smart Delta — threshold e confluência temporal) no aparelho, mesmo com o Copilot fechado, então nada se perde. Botão 'Limpar' pra zerar. Só frontend." },
