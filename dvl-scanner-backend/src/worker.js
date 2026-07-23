@@ -19,7 +19,40 @@ const train = require("./train");
 const backtest = require("./backtest");
 const pumpModel = require("./pumpModel");
 const exhaustionRsi = require("./exhaustionRsi");
+const vrsiStore = require("./vrsiStore");
 const { isTradableCrypto } = require("./symbolFilter");
+
+/* ── VP + RSI-V adaptive model — live sampling ────────────────────────────
+   Each cycle, sample a rotating batch of MEXC candidates on 1m and 5m (the TFs
+   the user trades), detect RSI-V setups near VP zones and log the resolved ones.
+   Fully guarded so it can never break the scan. */
+let _vrsiCursor = 0;
+function normRows(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .map(x => ({ time: +x[0], open: +x[1], high: +x[2], low: +x[3], close: +x[4], volume: +x[5] }))
+    .filter(c => Number.isFinite(c.time) && Number.isFinite(c.close));
+}
+async function ingestVrsi(adapter, cands) {
+  if (!adapter || adapter.key !== "mexc" || typeof adapter.klinesChart !== "function") return 0;
+  if (!Array.isArray(cands) || !cands.length) return 0;
+  const N = Math.max(1, cfg.VRSI_SYMBOLS_PER_CYCLE || 12);
+  const batch = [];
+  for (let j = 0; j < Math.min(N, cands.length); j++) batch.push(cands[(_vrsiCursor + j) % cands.length]);
+  _vrsiCursor = (_vrsiCursor + N) % Math.max(1, cands.length);
+  let logged = 0;
+  await mapPool(batch, Math.min(cfg.POOL, 4), async (c) => {
+    try {
+      const [r1, r5] = await Promise.all([
+        adapter.klinesChart(c.sym, "1m", 600),
+        adapter.klinesChart(c.sym, "5m", 400)
+      ]);
+      const one = normRows(r1), five = normRows(r5);
+      if (one.length >= 60) logged += vrsiStore.ingest(c.sym, "1m", one, one);
+      if (five.length >= 60 && one.length >= 60) logged += vrsiStore.ingest(c.sym, "5m", five, one);
+    } catch (_) { /* skip this symbol */ }
+  });
+  return logged;
+}
 
 /* DVL Exhaustion RSI reading (15m, faithful port) for one MEXC symbol — used to
    confirm the pré-volume+spike signal. Best-effort: two chart-kline fetches
@@ -771,6 +804,14 @@ async function cycle() {
      below MIN_SAMPLES, self-throttled to once/hour otherwise. Signals are
      recorded + resolved inline in scanExchange as candles arrive. */
   try { pumpModel.maybeTrain(); } catch (e) { console.warn("[DVL worker] pumpModel train:", e && e.message); }
+
+  /* VP + RSI-V adaptive model: sample a rotating batch this cycle, then re-learn
+     on a cooldown. Guarded — never breaks the scan. */
+  try {
+    const n = await ingestVrsi(mexc, mexcData && mexcData.cands);
+    vrsiStore.learn({});
+    if (n) console.log("[DVL worker] vrsi: +" + n + " samples");
+  } catch (e) { console.warn("[DVL worker] vrsi:", e && e.message); }
 
   /* Mirror the registry to disk so signals survive restarts. */
   saveRegistry();
