@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.258';
+window.DVL_APP_VERSION = 'Beta 1.259';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.259", note: "Alertas de CONFLUÊNCIA TEMPORAL institucional (§13). Além dos Smart Alerts por limiar (|Delta|/Confidence/Exhaustion), agora dá pra ligar um alerta que dispara quando os módulos direcionais (Net Delta, Net Long, Net Short) estão alinhados no MESMO viés (compra ou venda) há pelo menos X minutos — usando o contexto temporal já rastreado (não recalcula). Novos controles na seção Smart Delta > Smart Alerts: 'Alerta confluência' (on/off), 'Módulos alinhados ≥' (2 ou 3) e 'Tempo mín (min)'. O aviso vem como toast + evento dvl:smart-delta-alert com a narrativa temporal (ex.: 'Confluência institucional de COMPRA · Net Delta acima há 12m · Net Long acima há 9m · …'). Dispara uma vez por episódio (não repete a cada candle enquanto a confluência persiste) e só rearma quando ela se desfaz. Só frontend." },
   { version: "Beta 1.258", note: "Contexto temporal institucional no Copilot (§13 do spec). O motor da tabela (DVL_SMART_DELTA_STATE) agora expõe getConfluence() e narrative(): a confluência de Net Delta/Net Long/Net Short/OI/LSR ordenada por HÁ MAIS TEMPO no estado, com viés compra/venda — sem recalcular nada. O Chat IA do Copilot passa a EXPLICAR essa ordem temporal: pergunte 'institucional', 'net delta', 'ordem temporal' ou toque no atalho 'Institucional' e ele responde algo como 'OI acima da média há 30m · LSR abaixo há 25m · Net Delta acima há 5m — viés institucional de compra', ajudando a ver se a confluência está nascendo, madura ou exausta. Mesmo bridge fica disponível pra Market Matrix/Alerts futuros. Só frontend." },
   { version: "Beta 1.257", note: "Tabela institucional do Smart Delta — modo de exibição e opacidade (§10 do spec). Novo seletor 'Exibição' na config: Auto (mobile mínima / PC completa, como estava), Detalhado (força a versão completa com palavra+valor+distância em qualquer tela), Compacto (força só setinha+tempo em qualquer tela) e Colapsado (só cabeçalho + rodapé Confidence/Continuation/Exh, sem linhas). Novo controle de Opacidade (0.4–1) pra tabela ficar mais translúcida e não tapar as velas. Usa uma chave nova (view) — quem já usava continua no Auto, sem regressão. Só frontend." },
   { version: "Beta 1.256", note: "Config da tabela institucional do Smart Delta: nova seção 'Tabela institucional (overlay)' dentro das configurações do indicador (toque no ⚙ / no item DVL Smart Delta). Dá pra ajustar: Confirmação (Fechamento do candle × Intrabar — quando o estado é confirmado, evitando reset falso), Banda neutra % (tolerância pra considerar 'na média' antes de virar Acima/Abaixo), Média (MA) usada como referência de cada módulo, e Duração exibida (Candles + tempo / só candles / só tempo). Também dá pra escolher quais Módulos aparecem (Net Delta, Net Long, Net Short, OI, LSR). Tudo aplica na hora e persiste (a config já era salva por trás; agora tem UI). Consome o motor de estado existente (DVL_SMART_DELTA_STATE) sem recalcular. Só frontend." },
@@ -31186,6 +31187,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
   var KEY = "dvl_smart_delta_1228";
   var DEFAULTS = { on:false, panel:true, height:38, lookback:20, thNeutral:18, opacity:0.9,
     alertOn:false, alertDelta:60, alertConf:70, alertExh:75,
+    alertConflOn:false, alertConflMin:2, alertConflMins:10,
     // Beta 1.231 — histograma em painel próprio (oscilador) + tabela overlay
     histogram:true, maOn:true, maLen:9, zeroLine:true, spikeMult:2, detailed:false,
     posColor:"#16c784", negColor:"#ff4a61", maColor:"#f3c768",
@@ -31372,14 +31374,46 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     if(t!==lastPubTime){ lastPubTime=t; try{ evalAlerts(snap); }catch(_){} }
   }
   function evalAlerts(s){
-    if(!state.alertOn) return;
-    var msg=null;
-    if(Math.abs(s.delta)>=(state.alertDelta||60) && s.confidence>=(state.alertConf||70) && (s.cls==="buy"||s.cls==="sell")){
-      msg="Smart Delta "+(s.cls==="buy"?"COMPRA":"VENDA")+" forte · "+(s.delta>0?"+":"")+s.delta+" · Conf "+s.confidence+"% · Cont "+s.continuation+"%";
-    } else if(s.exhaustion>=(state.alertExh||75)){
-      msg="Smart Delta · exaustão "+s.exhaustion+"% ("+s.symbol+" "+s.tf+")";
+    if(state.alertOn){
+      var msg=null;
+      if(Math.abs(s.delta)>=(state.alertDelta||60) && s.confidence>=(state.alertConf||70) && (s.cls==="buy"||s.cls==="sell")){
+        msg="Smart Delta "+(s.cls==="buy"?"COMPRA":"VENDA")+" forte · "+(s.delta>0?"+":"")+s.delta+" · Conf "+s.confidence+"% · Cont "+s.continuation+"%";
+      } else if(s.exhaustion>=(state.alertExh||75)){
+        msg="Smart Delta · exaustão "+s.exhaustion+"% ("+s.symbol+" "+s.tf+")";
+      }
+      if(msg){ try{ if(typeof showToast==="function") showToast(msg); }catch(_){} try{ window.dispatchEvent(new CustomEvent("dvl:smart-delta-alert",{detail:{message:msg,snap:s}})); }catch(_){} }
     }
-    if(msg){ try{ if(typeof showToast==="function") showToast(msg); }catch(_){} try{ window.dispatchEvent(new CustomEvent("dvl:smart-delta-alert",{detail:{message:msg,snap:s}})); }catch(_){} }
+    /* Beta 1.259 — alerta de CONFLUÊNCIA TEMPORAL institucional (§13). Independe do
+       alerta de threshold acima: dispara quando N módulos direcionais (Net Delta/
+       Long/Short) estão alinhados no MESMO viés há pelo menos X minutos. Uma vez por
+       episódio (não repete a cada candle enquanto a confluência persiste). */
+    if(state.alertConflOn) evalConfluenceAlert(s);
+  }
+  var _conflActive=false, _conflBias="";
+  function evalConfluenceAlert(s){
+    var SD=window.DVL_SMART_DELTA_STATE; if(!SD||typeof SD.getConfluence!=="function") return;
+    var c; try{ c=SD.getConfluence(); }catch(_){ return; }
+    if(!c||!c.modules.length){ _conflActive=false; return; }
+    var sign = c.biasScore>0?1:(c.biasScore<0?-1:0);
+    if(!sign){ _conflActive=false; return; }
+    var minMs=Math.max(0,(state.alertConflMins!=null?state.alertConflMins:10))*60000;
+    var minMods=Math.max(2,state.alertConflMin||2);
+    var aligned=0;
+    for(var i=0;i<c.modules.length;i++){ var m=c.modules[i];
+      var lean = (m.key==="netShort") ? (m.relation==="above"?-1:(m.relation==="below"?1:0))
+               : ((m.key==="netDelta"||m.key==="netLong") ? (m.relation==="above"?1:(m.relation==="below"?-1:0)) : 0);
+      if(lean===sign && (m.stateMs||0)>=minMs) aligned++;
+    }
+    var bias = sign>0?"compra":"venda";
+    if(aligned>=minMods){
+      if(!_conflActive || _conflBias!==bias){
+        _conflActive=true; _conflBias=bias;
+        var nar=(typeof SD.narrative==="function")?SD.narrative():c.narrative;
+        var msg="Confluência institucional de "+bias.toUpperCase()+" · "+nar;
+        try{ if(typeof showToast==="function") showToast(msg); }catch(_){}
+        try{ window.dispatchEvent(new CustomEvent("dvl:smart-delta-alert",{detail:{message:msg,snap:s,confluence:c}})); }catch(_){}
+      }
+    } else if(aligned < minMods-1){ _conflActive=false; }  // histerese: só reseta quando dissolve de vez
   }
   function latest(){ compute(); for(var i=cache.length-1;i>=0;i--){ if(cache[i]) return { i:i, s:cache[i] }; } return null; }
 
@@ -31677,6 +31711,9 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
       '<div class="dvl-vt-field"><label>|Delta| ≥</label><input id="sdAlDelta" class="dvl-vt-input" type="number" min="20" max="100" step="5" value="'+(state.alertDelta||60)+'"></div>'+
       '<div class="dvl-vt-field"><label>Confidence ≥</label><input id="sdAlConf" class="dvl-vt-input" type="number" min="40" max="100" step="5" value="'+(state.alertConf||70)+'"></div>'+
       '<div class="dvl-vt-field"><label>Exhaustion ≥</label><input id="sdAlExh" class="dvl-vt-input" type="number" min="40" max="100" step="5" value="'+(state.alertExh||75)+'"></div>'+
+      '<div class="dvl-vt-field"><label>Alerta confluência</label><label class="dvl-switch"><input id="sdAlConflOn" type="checkbox" '+(state.alertConflOn?"checked":"")+'><i></i><b></b></label></div>'+
+      '<div class="dvl-vt-field"><label>Módulos alinhados ≥</label><input id="sdAlConflMin" class="dvl-vt-input" type="number" min="2" max="3" step="1" value="'+(state.alertConflMin||2)+'"></div>'+
+      '<div class="dvl-vt-field"><label>Tempo mín (min)</label><input id="sdAlConflMins" class="dvl-vt-input" type="number" min="0" max="240" step="1" value="'+(state.alertConflMins!=null?state.alertConflMins:10)+'"></div>'+
       '</div></div>'+
       tblSec;
     function bind(id,key,type){ var el=b.querySelector("#"+id); if(!el) return; var fn=function(){ if(type==="check") state[key]=!!el.checked; else state[key]=Number(el.value)||DEFAULTS[key]; if(id==="sdOn") updateRow(); if(id==="sdPanel"&&!state.panel) hidePanel(); save(); try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){} }; el.addEventListener("change",fn); el.addEventListener("input",fn); }
@@ -31684,6 +31721,7 @@ function _stepBack(){_pauseReplay();if(S.replay.index>0)_setReplayIdx(S.replay.i
     bind("sdHist","histogram","check"); bind("sdMaOn","maOn","check"); bind("sdMaLen","maLen","num"); bind("sdSpike","spikeMult","num"); bind("sdZero","zeroLine","check");
     bind("sdBarW","barWidth","num"); bind("sdAuto","autoScale","check"); bind("sdCO","useConfOpacity","check"); bind("sdOpMax","maxOpacity","num"); bind("sdOpMin","minOpacity","num"); bind("sdMaTh","maThick","num");
     bind("sdAlertOn","alertOn","check"); bind("sdAlDelta","alertDelta","num"); bind("sdAlConf","alertConf","num"); bind("sdAlExh","alertExh","num");
+    bind("sdAlConflOn","alertConflOn","check"); bind("sdAlConflMin","alertConflMin","num"); bind("sdAlConflMins","alertConflMins","num");
     /* Beta 1.256 — binds da tabela institucional → DVL_SMART_DELTA_STATE.setCfg + re-render */
     if(TS){
       var setT=function(patch){ try{ TS.setCfg(patch); }catch(_){} try{ renderPanel(); }catch(_){} };
