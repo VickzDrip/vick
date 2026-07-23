@@ -20,13 +20,9 @@ const express = require("express");
 const { WebSocketServer } = require("ws");
 const cfg = require("./config");
 const worker = require("./worker");
-const analyze = require("./analyze");
 const { mexc } = require("./exchanges");
 const M = require("./metrics");
 const oiStore = require("./oiStore");
-const pumpModel = require("./pumpModel");
-const pumpBacktest = require("./pumpBacktest");
-const annualBacktest = require("./annualBacktest");
 const vrsiStore = require("./vrsiStore");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
@@ -149,34 +145,6 @@ function createServer() {
     res.json({ ok: true, engine: cfg.ENGINE, weights: cfg.WEIGHTS, oiMaLen: cfg.OI_MA_LEN, lsrMaLen: cfg.LSR_MA_LEN, exr: cfg.EXR });
   });
 
-  /* Manual trades (opened by hand in the app's Trade tab, not a scanner
-     detection) become ML training examples too — see worker.recordManualTrade.
-     Best-effort: always 200s so a slow/unreachable backend never surfaces as
-     an error in the trading UI; failures are logged server-side only. */
-  app.post("/api/dvl/scanner/manual-trade", (req, res) => {
-    const body = req.body || {};
-    const symbol = String(body.symbol || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-    const side = body.side === "SHORT" ? "SHORT" : "LONG";
-    const entryPrice = Number(body.entryPrice);
-    const at = Number(body.at) || Date.now();
-    if (!symbol || !(entryPrice > 0)) { res.json({ ok: false, error: "missing symbol/entryPrice" }); return; }
-    worker.recordManualTrade(symbol, side, entryPrice, at)
-      .then(() => res.json({ ok: true }))
-      .catch(e => { console.error("[manual-trade]", symbol, e.message); res.json({ ok: false, error: e.message }); });
-  });
-
-  /* Every recorded signal (resolved + still-pending, auto-detected and
-     manual) for one symbol — the raw material for plotting markers on that
-     symbol's own chart. `combo` (e.g. "O+P") is added here, computed from
-     the same BLOCK_LABELS analyze.js's --combo CLI flag uses, so a chart
-     filter chip can match this field directly against the same letters. */
-  app.get("/api/dvl/scanner/history", (req, res) => {
-    const symbol = String(req.query.symbol || "").toUpperCase().replace(/[^A-Z0-9_]/g, "");
-    if (!symbol) { res.json({ ok: false, error: "missing symbol", rows: [] }); return; }
-    const rows = worker.getSymbolHistory(symbol).map(e => Object.assign({ combo: e.blocks ? analyze.comboKey(e.blocks) : null }, e));
-    res.json({ ok: true, symbol, rows });
-  });
-
   /* Read-only "how does this look RIGHT NOW" reading for ANY symbol — not
      gated by the scanner ever having flagged it, never logged anywhere.
      Powers the on-chart live labels (OI subindo/caindo, LSR subindo/caindo,
@@ -206,7 +174,6 @@ function createServer() {
       tfList: cfg.TF_LIST,
       binance: { rows: b.rows.length, updatedAt: b.updatedAt, fallback: b.fallback, activeSource: b.activeSource },
       mexc: { rows: m.rows.length, updatedAt: m.updatedAt },
-      outcomes: worker.getOutcomesStats()  // ML groundwork: pending/resolved labeled signals
     });
   });
 
@@ -225,177 +192,6 @@ function createServer() {
       const tf = vrsiStore.TFS.includes(String(req.query.tf)) ? String(req.query.tf) : "1m";
       res.json(Object.assign({ ok: true, tf }, vrsiStore.backtest(tf)));
     } catch (e) { res.status(500).json({ ok: false, error: String(e && e.message || e) }); }
-  });
-
-  /* Pré-pump / pré-short model status — how many resolved samples it has, and
-     whether it's trained enough to predict expected up/down moves (in ATR). */
-  app.get("/api/dvl/scanner/pump-model", (req, res) => {
-    res.json(Object.assign({ ok: true }, pumpModel.status()));
-  });
-
-  /* Financial backtest: replays the model's predicted direction over every
-     resolved signal that has a stored price path, simulating a $1000 account
-     with fixed-fractional risk + an ATR bracket, and sweeps the take-profit to
-     estimate the best exit. In-sample estimate — never a live order. Query:
-     account0, riskPct, slAtr, minConv override the defaults. */
-  app.get("/api/dvl/scanner/pump-backtest", (req, res) => {
-    const st = pumpModel.status();
-    const all = pumpModel.getDataset();
-    /* "Só sinais completos": restrict everything to the new-format signals that
-       carry the EXR/RSI reading (they also carry the exact price path). Nothing
-       is deleted — this is a reversible VIEW, not a reset. */
-    const onlyComplete = String(req.query.onlyComplete || "") === "1";
-    const complete = all.filter(s => s && Array.isArray(s.exrCloses) && s.exrCloses.length);
-    const data = onlyComplete ? complete : all;
-    const withPath = data.filter(s => s && Array.isArray(s.path) && s.path.length).length;
-    /* Gate mínimo. No modo "só sinais completos" os completos acumulam devagar
-       (só sinais de 15m que já RESOLVERAM, ~5h depois do disparo), então deixamos
-       rodar em modo PRELIMINAR a partir de PRELIM — resultado com aviso de
-       amostra pequena — em vez de travar em "aguardando". Sem o filtro, segue
-       exigindo MIN (a amostra grande dá resultado confiável). */
-    const MIN = 20, PRELIM = 8;
-    const gate = onlyComplete ? PRELIM : MIN;
-    const preliminary = onlyComplete && data.length < MIN;
-    if (!st.trained || data.length < gate) {
-      return res.json({ ok: true, ready: false, trained: !!st.trained, samples: data.length,
-                        onlyComplete, completeN: complete.length, totalN: all.length, need: gate });
-    }
-    const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
-    /* Realistic trading cost per side, as PERCENT of notional: taker fee +
-       slippage. MEXC USDT-perp fees are Maker 0.00% / Taker 0.02% — a spike
-       entry is a taker, so 0.02%/side. Slippage on a market fill adds a bit.
-       Round-trip cost fraction = 2 × (fee + slip) / 100. Tunable via query. */
-    const feePct = Math.max(0, num(req.query.feePct, 0.02));   // per side (MEXC taker)
-    const slipPct = Math.max(0, num(req.query.slipPct, 0.02)); // per side
-    const costFrac = 2 * (feePct + slipPct) / 100;
-    const base = {
-      account0: num(req.query.account0, 1000),
-      riskPct: Math.min(0.2, Math.max(0.001, num(req.query.riskPct, 0.01))),
-      costFrac
-    };
-    const predict = pumpModel.predictFeatures;
-    /* Different RISK MODES — one SL/TP profile is never right for everything.
-       Each is a fixed stop with its own take-profit search grid; evaluate()
-       learns the best TP + conviction gate per mode (net of costs). */
-    const MODES = [
-      { key: "scalp", label: "Scalp", slAtr: 0.8, tpGrid: [1, 1.5, 2, 2.5] },
-      { key: "normal", label: "Equilibrado", slAtr: 1.2, tpGrid: [1.5, 2, 3, 4] },
-      { key: "runner", label: "Runner", slAtr: 2.0, tpGrid: [3, 4, 5, 6, 8] },
-      /* Adaptive: fixed initial stop, ATR trailing exit (needs the price path). */
-      { key: "adapt", label: "Adaptativo", slAtr: 1.5, trail: true, trailGrid: [0.5, 1, 1.5, 2, 2.5, 3] }
-    ];
-    const sideOk = r => (r.returnPct > 0 && r.expectancyAtr > 0);
-    const evals = MODES.map(m => ({
-      m, e: pumpBacktest.evaluate(data, predict, Object.assign({}, base,
-        m.trail ? { slAtr: m.slAtr, trail: true, trailGrid: m.trailGrid } : { slAtr: m.slAtr, tpGrid: m.tpGrid }))
-    }));
-    const modes = evals.map(({ m, e }) => ({
-      key: m.key, label: m.label, adaptive: !!e.adaptive,
-      slAtr: e.slAtr, tpAtr: e.tpAtr, trailAtr: e.trailAtr, minConv: e.minConv,
-      account: e.all.account, returnPct: e.all.returnPct, maxDrawdownPct: e.all.maxDrawdownPct,
-      winRate: e.all.winRate, trades: e.all.trades,
-      longOperate: sideOk(e.long), shortOperate: sideOk(e.short)
-    }));
-    /* Best mode = highest net final account. */
-    let bestIdx = 0;
-    for (let i = 1; i < evals.length; i++) if (evals[i].e.all.account > evals[bestIdx].e.all.account) bestIdx = i;
-    const bm = evals[bestIdx], e = bm.e;
-    const strip = r => { const { equity, ...rest } = r; return rest; };
-    const trigger = {
-      minConv: e.minConv,
-      long: { operate: sideOk(e.long), trades: e.long.trades, returnPct: e.long.returnPct, winRate: e.long.winRate, expectancyAtr: e.long.expectancyAtr },
-      short: { operate: sideOk(e.short), trades: e.short.trades, returnPct: e.short.returnPct, winRate: e.short.winRate, expectancyAtr: e.short.expectancyAtr }
-    };
-    /* No-blind-spots SL×TP surface at the learned gate — the whole landscape,
-       so the best combo can be judged for robustness (plateau vs lucky spike). */
-    const surface = pumpBacktest.sweepGrid(data, predict, Object.assign({}, base, { minConv: e.minConv }));
-    /* THE OPTIMISER: search hundreds of exit combos (bracket / breakeven /
-       trailing) on a TRAIN split and validate the winner out-of-sample. */
-    const optimized = pumpBacktest.optimize(data, predict, base);
-    /* RESULTADO SEPARADO POR LADO — a pedido: os shorts puxavam o edge pra baixo,
-       então cada direção é otimizada SOZINHA (melhor modo + TP + gatilho só com
-       os trades daquele lado) e validada fora da amostra por conta própria. Assim
-       dá pra ver o edge real do long sem a diluição do short. */
-    const bestSideEval = (side) => {
-      const evs = MODES.map(m => ({ m, e: pumpBacktest.evaluate(data, predict, Object.assign({}, base,
-        m.trail ? { slAtr: m.slAtr, trail: true, trailGrid: m.trailGrid } : { slAtr: m.slAtr, tpGrid: m.tpGrid },
-        { side })) }));
-      let bi = 0; for (let i = 1; i < evs.length; i++) if (evs[i].e.all.account > evs[bi].e.all.account) bi = i;
-      const chosen = evs[bi];
-      return {
-        result: strip(chosen.e.all),
-        params: { mode: chosen.m.key, modeLabel: chosen.m.label, slAtr: chosen.e.slAtr,
-                  tpAtr: chosen.e.tpAtr, trailAtr: chosen.e.trailAtr, adaptive: !!chosen.e.adaptive, minConv: chosen.e.minConv },
-        optimize: pumpBacktest.optimize(data, predict, Object.assign({}, base, { side }))
-      };
-    };
-    const longSide = bestSideEval("long");
-    const shortSide = bestSideEval("short");
-    /* DEEP DIAGNOSTICS: is the model's number calibrated, and where (if
-       anywhere) does a profitable subset hide? */
-    const calibration = pumpBacktest.calibrate(data, predict);
-    const conditions = pumpBacktest.mineConditions(data, predict, pumpModel.FEATURES, base);
-    /* The user's discovery: pré-volume+spike CONFIRMED by the 15m Exhaustion
-       RSI zone. Sweeps the RSI inputs (len, push, zones) and validates the best
-       out-of-sample. */
-    const rsiConfirm = pumpBacktest.sweepRsiConfirm(data, predict, base);
-    res.json({
-      ok: true, ready: true, horizon: pumpModel.HORIZON,
-      samples: data.length, withPath, exactPath: e.all.exactPath,
-      onlyComplete, completeN: complete.length, totalN: all.length, preliminary, need: MIN,
-      modes, bestMode: bm.m.key,
-      params: { account0: base.account0, riskPct: base.riskPct, slAtr: e.slAtr, minConv: e.minConv,
-                tpAtr: e.tpAtr, trailAtr: e.trailAtr, adaptive: !!e.adaptive,
-                mode: bm.m.key, modeLabel: bm.m.label, feePct, slipPct, costRoundTripPct: costFrac * 100 },
-      trigger, convSweep: e.convSweep, surface, optimized, calibration, conditions, rsiConfirm,
-      best: strip(e.all), long: strip(e.long), short: strip(e.short),
-      /* Cada lado otimizado SOZINHO (resultado final separado). */
-      longSide: { result: longSide.result, params: longSide.params, optimize: longSide.optimize },
-      shortSide: { result: shortSide.result, params: shortSide.params, optimize: shortSide.optimize },
-      grossReturnPct: e.grossReturnPct, sweep: e.sweep,
-      equity: e.all.equity.filter((_, i) => i % Math.max(1, Math.ceil(e.all.equity.length / 120)) === 0)
-    });
-  });
-
-  /* ── ANNUAL backtest ─────────────────────────────────────────────────────
-     Same criteria (spike pós-flat + 15m Exhaustion RSI, RSI base 15m over the
-     full year) run on demand over ~365d of 15m for up to 5 assets. Heavy (many
-     paginated fetches), so: one run at a time + a short result cache. */
-  const DEFAULT_ANNUAL = ["BTC_USDT", "ETH_USDT", "SOL_USDT", "BNB_USDT", "XRP_USDT"];
-  let _annualRunning = false, _annualCache = null, _annualStartedAt = 0;
-  app.get("/api/dvl/scanner/pump-backtest-annual", (req, res) => {
-    const days = Math.max(30, Math.min(760, Number(req.query.days) || 365));
-    let symbols = String(req.query.symbols || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
-    symbols = (symbols.length ? symbols : DEFAULT_ANNUAL).slice(0, 5)
-      .map(s => /_/.test(s) ? s : s.replace(/USDT$/, "") + "_USDT");
-    const rsiGridFlag = /^(1|true)$/i.test(String(req.query.rsiGrid || ""));
-    const vpFlag = /^(1|true)$/i.test(String(req.query.vp || ""));
-    const comboFlag = /^(1|true)$/i.test(String(req.query.combo || ""));
-    const vSigFlag = /^(1|true)$/i.test(String(req.query.vsignal || ""));
-    const tfMin = [5, 15, 30, 60].indexOf(Number(req.query.tf)) >= 0 ? Number(req.query.tf) : 15;
-    const cacheKey = symbols.join(",") + "|" + days + "|" + tfMin + "m|" + (rsiGridFlag ? "grid" : "std") + (vpFlag ? "|vp" : "") + (comboFlag ? "|combo" : "") + (vSigFlag ? "|vsig" : "");
-    /* Poll pattern: the run takes 30–60s, so we never hold the HTTP connection
-       open for it. Fresh cache → return the result; already running → report
-       progress; otherwise kick it off and report "started". Client polls. */
-    if (_annualCache && _annualCache.key === cacheKey && (Date.now() - _annualCache.at) < 600000) {
-      return res.json(Object.assign({ cached: true }, _annualCache.data));
-    }
-    if (_annualRunning) {
-      return res.json({ ok: true, ready: false, running: true, elapsedMs: Date.now() - _annualStartedAt,
-                        message: "Rodando o backtest… (buscando ~1 ano de candles)" });
-    }
-    _annualRunning = true; _annualStartedAt = Date.now();
-    const runCfg = { ENGINE: cfg.ENGINE, EXR: cfg.EXR,
-      account0: Number(req.query.account0) || 1000, riskPct: Number(req.query.riskPct) || 0.01,
-      feePct: Number(req.query.feePct) || 0.02, slipPct: Number(req.query.slipPct) || 0.02,
-      rsiGrid: rsiGridFlag, vpBacktest: vpFlag, comboBacktest: comboFlag, vSignalBacktest: vSigFlag };
-    const fetch15m = (sym) => mexc.klinesHistory(sym, days, tfMin);
-    annualBacktest.run(symbols, days, runCfg, fetch15m, tfMin)
-      .then(out => { _annualCache = { key: cacheKey, at: Date.now(), data: out }; })
-      .catch(err => { _annualCache = { key: cacheKey, at: Date.now(), data: { ok: false, ready: false, error: String(err && err.message || err) } }; })
-      .finally(() => { _annualRunning = false; });
-    res.json({ ok: true, ready: false, running: true, started: true, symbols, days, tfMin,
-               message: "Backtest anual iniciado — buscando ~1 ano de " + tfMin + "m. Pode levar até 1 min." });
   });
 
   const server = http.createServer(app);

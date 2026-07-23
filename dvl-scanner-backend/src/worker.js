@@ -14,10 +14,6 @@ const path = require("path");
 const cfg = require("./config");
 const { EXCHANGES, binance, mexc, binanceLsr, tfToMs } = require("./exchanges");
 const M = require("./metrics");
-const outcomes = require("./outcomes");
-const train = require("./train");
-const backtest = require("./backtest");
-const pumpModel = require("./pumpModel");
 const exhaustionRsi = require("./exhaustionRsi");
 const vrsiStore = require("./vrsiStore");
 const { isTradableCrypto } = require("./symbolFilter");
@@ -79,85 +75,15 @@ async function exrReadingFor(adapter, sym) {
     if (!Array.isArray(series) || !series.length) return null;
     const last = series[series.length - 1];
     const zone = last.value >= opts.upperZone ? "up" : (last.value <= opts.lowerZone ? "down" : "neutral");
-    /* HISTORICAL BACKFILL — the reason the backtest was "slow to find signals":
-       it only recorded the CURRENT bar each cycle and each takes ~5h (20 bars)
-       to resolve, so it accumulated live. Here we mine every past close-confirmed
-       ignition already present in the fetched window, with its RSI reading, and
-       resolve them from the same candles — instantly seeding resolved signals.
-       Idempotent (dedup by sym|tf|barTime), so re-running each cycle only adds
-       genuinely new bars. Best-effort: never break the reading. */
-    try { backfillHistory(sym, cfg.SCAN_TF, base, series, opts); } catch (_) {}
     return { value: last.value, base: last.base, push: last.push, zone: zone,
              closes: base.slice(-40).map(c => c.close) };
   } catch (_) { return null; }
-}
-
-/* Walk every CLOSED 15m bar in `base` (ascending {time,open,high,low,close,
-   volume}), detect the same close-confirmed spike pós-flat ignition the live
-   scan uses, attach the EXR reading at that bar (from the precomputed `series`),
-   and record it. Then resolve everything with ≥HORIZON bars after it from this
-   same window. Returns how many NEW signals were recorded. */
-function backfillHistory(sym, tf, base, series, opts) {
-  if (!Array.isArray(base) || base.length < 30) return 0;
-  const engine = cfg.ENGINE;
-  const closes = base.map(c => Number(c.close));
-  const vols = base.map(c => Number(c.volume));
-  const ohlc = base.map(c => ({ time: Number(c.time), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume) }));
-  const sByTime = new Map();
-  if (Array.isArray(series)) for (const s of series) sByTime.set(Number(s.time), s);
-  const upperZone = opts.upperZone, lowerZone = opts.lowerZone;
-  let recorded = 0;
-  /* j = the bar treated as the last CLOSED bar. Need history before (MAs) and
-     ≥1 bar after so it's actually closed; resolution needs ≥HORIZON after. */
-  for (let j = 26; j <= base.length - 2; j++) {
-    /* closedIgnition treats len-2 as the last closed bar → pass slice(0, j+2). */
-    const ig = M.closedIgnition(closes.slice(0, j + 2), vols.slice(0, j + 2), engine);
-    if (!ig.isIgnition) continue;
-    const barT = Number(base[j].time);
-    const price = Number(base[j].close);
-    if (!(price > 0)) continue;
-    const atr = M.computeAtr(ohlc.slice(0, j + 1), 14);
-    if (!(atr > 0)) continue;
-    /* Features anchored at bar j (computeSignal reads its last element). */
-    let sig = null;
-    try { sig = M.computeSignal(closes.slice(0, j + 1), vols.slice(0, j + 1), engine); } catch (_) { sig = null; }
-    const row = {
-      volBelowMaBars: ig.volBelowMaBars,
-      crossStrength: ig.crossStrength,
-      maFlatness1: sig ? sig.maFlatness1 : 0,
-      spike20: sig ? sig.spike20 : 0,
-      spikePrevVolRatio: sig ? sig.spikePrevVolRatio : 0
-    };
-    const se = sByTime.get(barT);
-    let exr = null;
-    if (se && Number.isFinite(Number(se.value))) {
-      const val = Number(se.value);
-      exr = { value: val, push: Number(se.push) || 0,
-              zone: val >= upperZone ? "up" : (val <= lowerZone ? "down" : "neutral"),
-              closes: closes.slice(Math.max(0, j - 39), j + 1) };
-    }
-    if (pumpModel.record(sym, tf, barT, price, atr, row, exr)) recorded++;
-  }
-  /* Resolve from THIS window (160 bars) so backfilled signals older than the
-     live 80-bar window still resolve immediately. */
-  pumpModel.resolveWith(sym, tf, ohlc);
-  return recorded;
 }
 
 /* Where the persistent signal registry is mirrored to disk so it survives
    restarts (deploys/reboots). Untracked by git, so `git pull` won't touch it. */
 const PERSIST_FILE = process.env.DVL_DATA_FILE || path.join(process.cwd(), "data", "signal-registry.json");
 
-/* ML groundwork: attempt (re)training at most once/hour; cheap while below
-   train.MIN_SAMPLES (just re-reads the log to count lines). */
-const TRAIN_INTERVAL_MS = 3600000;
-let _lastTrainAttempt = 0;
-function emptyModelStatus() {
-  return {
-    LONG: { trained: false, side: "LONG", samples: 0, needed: train.MIN_SAMPLES }
-  };
-}
-let _modelStatus = emptyModelStatus();
 
 /* concurrency-limited map (mirrors the in-page mapPool). */
 async function mapPool(items, limit, fn) {
@@ -472,31 +398,13 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
     cur[cands[i].sym] = row;
     if (priceMap) priceMap[cands[i].sym] = row.price;
 
-    /* ── pré-pump / pré-short model ── predict the expected up/down move for
-       this live row (null until trained), resolve any pending outcomes for
-       this symbol from its fresh candles, and record a new spike-pós-flat
-       signal (isIgnition = the 2-block setup) for later resolution. */
+    /* Exhaustion RSI reading for this row (15m pass, computed above in the
+       pooled batch). Attach to EVERY row so the table shows it — value, raw RSI
+       (base) and the zone (down = sobrevendido/verde, up = sobrecomprado/vermelho). */
     try {
-      const pred = pumpModel.predict(row);
-      if (pred) { row.predUp = pred.up; row.predDown = pred.down; }
-      pumpModel.resolveWith(cands[i].sym, tf, k.ohlc);
-      /* Exhaustion RSI reading for this row (15m pass, computed above in the
-         pooled batch). Attach to EVERY row so the table shows it — value,
-         raw RSI (base) and the zone (down = sobrevendido/verde, up =
-         sobrecomprado/vermelho). */
       const exr = exrBySym ? exrBySym[cands[i].sym] : null;
       if (exr) { row.exrValue = exr.value; row.exrBase = exr.base; row.exrZone = exr.zone; }
-      /* Record signals ONLY on the 15m pass (SCAN_TF) — o modelo é 15m+RSI.
-         Antes gravava em TODOS os timeframes, mas só o 15m carrega a leitura do
-         RSI (exr); os sinais de 1m/3m/5m/… entravam SEM RSI e nunca ficavam
-         "completos", inflando o total e deixando a fração completa minúscula.
-         Agora TODO sinal novo é 15m e recebe o RSI → todo sinal novo é completo. */
-      if (row.isIgnition && tf === cfg.SCAN_TF && Array.isArray(k.ohlc) && k.ohlc.length) {
-        const atr = M.computeAtr(k.ohlc, 14);
-        const sigT = Number(k.ohlc[k.ohlc.length - 1].time) || now;
-        if (atr > 0) pumpModel.record(cands[i].sym, tf, sigT, row.lastClose || row.price, atr, row, exr);
-      }
-    } catch (_) { /* model is best-effort — never break a scan cycle */ }
+    } catch (_) { /* best-effort — never break a scan cycle */ }
   }
 
   /* Stash the FULL universe (all candidates, ranked by spike) for the
@@ -535,63 +443,7 @@ async function scanExchange(adapter, tf, cands, oiTrends, priceMap) {
     row.spikeScore = M.score(row, cfg.WEIGHTS, cfg.ENGINE);
     row.status = M.statusOf(row, row.spikeScore);
     row.blocks = M.blocksOf(row, cfg.ENGINE);
-    /* Advisory only — does the LONG model (whichever of logistic/tree tests
-       better) call this favorable RIGHT NOW? null (not false) until it
-       clears MIN_SAMPLES, same "no opinion yet" convention
-       train.predictFavorable documents. Consumed by the Bot Demo
-       (index.html) as an extra entry gate alongside the existing score
-       threshold — never affects spikeScore/status/blocks themselves.
-       Every tracked row is LONG (mergeRegistry never lets SHORT join), so
-       there's only ever one model to check. */
-    const mlPred = train.predictFavorable(_modelStatus.LONG, row);
-    row.mlFavorable = mlPred.favorable;
-    row.mlProb = mlPred.prob;
-    row.mlBestModel = mlPred.bestModel;
   });
-
-  /* Log the feature snapshot for freshly-joined signals only (ML outcome
-     groundwork) — uses the finalized row (real score/blocks, not the
-     placeholder set before step 5). Net Long/Short/Delta (metrics.js's
-     netFlowTrend) are fetched HERE, per fresh join only — not every cycle
-     for every already-tracked row like oi/lsr trend are — because a fresh
-     join is rare (a handful of new detections/hour across every TF), while
-     tracked rows refresh every cycle; doing this per-cycle-per-row would
-     reintroduce the exact Binance rate-limit pressure CAND/REFRESH_MS were
-     cut to escape (see config.js). These stay a snapshot captured AT
-     DETECTION TIME for the ML pipeline only — they don't feed the live
-     score/blocks checklist the user sees, same deliberate-separate-
-     decision stance as the rest of the ML groundwork. */
-  if (freshJoins.length) {
-    const bySym = {};
-    for (const row of rows) bySym[row.rawSymbol] = row;
-    await mapPool(freshJoins, cfg.POOL, async (sym) => {
-      const row = bySym[sym];
-      if (!row) return;
-      try {
-        const [oiSeries, posData] = await Promise.all([
-          binance.openInterestHist(sym, tf, cfg.OI_MA_LEN),
-          binanceLsr.positionRatio(sym, tf, cfg.OI_MA_LEN)
-        ]);
-        const netT = M.netFlowTrend(oiSeries, posData && posData.series);
-        row.netLongRatio = netT.netLong.ratio || 0;
-        row.netLongSlope = netT.netLong.slope || 0;
-        row.netShortRatio = netT.netShort.ratio || 0;
-        row.netShortSlope = netT.netShort.slope || 0;
-        row.netDeltaRatio = netT.netDelta.ratio || 0;
-        row.netDeltaSlope = netT.netDelta.slope || 0;
-        /* Divergence warning — read-only, NEVER touches spikeScore/status/
-           blocks or the ML feature set (see metrics.js's doc-comment on
-           netFlowDivergence for why this stays a separate flag). */
-        const div = M.netFlowDivergence(row);
-        row.divergenceWarning = div.warning;
-        row.divergenceCount = div.count;
-      } catch (_) { /* leave unset — outcomes.js/train.js default to neutral */ }
-    });
-    for (const sym of freshJoins) {
-      const row = bySym[sym];
-      if (row) outcomes.recordSignal(adapter.key, tf, row, now);
-    }
-  }
 
   return rows;
 }
@@ -638,16 +490,6 @@ async function computeFreshRow(symbol, tf, side, entryPrice) {
   return row;
 }
 
-/* Manual trades (the user opening a position by hand in the app, not a
-   scanner detection) — logged as ML training examples too, so the outcome
-   log isn't limited to what the automated ignition check happens to flag.
-   Side-effecting only (logs via outcomes.recordSignal); returns nothing
-   worth reporting back beyond success/failure. */
-async function recordManualTrade(symbol, side, entryPrice, at) {
-  const tf = cfg.SCAN_TF || "15m";
-  const row = await computeFreshRow(symbol, tf, side, entryPrice);
-  outcomes.recordSignal("binance", tf, row, at, "manual");
-}
 
 /* Short-lived cache for computeLiveReading, keyed by "symbol|tf" — the
    in-page app polls this on a timer AND on every symbol change, and each
@@ -787,24 +629,6 @@ async function cycle() {
     }
   }
 
-  /* Resolve any pending outcome-log entries whose return horizons elapsed
-     (ML groundwork — see outcomes.js). */
-  const resolveNow = Date.now();
-  outcomes.checkOutcomes("mexc", mexcPriceMap, resolveNow);
-  outcomes.checkOutcomes("binance", binPriceMap, resolveNow);
-
-  /* Attempt to (re)train the learned-weights model — cheap no-op below
-     MIN_SAMPLES, and self-throttled to at most once/hour otherwise so a
-     multi-TF cycle isn't slowed down re-fitting on an unchanged dataset. */
-  /* ML training ("Aprendizado") removed per product decision — the scanner
-     runs on the manually-set weights only. Left the outcome logging above
-     (harmless) but no model is ever fit. */
-
-  /* Pré-pump / pré-short model: (re)train on resolved signals. Cheap no-op
-     below MIN_SAMPLES, self-throttled to once/hour otherwise. Signals are
-     recorded + resolved inline in scanExchange as candles arrive. */
-  try { pumpModel.maybeTrain(); } catch (e) { console.warn("[DVL worker] pumpModel train:", e && e.message); }
-
   /* VP + RSI-V adaptive model: sample a rotating batch this cycle, then re-learn
      on a cooldown. Guarded — never breaks the scan. */
   try {
@@ -884,13 +708,6 @@ let _running = false;
 async function start() {
   console.log("[DVL worker] starting 24h scan loop (every " + cfg.REFRESH_MS + "ms, " + cfg.TF_LIST.length + " timeframes)");
   loadRegistry();     // restore persisted signals so a restart doesn't reset the list
-  outcomes.loadPending(); // restore pending outcome-log entries (ML groundwork)
-  try { pumpModel.load(); } catch (_) { }   // restore pré-pump/pré-short dataset + model
-  const existingModel = train.loadModel();
-  // Ignore a pre-LONG/SHORT-split model file (flat shape) — it has neither
-  // key, so falling through to emptyModelStatus() just retrains from
-  // scratch on the next cycle instead of crashing on the old shape.
-  if (existingModel && (existingModel.LONG || existingModel.SHORT)) _modelStatus = existingModel;
   _running = true;
   const loop = async () => {
     while (_running) {
@@ -905,29 +722,4 @@ async function start() {
 }
 function stop() { _running = false; if (_timer) { clearTimeout(_timer); _timer = null; } }
 
-function getOutcomesStats() {
-  const stats = outcomes.loadStats();
-  stats.model = _modelStatus;
-  return stats;
-}
-
-function getSymbolHistory(symbol) {
-  return outcomes.historyForSymbol(symbol);
-}
-
-/* Refitting logistic + tree on the whole log is pure in-memory CPU (no
-   network calls), sub-second even at a few thousand examples — but the
-   Copilot page polls its status periodically, so a short cache still
-   saves refitting on every single poll for an answer that can't have
-   changed since the last resolved signal a few minutes ago. */
-const BACKTEST_CACHE_MS = 5 * 60000;
-let _backtestCache = null; // { at, result }
-function getBacktestStats() {
-  const now = Date.now();
-  if (_backtestCache && (now - _backtestCache.at) < BACKTEST_CACHE_MS) return _backtestCache.result;
-  const result = backtest.backtest();
-  _backtestCache = { at: now, result };
-  return result;
-}
-
-module.exports = { start, stop, cycle, getSnapshot, getUniverse, getCandidates, getMexcDerivs, onChange, scanExchange, mergeRegistry, setEngineConfig, getOutcomesStats, recordManualTrade, getSymbolHistory, computeLiveReading, getBacktestStats, backfillHistory };
+module.exports = { start, stop, cycle, getSnapshot, getUniverse, getCandidates, getMexcDerivs, onChange, scanExchange, mergeRegistry, setEngineConfig, computeLiveReading };
