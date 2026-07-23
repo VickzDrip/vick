@@ -93,32 +93,44 @@
     ocean:  { bg:"#04101c", surface:"#0a1c30", text:"#eef4fb", muted:"#90a4bd", accent:"#2ad4c0", accentLight:"#7fe6da" },
     carbon: { bg:"#0b0e11", surface:"#1a1f25", text:"#eef1f4", muted:"#98a0a8", accent:"#3fb98f", accentLight:"#86e0bf" }
   };
-  /* Detecção ALGORÍTMICA de verde de destaque: pega QUALQUER verde (não só a lista),
-     preservando ciano/azul (g não domina o azul), vermelho e amarelo. Verde pastel/claro
-     vira accentLight; verde médio/forte vira accent. Fundos escuros (g baixo) ficam de fora. */
-  function greenRole(r,g,b){
-    if(g>125 && g>r+45 && g>b+15){ return ((r>=120&&b>=120)||(r+g+b)/3>=175) ? "accentLight" : "accent"; }
+  /* Detecção ALGORÍTMICA do PAPEL de uma cor — pega QUALQUER tom da família, não só a
+     lista. Conservadora e preserva o que é semântico:
+       • verde de destaque → accent / accentLight (verde domina R e B)
+       • fundo escuro (near-black, não preto puro p/ manter sombras) → bg / surface
+       • cinza/sage médio dessaturado → muted
+     PRESERVA: preto puro, vermelho/laranja/amarelo (tons quentes), ciano/azul e roxo. */
+  function autoRole(r,g,b){
+    var mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+    if(g>125 && g>r+45 && g>b+15) return ((r>=120&&b>=120)||(r+g+b)/3>=175) ? "accentLight" : "accent";
+    var warm = (r>g+8 && r>b+8);                 /* vermelho/laranja/amarelo/marrom → não mexe */
+    if(!warm){
+      if(mx>=6 && mx<=30 && mn<=24) return "bg";        /* fundo profundo (>preto puro) */
+      if(mx>30 && mx<=52 && mn<=42) return "surface";   /* painel/superfície escura */
+      if(mn>=80 && mx<=205 && (mx-mn)<62) return "muted"; /* cinza/sage/azul-acinzentado médio */
+    }
     return null;
   }
-  /* Também registramos as cores DE SAÍDA de cada tema com o mesmo papel, pra que trocar
-     de tema reconheça a cor já aplicada (ex.: accent do Ocean) e mapeie pro novo tema —
-     assim NÃO precisamos guardar o style original (o app pode mexer no inline à vontade). */
+  /* Registramos as cores DE SAÍDA de cada tema com o mesmo papel, pra que trocar de tema
+     reconheça a cor já aplicada e mapeie pro novo — assim NÃO guardamos style original. */
   Object.keys(RTHEME).forEach(function(k){ var rt=RTHEME[k];
     Object.keys(rt).forEach(function(role){ var hex=(rt[role]||"").toLowerCase(); if(/^#[0-9a-f]{6}$/.test(hex)){ SROLE[hex]=role; var rgb=hexToRgb(hex); SRGB[rgb[0]+","+rgb[1]+","+rgb[2]]=role; } });
   });
+  /* Deriva SRGB a partir de TODO o SROLE (hex): o CSSOM serializa cores hex das REGRAS
+     como rgb(), então sem isso o override das folhas não pegava fundo de cabeçalho/rodapé. */
+  Object.keys(SROLE).forEach(function(hex){ if(/^#[0-9a-f]{6}$/.test(hex)){ var rgb=hexToRgb(hex), key=rgb[0]+","+rgb[1]+","+rgb[2]; if(SRGB[key]==null) SRGB[key]=SROLE[hex]; } });
   function remapStr(str, rt){
     if(!str || str.indexOf("#")<0 && str.indexOf("rgb")<0) return str;
     /* hex #rrggbb / #rgb */
     str = str.replace(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g, function(m){
       var lm=m.toLowerCase(), role=SROLE[lm];
       if(role && rt[role]) return rt[role];
-      if(lm.length===7){ var r=parseInt(lm.slice(1,3),16),g=parseInt(lm.slice(3,5),16),b=parseInt(lm.slice(5,7),16); var gr=greenRole(r,g,b); if(gr && rt[gr]) return rt[gr]; }
+      if(lm.length===7){ var r=parseInt(lm.slice(1,3),16),g=parseInt(lm.slice(3,5),16),b=parseInt(lm.slice(5,7),16); var gr=autoRole(r,g,b); if(gr && rt[gr]) return rt[gr]; }
       return m;
     });
     /* rgb()/rgba() */
     str = str.replace(/rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*(?:,\s*([0-9.]+)\s*)?\)/g, function(m,r,g,b,a){
       r=+r; g=+g; b=+b;
-      var role=SRGB[r+","+g+","+b] || greenRole(r,g,b); if(!role || !rt[role]) return m;
+      var role=SRGB[r+","+g+","+b] || autoRole(r,g,b); if(!role || !rt[role]) return m;
       var rgb=hexToRgb(rt[role]); return a!=null ? "rgba("+rgb[0]+","+rgb[1]+","+rgb[2]+","+a+")" : "rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
     });
     return str;
@@ -147,7 +159,33 @@
     _sweeping=false;
   }
   /* override das regras CSS (folhas): reconstrói do zero a cada troca a partir das
-     folhas originais (que nunca são mutadas). Só declarações que mudam de cor. */
+     folhas originais (que nunca são mutadas). Só declarações que mudam de cor.
+     RECORRE em @media/@supports — muito do chrome do desktop (cabeçalho, rodapé, trilhos,
+     dica do mouse) fica dentro de @media, então precisa entrar nos grupos. */
+  function walkRules(rules, rt){
+    var out="";
+    for(var r=0;r<rules.length;r++){
+      var rule=rules[r];
+      if((rule.type===4 || rule.type===12) && rule.cssRules){      /* @media / @supports */
+        var cond = (rule.media && rule.media.mediaText) || rule.conditionText || "";
+        var kw = rule.type===4 ? "@media" : "@supports";
+        var inner = walkRules(rule.cssRules, rt);
+        if(inner) out += kw+" "+cond+"{\n"+inner+"}\n";
+        continue;
+      }
+      if(rule.type!==1 || !rule.style || !rule.selectorText) continue;
+      var ct=rule.cssText; if(ct.indexOf("#")<0 && ct.indexOf("rgb")<0) continue;
+      var decl="";
+      for(var pi=0; pi<rule.style.length; pi++){
+        var prop=rule.style[pi], val=rule.style.getPropertyValue(prop);
+        if(val.indexOf("#")<0 && val.indexOf("rgb")<0) continue;
+        var nv=remapStr(val, rt);
+        if(nv!==val) decl+=prop+":"+nv+" !important;";
+      }
+      if(decl) out+=rule.selectorText+"{"+decl+"}\n";
+    }
+    return out;
+  }
   function buildRuleOverride(rt){
     var out="";
     try{
@@ -155,18 +193,7 @@
       for(var s=0;s<sheets.length;s++){
         if(sheets[s].ownerNode && sheets[s].ownerNode.id && sheets[s].ownerNode.id.indexOf("dvlThemeRules")===0) continue;
         var rules; try{ rules=sheets[s].cssRules; }catch(_){ continue; } if(!rules) continue;
-        for(var r=0;r<rules.length;r++){
-          var rule=rules[r]; if(rule.type!==1 || !rule.style || !rule.selectorText) continue;
-          var ct=rule.cssText; if(ct.indexOf("#")<0 && ct.indexOf("rgb")<0) continue;
-          var decl="";
-          for(var pi=0; pi<rule.style.length; pi++){
-            var prop=rule.style[pi], val=rule.style.getPropertyValue(prop);
-            if(val.indexOf("#")<0 && val.indexOf("rgb")<0) continue;
-            var nv=remapStr(val, rt);
-            if(nv!==val) decl+=prop+":"+nv+" !important;";
-          }
-          if(decl) out+=rule.selectorText+"{"+decl+"}\n";
-        }
+        out += walkRules(rules, rt);
       }
     }catch(_){}
     return out;
@@ -174,11 +201,14 @@
   var _sweepTimer=0, _curThemeId="teal";
   window.DVL_THEME_DOM_REMAP = function(themeId){
     var rt=RTHEME[themeId]||RTHEME.teal; _curThemeId=themeId;
-    /* folha de override das regras CSS */
+    /* folha de override das regras CSS — anexada ao FIM do <body> (muitos estilos do app
+       ficam em <style> dentro do body; pra vencer no empilhamento a nossa precisa vir por
+       último). Movemos pro fim a cada troca. */
     try{
       var rs=document.getElementById("dvlThemeRules");
-      if(!rs){ rs=document.createElement("style"); rs.id="dvlThemeRules"; (document.head||document.documentElement).appendChild(rs); }
+      if(!rs){ rs=document.createElement("style"); rs.id="dvlThemeRules"; }
       rs.textContent = (themeId==="teal") ? "" : buildRuleOverride(rt);
+      var host=document.body||document.head||document.documentElement; host.appendChild(rs);   /* appendChild move pro fim */
     }catch(_){}
     /* varre o DOM (style inline) */
     sweepDom(rt);
@@ -197,11 +227,12 @@
     window.__DVL_THEME_CANVAS_BG=cbg;
     try{
       var st=document.getElementById("dvlThemeSurface");
-      if(!st){ st=document.createElement("style"); st.id="dvlThemeSurface"; (document.head||document.documentElement).appendChild(st); }
+      if(!st){ st=document.createElement("style"); st.id="dvlThemeSurface"; }
       st.textContent =
         'html,body{background-color:'+bg+' !important}'+
         'html,body{background-image:radial-gradient(900px 420px at 50% -180px,rgba(11,53,42,.10),transparent 64%),linear-gradient(180deg,'+t["--bg0"]+','+t["--bg1"]+' 46%,'+bg+') !important}'+
         '#chart,.canvasWrap,#chartWrap{background-color:'+cbg+' !important}';
+      (document.body||document.head||document.documentElement).appendChild(st);   /* mantém por último no cascade */
     }catch(_){}
     try{ var m=document.querySelector('meta[name="theme-color"]'); if(!m){ m=document.createElement("meta"); m.setAttribute("name","theme-color"); document.head.appendChild(m);} m.setAttribute("content", bg); }catch(_){}
     try{ if(typeof window.drawSoon==="function") window.drawSoon(); }catch(_){}
@@ -240,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.271';
+window.DVL_APP_VERSION = 'Beta 1.272';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16240,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.272", note: "Cabeçalho, RODAPÉ e o resto do chrome agora seguem o tema. Achei duas causas de cores teimosas: (1) o CSSOM devolve as cores das REGRAS já em rgb(), então o override das folhas não casava com a lista (que era hex) — passei a derivar as triplas rgb de toda a lista; (2) MUITO do chrome do desktop (cabeçalho, rodapé, trilhos, dica do mouse) mora dentro de blocos @media, e o gerador de override só olhava as regras de nível raiz — agora ele RECORRE em @media/@supports. Também troquei a detecção por uma classificação algorítmica de PAPEL: além do verde→acento, fundos escuros (near-black, menos o preto puro pra manter sombras) viram o fundo/superfície do tema e cinzas/sages dessaturados viram o muted — preservando preto puro, vermelho/amarelo (quentes), ciano/azul e roxo. E a folha de override vai pro fim do <body> pra vencer os <style> internos do app. Resultado: header + footer + trilhos + dica do mouse acompanham Teal/Ocean/Carbon. Só frontend." },
   { version: "Beta 1.271", note: "Agora TODO verde do app acompanha o tema — não só os botões da lista. Antes o remapeador só reconhecia uma mão-cheia de tons de verde; o app usa DEZENAS (botões, glows, bordas, gradientes, chips). Troquei por uma DETECÇÃO ALGORÍTMICA: qualquer verde de destaque (onde o verde domina o vermelho e o azul) vira o acento do tema — verde forte/médio → acento, verde claro/pastel → acento claro (pra gradientes e brilhos não ficarem chapados). Ciano/azul, vermelho (venda), amarelo/laranja (alerta) e roxo continuam intactos, e o teste confirma: #10df77, #13dc8d, limão, esmeralda, teal-verde e verde escuro TODOS viram o acento; #00d4ff, #ff4a61, #ffd321 e #8b5cff ficam iguais. Vale pras regras CSS e pro style inline, e a re-varredura periódica pega verdes de botões criados na hora. Só frontend." },
   { version: "Beta 1.270", note: "Tema agora se aplica na INTERFACE TODA — botões, painéis, chips, bordas — não só no gráfico. Como as cores estão hardcoded em regras CSS e em style=\"\" inline (inclusive nos botões), adicionei um REMAPEADOR GLOBAL em runtime: ele reescreve só as famílias NEUTRAS + o ACENTO (fundo, superfície/painel, borda, texto, muted e o verde de destaque) tanto nas folhas CSS quanto no style inline de cada elemento. É IDEMPOTENTE e não-destrutivo: recolore a partir do estado atual (reconhece as cores de qualquer tema), então dá pra alternar à vontade e o app continua livre pra animar/mexer no inline sem ser revertido. Vermelho (venda), amarelo/laranja (alerta), roxo, ciano e as velas do gráfico NÃO são tocados (semântica preservada). Uma re-varredura leve periódica pega botões/painéis criados depois. Três paletas: DVL Teal (padrão), Ocean (azul-marinho) e Carbon (grafite). Além disso: as 4 FOTOS DE FUNDO que você mandou entraram (Montanhas, Cidade noturna, Floresta, Vale/Lago) — WebP embutido, aplicadas como uma camada cinematográfica em baixa opacidade por cima do app (o gráfico se limpa pintando o próprio fundo, então a foto entra como overlay suave — sem rastro), controlável no Theme Studio (opacidade/escurecimento/blur/saturação/contraste/posição). Só frontend." },
   { version: "Beta 1.269", note: "Theme Studio AGORA MUDA AS CORES DE VERDADE. Na 1.267/1.268 a troca de tema era quase invisível: o app não usa as variáveis CSS que eu re-apontava — as cores estão hardcoded, inclusive o FUNDO DO GRÁFICO, que é pintado no <canvas> por JS (fillStyle='#020806') e por isso CSS nenhum pegava. Correção: (1) um hook único no canvas troca SÓ os near-blacks de fundo conhecidos pela cor de fundo do tema — velas verde/vermelho, textos, acentos e zonas passam intactos (semântica preservada); (2) as variáveis agora usam os nomes REAIS que o app declara (--bg0/1/2, --card, --text, --muted, --dvl-desktop-surface/-border, --dvl-panel-line…), retintando header, trilhos e superfícies que são baseadas em variável; (3) uma folha de override força o fundo do body e a moldura do gráfico. Três paletas bem distintas: DVL Teal (padrão, igual a hoje), Ocean (azul-marinho) e Carbon (grafite neutro). O fundo do gráfico — a maior área da tela — muda claramente entre elas. Painéis profundos ainda seguem por fases. Só frontend." },
