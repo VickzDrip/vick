@@ -121,10 +121,10 @@ function optimize(samples, opts) {
   const train = sorted.slice(0, cut), test = sorted.slice(cut);
 
   const proxGrid = opts.proxGrid || [0.25, 0.5, 0.75, 1.0, 1.5];
-  const slGrid = opts.slGrid || [0.8, 1.0, 1.2, 1.5, 2.0, 2.5];
+  const slGrid = opts.slGrid || [0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5];  // inclui stop justo 0.6×ATR
   const tpGrid = opts.tpGrid || [1, 1.5, 2, 3];               // fixed-ATR alternatives to POC
-  const rsiLongGrid = opts.rsiLongGrid || [30, 35, 40, 45];   // pivot ≤ this
-  const rsiShortGrid = opts.rsiShortGrid || [55, 60, 65, 70]; // pivot ≥ this
+  const rsiLongGrid = opts.rsiLongGrid || [25, 30, 35, 40, 45];   // pivot ≤ this (25 = sobrevendido forte)
+  const rsiShortGrid = opts.rsiShortGrid || [55, 60, 65, 70, 75]; // pivot ≥ this (75 = sobrecomprado forte)
   const account0 = opts.account0 || 1000, riskPct = opts.riskPct || 0.01, costFrac = opts.costFrac || 0, cost = opts.cost || null;
   const minTr = Math.max(5, Math.round(cut * 0.02));
 
