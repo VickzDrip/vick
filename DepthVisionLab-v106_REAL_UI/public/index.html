@@ -7,6 +7,56 @@
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
 <title>DVL — Beta 1.212</title>
+<script id="DVL_THEME_BOOT_1267">
+/* Beta 1.267 — DVL Theme Studio: registro central de temas + aplicação ANTES do
+   primeiro paint (sem flash). Re-aponta as variáveis CSS que o app já usa (--bg0/1/2,
+   --panel*, --text, --muted, --accent, --b-*, --dvl-desktop-*, --dvl-panel-line*) com
+   !important inline (vence o !important das folhas de estilo), então uma paleta muda
+   o app inteiro pelas mesmas variáveis. Semânticas (buy/sell/TP/SL/candles) NÃO mudam
+   — os acentos ficam sempre na família verde/teal pra não confundir compra. */
+(function(){
+  "use strict";
+  var P = window.DVL_THEME_PRESETS = {
+    teal: { name:"DVL Teal", swatch:["#061017","#0b1721","#14d8a0"], tokens:{
+      "--bg0":"#061017","--bg1":"#08141d","--bg2":"#0b1721",
+      "--panel":"rgba(11,23,33,.94)","--panel-soft":"rgba(9,20,29,.72)",
+      "--text":"#f4f8fb","--muted":"#8ea0af","--accent":"#14d8a0",
+      "--b-accent":"#14d8a0","--b-text":"#f4f8fb","--b-muted":"#8ea0af","--b-border":"rgba(142,174,190,.16)",
+      "--dvl-panel-line":"rgba(142,174,190,.20)","--dvl-panel-line-strong":"rgba(142,174,190,.30)",
+      "--dvl-desktop-surface":"#0b1721","--dvl-desktop-border":"rgba(142,174,190,.16)",
+      "--dvl-pos-text":"#f4f8fb","--dvl-pos-muted":"#8ea0af",
+      "--dvl-bg-0":"#061017","--dvl-bg-1":"#08141d","--dvl-surface-1":"#0b1721","--dvl-surface-2":"#0e1c27","--dvl-border":"rgba(142,174,190,.14)","--dvl-text":"#f4f8fb","--dvl-muted":"#8ea0af","--dvl-accent":"#14d8a0","--dvl-accent-2":"#28b7ff" } },
+    ocean: { name:"Ocean", swatch:["#04101c","#0a1c30","#2ad4c0"], tokens:{
+      "--bg0":"#04101c","--bg1":"#061726","--bg2":"#0a1c30",
+      "--panel":"rgba(10,28,48,.94)","--panel-soft":"rgba(7,22,40,.72)",
+      "--text":"#eef4fb","--muted":"#90a4bd","--accent":"#2ad4c0",
+      "--b-accent":"#2ad4c0","--b-text":"#eef4fb","--b-muted":"#90a4bd","--b-border":"rgba(120,160,205,.18)",
+      "--dvl-panel-line":"rgba(120,160,205,.22)","--dvl-panel-line-strong":"rgba(120,160,205,.34)",
+      "--dvl-desktop-surface":"#0a1c30","--dvl-desktop-border":"rgba(120,160,205,.18)",
+      "--dvl-pos-text":"#eef4fb","--dvl-pos-muted":"#90a4bd",
+      "--dvl-bg-0":"#04101c","--dvl-bg-1":"#061726","--dvl-surface-1":"#0a1c30","--dvl-surface-2":"#0e2338","--dvl-border":"rgba(120,160,205,.16)","--dvl-text":"#eef4fb","--dvl-muted":"#90a4bd","--dvl-accent":"#2ad4c0","--dvl-accent-2":"#3aa0ff" } },
+    carbon: { name:"Carbon", swatch:["#0b0e11","#14181d","#3fb98f"], tokens:{
+      "--bg0":"#0b0e11","--bg1":"#0e1216","--bg2":"#14181d",
+      "--panel":"rgba(20,24,29,.94)","--panel-soft":"rgba(14,18,22,.72)",
+      "--text":"#eef1f4","--muted":"#98a0a8","--accent":"#3fb98f",
+      "--b-accent":"#3fb98f","--b-text":"#eef1f4","--b-muted":"#98a0a8","--b-border":"rgba(160,170,180,.15)",
+      "--dvl-panel-line":"rgba(160,170,180,.18)","--dvl-panel-line-strong":"rgba(160,170,180,.28)",
+      "--dvl-desktop-surface":"#14181d","--dvl-desktop-border":"rgba(160,170,180,.15)",
+      "--dvl-pos-text":"#eef1f4","--dvl-pos-muted":"#98a0a8",
+      "--dvl-bg-0":"#0b0e11","--dvl-bg-1":"#0e1216","--dvl-surface-1":"#14181d","--dvl-surface-2":"#1a1f25","--dvl-border":"rgba(160,170,180,.14)","--dvl-text":"#eef1f4","--dvl-muted":"#98a0a8","--dvl-accent":"#3fb98f","--dvl-accent-2":"#5aa0ff" } }
+  };
+  window.DVL_THEME_APPLY_TOKENS = function(themeId){
+    var t = P[themeId] && P[themeId].tokens; if(!t) return;
+    var root=document.documentElement.style;
+    for(var k in t){ try{ root.setProperty(k, t[k], "important"); }catch(_){ try{ root.setProperty(k,t[k]); }catch(__){} } }
+    try{ var m=document.querySelector('meta[name="theme-color"]'); if(!m){ m=document.createElement("meta"); m.setAttribute("name","theme-color"); document.head.appendChild(m);} m.setAttribute("content", t["--bg0"]); }catch(_){}
+  };
+  try{
+    var saved=JSON.parse(localStorage.getItem("dvl.themeStudio.v1")||"null");
+    if(saved && saved.themeId && P[saved.themeId]) window.DVL_THEME_APPLY_TOKENS(saved.themeId);
+  }catch(_){}
+})();
+</script>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    DVL VERSION ROOT — ALTERE APENAS ESTE NÚMERO
@@ -20,7 +70,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.266';
+window.DVL_APP_VERSION = 'Beta 1.267';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16070,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.267", note: "DVL THEME STUDIO (v1): sistema central de tema global + fundos. Novo painel 'Aparência' (botão 🎨 no cabeçalho, ao lado do ⚙) com 3 paletas — DVL Teal, Ocean e Carbon — que trocam o app INTEIRO de uma vez (fundo, painéis, textos, bordas, acentos) re-apontando as variáveis CSS que o app já usa, com !important, então nada fica na paleta antiga. Compra/venda, TP/SL e velas mantêm o significado (não recoloram). Camada de fundo cinematográfico atrás do gráfico com controles completos (ativar, cenário, opacidade, escurecimento, nitidez/blur, saturação, contraste, posição) + Restaurar no cabeçalho. Persiste por localStorage e aplica ANTES do primeiro paint (sem flash). As fotos reais (WebP) entram em DVL_THEME_BG_IMAGES quando você enviar; enquanto isso o fundo mostra um véu discreto na cor do tema. Migração das superfícies principais nesta v1; componentes profundos seguem por fases. Só frontend." },
   { version: "Beta 1.266", note: "Novo card ALERTAS no Copilot: histórico de todos os alertas disparados (recentes primeiro), com o TEMPO relativo em que foram gerados ('há 4h', 'há 10 min') e o TF quando o alerta é de um timeframe específico (ex.: 'TF 5m'). Um capturador global grava cada alerta (hoje os Smart Alerts do Smart Delta — threshold e confluência temporal) no aparelho, mesmo com o Copilot fechado, então nada se perde. Botão 'Limpar' pra zerar. Só frontend." },
   { version: "Beta 1.265", note: "Market Matrix no PC: conserta o 'zoom' ao abrir. O Scanner Pro no desktop escalava um canvas FIXO de 880px (transform:scale) dimensionado pela largura da JANELA e não do painel, então dava aquele zoom que depois reenquadrava. Como o Matrix é fluido, neutralizamos o scale + largura fixa e escondemos o cabeçalho de colunas do scanner antigo (o Matrix tem título próprio). Agora enquadra certo de primeira no PC e no mobile. Só frontend." },
   { version: "Beta 1.264", note: "Remove a seção 'DETECTADOS (24h)' que sobrava embaixo da tabela do Scanner — ela ainda rodava no motor antigo (client-side), então não faz sentido com o scanner virado Market Matrix. Escondida. Só frontend." },
@@ -76659,6 +76710,126 @@ window.DVL_DOM_CROSSHAIR_1205={
   function boot(){ setInterval(tick, 20000); tick();
     try{ window.addEventListener("dvl:alerts-log-update",function(){ if(isOpen()) render(); }); }catch(_){}
     document.addEventListener("click",function(){ setTimeout(tick,200); },true);
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true}); else boot();
+})();
+</script>
+<script id="DVL_THEME_STUDIO_1267">
+/* Beta 1.267 — DVL Theme Studio (UI + fundos). Consome DVL_THEME_PRESETS/APPLY do
+   boot no <head>. Painel de Aparência: 3 temas globais (Teal/Ocean/Carbon) +
+   camada de fundo cinematográfico com controles (opacidade/escurecimento/nitidez/
+   saturação/contraste/posição). Persiste em localStorage e restaura antes do paint
+   (o boot já aplicou os tokens). Imagens reais entram em DVL_THEME_BG_IMAGES quando
+   o usuário enviar; enquanto vazio mostra um placeholder discreto na cor do tema. */
+(function(){
+  "use strict";
+  if(window.__DVL_THEME_STUDIO_ON) return; window.__DVL_THEME_STUDIO_ON=true;
+  var LS="dvl.themeStudio.v1";
+  /* slots pras fotos reais (WebP data URI). Vazio por ora → placeholder. */
+  window.DVL_THEME_BG_IMAGES = window.DVL_THEME_BG_IMAGES || { mountains:"", city:"", forest:"", valley:"" };
+  var SCENARIOS=[["mountains","Montanhas"],["city","Cidade noturna"],["forest","Floresta"],["valley","Vale/Lago"]];
+
+  var DEF={ themeId:"teal", backgroundEnabled:false, backgroundId:"mountains", backgroundOpacity:0.09, backgroundDim:0.58, backgroundBlur:0.5, backgroundSaturation:0.62, backgroundContrast:1.04, backgroundPosition:"center" };
+  function load(){ try{ return Object.assign({}, DEF, JSON.parse(localStorage.getItem(LS)||"{}")); }catch(_){ return Object.assign({}, DEF); } }
+  var cfg=load();
+  var _saveT=0; function persist(){ var now=Date.now(); if(now-_saveT<250){ clearTimeout(persist._t); persist._t=setTimeout(persist,260); return; } _saveT=now; try{ localStorage.setItem(LS, JSON.stringify(cfg)); }catch(_){} }
+
+  /* ── camada de fundo ── */
+  function ensureBgLayer(){
+    var el=document.getElementById("dvlThemeBg");
+    if(!el){ el=document.createElement("div"); el.id="dvlThemeBg";
+      el.style.cssText="position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;opacity:0;transition:opacity .35s ease";
+      el.innerHTML='<div id="dvlThemeBgImg" style="position:absolute;inset:0;background-size:cover;background-repeat:no-repeat;will-change:transform"></div><div id="dvlThemeBgDim" style="position:absolute;inset:0;background:#000"></div>';
+      if(document.body.firstChild) document.body.insertBefore(el, document.body.firstChild); else document.body.appendChild(el);
+    }
+    return el;
+  }
+  function applyBackground(){
+    var el=ensureBgLayer(); var img=document.getElementById("dvlThemeBgImg"), dim=document.getElementById("dvlThemeBgDim");
+    if(!cfg.backgroundEnabled){ el.style.opacity="0"; return; }
+    var src=window.DVL_THEME_BG_IMAGES[cfg.backgroundId]||"";
+    if(src){ img.style.backgroundImage="url('"+src+"')"; img.style.background=""; img.style.backgroundImage="url('"+src+"')"; }
+    else { /* placeholder discreto na cor do tema (não é foto, só um véu até chegarem as imagens) */
+      var t=(window.DVL_THEME_PRESETS[cfg.themeId]||{}).tokens||{}; img.style.backgroundImage="radial-gradient(1200px 700px at 50% -10%, "+(t["--accent"]||"#14d8a0")+"22, transparent 60%), linear-gradient(180deg, "+(t["--bg1"]||"#08141d")+", "+(t["--bg0"]||"#061017")+")"; }
+    img.style.backgroundPosition=cfg.backgroundPosition||"center";
+    img.style.filter="blur("+(cfg.backgroundBlur||0)+"px) saturate("+Math.round((cfg.backgroundSaturation||0.62)*100)+"%) contrast("+Math.round((cfg.backgroundContrast||1)*100)+"%)";
+    img.style.opacity=String(cfg.backgroundOpacity!=null?cfg.backgroundOpacity:0.09);
+    dim.style.opacity=String(cfg.backgroundDim!=null?cfg.backgroundDim:0.58);
+    el.style.opacity="1";
+    document.documentElement.style.setProperty("--dvl-bg-photo","1");
+  }
+
+  /* ── API ── */
+  function applyTheme(id){ if(!window.DVL_THEME_PRESETS[id]) return; cfg.themeId=id; try{ window.DVL_THEME_APPLY_TOKENS(id); }catch(_){}
+    persist(); applyBackground();
+    /* avisa o gráfico/overlays pra repintarem com os novos neutros (sem resetar zoom) */
+    try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){}
+    try{ window.dispatchEvent(new CustomEvent("dvl:theme-change",{detail:{themeId:id}})); }catch(_){}
+  }
+  window.DVLThemeStudio={ applyTheme:applyTheme, applyBackground:applyBackground, getConfig:function(){return Object.assign({},cfg);},
+    setBackground:function(patch){ Object.assign(cfg, patch||{}); persist(); applyBackground(); },
+    reset:function(){ cfg=Object.assign({}, DEF); persist(); try{ window.DVL_THEME_APPLY_TOKENS(cfg.themeId); }catch(_){} applyBackground(); renderPanel(); } };
+
+  /* ── painel Theme Studio ── */
+  var panel=null;
+  function chip(label,active,attr){ return '<button type="button" '+attr+' style="flex:0 0 auto;padding:6px 12px;border-radius:8px;border:1px solid '+(active?"var(--accent,#14d8a0)":"rgba(142,174,190,.22)")+';background:'+(active?"rgba(20,216,160,.14)":"rgba(142,174,190,.06)")+';color:'+(active?"#eafff4":"#bcd3e2")+';font:800 12px system-ui;cursor:pointer">'+label+'</button>'; }
+  function slider(id,label,min,max,step,val,unit){ return '<div style="margin:7px 0"><div style="display:flex;justify-content:space-between;font-size:11px;color:#9fb3c8;margin-bottom:3px"><span>'+label+'</span><b style="color:#dcebe4" id="'+id+'Val">'+val+(unit||"")+'</b></div><input id="'+id+'" type="range" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" style="width:100%"></div>'; }
+
+  function bodyHTML(){
+    var themeCards=Object.keys(window.DVL_THEME_PRESETS).map(function(id){ var pr=window.DVL_THEME_PRESETS[id]; var on=cfg.themeId===id;
+      var sw=(pr.swatch||[]).map(function(c){return '<span style="width:16px;height:16px;border-radius:5px;background:'+c+';display:inline-block"></span>';}).join("");
+      return '<button type="button" data-dvl-theme="'+id+'" style="flex:1;min-width:96px;padding:10px;border-radius:12px;border:1.5px solid '+(on?"var(--accent,#14d8a0)":"rgba(142,174,190,.2)")+';background:rgba(142,174,190,.05);cursor:pointer;text-align:left"><div style="display:flex;gap:4px;margin-bottom:6px">'+sw+'</div><b style="color:#eafff4;font-size:12px">'+pr.name+'</b>'+(on?'<span style="color:var(--accent,#14d8a0);font-size:10px;display:block">● ativo</span>':'')+'</button>';
+    }).join("");
+    var scen=SCENARIOS.map(function(s){ return chip(s[1], cfg.backgroundId===s[0], 'data-dvl-bg-scen="'+s[0]+'"'); }).join("");
+    var pos=[["center","Centro"],["top","Topo"],["bottom","Base"]].map(function(p){ return chip(p[1], cfg.backgroundPosition===p[0], 'data-dvl-bg-pos="'+p[0]+'"'); }).join("");
+    var noImg = !(window.DVL_THEME_BG_IMAGES[cfg.backgroundId]);
+    return '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Tema de cores</span></div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 2px">'+themeCards+'</div>'
+      +'<div style="font-size:10.5px;color:#8ea0af;margin-top:4px">Troca o app inteiro (fundo, painéis, textos, bordas, acentos). Compra/venda, TP/SL e velas mantêm o significado.</div></div>'
+      +'<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Plano de fundo do gráfico</span></div>'
+      +'<div class="dvl-vt-field"><label>Ativar fundo</label><label class="dvl-switch"><input id="dvlBgOn" type="checkbox" '+(cfg.backgroundEnabled?"checked":"")+'><i></i><b></b></label></div>'
+      +'<div style="font-size:10px;color:#7f9c8e;margin:2px 0 6px">Cenário</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">'+scen+'</div>'
+      +(noImg?'<div style="font-size:10.5px;color:#f4b942;background:rgba(244,185,66,.08);border:1px solid rgba(244,185,66,.22);border-radius:8px;padding:7px 9px;margin-bottom:8px">Sem imagem pra este cenário ainda — mostrando um véu na cor do tema. Me envie as fotos (WebP 1920×1080, ~180–350 KB) que eu embuto e este aviso some.</div>':'')
+      +slider("dvlBgOpacity","Opacidade",0,20,1,Math.round((cfg.backgroundOpacity||0)*100),"%")
+      +slider("dvlBgDim","Escurecimento",30,90,1,Math.round((cfg.backgroundDim||0)*100),"%")
+      +slider("dvlBgBlur","Nitidez (blur)",0,4,0.1,(cfg.backgroundBlur||0),"px")
+      +slider("dvlBgSat","Saturação",35,100,1,Math.round((cfg.backgroundSaturation||0)*100),"%")
+      +slider("dvlBgContrast","Contraste",80,125,1,Math.round((cfg.backgroundContrast||1)*100),"%")
+      +'<div style="font-size:10px;color:#7f9c8e;margin:6px 0 4px">Posição</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+pos+'</div>'
+      +'</div>';
+  }
+  function renderPanel(){ if(!panel) return; var b=panel.querySelector("#dvlThemeBody"); if(b){ b.innerHTML=bodyHTML(); bind(b); } }
+  function bind(b){
+    b.querySelectorAll("[data-dvl-theme]").forEach(function(el){ el.addEventListener("click",function(){ applyTheme(el.getAttribute("data-dvl-theme")); renderPanel(); }); });
+    b.querySelectorAll("[data-dvl-bg-scen]").forEach(function(el){ el.addEventListener("click",function(){ cfg.backgroundId=el.getAttribute("data-dvl-bg-scen"); persist(); applyBackground(); renderPanel(); }); });
+    b.querySelectorAll("[data-dvl-bg-pos]").forEach(function(el){ el.addEventListener("click",function(){ cfg.backgroundPosition=el.getAttribute("data-dvl-bg-pos"); persist(); applyBackground(); renderPanel(); }); });
+    var on=b.querySelector("#dvlBgOn"); if(on) on.addEventListener("change",function(){ cfg.backgroundEnabled=on.checked; persist(); applyBackground(); renderPanel(); });
+    function sl(id,key,scale,unit){ var el=b.querySelector("#"+id); if(!el) return; el.addEventListener("input",function(){ var v=Number(el.value); cfg[key]=scale?v/scale:v; var lab=b.querySelector("#"+id+"Val"); if(lab) lab.textContent=(scale?Math.round(v):v)+(unit||""); persist(); requestAnimationFrame(applyBackground); }); }
+    sl("dvlBgOpacity","backgroundOpacity",100,"%"); sl("dvlBgDim","backgroundDim",100,"%"); sl("dvlBgBlur","backgroundBlur",0,"px"); sl("dvlBgSat","backgroundSaturation",100,"%"); sl("dvlBgContrast","backgroundContrast",100,"%");
+  }
+  function openPanel(){
+    if(!panel){ panel=document.createElement("div"); panel.id="dvlThemeStudioPanel"; panel.className="dvl-vt-panel";
+      panel.innerHTML='<div class="dvl-vt-head"><div class="dvl-vt-title"><b>Aparência · Theme Studio</b><small>tema global + fundo</small></div><div class="dvl-vt-head-actions"><button class="dvl-vt-close" id="dvlThemeReset" type="button" title="Restaurar padrão" style="font-size:15px">⟲</button><button class="dvl-vt-close" id="dvlThemeClose" type="button">×</button></div></div><div class="dvl-vt-body" id="dvlThemeBody"></div>';
+      document.body.appendChild(panel);
+      panel.addEventListener("pointerdown",function(e){ e.stopPropagation(); },true);
+      panel.querySelector("#dvlThemeClose").addEventListener("click",function(){ panel.classList.remove("is-open"); });
+      panel.querySelector("#dvlThemeReset").addEventListener("click",function(){ window.DVLThemeStudio.reset(); });
+    }
+    renderPanel(); panel.classList.add("is-open");
+  }
+  window.DVLThemeStudio.open=openPanel;
+
+  /* launcher no header (ao lado do ⚙) */
+  function addLauncher(){
+    var gear=document.getElementById("dvl1b_settingsBtn"); if(!gear||document.getElementById("dvlThemeLauncher")) return;
+    var btn=gear.cloneNode(false); btn.id="dvlThemeLauncher"; btn.removeAttribute("onclick");
+    btn.innerHTML='🎨'; btn.title="Theme Studio"; btn.style.cursor="pointer";
+    btn.addEventListener("click",function(ev){ ev.stopPropagation(); openPanel(); });
+    if(gear.parentNode) gear.parentNode.insertBefore(btn, gear);
+  }
+
+  function boot(){ applyBackground(); addLauncher(); setInterval(addLauncher, 3000);
+    try{ window.addEventListener("dvl:theme-change",function(){ applyBackground(); }); }catch(_){}
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true}); else boot();
 })();
