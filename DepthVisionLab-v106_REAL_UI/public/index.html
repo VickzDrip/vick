@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.262';
+window.DVL_APP_VERSION = 'Beta 1.263';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.263", note: "MARKET MATRIX — a página do Scanner vira o placar do bot paper. Um bot 100% SIMULADO (nunca manda ordem real) opera o combo aprendido pelo modelo VP+RSI-V (vzin do RSI numa zona → alvo no POC, stop por ATR) nos TOP-50 ativos por liquidez, WALK-FORWARD: pula o histórico que o modelo treinou e só opera os setups NOVOS que resolvem daqui pra frente — cada trade já com TAXA + SLIPPAGE por ativo (alt fino escorrega mais). A tela mostra patrimônio ($1000 inicial), retorno, acerto, drawdown, custo médio, RANKING por ativo (quem mais deu lucro) e os trades recentes. Começa 'coletando' e vai enchendo conforme os setups resolvem. Backend (bot + endpoint /bot-state) + frontend. Reversível: window.DVL_SCANNER_PAUSED=false pra voltar o scanner antigo." },
   { version: "Beta 1.262", note: "Conserta o que a 1.261 não conseguiu aplicar: os scripts novos (card VP+RSI-V e o pause do scanner) tinham 'id' igual ao nome da variável de guarda, e no navegador um elemento com id vira uma global window[id] — então o 'if(window.X) return' saía na hora e o código nunca rodava. Renomeadas as guardas. Agora de fato: (1) o card 'Backtest financeiro' antigo (dvlCpBt1124) some; (2) o Scanner fica PAUSADO de verdade — o motor client-side (que lia a MEXC direto, por isso ainda mostrava ativos mesmo com o backend parado) é esvaziado e a página do Scanner mostra 'Scanner pausado — em breve, Market Matrix'; os cards do Copilot que dependiam do scanner ficam vazios; (3) o card do novo modelo VP+RSI-V passa a renderizar. Reversível: window.DVL_SCANNER_PAUSED=false. Só frontend." },
   { version: "Beta 1.261", note: "Limpeza pós-troca do ML: (1) escondido também o card 'Modelo pré-pump / pré-short' que tinha ficado no Copilot mostrando 'aguardando' — não existe mais modelo pré-pump, ele foi substituído pelo VP+RSI-V. (2) Scanner PAUSADO a pedido (vai ganhar outra função com o Market Matrix): a lista de ativos agora fica vazia. O backend ainda busca os candidatos (o modelo VP+RSI-V precisa da lista de símbolos) mas publica snapshots vazios; dá pra religar com DVL_SCAN_ENABLED=1. Só frontend + config do backend." },
   { version: "Beta 1.260", note: "NOVO Machine Learning (VP + RSI-V) substitui o ML antigo (pré-pump/pré-short). O modelo antigo foi REMOVIDO por inteiro do backend (train/tree/pumpModel/outcomes/analyze + todos os backtests do pump) e os cards 'Aprendizado (ML)' e 'Backtest financeiro' saíram do Copilot. O novo modelo aprende a SUA estratégia real: RSI vzinho (DVL Exhaustion RSI) numa zona de Volume Profile → alvo no POC, stop por ATR além da zona (VAL na compra, VAH na venda). É um otimizador adaptativo: registra cada setup real, resolve o resultado pela trajetória, e varre out-of-sample (treino/teste) qual SESSÃO de VP (dia anterior / hoje / janela), ZONA, proximidade, limiar do RSI, stop-ATR e alvo (POC vs ATR fixo) mais rende — separado por 1m e 5m e por lado (compra/venda). Novo card no Copilot mostra os combos aprendidos + o BACKTEST FINANCEIRO ($1000, risco 1%/trade, retorno, acerto, drawdown). Começa 'coletando' e vai ficando pronto conforme os setups resolvem ao vivo. O scanner segue rodando (vai ganhar outra função com o Market Matrix). Backend (reinicia o dvl-scanner) + frontend." },
@@ -76424,30 +76425,74 @@ window.DVL_DOM_CROSSHAIR_1205={
 })();
 </script>
 <style id="dvlVrsiHideOld">.dvlCp1024MlPanel,.dvlBt1040Panel,.dvlCpBt1124,#dvlCpPm1120Card,[data-dvl-cp-section="pumpModel"]{display:none!important}</style>
-<script id="DVL_SCANNER_PAUSE_1261">
-/* Beta 1.261 — Scanner PAUSADO a pedido (vai virar Market Matrix). O scanner é
-   calculado no CLIENTE (motor __DVL_SCANNER_ORIGINAL_1013 lendo a MEXC direto),
-   então pausar só o backend não basta: aqui esvaziamos as linhas do motor (some
-   dos cards do Copilot que consomem o scanner) e trocamos a página do Scanner por
-   um aviso "pausado". Reversível: window.DVL_SCANNER_PAUSED=false + reload. */
+<script id="DVL_MARKET_MATRIX_1263">
+/* Beta 1.263 — MARKET MATRIX: a página do Scanner vira o placar do bot paper
+   (VP+RSI-V, walk-forward, 100% simulado, top-50). O scanner antigo era calculado
+   no CLIENTE (motor __DVL_SCANNER_ORIGINAL_1013 lendo a MEXC direto), então além de
+   pausar o backend a gente esvazia o motor (some dos cards do Copilot que
+   consumiam o scanner) e renderiza o Market Matrix (dados de /bot-state) no lugar.
+   Reversível: window.DVL_SCANNER_PAUSED=false + reload. */
 (function(){
   "use strict";
-  if(window.__DVL_SCANNER_PAUSE_ON) return; window.__DVL_SCANNER_PAUSE_ON=true;
+  if(window.__DVL_MARKET_MATRIX_ON) return; window.__DVL_MARKET_MATRIX_ON=true;
   if(window.DVL_SCANNER_PAUSED!==false) window.DVL_SCANNER_PAUSED=true;
-  var PAUSED_HTML='<div style="padding:26px 16px;text-align:center;color:#8aa99b;font:600 13px system-ui"><div style="font-size:15px;color:#dcebe4;margin-bottom:6px">Scanner pausado</div>Em breve esta área vira o <b style="color:#10df77">Market Matrix</b>.</div>';
   function paused(){ return window.DVL_SCANNER_PAUSED!==false; }
+  function api(p){ try{ var br=window.DVL_SCANNER_LIVE_FEED_BRIDGE_1023; if(br&&typeof br.api==="function") return br.api(p); }catch(_){} return p; }
+  function esc(v){ return String(v==null?"":v).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}); }
   function wrapRows(o){ if(!o||o.__dvlPausedWrap) return; ["rows","rawRows"].forEach(function(k){ if(typeof o[k]==="function"){ var orig=o[k]; o[k]=function(){ return paused()?[]:orig.apply(this,arguments); }; } }); o.__dvlPausedWrap=true; }
-  function fillPaused(){ if(!paused()) return; ["dvlScan1013Body","dvlScan1012Body"].forEach(function(id){ var el=document.getElementById(id); if(el && el.innerHTML.indexOf("Scanner pausado")<0) el.innerHTML=PAUSED_HTML; }); }
+
+  var DATA=null, _lastPull=0;
+  function pull(){ var now=Date.now(); if(now-_lastPull<15000) return; _lastPull=now;
+    fetch(api("/api/dvl/scanner/bot-state"),{cache:"no-store"}).then(function(r){return r.ok?r.json():null;}).then(function(j){ if(j&&j.ok){ DATA=j; render(); } }).catch(function(){});
+  }
+  function money(v){ v=Number(v); if(!isFinite(v)) return "--"; var a=Math.abs(v),s=v<0?"-":""; if(a>=1e3) return s+"$"+(a/1e3).toFixed(2)+"K"; return s+"$"+a.toFixed(2); }
+  function pnlCol(v){ return Number(v)>=0?"#16c784":"#ff5a6a"; }
+
+  function matrixHTML(){
+    var d=DATA;
+    var head='<div style="padding:14px 14px 8px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><b style="font-size:15px;color:#eafff4">MARKET MATRIX</b><span style="font-size:10px;color:#7f9c8e">bot paper · walk-forward · 100% simulado</span></div>'
+      +'<div style="font-size:10.5px;color:#8aa99b;margin-top:2px">Opera o combo aprendido (VP + vzin do RSI → POC) nos top-50 ativos, já com taxa + slippage. Não é ordem real.</div></div>';
+    if(!d){ return head+'<div style="padding:22px 16px;text-align:center;color:#8aa99b">carregando…</div>'; }
+    if(!d.trades){ return head+'<div style="padding:22px 16px;text-align:center;color:#8aa99b"><div style="color:#dcebe4;margin-bottom:4px">Coletando setups…</div>O bot pula o histórico e só opera os setups <b>novos</b> que resolverem daqui pra frente. Os primeiros trades aparecem em breve.</div>'; }
+    var col=pnlCol(d.returnPct);
+    var summary='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;padding:0 14px 12px">'
+      +'<div><div style="font-size:9px;color:#7f9c8e">PATRIMÔNIO</div><b style="font-size:16px;color:'+col+'">'+money(d.account)+'</b><div style="font-size:10px;color:'+col+'">'+(d.returnPct>=0?"+":"")+d.returnPct+'%</div></div>'
+      +'<div><div style="font-size:9px;color:#7f9c8e">ACERTO</div><b style="font-size:16px;color:#dcebe4">'+d.winRate+'%</b><div style="font-size:10px;color:#8aa99b">'+d.wins+'/'+d.trades+'</div></div>'
+      +'<div><div style="font-size:9px;color:#7f9c8e">DRAWDOWN</div><b style="font-size:16px;color:#dcebe4">'+d.maxDrawdownPct+'%</b></div>'
+      +'<div><div style="font-size:9px;color:#7f9c8e">CUSTO MÉD</div><b style="font-size:16px;color:#dcebe4">'+(d.avgCostAtr||0)+'</b><div style="font-size:9px;color:#8aa99b">ATR/trade</div></div>'
+      +'</div>';
+    var lb='';
+    if(d.leaderboard&&d.leaderboard.length){
+      lb='<div style="padding:2px 14px 4px"><div style="font-size:10px;color:#7f9c8e;margin-bottom:4px">RANKING POR ATIVO</div>'
+        +'<div style="display:grid;grid-template-columns:20px 1fr 46px 52px 70px;gap:6px;font-size:9px;color:#7f9c8e;padding:2px 0"><span>#</span><span>ATIVO</span><span style="text-align:right">TR</span><span style="text-align:right">ACERTO</span><span style="text-align:right">PNL</span></div>';
+      d.leaderboard.slice(0,20).forEach(function(r,i){
+        lb+='<div style="display:grid;grid-template-columns:20px 1fr 46px 52px 70px;gap:6px;font-size:11px;align-items:center;padding:2.5px 0;border-top:1px solid rgba(129,166,151,.08)"><span style="color:#7f9c8e">'+(i+1)+'</span><b style="color:#dcebe4">'+esc((r.symbol||"").replace(/USDT$/,""))+'</b><span style="text-align:right;color:#8aa99b">'+r.trades+'</span><span style="text-align:right;color:#8aa99b">'+r.winRate+'%</span><b style="text-align:right;color:'+pnlCol(r.pnl)+'">'+money(r.pnl)+'</b></div>';
+      });
+      lb+='</div>';
+    }
+    var rec='';
+    if(d.recent&&d.recent.length){
+      rec='<div style="padding:8px 14px 14px"><div style="font-size:10px;color:#7f9c8e;margin-bottom:4px">TRADES RECENTES</div>';
+      d.recent.slice(0,12).forEach(function(t){ var pv=t["pnl$"]; var sd=t.side==="long"?"C":"V";
+        rec+='<div style="display:flex;align-items:center;gap:8px;font-size:11px;padding:1.5px 0"><span style="width:16px;color:'+(t.side==="long"?"#13dc8d":"#ff6b81")+'">'+sd+'</span><b style="flex:1;color:#dcebe4">'+esc((t.sym||"").replace(/USDT$/,""))+'</b><span style="color:#7f9c8e;font-size:9px">'+esc(t.tf)+' · '+esc(t.zone||"")+'</span><b style="color:'+pnlCol(pv)+';min-width:56px;text-align:right">'+money(pv)+'</b></div>';
+      });
+      rec+='</div>';
+    }
+    return head+summary+lb+rec;
+  }
+  function render(){ if(!paused()) return; ["dvlScan1013Body","dvlScan1012Body"].forEach(function(id){ var el=document.getElementById(id); if(el) el.innerHTML=matrixHTML(); }); }
+
   function patch(){
     try{
       wrapRows(window.__DVL_SCANNER_ORIGINAL_1013);
       wrapRows(window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780);
       var pro=window.DVL_SCANNER_PRO_FORCE_OPEN_1013;
-      if(pro && typeof pro.render==="function" && !pro.__dvlPausedRender){ var r=pro.render; pro.render=function(){ if(paused()){ fillPaused(); return; } return r.apply(this,arguments); }; pro.__dvlPausedRender=true; }
-      fillPaused();
+      if(pro && typeof pro.render==="function" && !pro.__dvlMatrixRender){ var r=pro.render; pro.render=function(){ if(paused()){ render(); return; } return r.apply(this,arguments); }; pro.__dvlMatrixRender=true; }
+      // if a scanner body is on screen, keep it as the matrix + poll
+      if(document.getElementById("dvlScan1013Body")||document.getElementById("dvlScan1012Body")){ pull(); render(); }
     }catch(_){}
   }
-  setInterval(patch, 1500);
+  setInterval(patch, 2000);
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",patch,{once:true}); else patch();
 })();
 </script>
