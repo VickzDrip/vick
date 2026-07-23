@@ -20,7 +20,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.263';
+window.DVL_APP_VERSION = 'Beta 1.264';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16020,6 +16020,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.264", note: "Remove a seção 'DETECTADOS (24h)' que sobrava embaixo da tabela do Scanner — ela ainda rodava no motor antigo (client-side), então não faz sentido com o scanner virado Market Matrix. Escondida. Só frontend." },
   { version: "Beta 1.263", note: "MARKET MATRIX — a página do Scanner vira o placar do bot paper. Um bot 100% SIMULADO (nunca manda ordem real) opera o combo aprendido pelo modelo VP+RSI-V (vzin do RSI numa zona → alvo no POC, stop por ATR) nos TOP-50 ativos por liquidez, WALK-FORWARD: pula o histórico que o modelo treinou e só opera os setups NOVOS que resolvem daqui pra frente — cada trade já com TAXA + SLIPPAGE por ativo (alt fino escorrega mais). A tela mostra patrimônio ($1000 inicial), retorno, acerto, drawdown, custo médio, RANKING por ativo (quem mais deu lucro) e os trades recentes. Começa 'coletando' e vai enchendo conforme os setups resolvem. Backend (bot + endpoint /bot-state) + frontend. Reversível: window.DVL_SCANNER_PAUSED=false pra voltar o scanner antigo." },
   { version: "Beta 1.262", note: "Conserta o que a 1.261 não conseguiu aplicar: os scripts novos (card VP+RSI-V e o pause do scanner) tinham 'id' igual ao nome da variável de guarda, e no navegador um elemento com id vira uma global window[id] — então o 'if(window.X) return' saía na hora e o código nunca rodava. Renomeadas as guardas. Agora de fato: (1) o card 'Backtest financeiro' antigo (dvlCpBt1124) some; (2) o Scanner fica PAUSADO de verdade — o motor client-side (que lia a MEXC direto, por isso ainda mostrava ativos mesmo com o backend parado) é esvaziado e a página do Scanner mostra 'Scanner pausado — em breve, Market Matrix'; os cards do Copilot que dependiam do scanner ficam vazios; (3) o card do novo modelo VP+RSI-V passa a renderizar. Reversível: window.DVL_SCANNER_PAUSED=false. Só frontend." },
   { version: "Beta 1.261", note: "Limpeza pós-troca do ML: (1) escondido também o card 'Modelo pré-pump / pré-short' que tinha ficado no Copilot mostrando 'aguardando' — não existe mais modelo pré-pump, ele foi substituído pelo VP+RSI-V. (2) Scanner PAUSADO a pedido (vai ganhar outra função com o Market Matrix): a lista de ativos agora fica vazia. O backend ainda busca os candidatos (o modelo VP+RSI-V precisa da lista de símbolos) mas publica snapshots vazios; dá pra religar com DVL_SCAN_ENABLED=1. Só frontend + config do backend." },
@@ -76424,7 +76425,7 @@ window.DVL_DOM_CROSSHAIR_1205={
 };
 })();
 </script>
-<style id="dvlVrsiHideOld">.dvlCp1024MlPanel,.dvlBt1040Panel,.dvlCpBt1124,#dvlCpPm1120Card,[data-dvl-cp-section="pumpModel"]{display:none!important}</style>
+<style id="dvlVrsiHideOld">.dvlCp1024MlPanel,.dvlBt1040Panel,.dvlCpBt1124,#dvlCpPm1120Card,[data-dvl-cp-section="pumpModel"],.dvlScan1013DetSec{display:none!important}</style>
 <script id="DVL_MARKET_MATRIX_1263">
 /* Beta 1.263 — MARKET MATRIX: a página do Scanner vira o placar do bot paper
    (VP+RSI-V, walk-forward, 100% simulado, top-50). O scanner antigo era calculado
