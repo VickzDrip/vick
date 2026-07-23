@@ -25,6 +25,24 @@ module.exports = {
      symbol list) but publishes EMPTY snapshots, so the Scanner page shows no
      assets. Flip to "1" (or set DVL_SCAN_ENABLED=1) to bring it back. */
   SCAN_ENABLED: process.env.DVL_SCAN_ENABLED === "1",
+
+  /* ── Trading frictions (applied to the ML backtest AND the paper bot) ──────
+     Real fees + slippage so the numbers aren't a frictionless lab. Fee is per
+     side (MEXC futures taker ≈ 0.04%); slippage is per side in ATR and scaled
+     per asset by liquidity (illiquid alts slip more — see cost.js). */
+  FEE_TAKER_PER_SIDE: Number(process.env.DVL_FEE_TAKER || 0.0004),
+  SLIP_ATR_PER_SIDE: Number(process.env.DVL_SLIP_ATR || 0.03),
+
+  /* ── Paper bot (the "Market Matrix" engine) ────────────────────────────────
+     A virtual account that trades the learned VP+RSI-V combo across the top-N
+     most-liquid assets, WALK-FORWARD (only setups that appear after the model
+     learned). 100% simulated — the app never sends a real order. */
+  BOT_ENABLED: process.env.DVL_BOT_ENABLED !== "0",
+  BOT_UNIVERSE: Number(process.env.DVL_BOT_UNIVERSE || 50),   // top-N by 24h quote volume
+  BOT_ACCOUNT0: Number(process.env.DVL_BOT_ACCOUNT0 || 1000),
+  BOT_RISK_PCT: Number(process.env.DVL_BOT_RISK_PCT || 0.01), // risk per trade
+  BOT_MAX_OPEN: Number(process.env.DVL_BOT_MAX_OPEN || 20),   // max concurrent paper positions
+
   FRESH_MS: 3 * 3600000, // a symbol's last candle must be newer than this
 
   /* How often the 24h worker re-scans each exchange (ms). */

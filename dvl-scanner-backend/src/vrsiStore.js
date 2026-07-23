@@ -11,6 +11,8 @@
 const fs = require("fs");
 const path = require("path");
 const model = require("./vrsiModel");
+let cfg = {}; try { cfg = require("./config"); } catch (_) { }
+function costModel() { return { feeTakerPerSide: cfg.FEE_TAKER_PER_SIDE, slipAtrPerSide: cfg.SLIP_ATR_PER_SIDE }; }
 
 const LOG_FILE = process.env.DVL_VRSI_LOG_FILE || path.join(process.cwd(), "data", "vrsi-samples.jsonl");
 const TFS = ["1m", "5m"];
@@ -51,7 +53,7 @@ function ingest(symbol, tf, baseCandles, oneMin, opts) {
   if (!TFS.includes(tf) || !Array.isArray(baseCandles) || baseCandles.length < 40) return 0;
   const keys = loadKeys();
   const samples = model.buildSamples(baseCandles, oneMin, Object.assign({
-    baseTfMin: BASE_MIN[tf], horizon: HORIZON[tf], winBars: WIN_BARS[tf], requireFullHorizon: true
+    baseTfMin: BASE_MIN[tf], horizon: HORIZON[tf], winBars: WIN_BARS[tf], requireFullHorizon: true, qv: 0
   }, opts || {}));
   let n = 0;
   for (const s of samples) {
@@ -84,7 +86,7 @@ function learn(opts) {
   lastLearn = now;
   for (const tf of TFS) {
     const samples = samplesFor(tf);
-    modelCache[tf] = model.optimize(samples, Object.assign({ minSamples: opts.minSamples || 30 }, opts));
+    modelCache[tf] = model.optimize(samples, Object.assign({ minSamples: opts.minSamples || 30, cost: costModel() }, opts));
   }
   return modelCache;
 }
@@ -97,8 +99,8 @@ function backtest(tf) {
   if (!m || !m.ready) return { ready: false };
   const samples = samplesFor(tf);
   const out = { ready: true, tf, long: null, short: null };
-  if (m.long && m.long.best) out.long = model.backtestCombo(samples, m.long.best, {});
-  if (m.short && m.short.best) out.short = model.backtestCombo(samples, m.short.best, {});
+  if (m.long && m.long.best) out.long = model.backtestCombo(samples, m.long.best, { cost: costModel() });
+  if (m.short && m.short.best) out.short = model.backtestCombo(samples, m.short.best, { cost: costModel() });
   return out;
 }
 

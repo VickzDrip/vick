@@ -24,6 +24,7 @@ const { mexc } = require("./exchanges");
 const M = require("./metrics");
 const oiStore = require("./oiStore");
 const vrsiStore = require("./vrsiStore");
+const paperBot = require("./paperBot");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -192,6 +193,15 @@ function createServer() {
       const tf = vrsiStore.TFS.includes(String(req.query.tf)) ? String(req.query.tf) : "1m";
       res.json(Object.assign({ ok: true, tf }, vrsiStore.backtest(tf)));
     } catch (e) { res.status(500).json({ ok: false, error: String(e && e.message || e) }); }
+  });
+
+  /* Paper bot (the Market Matrix engine) — the walk-forward simulated account
+     trading the learned VP+RSI-V combo across the top-N assets, with fees +
+     slippage. 100% simulated. Returns account/return/drawdown, per-asset
+     leaderboard, recent trades and the equity curve. */
+  app.get("/api/dvl/scanner/bot-state", (req, res) => {
+    try { res.json(Object.assign({ ok: true }, paperBot.status())); }
+    catch (e) { res.status(500).json({ ok: false, error: String(e && e.message || e) }); }
   });
 
   const server = http.createServer(app);

@@ -1,5 +1,7 @@
 "use strict";
 
+const cost = require("./cost");
+
 /* ── Financial backtest engine for the VP+RSI-V model ─────────────────────
    Clean, strategy-agnostic account simulator (replaces the pump-era engine).
    Each sample already knows its DIRECTION (the RSI-V decided long/short) and
@@ -58,7 +60,8 @@ function outcomeFor(s, slAtr, optTpAtr, useSampleTp) {
 
 /* Run the account over `samples`. opts:
    { account0=1000, riskPct=0.01, slAtr=1.2, tpAtr=2, useSampleTp=false,
-     costFrac=0, side=null (filter) }. */
+     cost={feeTakerPerSide,slipAtrPerSide} (per-asset fees+slippage; uses each
+     sample's entry/atr/qv), costFrac=0 (legacy flat fee), side=null (filter) }. */
 function run(samples, opts) {
   opts = opts || {};
   const account0 = opts.account0 != null ? opts.account0 : 1000;
@@ -67,6 +70,7 @@ function run(samples, opts) {
   const tpAtr = opts.tpAtr != null ? opts.tpAtr : 2.0;
   const useSampleTp = !!opts.useSampleTp;
   const costFrac = opts.costFrac != null ? opts.costFrac : 0;
+  const costModel = opts.cost || null;   // fees + slippage per asset
   const onlySide = opts.side || null;
   const list = Array.isArray(samples) ? samples : [];
 
@@ -77,7 +81,7 @@ function run(samples, opts) {
   const atrPctOf = s => { const e = Number(s && s.entry), a = Number(s && s.atr); const v = (e > 0 && a > 0) ? a / e : medianAtrPct; return Math.max(0.0015, v); };
 
   let account = account0, peak = account0, maxDD = 0;
-  let wins = 0, losses = 0, trades = 0, grossAtr = 0, exactPath = 0;
+  let wins = 0, losses = 0, trades = 0, grossAtr = 0, exactPath = 0, costAtrSum = 0;
   let sumWinAtr = 0, sumLossAtr = 0, streak = 0, maxLossStreak = 0;
   const equity = [account0];
 
@@ -87,7 +91,8 @@ function run(samples, opts) {
     const oc = outcomeFor(s, slAtr, tpAtr, useSampleTp);
     if (!oc) continue;
     if (Array.isArray(s.path) && s.path.length) exactPath++;
-    const costAtr = costFrac > 0 ? costFrac / atrPctOf(s) : 0;
+    const costAtr = costModel ? cost.costAtr(s, costModel) : (costFrac > 0 ? costFrac / atrPctOf(s) : 0);
+    costAtrSum += costAtr;
     const pnlAtr = oc.pnl - costAtr;
     const pnl$ = (pnlAtr / slAtr) * riskPct * account;
     account += pnl$;
@@ -108,6 +113,7 @@ function run(samples, opts) {
     trades, wins, losses,
     winRate: trades ? (wins / trades) * 100 : 0,
     expectancyAtr: trades ? grossAtr / trades : 0,
+    avgCostAtr: trades ? costAtrSum / trades : 0,
     profitFactor: sumLossAtr > 0 ? sumWinAtr / sumLossAtr : (sumWinAtr > 0 ? Infinity : 0),
     avgWinAtr: wins ? sumWinAtr / wins : 0,
     avgLossAtr: losses ? sumLossAtr / losses : 0,
