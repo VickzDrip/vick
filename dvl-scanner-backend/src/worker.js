@@ -637,6 +637,14 @@ async function cycle() {
     if (n) console.log("[DVL worker] vrsi: +" + n + " samples");
   } catch (e) { console.warn("[DVL worker] vrsi:", e && e.message); }
 
+  /* VP + RSI-V adaptive model: sample a rotating batch this cycle, then re-learn
+     on a cooldown. Guarded — never breaks the scan. */
+  try {
+    const n = await ingestVrsi(mexc, mexcData && mexcData.cands);
+    vrsiStore.learn({});
+    if (n) console.log("[DVL worker] vrsi: +" + n + " samples");
+  } catch (e) { console.warn("[DVL worker] vrsi:", e && e.message); }
+
   /* Mirror the registry to disk so signals survive restarts. */
   saveRegistry();
 }
