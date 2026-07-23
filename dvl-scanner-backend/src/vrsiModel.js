@@ -52,10 +52,15 @@ function buildSamples(baseCandles, oneMin, opts) {
     lowerZone: opts.detectLower != null ? opts.detectLower : 45,   // loose on purpose
     upperZone: opts.detectUpper != null ? opts.detectUpper : 55
   });
+  const requireFull = !!opts.requireFullHorizon;
   const out = [];
   for (const sig of sigs) {
     const i = sig.index;
     if (i < atrLen + 2 || i + 2 > n - 1) continue;
+    /* Only emit once the FULL forward horizon has closed — so a signal is logged
+       exactly once, with a complete path (used by the live store to avoid
+       re-logging the same signal with a growing path). */
+    if (requireFull && i + horizon > n - 1) continue;
     const entry = Number(baseCandles[i].close);
     const atr = atrAt(baseCandles, i, atrLen);
     if (!(entry > 0 && atr > 0)) continue;
