@@ -27,6 +27,7 @@ const oiStore = require("./oiStore");
 const pumpModel = require("./pumpModel");
 const pumpBacktest = require("./pumpBacktest");
 const annualBacktest = require("./annualBacktest");
+const vrsiStore = require("./vrsiStore");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -207,6 +208,23 @@ function createServer() {
       mexc: { rows: m.rows.length, updatedAt: m.updatedAt },
       outcomes: worker.getOutcomesStats()  // ML groundwork: pending/resolved labeled signals
     });
+  });
+
+  /* VP + RSI-V adaptive model — the new ML. Learned combos per TF (1m/5m):
+     which VP session, zone, proximity, RSI-vzinho threshold, ATR stop and
+     take-profit (POC vs fixed) generalise out-of-sample. */
+  app.get("/api/dvl/scanner/vrsi-model", (req, res) => {
+    try { res.json(Object.assign({ ok: true }, vrsiStore.status())); }
+    catch (e) { res.status(500).json({ ok: false, error: String(e && e.message || e) }); }
+  });
+
+  /* Financial backtest of the learned VP+RSI-V combos (long+short) for a TF —
+     $1000, fixed-fractional risk, compounding. Query: tf=1m|5m (default 1m). */
+  app.get("/api/dvl/scanner/vrsi-backtest", (req, res) => {
+    try {
+      const tf = vrsiStore.TFS.includes(String(req.query.tf)) ? String(req.query.tf) : "1m";
+      res.json(Object.assign({ ok: true, tf }, vrsiStore.backtest(tf)));
+    } catch (e) { res.status(500).json({ ok: false, error: String(e && e.message || e) }); }
   });
 
   /* Pré-pump / pré-short model status — how many resolved samples it has, and
