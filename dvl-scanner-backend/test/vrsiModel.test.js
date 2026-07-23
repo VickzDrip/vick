@@ -64,4 +64,27 @@ function bad(t) {
   }
 })();
 
+/* ---- cross-session VP confluence in passes() + generalizing list ---- */
+(function testConfluenceFilter() {
+  // long at window VAL; VAL also confluent in today, but NOT prevDay
+  const s = { side: "long", entry: 100, atr: 1, pivotRsi: 30,
+    dist: { window: { val: 0.2, poc: -2, vah: -3, pocAtr: 2 }, today: { val: -0.5, poc: -1.5, vah: -2.5, pocAtr: 1.5 }, prevDay: { val: 4.0, poc: 2, vah: 1, pocAtr: 2 } } };
+  const base = { side: "long", session: "window", zone: "val", prox: 1.0, sl: 1.0, rsiThresh: 40, tpMode: "poc", tpAtr: 0 };
+  assert(model.passes(s, Object.assign({}, base, { minConf: 1 })), "minConf 1 passes (no confluence needed)");
+  assert(model.passes(s, Object.assign({}, base, { minConf: 2, confTol: 1.0 })), "minConf 2 passes (window+today VAL confluent)");
+  assert(!model.passes(s, Object.assign({}, base, { minConf: 3, confTol: 1.0 })), "minConf 3 fails (prevDay VAL far)");
+  console.log("  confluence: minConf1 ok, minConf2 ok, minConf3 rejected");
+})();
+
+(function testExposesGeneralizingList() {
+  const samples = [];
+  let t = 0;
+  for (let i = 0; i < 60; i++) { samples.push(good(t += 1000)); samples.push(bad(t += 1000)); }
+  const res = model.optimize(samples, { minSamples: 30 });
+  assert(res.long && Array.isArray(res.long.generalizing), "long exposes a generalizing list");
+  assert(res.long.generalizing.length >= 1, "at least one generalizing long combo");
+  assert(res.long.generalizing.every(c => c.generalizes), "every listed combo generalizes");
+  console.log("  generalizing long combos:", res.long.generalizing.length);
+})();
+
 console.log("vrsiModel.test.js OK");

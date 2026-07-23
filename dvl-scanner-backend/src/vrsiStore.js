@@ -134,7 +134,7 @@ function candidate(sideObj) {
   if (!c) return out;
   return Object.assign(out, {
     generalizes: !!c.generalizes, session: c.session, zone: c.zone, prox: c.prox, slAtr: c.sl,
-    rsiThresh: c.rsiThresh, tp: c.tpMode === "poc" ? "POC" : (c.tpAtr + "×ATR"),
+    rsiThresh: c.rsiThresh, minConf: c.minConf || 1, tp: c.tpMode === "poc" ? "POC" : (c.tpAtr + "×ATR"),
     trainRet: round1(c.train.returnPct), testRet: round1(c.test.returnPct),
     winRate: round1(c.test.winRate), trainTrades: c.train.trades, testTrades: c.test.trades,
     trainN: c.trainN, testN: c.testN
@@ -143,7 +143,7 @@ function candidate(sideObj) {
 
 function summarize(c) {
   return {
-    session: c.session, zone: c.zone, prox: c.prox, slAtr: c.sl, rsiThresh: c.rsiThresh,
+    session: c.session, zone: c.zone, prox: c.prox, slAtr: c.sl, rsiThresh: c.rsiThresh, minConf: c.minConf || 1,
     tp: c.tpMode === "poc" ? "POC" : (c.tpAtr + "×ATR"),
     trainRet: round1(c.train.returnPct), testRet: round1(c.test.returnPct),
     winRate: round1(c.test.winRate), trades: c.test.trades

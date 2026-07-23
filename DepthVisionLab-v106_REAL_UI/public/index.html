@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.273';
+window.DVL_APP_VERSION = 'Beta 1.274';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.274", note: "(1) CONFLUÊNCIA VP entre sessões no modelo — o otimizador agora testa exigir que a zona (VAL/VAH/POC) esteja ALINHADA em ≥2 ou 3 sessões (janela/hoje/véspera) ao mesmo tempo, como você pediu no spec. Isso deixa a entrada mais seletiva (tende a subir o acerto e baixar a variância, principalmente da compra). O combo aprendido mostra 'confl. N sessões' no card quando usa confluência. (2) MARKET MATRIX opera MAIS — antes o bot só entrava no ÚNICO melhor combo por TF/lado (poucos casamentos, 3 trades num ativo). Agora ele opera TODOS os combos que passam no teste out-of-sample (best + os demais que generalizam), por TF e lado, sem repetir o mesmo setup — mais atividade e mais ativos, mantendo a honestidade (todo combo foi validado fora da amostra). Backend (reinicia o dvl-scanner) + frontend." },
   { version: "Beta 1.273", note: "Lado COMPRA do modelo VP+RSI-V: diagnóstico + busca ampliada + status honesto. O card mostrava 'sem combo confiável' pra compra sem explicar; agora ele mostra o MELHOR CANDIDATO de cada lado com status claro (ex.: 'aguardando · melhor combo ainda PERDE out-of-sample no regime atual · teste −4,4% · acerto 47%') e a contagem de amostras por lado. O diagnóstico revelou o motivo real: NÃO falta amostra de compra (1m tem 10.161 amostras long vs 9.338 short) — é o regime: no período coletado, comprar no VAL/POC perdeu enquanto vender no VAH/POC rendeu (+7,7% no 1m, +29,1% no 5m). O modelo se recusa (corretamente) a operar um combo perdedor. Pra dar chance justa à compra quando o regime virar, ampliei a busca: stop mais justo (0.6×ATR) e RSI de sobrevenda mais forte (≤25) — assim um long seletivo de reversão aparece automaticamente assim que passar no teste out-of-sample. Backend (reinicia o dvl-scanner) + frontend." },
   { version: "Beta 1.272", note: "Cabeçalho, RODAPÉ e o resto do chrome agora seguem o tema. Achei duas causas de cores teimosas: (1) o CSSOM devolve as cores das REGRAS já em rgb(), então o override das folhas não casava com a lista (que era hex) — passei a derivar as triplas rgb de toda a lista; (2) MUITO do chrome do desktop (cabeçalho, rodapé, trilhos, dica do mouse) mora dentro de blocos @media, e o gerador de override só olhava as regras de nível raiz — agora ele RECORRE em @media/@supports. Também troquei a detecção por uma classificação algorítmica de PAPEL: além do verde→acento, fundos escuros (near-black, menos o preto puro pra manter sombras) viram o fundo/superfície do tema e cinzas/sages dessaturados viram o muted — preservando preto puro, vermelho/amarelo (quentes), ciano/azul e roxo. E a folha de override vai pro fim do <body> pra vencer os <style> internos do app. Resultado: header + footer + trilhos + dica do mouse acompanham Teal/Ocean/Carbon. Só frontend." },
   { version: "Beta 1.271", note: "Agora TODO verde do app acompanha o tema — não só os botões da lista. Antes o remapeador só reconhecia uma mão-cheia de tons de verde; o app usa DEZENAS (botões, glows, bordas, gradientes, chips). Troquei por uma DETECÇÃO ALGORÍTMICA: qualquer verde de destaque (onde o verde domina o vermelho e o azul) vira o acento do tema — verde forte/médio → acento, verde claro/pastel → acento claro (pra gradientes e brilhos não ficarem chapados). Ciano/azul, vermelho (venda), amarelo/laranja (alerta) e roxo continuam intactos, e o teste confirma: #10df77, #13dc8d, limão, esmeralda, teal-verde e verde escuro TODOS viram o acento; #00d4ff, #ff4a61, #ffd321 e #8b5cff ficam iguais. Vale pras regras CSS e pro style inline, e a re-varredura periódica pega verdes de botões criados na hora. Só frontend." },
@@ -76806,9 +76807,10 @@ window.DVL_DOM_CROSSHAIR_1205={
   }
 
   function zoneName(z){ return z==="val"?"VAL":(z==="vah"?"VAH":(z==="poc"?"POC":esc(z))); }
+  function confTag(mc){ mc=Number(mc)||1; return mc>1 ? ' · <b style="color:#20e6ba">confl. '+mc+' sessões</b>' : ''; }
   function combo(c){
     if(!c) return '<span style="color:#7f9c8e">sem combo confiável ainda</span>';
-    return 'sessão <b>'+esc(c.session)+'</b> · zona <b>'+zoneName(c.zone)+'</b> · prox '+esc(c.prox)+'×ATR · SL '+esc(c.slAtr)+'×ATR · RSI '+esc(c.rsiThresh)+' · alvo <b>'+esc(c.tp)+'</b>'
+    return 'sessão <b>'+esc(c.session)+'</b> · zona <b>'+zoneName(c.zone)+'</b> · prox '+esc(c.prox)+'×ATR · SL '+esc(c.slAtr)+'×ATR · RSI '+esc(c.rsiThresh)+confTag(c.minConf)+' · alvo <b>'+esc(c.tp)+'</b>'
       +'<br><span style="color:#8aa99b">treino '+esc(c.trainRet)+'% · teste '+esc(c.testRet)+'% · acerto '+esc(c.winRate)+'% · '+esc(c.trades)+' trades</span>';
   }
   /* Quando não há combo que GENERALIZE, mostra o melhor candidato (diag) com status
@@ -76820,7 +76822,7 @@ window.DVL_DOM_CROSSHAIR_1205={
       var neg=(Number(diag.testRet)<0||Number(diag.trainRet)<0);
       var why=neg?'melhor combo ainda PERDE out-of-sample no regime atual':'quase lá — poucos trades no teste';
       return '<span style="color:#f4b942">aguardando · '+why+'</span>'
-        +'<br><span style="color:#8aa99b">melhor: '+esc(diag.session)+'/'+zoneName(diag.zone)+' · prox '+esc(diag.prox)+' · SL '+esc(diag.slAtr)+' · RSI '+esc(diag.rsiThresh)+' · alvo '+esc(diag.tp)
+        +'<br><span style="color:#8aa99b">melhor: '+esc(diag.session)+'/'+zoneName(diag.zone)+' · prox '+esc(diag.prox)+' · SL '+esc(diag.slAtr)+' · RSI '+esc(diag.rsiThresh)+(Number(diag.minConf)>1?(' · confl.'+esc(diag.minConf)):'')+' · alvo '+esc(diag.tp)
         +' · treino '+esc(diag.trainRet)+'% · teste '+esc(diag.testRet)+'% · acerto '+esc(diag.winRate)+'% · '+esc(diag.testTrades)+'t · '+esc(sideCount||0)+' amostras</span>';
     }
     return '<span style="color:#7f9c8e">coletando setups reais…</span>';
