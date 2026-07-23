@@ -109,15 +109,36 @@ function status() {
   const st = { tfs: {}, updatedAt: lastLearn };
   for (const tf of TFS) {
     const m = modelCache[tf];
-    const n = samplesFor(tf).length;
+    const rows = samplesFor(tf);
+    const sides = { long: 0, short: 0 };
+    for (const s of rows) { if (s && (s.side === "long" || s.side === "short")) sides[s.side]++; }
     st.tfs[tf] = {
-      samples: n,
+      samples: rows.length,
+      sides,
       ready: !!(m && m.ready),
       long: m && m.long && m.long.best ? summarize(m.long.best) : null,
-      short: m && m.short && m.short.best ? summarize(m.short.best) : null
+      short: m && m.short && m.short.best ? summarize(m.short.best) : null,
+      /* diagnóstico: melhor CANDIDATO por lado, mesmo que ainda não generalize —
+         mostra por que um lado pode estar "off" (poucas amostras / perde out-of-sample). */
+      diag: { long: candidate(m && m.long), short: candidate(m && m.short) }
     };
   }
   return st;
+}
+
+/* Best candidate of a side (top by robustness), even if best=null. */
+function candidate(sideObj) {
+  if (!sideObj) return null;
+  const c = (sideObj.top && sideObj.top[0]) || null;
+  const out = { combos: sideObj.combos || 0 };
+  if (!c) return out;
+  return Object.assign(out, {
+    generalizes: !!c.generalizes, session: c.session, zone: c.zone, prox: c.prox, slAtr: c.sl,
+    rsiThresh: c.rsiThresh, tp: c.tpMode === "poc" ? "POC" : (c.tpAtr + "×ATR"),
+    trainRet: round1(c.train.returnPct), testRet: round1(c.test.returnPct),
+    winRate: round1(c.test.winRate), trainTrades: c.train.trades, testTrades: c.test.trades,
+    trainN: c.trainN, testN: c.testN
+  });
 }
 
 function summarize(c) {
