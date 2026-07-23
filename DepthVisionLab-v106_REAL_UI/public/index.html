@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.272';
+window.DVL_APP_VERSION = 'Beta 1.273';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.273", note: "Lado COMPRA do modelo VP+RSI-V: diagnóstico + busca ampliada + status honesto. O card mostrava 'sem combo confiável' pra compra sem explicar; agora ele mostra o MELHOR CANDIDATO de cada lado com status claro (ex.: 'aguardando · melhor combo ainda PERDE out-of-sample no regime atual · teste −4,4% · acerto 47%') e a contagem de amostras por lado. O diagnóstico revelou o motivo real: NÃO falta amostra de compra (1m tem 10.161 amostras long vs 9.338 short) — é o regime: no período coletado, comprar no VAL/POC perdeu enquanto vender no VAH/POC rendeu (+7,7% no 1m, +29,1% no 5m). O modelo se recusa (corretamente) a operar um combo perdedor. Pra dar chance justa à compra quando o regime virar, ampliei a busca: stop mais justo (0.6×ATR) e RSI de sobrevenda mais forte (≤25) — assim um long seletivo de reversão aparece automaticamente assim que passar no teste out-of-sample. Backend (reinicia o dvl-scanner) + frontend." },
   { version: "Beta 1.272", note: "Cabeçalho, RODAPÉ e o resto do chrome agora seguem o tema. Achei duas causas de cores teimosas: (1) o CSSOM devolve as cores das REGRAS já em rgb(), então o override das folhas não casava com a lista (que era hex) — passei a derivar as triplas rgb de toda a lista; (2) MUITO do chrome do desktop (cabeçalho, rodapé, trilhos, dica do mouse) mora dentro de blocos @media, e o gerador de override só olhava as regras de nível raiz — agora ele RECORRE em @media/@supports. Também troquei a detecção por uma classificação algorítmica de PAPEL: além do verde→acento, fundos escuros (near-black, menos o preto puro pra manter sombras) viram o fundo/superfície do tema e cinzas/sages dessaturados viram o muted — preservando preto puro, vermelho/amarelo (quentes), ciano/azul e roxo. E a folha de override vai pro fim do <body> pra vencer os <style> internos do app. Resultado: header + footer + trilhos + dica do mouse acompanham Teal/Ocean/Carbon. Só frontend." },
   { version: "Beta 1.271", note: "Agora TODO verde do app acompanha o tema — não só os botões da lista. Antes o remapeador só reconhecia uma mão-cheia de tons de verde; o app usa DEZENAS (botões, glows, bordas, gradientes, chips). Troquei por uma DETECÇÃO ALGORÍTMICA: qualquer verde de destaque (onde o verde domina o vermelho e o azul) vira o acento do tema — verde forte/médio → acento, verde claro/pastel → acento claro (pra gradientes e brilhos não ficarem chapados). Ciano/azul, vermelho (venda), amarelo/laranja (alerta) e roxo continuam intactos, e o teste confirma: #10df77, #13dc8d, limão, esmeralda, teal-verde e verde escuro TODOS viram o acento; #00d4ff, #ff4a61, #ffd321 e #8b5cff ficam iguais. Vale pras regras CSS e pro style inline, e a re-varredura periódica pega verdes de botões criados na hora. Só frontend." },
   { version: "Beta 1.270", note: "Tema agora se aplica na INTERFACE TODA — botões, painéis, chips, bordas — não só no gráfico. Como as cores estão hardcoded em regras CSS e em style=\"\" inline (inclusive nos botões), adicionei um REMAPEADOR GLOBAL em runtime: ele reescreve só as famílias NEUTRAS + o ACENTO (fundo, superfície/painel, borda, texto, muted e o verde de destaque) tanto nas folhas CSS quanto no style inline de cada elemento. É IDEMPOTENTE e não-destrutivo: recolore a partir do estado atual (reconhece as cores de qualquer tema), então dá pra alternar à vontade e o app continua livre pra animar/mexer no inline sem ser revertido. Vermelho (venda), amarelo/laranja (alerta), roxo, ciano e as velas do gráfico NÃO são tocados (semântica preservada). Uma re-varredura leve periódica pega botões/painéis criados depois. Três paletas: DVL Teal (padrão), Ocean (azul-marinho) e Carbon (grafite). Além disso: as 4 FOTOS DE FUNDO que você mandou entraram (Montanhas, Cidade noturna, Floresta, Vale/Lago) — WebP embutido, aplicadas como uma camada cinematográfica em baixa opacidade por cima do app (o gráfico se limpa pintando o próprio fundo, então a foto entra como overlay suave — sem rastro), controlável no Theme Studio (opacidade/escurecimento/blur/saturação/contraste/posição). Só frontend." },
@@ -76804,11 +76805,25 @@ window.DVL_DOM_CROSSHAIR_1205={
     return el;
   }
 
+  function zoneName(z){ return z==="val"?"VAL":(z==="vah"?"VAH":(z==="poc"?"POC":esc(z))); }
   function combo(c){
     if(!c) return '<span style="color:#7f9c8e">sem combo confiável ainda</span>';
-    var zone=c.zone==="val"?"VAL":(c.zone==="vah"?"VAH":(c.zone==="poc"?"POC":esc(c.zone)));
-    return 'sessão <b>'+esc(c.session)+'</b> · zona <b>'+zone+'</b> · prox '+esc(c.prox)+'×ATR · SL '+esc(c.slAtr)+'×ATR · RSI '+esc(c.rsiThresh)+' · alvo <b>'+esc(c.tp)+'</b>'
+    return 'sessão <b>'+esc(c.session)+'</b> · zona <b>'+zoneName(c.zone)+'</b> · prox '+esc(c.prox)+'×ATR · SL '+esc(c.slAtr)+'×ATR · RSI '+esc(c.rsiThresh)+' · alvo <b>'+esc(c.tp)+'</b>'
       +'<br><span style="color:#8aa99b">treino '+esc(c.trainRet)+'% · teste '+esc(c.testRet)+'% · acerto '+esc(c.winRate)+'% · '+esc(c.trades)+' trades</span>';
+  }
+  /* Quando não há combo que GENERALIZE, mostra o melhor candidato (diag) com status
+     honesto — explica por que o lado está "off" em vez de deixar em branco. */
+  function sideStatus(best, diag, sideCount){
+    if(best) return combo(best);
+    if(diag && diag.combos){
+      if(diag.session==null) return '<span style="color:#7f9c8e">avaliando '+esc(diag.combos)+' combos… ('+esc(sideCount||0)+' amostras)</span>';
+      var neg=(Number(diag.testRet)<0||Number(diag.trainRet)<0);
+      var why=neg?'melhor combo ainda PERDE out-of-sample no regime atual':'quase lá — poucos trades no teste';
+      return '<span style="color:#f4b942">aguardando · '+why+'</span>'
+        +'<br><span style="color:#8aa99b">melhor: '+esc(diag.session)+'/'+zoneName(diag.zone)+' · prox '+esc(diag.prox)+' · SL '+esc(diag.slAtr)+' · RSI '+esc(diag.rsiThresh)+' · alvo '+esc(diag.tp)
+        +' · treino '+esc(diag.trainRet)+'% · teste '+esc(diag.testRet)+'% · acerto '+esc(diag.winRate)+'% · '+esc(diag.testTrades)+'t · '+esc(sideCount||0)+' amostras</span>';
+    }
+    return '<span style="color:#7f9c8e">coletando setups reais…</span>';
   }
   function money(v){ v=Number(v); if(!isFinite(v)) return "--"; return "$"+v.toFixed(0); }
   function btLine(bt,side){
@@ -76821,8 +76836,9 @@ window.DVL_DOM_CROSSHAIR_1205={
     var bt=DATA.bt[tf];
     var head='<div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 4px"><b style="color:#10df77">'+tf+'</b><span style="color:#8aa99b;font-size:11px">'+(m?esc(m.samples)+' amostras':'—')+'</span></div>';
     if(!m||!m.ready) return head+'<div style="color:#8aa99b;font-size:11px">coletando setups reais… o modelo aprende quando tiver amostras resolvidas suficientes.</div>';
-    var body='<div style="font-size:11px;margin-bottom:3px"><span style="color:#13dc8d">COMPRA (VAL→POC):</span> '+combo(m.long)+'</div>'
-            +'<div style="font-size:11px"><span style="color:#ff6b81">VENDA (VAH→POC):</span> '+combo(m.short)+'</div>';
+    var dg=m.diag||{}, sd=m.sides||{};
+    var body='<div style="font-size:11px;margin-bottom:3px"><span style="color:#13dc8d">COMPRA (VAL→POC):</span> '+sideStatus(m.long, dg.long, sd.long)+'</div>'
+            +'<div style="font-size:11px"><span style="color:#ff6b81">VENDA (VAH→POC):</span> '+sideStatus(m.short, dg.short, sd.short)+'</div>';
     var btHtml = bt&&bt.ready ? ('<div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(129,166,151,.16)"><div style="color:#7f9c8e;font-size:10px;margin-bottom:2px">BACKTEST FINANCEIRO · $1000 · risco 1%/trade</div>'+btLine(bt,"long")+btLine(bt,"short")+'</div>') : '';
     return head+body+btHtml;
   }
