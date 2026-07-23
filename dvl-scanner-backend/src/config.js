@@ -20,6 +20,11 @@ module.exports = {
   CAND: 80,          // scan top-N symbols by 24h quote volume
   POOL: 8,           // concurrent kline fetches
   VRSI_SYMBOLS_PER_CYCLE: Number(process.env.DVL_VRSI_SYMBOLS || 12), // VP+RSI-V model: symbols sampled per cycle (rotating)
+  /* Scanner PAUSED per product decision — it will be repurposed for the Market
+     Matrix. The worker still fetches candidates (the VP+RSI-V model needs the
+     symbol list) but publishes EMPTY snapshots, so the Scanner page shows no
+     assets. Flip to "1" (or set DVL_SCAN_ENABLED=1) to bring it back. */
+  SCAN_ENABLED: process.env.DVL_SCAN_ENABLED === "1",
   FRESH_MS: 3 * 3600000, // a symbol's last candle must be newer than this
 
   /* How often the 24h worker re-scans each exchange (ms). */
