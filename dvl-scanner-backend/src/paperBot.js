@@ -26,10 +26,12 @@ const STATE_FILE = process.env.DVL_BOT_STATE_FILE || path.join(process.cwd(), "d
 const TFS = ["1m", "5m"];
 const MAX_TRADES = 400;   // keep the last N closed trades
 
+const STATE_V = 2;   // bump to discard old-schema state (walk-forward seed changed)
+
 function freshState(account0) {
   return {
-    account0: account0, account: account0, startedAt: Date.now(), updatedAt: 0,
-    cursor: { "1m": 0, "5m": 0 },
+    v: STATE_V, account0: account0, account: account0, startedAt: Date.now(), updatedAt: 0,
+    cursor: { "1m": 0, "5m": 0 }, seeded: { "1m": false, "5m": false },
     trades: [], equity: [account0], peak: account0, maxDD: 0,
     wins: 0, losses: 0, count: 0, grossAtr: 0, costAtrSum: 0,
     bySymbol: {}   // sym -> { trades, wins, pnl$, pnlAtr }
@@ -40,7 +42,7 @@ let state = null;
 function load(account0) {
   if (state) return state;
   try { state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch (_) { state = null; }
-  if (!state || typeof state !== "object" || !state.account0) state = freshState(account0 || 1000);
+  if (!state || typeof state !== "object" || !state.account0 || state.v !== STATE_V) state = freshState(account0 || 1000);
   return state;
 }
 let saveT = 0;
@@ -73,55 +75,71 @@ function tpFor(sample, combo) {
   return combo.tpAtr > 0 ? combo.tpAtr : 2;
 }
 
-/* Process any NEW resolved setups since the last cursor, per TF, booking each
-   that matches the current learned combo. `store` provides samplesFor(tf);
-   `models` is vrsiStore's per-TF optimize() cache. opts: { cost, riskPct }. */
+/* Book ONE resolved sample against a combo into the running account. */
+function book(st, s, combo, tf, cost, riskPct) {
+  if (!Array.isArray(s.path) || !s.path.length) return false;
+  const tp = tpFor(s, combo);
+  let pnlAtr = fin.simFromPath(s.path, combo.side, combo.sl, tp);
+  const cAtr = cost ? costMod.costAtr(s, cost) : 0;
+  pnlAtr -= cAtr;
+  const pnl$ = (pnlAtr / combo.sl) * riskPct * st.account;
+  st.account += pnl$;
+  st.grossAtr += pnlAtr; st.costAtrSum += cAtr; st.count++;
+  if (pnlAtr > 0) st.wins++; else if (pnlAtr < 0) st.losses++;
+  st.equity.push(st.account); if (st.equity.length > 2000) st.equity.shift();
+  if (st.account > st.peak) st.peak = st.account;
+  const dd = st.peak > 0 ? (st.peak - st.account) / st.peak : 0;
+  if (dd > st.maxDD) st.maxDD = dd;
+  const sym = s.symbol || "?";
+  const bs = st.bySymbol[sym] || (st.bySymbol[sym] = { trades: 0, wins: 0, pnl$: 0, pnlAtr: 0 });
+  bs.trades++; if (pnlAtr > 0) bs.wins++; bs.pnl$ += pnl$; bs.pnlAtr += pnlAtr;
+  st.trades.push({ t: Number(s.time), sym, tf, side: combo.side, zone: combo.zone, session: combo.session, pnlAtr: round3(pnlAtr), pnl$: round2(pnl$), rsi: s.pivotRsi });
+  if (st.trades.length > MAX_TRADES) st.trades.shift();
+  return true;
+}
+
+/* First validated combo of a sample's side that it passes. */
+function matchCombo(cands, s) { for (const c of cands) { if (model.passes(s, c)) return c; } return null; }
+
+/* Process resolved setups per TF. On the FIRST run for a TF the bot SEEDS from the
+   model's out-of-sample window — the most-recent (1-trainFrac) slice of stored
+   history, i.e. the same validated set the card's backtest reports — so the Market
+   Matrix starts populated instead of empty. After seeding it trades strictly
+   FORWARD (new setups as they resolve). opts: { cost, riskPct, trainFrac }. */
 function tick(store, models, opts) {
   opts = opts || {};
   const account0 = opts.account0 || 1000;
   const st = load(account0);
   const cost = opts.cost || null;
   const riskPct = opts.riskPct != null ? opts.riskPct : 0.01;
+  const trainFrac = opts.trainFrac != null ? opts.trainFrac : 0.7;
   let booked = 0;
 
   for (const tf of TFS) {
-    let samples;
-    try { samples = store.samplesFor(tf); } catch (_) { samples = []; }
-    samples = (samples || []).filter(s => s && Number(s.time) > (st.cursor[tf] || 0)).sort((a, b) => a.time - b.time);
-    if (!samples.length) continue;
-
-    // first run for this TF: skip the historical backfill → only trade forward
-    if (!st.cursor[tf]) { st.cursor[tf] = samples[samples.length - 1].time; continue; }
-
+    let all;
+    try { all = store.samplesFor(tf); } catch (_) { all = []; }
+    all = (all || []).filter(s => s && Number(s.time) > 0).sort((a, b) => a.time - b.time);
+    if (!all.length) continue;
     const combosBySide = { long: pickCombos(models, tf, "long"), short: pickCombos(models, tf, "short") };
-    for (const s of samples) {
+
+    // FIRST run for this TF: seed from the out-of-sample window, then set the cursor forward.
+    if (!st.seeded || !st.seeded[tf]) {
+      const cut = Math.floor(all.length * trainFrac);
+      for (const s of all.slice(cut)) {
+        const combo = matchCombo(combosBySide[s.side] || [], s);
+        if (combo && book(st, s, combo, tf, cost, riskPct)) booked++;
+      }
+      (st.seeded || (st.seeded = {}))[tf] = true;
+      st.cursor[tf] = all[all.length - 1].time;
+      continue;
+    }
+
+    // FORWARD: only setups newer than the cursor.
+    for (const s of all) {
+      if (Number(s.time) <= (st.cursor[tf] || 0)) continue;
       st.cursor[tf] = Math.max(st.cursor[tf], Number(s.time));
-      const cands = combosBySide[s.side] || [];
-      let combo = null;
-      for (const c of cands) { if (model.passes(s, c)) { combo = c; break; } }
-      if (!combo) continue;
-      if (!Array.isArray(s.path) || !s.path.length) continue;
-      const tp = tpFor(s, combo);
-      let pnlAtr = fin.simFromPath(s.path, combo.side, combo.sl, tp);
-      const cAtr = cost ? costMod.costAtr(s, cost) : 0;
-      pnlAtr -= cAtr;
-      const pnl$ = (pnlAtr / combo.sl) * riskPct * st.account;
-      st.account += pnl$;
-      st.grossAtr += pnlAtr; st.costAtrSum += cAtr; st.count++;
-      if (pnlAtr > 0) st.wins++; else if (pnlAtr < 0) st.losses++;
-      // equity / drawdown
-      st.equity.push(st.account); if (st.equity.length > 2000) st.equity.shift();
-      if (st.account > st.peak) st.peak = st.account;
-      const dd = st.peak > 0 ? (st.peak - st.account) / st.peak : 0;
-      if (dd > st.maxDD) st.maxDD = dd;
-      // per-asset
-      const sym = s.symbol || "?";
-      const bs = st.bySymbol[sym] || (st.bySymbol[sym] = { trades: 0, wins: 0, pnl$: 0, pnlAtr: 0 });
-      bs.trades++; if (pnlAtr > 0) bs.wins++; bs.pnl$ += pnl$; bs.pnlAtr += pnlAtr;
-      // trade log (capped)
-      st.trades.push({ t: Number(s.time), sym, tf, side: combo.side, zone: combo.zone, session: combo.session, pnlAtr: round3(pnlAtr), pnl$: round2(pnl$), rsi: s.pivotRsi });
-      if (st.trades.length > MAX_TRADES) st.trades.shift();
-      booked++;
+      const combo = matchCombo(combosBySide[s.side] || [], s);
+      if (combo && book(st, s, combo, tf, cost, riskPct)) booked++;
     }
   }
   st.updatedAt = Date.now();

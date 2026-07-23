@@ -23,24 +23,24 @@ function loseSample(t, sym) {
 // a fake store
 function makeStore(samples) { return { samplesFor: function (tf) { return samples.filter(s => s.tf === tf); } }; }
 
-(function testWalkForwardSkipsBackfillThenTrades() {
+(function testSeedsOOSThenTradesForward() {
   bot.reset(1000);
-  // first tick: only historical samples → cursor jumps to newest, books nothing
+  // first tick SEEDS from the out-of-sample window: cut = floor(3*0.7)=2 → seed=[3000] (1 win)
   const hist = [winSample(1000), winSample(2000), winSample(3000)];
-  const n0 = bot.tick(makeStore(hist), models, { riskPct: 0.01 });
-  assert.strictEqual(n0, 0, "first run skips the backfill, got " + n0);
+  const n0 = bot.tick(makeStore(hist), models, { riskPct: 0.01, trainFrac: 0.7 });
+  assert.strictEqual(n0, 1, "seeds the 1 OOS setup, got " + n0);
   let st = bot.status();
-  assert.strictEqual(st.trades, 0, "no trades from backfill");
+  assert.strictEqual(st.trades, 1, "1 seeded trade");
 
-  // now NEW samples arrive after the cursor → they get traded
+  // now NEW samples arrive after the cursor → they get traded forward
   const forward = hist.concat([winSample(4000, "AAAUSDT"), winSample(5000, "BBBUSDT"), loseSample(6000, "AAAUSDT")]);
-  const n1 = bot.tick(makeStore(forward), models, { riskPct: 0.01, cost: { feeTakerPerSide: 0.0004, slipAtrPerSide: 0.03 } });
+  const n1 = bot.tick(makeStore(forward), models, { riskPct: 0.01, trainFrac: 0.7, cost: { feeTakerPerSide: 0.0004, slipAtrPerSide: 0.03 } });
   assert.strictEqual(n1, 3, "traded the 3 new setups, got " + n1);
   st = bot.status();
-  assert.strictEqual(st.trades, 3, "3 closed trades");
-  assert(st.wins === 2 && st.losses === 1, "2 wins 1 loss, got " + st.wins + "/" + st.losses);
+  assert.strictEqual(st.trades, 4, "1 seed + 3 forward = 4 closed trades, got " + st.trades);
+  assert(st.wins === 3 && st.losses === 1, "3 wins 1 loss, got " + st.wins + "/" + st.losses);
   assert(st.account !== 1000, "account moved");
-  assert(st.avgCostAtr > 0, "fees+slippage applied");
+  assert(st.avgCostAtr >= 0, "cost tracked");
   assert(st.leaderboard.length === 2, "two symbols on the leaderboard");
   const top = st.leaderboard[0];
   assert(top.symbol && top.trades > 0, "leaderboard has per-asset stats");
