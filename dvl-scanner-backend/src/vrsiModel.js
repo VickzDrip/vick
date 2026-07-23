@@ -86,9 +86,22 @@ function buildSamples(baseCandles, oneMin, opts) {
   return out;
 }
 
+/* How many VP sessions have their `zone` level within `tol` ATR of the entry —
+   the cross-session confluence count (e.g., VAL of window + today + prevDay all
+   clustered near the entry is a strong reversal zone). */
+function confluence(s, zone, tol) {
+  let n = 0;
+  for (const sess of SESSIONS) {
+    const d = s.dist[sess];
+    if (d && d[zone] != null && Math.abs(d[zone]) <= tol) n++;
+  }
+  return n;
+}
+
 /* Does a sample pass a combo's entry filter? side must match; the entry must sit
-   within `prox` ATR of the combo's zone in the combo's session; and the RSI
-   vzinho must be strict enough (pivot ≤ rsiMax for long, ≥ rsiMin for short). */
+   within `prox` ATR of the combo's zone in the combo's session; the RSI vzinho
+   must be strict enough (pivot ≤ rsiMax for long, ≥ rsiMin for short); and — when
+   the combo asks for it — the same zone must be CONFLUENT across ≥ minConf sessions. */
 function passes(s, c) {
   if (s.side !== c.side) return false;
   const d = s.dist[c.session];
@@ -97,6 +110,8 @@ function passes(s, c) {
   if (zoneD == null || Math.abs(zoneD) > c.prox) return false;
   if (c.side === "long" && !(s.pivotRsi <= c.rsiThresh)) return false;
   if (c.side === "short" && !(s.pivotRsi >= c.rsiThresh)) return false;
+  const minConf = c.minConf || 1;
+  if (minConf > 1 && confluence(s, c.zone, c.confTol || 1.0) < minConf) return false;
   return true;
 }
 
@@ -125,6 +140,8 @@ function optimize(samples, opts) {
   const tpGrid = opts.tpGrid || [1, 1.5, 2, 3];               // fixed-ATR alternatives to POC
   const rsiLongGrid = opts.rsiLongGrid || [25, 30, 35, 40, 45];   // pivot ≤ this (25 = sobrevendido forte)
   const rsiShortGrid = opts.rsiShortGrid || [55, 60, 65, 70, 75]; // pivot ≥ this (75 = sobrecomprado forte)
+  const minConfGrid = opts.minConfGrid || [1, 2, 3];             // confluência VP entre sessões (1 = desliga)
+  const confTol = opts.confTol || 1.0;                          // ATR de tolerância p/ contar confluência
   const account0 = opts.account0 || 1000, riskPct = opts.riskPct || 0.01, costFrac = opts.costFrac || 0, cost = opts.cost || null;
   const minTr = Math.max(5, Math.round(cut * 0.02));
 
@@ -151,7 +168,8 @@ function optimize(samples, opts) {
     const sum = r => ({ returnPct: r.returnPct, account: r.account, maxDrawdownPct: r.maxDrawdownPct, winRate: r.winRate, trades: r.trades, profitFactor: r.profitFactor === Infinity ? null : r.profitFactor, expectancyAtr: r.expectancyAtr });
     return {
       side: base.side, session: base.session, zone: base.zone, prox: base.prox, sl: base.sl,
-      rsiThresh: base.rsiThresh, tpMode: best.tpMode, tpAtr: best.tpAtr,
+      rsiThresh: base.rsiThresh, minConf: base.minConf || 1, confTol: base.confTol || confTol,
+      tpMode: best.tpMode, tpAtr: best.tpAtr,
       train: sum(best.r), test: sum(teR), trainN: trAll.length, testN: teAll.length,
       robust: Math.min(best.r.returnPct, teR.returnPct),
       generalizes: teR.trades >= 5 && teR.returnPct > 0 && best.r.returnPct > 0
@@ -162,18 +180,18 @@ function optimize(samples, opts) {
     const zones = side === "long" ? ["val", "poc"] : ["vah", "poc"];
     const rsiGrid = side === "long" ? rsiLongGrid : rsiShortGrid;
     const combos = [];
-    for (const session of SESSIONS) for (const zone of zones) for (const prox of proxGrid) for (const sl of slGrid) for (const rsiThresh of rsiGrid) {
-      const c = evalCombo({ side, session, zone, prox, sl, rsiThresh });
+    for (const session of SESSIONS) for (const zone of zones) for (const prox of proxGrid) for (const sl of slGrid) for (const rsiThresh of rsiGrid) for (const minConf of minConfGrid) {
+      const c = evalCombo({ side, session, zone, prox, sl, rsiThresh, minConf, confTol });
       if (c) combos.push(c);
     }
     const scored = combos.slice().sort((a, b) => b.robust - a.robust);
-    const best = scored.filter(c => c.generalizes)[0] || null;
-    return { best, top: scored.slice(0, 10), combos: combos.length };
+    const gen = scored.filter(c => c.generalizes);
+    return { best: gen[0] || null, generalizing: gen.slice(0, opts.maxGeneralizing || 6), top: scored.slice(0, 10), combos: combos.length };
   }
 
   return {
     ready: true, samples: use.length, trainN: cut, testN: sorted.length - cut,
-    grids: { session: SESSIONS, prox: proxGrid, sl: slGrid, tp: tpGrid, rsiLong: rsiLongGrid, rsiShort: rsiShortGrid },
+    grids: { session: SESSIONS, prox: proxGrid, sl: slGrid, tp: tpGrid, rsiLong: rsiLongGrid, rsiShort: rsiShortGrid, minConf: minConfGrid },
     long: searchSide("long"), short: searchSide("short")
   };
 }

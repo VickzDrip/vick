@@ -49,11 +49,23 @@ function save() {
   try { fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true }); fs.writeFileSync(STATE_FILE, JSON.stringify(state)); } catch (_) { }
 }
 
-function pickCombo(models, tf, side) {
+/* All OOS-validated combos for a side (best + the rest that generalize), deduped.
+   The bot books a setup that matches ANY of them → more activity, still honest
+   (every combo passed the out-of-sample test). */
+function pickCombos(models, tf, side) {
   const m = models && models[tf];
-  if (!m || !m.ready) return null;
+  if (!m || !m.ready) return [];
   const s = side === "long" ? m.long : m.short;
-  return (s && s.best) || null;
+  if (!s) return [];
+  const list = [];
+  if (s.best) list.push(s.best);
+  if (Array.isArray(s.generalizing)) for (const c of s.generalizing) if (c) list.push(c);
+  const seen = new Set(), out = [];
+  for (const c of list) {
+    const k = c.session + "|" + c.zone + "|" + c.prox + "|" + c.sl + "|" + c.rsiThresh + "|" + (c.minConf || 1) + "|" + c.tpMode + "|" + c.tpAtr;
+    if (!seen.has(k)) { seen.add(k); out.push(c); }
+  }
+  return out;
 }
 
 function tpFor(sample, combo) {
@@ -81,10 +93,13 @@ function tick(store, models, opts) {
     // first run for this TF: skip the historical backfill → only trade forward
     if (!st.cursor[tf]) { st.cursor[tf] = samples[samples.length - 1].time; continue; }
 
+    const combosBySide = { long: pickCombos(models, tf, "long"), short: pickCombos(models, tf, "short") };
     for (const s of samples) {
       st.cursor[tf] = Math.max(st.cursor[tf], Number(s.time));
-      const combo = pickCombo(models, tf, s.side);
-      if (!combo || !model.passes(s, combo)) continue;
+      const cands = combosBySide[s.side] || [];
+      let combo = null;
+      for (const c of cands) { if (model.passes(s, c)) { combo = c; break; } }
+      if (!combo) continue;
       if (!Array.isArray(s.path) || !s.path.length) continue;
       const tp = tpFor(s, combo);
       let pnlAtr = fin.simFromPath(s.path, combo.side, combo.sl, tp);
