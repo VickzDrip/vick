@@ -81,7 +81,7 @@ function buildSamples(baseCandles, oneMin, opts) {
       path.push([(Number(baseCandles[k].high) - entry) / atr, (Number(baseCandles[k].low) - entry) / atr, (Number(baseCandles[k].close) - entry) / atr]);
     }
     if (!path.length) continue;
-    out.push({ side: sig.side, entry, atr, path, dist, pivotRsi: sig.pivotRsi, rsi: sig.rsi, time: Number(baseCandles[i].time) });
+    out.push({ side: sig.side, entry, atr, path, dist, pivotRsi: sig.pivotRsi, rsi: sig.rsi, time: Number(baseCandles[i].time), qv: Number(opts.qv) || 0 });
   }
   return out;
 }
@@ -125,7 +125,7 @@ function optimize(samples, opts) {
   const tpGrid = opts.tpGrid || [1, 1.5, 2, 3];               // fixed-ATR alternatives to POC
   const rsiLongGrid = opts.rsiLongGrid || [30, 35, 40, 45];   // pivot ≤ this
   const rsiShortGrid = opts.rsiShortGrid || [55, 60, 65, 70]; // pivot ≥ this
-  const account0 = opts.account0 || 1000, riskPct = opts.riskPct || 0.01, costFrac = opts.costFrac || 0;
+  const account0 = opts.account0 || 1000, riskPct = opts.riskPct || 0.01, costFrac = opts.costFrac || 0, cost = opts.cost || null;
   const minTr = Math.max(5, Math.round(cut * 0.02));
 
   function evalCombo(base) {
@@ -136,18 +136,18 @@ function optimize(samples, opts) {
     let best = null;
     // POC target
     {
-      const r = fin.run(trS, { slAtr: base.sl, useSampleTp: true, side: base.side, account0, riskPct, costFrac });
+      const r = fin.run(trS, { slAtr: base.sl, useSampleTp: true, side: base.side, account0, riskPct, costFrac, cost });
       best = { tpMode: "poc", tpAtr: 0, r };
     }
     for (const tp of tpGrid) {
-      const r = fin.run(trS, { slAtr: base.sl, tpAtr: tp, useSampleTp: false, side: base.side, account0, riskPct, costFrac });
+      const r = fin.run(trS, { slAtr: base.sl, tpAtr: tp, useSampleTp: false, side: base.side, account0, riskPct, costFrac, cost });
       if (r.account > best.r.account) best = { tpMode: "fixed", tpAtr: tp, r };
     }
     const teAll = test.filter(s => passes(s, base));
     const teS = withPocTp(teAll, base.session);
     const teR = fin.run(teS, best.tpMode === "poc"
-      ? { slAtr: base.sl, useSampleTp: true, side: base.side, account0, riskPct, costFrac }
-      : { slAtr: base.sl, tpAtr: best.tpAtr, useSampleTp: false, side: base.side, account0, riskPct, costFrac });
+      ? { slAtr: base.sl, useSampleTp: true, side: base.side, account0, riskPct, costFrac, cost }
+      : { slAtr: base.sl, tpAtr: best.tpAtr, useSampleTp: false, side: base.side, account0, riskPct, costFrac, cost });
     const sum = r => ({ returnPct: r.returnPct, account: r.account, maxDrawdownPct: r.maxDrawdownPct, winRate: r.winRate, trades: r.trades, profitFactor: r.profitFactor === Infinity ? null : r.profitFactor, expectancyAtr: r.expectancyAtr });
     return {
       side: base.side, session: base.session, zone: base.zone, prox: base.prox, sl: base.sl,
@@ -187,7 +187,7 @@ function backtestCombo(samples, combo, opts) {
   const runOpts = combo.tpMode === "poc"
     ? { slAtr: combo.sl, useSampleTp: true, side: combo.side }
     : { slAtr: combo.sl, tpAtr: combo.tpAtr, useSampleTp: false, side: combo.side };
-  return fin.run(filt, Object.assign({ account0: opts.account0 || 1000, riskPct: opts.riskPct || 0.01, costFrac: opts.costFrac || 0 }, runOpts));
+  return fin.run(filt, Object.assign({ account0: opts.account0 || 1000, riskPct: opts.riskPct || 0.01, costFrac: opts.costFrac || 0, cost: opts.cost || null }, runOpts));
 }
 
 module.exports = { buildSamples, optimize, backtestCombo, passes, atrAt, SESSIONS };

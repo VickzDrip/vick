@@ -16,6 +16,7 @@ const { EXCHANGES, binance, mexc, binanceLsr, tfToMs } = require("./exchanges");
 const M = require("./metrics");
 const exhaustionRsi = require("./exhaustionRsi");
 const vrsiStore = require("./vrsiStore");
+const paperBot = require("./paperBot");
 const { isTradableCrypto } = require("./symbolFilter");
 
 /* ── VP + RSI-V adaptive model — live sampling ────────────────────────────
@@ -31,20 +32,24 @@ function normRows(rows) {
 async function ingestVrsi(adapter, cands) {
   if (!adapter || adapter.key !== "mexc" || typeof adapter.klinesChart !== "function") return 0;
   if (!Array.isArray(cands) || !cands.length) return 0;
+  /* Universe = top-N most-liquid (24h quote volume) — the bot + model trade this
+     set. Rotate a small batch through it each cycle to stay under rate limits. */
+  const universe = cands.slice().sort((a, b) => (Number(b.qv) || 0) - (Number(a.qv) || 0)).slice(0, Math.max(1, cfg.BOT_UNIVERSE || 50));
   const N = Math.max(1, cfg.VRSI_SYMBOLS_PER_CYCLE || 12);
   const batch = [];
-  for (let j = 0; j < Math.min(N, cands.length); j++) batch.push(cands[(_vrsiCursor + j) % cands.length]);
-  _vrsiCursor = (_vrsiCursor + N) % Math.max(1, cands.length);
+  for (let j = 0; j < Math.min(N, universe.length); j++) batch.push(universe[(_vrsiCursor + j) % universe.length]);
+  _vrsiCursor = (_vrsiCursor + N) % Math.max(1, universe.length);
   let logged = 0;
   await mapPool(batch, Math.min(cfg.POOL, 4), async (c) => {
     try {
+      const qv = Number(c.qv) || 0;
       const [r1, r5] = await Promise.all([
         adapter.klinesChart(c.sym, "1m", 600),
         adapter.klinesChart(c.sym, "5m", 400)
       ]);
       const one = normRows(r1), five = normRows(r5);
-      if (one.length >= 60) logged += vrsiStore.ingest(c.sym, "1m", one, one);
-      if (five.length >= 60 && one.length >= 60) logged += vrsiStore.ingest(c.sym, "5m", five, one);
+      if (one.length >= 60) logged += vrsiStore.ingest(c.sym, "1m", one, one, { qv });
+      if (five.length >= 60 && one.length >= 60) logged += vrsiStore.ingest(c.sym, "5m", five, one, { qv });
     } catch (_) { /* skip this symbol */ }
   });
   return logged;
@@ -640,11 +645,18 @@ async function cycle() {
   }
 
   /* VP + RSI-V adaptive model: sample a rotating batch this cycle, then re-learn
-     on a cooldown. Guarded — never breaks the scan. */
+     on a cooldown. Then let the paper bot trade any NEW resolved setups
+     walk-forward (100% simulated). Guarded — never breaks the scan. */
   try {
     const n = await ingestVrsi(mexc, mexcData && mexcData.cands);
-    vrsiStore.learn({});
-    if (n) console.log("[DVL worker] vrsi: +" + n + " samples");
+    const models = vrsiStore.learn({});
+    if (cfg.BOT_ENABLED) {
+      const booked = paperBot.tick(vrsiStore, models, {
+        account0: cfg.BOT_ACCOUNT0, riskPct: cfg.BOT_RISK_PCT,
+        cost: { feeTakerPerSide: cfg.FEE_TAKER_PER_SIDE, slipAtrPerSide: cfg.SLIP_ATR_PER_SIDE }
+      });
+      if (n || booked) console.log("[DVL worker] vrsi: +" + n + " samples · bot +" + booked + " trades");
+    } else if (n) console.log("[DVL worker] vrsi: +" + n + " samples");
   } catch (e) { console.warn("[DVL worker] vrsi:", e && e.message); }
 
   /* Mirror the registry to disk so signals survive restarts. */

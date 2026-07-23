@@ -42,3 +42,15 @@ function longLose() { return { side: "long", entry: 100, atr: 1, path: [[0.2, -0
 })();
 
 console.log("finBacktest.test.js OK");
+
+/* ---- cost model: fees + slippage reduce the account ---- */
+(function testCostModelApplies(){
+  const samples=[];
+  for(let i=0;i<40;i++) samples.push({side:"long",entry:100,atr:1,qv:1e6,path:[[2.2,0.4,2.1]]}); // all win +2
+  const gross = fin.run(samples,{slAtr:1.2,tpAtr:2,riskPct:0.01});
+  const net   = fin.run(samples,{slAtr:1.2,tpAtr:2,riskPct:0.01,cost:{feeTakerPerSide:0.0004,slipAtrPerSide:0.03}});
+  assert(net.account < gross.account, "cost lowers the account");
+  assert(net.avgCostAtr>0, "reports avg cost in ATR, got "+net.avgCostAtr);
+  console.log("  gross:",gross.account.toFixed(0),"net(after cost):",net.account.toFixed(0),"avgCostAtr:",net.avgCostAtr.toFixed(3));
+})();
+console.log("finBacktest cost OK");
