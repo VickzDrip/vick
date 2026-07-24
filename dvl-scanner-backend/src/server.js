@@ -25,6 +25,7 @@ const M = require("./metrics");
 const oiStore = require("./oiStore");
 const vrsiStore = require("./vrsiStore");
 const paperBot = require("./paperBot");
+const bubbleHistory = require("./bubbleHistory");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -202,6 +203,13 @@ function createServer() {
   app.get("/api/dvl/scanner/bot-state", (req, res) => {
     try { res.json(Object.assign({ ok: true }, paperBot.status())); }
     catch (e) { res.status(500).json({ ok: false, error: String(e && e.message || e) }); }
+  });
+
+  /* DVL Bubbles history: ~2h of aggregated flow (1s-kline based) so the overlay
+     starts populated. Server-side fetch avoids the browser's Binance geo-block. */
+  app.get("/api/dvl/bubbles/history", async (req, res) => {
+    try { res.json(Object.assign({ ok: true }, await bubbleHistory.history(req.query.symbol, req.query.mins))); }
+    catch (e) { res.json({ ok: false, error: String(e && e.message || e), groups: [] }); }
   });
 
   const server = http.createServer(app);
