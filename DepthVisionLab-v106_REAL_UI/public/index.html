@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.275';
+window.DVL_APP_VERSION = 'Beta 1.276';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.276", note: "NOVO indicador DVL BUBBLES — as bolhas de fluxo agora são um overlay NATIVO do gráfico (não um protótipo à parte). Registrado no menu Indicadores (ao lado do FVG Firewall), com três modos no mesmo módulo: BIG TRADES (bolhas de negócios agressivos acima do filtro — azul-ciano compra no Ask, rosa venda no Bid), VOLUME BUBBLES (Ask/Bid split, Delta ou Volume) e DEEP PROXY (círculo vazio/cheio, quadrado = absorção estimada, losango = batalha estimada — dados públicos, rotulado como ESTIMATIVA, não é MBO real). As bolhas ficam ancoradas a preço+tempo (acompanham pan, zoom, troca de TF e resize) desenhadas pela mesma função de overlay dos outros indicadores. Consome o feed @aggTrade que já existe (fan-out, sem abrir WebSocket novo). Agrupamento por lado+tempo+preço (auto/tempo/preço), filtro significativo automático (percentil P90/P96/P98,5 sobre janela móvel) ou manual em USDT, escala Linear/SQRT/Log com tamanho mín/máx e opacidade, tooltip por toque/hover (não bloqueia pan), cores por tokens do tema (--dvl-bubble-buy/sell/absorption/battle, seguem o Theme Studio). Performance: ring buffer de 5.000 trades, filtro por range visível, teto de bolhas por frame e cap de raio no mobile. Painel no padrão DVL com Restaurar. 100% leitura — não envia ordens. Só frontend." },
   { version: "Beta 1.275", note: "MARKET MATRIX opera MUITO mais. O bot era honesto mas lento: pulava TODO o histórico e só operava setups novos que resolvessem daqui pra frente — por isso ficava em 3 trades num ativo. Agora ele SEMEIA a partir da janela de teste OUT-OF-SAMPLE do modelo (os ~30% mais recentes das amostras — o mesmo conjunto validado que o card de backtest reporta) e depois segue AO VIVO pra frente. Combinado com operar todos os combos validados (1.274), a Matrix já começa cheia: patrimônio, retorno, acerto, drawdown, ranking por ativo e trades recentes de verdade, com taxa + slippage por ativo. Também aumentei a cobertura do universo (18 símbolos/ciclo em vez de 12) pra acumular mais rápido ao vivo. O estado antigo do bot é descartado (schema novo) e re-semeado. Continua 100% simulado — não é ordem real. Backend (reinicia o dvl-scanner) + frontend." },
   { version: "Beta 1.274", note: "(1) CONFLUÊNCIA VP entre sessões no modelo — o otimizador agora testa exigir que a zona (VAL/VAH/POC) esteja ALINHADA em ≥2 ou 3 sessões (janela/hoje/véspera) ao mesmo tempo, como você pediu no spec. Isso deixa a entrada mais seletiva (tende a subir o acerto e baixar a variância, principalmente da compra). O combo aprendido mostra 'confl. N sessões' no card quando usa confluência. (2) MARKET MATRIX opera MAIS — antes o bot só entrava no ÚNICO melhor combo por TF/lado (poucos casamentos, 3 trades num ativo). Agora ele opera TODOS os combos que passam no teste out-of-sample (best + os demais que generalizam), por TF e lado, sem repetir o mesmo setup — mais atividade e mais ativos, mantendo a honestidade (todo combo foi validado fora da amostra). Backend (reinicia o dvl-scanner) + frontend." },
   { version: "Beta 1.273", note: "Lado COMPRA do modelo VP+RSI-V: diagnóstico + busca ampliada + status honesto. O card mostrava 'sem combo confiável' pra compra sem explicar; agora ele mostra o MELHOR CANDIDATO de cada lado com status claro (ex.: 'aguardando · melhor combo ainda PERDE out-of-sample no regime atual · teste −4,4% · acerto 47%') e a contagem de amostras por lado. O diagnóstico revelou o motivo real: NÃO falta amostra de compra (1m tem 10.161 amostras long vs 9.338 short) — é o regime: no período coletado, comprar no VAL/POC perdeu enquanto vender no VAH/POC rendeu (+7,7% no 1m, +29,1% no 5m). O modelo se recusa (corretamente) a operar um combo perdedor. Pra dar chance justa à compra quando o regime virar, ampliei a busca: stop mais justo (0.6×ATR) e RSI de sobrevenda mais forte (≤25) — assim um long seletivo de reversão aparece automaticamente assim que passar no teste out-of-sample. Backend (reinicia o dvl-scanner) + frontend." },
@@ -20909,6 +20910,10 @@ if(window.DVLSpikeZonesDraw){
     try{window.DVLFvgFirewallDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,priceBottom,priceH});}catch(_dvlFvg_e){}
   }
 
+  if(window.DVLBubblesDraw){
+    try{window.DVLBubblesDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,priceBottom,priceH});}catch(_dvlBub_e){}
+  }
+
   if(window.DVLRiskLinesDraw){
     try{window.DVLRiskLinesDraw(ctx,{view,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlRiskLn_e){}
   }
@@ -22448,6 +22453,7 @@ function _agWsConnect(){
         try{ window.DVL_PERF.tickMs = Math.max(0, now-(+d.T||now)); window.DVL_PERF.wsMs = Math.max(0, now-(+d.E||now)); }catch(_){}
         if(els && els.lastPrice && now-_agLastHdr>100){ _agLastHdr=now; try{ els.lastPrice.textContent=fmtPrice(p); }catch(_){} }
         if(now-_agLastPub>120){ _agLastPub=now; publishDvlChartPrice1204(p,'aggtrade-ws',now); }
+        try{ if(window.DVL_TRADE_FEED) window.DVL_TRADE_FEED._emit(d); }catch(_bub){}   // fan-out p/ DVL Bubbles (mesmo feed, sem WS novo)
         requestLiveChartRender(false);   // render coalescido + gap adaptativo (Beta 1.249)
       }catch(_){}
     };
@@ -64184,6 +64190,7 @@ body.dvl-osc-divider-dragging *{
       {key:"vp",mark:"VP",title:"Volume Profile",sub:"range visível · POC / VAH / VAL",api:"DVLVolumeProfile",pill:"dvlVPState",row:"dvlVolProfileItem"},
       {key:"sz",mark:"SZ",title:"DVL Spike Zones",sub:"overlay",api:"DVLSpikeZones",pill:"dvlSzState",row:"dvlSpikeZonesItem"},
       {key:"fvg",mark:"FV",title:"DVL FVG Firewall",sub:"order flow · smart money",api:"DVL_FVG_FIREWALL_API",pill:"dvlFvgState",row:"dvlFvgFirewallItem"},
+      {key:"bubbles",mark:"BB",title:"DVL Bubbles",sub:"big trades · volume · deep proxy",api:"DVL_BUBBLES_API",pill:"dvlBubblesState",row:"dvlBubblesItem"},
       {key:"smartdelta",mark:"SD",title:"DVL Smart Delta",sub:"institutional confluence",api:"DVL_SMART_DELTA_ENGINE_API",pill:"dvlSmartDeltaState",row:"dvlSmartDeltaItem"},
       {key:"ma",mark:"MA",title:"Moving Averages",sub:"10 médias · overlay",api:"DVLMovingAverages",pill:"dvlMaState",row:"dvlMovingAveragesItem"},
       {key:"bookmap",mark:"BM",title:"DVL Bookmap Zones",sub:"Order book heatmap · Bookmap style",api:"DVL_BOOKMAP_ZONES_0813"},
@@ -77096,4 +77103,310 @@ window.DVL_DOM_CROSSHAIR_1205={
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true}); else boot();
 })();
 </script>
+<style id="dvlBubblesTokens1276">
+/* Beta 1.276 — DVL Bubbles: tokens de cor (integra com o Theme Studio; o remapeador
+   de tema reconhece verde→accent, mas aqui buy/sell têm tokens próprios). */
+:root{
+  --dvl-bubble-buy:#12b8ff;      /* compra agressiva no Ask */
+  --dvl-bubble-sell:#ff4d7d;     /* venda agressiva no Bid  */
+  --dvl-bubble-absorption:#f4b942;
+  --dvl-bubble-battle:#b370ff;
+}
+.dvl-bb-panel{ width:min(340px,calc(100vw - 18px)); }
+.dvl-bb-field{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:7px 0; }
+.dvl-bb-field>label{ font-size:11px; color:#bcd3e2; font-weight:800; flex:0 0 auto; }
+.dvl-bb-seg{ display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
+.dvl-bb-seg button{ padding:5px 9px; border-radius:8px; border:1px solid rgba(142,174,190,.22); background:rgba(142,174,190,.06); color:#bcd3e2; font:800 11px system-ui; cursor:pointer; }
+.dvl-bb-seg button.is-on{ border-color:var(--accent,#14d8a0); background:rgba(20,216,160,.16); color:#eafff4; }
+.dvl-bb-num{ width:120px; padding:5px 8px; border-radius:8px; border:1px solid rgba(142,174,190,.22); background:rgba(7,18,14,.7); color:#eaf4ef; font:700 12px system-ui; }
+.dvl-bb-rng{ display:flex; align-items:center; gap:8px; flex:1; justify-content:flex-end; }
+.dvl-bb-rng input[type=range]{ width:140px; }
+.dvl-bb-rng b{ font-size:11px; color:#dcebe4; min-width:34px; text-align:right; }
+</style>
+<script id="DVL_BUBBLES_1276">
+/* ── DVL BUBBLES — indicador overlay nativo (Big Trades · Volume Bubbles · Deep Proxy)
+   Portado do protótipo Bubbles Lab para dentro do gráfico do DVL: um único módulo,
+   registrado no menu Indicators, desenhado sobre o gráfico principal pela MESMA função
+   de desenho dos outros overlays (window.DVLBubblesDraw), ancorado a preço+tempo pelas
+   transforms oficiais (x(slotOffset+i), y(price)). Consome o feed @aggTrade que já existe
+   (fan-out via window.DVL_TRADE_FEED) — sem abrir WebSocket novo. 100% leitura. */
+(function(){
+  "use strict";
+  if(window.__DVL_BUBBLES_ON) return; window.__DVL_BUBBLES_ON=true;
+
+  var LS="dvl.indicator.bubbles.v1";
+  var DEF={
+    on:false, mode:"big", bubbleMode:"split",
+    filterMode:"auto", intensity:"medium", minNotional:50000,
+    grouping:"auto", timeWindow:400, priceBucketMode:"auto", priceBucket:0,
+    scale:"sqrt", minSize:5, maxSize:34, opacity:0.78,
+    zones:false, labels:false, bubble3d:false
+  };
+  var st=(function(){ try{ var s=JSON.parse(localStorage.getItem(LS)||"{}"); var o={}; for(var k in DEF) o[k]=(s&&k in s)?s[k]:DEF[k]; return o; }catch(_){ var d={}; for(var k2 in DEF) d[k2]=DEF[k2]; return d; } })();
+  var saveT=0; function save(){ clearTimeout(saveT); saveT=setTimeout(function(){ try{ localStorage.setItem(LS,JSON.stringify(st)); }catch(_){} },140); updateItem(); }
+  function reset(){ for(var k in DEF) st[k]=DEF[k]; try{ localStorage.setItem(LS,JSON.stringify(st)); }catch(_){} updateItem(); if(panel) renderPanel(); requestDraw(); }
+
+  /* ── globals do app (let → por identificador com guarda) ── */
+  function gsym(){ try{ if(typeof symbol!=="undefined"&&symbol) return String(symbol).toUpperCase(); }catch(_){} try{ if(window.ticker&&window.ticker.symbol) return String(window.ticker.symbol).toUpperCase(); }catch(_){} return "BTCUSDT"; }
+  function candles(){ try{ if(typeof klines!=="undefined"&&Array.isArray(klines)) return klines; }catch(_){} try{ if(Array.isArray(window.klines)) return window.klines; }catch(_){} return []; }
+  function requestDraw(){ try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){} try{ if(typeof window.drawSoon==="function") window.drawSoon(); }catch(_){} }
+
+  /* ── feed compartilhado (fan-out do @aggTrade existente) ─────────────────── */
+  var RAW_MAX=5000, GROUP_MAX=4000;
+  var raw=[];              // ring buffer de trades normalizados
+  var groups=[];           // ring buffer de grupos agregados (ordenados por firstTs)
+  var groupIndex={};       // key -> group (só do bucket de tempo corrente p/ merge rápido)
+  var curSym=gsym();
+  var recentNotional=[];   // janela móvel de nocional de grupos p/ threshold automático
+  var RECENT_MAX=1500;
+
+  function twMs(){ if(st.grouping==="time") return Math.max(100, Math.min(3000, +st.timeWindow||400)); return 450; /* auto */ }
+  function priceBucketFor(price){
+    if(st.grouping==="price" && +st.priceBucket>0) return +st.priceBucket;
+    /* auto: ~2 casas do tick relativo ao preço/volatilidade */
+    var p=price||1; var step=Math.pow(10, Math.floor(Math.log10(p))-3); return Math.max(step, p*0.0002);
+  }
+  function keyOf(ts, price){ return Math.floor(ts/twMs())+"|"+Math.round(price/priceBucketFor(price)); }
+
+  function pushGroup(g){ groups.push(g); if(groups.length>GROUP_MAX) groups.shift();
+    recentNotional.push(g.buyN+g.sellN); if(recentNotional.length>RECENT_MAX) recentNotional.shift(); }
+
+  /* API pública do módulo (spec §5.1) */
+  window.DVL_BUBBLES={
+    get enabled(){ return !!st.on; }, get mode(){ return st.mode; }, get bubbleMode(){ return st.bubbleMode; },
+    get trades(){ return raw; }, get groups(){ return groups; }, get settings(){ return st; },
+    ingestTrade:function(t){
+      if(!st.on || !t || !(t.price>0) || !(t.qty>0)) return;
+      if(t.symbol && t.symbol!==curSym){ return; }
+      raw.push(t); if(raw.length>RAW_MAX) raw.shift();
+      var k=keyOf(t.ts, t.price);
+      var g=groupIndex[k];
+      if(!g || (t.ts-g.firstTs)>twMs()*1.5){
+        g={ key:k, firstTs:t.ts, lastTs:t.ts, buyN:0, sellN:0, buyQ:0, sellQ:0, qty:0, pxQty:0,
+            priceMin:t.price, priceMax:t.price, rawCount:0, maxSingle:0 };
+        groupIndex[k]=g; pushGroup(g);
+      }
+      if(t.side==="buy"){ g.buyN+=t.notional; g.buyQ+=t.qty; } else { g.sellN+=t.notional; g.sellQ+=t.qty; }
+      g.qty+=t.qty; g.pxQty+=t.price*t.qty; g.rawCount+=(t.rawCount||1);
+      if(t.notional>g.maxSingle) g.maxSingle=t.notional;
+      if(t.price<g.priceMin) g.priceMin=t.price; if(t.price>g.priceMax) g.priceMax=t.price;
+      g.lastTs=t.ts;
+    },
+    recompute:function(){ /* agregação é incremental; nada a fazer aqui */ },
+    render:function(ctx,vp){ drawOverlay(ctx,vp); },
+    hitTest:function(x,y){ return hitAt(x,y); },
+    setSymbol:function(sym){ sym=String(sym||"").toUpperCase(); if(sym && sym!==curSym){ curSym=sym; raw=[]; groups=[]; groupIndex={}; recentNotional=[]; requestDraw(); } },
+    destroy:function(){ raw=[]; groups=[]; groupIndex={}; recentNotional=[]; }
+  };
+  /* recebe cada trade cru do @aggTrade (fan-out no core) e normaliza (spec §5.3) */
+  window.DVL_TRADE_FEED={
+    _emit:function(d){
+      try{
+        if(!d || d.e!=="aggTrade") return;
+        var price=+d.p, qty=+d.q; if(!(price>0)||!(qty>0)) return;
+        var t={ ts:+d.T||Date.now(), symbol:String(d.s||"").toUpperCase(), price:price, qty:qty,
+                notional:price*qty, side:d.m?"sell":"buy", firstId:+d.f, lastId:+d.l, rawCount:(+d.l-+d.f+1)||1 };
+        window.DVL_BUBBLES.ingestTrade(t);
+      }catch(_){}
+    },
+    subscribe:function(){ /* reservado p/ outros consumidores */ }
+  };
+
+  /* ── threshold significativo (spec §8): manual OU auto por percentil sobre janela ── */
+  var PCTL={ low:0.90, medium:0.96, strong:0.985 };
+  function threshold(){
+    if(st.filterMode==="manual") return Math.max(0, +st.minNotional||0);
+    var arr=recentNotional; if(arr.length<20) return 0;
+    var s=arr.slice().sort(function(a,b){return a-b;});
+    var p=PCTL[st.intensity]||0.96; var idx=Math.min(s.length-1, Math.floor(p*s.length));
+    return s[idx];
+  }
+
+  /* ── escala visual (spec §9) ── */
+  function radiusFor(notional, visMax){
+    var nrm=visMax>0?Math.max(0,Math.min(1,notional/visMax)):0, sc;
+    if(st.scale==="linear") sc=nrm; else if(st.scale==="log") sc=Math.log1p(nrm*9)/Math.log(10); else sc=Math.sqrt(nrm);
+    var mn=+st.minSize||5, mx=+st.maxSize||34;
+    var r=mn+(mx-mn)*sc;
+    if(window.innerWidth<=760) r=Math.min(r, mx*0.72);   // cap mobile p/ não tapar candles
+    return r;
+  }
+
+  /* ── cor por token do tema ── */
+  function tok(name,fb){ try{ var v=getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v||fb; }catch(_){ return fb; } }
+  function rgbaHex(hex,a){ hex=(hex||"").replace("#",""); if(hex.length===3) hex=hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2]; var r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16); if(isNaN(r)) return "rgba(120,140,160,"+a+")"; return "rgba("+r+","+g+","+b+","+a+")"; }
+
+  /* ── desenho overlay (chamado pela draw() do app via DVLBubblesDraw) ── */
+  var hitList=[];   // {x,y,r,g}
+  function bsearchTime(view,t){ var lo=0,hi=view.length-1,ans=-1; while(lo<=hi){ var m=(lo+hi)>>1; if(+view[m].time<=t){ans=m;lo=m+1;}else hi=m-1;} return ans; }
+  function drawOverlay(ctx,o){
+    hitList.length=0;
+    if(!st.on) return;
+    var s2=gsym(); if(s2!==curSym){ window.DVL_BUBBLES.setSymbol(s2); return; }
+    var view=o.view, x=o.x, y=o.y, x0=o.x0,x1=o.x1,y0=o.y0,y1=o.y1, slotOffset=o.slotOffset||0;
+    if(!view||!view.length||typeof x!=="function"||typeof y!=="function") return;
+    var vFirst=+view[0].time, vLast=+view[view.length-1].time;
+    var twEnd=vLast + (view.length>1 ? (+view[view.length-1].time-+view[view.length-2].time) : 60000);
+    var thr=threshold();
+
+    /* filtra grupos visíveis + significativos, calcula o máximo nocional visível */
+    var vis=[], visMax=0;
+    for(var i=groups.length-1;i>=0;i--){
+      var g=groups[i]; if(g.lastTs<vFirst) break;    // groups em ordem crescente → tudo antes é fora
+      if(g.firstTs>twEnd) continue;
+      var domN=Math.max(g.buyN,g.sellN), totN=g.buyN+g.sellN;
+      var sig = st.mode==="big" ? domN : totN;
+      if(sig<thr) continue;
+      vis.push(g); if(sig>visMax) visMax=sig;
+      if(vis.length>600) break;    // teto de bolhas por frame (perf/mobile)
+    }
+    if(!vis.length) return;
+
+    ctx.save();
+    ctx.globalAlpha=1;
+    ctx.font="700 9px -apple-system,Segoe UI,Roboto,sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    var buyC=tok("--dvl-bubble-buy","#12b8ff"), sellC=tok("--dvl-bubble-sell","#ff4d7d"),
+        absC=tok("--dvl-bubble-absorption","#f4b942"), batC=tok("--dvl-bubble-battle","#b370ff");
+    var op=Math.max(0.1,Math.min(1,+st.opacity||0.78));
+
+    for(var j=0;j<vis.length;j++){
+      var G=vis[j];
+      var price=G.pxQty/(G.qty||1);
+      var py=y(price); if(py<y0-40||py>y1+40) continue;
+      /* x: acha a vela do timestamp e interpola dentro dela */
+      var t=G.firstTs, px;
+      if(t<=vFirst){ px=x0; } else if(t>=vLast){
+        var frac=view.length>1?(t-vLast)/((+view[view.length-1].time-+view[view.length-2].time)||60000):0;
+        px=x(slotOffset+(view.length-1)+Math.max(0,Math.min(1,frac)));
+      } else {
+        var vi=bsearchTime(view,t); if(vi<0) vi=0;
+        var next=Math.min(view.length-1,vi+1);
+        var span=(+view[next].time-+view[vi].time)||60000;
+        var f=span>0?(t-+view[vi].time)/span:0;
+        px=x(slotOffset+vi+Math.max(0,Math.min(1,f)));
+      }
+      if(px<x0-40||px>x1+40) continue;
+
+      var domN=Math.max(G.buyN,G.sellN), totN=G.buyN+G.sellN;
+      var domSide=G.buyN>=G.sellN?"buy":"sell";
+      var sig=st.mode==="big"?domN:totN;
+      var r=radiusFor(sig,visMax);
+      if(r<1.5) continue;
+
+      if(st.mode==="big"){
+        var c=domSide==="buy"?buyC:sellC;
+        fillCircle(ctx,px,py,r,rgbaHex(c,op)); strokeCircle(ctx,px,py,r,rgbaHex(c,Math.min(1,op+0.2)),1);
+      } else if(st.mode==="volume"){
+        if(st.bubbleMode==="delta"){
+          var d=G.buyN-G.sellN, mag=totN>0?Math.abs(d)/totN:0;
+          var c2=d>=0?buyC:sellC; fillCircle(ctx,px,py,r,rgbaHex(c2,op*(0.45+0.55*mag))); strokeCircle(ctx,px,py,r,rgbaHex(c2,op),1);
+        } else if(st.bubbleMode==="volume"){
+          fillCircle(ctx,px,py,r,rgbaHex(domSide==="buy"?buyC:sellC,op*0.5));
+          strokeCircle(ctx,px,py,r,rgbaHex(domSide==="buy"?buyC:sellC,Math.min(1,op+0.25)),1.6);
+        } else { /* split ask/bid */
+          var buyFrac=totN>0?G.buyN/totN:0.5;
+          drawSplit(ctx,px,py,r,buyFrac,rgbaHex(buyC,op),rgbaHex(sellC,op));
+        }
+      } else { /* deep proxy (estimado) */
+        var conc=totN>0?G.maxSingle/totN:0;        // concentração
+        var disp=price>0?(G.priceMax-G.priceMin)/price:0;  // deslocamento relativo
+        var bal=domN>0?Math.min(G.buyN,G.sellN)/domN:0;     // equilíbrio dos lados
+        var c3=domSide==="buy"?buyC:sellC;
+        if(bal>=0.8 && totN>=thr){ drawDiamond(ctx,px,py,r,rgbaHex(batC,op)); }        // batalha estimada
+        else if(disp<0.0006 && totN>=thr*1.3){ drawSquare(ctx,px,py,r,rgbaHex(absC,op)); } // absorção estimada
+        else if(conc>=0.5){ fillCircle(ctx,px,py,r,rgbaHex(c3,op)); }                   // concentrado (poucos grandes)
+        else { strokeCircle(ctx,px,py,r,rgbaHex(c3,Math.min(1,op+0.2)),1.6); }          // vazio (muitos pequenos)
+      }
+
+      if(st.labels && r>=13){
+        ctx.fillStyle="rgba(240,246,255,0.92)";
+        ctx.fillText(fmtNotional(sig), px, py);
+      }
+      hitList.push({x:px,y:py,r:r,g:G,side:domSide,sig:sig});
+    }
+    ctx.restore();
+  }
+
+  function fillCircle(ctx,cx,cy,r,fill){ ctx.beginPath(); ctx.arc(cx,cy,r,0,6.283185); ctx.fillStyle=fill; ctx.fill(); }
+  function strokeCircle(ctx,cx,cy,r,stroke,w){ ctx.beginPath(); ctx.arc(cx,cy,r,0,6.283185); ctx.lineWidth=w||1; ctx.strokeStyle=stroke; ctx.stroke(); }
+  function drawSplit(ctx,cx,cy,r,buyFrac,buyFill,sellFill){
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,-1.5707963,-1.5707963+6.283185*buyFrac); ctx.closePath(); ctx.fillStyle=buyFill; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,-1.5707963+6.283185*buyFrac,-1.5707963+6.283185); ctx.closePath(); ctx.fillStyle=sellFill; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,6.283185); ctx.lineWidth=0.8; ctx.strokeStyle="rgba(255,255,255,0.25)"; ctx.stroke();
+  }
+  function drawSquare(ctx,cx,cy,r,fill){ var s=r*1.6; ctx.fillStyle=fill; ctx.fillRect(cx-s/2,cy-s/2,s,s); ctx.lineWidth=1; ctx.strokeStyle="rgba(255,255,255,0.3)"; ctx.strokeRect(cx-s/2,cy-s/2,s,s); }
+  function drawDiamond(ctx,cx,cy,r,fill){ ctx.beginPath(); ctx.moveTo(cx,cy-r); ctx.lineTo(cx+r,cy); ctx.lineTo(cx,cy+r); ctx.lineTo(cx-r,cy); ctx.closePath(); ctx.fillStyle=fill; ctx.fill(); ctx.lineWidth=1; ctx.strokeStyle="rgba(255,255,255,0.3)"; ctx.stroke(); }
+  function fmtNotional(v){ v=+v||0; if(v>=1e9) return (v/1e9).toFixed(1)+"B"; if(v>=1e6) return (v/1e6).toFixed(1)+"M"; if(v>=1e3) return (v/1e3).toFixed(0)+"K"; return String(Math.round(v)); }
+  function hitAt(px,py){ for(var i=hitList.length-1;i>=0;i--){ var h=hitList[i]; var dx=px-h.x, dy=py-h.y; if(dx*dx+dy*dy<=(h.r+3)*(h.r+3)) return h; } return null; }
+  window.DVLBubblesDraw=function(ctx,o){ try{ drawOverlay(ctx,o); }catch(_){} };
+
+  /* ── tooltip (toque curto / hover; não bloqueia pan/zoom) ── */
+  var tip=null;
+  function ensureTip(){ if(tip) return tip; tip=document.createElement("div"); tip.id="dvlBubblesTip"; tip.style.cssText="position:fixed;z-index:100030;pointer-events:none;display:none;background:rgba(6,16,20,.96);border:1px solid rgba(140,174,190,.28);border-radius:8px;padding:7px 9px;font:600 11px system-ui;color:#eaf4ef;box-shadow:0 8px 26px rgba(0,0,0,.5)"; document.body.appendChild(tip); return tip; }
+  function showTip(h,cx,cy){ var t=ensureTip(); var G=h.g; var price=G.pxQty/(G.qty||1); var d=new Date(G.firstTs);
+    t.innerHTML='<div style="color:'+(h.side==="buy"?"var(--dvl-bubble-buy,#12b8ff)":"var(--dvl-bubble-sell,#ff4d7d)")+';font-weight:900">'+(h.side==="buy"?"COMPRA agressiva":"VENDA agressiva")+'</div>'
+      +'<div>nocional <b>'+fmtNotional(h.sig)+'</b> · preço '+price.toFixed(price>100?1:4)+'</div>'
+      +'<div style="color:#9fb3c8">buy '+fmtNotional(G.buyN)+' · sell '+fmtNotional(G.sellN)+' · '+G.rawCount+' exec</div>'
+      +'<div style="color:#7f9c8e">'+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)+":"+("0"+d.getSeconds()).slice(-2)+'</div>';
+    t.style.display="block"; var tw=t.offsetWidth,th=t.offsetHeight,vw=window.innerWidth,vh=window.innerHeight; var tx=cx+14,ty=cy+14; if(tx+tw>vw-6)tx=cx-tw-14; if(ty+th>vh-6)ty=vh-th-6; t.style.left=tx+"px"; t.style.top=ty+"px"; }
+  function hideTip(){ if(tip) tip.style.display="none"; }
+  function canvasEl(){ try{ return document.getElementById("chart")||document.querySelector("canvas"); }catch(_){ return null; } }
+  function onMove(ev){ if(!st.on){ hideTip(); return; } var cv=canvasEl(); if(!cv) return; var r=cv.getBoundingClientRect(); var h=hitAt(ev.clientX-r.left, ev.clientY-r.top); if(h) showTip(h,ev.clientX,ev.clientY); else hideTip(); }
+  function bindTip(){ var cv=canvasEl(); if(!cv||cv.__dvlBubblesTip) return; cv.__dvlBubblesTip=1; cv.addEventListener("pointermove",onMove,{passive:true}); cv.addEventListener("pointerleave",hideTip,{passive:true}); }
+
+  /* ── item no menu real (modules() registry) + item legado ── */
+  function updateItem(){ var el=document.getElementById("dvlBubblesState"); if(el){ el.textContent=st.on?"ON":"OFF"; el.classList.toggle("is-on",!!st.on); } }
+  window.DVL_BUBBLES_API={ isOn:function(){return !!st.on;}, on:function(){return !!st.on;},
+    setOn:function(v){ st.on=(v===undefined?!st.on:!!v); if(st.on){ curSym=gsym(); bindTip(); } else hideTip(); save(); requestDraw(); },
+    openPanel:function(){ openPanel(); }, open:function(){ openPanel(); }, refresh:requestDraw, getState:function(){var o={};for(var k in st)o[k]=st[k];return o;} };
+
+  /* ── painel de config (shell padrão DVL) ── */
+  var panel=null;
+  function seg(label,key,opts){ var cur=st[key]; return '<div class="dvl-bb-field"><label>'+label+'</label><div class="dvl-bb-seg">'
+    +opts.map(function(o){ return '<button type="button" data-bbseg="'+key+'" data-val="'+o[0]+'" class="'+(String(cur)===String(o[0])?"is-on":"")+'">'+o[1]+'</button>'; }).join("")+'</div></div>'; }
+  function sw(label,key){ return '<div class="dvl-bb-field"><label>'+label+'</label><label class="dvl-switch"><input type="checkbox" data-bbsw="'+key+'" '+(st[key]?"checked":"")+'><i></i><b></b></label></div>'; }
+  function num(label,key,min,max,step){ return '<div class="dvl-bb-field"><label>'+label+'</label><input class="dvl-bb-num" type="number" data-bbnum="'+key+'" value="'+(st[key])+'" min="'+min+'" max="'+max+'" step="'+(step||1)+'"></div>'; }
+  function rng(label,key,min,max,step,unit,scale){ scale=scale||1; unit=unit||""; var disp=scale>1?Math.round(st[key]*scale):st[key]; return '<div class="dvl-bb-field"><label>'+label+'</label><div class="dvl-bb-rng"><input type="range" data-bbrng="'+key+'" data-scale="'+scale+'" data-unit="'+unit+'" min="'+min+'" max="'+max+'" step="'+(step||1)+'" value="'+disp+'"><b data-bbrngval="'+key+'">'+disp+unit+'</b></div></div>'; }
+  function bodyHTML(){
+    var showBubbleMode = st.mode==="volume";
+    return seg("Modo","mode",[["big","Big Trades"],["volume","Volume"],["deep","Deep Proxy"]])
+      +(showBubbleMode?seg("Bubble Mode","bubbleMode",[["split","Ask/Bid"],["delta","Delta"],["volume","Volume"]]):"")
+      +seg("Filtro","filterMode",[["auto","Automático"],["manual","Manual"]])
+      +(st.filterMode==="auto"?seg("Intensidade","intensity",[["low","Low"],["medium","Medium"],["strong","Strong"]]):num("Mín. nocional (USDT)","minNotional",0,1e9,1000))
+      +seg("Agrupamento","grouping",[["auto","Auto"],["time","Tempo"],["price","Preço"]])
+      +(st.grouping==="time"?rng("Janela (ms)","timeWindow",100,3000,50):"")
+      +(st.grouping==="price"?num("Bucket de preço","priceBucket",0,100000,0.0001):"")
+      +seg("Escala","scale",[["linear","Linear"],["sqrt","SQRT"],["log","Log"]])
+      +rng("Tamanho mín","minSize",2,20,1,"px")+rng("Tamanho máx","maxSize",10,60,1,"px")
+      +rng("Opacidade","opacity",20,100,1,"%",100)
+      +sw("Rótulos nas bolhas","labels")+sw("Zonas horizontais","zones")
+      +'<div style="font-size:10px;color:#7f9c8e;margin-top:6px">Deep Proxy usa dados públicos: absorção e batalha são <b>estimativas</b> (não é MBO real).</div>';
+  }
+  function renderPanel(){ if(!panel) return; var b=panel.querySelector("#dvlBubblesBody"); if(!b) return; b.innerHTML=bodyHTML(); bind(b); }
+  function bind(b){
+    b.querySelectorAll("[data-bbseg]").forEach(function(el){ el.addEventListener("click",function(){ st[el.getAttribute("data-bbseg")]=el.getAttribute("data-val"); save(); renderPanel(); requestDraw(); }); });
+    b.querySelectorAll("[data-bbsw]").forEach(function(el){ el.addEventListener("change",function(){ st[el.getAttribute("data-bbsw")]=el.checked; save(); requestDraw(); }); });
+    b.querySelectorAll("[data-bbnum]").forEach(function(el){ el.addEventListener("input",function(){ st[el.getAttribute("data-bbnum")]=Number(el.value)||0; save(); requestDraw(); }); });
+    b.querySelectorAll("[data-bbrng]").forEach(function(el){ el.addEventListener("input",function(){ var sc=+el.getAttribute("data-scale")||1, unit=el.getAttribute("data-unit")||"", key=el.getAttribute("data-bbrng"), v=Number(el.value); st[key]=sc>1?v/sc:v; var lab=b.querySelector('[data-bbrngval="'+key+'"]'); if(lab) lab.textContent=v+unit; save(); requestDraw(); }); });
+  }
+  function openPanel(){
+    if(!panel){ panel=document.createElement("div"); panel.id="dvlBubblesPanel"; panel.className="dvl-vt-panel dvl-bb-panel";
+      panel.innerHTML='<div class="dvl-vt-head"><div class="dvl-vt-title"><b>DVL Bubbles</b><small>big trades · volume · deep proxy</small></div><div class="dvl-vt-head-actions"><button class="dvl-vt-close" id="dvlBubblesReset" type="button" title="Restaurar" style="font-size:15px">⟲</button><button class="dvl-vt-close" id="dvlBubblesClose" type="button">×</button></div></div><div class="dvl-vt-body" id="dvlBubblesBody"></div>';
+      document.body.appendChild(panel);
+      panel.addEventListener("pointerdown",function(e){ e.stopPropagation(); },true);
+      panel.querySelector("#dvlBubblesClose").addEventListener("click",function(){ panel.classList.remove("is-open"); });
+      panel.querySelector("#dvlBubblesReset").addEventListener("click",reset);
+    }
+    renderPanel(); panel.classList.add("is-open");
+  }
+
+  /* troca de ativo → limpa buffers */
+  try{ window.addEventListener("dvl-safe-asset-selected-0804",function(){ window.DVL_BUBBLES.setSymbol(gsym()); },{passive:true}); }catch(_){}
+  try{ window.addEventListener("chart:draw",function(){ if(st.on) bindTip(); },{passive:true}); }catch(_){}
+
+  function boot(){ updateItem(); if(st.on){ curSym=gsym(); bindTip(); } setInterval(bindTip,4000); }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true}); else boot();
+})();
+</script>
+
 </html>
