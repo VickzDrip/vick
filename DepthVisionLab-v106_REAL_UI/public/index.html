@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.281';
+window.DVL_APP_VERSION = 'Beta 1.282';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.282", note: "DVL Bubbles — bolhas PRESAS na região da vela + fim do sumiço ao mover o gráfico. (1) Cada bolha agora fica presa à faixa [mínima,máxima] da vela correspondente: o histórico spot pode ter base de preço diferente do mercado do gráfico e algumas bolhas 'flutuavam' fora da vela — agora o preço da bolha é limitado ao low/high daquela vela, ficando sempre na região do candle. (2) O corte de tamanho (threshold automático) passou a ser calculado sobre TODO o buffer em cache (~1,5s), não só sobre a janela visível: antes, ao mover/dar zoom, o percentil mudava e bolhas na borda piscavam (sumiam e voltavam). (3) Quando há bolhas demais para desenhar, mantém as MAIORES (seleção estável por tamanho) em vez das 'primeiras 600' (que mudavam conforme o pan). Só frontend." },
   { version: "Beta 1.281", note: "DVL Bubbles — HISTÓRICO de ~2h ao abrir (backend) + bolhas CENTRALIZADAS na vela. (1) Novo endpoint no backend /api/dvl/bubbles/history: o servidor busca klines de 1 SEGUNDO da Binance (spot) das últimas 2h e agrega cada segundo numa bolha (nocional comprador/vendedor via taker-buy volume) — leve (poucas chamadas, nada de milhões de trades crus) e feito no servidor (sem o bloqueio de região do navegador). Ao ligar o indicador (ou trocar de ativo), o gráfico já abre populado com ~2h de fluxo e segue ao vivo por cima. (2) As bolhas agora CENTRALIZAM na vela: várias bolhas na mesma vela alinham no centro dela (antes espalhavam pelo tempo dentro da vela e ficavam 'tortas'). Backend (reinicia o dvl-scanner) + frontend." },
   { version: "Beta 1.280", note: "DVL Bubbles — FEED PRÓPRIO com fallback pro SPOT (conserta o 'sem trades' no Brasil). O diagnóstico do usuário mostrou 'ligado, 0 trades': a Binance FUTUROS (fstream) é bloqueada em algumas regiões (Brasil), então o @aggTrade de futuros que o app usava nunca conectava e as bolhas ficavam sem fonte. Agora o indicador abre um WebSocket PRÓPRIO só quando ligado, tentando Binance futuros e caindo automaticamente pro Binance SPOT (stream.binance.com, acessível onde futuros é bloqueado) — com reconexão e troca por símbolo. Quando o feed próprio sobe, o fan-out do core é ignorado pra não contar trade em dobro; se o próprio não subir, o do core serve de fallback. A linha de status agora mostra a FONTE (futures/spot) e o debug() traz feedSrc/ownFeed. Só frontend." },
   { version: "Beta 1.279", note: "DVL Bubbles — diagnóstico VISÍVEL no painel (sem console). A linha de status dentro do painel do indicador agora diz exatamente o que está acontecendo: 'ligado, mas SEM trades chegando' (feed @aggTrade da Binance não respondeu — rede/região pode bloquear a Binance), 'recebendo trades mas o gráfico não chamou o desenho', 'trades OK mas nada na faixa de preço visível' (role até o preço atual / diminua o filtro), ou 'desenhando N bolhas' quando está tudo certo — sempre com os números (trades recebidos, grupos, bolhas na tela). Assim dá pra ver a causa na hora, no celular, sem abrir console. Também corrigi o atalho: agora tanto DVL_BUBBLES.debug() quanto DVL_BUBBLES_API.debug() funcionam. Só frontend." },
@@ -77275,6 +77276,21 @@ window.DVL_DOM_CROSSHAIR_1205={
     var p=PCTL[st.intensity]||0.96; var idx=Math.min(s.length-1, Math.floor(p*s.length));
     return s[idx];
   }
+  /* threshold auto ESTÁVEL: percentil sobre TODO o buffer (não só a janela visível),
+     em cache ~1.5s. Assim mover/zoom o gráfico não muda o corte → bolhas não somem/voltam. */
+  var _thrCache={ t:0, key:"", val:0 };
+  function autoThreshold(){
+    var key=st.mode+"|"+st.intensity;
+    var now=Date.now();
+    if(_thrCache.key===key && now-_thrCache.t<1500) return _thrCache.val;
+    var n=groups.length, from=Math.max(0,n-4000);
+    var s=[];
+    for(var i=from;i<n;i++){ var g=groups[i]; var v=st.mode==="big"?Math.max(g.buyN,g.sellN):(g.buyN+g.sellN); if(v>0) s.push(v); }
+    var val=0;
+    if(s.length>=20){ s.sort(function(a,b){return a-b;}); var pc=PCTL[st.intensity]||0.96; val=s[Math.min(s.length-1,Math.floor(pc*s.length))]||0; }
+    _thrCache.t=now; _thrCache.key=key; _thrCache.val=val;
+    return val;
+  }
 
   /* ── escala visual (spec §9) ── */
   function radiusFor(notional, visMax){
@@ -77314,12 +77330,15 @@ window.DVL_DOM_CROSSHAIR_1205={
     }
     _dbg.visibleGroups=inRange.length;
     if(!inRange.length) return;
-    /* passo 2: threshold ADAPTATIVO à janela visível (auto=percentil; manual=USDT) */
-    var thr;
-    if(st.filterMode==="manual") thr=Math.max(0,+st.minNotional||0);
-    else { var s=inRange.map(function(g){return g.__sig;}).sort(function(a,b){return a-b;}); var pc=PCTL[st.intensity]||0.96; thr=s[Math.min(s.length-1,Math.floor(pc*s.length))]||0; }
+    /* passo 2: threshold ESTÁVEL (auto=percentil sobre buffer inteiro em cache; manual=USDT).
+       Antes o percentil era calculado só sobre a janela visível → ao mover o gráfico o corte
+       mudava e bolhas na borda piscavam. Agora o corte é o mesmo independente do pan/zoom. */
+    var thr = st.filterMode==="manual" ? Math.max(0,+st.minNotional||0) : autoThreshold();
     var vis=[], visMax=0;
-    for(var k2=0;k2<inRange.length;k2++){ var gg=inRange[k2]; if(gg.__sig<thr) continue; vis.push(gg); if(gg.__sig>visMax) visMax=gg.__sig; if(vis.length>600) break; }
+    for(var k2=0;k2<inRange.length;k2++){ var gg=inRange[k2]; if(gg.__sig<thr) continue; vis.push(gg); if(gg.__sig>visMax) visMax=gg.__sig; }
+    /* se exceder o limite de render, mantém as MAIORES (seleção estável por tamanho),
+       não as "primeiras 600" (que mudavam conforme o pan) → sem sumiço/reaparecimento. */
+    if(vis.length>600){ vis.sort(function(a,b){return b.__sig-a.__sig;}); vis.length=600; }
     _dbg.shown=vis.length;
     if(!vis.length) return;
 
@@ -77333,14 +77352,19 @@ window.DVL_DOM_CROSSHAIR_1205={
     _dbg.drawn=0; _dbg.skipY=0; _dbg.skipX=0;
     for(var j=0;j<vis.length;j++){
       var G=vis[j];
-      var price=G.pxQty/(G.qty||1);
-      var py=y(price); if(py<y0-40||py>y1+40){ _dbg.skipY++; continue; }
       /* x: CENTRALIZA na vela do timestamp (várias bolhas na mesma vela alinham no centro,
          sem ficar "torto" por espalhar pelo tempo dentro da vela) */
       var t=G.firstTs, vi;
       if(t<=vFirst) vi=0; else if(t>=vLast) vi=view.length-1; else { vi=bsearchTime(view,t); if(vi<0) vi=0; }
       var px=x(slotOffset+vi);
       if(px<x0-40||px>x1+40){ _dbg.skipX++; continue; }
+      /* y: preço da bolha, PRESO à faixa [low,high] da vela correspondente. Assim a bolha
+         fica sempre na região do candle (o histórico spot pode ter base diferente do mercado
+         do gráfico e "flutuava" fora da vela). */
+      var price=G.pxQty/(G.qty||1);
+      var cndl=view[vi];
+      if(cndl){ var lo=+cndl.low, hi=+cndl.high; if(isFinite(lo)&&isFinite(hi)&&hi>=lo){ if(price<lo) price=lo; else if(price>hi) price=hi; } }
+      var py=y(price); if(py<y0-40||py>y1+40){ _dbg.skipY++; continue; }
 
       var domN=Math.max(G.buyN,G.sellN), totN=G.buyN+G.sellN;
       var domSide=G.buyN>=G.sellN?"buy":"sell";
