@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.277';
+window.DVL_APP_VERSION = 'Beta 1.278';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.278", note: "DVL Bubbles — validado ponta-a-ponta (as bolhas DESENHAM no gráfico) e diagnóstico mais fino. Teste offline com velas reais + trades injetados confirmou as bolhas renderizando ancoradas a preço+tempo sobre os candles (compra ciano / venda rosa), consistente em várias execuções. O window.DVL_BUBBLES.debug() agora também mostra drawnOnScreen (quantas bolhas de fato foram desenhadas no frame) e offX/offY (quantas caíram fora da área visível), pra fechar qualquer diagnóstico na hora. Só frontend." },
   { version: "Beta 1.277", note: "DVL Bubbles — conserta 'não aparece' e deixa o ligar à prova de erro. (1) Abrir as configurações do indicador agora JÁ LIGA as bolhas (o caso comum era abrir o painel mas não virar o interruptor no menu). (2) Novo interruptor ON/OFF e uma linha de STATUS ao vivo dentro do painel ('ligado · N trades · M bolhas na tela' / 'aguardando trades…'), pra ficar claro se está recebendo fluxo. (3) Filtro automático agora é ADAPTATIVO à janela visível (percentil calculado sobre os grupos que estão na tela, não sobre um buffer que ficava desatualizado) — some o caso em que o limiar automático escondia tudo. (4) window.DVL_BUBBLES.debug() no console mostra o diagnóstico (trades recebidos, grupos, chamadas de desenho, símbolo) se precisar investigar. Só frontend." },
   { version: "Beta 1.276", note: "NOVO indicador DVL BUBBLES — as bolhas de fluxo agora são um overlay NATIVO do gráfico (não um protótipo à parte). Registrado no menu Indicadores (ao lado do FVG Firewall), com três modos no mesmo módulo: BIG TRADES (bolhas de negócios agressivos acima do filtro — azul-ciano compra no Ask, rosa venda no Bid), VOLUME BUBBLES (Ask/Bid split, Delta ou Volume) e DEEP PROXY (círculo vazio/cheio, quadrado = absorção estimada, losango = batalha estimada — dados públicos, rotulado como ESTIMATIVA, não é MBO real). As bolhas ficam ancoradas a preço+tempo (acompanham pan, zoom, troca de TF e resize) desenhadas pela mesma função de overlay dos outros indicadores. Consome o feed @aggTrade que já existe (fan-out, sem abrir WebSocket novo). Agrupamento por lado+tempo+preço (auto/tempo/preço), filtro significativo automático (percentil P90/P96/P98,5 sobre janela móvel) ou manual em USDT, escala Linear/SQRT/Log com tamanho mín/máx e opacidade, tooltip por toque/hover (não bloqueia pan), cores por tokens do tema (--dvl-bubble-buy/sell/absorption/battle, seguem o Theme Studio). Performance: ring buffer de 5.000 trades, filtro por range visível, teto de bolhas por frame e cap de raio no mobile. Painel no padrão DVL com Restaurar. 100% leitura — não envia ordens. Só frontend." },
   { version: "Beta 1.275", note: "MARKET MATRIX opera MUITO mais. O bot era honesto mas lento: pulava TODO o histórico e só operava setups novos que resolvessem daqui pra frente — por isso ficava em 3 trades num ativo. Agora ele SEMEIA a partir da janela de teste OUT-OF-SAMPLE do modelo (os ~30% mais recentes das amostras — o mesmo conjunto validado que o card de backtest reporta) e depois segue AO VIVO pra frente. Combinado com operar todos os combos validados (1.274), a Matrix já começa cheia: patrimônio, retorno, acerto, drawdown, ranking por ativo e trades recentes de verdade, com taxa + slippage por ativo. Também aumentei a cobertura do universo (18 símbolos/ciclo em vez de 12) pra acumular mais rápido ao vivo. O estado antigo do bot é descartado (schema novo) e re-semeado. Continua 100% simulado — não é ordem real. Backend (reinicia o dvl-scanner) + frontend." },
@@ -77160,7 +77161,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   var curSym=gsym();
   var recentNotional=[];   // janela móvel de nocional de grupos p/ threshold automático
   var RECENT_MAX=1500;
-  var _dbg={ trades:0, drawCalls:0, visibleGroups:0, shown:0, lastTradeTs:0, lastDrawTs:0 };
+  var _dbg={ trades:0, drawCalls:0, visibleGroups:0, shown:0, drawn:0, skipY:0, skipX:0, lastTradeTs:0, lastDrawTs:0 };
 
   function twMs(){ if(st.grouping==="time") return Math.max(100, Math.min(3000, +st.timeWindow||400)); return 450; /* auto */ }
   function priceBucketFor(price){
@@ -77279,10 +77280,11 @@ window.DVL_DOM_CROSSHAIR_1205={
         absC=tok("--dvl-bubble-absorption","#f4b942"), batC=tok("--dvl-bubble-battle","#b370ff");
     var op=Math.max(0.1,Math.min(1,+st.opacity||0.78));
 
+    _dbg.drawn=0; _dbg.skipY=0; _dbg.skipX=0;
     for(var j=0;j<vis.length;j++){
       var G=vis[j];
       var price=G.pxQty/(G.qty||1);
-      var py=y(price); if(py<y0-40||py>y1+40) continue;
+      var py=y(price); if(py<y0-40||py>y1+40){ _dbg.skipY++; continue; }
       /* x: acha a vela do timestamp e interpola dentro dela */
       var t=G.firstTs, px;
       if(t<=vFirst){ px=x0; } else if(t>=vLast){
@@ -77295,13 +77297,14 @@ window.DVL_DOM_CROSSHAIR_1205={
         var f=span>0?(t-+view[vi].time)/span:0;
         px=x(slotOffset+vi+Math.max(0,Math.min(1,f)));
       }
-      if(px<x0-40||px>x1+40) continue;
+      if(px<x0-40||px>x1+40){ _dbg.skipX++; continue; }
 
       var domN=Math.max(G.buyN,G.sellN), totN=G.buyN+G.sellN;
       var domSide=G.buyN>=G.sellN?"buy":"sell";
       var sig=st.mode==="big"?domN:totN;
       var r=radiusFor(sig,visMax);
       if(r<1.5) continue;
+      _dbg.drawn++;
 
       if(st.mode==="big"){
         var c=domSide==="buy"?buyC:sellC;
@@ -77369,7 +77372,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   window.DVL_BUBBLES_API={ isOn:function(){return !!st.on;}, on:function(){return !!st.on;},
     setOn:function(v){ st.on=(v===undefined?!st.on:!!v); if(st.on){ curSym=gsym(); bindTip(); } else hideTip(); save(); requestDraw(); },
     openPanel:function(){ openPanel(); }, open:function(){ openPanel(); }, refresh:requestDraw, getState:function(){var o={};for(var k in st)o[k]=st[k];return o;},
-    debug:function(){ return { on:st.on, mode:st.mode, curSym:curSym, appSym:gsym(), trades:_dbg.trades, rawLen:raw.length, groups:groups.length, drawCalls:_dbg.drawCalls, visibleGroups:_dbg.visibleGroups, shownLastDraw:_dbg.shown, secsSinceTrade:_dbg.lastTradeTs?Math.round((Date.now()-_dbg.lastTradeTs)/1000):null, secsSinceDraw:_dbg.lastDrawTs?Math.round((Date.now()-_dbg.lastDrawTs)/1000):null, drawFnPresent:typeof window.DVLBubblesDraw }; } };
+    debug:function(){ return { on:st.on, mode:st.mode, curSym:curSym, appSym:gsym(), trades:_dbg.trades, rawLen:raw.length, groups:groups.length, drawCalls:_dbg.drawCalls, visibleGroups:_dbg.visibleGroups, passedFilter:_dbg.shown, drawnOnScreen:_dbg.drawn, offY:_dbg.skipY, offX:_dbg.skipX, secsSinceTrade:_dbg.lastTradeTs?Math.round((Date.now()-_dbg.lastTradeTs)/1000):null, secsSinceDraw:_dbg.lastDrawTs?Math.round((Date.now()-_dbg.lastDrawTs)/1000):null, drawFnPresent:typeof window.DVLBubblesDraw }; } };
 
   /* ── painel de config (shell padrão DVL) ── */
   var panel=null;
