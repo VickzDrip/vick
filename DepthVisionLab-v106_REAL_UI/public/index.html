@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.276';
+window.DVL_APP_VERSION = 'Beta 1.277';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.277", note: "DVL Bubbles — conserta 'não aparece' e deixa o ligar à prova de erro. (1) Abrir as configurações do indicador agora JÁ LIGA as bolhas (o caso comum era abrir o painel mas não virar o interruptor no menu). (2) Novo interruptor ON/OFF e uma linha de STATUS ao vivo dentro do painel ('ligado · N trades · M bolhas na tela' / 'aguardando trades…'), pra ficar claro se está recebendo fluxo. (3) Filtro automático agora é ADAPTATIVO à janela visível (percentil calculado sobre os grupos que estão na tela, não sobre um buffer que ficava desatualizado) — some o caso em que o limiar automático escondia tudo. (4) window.DVL_BUBBLES.debug() no console mostra o diagnóstico (trades recebidos, grupos, chamadas de desenho, símbolo) se precisar investigar. Só frontend." },
   { version: "Beta 1.276", note: "NOVO indicador DVL BUBBLES — as bolhas de fluxo agora são um overlay NATIVO do gráfico (não um protótipo à parte). Registrado no menu Indicadores (ao lado do FVG Firewall), com três modos no mesmo módulo: BIG TRADES (bolhas de negócios agressivos acima do filtro — azul-ciano compra no Ask, rosa venda no Bid), VOLUME BUBBLES (Ask/Bid split, Delta ou Volume) e DEEP PROXY (círculo vazio/cheio, quadrado = absorção estimada, losango = batalha estimada — dados públicos, rotulado como ESTIMATIVA, não é MBO real). As bolhas ficam ancoradas a preço+tempo (acompanham pan, zoom, troca de TF e resize) desenhadas pela mesma função de overlay dos outros indicadores. Consome o feed @aggTrade que já existe (fan-out, sem abrir WebSocket novo). Agrupamento por lado+tempo+preço (auto/tempo/preço), filtro significativo automático (percentil P90/P96/P98,5 sobre janela móvel) ou manual em USDT, escala Linear/SQRT/Log com tamanho mín/máx e opacidade, tooltip por toque/hover (não bloqueia pan), cores por tokens do tema (--dvl-bubble-buy/sell/absorption/battle, seguem o Theme Studio). Performance: ring buffer de 5.000 trades, filtro por range visível, teto de bolhas por frame e cap de raio no mobile. Painel no padrão DVL com Restaurar. 100% leitura — não envia ordens. Só frontend." },
   { version: "Beta 1.275", note: "MARKET MATRIX opera MUITO mais. O bot era honesto mas lento: pulava TODO o histórico e só operava setups novos que resolvessem daqui pra frente — por isso ficava em 3 trades num ativo. Agora ele SEMEIA a partir da janela de teste OUT-OF-SAMPLE do modelo (os ~30% mais recentes das amostras — o mesmo conjunto validado que o card de backtest reporta) e depois segue AO VIVO pra frente. Combinado com operar todos os combos validados (1.274), a Matrix já começa cheia: patrimônio, retorno, acerto, drawdown, ranking por ativo e trades recentes de verdade, com taxa + slippage por ativo. Também aumentei a cobertura do universo (18 símbolos/ciclo em vez de 12) pra acumular mais rápido ao vivo. O estado antigo do bot é descartado (schema novo) e re-semeado. Continua 100% simulado — não é ordem real. Backend (reinicia o dvl-scanner) + frontend." },
   { version: "Beta 1.274", note: "(1) CONFLUÊNCIA VP entre sessões no modelo — o otimizador agora testa exigir que a zona (VAL/VAH/POC) esteja ALINHADA em ≥2 ou 3 sessões (janela/hoje/véspera) ao mesmo tempo, como você pediu no spec. Isso deixa a entrada mais seletiva (tende a subir o acerto e baixar a variância, principalmente da compra). O combo aprendido mostra 'confl. N sessões' no card quando usa confluência. (2) MARKET MATRIX opera MAIS — antes o bot só entrava no ÚNICO melhor combo por TF/lado (poucos casamentos, 3 trades num ativo). Agora ele opera TODOS os combos que passam no teste out-of-sample (best + os demais que generalizam), por TF e lado, sem repetir o mesmo setup — mais atividade e mais ativos, mantendo a honestidade (todo combo foi validado fora da amostra). Backend (reinicia o dvl-scanner) + frontend." },
@@ -77159,6 +77160,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   var curSym=gsym();
   var recentNotional=[];   // janela móvel de nocional de grupos p/ threshold automático
   var RECENT_MAX=1500;
+  var _dbg={ trades:0, drawCalls:0, visibleGroups:0, shown:0, lastTradeTs:0, lastDrawTs:0 };
 
   function twMs(){ if(st.grouping==="time") return Math.max(100, Math.min(3000, +st.timeWindow||400)); return 450; /* auto */ }
   function priceBucketFor(price){
@@ -77179,6 +77181,7 @@ window.DVL_DOM_CROSSHAIR_1205={
       if(!st.on || !t || !(t.price>0) || !(t.qty>0)) return;
       if(t.symbol && t.symbol!==curSym){ return; }
       raw.push(t); if(raw.length>RAW_MAX) raw.shift();
+      _dbg.trades++; _dbg.lastTradeTs=t.ts;
       var k=keyOf(t.ts, t.price);
       var g=groupIndex[k];
       if(!g || (t.ts-g.firstTs)>twMs()*1.5){
@@ -77242,24 +77245,31 @@ window.DVL_DOM_CROSSHAIR_1205={
   function drawOverlay(ctx,o){
     hitList.length=0;
     if(!st.on) return;
+    _dbg.drawCalls++; _dbg.lastDrawTs=Date.now();
     var s2=gsym(); if(s2!==curSym){ window.DVL_BUBBLES.setSymbol(s2); return; }
     var view=o.view, x=o.x, y=o.y, x0=o.x0,x1=o.x1,y0=o.y0,y1=o.y1, slotOffset=o.slotOffset||0;
     if(!view||!view.length||typeof x!=="function"||typeof y!=="function") return;
     var vFirst=+view[0].time, vLast=+view[view.length-1].time;
     var twEnd=vLast + (view.length>1 ? (+view[view.length-1].time-+view[view.length-2].time) : 60000);
-    var thr=threshold();
-
-    /* filtra grupos visíveis + significativos, calcula o máximo nocional visível */
-    var vis=[], visMax=0;
+    /* passo 1: todos os grupos DENTRO da janela visível (sem filtro de tamanho) */
+    var inRange=[];
     for(var i=groups.length-1;i>=0;i--){
-      var g=groups[i]; if(g.lastTs<vFirst) break;    // groups em ordem crescente → tudo antes é fora
+      var g=groups[i]; if(g.lastTs<vFirst-twMs()) break;   // groups ~ordem crescente → antes disso é fora
       if(g.firstTs>twEnd) continue;
       var domN=Math.max(g.buyN,g.sellN), totN=g.buyN+g.sellN;
-      var sig = st.mode==="big" ? domN : totN;
-      if(sig<thr) continue;
-      vis.push(g); if(sig>visMax) visMax=sig;
-      if(vis.length>600) break;    // teto de bolhas por frame (perf/mobile)
+      g.__sig = st.mode==="big" ? domN : totN;
+      if(g.__sig>0) inRange.push(g);
+      if(inRange.length>2500) break;
     }
+    _dbg.visibleGroups=inRange.length;
+    if(!inRange.length) return;
+    /* passo 2: threshold ADAPTATIVO à janela visível (auto=percentil; manual=USDT) */
+    var thr;
+    if(st.filterMode==="manual") thr=Math.max(0,+st.minNotional||0);
+    else { var s=inRange.map(function(g){return g.__sig;}).sort(function(a,b){return a-b;}); var pc=PCTL[st.intensity]||0.96; thr=s[Math.min(s.length-1,Math.floor(pc*s.length))]||0; }
+    var vis=[], visMax=0;
+    for(var k2=0;k2<inRange.length;k2++){ var gg=inRange[k2]; if(gg.__sig<thr) continue; vis.push(gg); if(gg.__sig>visMax) visMax=gg.__sig; if(vis.length>600) break; }
+    _dbg.shown=vis.length;
     if(!vis.length) return;
 
     ctx.save();
@@ -77358,7 +77368,8 @@ window.DVL_DOM_CROSSHAIR_1205={
   function updateItem(){ var el=document.getElementById("dvlBubblesState"); if(el){ el.textContent=st.on?"ON":"OFF"; el.classList.toggle("is-on",!!st.on); } }
   window.DVL_BUBBLES_API={ isOn:function(){return !!st.on;}, on:function(){return !!st.on;},
     setOn:function(v){ st.on=(v===undefined?!st.on:!!v); if(st.on){ curSym=gsym(); bindTip(); } else hideTip(); save(); requestDraw(); },
-    openPanel:function(){ openPanel(); }, open:function(){ openPanel(); }, refresh:requestDraw, getState:function(){var o={};for(var k in st)o[k]=st[k];return o;} };
+    openPanel:function(){ openPanel(); }, open:function(){ openPanel(); }, refresh:requestDraw, getState:function(){var o={};for(var k in st)o[k]=st[k];return o;},
+    debug:function(){ return { on:st.on, mode:st.mode, curSym:curSym, appSym:gsym(), trades:_dbg.trades, rawLen:raw.length, groups:groups.length, drawCalls:_dbg.drawCalls, visibleGroups:_dbg.visibleGroups, shownLastDraw:_dbg.shown, secsSinceTrade:_dbg.lastTradeTs?Math.round((Date.now()-_dbg.lastTradeTs)/1000):null, secsSinceDraw:_dbg.lastDrawTs?Math.round((Date.now()-_dbg.lastDrawTs)/1000):null, drawFnPresent:typeof window.DVLBubblesDraw }; } };
 
   /* ── painel de config (shell padrão DVL) ── */
   var panel=null;
@@ -77367,9 +77378,16 @@ window.DVL_DOM_CROSSHAIR_1205={
   function sw(label,key){ return '<div class="dvl-bb-field"><label>'+label+'</label><label class="dvl-switch"><input type="checkbox" data-bbsw="'+key+'" '+(st[key]?"checked":"")+'><i></i><b></b></label></div>'; }
   function num(label,key,min,max,step){ return '<div class="dvl-bb-field"><label>'+label+'</label><input class="dvl-bb-num" type="number" data-bbnum="'+key+'" value="'+(st[key])+'" min="'+min+'" max="'+max+'" step="'+(step||1)+'"></div>'; }
   function rng(label,key,min,max,step,unit,scale){ scale=scale||1; unit=unit||""; var disp=scale>1?Math.round(st[key]*scale):st[key]; return '<div class="dvl-bb-field"><label>'+label+'</label><div class="dvl-bb-rng"><input type="range" data-bbrng="'+key+'" data-scale="'+scale+'" data-unit="'+unit+'" min="'+min+'" max="'+max+'" step="'+(step||1)+'" value="'+disp+'"><b data-bbrngval="'+key+'">'+disp+unit+'</b></div></div>'; }
+  function statusLine(){
+    if(!st.on) return '<span style="color:#f4b942">desligado — ligue no botão acima</span>';
+    if(_dbg.trades<=0) return '<span style="color:#8aa99b">ligado · aguardando trades ao vivo…</span>';
+    return '<span style="color:#16c784">ligado · '+_dbg.trades+' trades · '+_dbg.shown+' bolhas na tela</span>';
+  }
   function bodyHTML(){
     var showBubbleMode = st.mode==="volume";
-    return seg("Modo","mode",[["big","Big Trades"],["volume","Volume"],["deep","Deep Proxy"]])
+    return '<div class="dvl-bb-field" style="border-bottom:1px solid rgba(129,166,151,.16);padding-bottom:8px"><label>Indicador</label><label class="dvl-switch"><input type="checkbox" data-bbpower '+(st.on?"checked":"")+'><i></i><b></b></label></div>'
+      +'<div style="font-size:10.5px;margin:2px 0 8px" id="dvlBubblesStatus">'+statusLine()+'</div>'
+      +seg("Modo","mode",[["big","Big Trades"],["volume","Volume"],["deep","Deep Proxy"]])
       +(showBubbleMode?seg("Bubble Mode","bubbleMode",[["split","Ask/Bid"],["delta","Delta"],["volume","Volume"]]):"")
       +seg("Filtro","filterMode",[["auto","Automático"],["manual","Manual"]])
       +(st.filterMode==="auto"?seg("Intensidade","intensity",[["low","Low"],["medium","Medium"],["strong","Strong"]]):num("Mín. nocional (USDT)","minNotional",0,1e9,1000))
@@ -77384,6 +77402,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   }
   function renderPanel(){ if(!panel) return; var b=panel.querySelector("#dvlBubblesBody"); if(!b) return; b.innerHTML=bodyHTML(); bind(b); }
   function bind(b){
+    var pw=b.querySelector("[data-bbpower]"); if(pw) pw.addEventListener("change",function(){ window.DVL_BUBBLES_API.setOn(pw.checked); renderPanel(); });
     b.querySelectorAll("[data-bbseg]").forEach(function(el){ el.addEventListener("click",function(){ st[el.getAttribute("data-bbseg")]=el.getAttribute("data-val"); save(); renderPanel(); requestDraw(); }); });
     b.querySelectorAll("[data-bbsw]").forEach(function(el){ el.addEventListener("change",function(){ st[el.getAttribute("data-bbsw")]=el.checked; save(); requestDraw(); }); });
     b.querySelectorAll("[data-bbnum]").forEach(function(el){ el.addEventListener("input",function(){ st[el.getAttribute("data-bbnum")]=Number(el.value)||0; save(); requestDraw(); }); });
@@ -77397,7 +77416,11 @@ window.DVL_DOM_CROSSHAIR_1205={
       panel.querySelector("#dvlBubblesClose").addEventListener("click",function(){ panel.classList.remove("is-open"); });
       panel.querySelector("#dvlBubblesReset").addEventListener("click",reset);
     }
+    /* abrir as configurações LIGA o indicador (evita 'abri mas não apareceu') */
+    if(!st.on){ window.DVL_BUBBLES_API.setOn(true); }
     renderPanel(); panel.classList.add("is-open");
+    /* status ao vivo enquanto o painel estiver aberto */
+    clearInterval(openPanel._t); openPanel._t=setInterval(function(){ if(!panel||!panel.classList.contains("is-open")){ clearInterval(openPanel._t); return; } var s=panel.querySelector("#dvlBubblesStatus"); if(s) s.innerHTML=statusLine(); },1000);
   }
 
   /* troca de ativo → limpa buffers */
