@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.282';
+window.DVL_APP_VERSION = 'Beta 1.283';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.283", note: "DVL Bubbles — 'Zonas horizontais' agora FUNCIONA. Antes o interruptor existia no painel mas não desenhava nada (era só um flag morto do spec). Agora, ao ligar, o indicador agrega o nocional dos grupos visíveis por faixa de preço (histograma de 40 níveis) e pinta BANDAS HORIZONTAIS nos níveis onde o fluxo mais se acumulou — cor pelo lado dominante (compra=ciano / venda=rosa) e opacidade pela força; níveis muito fortes ganham uma linha central. As bandas ficam ATRÁS das bolhas (não tapam), é um 'mapa de níveis de agressão' (onde o dinheiro grande atuou repetidamente). Barato: no máx. ~2500 grupos e 40 baldes por frame. Só frontend." },
   { version: "Beta 1.282", note: "DVL Bubbles — bolhas PRESAS na região da vela + fim do sumiço ao mover o gráfico. (1) Cada bolha agora fica presa à faixa [mínima,máxima] da vela correspondente: o histórico spot pode ter base de preço diferente do mercado do gráfico e algumas bolhas 'flutuavam' fora da vela — agora o preço da bolha é limitado ao low/high daquela vela, ficando sempre na região do candle. (2) O corte de tamanho (threshold automático) passou a ser calculado sobre TODO o buffer em cache (~1,5s), não só sobre a janela visível: antes, ao mover/dar zoom, o percentil mudava e bolhas na borda piscavam (sumiam e voltavam). (3) Quando há bolhas demais para desenhar, mantém as MAIORES (seleção estável por tamanho) em vez das 'primeiras 600' (que mudavam conforme o pan). Só frontend." },
   { version: "Beta 1.281", note: "DVL Bubbles — HISTÓRICO de ~2h ao abrir (backend) + bolhas CENTRALIZADAS na vela. (1) Novo endpoint no backend /api/dvl/bubbles/history: o servidor busca klines de 1 SEGUNDO da Binance (spot) das últimas 2h e agrega cada segundo numa bolha (nocional comprador/vendedor via taker-buy volume) — leve (poucas chamadas, nada de milhões de trades crus) e feito no servidor (sem o bloqueio de região do navegador). Ao ligar o indicador (ou trocar de ativo), o gráfico já abre populado com ~2h de fluxo e segue ao vivo por cima. (2) As bolhas agora CENTRALIZAM na vela: várias bolhas na mesma vela alinham no centro dela (antes espalhavam pelo tempo dentro da vela e ficavam 'tortas'). Backend (reinicia o dvl-scanner) + frontend." },
   { version: "Beta 1.280", note: "DVL Bubbles — FEED PRÓPRIO com fallback pro SPOT (conserta o 'sem trades' no Brasil). O diagnóstico do usuário mostrou 'ligado, 0 trades': a Binance FUTUROS (fstream) é bloqueada em algumas regiões (Brasil), então o @aggTrade de futuros que o app usava nunca conectava e as bolhas ficavam sem fonte. Agora o indicador abre um WebSocket PRÓPRIO só quando ligado, tentando Binance futuros e caindo automaticamente pro Binance SPOT (stream.binance.com, acessível onde futuros é bloqueado) — com reconexão e troca por símbolo. Quando o feed próprio sobe, o fan-out do core é ignorado pra não contar trade em dobro; se o próprio não subir, o do core serve de fallback. A linha de status agora mostra a FONTE (futures/spot) e o debug() traz feedSrc/ownFeed. Só frontend." },
@@ -77349,6 +77350,10 @@ window.DVL_DOM_CROSSHAIR_1205={
         absC=tok("--dvl-bubble-absorption","#f4b942"), batC=tok("--dvl-bubble-battle","#b370ff");
     var op=Math.max(0.1,Math.min(1,+st.opacity||0.78));
 
+    /* zonas horizontais: níveis de preço onde o fluxo (buy/sell) mais se acumulou,
+       desenhadas ATRÁS das bolhas (mapa de níveis de agressão). */
+    if(st.zones){ try{ drawZones(ctx,inRange,o,buyC,sellC); }catch(_z){} }
+
     _dbg.drawn=0; _dbg.skipY=0; _dbg.skipX=0;
     for(var j=0;j<vis.length;j++){
       var G=vis[j];
@@ -77407,6 +77412,34 @@ window.DVL_DOM_CROSSHAIR_1205={
     ctx.restore();
   }
 
+  /* ── zonas horizontais (níveis de fluxo) ──────────────────────────────────
+     Agrega o nocional dos grupos VISÍVEIS por faixa de preço (histograma) e pinta
+     bandas horizontais nos níveis de maior concentração — cor pelo lado dominante
+     (compra=ciano / venda=rosa), opacidade pela força. Barato: ≤2500 grupos, 40 baldes. */
+  function drawZones(ctx,list,o,buyC,sellC){
+    if(!list||!list.length) return;
+    var y=o.y, x0=o.x0, x1=o.x1;
+    var pMin=Infinity,pMax=-Infinity, i, g, p;
+    for(i=0;i<list.length;i++){ g=list[i]; p=g.pxQty/(g.qty||1); if(!isFinite(p)) continue; if(p<pMin)pMin=p; if(p>pMax)pMax=p; }
+    if(!(pMax>pMin)) return;
+    var NB=40, span=pMax-pMin;
+    var buyB=new Float64Array(NB), sellB=new Float64Array(NB), bi;
+    for(i=0;i<list.length;i++){ g=list[i]; p=g.pxQty/(g.qty||1); if(!isFinite(p)) continue; bi=Math.floor((p-pMin)/span*NB); if(bi<0)bi=0; else if(bi>=NB)bi=NB-1; buyB[bi]+=g.buyN||0; sellB[bi]+=g.sellN||0; }
+    var mx=0,t; for(i=0;i<NB;i++){ t=buyB[i]+sellB[i]; if(t>mx)mx=t; }
+    if(!(mx>0)) return;
+    ctx.save();
+    for(i=0;i<NB;i++){
+      t=buyB[i]+sellB[i]; if(t<mx*0.18) continue;                 // só níveis relevantes
+      var frac=t/mx;
+      var pLo=pMin+span*i/NB, pHi=pMin+span*(i+1)/NB;
+      var yA=y(pHi), yB=y(pLo);                                    // y é invertido (preço↑ = pixel↓)
+      var yt=Math.min(yA,yB), hb=Math.max(2,Math.abs(yB-yA));
+      var c=(buyB[i]>=sellB[i])?buyC:sellC;
+      ctx.fillStyle=rgbaHex(c,0.05+0.16*frac); ctx.fillRect(x0,yt,x1-x0,hb);
+      if(frac>0.55){ ctx.fillStyle=rgbaHex(c,0.30); ctx.fillRect(x0,yt+hb/2-0.5,x1-x0,1); }  // linha do nível forte
+    }
+    ctx.restore();
+  }
   function fillCircle(ctx,cx,cy,r,fill){ ctx.beginPath(); ctx.arc(cx,cy,r,0,6.283185); ctx.fillStyle=fill; ctx.fill(); }
   function strokeCircle(ctx,cx,cy,r,stroke,w){ ctx.beginPath(); ctx.arc(cx,cy,r,0,6.283185); ctx.lineWidth=w||1; ctx.strokeStyle=stroke; ctx.stroke(); }
   function drawSplit(ctx,cx,cy,r,buyFrac,buyFill,sellFill){
