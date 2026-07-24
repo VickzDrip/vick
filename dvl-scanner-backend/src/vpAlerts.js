@@ -258,4 +258,27 @@ async function testPush() {
   } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 }
 
-module.exports = { getConfig, setConfig, status, testPush, refreshLevels, _internal: { computeATR, band: () => band(), tick } };
+/* Descobre o chat id automaticamente lendo o getUpdates do bot (o usuário só
+   precisa ter mandado /start pro bot). Se achar, salva no config. */
+async function discoverChatId(token) {
+  const tk = (token && String(token).trim()) || cfg.tgToken;
+  if (!tk) return { ok: false, error: "sem token" };
+  try {
+    const d = await getJSON("https://api.telegram.org/bot" + tk + "/getUpdates", 10000);
+    if (!d || !d.ok || !Array.isArray(d.result)) return { ok: false, error: "getUpdates falhou" };
+    let chat = null;
+    for (let i = d.result.length - 1; i >= 0; i--) {
+      const u = d.result[i];
+      const m = u.message || u.edited_message || (u.my_chat_member && u.my_chat_member) || {};
+      if (m.chat && m.chat.id != null) { chat = m.chat; break; }
+    }
+    if (!chat) return { ok: false, error: "nenhuma conversa encontrada — mande /start pro bot e tente de novo" };
+    cfg.tgToken = tk;
+    cfg.tgChatId = String(chat.id);
+    save();
+    const name = [chat.first_name, chat.last_name].filter(Boolean).join(" ") || chat.username || String(chat.id);
+    return { ok: true, chatId: String(chat.id), name };
+  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+}
+
+module.exports = { getConfig, setConfig, status, testPush, discoverChatId, refreshLevels, _internal: { computeATR, band: () => band(), tick } };
