@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.279';
+window.DVL_APP_VERSION = 'Beta 1.280';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.280", note: "DVL Bubbles — FEED PRÓPRIO com fallback pro SPOT (conserta o 'sem trades' no Brasil). O diagnóstico do usuário mostrou 'ligado, 0 trades': a Binance FUTUROS (fstream) é bloqueada em algumas regiões (Brasil), então o @aggTrade de futuros que o app usava nunca conectava e as bolhas ficavam sem fonte. Agora o indicador abre um WebSocket PRÓPRIO só quando ligado, tentando Binance futuros e caindo automaticamente pro Binance SPOT (stream.binance.com, acessível onde futuros é bloqueado) — com reconexão e troca por símbolo. Quando o feed próprio sobe, o fan-out do core é ignorado pra não contar trade em dobro; se o próprio não subir, o do core serve de fallback. A linha de status agora mostra a FONTE (futures/spot) e o debug() traz feedSrc/ownFeed. Só frontend." },
   { version: "Beta 1.279", note: "DVL Bubbles — diagnóstico VISÍVEL no painel (sem console). A linha de status dentro do painel do indicador agora diz exatamente o que está acontecendo: 'ligado, mas SEM trades chegando' (feed @aggTrade da Binance não respondeu — rede/região pode bloquear a Binance), 'recebendo trades mas o gráfico não chamou o desenho', 'trades OK mas nada na faixa de preço visível' (role até o preço atual / diminua o filtro), ou 'desenhando N bolhas' quando está tudo certo — sempre com os números (trades recebidos, grupos, bolhas na tela). Assim dá pra ver a causa na hora, no celular, sem abrir console. Também corrigi o atalho: agora tanto DVL_BUBBLES.debug() quanto DVL_BUBBLES_API.debug() funcionam. Só frontend." },
   { version: "Beta 1.278", note: "DVL Bubbles — validado ponta-a-ponta (as bolhas DESENHAM no gráfico) e diagnóstico mais fino. Teste offline com velas reais + trades injetados confirmou as bolhas renderizando ancoradas a preço+tempo sobre os candles (compra ciano / venda rosa), consistente em várias execuções. O window.DVL_BUBBLES.debug() agora também mostra drawnOnScreen (quantas bolhas de fato foram desenhadas no frame) e offX/offY (quantas caíram fora da área visível), pra fechar qualquer diagnóstico na hora. Só frontend." },
   { version: "Beta 1.277", note: "DVL Bubbles — conserta 'não aparece' e deixa o ligar à prova de erro. (1) Abrir as configurações do indicador agora JÁ LIGA as bolhas (o caso comum era abrir o painel mas não virar o interruptor no menu). (2) Novo interruptor ON/OFF e uma linha de STATUS ao vivo dentro do painel ('ligado · N trades · M bolhas na tela' / 'aguardando trades…'), pra ficar claro se está recebendo fluxo. (3) Filtro automático agora é ADAPTATIVO à janela visível (percentil calculado sobre os grupos que estão na tela, não sobre um buffer que ficava desatualizado) — some o caso em que o limiar automático escondia tudo. (4) window.DVL_BUBBLES.debug() no console mostra o diagnóstico (trades recebidos, grupos, chamadas de desenho, símbolo) se precisar investigar. Só frontend." },
@@ -77200,22 +77201,45 @@ window.DVL_DOM_CROSSHAIR_1205={
     recompute:function(){ /* agregação é incremental; nada a fazer aqui */ },
     render:function(ctx,vp){ drawOverlay(ctx,vp); },
     hitTest:function(x,y){ return hitAt(x,y); },
-    setSymbol:function(sym){ sym=String(sym||"").toUpperCase(); if(sym && sym!==curSym){ curSym=sym; raw=[]; groups=[]; groupIndex={}; recentNotional=[]; requestDraw(); } },
-    destroy:function(){ raw=[]; groups=[]; groupIndex={}; recentNotional=[]; }
+    setSymbol:function(sym){ sym=String(sym||"").toUpperCase(); if(sym && sym!==curSym){ curSym=sym; raw=[]; groups=[]; groupIndex={}; recentNotional=[]; if(st.on) openFeed(); requestDraw(); } },
+    destroy:function(){ closeFeed(); raw=[]; groups=[]; groupIndex={}; recentNotional=[]; }
   };
-  /* recebe cada trade cru do @aggTrade (fan-out no core) e normaliza (spec §5.3) */
-  window.DVL_TRADE_FEED={
-    _emit:function(d){
-      try{
-        if(!d || d.e!=="aggTrade") return;
-        var price=+d.p, qty=+d.q; if(!(price>0)||!(qty>0)) return;
-        var t={ ts:+d.T||Date.now(), symbol:String(d.s||"").toUpperCase(), price:price, qty:qty,
-                notional:price*qty, side:d.m?"sell":"buy", firstId:+d.f, lastId:+d.l, rawCount:(+d.l-+d.f+1)||1 };
-        window.DVL_BUBBLES.ingestTrade(t);
-      }catch(_){}
-    },
-    subscribe:function(){ /* reservado p/ outros consumidores */ }
-  };
+  /* normaliza um evento aggTrade cru (spec §5.3) e ingere */
+  function ingestRaw(d){
+    if(!d || d.e!=="aggTrade") return;
+    var price=+d.p, qty=+d.q; if(!(price>0)||!(qty>0)) return;
+    window.DVL_BUBBLES.ingestTrade({ ts:+d.T||Date.now(), symbol:String(d.s||"").toUpperCase(), price:price, qty:qty,
+      notional:price*qty, side:d.m?"sell":"buy", firstId:+d.f, lastId:+d.l, rawCount:(+d.l-+d.f+1)||1 });
+  }
+  /* fan-out do @aggTrade do CORE (futuros). Ignorado quando o feed PRÓPRIO já está
+     ativo, pra não contar em dobro. Serve de fallback quando o próprio não subiu. */
+  window.DVL_TRADE_FEED={ _emit:function(d){ try{ if(window.__DVL_BUB_OWN_FEED) return; ingestRaw(d); }catch(_){} }, subscribe:function(){} };
+
+  /* ── FEED PRÓPRIO resiliente ────────────────────────────────────────────
+     O @aggTrade de FUTUROS (fstream.binance.com) é bloqueado em algumas regiões
+     (ex.: Brasil), então o feed do core pode nunca chegar. Aqui abrimos UM WS por
+     símbolo, tentando futuros e caindo pra SPOT (stream.binance.com, acessível no
+     Brasil). Só liga quando o indicador está ON; fecha no OFF/troca de símbolo. */
+  var _feedWs=null, _feedSymL="", _feedIdx=0, _feedSrc="";
+  var FEED_URLS=[
+    { src:"futures", url:function(s){ return "wss://fstream.binance.com/ws/"+s+"@aggTrade"; } },
+    { src:"spot",    url:function(s){ return "wss://stream.binance.com:9443/ws/"+s+"@aggTrade"; } }
+  ];
+  function closeFeed(){ if(_feedWs){ try{ _feedWs.onclose=null; _feedWs.close(); }catch(_){} _feedWs=null; } window.__DVL_BUB_OWN_FEED=false; _feedSrc=""; }
+  function openFeed(){ if(!st.on) return; var s=gsym().toLowerCase(); if(_feedWs && _feedSymL===s && _feedWs.readyState<2) return; closeFeed(); _feedSymL=s; _feedIdx=0; tryFeed(s,0); }
+  function tryFeed(s, idx){
+    if(!st.on || s!==gsym().toLowerCase()) return;
+    if(idx>=FEED_URLS.length){ window.__DVL_BUB_OWN_FEED=false; _feedSrc=""; setTimeout(function(){ if(st.on && s===gsym().toLowerCase()) tryFeed(s,0); }, 6000); return; }  // esgotou → tenta de novo depois
+    var cfg=FEED_URLS[idx], ws;
+    try{ ws=new WebSocket(cfg.url(s)); }catch(_){ tryFeed(s, idx+1); return; }
+    _feedWs=ws; var got=false;
+    var timer=setTimeout(function(){ if(!got){ try{ ws.onclose=null; ws.close(); }catch(_){} tryFeed(s, idx+1); } }, 4500);
+    ws.onopen=function(){ window.__DVL_BUB_OWN_FEED=true; _feedSrc=cfg.src; };
+    ws.onmessage=function(ev){ got=true; if(timer){ clearTimeout(timer); timer=0; } try{ ingestRaw(JSON.parse(ev.data)); }catch(_){} };
+    ws.onerror=function(){};
+    ws.onclose=function(){ if(_feedWs===ws){ _feedWs=null; window.__DVL_BUB_OWN_FEED=false; } if(timer){ clearTimeout(timer); timer=0; }
+      if(st.on && s===gsym().toLowerCase()){ setTimeout(function(){ if(got) openFeed(); else tryFeed(s, idx+1); }, 1500); } };
+  }
 
   /* ── threshold significativo (spec §8): manual OU auto por percentil sobre janela ── */
   var PCTL={ low:0.90, medium:0.96, strong:0.985 };
@@ -77371,9 +77395,9 @@ window.DVL_DOM_CROSSHAIR_1205={
   /* ── item no menu real (modules() registry) + item legado ── */
   function updateItem(){ var el=document.getElementById("dvlBubblesState"); if(el){ el.textContent=st.on?"ON":"OFF"; el.classList.toggle("is-on",!!st.on); } }
   window.DVL_BUBBLES_API={ isOn:function(){return !!st.on;}, on:function(){return !!st.on;},
-    setOn:function(v){ st.on=(v===undefined?!st.on:!!v); if(st.on){ curSym=gsym(); bindTip(); } else hideTip(); save(); requestDraw(); },
+    setOn:function(v){ st.on=(v===undefined?!st.on:!!v); if(st.on){ curSym=gsym(); bindTip(); openFeed(); } else { hideTip(); closeFeed(); } save(); requestDraw(); },
     openPanel:function(){ openPanel(); }, open:function(){ openPanel(); }, refresh:requestDraw, getState:function(){var o={};for(var k in st)o[k]=st[k];return o;},
-    debug:function(){ return { on:st.on, mode:st.mode, curSym:curSym, appSym:gsym(), trades:_dbg.trades, rawLen:raw.length, groups:groups.length, drawCalls:_dbg.drawCalls, visibleGroups:_dbg.visibleGroups, passedFilter:_dbg.shown, drawnOnScreen:_dbg.drawn, offY:_dbg.skipY, offX:_dbg.skipX, secsSinceTrade:_dbg.lastTradeTs?Math.round((Date.now()-_dbg.lastTradeTs)/1000):null, secsSinceDraw:_dbg.lastDrawTs?Math.round((Date.now()-_dbg.lastDrawTs)/1000):null, drawFnPresent:typeof window.DVLBubblesDraw }; } };
+    debug:function(){ return { on:st.on, mode:st.mode, curSym:curSym, appSym:gsym(), feedSrc:_feedSrc||"(conectando)", ownFeed:!!window.__DVL_BUB_OWN_FEED, trades:_dbg.trades, rawLen:raw.length, groups:groups.length, drawCalls:_dbg.drawCalls, visibleGroups:_dbg.visibleGroups, passedFilter:_dbg.shown, drawnOnScreen:_dbg.drawn, offY:_dbg.skipY, offX:_dbg.skipX, secsSinceTrade:_dbg.lastTradeTs?Math.round((Date.now()-_dbg.lastTradeTs)/1000):null, secsSinceDraw:_dbg.lastDrawTs?Math.round((Date.now()-_dbg.lastDrawTs)/1000):null, drawFnPresent:typeof window.DVLBubblesDraw }; } };
   try{ window.DVL_BUBBLES.debug = window.DVL_BUBBLES_API.debug; }catch(_){}   /* alias: DVL_BUBBLES.debug() também funciona */
 
   /* ── painel de config (shell padrão DVL) ── */
@@ -77385,8 +77409,9 @@ window.DVL_DOM_CROSSHAIR_1205={
   function rng(label,key,min,max,step,unit,scale){ scale=scale||1; unit=unit||""; var disp=scale>1?Math.round(st[key]*scale):st[key]; return '<div class="dvl-bb-field"><label>'+label+'</label><div class="dvl-bb-rng"><input type="range" data-bbrng="'+key+'" data-scale="'+scale+'" data-unit="'+unit+'" min="'+min+'" max="'+max+'" step="'+(step||1)+'" value="'+disp+'"><b data-bbrngval="'+key+'">'+disp+unit+'</b></div></div>'; }
   function statusLine(){
     if(!st.on) return '<span style="color:#f4b942">desligado — ligue no interruptor acima</span>';
-    var base='<span style="color:#7f9c8e">feed '+_dbg.trades+' trades · '+groups.length+' grupos · '+(_dbg.drawn||0)+' bolhas na tela</span>';
-    if(_dbg.trades<=0) return '<span style="color:#f4b942">ligado, mas SEM trades chegando</span> — o feed @aggTrade da Binance não respondeu (rede/região pode bloquear a Binance). '+base;
+    var src=_feedSrc?(" · fonte "+_feedSrc):" · conectando…";
+    var base='<span style="color:#7f9c8e">feed '+_dbg.trades+' trades · '+groups.length+' grupos · '+(_dbg.drawn||0)+' bolhas na tela'+src+'</span>';
+    if(_dbg.trades<=0) return '<span style="color:#f4b942">ligado, conectando o feed de trades…</span> (tento Binance futuros e caio pro spot; se não vier, a Binance pode estar bloqueada). '+base;
     if(_dbg.drawCalls<=0) return '<span style="color:#f4b942">ligado, recebendo trades, mas o gráfico não chamou o desenho</span> — '+base;
     if((_dbg.drawn||0)<=0) return '<span style="color:#f4b942">ligado · trades OK, mas nada na faixa de preço visível</span> (role até o preço atual / diminua o filtro). '+base;
     return '<span style="color:#16c784">ligado · desenhando '+(_dbg.drawn||0)+' bolhas</span> · '+base;
@@ -77435,7 +77460,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   try{ window.addEventListener("dvl-safe-asset-selected-0804",function(){ window.DVL_BUBBLES.setSymbol(gsym()); },{passive:true}); }catch(_){}
   try{ window.addEventListener("chart:draw",function(){ if(st.on) bindTip(); },{passive:true}); }catch(_){}
 
-  function boot(){ updateItem(); if(st.on){ curSym=gsym(); bindTip(); } setInterval(bindTip,4000); }
+  function boot(){ updateItem(); if(st.on){ curSym=gsym(); bindTip(); openFeed(); } setInterval(bindTip,4000); }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true}); else boot();
 })();
 </script>
