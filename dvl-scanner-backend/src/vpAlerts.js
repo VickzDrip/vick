@@ -264,7 +264,12 @@ async function discoverChatId(token) {
   const tk = (token && String(token).trim()) || cfg.tgToken;
   if (!tk) return { ok: false, error: "sem token" };
   try {
-    const d = await getJSON("https://api.telegram.org/bot" + tk + "/getUpdates", 10000);
+    /* se houver webhook ativo, ele "engole" os updates do getUpdates → remove
+       (preservando os pendentes) pra conseguir ler o /start do usuário. */
+    let hadWebhook = false;
+    try { const wi = await getJSON("https://api.telegram.org/bot" + tk + "/getWebhookInfo", 8000); hadWebhook = !!(wi && wi.result && wi.result.url); } catch (_) {}
+    try { await fetch("https://api.telegram.org/bot" + tk + "/deleteWebhook?drop_pending_updates=false", { cache: "no-store" }); } catch (_) {}
+    const d = await getJSON("https://api.telegram.org/bot" + tk + "/getUpdates?offset=-10&limit=10", 10000);
     if (!d || !d.ok || !Array.isArray(d.result)) return { ok: false, error: "getUpdates falhou" };
     let chat = null;
     for (let i = d.result.length - 1; i >= 0; i--) {
@@ -272,7 +277,7 @@ async function discoverChatId(token) {
       const m = u.message || u.edited_message || (u.my_chat_member && u.my_chat_member) || {};
       if (m.chat && m.chat.id != null) { chat = m.chat; break; }
     }
-    if (!chat) return { ok: false, error: "nenhuma conversa encontrada — mande /start pro bot e tente de novo" };
+    if (!chat) return { ok: false, error: "nenhuma conversa encontrada — mande /start pro bot e tente de novo", updates: d.result.length, hadWebhook: hadWebhook };
     cfg.tgToken = tk;
     cfg.tgChatId = String(chat.id);
     save();
