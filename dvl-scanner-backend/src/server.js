@@ -26,6 +26,7 @@ const oiStore = require("./oiStore");
 const vrsiStore = require("./vrsiStore");
 const paperBot = require("./paperBot");
 const bubbleHistory = require("./bubbleHistory");
+const vpAlerts = require("./vpAlerts");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -210,6 +211,20 @@ function createServer() {
   app.get("/api/dvl/bubbles/history", async (req, res) => {
     try { res.json(Object.assign({ ok: true }, await bubbleHistory.history(req.query.symbol, req.query.mins))); }
     catch (e) { res.json({ ok: false, error: String(e && e.message || e), groups: [] }); }
+  });
+
+  // ── Alertas VP (Telegram, vigiados no backend) ──
+  app.get("/api/dvl/vpalerts/status", (req, res) => {
+    try { res.json(vpAlerts.status()); }
+    catch (e) { res.json({ ok: false, error: String(e && e.message || e) }); }
+  });
+  app.post("/api/dvl/vpalerts/config", (req, res) => {
+    try { res.json({ ok: true, config: vpAlerts.setConfig(req.body || {}) }); }
+    catch (e) { res.json({ ok: false, error: String(e && e.message || e) }); }
+  });
+  app.post("/api/dvl/vpalerts/test", async (req, res) => {
+    try { if (req.body && Object.keys(req.body).length) vpAlerts.setConfig(req.body); res.json(await vpAlerts.testPush()); }
+    catch (e) { res.json({ ok: false, error: String(e && e.message || e) }); }
   });
 
   const server = http.createServer(app);
