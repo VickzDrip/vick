@@ -226,6 +226,10 @@ function createServer() {
     try { if (req.body && Object.keys(req.body).length) vpAlerts.setConfig(req.body); res.json(await vpAlerts.testPush()); }
     catch (e) { res.json({ ok: false, error: String(e && e.message || e) }); }
   });
+  app.post("/api/dvl/vpalerts/discover", async (req, res) => {
+    try { res.json(await vpAlerts.discoverChatId(req.body && req.body.tgToken)); }
+    catch (e) { res.json({ ok: false, error: String(e && e.message || e) }); }
+  });
 
   const server = http.createServer(app);
   const wss = new WebSocketServer({ noServer: true });

@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.284';
+window.DVL_APP_VERSION = 'Beta 1.285';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.285", note: "Alertas VP — botão 'Descobrir chat id' (Telegram). Agora não precisa do @userinfobot: basta colar o token do bot, mandar /start pro seu bot e tocar em 'Descobrir chat id' — o backend lê o getUpdates do bot e preenche/salva o chat id sozinho. Novo endpoint /api/dvl/vpalerts/discover. Backend + frontend." },
   { version: "Beta 1.284", note: "NOVO — Alertas VP no Telegram (vigiados no backend, funcionam com o app FECHADO). Novo item 'Alertas VP' no menu de Indicadores. O servidor calcula o Volume Profile de 1m e dispara um alerta no seu Telegram quando o preço chega perto de QUALQUER linha, independente de qual seja: hoje (POC/VAH/VAL) e dia anterior/overnight (OPOC/OVAH/OVAL). Critério de proximidade: banda ADAPTATIVA ao ATR(14) do 1m (mercado agitado = banda maior; parado = aperta), com piso/teto em % do preço; dispara na ENTRADA da banda (não repete), com histerese pra re-armar e cooldown por linha. Sensibilidade (Baixa/Média/Alta) controla quão cedo avisa. Config no painel: liga/desliga, símbolo (botão 'usar atual'), token+chat id do Telegram (ficam só no servidor) com botão Testar, cooldown e quais grupos vigiar. Backend (novo vpAlerts.js + endpoints /api/dvl/vpalerts/*) + frontend." },
   { version: "Beta 1.283", note: "DVL Bubbles — 'Zonas horizontais' agora FUNCIONA. Antes o interruptor existia no painel mas não desenhava nada (era só um flag morto do spec). Agora, ao ligar, o indicador agrega o nocional dos grupos visíveis por faixa de preço (histograma de 40 níveis) e pinta BANDAS HORIZONTAIS nos níveis onde o fluxo mais se acumulou — cor pelo lado dominante (compra=ciano / venda=rosa) e opacidade pela força; níveis muito fortes ganham uma linha central. As bandas ficam ATRÁS das bolhas (não tapam), é um 'mapa de níveis de agressão' (onde o dinheiro grande atuou repetidamente). Barato: no máx. ~2500 grupos e 40 baldes por frame. Só frontend." },
   { version: "Beta 1.282", note: "DVL Bubbles — bolhas PRESAS na região da vela + fim do sumiço ao mover o gráfico. (1) Cada bolha agora fica presa à faixa [mínima,máxima] da vela correspondente: o histórico spot pode ter base de preço diferente do mercado do gráfico e algumas bolhas 'flutuavam' fora da vela — agora o preço da bolha é limitado ao low/high daquela vela, ficando sempre na região do candle. (2) O corte de tamanho (threshold automático) passou a ser calculado sobre TODO o buffer em cache (~1,5s), não só sobre a janela visível: antes, ao mover/dar zoom, o percentil mudava e bolhas na borda piscavam (sumiam e voltavam). (3) Quando há bolhas demais para desenhar, mantém as MAIORES (seleção estável por tamanho) em vez das 'primeiras 600' (que mudavam conforme o pan). Só frontend." },
@@ -77559,6 +77560,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   function getStatus(){ return fetch(api("/api/dvl/vpalerts/status"),{cache:"no-store"}).then(function(r){return r.json();}).catch(function(){return {ok:false,error:"sem conexão com o backend"};}); }
   function postCfg(body){ return fetch(api("/api/dvl/vpalerts/config"),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body||{})}).then(function(r){return r.json();}).catch(function(e){return {ok:false,error:String(e)};}); }
   function postTest(body){ return fetch(api("/api/dvl/vpalerts/test"),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body||{})}).then(function(r){return r.json();}).catch(function(e){return {ok:false,error:String(e)};}); }
+  function postDiscover(body){ return fetch(api("/api/dvl/vpalerts/discover"),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body||{})}).then(function(r){return r.json();}).catch(function(e){return {ok:false,error:String(e)};}); }
 
   var last={ enabled:false };   // último status conhecido (p/ o pill do menu)
   function updateItem(){ var el=document.getElementById("dvlVpAlertState"); if(el){ el.textContent=last.enabled?"ON":"OFF"; el.classList.toggle("is-on",!!last.enabled); } }
@@ -77612,8 +77614,8 @@ window.DVL_DOM_CROSSHAIR_1205={
       +'<div style="border-top:1px solid rgba(129,166,151,.16);margin-top:8px;padding-top:8px">'
       +txt("Telegram — Bot Token","tgToken","","cole aqui (fica só no servidor)",true)
       +txt("Telegram — Chat ID","tgChatId","","ex: 123456789")
-      +'<div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="dvl-vt-close" data-altest style="font-size:11px;width:auto;padding:3px 10px;background:rgba(53,224,255,.14)">Testar envio</button><span id="dvlVpAlertTestMsg" style="font-size:10px;align-self:center;color:#7f9c8e"></span></div>'
-      +'<div style="font-size:9.5px;color:#7f9c8e;margin-top:6px;line-height:1.5">Como obter: 1) no Telegram fale com <b>@BotFather</b> → /newbot → copie o <b>token</b>. 2) fale com <b>@userinfobot</b> pra pegar seu <b>Chat ID</b>. 3) mande /start pro seu bot. 4) cole aqui e toque em Testar.</div>'
+      +'<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><button type="button" class="dvl-vt-close" data-aldiscover style="font-size:11px;width:auto;padding:3px 10px;background:rgba(180,150,255,.16)">Descobrir chat id</button><button type="button" class="dvl-vt-close" data-altest style="font-size:11px;width:auto;padding:3px 10px;background:rgba(53,224,255,.14)">Testar envio</button><span id="dvlVpAlertTestMsg" style="font-size:10px;align-self:center;color:#7f9c8e"></span></div>'
+      +'<div style="font-size:9.5px;color:#7f9c8e;margin-top:6px;line-height:1.5">Como obter: 1) no Telegram fale com <b>@BotFather</b> → /newbot → copie o <b>token</b>. 2) mande <b>/start</b> pro seu bot. 3) cole o token acima e toque em <b>Descobrir chat id</b> (pego sozinho). Ou pegue o id manualmente no <b>@userinfobot</b>.</div>'
       +'</div>';
   }
 
@@ -77631,6 +77633,14 @@ window.DVL_DOM_CROSSHAIR_1205={
       var tok=b.querySelector('[data-altxt="tgToken"]').value, cid=b.querySelector('[data-altxt="tgChatId"]').value;
       var msg=b.querySelector("#dvlVpAlertTestMsg"); if(msg){ msg.style.color="#7f9c8e"; msg.textContent="enviando…"; }
       postTest({tgToken:tok, tgChatId:cid}).then(function(r){ if(msg){ msg.style.color=r&&r.ok?"#16c784":"#ff6b6b"; msg.textContent=r&&r.ok?"enviado! confira o Telegram":("falhou — "+(r&&r.error||"?")); } });
+    });
+    var disc=b.querySelector("[data-aldiscover]"); if(disc) disc.addEventListener("click",function(){
+      var tok=b.querySelector('[data-altxt="tgToken"]').value;
+      var msg=b.querySelector("#dvlVpAlertTestMsg"); if(msg){ msg.style.color="#7f9c8e"; msg.textContent="procurando…"; }
+      postDiscover({tgToken:tok}).then(function(r){ if(!msg) return;
+        if(r&&r.ok){ msg.style.color="#16c784"; msg.textContent="achei: "+(r.name||r.chatId)+" — configurado!"; var ci=b.querySelector('[data-altxt="tgChatId"]'); if(ci) ci.value=r.chatId; refresh(); }
+        else { msg.style.color="#ff6b6b"; msg.textContent="não achei — mande /start pro bot e tente de novo"+(r&&r.error?(" ("+r.error+")"):""); }
+      });
     });
   }
 
