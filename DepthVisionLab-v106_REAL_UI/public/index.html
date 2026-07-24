@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.278';
+window.DVL_APP_VERSION = 'Beta 1.279';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.279", note: "DVL Bubbles — diagnóstico VISÍVEL no painel (sem console). A linha de status dentro do painel do indicador agora diz exatamente o que está acontecendo: 'ligado, mas SEM trades chegando' (feed @aggTrade da Binance não respondeu — rede/região pode bloquear a Binance), 'recebendo trades mas o gráfico não chamou o desenho', 'trades OK mas nada na faixa de preço visível' (role até o preço atual / diminua o filtro), ou 'desenhando N bolhas' quando está tudo certo — sempre com os números (trades recebidos, grupos, bolhas na tela). Assim dá pra ver a causa na hora, no celular, sem abrir console. Também corrigi o atalho: agora tanto DVL_BUBBLES.debug() quanto DVL_BUBBLES_API.debug() funcionam. Só frontend." },
   { version: "Beta 1.278", note: "DVL Bubbles — validado ponta-a-ponta (as bolhas DESENHAM no gráfico) e diagnóstico mais fino. Teste offline com velas reais + trades injetados confirmou as bolhas renderizando ancoradas a preço+tempo sobre os candles (compra ciano / venda rosa), consistente em várias execuções. O window.DVL_BUBBLES.debug() agora também mostra drawnOnScreen (quantas bolhas de fato foram desenhadas no frame) e offX/offY (quantas caíram fora da área visível), pra fechar qualquer diagnóstico na hora. Só frontend." },
   { version: "Beta 1.277", note: "DVL Bubbles — conserta 'não aparece' e deixa o ligar à prova de erro. (1) Abrir as configurações do indicador agora JÁ LIGA as bolhas (o caso comum era abrir o painel mas não virar o interruptor no menu). (2) Novo interruptor ON/OFF e uma linha de STATUS ao vivo dentro do painel ('ligado · N trades · M bolhas na tela' / 'aguardando trades…'), pra ficar claro se está recebendo fluxo. (3) Filtro automático agora é ADAPTATIVO à janela visível (percentil calculado sobre os grupos que estão na tela, não sobre um buffer que ficava desatualizado) — some o caso em que o limiar automático escondia tudo. (4) window.DVL_BUBBLES.debug() no console mostra o diagnóstico (trades recebidos, grupos, chamadas de desenho, símbolo) se precisar investigar. Só frontend." },
   { version: "Beta 1.276", note: "NOVO indicador DVL BUBBLES — as bolhas de fluxo agora são um overlay NATIVO do gráfico (não um protótipo à parte). Registrado no menu Indicadores (ao lado do FVG Firewall), com três modos no mesmo módulo: BIG TRADES (bolhas de negócios agressivos acima do filtro — azul-ciano compra no Ask, rosa venda no Bid), VOLUME BUBBLES (Ask/Bid split, Delta ou Volume) e DEEP PROXY (círculo vazio/cheio, quadrado = absorção estimada, losango = batalha estimada — dados públicos, rotulado como ESTIMATIVA, não é MBO real). As bolhas ficam ancoradas a preço+tempo (acompanham pan, zoom, troca de TF e resize) desenhadas pela mesma função de overlay dos outros indicadores. Consome o feed @aggTrade que já existe (fan-out, sem abrir WebSocket novo). Agrupamento por lado+tempo+preço (auto/tempo/preço), filtro significativo automático (percentil P90/P96/P98,5 sobre janela móvel) ou manual em USDT, escala Linear/SQRT/Log com tamanho mín/máx e opacidade, tooltip por toque/hover (não bloqueia pan), cores por tokens do tema (--dvl-bubble-buy/sell/absorption/battle, seguem o Theme Studio). Performance: ring buffer de 5.000 trades, filtro por range visível, teto de bolhas por frame e cap de raio no mobile. Painel no padrão DVL com Restaurar. 100% leitura — não envia ordens. Só frontend." },
@@ -77373,6 +77374,7 @@ window.DVL_DOM_CROSSHAIR_1205={
     setOn:function(v){ st.on=(v===undefined?!st.on:!!v); if(st.on){ curSym=gsym(); bindTip(); } else hideTip(); save(); requestDraw(); },
     openPanel:function(){ openPanel(); }, open:function(){ openPanel(); }, refresh:requestDraw, getState:function(){var o={};for(var k in st)o[k]=st[k];return o;},
     debug:function(){ return { on:st.on, mode:st.mode, curSym:curSym, appSym:gsym(), trades:_dbg.trades, rawLen:raw.length, groups:groups.length, drawCalls:_dbg.drawCalls, visibleGroups:_dbg.visibleGroups, passedFilter:_dbg.shown, drawnOnScreen:_dbg.drawn, offY:_dbg.skipY, offX:_dbg.skipX, secsSinceTrade:_dbg.lastTradeTs?Math.round((Date.now()-_dbg.lastTradeTs)/1000):null, secsSinceDraw:_dbg.lastDrawTs?Math.round((Date.now()-_dbg.lastDrawTs)/1000):null, drawFnPresent:typeof window.DVLBubblesDraw }; } };
+  try{ window.DVL_BUBBLES.debug = window.DVL_BUBBLES_API.debug; }catch(_){}   /* alias: DVL_BUBBLES.debug() também funciona */
 
   /* ── painel de config (shell padrão DVL) ── */
   var panel=null;
@@ -77382,9 +77384,12 @@ window.DVL_DOM_CROSSHAIR_1205={
   function num(label,key,min,max,step){ return '<div class="dvl-bb-field"><label>'+label+'</label><input class="dvl-bb-num" type="number" data-bbnum="'+key+'" value="'+(st[key])+'" min="'+min+'" max="'+max+'" step="'+(step||1)+'"></div>'; }
   function rng(label,key,min,max,step,unit,scale){ scale=scale||1; unit=unit||""; var disp=scale>1?Math.round(st[key]*scale):st[key]; return '<div class="dvl-bb-field"><label>'+label+'</label><div class="dvl-bb-rng"><input type="range" data-bbrng="'+key+'" data-scale="'+scale+'" data-unit="'+unit+'" min="'+min+'" max="'+max+'" step="'+(step||1)+'" value="'+disp+'"><b data-bbrngval="'+key+'">'+disp+unit+'</b></div></div>'; }
   function statusLine(){
-    if(!st.on) return '<span style="color:#f4b942">desligado — ligue no botão acima</span>';
-    if(_dbg.trades<=0) return '<span style="color:#8aa99b">ligado · aguardando trades ao vivo…</span>';
-    return '<span style="color:#16c784">ligado · '+_dbg.trades+' trades · '+_dbg.shown+' bolhas na tela</span>';
+    if(!st.on) return '<span style="color:#f4b942">desligado — ligue no interruptor acima</span>';
+    var base='<span style="color:#7f9c8e">feed '+_dbg.trades+' trades · '+groups.length+' grupos · '+(_dbg.drawn||0)+' bolhas na tela</span>';
+    if(_dbg.trades<=0) return '<span style="color:#f4b942">ligado, mas SEM trades chegando</span> — o feed @aggTrade da Binance não respondeu (rede/região pode bloquear a Binance). '+base;
+    if(_dbg.drawCalls<=0) return '<span style="color:#f4b942">ligado, recebendo trades, mas o gráfico não chamou o desenho</span> — '+base;
+    if((_dbg.drawn||0)<=0) return '<span style="color:#f4b942">ligado · trades OK, mas nada na faixa de preço visível</span> (role até o preço atual / diminua o filtro). '+base;
+    return '<span style="color:#16c784">ligado · desenhando '+(_dbg.drawn||0)+' bolhas</span> · '+base;
   }
   function bodyHTML(){
     var showBubbleMode = st.mode==="volume";
