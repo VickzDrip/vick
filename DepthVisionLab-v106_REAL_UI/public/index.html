@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.288';
+window.DVL_APP_VERSION = 'Beta 1.289';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.289", note: "DVL Replay Pro — seletor de início virou uma LINHA VERTICAL arrastável (substitui o clique). Ao ativar o Replay, aparece uma linha vertical marcando onde o replay vai começar, com o 'futuro' (à direita da linha) escurecido. Você arrasta a linha (pelo topo/perto dela) livremente pra escolher exatamente o ponto de início — o gráfico continua panável quando você segura longe da linha. A linha SOME quando dá Play e REAPARECE quando pausa, reinicia ou o replay chega ao fim. Removido o antigo botão '◎ Início'. Só frontend." },
   { version: "Beta 1.288", note: "DVL Replay Pro — seletor de início + marca d'água + saída sem popup nativo. (1) Botão '◎ Início' na barra: revela todo o histórico e você CLICA no gráfico pra escolher exatamente onde o replay começa (o candle escolhido vai pra borda direita e o resto vira o 'futuro' escondido). (2) Marca d'água 'replay' bem fosca no fundo do gráfico enquanto o modo está ativo. (3) Ao encerrar o Replay, agora aparece um diálogo do próprio DVL (Cancelar/Encerrar) em vez do popup nativo do navegador. Só frontend." },
   { version: "Beta 1.287", note: "DVL Replay Pro — ao ativar, MANTÉM o enquadramento atual (antes o gráfico pulava pra outro lugar/zoom). Agora o Replay começa no candle que está na borda direita do que você está vendo e re-ancora o scroll pra os mesmos candles ficarem exatamente na mesma posição e no mesmo zoom — sem pulo. O 'futuro' escondido passa a ser o que estava à direita da vela visível (role o gráfico pra trás antes de ativar pra ter mais candles pra reproduzir), e a timeline continua deixando escolher de onde começar. Só frontend." },
   { version: "Beta 1.286", note: "NOVO — DVL Replay Pro (Fase 1: Candle Replay, sem lookahead). Botão 'Replay' na hotbar do gráfico + barra de controle acima do rodapé. Reproduz o histórico no MESMO gráfico, revelando candle a candle: durante o Replay o array de candles é limitado ao cursor, então NENHUM indicador enxerga o futuro (VP, Bubbles, osciladores etc. só veem o histórico já revelado). Arquitetura definitiva já montada: relógio virtual central (window.DVLReplayClock) e barramento de mercado único (window.DVLMarketBus) com campo source=live|replay. Controles: ⟳ reiniciar, ◀ candle anterior, ▶ play/pause, ▶❘ próximo candle, velocidade 0,25x–25x (menu customizado), timeline arrastável e ✕ encerrar. Atalhos: Espaço=play/pause, →/←=próximo/anterior candle, R=reiniciar, Esc=encerrar. Ao encerrar, o feed ao vivo é reassinado e os dados frescos recarregados sem reload da página (o feed ao vivo fica pausado durante o Replay pra não contaminar o histórico). Próximas fases (por spec): Paper Trading dentro do Replay + diário, depois Intrabar/Full Market. Só frontend." },
@@ -19375,85 +19376,99 @@ window.DVLMarketBus = window.DVLMarketBus || {
   subscribe(fn){ this.subscribers.add(fn); return function(){ window.DVLMarketBus.subscribers.delete(fn); }; }
 };
 (function(){
-  var R = { full:[], cursor:0, startIdx:0, minIdx:0, active:false, playing:false, speed:1, tf:'', sym:'', timer:0, baseMs:1000 };
+  var R = { full:[], cursor:0, startIdx:0, minIdx:0, active:false, playing:false, selecting:true, speed:1, tf:'', sym:'', timer:0, baseMs:1000 };
   var listeners = [];
   function tfMs(){ if(R.full.length>=2){ var d=+R.full[1].time-+R.full[0].time; if(d>0) return d; } return 60000; }
   function clampCursor(i){ return Math.max(R.minIdx, Math.min(R.full.length-1, i)); }
-  function status(){ return { active:R.active, playing:R.playing, speed:R.speed, cursor:R.cursor, startIdx:R.startIdx,
+  function status(){ return { active:R.active, playing:R.playing, selecting:R.selecting, speed:R.speed, cursor:R.cursor, startIdx:R.startIdx,
     minIdx:R.minIdx, total:R.full.length, atStart:R.cursor<=R.minIdx, atEnd:R.cursor>=R.full.length-1,
     curTs: R.full[R.cursor]?+R.full[R.cursor].time:0, tf:R.tf, sym:R.sym }; }
   function notify(){ var st=status(); for(var i=0;i<listeners.length;i++){ try{ listeners[i](st); }catch(_){} } }
-  function cap(){
+  /* refresh: selecting → mostra TODO o histórico (linha de início visível, futuro
+     escurecido); tocando → LIMITA ao cursor (nada do futuro visível). */
+  function refresh(){
     if(!R.active) return;
-    klines = R.full.slice(0, R.cursor+1);
+    klines = R.selecting ? R.full : R.full.slice(0, R.cursor+1);
     var last = R.full[R.cursor];
     if(last){ window.DVLReplayClock.currentTs = +last.time + tfMs(); }
-    try{ if(last) window.DVLMarketBus.emit({type:'candle',source:'replay',exchange:'binance',symbol:R.sym,ts:+last.time,price:+last.close,payload:last}); }catch(_){}
+    if(last && !R.selecting){ try{ window.DVLMarketBus.emit({type:'candle',source:'replay',exchange:'binance',symbol:R.sym,ts:+last.time,price:+last.close,payload:last}); }catch(_){} }
     try{ if(typeof buildTickerFromRealKlines==='function'){ ticker = buildTickerFromRealKlines(); } }catch(_){}
     try{ drawSoon(); }catch(_){}
     notify();
   }
+  /* posiciona o scroll pra a vela do cursor ficar na borda direita (com folga `gap`) */
+  function anchorCursorRight(gap){ try{ if(typeof chartOffsetCandles!=='undefined'){ var len=R.selecting?R.full.length:(R.cursor+1); chartOffsetCandles=(len-1)-R.cursor-(gap||0); } }catch(_){} }
   function start(opts){
     opts = opts||{};
     if(!Array.isArray(klines) || klines.length<20) return false;
     R.full = klines.slice();
     R.sym = (typeof symbol!=='undefined'&&symbol)||'BTCUSDT'; R.tf=(typeof interval!=='undefined'&&interval)||'5m';
     R.minIdx = Math.min(R.full.length-1, Math.max(20, Math.floor(R.full.length*0.15)));   // warmup p/ indicadores
-    /* MANTER O ENQUADRAMENTO ATUAL: começa o replay no candle que está na borda
-       direita do que o usuário vê agora e re-ancora o scroll pra os MESMOS candles
-       ficarem exatamente no mesmo lugar (sem pulo de zoom/posição). O "futuro"
-       escondido é o que estava à direita da vela visível (se o usuário rolou pra trás). */
+    /* MANTER O ENQUADRAMENTO: a linha de início aparece na borda direita do que o
+       usuário vê agora, sem mudar o scroll/zoom. Arraste a linha pra escolher onde começa. */
     var Lfull=R.full.length;
     var Off=(typeof chartOffsetCandles!=='undefined' && isFinite(chartOffsetCandles))?chartOffsetCandles:0;
     var rightEdge=(Lfull-1)-Off;
     var newestVisible=Math.max(R.minIdx, Math.min(Lfull-1, Math.round(rightEdge)));
-    if(opts.startFrac!=null){ newestVisible=clampCursor(Math.floor(opts.startFrac*(Lfull-1))); }  // override opcional
-    R.startIdx = newestVisible; R.cursor = newestVisible; R.active=true; R.playing=false;
-    R._anchorOff = Off - ((Lfull-1) - R.cursor);   // offset que mantém a mesma vela na mesma posição
+    if(opts.startFrac!=null){ newestVisible=clampCursor(Math.floor(opts.startFrac*(Lfull-1))); }
+    R.startIdx = newestVisible; R.cursor = newestVisible; R.active=true; R.playing=false; R.selecting=true;
     window.__DVL_REPLAY_ACTIVE=true;
     window.DVLReplayClock.active=true; window.DVLReplayClock.paused=true; window.DVLReplayClock.speed=R.speed;
     try{ window.DVLMarketBus.setSource('replay'); }catch(_){}
     try{ if(typeof _klWs!=='undefined'&&_klWs){ _klWs.close(); _klWs=null; } }catch(_){}   // pausa feed ao vivo
     try{ if(typeof _agWs!=='undefined'&&_agWs){ _agWs.close(); _agWs=null; } }catch(_){}
-    cap();
-    try{ if(R._anchorOff!=null && typeof chartOffsetCandles!=='undefined'){ chartOffsetCandles = R._anchorOff; R._anchorOff=null; drawSoon(); } }catch(_){}
+    refresh();   // sem re-ancorar → enquadramento intacto
     return true;
   }
-  function tick(){ if(!R.active||!R.playing) return; if(R.cursor>=R.full.length-1){ pause(); return; } R.cursor=clampCursor(R.cursor+1); cap(); }
+  function tick(){ if(!R.active||!R.playing) return; if(R.cursor>=R.full.length-1){ pause(); return; } R.cursor=clampCursor(R.cursor+1); anchorCursorRight(6); refresh(); }
   function schedule(){ if(R.timer){ clearTimeout(R.timer); R.timer=0; } if(!R.playing) return;
     R.timer=setTimeout(function(){ tick(); if(R.playing) schedule(); }, Math.max(30, R.baseMs/R.speed)); }
-  function play(){ if(!R.active||R.playing||R.cursor>=R.full.length-1) return; R.playing=true; window.DVLReplayClock.paused=false; schedule(); notify(); }
-  function pause(){ R.playing=false; window.DVLReplayClock.paused=true; if(R.timer){ clearTimeout(R.timer); R.timer=0; } notify(); }
-  function step(dir){ if(!R.active) return; pause(); R.cursor=clampCursor(R.cursor+(dir<0?-1:1)); cap(); }
+  function play(){ if(!R.active||R.playing) return;
+    if(R.selecting){ R.selecting=false; anchorCursorRight(6); }   // fixa o início e esconde o futuro
+    if(R.cursor>=R.full.length-1){ R.selecting=true; anchorCursorRight(0); refresh(); return; }   // nada pra reproduzir
+    R.playing=true; window.DVLReplayClock.paused=false; refresh(); schedule(); notify(); }
+  function pause(){ R.playing=false; window.DVLReplayClock.paused=true; if(R.timer){ clearTimeout(R.timer); R.timer=0; }
+    R.selecting=true; anchorCursorRight(0); refresh(); }   // linha reaparece na posição atual
+  function step(dir){ if(!R.active) return; if(R.playing){ R.playing=false; if(R.timer){clearTimeout(R.timer);R.timer=0;} } R.selecting=true; R.cursor=clampCursor(R.cursor+(dir<0?-1:1)); anchorCursorRight(0); refresh(); }
   function setSpeed(s){ R.speed=+s||1; window.DVLReplayClock.speed=R.speed; if(R.playing) schedule(); notify(); }
-  function seekFrac(f){ if(!R.active) return; R.cursor=clampCursor(Math.round(R.minIdx+f*(R.full.length-1-R.minIdx))); cap(); }
-  function restart(){ if(!R.active) return; pause(); R.cursor=R.startIdx; cap(); }
-  /* ── seletor de início: revela tudo pra escolher, depois fixa o candle clicado ── */
-  function revealAllForPick(){ if(!R.active) return; pause(); klines=R.full;
-    try{ if(typeof chartOffsetCandles!=='undefined'){ chartOffsetCandles=(R.full.length-1)-R.cursor; } }catch(_){}   // mantém a vela atual na borda direita
-    try{ drawSoon(); }catch(_){}
-  }
-  function pickAtTime(ts){
-    if(!R.active) return;
-    var best=R.minIdx, bd=Infinity;
-    for(var i=R.minIdx;i<R.full.length;i++){ var d=Math.abs((+R.full[i].time)-ts); if(d<bd){ bd=d; best=i; } }
-    R.cursor=clampCursor(best); R.startIdx=R.cursor; pause(); cap();
-    try{ if(typeof chartOffsetCandles!=='undefined'){ chartOffsetCandles=0; drawSoon(); } }catch(_){}   // candle escolhido na borda direita
-  }
-  function pickStartByClientX(clientX){
-    var cfg=window.__DVL_DRAWCFG; if(!cfg) return false;   // só p/ x0/x1 (limites do plot, estáveis)
+  function seekFrac(f){ if(!R.active) return; if(R.playing){ R.playing=false; if(R.timer){clearTimeout(R.timer);R.timer=0;} } R.selecting=true; R.cursor=clampCursor(Math.round(R.minIdx+f*(R.full.length-1-R.minIdx))); anchorCursorRight(0); refresh(); }
+  function restart(){ if(!R.active) return; if(R.timer){clearTimeout(R.timer);R.timer=0;} R.playing=false; R.selecting=true; R.cursor=R.startIdx; anchorCursorRight(0); refresh(); }
+  /* ── arrastar a linha vertical de início: mapeia clientX → candle e move o cursor,
+     SEM re-ancorar (o enquadramento fica parado; o futuro à direita da linha escurece) ── */
+  function setStartByClientX(clientX){
+    if(!R.active) return false;
+    var cfg=window.__DVL_DRAWCFG; if(!cfg) return false;
     var win=(typeof visibleWindow==='function')?visibleWindow():null;
     var view=win&&win.candles; if(!view||!view.length) return false;
     var so=(typeof __dvlSlotOffset==='function')?__dvlSlotOffset(win,view):0;
     var cv=document.getElementById("chart")||document.querySelector("canvas"); if(!cv) return false;
     var rect=cv.getBoundingClientRect();
-    var cx=clientX-rect.left;
-    var slotRaw=((cx-cfg.x0)/Math.max(cfg.x1-cfg.x0,1))*Math.max(win.totalSlots-1,1);
-    var idx=Math.round(slotRaw-so);
-    idx=Math.max(0,Math.min(view.length-1,idx));
-    pickAtTime(+view[idx].time);
+    var slotRaw=((clientX-rect.left-cfg.x0)/Math.max(cfg.x1-cfg.x0,1))*Math.max(win.totalSlots-1,1);
+    var vi=Math.round(slotRaw-so);
+    vi=Math.max(0,Math.min(view.length-1,vi));
+    var ts=+view[vi].time, best=R.minIdx, bd=Infinity;
+    for(var i=R.minIdx;i<R.full.length;i++){ var d=Math.abs((+R.full[i].time)-ts); if(d<bd){ bd=d; best=i; } }
+    R.selecting=true; R.cursor=clampCursor(best); R.startIdx=R.cursor; refresh();   // sem anchor
     return true;
   }
+  /* desenha a linha vertical de início + escurecido do futuro (chamado pela draw()) */
+  window.DVLReplayLineDraw=function(ctx,o){
+    if(!R.active||!R.selecting) { window.__DVL_REPLAY_LINE_X=null; return; }
+    var view=o.view, x=o.x, win=o.win, slotOffset=o.slotOffset||0, x0=o.x0,x1=o.x1,y0=o.y0,y1=o.y1;
+    if(!view||!view.length||typeof x!=='function') return;
+    var gi0=(win&&isFinite(+win.start))?+win.start:0;
+    var vi=R.cursor-gi0, lx;
+    if(vi<=0) lx=x(slotOffset+0); else if(vi>=view.length-1) lx=x(slotOffset+view.length-1); else lx=x(slotOffset+vi);
+    lx=Math.max(x0,Math.min(x1,lx));
+    ctx.save();
+    ctx.fillStyle="rgba(3,9,12,0.5)"; ctx.fillRect(lx, y0, Math.max(0,x1-lx), y1-y0);   // futuro escurecido
+    ctx.strokeStyle="rgba(20,216,160,0.95)"; ctx.lineWidth=2; ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(lx,y0); ctx.lineTo(lx,y1); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle="rgba(20,216,160,0.95)"; var hw=9,hh=17; ctx.fillRect(lx-hw,y0,hw*2,hh);
+    ctx.fillStyle="#03110c"; ctx.font="700 11px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⇆",lx,y0+hh/2);
+    ctx.restore();
+    window.__DVL_REPLAY_LINE_X=lx;
+  };
   function exit(){
     if(!R.active) return;
     pause(); R.active=false; window.__DVL_REPLAY_ACTIVE=false;
@@ -19466,7 +19481,7 @@ window.DVLMarketBus = window.DVLMarketBus || {
     notify();
   }
   window.DVLReplay = { start:start, step:step, play:play, pause:pause, setSpeed:setSpeed, seekFrac:seekFrac,
-    restart:restart, exit:exit, status:status, revealAllForPick:revealAllForPick, pickStartByClientX:pickStartByClientX,
+    restart:restart, exit:exit, status:status, setStartByClientX:setStartByClientX,
     onUpdate:function(fn){ listeners.push(fn); return function(){ var i=listeners.indexOf(fn); if(i>=0) listeners.splice(i,1); }; } };
 })();
 
@@ -21040,6 +21055,8 @@ if(window.DVLSpikeZonesDraw){
   }
   /* mapping p/ o Replay Pro converter clique → candle (seletor de início) */
   try{ window.__DVL_DRAWCFG={x0:x0,x1:x1,y0:y0,y1:y1,slotOffset:slotOffset,totalSlots:(win&&win.totalSlots)||0,view:view}; }catch(_dvlCfg_e){}
+  /* linha vertical de início do Replay (+ escurecido do futuro) */
+  if(window.DVLReplayLineDraw){ try{ window.DVLReplayLineDraw(ctx,{view:view,win:win,x:x,x0:x0,x1:x1,y0:y0,y1:y1,slotOffset:slotOffset}); }catch(_dvlRl_e){} }
 
   if(window.DVLRiskLinesDraw){
     try{window.DVLRiskLinesDraw(ctx,{view,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlRiskLn_e){}
@@ -77881,7 +77898,6 @@ window.DVL_DOM_CROSSHAIR_1205={
     bar=document.createElement("div"); bar.id="dvlReplayBar";
     bar.innerHTML=''
       +'<button class="restart" title="Reiniciar (R)">⟳</button>'
-      +'<button class="pick" title="Escolher onde o replay começa">◎ Início</button>'
       +'<div class="sep"></div>'
       +'<button class="prev" title="Candle anterior (←)">◀</button>'
       +'<button class="play" title="Play/Pause (Espaço)">▶ Play</button>'
@@ -77901,7 +77917,6 @@ window.DVL_DOM_CROSSHAIR_1205={
   function wireBar(bar){
     bar.addEventListener("pointerdown",function(e){ e.stopPropagation(); },true);
     bar.querySelector(".restart").addEventListener("click",function(){ eng()&&eng().restart(); });
-    bar.querySelector(".pick").addEventListener("click",enterPickMode);
     bar.querySelector(".prev").addEventListener("click",function(){ eng()&&eng().step(-1); });
     bar.querySelector(".next").addEventListener("click",function(){ eng()&&eng().step(1); });
     bar.querySelector(".play").addEventListener("click",togglePlay);
@@ -77934,30 +77949,26 @@ window.DVL_DOM_CROSSHAIR_1205={
 
   function togglePlay(){ var e=eng(); if(!e) return; var st=e.status(); if(st.playing) e.pause(); else e.play(); }
 
-  /* ── seletor de início: clicar no gráfico ── */
-  var picking=false, pickHint=null;
-  function ensureHint(){ if(pickHint) return pickHint; pickHint=document.createElement("div"); pickHint.id="dvlReplayPickHint"; pickHint.textContent="clique no gráfico onde o replay deve começar"; document.body.appendChild(pickHint); return pickHint; }
+  /* ── linha vertical de início: arrastável (só aparece quando pausado/parado) ── */
+  var dragLine=false, lineCv=null;
   function canvasEl(){ return document.getElementById("chart")||document.querySelector("canvas"); }
-  function enterPickMode(){
-    var e=eng(); if(!e||!e.status().active) return;
-    if(picking){ exitPickMode(); return; }
-    picking=true; e.revealAllForPick();
-    ensureHint().classList.add("on");
-    document.body.classList.add("dvl-replay-picking");
-    var cv=canvasEl(); if(cv) cv.addEventListener("pointerdown",onPick,true);
+  function grabsLine(clientX){
+    var lx=window.__DVL_REPLAY_LINE_X; if(lx==null) return false;
+    var cv=canvasEl(); if(!cv) return false;
+    var rect=cv.getBoundingClientRect();
+    return Math.abs((clientX-rect.left)-lx)<=16;   // perto da linha
   }
-  function exitPickMode(){
-    picking=false;
-    if(pickHint) pickHint.classList.remove("on");
-    document.body.classList.remove("dvl-replay-picking");
-    var cv=canvasEl(); if(cv) cv.removeEventListener("pointerdown",onPick,true);
-  }
-  function onPick(ev){
+  function onLineDown(ev){
+    var e=eng(); if(!e||!e.status().active||!e.status().selecting) return;
+    if(!grabsLine(ev.clientX)) return;             // longe da linha → deixa o gráfico panar
     ev.preventDefault(); ev.stopPropagation();
-    var e=eng(); if(e) e.pickStartByClientX(ev.clientX);
-    exitPickMode();
-    if(e) render(e.status());
+    dragLine=true; try{ ev.target.setPointerCapture&&ev.target.setPointerCapture(ev.pointerId); }catch(_){}
+    e.setStartByClientX(ev.clientX);
   }
+  function onLineMove(ev){ if(!dragLine) return; var e=eng(); if(!e) return; ev.preventDefault(); ev.stopPropagation(); e.setStartByClientX(ev.clientX); }
+  function onLineUp(ev){ if(dragLine){ dragLine=false; try{ ev.target.releasePointerCapture&&ev.target.releasePointerCapture(ev.pointerId); }catch(_){} } }
+  function bindLine(){ lineCv=canvasEl(); if(!lineCv) return; lineCv.addEventListener("pointerdown",onLineDown,true); lineCv.addEventListener("pointermove",onLineMove,true); lineCv.addEventListener("pointerup",onLineUp,true); lineCv.addEventListener("pointercancel",onLineUp,true); }
+  function unbindLine(){ if(!lineCv) return; lineCv.removeEventListener("pointerdown",onLineDown,true); lineCv.removeEventListener("pointermove",onLineMove,true); lineCv.removeEventListener("pointerup",onLineUp,true); lineCv.removeEventListener("pointercancel",onLineUp,true); lineCv=null; dragLine=false; }
 
   /* ── diálogo de confirmação DVL (sem confirm nativo) ── */
   var dlg=null;
@@ -77982,7 +77993,7 @@ window.DVL_DOM_CROSSHAIR_1205={
 
   function doExit(){
     var e=eng(); if(!e) return;
-    showDialog(function(){ exitPickMode(); e.exit(); close(); });
+    showDialog(function(){ e.exit(); close(); });
   }
   function open(){
     var e=eng(); if(!e){ alert("Replay indisponível: gráfico ainda carregando."); return; }
@@ -77990,11 +78001,12 @@ window.DVL_DOM_CROSSHAIR_1205={
     ensureBar().classList.add("is-open");
     ensureMark().classList.add("on");
     if(btn) btn.classList.add("is-on");
+    bindLine();
     if(unsub) unsub(); unsub=e.onUpdate(render); render(e.status());
     document.addEventListener("keydown",onKey,true);
   }
   function close(){
-    exitPickMode(); hideDialog();
+    hideDialog(); unbindLine();
     if(bar) bar.classList.remove("is-open");
     var m=document.getElementById("dvlReplayMark"); if(m) m.classList.remove("on");
     if(btn) btn.classList.remove("is-on");
@@ -78007,7 +78019,6 @@ window.DVL_DOM_CROSSHAIR_1205={
     var e=eng(); if(!e||!e.status().active) return;
     var tag=(ev.target&&ev.target.tagName||"").toLowerCase();
     if(tag==="input"||tag==="textarea"||ev.target.isContentEditable) return;
-    if(picking){ if(ev.key==="Escape"){ ev.preventDefault(); ev.stopPropagation(); exitPickMode(); } return; }
     if(dlg&&dlg.classList.contains("on")){ if(ev.key==="Escape"){ ev.preventDefault(); ev.stopPropagation(); hideDialog(); } return; }
     if(ev.code==="Space"){ ev.preventDefault(); ev.stopPropagation(); togglePlay(); }
     else if(ev.key==="ArrowRight"){ ev.preventDefault(); ev.stopPropagation(); e.step(1); }
