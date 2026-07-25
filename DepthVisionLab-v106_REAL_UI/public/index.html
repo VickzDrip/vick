@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.290';
+window.DVL_APP_VERSION = 'Beta 1.291';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.291", note: "DVL Replay Pro — conserta o arraste da linha de início que não pegava: as camadas do gráfico (crosshair/desenhos/pan) estavam capturando o toque antes. Agora tem uma alça invisível que fica ACIMA dessas camadas, exatamente sobre a linha, e acompanha ela. Você segura em cima da linha e arrasta; solta e ela fixa. Fora da alça, o gráfico continua panável normal. Só frontend." },
   { version: "Beta 1.290", note: "DVL Replay Pro — a linha de início agora fica FIXA no lugar e só se move quando você segura a própria linha e arrasta (antes ela seguia o mouse sem parar porque o 'soltar' não encerrava o arraste). Agora o arraste é solto em qualquer lugar da tela. E a linha virou CHEIA (sólida) em vez de pontilhada. Só frontend." },
   { version: "Beta 1.289", note: "DVL Replay Pro — seletor de início virou uma LINHA VERTICAL arrastável (substitui o clique). Ao ativar o Replay, aparece uma linha vertical marcando onde o replay vai começar, com o 'futuro' (à direita da linha) escurecido. Você arrasta a linha (pelo topo/perto dela) livremente pra escolher exatamente o ponto de início — o gráfico continua panável quando você segura longe da linha. A linha SOME quando dá Play e REAPARECE quando pausa, reinicia ou o replay chega ao fim. Removido o antigo botão '◎ Início'. Só frontend." },
   { version: "Beta 1.288", note: "DVL Replay Pro — seletor de início + marca d'água + saída sem popup nativo. (1) Botão '◎ Início' na barra: revela todo o histórico e você CLICA no gráfico pra escolher exatamente onde o replay começa (o candle escolhido vai pra borda direita e o resto vira o 'futuro' escondido). (2) Marca d'água 'replay' bem fosca no fundo do gráfico enquanto o modo está ativo. (3) Ao encerrar o Replay, agora aparece um diálogo do próprio DVL (Cancelar/Encerrar) em vez do popup nativo do navegador. Só frontend." },
@@ -77842,6 +77843,10 @@ window.DVL_DOM_CROSSHAIR_1205={
     background:rgba(20,216,160,.14); border:1px solid rgba(20,216,160,.5); color:#7ff0d0; font:700 12px system-ui; box-shadow:0 6px 20px rgba(0,0,0,.4); }
   #dvlReplayPickHint.on{ display:block; }
   body.dvl-replay-picking #chart, body.dvl-replay-picking canvas{ cursor:crosshair !important; }
+  /* alça invisível pra arrastar a linha de início (fica acima das camadas do gráfico) */
+  #dvlReplayLineHandle{ position:fixed; width:30px; z-index:90038; display:none; cursor:ew-resize; touch-action:none; }
+  #dvlReplayLineHandle::after{ content:""; position:absolute; left:50%; top:0; bottom:0; width:2px; transform:translateX(-50%); background:transparent; }
+  #dvlReplayLineHandle:hover::after{ background:rgba(20,216,160,.25); }
   #dvlReplayBar button.pick{ background:rgba(53,224,255,.12); border-color:rgba(53,224,255,.4); color:#7fe3ff; }
   /* diálogo nativo DVL (substitui o confirm do navegador) */
   #dvlReplayConfirm{ position:fixed; inset:0; z-index:100050; display:none; align-items:center; justify-content:center; background:rgba(3,9,12,.55); backdrop-filter:blur(3px); }
@@ -77950,32 +77955,44 @@ window.DVL_DOM_CROSSHAIR_1205={
 
   function togglePlay(){ var e=eng(); if(!e) return; var st=e.status(); if(st.playing) e.pause(); else e.play(); }
 
-  /* ── linha vertical de início: FIXA; só move enquanto você segura e arrasta a própria linha ── */
-  var dragLine=false, lineCv=null;
+  /* ── linha vertical de início: alça DOM invisível por cima do gráfico (as camadas do
+     chart não roubam mais o pointer). A alça segue a linha; só ela é arrastável. ── */
+  var dragLine=false, handle=null, syncRAF=0;
   function canvasEl(){ return document.getElementById("chart")||document.querySelector("canvas"); }
-  function grabsLine(clientX){
-    var lx=window.__DVL_REPLAY_LINE_X; if(lx==null) return false;
-    var cv=canvasEl(); if(!cv) return false;
-    var rect=cv.getBoundingClientRect();
-    return Math.abs((clientX-rect.left)-lx)<=18;   // só pega se o clique for EM CIMA da linha
-  }
-  function onLineDown(ev){
+  function ensureHandle(){ if(handle) return handle; handle=document.createElement("div"); handle.id="dvlReplayLineHandle"; document.body.appendChild(handle); handle.addEventListener("pointerdown",onHandleDown,true); return handle; }
+  function onHandleDown(ev){
     var e=eng(); if(!e||!e.status().active||!e.status().selecting) return;
-    if(!grabsLine(ev.clientX)) return;             // longe da linha → deixa o gráfico panar (linha fica fixa)
     ev.preventDefault(); ev.stopPropagation();
     dragLine=true;
     document.addEventListener("pointermove",onDocMove,true);
     document.addEventListener("pointerup",onDocUp,true);
     document.addEventListener("pointercancel",onDocUp,true);
+    e.setStartByClientX(ev.clientX);
   }
-  function onDocMove(ev){ if(!dragLine) return; var e=eng(); if(!e) return; ev.preventDefault(); ev.stopPropagation(); e.setStartByClientX(ev.clientX); }
+  function onDocMove(ev){ if(!dragLine) return; ev.preventDefault(); ev.stopPropagation(); var e=eng(); if(e) e.setStartByClientX(ev.clientX); }
   function onDocUp(ev){ if(!dragLine) return; ev.preventDefault(); ev.stopPropagation(); dragLine=false;
     document.removeEventListener("pointermove",onDocMove,true);
     document.removeEventListener("pointerup",onDocUp,true);
     document.removeEventListener("pointercancel",onDocUp,true);
   }
-  function bindLine(){ lineCv=canvasEl(); if(!lineCv) return; lineCv.addEventListener("pointerdown",onLineDown,true); }
-  function unbindLine(){ dragLine=false; document.removeEventListener("pointermove",onDocMove,true); document.removeEventListener("pointerup",onDocUp,true); document.removeEventListener("pointercancel",onDocUp,true); if(lineCv){ lineCv.removeEventListener("pointerdown",onLineDown,true); lineCv=null; } }
+  function syncHandle(){
+    syncRAF=requestAnimationFrame(syncHandle);
+    var h=handle; if(!h) return;
+    var e=eng(), cfg=window.__DVL_DRAWCFG, cv=canvasEl(), lx=window.__DVL_REPLAY_LINE_X;
+    var show = e && e.status().active && e.status().selecting && lx!=null && cfg && cv;
+    if(!show){ if(h.style.display!=="none") h.style.display="none"; return; }
+    var rect=cv.getBoundingClientRect();
+    h.style.display="block";
+    h.style.left=(rect.left+lx-15)+"px";
+    h.style.top=(rect.top+(cfg.y0||0))+"px";
+    h.style.height=Math.max(24,(cfg.y1||rect.height)-(cfg.y0||0))+"px";
+  }
+  function bindLine(){ ensureHandle(); if(!syncRAF) syncHandle(); }
+  function unbindLine(){ dragLine=false;
+    document.removeEventListener("pointermove",onDocMove,true); document.removeEventListener("pointerup",onDocUp,true); document.removeEventListener("pointercancel",onDocUp,true);
+    if(syncRAF){ cancelAnimationFrame(syncRAF); syncRAF=0; }
+    if(handle) handle.style.display="none";
+  }
 
   /* ── diálogo de confirmação DVL (sem confirm nativo) ── */
   var dlg=null;
