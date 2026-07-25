@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.286';
+window.DVL_APP_VERSION = 'Beta 1.287';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.287", note: "DVL Replay Pro — ao ativar, MANTÉM o enquadramento atual (antes o gráfico pulava pra outro lugar/zoom). Agora o Replay começa no candle que está na borda direita do que você está vendo e re-ancora o scroll pra os mesmos candles ficarem exatamente na mesma posição e no mesmo zoom — sem pulo. O 'futuro' escondido passa a ser o que estava à direita da vela visível (role o gráfico pra trás antes de ativar pra ter mais candles pra reproduzir), e a timeline continua deixando escolher de onde começar. Só frontend." },
   { version: "Beta 1.286", note: "NOVO — DVL Replay Pro (Fase 1: Candle Replay, sem lookahead). Botão 'Replay' na hotbar do gráfico + barra de controle acima do rodapé. Reproduz o histórico no MESMO gráfico, revelando candle a candle: durante o Replay o array de candles é limitado ao cursor, então NENHUM indicador enxerga o futuro (VP, Bubbles, osciladores etc. só veem o histórico já revelado). Arquitetura definitiva já montada: relógio virtual central (window.DVLReplayClock) e barramento de mercado único (window.DVLMarketBus) com campo source=live|replay. Controles: ⟳ reiniciar, ◀ candle anterior, ▶ play/pause, ▶❘ próximo candle, velocidade 0,25x–25x (menu customizado), timeline arrastável e ✕ encerrar. Atalhos: Espaço=play/pause, →/←=próximo/anterior candle, R=reiniciar, Esc=encerrar. Ao encerrar, o feed ao vivo é reassinado e os dados frescos recarregados sem reload da página (o feed ao vivo fica pausado durante o Replay pra não contaminar o histórico). Próximas fases (por spec): Paper Trading dentro do Replay + diário, depois Intrabar/Full Market. Só frontend." },
   { version: "Beta 1.285", note: "Alertas VP — botão 'Descobrir chat id' (Telegram). Agora não precisa do @userinfobot: basta colar o token do bot, mandar /start pro seu bot e tocar em 'Descobrir chat id' — o backend lê o getUpdates do bot e preenche/salva o chat id sozinho. Novo endpoint /api/dvl/vpalerts/discover. Backend + frontend." },
   { version: "Beta 1.284", note: "NOVO — Alertas VP no Telegram (vigiados no backend, funcionam com o app FECHADO). Novo item 'Alertas VP' no menu de Indicadores. O servidor calcula o Volume Profile de 1m e dispara um alerta no seu Telegram quando o preço chega perto de QUALQUER linha, independente de qual seja: hoje (POC/VAH/VAL) e dia anterior/overnight (OPOC/OVAH/OVAL). Critério de proximidade: banda ADAPTATIVA ao ATR(14) do 1m (mercado agitado = banda maior; parado = aperta), com piso/teto em % do preço; dispara na ENTRADA da banda (não repete), com histerese pra re-armar e cooldown por linha. Sensibilidade (Baixa/Média/Alta) controla quão cedo avisa. Config no painel: liga/desliga, símbolo (botão 'usar atual'), token+chat id do Telegram (ficam só no servidor) com botão Testar, cooldown e quais grupos vigiar. Backend (novo vpAlerts.js + endpoints /api/dvl/vpalerts/*) + frontend." },
@@ -19397,16 +19398,24 @@ window.DVLMarketBus = window.DVLMarketBus || {
     R.full = klines.slice();
     R.sym = (typeof symbol!=='undefined'&&symbol)||'BTCUSDT'; R.tf=(typeof interval!=='undefined'&&interval)||'5m';
     R.minIdx = Math.min(R.full.length-1, Math.max(20, Math.floor(R.full.length*0.15)));   // warmup p/ indicadores
-    var frac = (opts.startFrac!=null)?opts.startFrac:0.5;
-    R.startIdx = clampCursor(Math.floor(frac*(R.full.length-1)));
-    if(R.startIdx<R.minIdx) R.startIdx=R.minIdx;
-    R.cursor = R.startIdx; R.active=true; R.playing=false;
+    /* MANTER O ENQUADRAMENTO ATUAL: começa o replay no candle que está na borda
+       direita do que o usuário vê agora e re-ancora o scroll pra os MESMOS candles
+       ficarem exatamente no mesmo lugar (sem pulo de zoom/posição). O "futuro"
+       escondido é o que estava à direita da vela visível (se o usuário rolou pra trás). */
+    var Lfull=R.full.length;
+    var Off=(typeof chartOffsetCandles!=='undefined' && isFinite(chartOffsetCandles))?chartOffsetCandles:0;
+    var rightEdge=(Lfull-1)-Off;
+    var newestVisible=Math.max(R.minIdx, Math.min(Lfull-1, Math.round(rightEdge)));
+    if(opts.startFrac!=null){ newestVisible=clampCursor(Math.floor(opts.startFrac*(Lfull-1))); }  // override opcional
+    R.startIdx = newestVisible; R.cursor = newestVisible; R.active=true; R.playing=false;
+    R._anchorOff = Off - ((Lfull-1) - R.cursor);   // offset que mantém a mesma vela na mesma posição
     window.__DVL_REPLAY_ACTIVE=true;
     window.DVLReplayClock.active=true; window.DVLReplayClock.paused=true; window.DVLReplayClock.speed=R.speed;
     try{ window.DVLMarketBus.setSource('replay'); }catch(_){}
     try{ if(typeof _klWs!=='undefined'&&_klWs){ _klWs.close(); _klWs=null; } }catch(_){}   // pausa feed ao vivo
     try{ if(typeof _agWs!=='undefined'&&_agWs){ _agWs.close(); _agWs=null; } }catch(_){}
     cap();
+    try{ if(R._anchorOff!=null && typeof chartOffsetCandles!=='undefined'){ chartOffsetCandles = R._anchorOff; R._anchorOff=null; drawSoon(); } }catch(_){}
     return true;
   }
   function tick(){ if(!R.active||!R.playing) return; if(R.cursor>=R.full.length-1){ pause(); return; } R.cursor=clampCursor(R.cursor+1); cap(); }
@@ -77879,7 +77888,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   }
   function open(){
     var e=eng(); if(!e){ alert("Replay indisponível: gráfico ainda carregando."); return; }
-    if(!e.status().active){ if(!e.start({startFrac:0.55})){ alert("Poucos candles carregados para o Replay. Aguarde o gráfico."); return; } }
+    if(!e.status().active){ if(!e.start()){ alert("Poucos candles carregados para o Replay. Aguarde o gráfico."); return; } }
     ensureBar().classList.add("is-open");
     if(btn) btn.classList.add("is-on");
     if(unsub) unsub(); unsub=e.onUpdate(render); render(e.status());
