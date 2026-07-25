@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.291';
+window.DVL_APP_VERSION = 'Beta 1.292';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16271,6 +16271,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.292", note: "DVL Replay Pro — arraste da linha de início agora captura o toque no DOCUMENT em fase de captura (acima de TODAS as camadas do gráfico), então segurar a linha e arrastar funciona mesmo com crosshair/desenhos/pan ativos. A alça no topo da linha ficou maior e mais visível (o ⇆). Fora da linha, o gráfico continua panável. Só frontend." },
   { version: "Beta 1.291", note: "DVL Replay Pro — conserta o arraste da linha de início que não pegava: as camadas do gráfico (crosshair/desenhos/pan) estavam capturando o toque antes. Agora tem uma alça invisível que fica ACIMA dessas camadas, exatamente sobre a linha, e acompanha ela. Você segura em cima da linha e arrasta; solta e ela fixa. Fora da alça, o gráfico continua panável normal. Só frontend." },
   { version: "Beta 1.290", note: "DVL Replay Pro — a linha de início agora fica FIXA no lugar e só se move quando você segura a própria linha e arrasta (antes ela seguia o mouse sem parar porque o 'soltar' não encerrava o arraste). Agora o arraste é solto em qualquer lugar da tela. E a linha virou CHEIA (sólida) em vez de pontilhada. Só frontend." },
   { version: "Beta 1.289", note: "DVL Replay Pro — seletor de início virou uma LINHA VERTICAL arrastável (substitui o clique). Ao ativar o Replay, aparece uma linha vertical marcando onde o replay vai começar, com o 'futuro' (à direita da linha) escurecido. Você arrasta a linha (pelo topo/perto dela) livremente pra escolher exatamente o ponto de início — o gráfico continua panável quando você segura longe da linha. A linha SOME quando dá Play e REAPARECE quando pausa, reinicia ou o replay chega ao fim. Removido o antigo botão '◎ Início'. Só frontend." },
@@ -19466,8 +19467,9 @@ window.DVLMarketBus = window.DVLMarketBus || {
     ctx.fillStyle="rgba(3,9,12,0.5)"; ctx.fillRect(lx, y0, Math.max(0,x1-lx), y1-y0);   // futuro escurecido
     ctx.strokeStyle="rgba(20,216,160,0.95)"; ctx.lineWidth=2; ctx.setLineDash([]);       // linha CHEIA
     ctx.beginPath(); ctx.moveTo(lx,y0); ctx.lineTo(lx,y1); ctx.stroke();
-    ctx.fillStyle="rgba(20,216,160,0.95)"; var hw=9,hh=17; ctx.fillRect(lx-hw,y0,hw*2,hh);
-    ctx.fillStyle="#03110c"; ctx.font="700 11px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⇆",lx,y0+hh/2);
+    var hw=13,hh=22; ctx.fillStyle="rgba(20,216,160,0.98)"; ctx.beginPath();             // alça (pega aqui pra arrastar)
+    if(ctx.roundRect){ ctx.roundRect(lx-hw,y0,hw*2,hh,4); ctx.fill(); } else ctx.fillRect(lx-hw,y0,hw*2,hh);
+    ctx.fillStyle="#03110c"; ctx.font="700 13px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⇆",lx,y0+hh/2);
     ctx.restore();
     window.__DVL_REPLAY_LINE_X=lx;
   };
@@ -77960,14 +77962,31 @@ window.DVL_DOM_CROSSHAIR_1205={
   var dragLine=false, handle=null, syncRAF=0;
   function canvasEl(){ return document.getElementById("chart")||document.querySelector("canvas"); }
   function ensureHandle(){ if(handle) return handle; handle=document.createElement("div"); handle.id="dvlReplayLineHandle"; document.body.appendChild(handle); handle.addEventListener("pointerdown",onHandleDown,true); return handle; }
-  function onHandleDown(ev){
-    var e=eng(); if(!e||!e.status().active||!e.status().selecting) return;
-    ev.preventDefault(); ev.stopPropagation();
+  function startDrag(clientX){
     dragLine=true;
     document.addEventListener("pointermove",onDocMove,true);
     document.addEventListener("pointerup",onDocUp,true);
     document.addEventListener("pointercancel",onDocUp,true);
-    e.setStartByClientX(ev.clientX);
+    var e=eng(); if(e) e.setStartByClientX(clientX);
+  }
+  function onHandleDown(ev){
+    var e=eng(); if(!e||!e.status().active||!e.status().selecting) return;
+    ev.preventDefault(); ev.stopPropagation();
+    startDrag(ev.clientX);
+  }
+  /* captura no DOCUMENT (fase de captura = acima de TODAS as camadas do gráfico):
+     se o toque começar em cima da linha, inicia o arraste; senão, deixa o gráfico panar. */
+  function onDocDown(ev){
+    if(dragLine) return;
+    var e=eng(); if(!e||!e.status().active||!e.status().selecting) return;
+    var cv=canvasEl(), lx=window.__DVL_REPLAY_LINE_X, cfg=window.__DVL_DRAWCFG;
+    if(!cv||lx==null||!cfg) return;
+    var rect=cv.getBoundingClientRect();
+    var x=ev.clientX-rect.left, y=ev.clientY-rect.top;
+    if(y<(+cfg.y0||0)-8 || y>(+cfg.y1||rect.height)+8) return;   // fora do painel de preço
+    if(Math.abs(x-lx)>20) return;                                 // longe da linha → pan normal
+    ev.preventDefault(); ev.stopPropagation(); if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+    startDrag(ev.clientX);
   }
   function onDocMove(ev){ if(!dragLine) return; ev.preventDefault(); ev.stopPropagation(); var e=eng(); if(e) e.setStartByClientX(ev.clientX); }
   function onDocUp(ev){ if(!dragLine) return; ev.preventDefault(); ev.stopPropagation(); dragLine=false;
@@ -77987,8 +78006,9 @@ window.DVL_DOM_CROSSHAIR_1205={
     h.style.top=(rect.top+(cfg.y0||0))+"px";
     h.style.height=Math.max(24,(cfg.y1||rect.height)-(cfg.y0||0))+"px";
   }
-  function bindLine(){ ensureHandle(); if(!syncRAF) syncHandle(); }
+  function bindLine(){ ensureHandle(); if(!syncRAF) syncHandle(); document.addEventListener("pointerdown",onDocDown,true); }
   function unbindLine(){ dragLine=false;
+    document.removeEventListener("pointerdown",onDocDown,true);
     document.removeEventListener("pointermove",onDocMove,true); document.removeEventListener("pointerup",onDocUp,true); document.removeEventListener("pointercancel",onDocUp,true);
     if(syncRAF){ cancelAnimationFrame(syncRAF); syncRAF=0; }
     if(handle) handle.style.display="none";
