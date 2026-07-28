@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.357';
+window.DVL_APP_VERSION = 'Beta 1.358';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16299,6 +16299,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.358", note: "Risk Express — agora dá pra OCULTAR o painel deixando só as linhas no gráfico, e o painel virou ARRASTÁVEL. Botão '⌄ ocultar' na toolbar esconde o painel mantendo Entry/SL/TP no gráfico (as linhas continuam vivas e arrastáveis); o botão flutuante 🛡 ganha um pontinho âmbar quando o painel está oculto e um toque nele traz o painel de volta (outro toque oculta de novo). '✕ fechar' continua desligando tudo. A toolbar ganhou uma alça (⠿) à esquerda pra arrastar e reposicionar onde quiser — a posição fica salva. Só ajuste de UI; cálculo, drag das linhas e sincronização com o painel completo inalterados." },
   { version: "Beta 1.357", note: "Risk Express — proporção no mobile ajustada: as linhas e labels do Entry/SL/TP estavam exageradas e se sobrepondo no celular. Reduzi as fontes (LOT de 18→12px no mobile, valores NET de 14→10px), afinei as linhas (entry 3,4→2px, SL/TP 3→1,5px), diminuí o padding/raio das caixas e juntei o preço do TP com o R:R numa linha só (caixa do TP passou de 3 pra 2 linhas). Agora os labels ficam compactos e não cobrem os candles nem a escala de preço. Só ajuste visual — cálculo, drag e sincronização com o painel inalterados." },
   { version: "Beta 1.356", note: "Risk Management Express — botão flutuante (🛡) no gráfico que, com um toque, plota Entry/SL/TP no ativo atual e mostra o LOTE líquido GRANDE na própria linha Entry, já com comissão, buffer, teto de notional e Net R:R. As três linhas continuam arrastáveis e recalculam lote/risco/comissões/TP líquido em tempo real. NÃO recria cálculo: chama a MESMA API do Risk Engine (1.355) que alimenta o painel completo — os valores são idênticos nos dois. Labels repaginados (maiores, com caixa de alto contraste): ENTRY|LOT|RISCO, SL|−$ NET, TP|+$ NET|1:1, e badges CAP/CUSTO ALTO/TP MANUAL/AJUSTE SL. Mini-toolbar compacta: BUY/SELL, chips de risco ($100/$250/$500/0,5%/1%), Net R:R ±, TP Auto/Manual, Copiar lote (toque no lote copia só o número), Reset e Fechar. Botão arrastável e com posição persistida; pressão longa abre o painel completo. Só planejamento/cópia — nunca envia ordem. Cenário de referência do spec valida lote 2.740 e risco líquido US$315,90. Replay Pro e demais módulos intactos. Só frontend." },
   { version: "Beta 1.355", note: "Risk Engine — modo 'Net R:R (fees included)'. O TP automático deixou de ser 1:1 BRUTO (que a comissão da CFT depois comia) e passou a ser 1:1 LÍQUIDO: o alvo já embute a comissão de entrada e saída (0,0325%/lado) + buffer de execução, então um 1:1 vira 1:1 financeiro de verdade. Novidades: teto de NOTIONAL (padrão $175.000) que limita o lote com o badge NOTIONAL CAPPED; badges de status (RISK BASED / NOTIONAL CAPPED / LOT CAPPED / COST HIGH / INVALID); eficiência de custo (verde ≤20%, amarelo ≤25%, vermelho >25%); TP bruto vs TP líquido lado a lado; buffer de execução e Net R:R alvo editáveis. Preset data-driven 'CFT Break 50K — BTC MT5/Match' (registro central DVL_PROP_RISK_PRESETS: risco $300, net R:R 1, notional máx $175k, buffer $0). O lote continua arredondado SEMPRE para baixo e nunca ultrapassa o notional. O modo antigo (bruto/priceOnly) segue disponível. Replay Pro, scanner e demais módulos intactos. Só frontend." },
@@ -42276,6 +42277,10 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
 .dvlRmxBadges .cost{background:rgba(255,74,97,.16);color:#ff8098;border:1px solid rgba(255,74,97,.4)}
 .dvlRmxBadges .manual{background:rgba(244,185,66,.16);color:#f4b942;border:1px solid rgba(244,185,66,.4)}
 .dvlRmxBadges .invalid{background:rgba(255,74,97,.2);color:#ff8098;border:1px solid rgba(255,74,97,.5)}
+.dvlRmxGrip{cursor:grab;touch-action:none;color:#5f7183;font-size:15px;font-weight:700;line-height:1;padding:0 5px 0 1px;display:flex;align-items:center;align-self:stretch;user-select:none;-webkit-user-select:none}
+.dvlRmxGrip:active{cursor:grabbing;color:#9fb2c4}
+.dvlRmxBtn.hide{border-color:rgba(110,140,160,.3);color:#9fb2c4}
+#dvlRmExpressBtn.panel-hidden::after{content:"";position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:#f4b942;border:1.5px solid rgba(6,12,18,.92);box-shadow:0 0 6px rgba(244,185,66,.7)}
 </style>
 
 <script id="DVL_RISK_EXPRESS_1356">
@@ -42292,7 +42297,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   var st=(function(){ try{ return Object.assign({btn:null},JSON.parse(localStorage.getItem(LS)||"{}")); }catch(_){ return {btn:null}; } })();
   function save(){ try{ localStorage.setItem(LS,JSON.stringify(st)); }catch(_){} }
   function api(){ return window.DVL_RISK_ENGINE_UI||null; }
-  var active=false, btn=null, bar=null, poll=0;
+  var active=false, panelHidden=false, btn=null, bar=null, poll=0;
 
   function fmtLot(p){ return (p&&p.lot!=null)?Number(p.lot).toFixed(p.lotDecimals):"--"; }
 
@@ -42324,7 +42329,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
       if(lp){ clearTimeout(lp); lp=0; }
       try{ btn.releasePointerCapture(e.pointerId); }catch(_){}
       if(dragging){ var r=btn.getBoundingClientRect(); st.btn={left:Math.round(r.left),top:Math.round(r.top)}; save(); }
-      else if(!moved){ toggle(); }
+      else if(!moved){ fabTap(); }
       downXY=null; moved=false; dragging=false;
     });
   }
@@ -42334,6 +42339,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     if(bar) return;
     bar=document.createElement("div"); bar.id="dvlRmxToolbar"; bar.setAttribute("data-dvl-ui","true");
     bar.innerHTML=''
+      +'<div class="dvlRmxGrip" id="dvlRmxGrip" title="Arrastar painel" aria-label="Arrastar painel">⠿</div>'
       +'<div class="dvlRmxLot"><b id="dvlRmxLot">--</b><small>LOTE MT5</small></div>'
       +'<div class="dvlRmxBadges"><span class="cap" id="dvlRmxBadgeCap">NOCIONAL LIMITADO</span><span class="cost" id="dvlRmxBadgeCost">CUSTO ALTO</span><span class="manual" id="dvlRmxBadgeManual">TP MANUAL</span><span class="invalid" id="dvlRmxBadgeInvalid">AJUSTE SL</span></div>'
       +'<div class="dvlRmxSeg"><button type="button" class="buy" data-rmx-side="buy">BUY</button><button type="button" class="sell" data-rmx-side="sell">SELL</button></div>'
@@ -42342,6 +42348,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
       +'<button type="button" class="dvlRmxBtn tp" id="dvlRmxTpBtn">AUTO<small>TP</small></button>'
       +'<button type="button" class="dvlRmxBtn copy" id="dvlRmxCopyBtn">Copiar<small>lote</small></button>'
       +'<button type="button" class="dvlRmxBtn" id="dvlRmxResetBtn">Reset<small>auto</small></button>'
+      +'<button type="button" class="dvlRmxBtn hide" id="dvlRmxHideBtn">⌄<small>ocultar</small></button>'
       +'<button type="button" class="dvlRmxBtn close" id="dvlRmxCloseBtn">✕<small>fechar</small></button>';
     document.body.appendChild(bar);
     bar.addEventListener("pointerdown",function(e){ e.stopPropagation(); },true);
@@ -42352,8 +42359,20 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     q("dvlRmxTpBtn").addEventListener("click",function(){ var A=api(); if(A&&A.resetTpAuto){ A.resetTpAuto(); refresh(); } });
     q("dvlRmxCopyBtn").addEventListener("click",function(){ var A=api(); if(A&&A.copyLot){ A.copyLot(); dispatch("copy-lot",{}); } });
     q("dvlRmxResetBtn").addEventListener("click",function(){ var A=api(); if(A){ if(A.resetTpAuto)A.resetTpAuto(); if(A.setLinesVisible)A.setLinesVisible(true); refresh(); } });
-    q("dvlRmxCloseBtn").addEventListener("click",function(){ toggle(); });
+    q("dvlRmxHideBtn").addEventListener("click",function(){ hidePanel(); });
+    q("dvlRmxCloseBtn").addEventListener("click",function(){ deactivate(); });
+    makeBarDraggable();
+    applyBarPos();
   }
+  /* arrastar o painel pela alça (⠿) — não interfere nos botões; posição persiste. */
+  function makeBarDraggable(){
+    var grip=q("dvlRmxGrip"); if(!grip) return;
+    var down=null, off=null, moved=false;
+    grip.addEventListener("pointerdown",function(e){ e.preventDefault(); e.stopPropagation(); var r=bar.getBoundingClientRect(); off={dx:e.clientX-r.left,dy:e.clientY-r.top}; down={x:e.clientX,y:e.clientY}; moved=false; try{ grip.setPointerCapture(e.pointerId); }catch(_){} });
+    grip.addEventListener("pointermove",function(e){ if(!down) return; if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>3) moved=true; if(moved){ var w=bar.offsetWidth,h=bar.offsetHeight; var x=Math.max(4,Math.min(window.innerWidth-w-4,e.clientX-off.dx)); var yy=Math.max(4,Math.min(window.innerHeight-h-4,e.clientY-off.dy)); bar.style.left=x+"px"; bar.style.top=yy+"px"; bar.style.right="auto"; bar.style.bottom="auto"; bar.style.transform="none"; } });
+    grip.addEventListener("pointerup",function(e){ try{ grip.releasePointerCapture(e.pointerId); }catch(_){} if(moved){ var r=bar.getBoundingClientRect(); st.barPos={left:Math.round(r.left),top:Math.round(r.top)}; save(); } down=null; moved=false; });
+  }
+  function applyBarPos(){ if(!bar) return; if(st.barPos&&Number.isFinite(st.barPos.left)&&Number.isFinite(st.barPos.top)){ var w=bar.offsetWidth||280,h=bar.offsetHeight||80; var x=Math.max(4,Math.min(window.innerWidth-w-4,st.barPos.left)); var yy=Math.max(4,Math.min(window.innerHeight-h-4,st.barPos.top)); bar.style.left=x+"px"; bar.style.top=yy+"px"; bar.style.right="auto"; bar.style.bottom="auto"; bar.style.transform="none"; } }
   function q(id){ return document.getElementById(id); }
   function stepRR(d){ var A=api(); if(!A) return; var p=A.getPlan?A.getPlan():{}; var cur=Number(p.netRRTarget)||1; var v=Math.max(0.25,Math.round((cur+d)*100)/100); if(A.setNetRR){ A.setNetRR(v); refresh(); } }
 
@@ -42361,27 +42380,46 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
 
   function openFull(){ var A=api(); if(A&&A.open){ try{ A.open(); }catch(_){} } }
 
-  function toggle(){
-    active=!active;
-    var A=api();
-    if(active){
-      if(A&&A.activateExpress){ try{ A.activateExpress(); }catch(_){} }
-      buildBar(); bar.classList.add("open");
-      dispatch("activate",{});
-    }else{
-      if(A&&A.setLinesVisible){ try{ A.setLinesVisible(false); }catch(_){} }
-      if(bar) bar.classList.remove("open");
-      dispatch("close",{});
-    }
-    st.active=active; save();
-    refresh();
-    startPoll();
+  /* 3 estados: OFF · ATIVO(painel visível) · ATIVO(painel oculto, só linhas).
+     Toque no botão flutuante: OFF→ativa · painel oculto→mostra · painel visível→oculta.
+     "⌄ ocultar": esconde o painel mantendo as linhas. "✕ fechar": desliga tudo. */
+  function activate(){
+    active=true; panelHidden=false;
+    var A=api(); if(A&&A.activateExpress){ try{ A.activateExpress(); }catch(_){} }
+    buildBar(); applyBarPos(); bar.classList.add("open");
+    st.active=true; st.panelHidden=false; save();
+    dispatch("activate",{}); refresh(); startPoll();
   }
+  function deactivate(){
+    active=false; panelHidden=false;
+    var A=api(); if(A&&A.setLinesVisible){ try{ A.setLinesVisible(false); }catch(_){} }
+    if(bar) bar.classList.remove("open");
+    st.active=false; st.panelHidden=false; save();
+    dispatch("close",{}); refresh(); startPoll();
+  }
+  function hidePanel(){
+    if(!active) return; panelHidden=true;
+    if(bar) bar.classList.remove("open");
+    st.panelHidden=true; save();
+    dispatch("panel-hidden",{}); refresh();
+  }
+  function showPanel(){
+    if(!active) return; panelHidden=false;
+    buildBar(); applyBarPos(); bar.classList.add("open");
+    st.panelHidden=false; save();
+    dispatch("panel-shown",{}); refresh(); startPoll();
+  }
+  /* toque no botão flutuante */
+  function fabTap(){ if(!active) activate(); else if(panelHidden) showPanel(); else hidePanel(); }
+  /* compat: toggle() liga/desliga por completo (usado por API externa/testes) */
+  function toggle(){ if(active) deactivate(); else activate(); }
 
   function refresh(){
     var A=api(); if(!A||!A.getPlan) return; var p=A.getPlan();
     if(btn){
       btn.classList.toggle("active",active);
+      btn.classList.toggle("panel-hidden",active&&panelHidden);
+      btn.title=active?(panelHidden?"Mostrar painel Risk Express":"Ocultar painel (mantém as linhas)"):"Risk Express";
       var side=(p&&p.side==="sell")?"sell":"buy";
       btn.classList.toggle("side-sell",side==="sell"); btn.classList.toggle("side-buy",side==="buy");
       var sb=q("dvlRmxSideBadge"); if(sb) sb.textContent=side.toUpperCase();
@@ -42408,7 +42446,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function boot(){ buildButton(); if(st.active){ /* não reabre linhas em preço antigo automaticamente; só o botão volta */ } refresh(); }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true}); else boot();
 
-  window.DVL_RISK_EXPRESS={ active:function(){return active;}, toggle:toggle, open:function(){ if(!active) toggle(); }, close:function(){ if(active) toggle(); }, refresh:refresh };
+  window.DVL_RISK_EXPRESS={ active:function(){return active;}, panelHidden:function(){return panelHidden;}, toggle:toggle, open:activate, close:deactivate, hidePanel:hidePanel, showPanel:showPanel, refresh:refresh };
 })();
 </script>
 
