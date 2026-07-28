@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.354';
+window.DVL_APP_VERSION = 'Beta 1.355';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16045,11 +16045,20 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
               <button type="button" class="dvlRiskCost active" data-cost-mode="priceCommission">Preço + comissões</button>
               <button type="button" class="dvlRiskCost" data-cost-mode="priceOnly">Preço apenas</button>
             </div>
+            <div class="dvlRiskNetRow">
+              <button type="button" class="dvlRiskLineToggle" id="dvlRiskFeesToggle" aria-pressed="true"><i></i><span>Net R:R (fees included)</span></button>
+            </div>
+            <div class="dvlRiskNetParams">
+              <button type="button" class="dvlRiskValueBtn" id="dvlRiskNetRRBtn"><span>Net R:R</span><strong id="dvlRiskNetRRValue">1:1,00</strong></button>
+              <button type="button" class="dvlRiskValueBtn" id="dvlRiskMaxNotionalBtn"><span>Notional máx</span><strong id="dvlRiskMaxNotionalValue">175.000,00 USD</strong></button>
+              <button type="button" class="dvlRiskValueBtn" id="dvlRiskBufferBtn"><span>Buffer/BTC</span><strong id="dvlRiskBufferValue">0,00 USD</strong></button>
+            </div>
           </div>
 
           <div class="dvlRiskResult" id="dvlRiskResultCard">
             <span>LOTE MT5</span>
             <strong id="dvlRiskLotValue">--</strong>
+            <div class="dvlRiskBadgeRow"><span class="dvlRiskBadge" id="dvlRiskBadge"></span><span class="dvlRiskBadge" id="dvlRiskCostBadge"></span></div>
             <button type="button" id="dvlRiskCopyLotBtn" disabled>Copiar lote</button>
             <div class="dvlRiskResultLines">
               <div><span>Risco solicitado</span><b id="dvlRiskRequested">--</b></div>
@@ -16074,6 +16083,10 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
             <div><span>Valor nominal</span><b id="dvlRiskNominalValue">--</b></div>
             <div><span>Risco da conta</span><b id="dvlRiskAccountRisk">--</b></div>
             <div><span>Margem estimada</span><b id="dvlRiskMargin">--</b></div>
+            <div><span>TP bruto (1:1)</span><b id="dvlRiskGrossTp">--</b></div>
+            <div><span>TP líquido</span><b id="dvlRiskNetTp">--</b></div>
+            <div><span>Eficiência de custo</span><b class="dvlRiskCostShareVal" id="dvlRiskCostShare">--</b></div>
+            <div><span>Máx lote (notional)</span><b id="dvlRiskMaxLotNotional">--</b></div>
           </div>
 
           <div class="dvlRiskMessage" id="dvlRiskMessage" role="status">Informe as especificações reais do contrato no MT5.</div>
@@ -16286,6 +16299,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.355", note: "Risk Engine — modo 'Net R:R (fees included)'. O TP automático deixou de ser 1:1 BRUTO (que a comissão da CFT depois comia) e passou a ser 1:1 LÍQUIDO: o alvo já embute a comissão de entrada e saída (0,0325%/lado) + buffer de execução, então um 1:1 vira 1:1 financeiro de verdade. Novidades: teto de NOTIONAL (padrão $175.000) que limita o lote com o badge NOTIONAL CAPPED; badges de status (RISK BASED / NOTIONAL CAPPED / LOT CAPPED / COST HIGH / INVALID); eficiência de custo (verde ≤20%, amarelo ≤25%, vermelho >25%); TP bruto vs TP líquido lado a lado; buffer de execução e Net R:R alvo editáveis. Preset data-driven 'CFT Break 50K — BTC MT5/Match' (registro central DVL_PROP_RISK_PRESETS: risco $300, net R:R 1, notional máx $175k, buffer $0). O lote continua arredondado SEMPRE para baixo e nunca ultrapassa o notional. O modo antigo (bruto/priceOnly) segue disponível. Replay Pro, scanner e demais módulos intactos. Só frontend." },
   { version: "Beta 1.354", note: "DVL Bubbles — motor de MESCLA de aglomerados. Quando muitas bolhas caíam na mesma região (mesmo preço + tempo), elas se sobrepunham e viravam um borrão ilegível. Agora um motor agrupa as bolhas que ficariam coladas numa só, SOMANDO o fluxo real (compra/venda, volume e nº de execuções) — o que faz sentido: uma rajada de prints no mesmo nível já é um único evento de agressão/absorção. É greedy ancorado no MAIOR print da região e acelerado por grade de pixels (barato e estável no pan/zoom). A bolha mesclada ganha um halo fininho concêntrico pra indicar que é um cluster, e o tooltip mostra o fluxo somado. Dois controles novos no painel: 'Mesclar aglomerados' (liga/desliga) e 'Força da mescla' (o quão perto elas precisam estar pra juntar). Ligado por padrão. Só frontend." },
   { version: "Beta 1.353", note: "Fix — a notificação de 'salvo' (toast) aparecia ATRÁS da barra de timeline do Replay. O toast tinha z-index 40 e a barra 45, então a barra cobria o aviso quando os dois se sobrepunham embaixo. Subi o z-index do toast pra ficar acima da barra de timeline (e também acima dos painéis de config), então a notificação fica sempre visível. Só frontend." },
   { version: "Beta 1.352", note: "DVL Bubbles — visual repaginado (estilo Tape Aggression): bolhas com tracinhos de preço (rastros) e agora SOBREPOSTAS aos candles em vez de atrás deles — o hook de desenho passou a rodar DEPOIS do render dos corpos/pavios das velas, então as bolhas ficam sempre visíveis por cima. O painel de ajustes ganhou controles numéricos '− valor +' (mais fáceis no mobile) pros parâmetros de sensibilidade/tamanho/rastro. Consome o mesmo histórico de aggTrades reais do backend (1.351). Só frontend." },
@@ -41618,10 +41632,15 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     accountPreset:"50000",
     symbolKey:"BTCUSD",
     riskMode:"cash",
-    riskValue:100,
+    riskValue:300,
     tolerancePct:2,
     costMode:"priceCommission",
     defaultRR:1,
+    feesIncluded:true,
+    maxNotional:175000,
+    buffer:0,
+    netRR:1,
+    maxCostShare:0.25,
     entryMode:"market",
     tpMode:"autoRR",
     linesVisible:false,
@@ -41708,6 +41727,47 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
 })();
 </script>
 
+<script id="DVL_PROP_RISK_PRESETS_1355">
+/* ── Registro de presets de risco prop-firm (data-driven, spec §9) ──────────
+   Centraliza os parâmetros do preset "CFT Break 50K — BTC MT5/Match" para que
+   comissão, notional máximo, buffer, net R:R e limite de custo NÃO fiquem
+   espalhados como constantes de UI. O Risk Engine lê daqui os defaults do modo
+   "Net R:R (fees included)". */
+(function(){
+  "use strict";
+  if(window.DVL_PROP_RISK_PRESETS) return;
+  var presets={
+    cftBreak50kBtc:{
+      id:"cft-break-50k-btc",
+      label:"CFT Break 50K — BTC MT5/Match",
+      brokerId:"cryptoFundTrader",
+      symbolKey:"BTCUSD",
+      accountBalance:50000,
+      maxDrawdown:2000,
+      commissionModel:"notional_per_side",
+      commissionRatePerSide:0.000325,   // 0,0325%/lado  (~0,065% round turn)
+      contractSize:1,
+      leverage:100,
+      defaultRiskUsd:300,
+      defaultNetRR:1,
+      maxRecommendedNotional:175000,
+      notionalRange:[150000,200000],
+      maxCostShare:0.25,
+      executionBufferPerUnit:0,          // USD por BTC round trip, editável
+      lotStep:0.01,
+      defaultFeesIncluded:true
+    }
+  };
+  function clone(v){return JSON.parse(JSON.stringify(v));}
+  window.DVL_PROP_RISK_PRESETS={
+    get:function(id){return presets[id]?clone(presets[id]):null;},
+    forBroker:function(brokerId,symbolKey){var k=String(symbolKey||"").toUpperCase();for(var id in presets){var p=presets[id];if(p.brokerId===brokerId&&(!k||p.symbolKey===k))return clone(p);}return null;},
+    list:function(){return Object.keys(presets).map(function(k){return clone(presets[k]);});},
+    "default":"cftBreak50kBtc"
+  };
+})();
+</script>
+
 <script id="DVL_RISK_ENGINE_CORE_1213">
 (function(){
   "use strict";
@@ -41716,6 +41776,75 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function decimals(step){var s=String(step);if(s.indexOf("e-")>0)return Number(s.split("e-")[1])||0;var p=s.indexOf(".");return p<0?0:s.length-p-1;}
   function floorStep(raw,step){var d=Math.min(12,Math.max(0,decimals(step)));var units=Math.floor((Number(raw)+1e-12)/Number(step));return Number((units*Number(step)).toFixed(d));}
   function money(v,c){if(!Number.isFinite(Number(v)))return "--";return Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})+" "+String(c||"USD");}
+  /* ── Net R:R (fees included) — spec §6 ─────────────────────────────────────
+     TP automático NET-aware. Chave: targetPerBTC = netLossPorUnidade×rr + b é
+     INDEPENDENTE do lote (o lote cancela em targetNetProfit/Q), então o TP líquido
+     depende só de E,S,c,b,rr,k. Assim um "1:1" vira 1:1 FINANCEIRO (cobre a
+     comissão de saída), não um 1:1 bruto que a taxa depois come. */
+  function netAutoTp(entry,stop,side,c,b,rr,k){
+    entry=Number(entry);stop=Number(stop);
+    if(!(entry>0&&stop>0)||entry===stop)return null;
+    side=side==="sell"?"sell":"buy";
+    if(side==="buy"&&stop>=entry)return null;
+    if(side==="sell"&&stop<=entry)return null;
+    c=Number(c)||0;b=Number(b)||0;rr=Number(rr)>0?Number(rr):1;k=Number(k)>0?Number(k):1;
+    var dist=Math.abs(entry-stop);
+    var netLossPerUnit=dist + c*(entry+stop) + b;   // = netLossPerLot / k
+    var targetPerBTC=netLossPerUnit*rr + b;
+    if(side==="buy")return (entry*(1+c)+targetPerBTC)/(1-c);
+    return (entry*(1-c)-targetPerBTC)/(1+c);
+  }
+  function calcNet(input,spec,tv){
+    var entry=Number(input.entry),stop=Number(input.stop),side=input.side==="sell"?"sell":"buy";
+    var k=Number(spec.contractSize)>0?Number(spec.contractSize):1;
+    var c=Number(spec.commissionPct)>0?Number(spec.commissionPct)/100:0;
+    var b=Number(input.buffer)>0?Number(input.buffer):0;
+    var rr=Number(input.rr)>0?Number(input.rr):1;
+    var R=tv.requestedRisk;
+    var step=Number(spec.volumeStep),min=Number(spec.volumeMin),max=Number(spec.volumeMax);
+    var dist=Math.abs(entry-stop),lossPerLot=0,ticks=null;
+    if(spec.calculationMode==="tickValue"){ticks=dist/Number(spec.tickSize);lossPerLot=ticks*Number(spec.tickValue);}
+    else lossPerLot=dist*k;
+    if(!(lossPerLot>0))return {ok:false,code:"LOSS_INVALID",errors:["Perda por lote inválida"]};
+    var lossCommissionPerLot=k*c*(entry+stop), bufferPerLot=k*b;
+    var netLossPerLot=lossPerLot+lossCommissionPerLot+bufferPerLot;
+    if(!(netLossPerLot>0))return {ok:false,code:"LOSS_INVALID",errors:["Perda líquida por lote inválida"]};
+    var riskBasedLot=R/netLossPerLot;
+    var maxNotional=Number(input.maxNotional)>0?Number(input.maxNotional):Infinity;
+    var maxLotByNotional=isFinite(maxNotional)?maxNotional/(entry*k):Infinity;
+    var platformMaxLot=Number(max)>0?Number(max):Infinity;
+    var rawLot=Math.min(riskBasedLot,maxLotByNotional,platformMaxLot);
+    var capReason=(riskBasedLot<=maxLotByNotional&&riskBasedLot<=platformMaxLot)?"RISK_BASED":(maxLotByNotional<=platformMaxLot?"NOTIONAL_CAPPED":"LOT_CAPPED");
+    var minimumRisk=netLossPerLot*(min>0?min:0);
+    if(min>0&&rawLot<min-1e-12)return {ok:false,code:"BELOW_MIN",errors:["O risco solicitado exige um lote menor que o mínimo permitido."],rawLot:riskBasedLot,minimumLot:min,minimumRisk:minimumRisk,requestedRisk:R,lossPerLot:lossPerLot,stopDistance:dist,ticks:ticks};
+    var lot=floorStep(rawLot,step);if(min>0&&lot<min)lot=min;if(platformMaxLot<Infinity&&lot>platformMaxLot)lot=platformMaxLot;
+    if(!(lot>0))return {ok:false,code:"BELOW_MIN",errors:["Lote abaixo do passo mínimo permitido."],rawLot:rawLot,minimumLot:min,minimumRisk:minimumRisk,requestedRisk:R};
+    var Q=lot*k, actualNetRisk=lot*netLossPerLot;
+    var manual=(input.tpMode==="manual")&&Number(input.tp)>0;
+    var autoTp=netAutoTp(entry,stop,side,c,b,rr,k), T=manual?Number(input.tp):autoTp;
+    var winCommission=(T>0)?Q*c*(entry+T):0, lossCommission=Q*c*(entry+stop);
+    var grossWin=(T>0)?(side==="buy"?Q*(T-entry):Q*(entry-T)):null;
+    var netWin=(grossWin!=null)?grossWin-winCommission-Q*b:null;
+    var grossLoss=Q*dist, netLoss=grossLoss+lossCommission+Q*b;
+    var netRR=(netWin!=null&&netLoss>0)?netWin/netLoss:null, grossRR=(T>0&&dist>0)?Math.abs(T-entry)/dist:null;
+    var costShare=(grossWin!=null&&grossWin>0)?(winCommission+Q*b)/grossWin:null;
+    var maxCostShare=Number(input.maxCostShare)>0?Number(input.maxCostShare):0.25;
+    var costHigh=(costShare!=null)&&costShare>maxCostShare;
+    var entryCommission=Q*c*entry, exitCommission=Q*c*stop, totalFees=entryCommission+exitCommission;
+    var nominalUnits=Q, nominalValue=Q*entry;
+    var lev=Number(spec.marginLeverage)>0?Number(spec.marginLeverage):(Number(input.leverage)>0?Number(input.leverage):0);
+    var margin=lev>0?nominalValue/lev:null;
+    return {ok:true,code:capReason,feesIncluded:true,costMode:"netFeesIncluded",commissionPct:Number(spec.commissionPct)||0,
+      capReason:capReason,lot:lot,rawLot:riskBasedLot,recommendedLotRaw:rawLot,maxLotByNotional:isFinite(maxLotByNotional)?maxLotByNotional:null,
+      requestedRisk:R,realRisk:netLoss,difference:netLoss-R,lossPerLot:lossPerLot,netLossPerLot:netLossPerLot,
+      priceRisk:grossLoss,entryCommission:entryCommission,exitCommission:exitCommission,totalFees:totalFees,totalRisk:netLoss,
+      profit:grossWin,netProfit:netWin,rr:grossRR,netRR:netRR,autoTp:autoTp,tp:T,netTp:T,tpManual:manual,
+      stopDistance:dist,ticks:ticks,nominalUnits:nominalUnits,nominalValue:nominalValue,
+      accountRiskPct:Number(input.accountBalance)>0?netLoss/Number(input.accountBalance)*100:null,margin:margin,
+      minimumRisk:minimumRisk,costShare:costShare,maxCostShare:maxCostShare,costHigh:costHigh,buffer:b,rrTarget:rr,
+      currency:spec.currency||"USD",lotDecimals:decimals(step),
+      warning:costHigh?"Trade range too short for configured CFT costs":null};
+  }
   /* Beta 1.219 — dimensionamento CIENTE DE COMISSÕES da CFT.
      A perda por lote no PREÇO (lossPerLot) continua igual. Sobre ela somamos as
      comissões estimadas de entrada e saída (0,0325%/lado da CFT) para que o LOTE
@@ -41726,7 +41855,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
          (comissão de saída no stop real) nunca ultrapassa o orçamento.
      costMode "priceCommission" (padrão) dimensiona por preço+comissões; costMode
      "priceOnly" dimensiona só pelo preço (lote maior) e avisa que ignora taxas. */
-  function calculate(input,spec){var sv=V.validateSpec(spec),tv=V.validateTrade(input);if(!sv.ok)return {ok:false,code:"PROFILE_INCOMPLETE",errors:sv.errors};if(!tv.ok)return {ok:false,code:"TRADE_INVALID",errors:tv.errors};var entry=Number(input.entry),stop=Number(input.stop),tp=Number(input.tp),distance=Math.abs(entry-stop),lossPerLot=0,ticks=null;if(spec.calculationMode==="tickValue"){ticks=distance/Number(spec.tickSize);lossPerLot=ticks*Number(spec.tickValue);}else if(spec.calculationMode==="contractSizeLinear")lossPerLot=distance*Number(spec.contractSize);if(!(lossPerLot>0))return {ok:false,code:"LOSS_INVALID",errors:["Perda por lote inválida"]};
+  function calculate(input,spec){var sv=V.validateSpec(spec),tv=V.validateTrade(input);if(!sv.ok)return {ok:false,code:"PROFILE_INCOMPLETE",errors:sv.errors};if(!tv.ok)return {ok:false,code:"TRADE_INVALID",errors:tv.errors};if(input&&input.feesIncluded)return calcNet(input,spec,tv);var entry=Number(input.entry),stop=Number(input.stop),tp=Number(input.tp),distance=Math.abs(entry-stop),lossPerLot=0,ticks=null;if(spec.calculationMode==="tickValue"){ticks=distance/Number(spec.tickSize);lossPerLot=ticks*Number(spec.tickValue);}else if(spec.calculationMode==="contractSizeLinear")lossPerLot=distance*Number(spec.contractSize);if(!(lossPerLot>0))return {ok:false,code:"LOSS_INVALID",errors:["Perda por lote inválida"]};
     var costMode=input.costMode==="priceOnly"?"priceOnly":"priceCommission";
     var cs=Number(spec.contractSize)>0?Number(spec.contractSize):1;
     var commPct=Number(spec.commissionPct)>0?Number(spec.commissionPct):0,commFrac=commPct/100;
@@ -41735,7 +41864,7 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     var requested=tv.requestedRisk,raw=requested/perLotForSizing,min=Number(spec.volumeMin),max=Number(spec.volumeMax),step=Number(spec.volumeStep);var minimumRisk=perLotForSizing*min;if(raw<min-1e-12)return {ok:false,code:"BELOW_MIN",errors:["O risco solicitado exige um lote menor que o mínimo permitido."],rawLot:raw,minimumLot:min,minimumRisk:minimumRisk,requestedRisk:requested,lossPerLot:lossPerLot,stopDistance:distance,ticks:ticks};var capped=raw>max;var lot=floorStep(Math.min(raw,max),step);if(lot<min)lot=min;if(lot>max)lot=max;
     var priceRisk=lossPerLot*lot,entryCommission=entryCommPerLot*lot,exitCommission=exitCommStopPerLot*lot,totalFees=entryCommission+exitCommission,totalRisk=priceRisk+totalFees;
     var real=costMode==="priceCommission"?totalRisk:priceRisk,diff=real-requested,tolerance=Math.max(0,Number(input.tolerancePct)||0),limit=requested*(1+tolerance/100);if(real>limit+1e-8)return {ok:false,code:"TOLERANCE",errors:["Resultado bloqueado: risco acima da tolerância."],lot:lot,realRisk:real,requestedRisk:requested,tolerancePct:tolerance};var tpDistance=Number.isFinite(tp)&&tp>0?Math.abs(tp-entry):null,profit=null,rr=null,netProfit=null,netRR=null;if(tpDistance!=null){rr=distance>0?tpDistance/distance:null;if(spec.calculationMode==="tickValue")profit=(tpDistance/Number(spec.tickSize))*Number(spec.tickValue)*lot;else profit=tpDistance*Number(spec.contractSize)*lot;var tpExitCommission=commFrac>0?tp*cs*commFrac*lot:0;netProfit=profit-entryCommission-tpExitCommission;netRR=totalRisk>0?netProfit/totalRisk:null;}var nominalUnits=Number(spec.contractSize)>0?lot*Number(spec.contractSize):null,nominalValue=nominalUnits!=null?nominalUnits*entry:null,margin=(nominalValue!=null&&Number(spec.marginLeverage)>0)?nominalValue/Number(spec.marginLeverage):null;return {ok:true,code:capped?"CAPPED_MAX":"OK",warning:capped?"Lote limitado ao máximo permitido.":(costMode==="priceOnly"?"O lote não considera as comissões de entrada e saída.":null),costMode:costMode,commissionPct:commPct,lot:lot,rawLot:raw,requestedRisk:requested,realRisk:real,difference:diff,lossPerLot:lossPerLot,priceRisk:priceRisk,entryCommission:entryCommission,exitCommission:exitCommission,totalFees:totalFees,totalRisk:totalRisk,netProfit:netProfit,netRR:netRR,stopDistance:distance,ticks:ticks,rr:rr,profit:profit,nominalUnits:nominalUnits,nominalValue:nominalValue,accountRiskPct:Number(input.accountBalance)>0?real/Number(input.accountBalance)*100:null,margin:margin,minimumRisk:minimumRisk,currency:spec.currency||"USD",lotDecimals:decimals(step)};}
-  window.DVL_RISK_ENGINE={calculate:calculate,floorStep:floorStep,formatMoney:money};
+  window.DVL_RISK_ENGINE={calculate:calculate,floorStep:floorStep,formatMoney:money,netAutoTp:netAutoTp};
 })();
 </script>
 
@@ -41746,12 +41875,25 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   var Storage=window.DVL_RISK_ENGINE_STORAGE,Brokers=window.DVL_BROKER_PROFILE_REGISTRY,Specs=window.DVL_SYMBOL_SPEC_REGISTRY,Validation=window.DVL_RISK_ENGINE_VALIDATION,Engine=window.DVL_RISK_ENGINE;
   var ui={},state=Storage.get(),workingSpec=null,pad={field:null,value:"",apply:null,title:""},raf=0,lastResult=null,lastMarketPrice=null;
   function $(id){return document.getElementById(id);}function all(sel,root){return Array.prototype.slice.call((root||document).querySelectorAll(sel));}
+  function setT(id,v){var e=$(id);if(e)e.textContent=v;}
+  /* Beta 1.355 — badges de status do Risk Engine (spec §5). */
+  function renderBadge(r){var el=$("dvlRiskBadge");if(!el)return;var label="",cls="";if(!r||!r.ok){if(r&&(r.code==="TRADE_INVALID"||r.code==="PROFILE_INCOMPLETE"||r.code==="LOSS_INVALID"||r.code==="BELOW_MIN")){label="INVALID";cls="invalid";}else{el.textContent="";el.className="dvlRiskBadge";return;}}
+    else{var cap=r.capReason||r.code;label=cap==="NOTIONAL_CAPPED"?"NOTIONAL CAPPED":cap==="LOT_CAPPED"?"LOT CAPPED":"RISK BASED";cls=cap==="NOTIONAL_CAPPED"?"notional":cap==="LOT_CAPPED"?"lotcap":"riskbased";}
+    el.textContent=label;el.className="dvlRiskBadge "+cls;
+    var cs=$("dvlRiskCostBadge");if(cs){if(r&&r.ok&&r.costHigh){cs.textContent="COST HIGH";cs.className="dvlRiskBadge costhigh show";}else{cs.textContent="";cs.className="dvlRiskBadge";}}
+  }
   function n(v){if(v==null||v==="")return null;v=Number(v);return Number.isFinite(v)?v:null;}function fmt(v,max){if(v==null||v===""||!Number.isFinite(Number(v)))return "--";return Number(v).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:max==null?4:max});}
   function money(v,c){if(!Number.isFinite(Number(v)))return "--";return Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})+" "+String(c||"USD");}
   function appSymbol(){try{if(typeof symbol!=="undefined"&&symbol)return String(symbol);}catch(_){}try{if(window.S&&S.sym)return String(S.sym);}catch(_){}return "BTCUSDT";}
   function brokerSymbolFromApp(s){s=String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");var q=["USDT","USDC","BUSD","FDUSD","USD"];for(var i=0;i<q.length;i++)if(s.endsWith(q[i]))return s.slice(0,-q[i].length)+"USD";return s||"BTCUSD";}
   function latestMarketPrice(){var raw=String(appSymbol()||"").toUpperCase().replace(/[^A-Z0-9]/g,"");var v=null;try{var map=window.DVL_LAST_PRICE_BY_SYMBOL||{};var row=map[raw]||map[raw.replace(/USD$/,"USDT")];if(row&&Number(row.price)>0)v=Number(row.price);}catch(_){}try{if(!(v>0)&&typeof ticker!=="undefined"&&ticker&&Number(ticker.lastPrice)>0)v=Number(ticker.lastPrice);}catch(_){}try{if(!(v>0)&&typeof marketEntryPrice!=="undefined"&&Number(marketEntryPrice)>0)v=Number(marketEntryPrice);}catch(_){}try{if(!(v>0)&&typeof klines!=="undefined"&&klines&&klines.length){var k=klines[klines.length-1];v=Number(k&&((k.close!=null?k.close:k.c)));}}catch(_){}try{if(!(v>0)&&window.S&&S.candles&&S.candles.length){var c=S.candles[S.candles.length-1];v=Number(c&&((c.close!=null?c.close:c.c)));}}catch(_){}if(v>0)lastMarketPrice=v;return Number(lastMarketPrice)>0?Number(lastMarketPrice):null;}
-  function oneToOneTp(entry,stop,side){entry=Number(entry);stop=Number(stop);if(!(entry>0&&stop>0)||entry===stop)return null;side=side==="sell"?"sell":"buy";if(side==="buy"&&stop>=entry)return null;if(side==="sell"&&stop<=entry)return null;var d=Math.abs(entry-stop),rr=Math.max(.00000001,Number(state.defaultRR)||1);return side==="buy"?entry+d*rr:entry-d*rr;}
+  /* Beta 1.355 — quando o modo "Net R:R (fees included)" está ligado, o TP
+     automático é NET-aware (cobre a comissão de saída), então um 1:1 vira 1:1
+     financeiro. Desligado, mantém o 1:1 bruto legado. */
+  function grossOneToOneTp(entry,stop,side){var d=Math.abs(entry-stop),rr=Math.max(.00000001,Number(state.netRR)||Number(state.defaultRR)||1);return side==="buy"?entry+d*rr:entry-d*rr;}
+  function oneToOneTp(entry,stop,side){entry=Number(entry);stop=Number(stop);if(!(entry>0&&stop>0)||entry===stop)return null;side=side==="sell"?"sell":"buy";if(side==="buy"&&stop>=entry)return null;if(side==="sell"&&stop<=entry)return null;
+    if(state.feesIncluded&&window.DVL_RISK_ENGINE&&typeof window.DVL_RISK_ENGINE.netAutoTp==="function"){var sp=currentSpec()||{};var c=Number(sp.commissionPct)>0?Number(sp.commissionPct)/100:0;var k=Number(sp.contractSize)>0?Number(sp.contractSize):1;var b=Number(state.buffer)>0?Number(state.buffer):0;var rr=Number(state.netRR)>0?Number(state.netRR):1;var t=window.DVL_RISK_ENGINE.netAutoTp(entry,stop,side,c,b,rr,k);if(t>0)return t;}
+    return grossOneToOneTp(entry,stop,side);}
   function applyOneToOneToState(){var tp=oneToOneTp(state.trade.entry,state.trade.stop,state.trade.side);state.trade.tp=tp;return tp;}
   function seedManualEntryFromMarket(force){if(sourceOrder())return false;var live=latestMarketPrice();if(!(live>0))return false;var oldEntry=Number(state.trade.entry),oldStop=Number(state.trade.stop),side=state.trade.side==="sell"?"sell":"buy";if(!force&&oldEntry>0)return false;if(oldEntry>0&&oldStop>0&&oldEntry!==oldStop){var d=Math.abs(oldEntry-oldStop);state.trade.stop=side==="buy"?live-d:live+d;}state.trade.entry=live;applyOneToOneToState();state.trade.graphOrderId=null;Storage.patch({trade:state.trade,defaultRR:1});return true;}
   function currentProfile(){return Brokers.get(state.brokerId)||Brokers.get("custom");}
@@ -41789,9 +41931,18 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function renderRiskControls(){all(".dvlRiskMode").forEach(function(b){b.classList.toggle("active",b.dataset.riskMode===state.riskMode);});var cash=state.riskMode==="percent"?Number(state.accountSize)*Number(state.riskValue)/100:Number(state.riskValue),pct=Number(state.accountSize)>0?cash/Number(state.accountSize)*100:0;$("dvlRiskValueText").textContent=state.riskMode==="percent"?fmt(state.riskValue,4)+"%":money(state.riskValue,"USD");$("dvlRiskEquivalent").textContent=money(cash,"USD")+" · "+fmt(pct,4)+"%";all("#dvlRiskPresetRow button").forEach(function(b){b.classList.toggle("active",b.dataset.riskMode===state.riskMode&&Math.abs(Number(b.dataset.riskValue)-Number(state.riskValue))<1e-9);});var cmode=state.costMode==="priceOnly"?"priceOnly":"priceCommission";all("#dvlRiskCostRow .dvlRiskCost").forEach(function(b){b.classList.toggle("active",b.dataset.costMode===cmode);});$("dvlRiskToleranceValue").textContent=fmt(state.tolerancePct,2)+"%";}
   function specFieldValue(k){var v=workingSpec&&workingSpec[k];return v==null||v===""?"--":fmt(v,10);}
   function renderSpecs(){if(!workingSpec)loadWorkingSpec();$("dvlRiskBrokerSymbolInput").value=workingSpec.brokerSymbol||state.symbolKey;$("dvlRiskCurrencyInput").value=workingSpec.currency||"USD";["contractSize","tickSize","tickValue","volumeMin","volumeMax","volumeStep","digits","marginLeverage"].forEach(function(k){var id="dvlRiskSpec"+k.charAt(0).toUpperCase()+k.slice(1);$(id).textContent=specFieldValue(k);});$("dvlRiskVerifiedToggle").classList.toggle("active",!!workingSpec.verified);$("dvlRiskVerifiedToggle").setAttribute("aria-pressed",workingSpec.verified?"true":"false");}
-  function clearResult(){lastResult=null;$("dvlRiskLotValue").textContent="--";$("dvlRiskCopyLotBtn").disabled=true;["dvlRiskRequested","dvlRiskReal","dvlRiskDifference","dvlRiskPriceRisk","dvlRiskEntryComm","dvlRiskExitComm","dvlRiskTotalFees","dvlRiskTotalRisk","dvlRiskNetRR","dvlRiskNetProfit","dvlRiskRR","dvlRiskProfit","dvlRiskStopDistance","dvlRiskTicks","dvlRiskNominalSize","dvlRiskNominalValue","dvlRiskAccountRisk","dvlRiskMargin"].forEach(function(id){$(id).textContent="--";});}
+  function clearResult(){lastResult=null;$("dvlRiskLotValue").textContent="--";$("dvlRiskCopyLotBtn").disabled=true;["dvlRiskRequested","dvlRiskReal","dvlRiskDifference","dvlRiskPriceRisk","dvlRiskEntryComm","dvlRiskExitComm","dvlRiskTotalFees","dvlRiskTotalRisk","dvlRiskNetRR","dvlRiskNetProfit","dvlRiskRR","dvlRiskProfit","dvlRiskStopDistance","dvlRiskTicks","dvlRiskNominalSize","dvlRiskNominalValue","dvlRiskAccountRisk","dvlRiskMargin"].forEach(function(id){$(id).textContent="--";});["dvlRiskGrossTp","dvlRiskNetTp","dvlRiskCostShare","dvlRiskMaxLotNotional"].forEach(function(id){setT(id,"--");});var _b=$("dvlRiskBadge");if(_b){_b.textContent="";_b.className="dvlRiskBadge";}var _cb=$("dvlRiskCostBadge");if(_cb){_cb.textContent="";_cb.className="dvlRiskBadge";}}
   function message(txt,type){var el=$("dvlRiskMessage");el.textContent=txt||"";el.className="dvlRiskMessage"+(type?" "+type:"");}
-  function calculate(){clearResult();if(state.executionProfile==="paper"){message("DVL Paper continua usando a lógica interna atual. Selecione um perfil MT5 para calcular o lote.","");return;}var _tpc=Number(state.trade.tp);if(!(_tpc>0)&&Number(state.trade.entry)>0&&Number(state.trade.stop)>0){var _dtp=oneToOneTp(state.trade.entry,state.trade.stop,state.trade.side);if(_dtp>0)_tpc=_dtp;}var result=Engine.calculate({accountBalance:state.accountSize,side:state.trade.side,entry:state.trade.entry,stop:state.trade.stop,tp:_tpc,riskMode:state.riskMode,riskValue:state.riskValue,tolerancePct:state.tolerancePct,costMode:state.costMode==="priceOnly"?"priceOnly":"priceCommission"},workingSpec);lastResult=result;var c=workingSpec&&workingSpec.currency||"USD";if(!result.ok){if(result.requestedRisk!=null)$("dvlRiskRequested").textContent=money(result.requestedRisk,c);if(result.code==="BELOW_MIN"){message("O risco solicitado exige um lote menor que o mínimo permitido. Lote mínimo: "+fmt(result.minimumLot,8)+". Risco mínimo possível: "+money(result.minimumRisk,c),"error");}else message((result.errors||["Não foi possível calcular."]).join(" · "),"error");return;}$("dvlRiskLotValue").textContent=Number(result.lot).toFixed(result.lotDecimals);$("dvlRiskCopyLotBtn").disabled=false;$("dvlRiskRequested").textContent=money(result.requestedRisk,c);$("dvlRiskReal").textContent=money(result.realRisk,c);$("dvlRiskDifference").textContent=(result.difference>0?"+":"")+money(result.difference,c);$("dvlRiskPriceRisk").textContent=result.priceRisk!=null?money(result.priceRisk,c):"--";$("dvlRiskEntryComm").textContent=result.entryCommission!=null?money(result.entryCommission,c):"--";$("dvlRiskExitComm").textContent=result.exitCommission!=null?money(result.exitCommission,c):"--";$("dvlRiskTotalFees").textContent=result.totalFees!=null?money(result.totalFees,c):"--";$("dvlRiskTotalRisk").textContent=result.totalRisk!=null?money(result.totalRisk,c):"--";$("dvlRiskRR").textContent=result.rr!=null?"1:"+fmt(result.rr,2):"--";$("dvlRiskNetRR").textContent=result.netRR!=null?"1:"+fmt(result.netRR,2):"--";$("dvlRiskProfit").textContent=result.profit!=null?money(result.profit,c):"--";$("dvlRiskNetProfit").textContent=result.netProfit!=null?money(result.netProfit,c):"--";$("dvlRiskStopDistance").textContent=fmt(result.stopDistance,8);$("dvlRiskTicks").textContent=result.ticks!=null?fmt(result.ticks,2):"--";$("dvlRiskNominalSize").textContent=result.nominalUnits!=null?fmt(result.nominalUnits,8):"--";$("dvlRiskNominalValue").textContent=result.nominalValue!=null?money(result.nominalValue,c):"--";$("dvlRiskAccountRisk").textContent=result.accountRiskPct!=null?fmt(result.accountRiskPct,4)+"%":"--";$("dvlRiskMargin").textContent=result.margin!=null?money(result.margin,c):"--";message(result.warning||(result.costMode==="priceCommission"?"Lote seguro com comissões de entrada e saída embutidas · arredondado para baixo.":"Cálculo concluído com arredondamento seguro para baixo."),(result.code==="CAPPED_MAX"||result.costMode==="priceOnly")?"warn":"ok");}
+  function calculate(){clearResult();if(state.executionProfile==="paper"){message("DVL Paper continua usando a lógica interna atual. Selecione um perfil MT5 para calcular o lote.","");return;}var _tpc=Number(state.trade.tp);if(!(_tpc>0)&&Number(state.trade.entry)>0&&Number(state.trade.stop)>0){var _dtp=oneToOneTp(state.trade.entry,state.trade.stop,state.trade.side);if(_dtp>0)_tpc=_dtp;}var result=Engine.calculate({accountBalance:state.accountSize,side:state.trade.side,entry:state.trade.entry,stop:state.trade.stop,tp:_tpc,riskMode:state.riskMode,riskValue:state.riskValue,tolerancePct:state.tolerancePct,costMode:state.costMode==="priceOnly"?"priceOnly":"priceCommission",feesIncluded:!!state.feesIncluded,maxNotional:Number(state.maxNotional)>0?Number(state.maxNotional):0,buffer:Number(state.buffer)>0?Number(state.buffer):0,rr:Number(state.netRR)>0?Number(state.netRR):1,maxCostShare:Number(state.maxCostShare)>0?Number(state.maxCostShare):0.25,tpMode:state.tpMode||"autoRR",leverage:Number(workingSpec&&workingSpec.marginLeverage)||0},workingSpec);lastResult=result;var c=workingSpec&&workingSpec.currency||"USD";renderBadge(result);if(!result.ok){if(result.requestedRisk!=null)$("dvlRiskRequested").textContent=money(result.requestedRisk,c);if(result.code==="BELOW_MIN"){message("O risco solicitado exige um lote menor que o mínimo permitido. Lote mínimo: "+fmt(result.minimumLot,8)+". Risco mínimo possível: "+money(result.minimumRisk,c),"error");}else message((result.errors||["Não foi possível calcular."]).join(" · "),"error");return;}$("dvlRiskLotValue").textContent=Number(result.lot).toFixed(result.lotDecimals);$("dvlRiskCopyLotBtn").disabled=false;$("dvlRiskRequested").textContent=money(result.requestedRisk,c);$("dvlRiskReal").textContent=money(result.realRisk,c);$("dvlRiskDifference").textContent=(result.difference>0?"+":"")+money(result.difference,c);$("dvlRiskPriceRisk").textContent=result.priceRisk!=null?money(result.priceRisk,c):"--";$("dvlRiskEntryComm").textContent=result.entryCommission!=null?money(result.entryCommission,c):"--";$("dvlRiskExitComm").textContent=result.exitCommission!=null?money(result.exitCommission,c):"--";$("dvlRiskTotalFees").textContent=result.totalFees!=null?money(result.totalFees,c):"--";$("dvlRiskTotalRisk").textContent=result.totalRisk!=null?money(result.totalRisk,c):"--";$("dvlRiskRR").textContent=result.rr!=null?"1:"+fmt(result.rr,2):"--";$("dvlRiskNetRR").textContent=result.netRR!=null?"1:"+fmt(result.netRR,2):"--";$("dvlRiskProfit").textContent=result.profit!=null?money(result.profit,c):"--";$("dvlRiskNetProfit").textContent=result.netProfit!=null?money(result.netProfit,c):"--";$("dvlRiskStopDistance").textContent=fmt(result.stopDistance,8);$("dvlRiskTicks").textContent=result.ticks!=null?fmt(result.ticks,2):"--";$("dvlRiskNominalSize").textContent=result.nominalUnits!=null?fmt(result.nominalUnits,8):"--";$("dvlRiskNominalValue").textContent=result.nominalValue!=null?money(result.nominalValue,c):"--";$("dvlRiskAccountRisk").textContent=result.accountRiskPct!=null?fmt(result.accountRiskPct,4)+"%":"--";$("dvlRiskMargin").textContent=result.margin!=null?money(result.margin,c):"--";
+    /* Beta 1.355 — extras do modo Net R:R (fees included) */
+    var _gtp=(Number(state.trade.entry)>0&&Number(state.trade.stop)>0)?grossOneToOneTp(Number(state.trade.entry),Number(state.trade.stop),state.trade.side):null;
+    setT("dvlRiskGrossTp",_gtp!=null?fmt(_gtp,6):"--");
+    setT("dvlRiskNetTp",(result.netTp||result.autoTp)!=null?fmt(result.netTp||result.autoTp,6):"--");
+    setT("dvlRiskCostShare",result.costShare!=null?fmt(result.costShare*100,2)+"%":"--");
+    var _csEl=$("dvlRiskCostShare");if(_csEl){var _cv=result.costShare;_csEl.className="dvlRiskCostShareVal "+((_cv==null)?"":(_cv<=0.20?"good":_cv<=(result.maxCostShare||0.25)?"warn":"bad"));}
+    setT("dvlRiskMaxLotNotional",result.maxLotByNotional!=null?fmt(result.maxLotByNotional,result.lotDecimals):"--");
+    var _msg=result.warning||(result.feesIncluded?"Lote e TP com comissão de entrada/saída embutidas (Net R:R). Arredondado para baixo.":(result.costMode==="priceCommission"?"Lote seguro com comissões de entrada e saída embutidas · arredondado para baixo.":"Cálculo concluído com arredondamento seguro para baixo."));
+    message(_msg,(result.costHigh)?"warn":(result.code==="CAPPED_MAX"||result.costMode==="priceOnly")?"warn":"ok");}
   /* Beta 1.218 — saneia o Stop no modo "entrada pelo último preço". Sem trade
      selecionado, um Stop inválido persistido (negativo, do lado errado da
      entrada, NaN, ou absurdamente longe — o "-44,3" do print) passava direto e
@@ -41808,7 +41959,8 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     applyOneToOneToState();
     Storage.patch({trade:state.trade,defaultRR:1});
   }
-  function renderAll(){sanitizeManualStop();renderSelects();renderLabels();renderStatus();renderTrade();renderRiskControls();renderSpecs();calculate();}
+  function renderNetControls(){var t=$("dvlRiskFeesToggle");if(t){t.classList.toggle("active",!!state.feesIncluded);t.setAttribute("aria-pressed",state.feesIncluded?"true":"false");}setT("dvlRiskNetRRValue","1:"+fmt(state.netRR,2));setT("dvlRiskMaxNotionalValue",money(state.maxNotional,"USD"));setT("dvlRiskBufferValue",money(state.buffer,"USD"));}
+  function renderAll(){sanitizeManualStop();renderSelects();renderLabels();renderStatus();renderTrade();renderRiskControls();renderNetControls();renderSpecs();calculate();}
   function schedule(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;graphSync(false);renderAll();});}
   function openRisk(){ui.body.classList.add("dvl-risk-mode");ui.drawer.classList.add("dvl-risk-open");ui.panel.setAttribute("aria-hidden","false");ui.open.setAttribute("aria-expanded","true");if(!graphSync(false))seedManualEntryFromMarket(true);renderAll();try{if(typeof drawSoon==="function")drawSoon();}catch(_){}}
   function back(){ui.body.classList.remove("dvl-risk-mode");ui.drawer.classList.remove("dvl-risk-open");ui.panel.setAttribute("aria-hidden","true");ui.open.setAttribute("aria-expanded","false");closeSelects();/* Beta 1.239 — ao fechar o painel, as linhas Entry/TP/SL CONTINUAM visíveis se "Mostrar no gráfico" estiver ligado (no mobile o painel cobre o gráfico; assim dá pra fechar e ver as linhas). Só somem quando o usuário desliga o toggle. */try{window.dispatchEvent(new CustomEvent("dvl:risk-lines-visible",{detail:{visible:!!state.linesVisible}}));}catch(_){}try{if(typeof drawSoon==="function")drawSoon();}catch(_){}}
@@ -41826,6 +41978,11 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     var _tab=$("dvlRiskTpAutoBtn");if(_tab)_tab.addEventListener("click",function(){resetTpAuto();});
     all(".dvlRiskMode").forEach(function(b){b.addEventListener("click",function(){state.riskMode=b.dataset.riskMode;Storage.patch({riskMode:state.riskMode});schedule();});});
     all("#dvlRiskCostRow .dvlRiskCost").forEach(function(b){b.addEventListener("click",function(){state.costMode=b.dataset.costMode==="priceOnly"?"priceOnly":"priceCommission";Storage.patch({costMode:state.costMode});schedule();});});
+    /* Beta 1.355 — modo Net R:R (fees included) + parâmetros do preset CFT */
+    var _fx=$("dvlRiskFeesToggle");if(_fx)_fx.addEventListener("click",function(){state.feesIncluded=!state.feesIncluded;if((state.tpMode||"autoRR")==="autoRR")applyOneToOneToState();Storage.patch({feesIncluded:state.feesIncluded,trade:state.trade});schedule();});
+    var _nrr=$("dvlRiskNetRRBtn");if(_nrr)_nrr.addEventListener("click",function(){openPad("Net R:R alvo",state.netRR,function(v){if(v>0){state.netRR=v;if((state.tpMode||"autoRR")==="autoRR")applyOneToOneToState();Storage.patch({netRR:v,trade:state.trade});schedule();}});});
+    var _mn=$("dvlRiskMaxNotionalBtn");if(_mn)_mn.addEventListener("click",function(){openPad("Notional máximo (USD)",state.maxNotional,function(v){if(v>0){state.maxNotional=v;Storage.patch({maxNotional:v});schedule();}});});
+    var _bf=$("dvlRiskBufferBtn");if(_bf)_bf.addEventListener("click",function(){openPad("Buffer de execução (USD por BTC round trip)",state.buffer,function(v){if(v>=0){state.buffer=v;if((state.tpMode||"autoRR")==="autoRR")applyOneToOneToState();Storage.patch({buffer:v,trade:state.trade});schedule();}});});
     $("dvlRiskValueBtn").addEventListener("click",function(){openPad(state.riskMode==="percent"?"Risco em porcentagem":"Risco em dinheiro",state.riskValue,function(v){if(v>0){state.riskValue=v;Storage.patch({riskValue:v});schedule();}});});
     all("#dvlRiskPresetRow button").forEach(function(b){b.addEventListener("click",function(){state.riskMode=b.dataset.riskMode;state.riskValue=Number(b.dataset.riskValue);Storage.patch({riskMode:state.riskMode,riskValue:state.riskValue});schedule();});});
     $("dvlRiskCopyLotBtn").addEventListener("click",function(){if(!lastResult||!lastResult.ok)return;var v=Number(lastResult.lot).toFixed(lastResult.lotDecimals);var done=function(){message("Lote copiado","ok");};if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(v).then(done).catch(function(){});else{var ta=document.createElement("textarea");ta.value=v;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");done();}catch(_){}ta.remove();}});
@@ -78157,6 +78314,17 @@ window.DVL_COPILOT_BACKTEST_1040={
 </style>
 
 <style id="DVL_RISK_ENGINE_CSS_1213">
+/* Beta 1.355 — badges de status + controles do modo Net R:R (fees included) */
+.dvlRiskBadgeRow{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:2px 0 4px}
+.dvlRiskBadge{display:none;font-size:9.5px;font-weight:800;letter-spacing:.5px;padding:3px 8px;border-radius:999px;text-transform:uppercase;line-height:1}
+.dvlRiskBadge.riskbased{display:inline-block;background:rgba(19,220,141,.16);color:#13dc8d;border:1px solid rgba(19,220,141,.42)}
+.dvlRiskBadge.notional{display:inline-block;background:rgba(244,185,66,.16);color:#f4b942;border:1px solid rgba(244,185,66,.42)}
+.dvlRiskBadge.lotcap{display:inline-block;background:rgba(130,158,255,.16);color:#8ea6ff;border:1px solid rgba(130,158,255,.42)}
+.dvlRiskBadge.invalid{display:inline-block;background:rgba(255,74,97,.16);color:#ff4a61;border:1px solid rgba(255,74,97,.42)}
+.dvlRiskBadge.costhigh.show{display:inline-block;background:rgba(255,74,97,.16);color:#ff4a61;border:1px solid rgba(255,74,97,.42)}
+.dvlRiskNetRow{margin-top:8px}
+.dvlRiskNetParams{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px}
+.dvlRiskCostShareVal.good{color:#13dc8d}.dvlRiskCostShareVal.warn{color:#f4b942}.dvlRiskCostShareVal.bad{color:#ff4a61}
 /* Beta 1.238 — Acesso mobile ao Risk Manager INLINE no cabeçalho do Trade Panel,
    ao lado do ✕ (sem adicionar altura → não empurra nem sobrepõe as linhas do
    painel). Problema anterior: o launcher (.dvlRiskLaunch) ficava no rodapé e no
