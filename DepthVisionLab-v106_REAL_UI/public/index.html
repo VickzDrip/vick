@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.356';
+window.DVL_APP_VERSION = 'Beta 1.357';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16299,6 +16299,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.357", note: "Risk Express — proporção no mobile ajustada: as linhas e labels do Entry/SL/TP estavam exageradas e se sobrepondo no celular. Reduzi as fontes (LOT de 18→12px no mobile, valores NET de 14→10px), afinei as linhas (entry 3,4→2px, SL/TP 3→1,5px), diminuí o padding/raio das caixas e juntei o preço do TP com o R:R numa linha só (caixa do TP passou de 3 pra 2 linhas). Agora os labels ficam compactos e não cobrem os candles nem a escala de preço. Só ajuste visual — cálculo, drag e sincronização com o painel inalterados." },
   { version: "Beta 1.356", note: "Risk Management Express — botão flutuante (🛡) no gráfico que, com um toque, plota Entry/SL/TP no ativo atual e mostra o LOTE líquido GRANDE na própria linha Entry, já com comissão, buffer, teto de notional e Net R:R. As três linhas continuam arrastáveis e recalculam lote/risco/comissões/TP líquido em tempo real. NÃO recria cálculo: chama a MESMA API do Risk Engine (1.355) que alimenta o painel completo — os valores são idênticos nos dois. Labels repaginados (maiores, com caixa de alto contraste): ENTRY|LOT|RISCO, SL|−$ NET, TP|+$ NET|1:1, e badges CAP/CUSTO ALTO/TP MANUAL/AJUSTE SL. Mini-toolbar compacta: BUY/SELL, chips de risco ($100/$250/$500/0,5%/1%), Net R:R ±, TP Auto/Manual, Copiar lote (toque no lote copia só o número), Reset e Fechar. Botão arrastável e com posição persistida; pressão longa abre o painel completo. Só planejamento/cópia — nunca envia ordem. Cenário de referência do spec valida lote 2.740 e risco líquido US$315,90. Replay Pro e demais módulos intactos. Só frontend." },
   { version: "Beta 1.355", note: "Risk Engine — modo 'Net R:R (fees included)'. O TP automático deixou de ser 1:1 BRUTO (que a comissão da CFT depois comia) e passou a ser 1:1 LÍQUIDO: o alvo já embute a comissão de entrada e saída (0,0325%/lado) + buffer de execução, então um 1:1 vira 1:1 financeiro de verdade. Novidades: teto de NOTIONAL (padrão $175.000) que limita o lote com o badge NOTIONAL CAPPED; badges de status (RISK BASED / NOTIONAL CAPPED / LOT CAPPED / COST HIGH / INVALID); eficiência de custo (verde ≤20%, amarelo ≤25%, vermelho >25%); TP bruto vs TP líquido lado a lado; buffer de execução e Net R:R alvo editáveis. Preset data-driven 'CFT Break 50K — BTC MT5/Match' (registro central DVL_PROP_RISK_PRESETS: risco $300, net R:R 1, notional máx $175k, buffer $0). O lote continua arredondado SEMPRE para baixo e nunca ultrapassa o notional. O modo antigo (bruto/priceOnly) segue disponível. Replay Pro, scanner e demais módulos intactos. Só frontend." },
   { version: "Beta 1.354", note: "DVL Bubbles — motor de MESCLA de aglomerados. Quando muitas bolhas caíam na mesma região (mesmo preço + tempo), elas se sobrepunham e viravam um borrão ilegível. Agora um motor agrupa as bolhas que ficariam coladas numa só, SOMANDO o fluxo real (compra/venda, volume e nº de execuções) — o que faz sentido: uma rajada de prints no mesmo nível já é um único evento de agressão/absorção. É greedy ancorado no MAIOR print da região e acelerado por grade de pixels (barato e estável no pan/zoom). A bolha mesclada ganha um halo fininho concêntrico pra indicar que é um cluster, e o tooltip mostra o fluxo somado. Dois controles novos no painel: 'Mesclar aglomerados' (liga/desliga) e 'Força da mescla' (o quão perto elas precisam estar pra juntar). Ligado por padrão. Só frontend." },
@@ -42067,16 +42068,17 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
   function roundRectPath(ctx,x,y,w,h,radius){ var rr=Math.min(radius,h/2,w/2); ctx.beginPath(); ctx.moveTo(x+rr,y); ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr); ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath(); }
   /* Beta 1.356 — caixa de label grande (LOT/NET/R:R + badges) desenhada à esquerda da escala. */
   function drawLabelBox(ctx, rightX, yy, r, alpha){
-    var padX=7, padY=4, gap=2, li, ln, maxW=0, totalH=padY*2, metrics=[];
+    var _mob=false; try{ _mob=window.innerWidth<=760; }catch(_){}
+    var padX=_mob?5:6, padY=_mob?3:3.5, gap=1.5, bfs=_mob?7.5:8.5, li, ln, maxW=0, totalH=padY*2, metrics=[];
     for(li=0; li<r.lines.length; li++){ ln=r.lines[li]; ctx.font=(ln.strong?"800 ":"700 ")+ln.s+"px system-ui"; var w=ctx.measureText(ln.t).width; metrics.push({t:ln.t,s:ln.s,strong:ln.strong}); if(w>maxW)maxW=w; totalH+=ln.s+(li>0?gap:0); }
     var badgeTxt=(r.badges&&r.badges.length)?r.badges.join(" · "):"";
-    if(badgeTxt){ ctx.font="800 9px system-ui"; var bw=ctx.measureText(badgeTxt).width; if(bw>maxW)maxW=bw; totalH+=9+gap+2; }
+    if(badgeTxt){ ctx.font="800 "+bfs+"px system-ui"; var bw=ctx.measureText(badgeTxt).width; if(bw>maxW)maxW=bw; totalH+=bfs+gap+1; }
     var boxW=maxW+padX*2, boxH=totalH, bx=rightX-boxW, by=yy-boxH/2;
-    ctx.globalAlpha=alpha*0.92; roundRectPath(ctx,bx,by,boxW,boxH,6); ctx.fillStyle="rgba(6,12,18,0.92)"; ctx.fill();
-    ctx.lineWidth=1.4; ctx.strokeStyle=r.color; ctx.globalAlpha=alpha; ctx.stroke();
+    ctx.globalAlpha=alpha*0.9; roundRectPath(ctx,bx,by,boxW,boxH,5); ctx.fillStyle="rgba(6,12,18,0.9)"; ctx.fill();
+    ctx.lineWidth=1.1; ctx.strokeStyle=r.color; ctx.globalAlpha=alpha; ctx.stroke();
     var ty=by+padY; ctx.textAlign="left"; ctx.textBaseline="top";
     for(li=0; li<metrics.length; li++){ var m=metrics[li]; ctx.font=(m.strong?"800 ":"700 ")+m.s+"px system-ui"; ctx.fillStyle=m.strong?"#ffffff":r.color; ctx.globalAlpha=alpha*(m.strong?1:0.95); ctx.fillText(m.t, bx+padX, ty); ty+=m.s+gap; }
-    if(badgeTxt){ ctx.font="800 9px system-ui"; ctx.fillStyle=r.color; ctx.globalAlpha=alpha*0.92; ctx.fillText(badgeTxt, bx+padX, ty); }
+    if(badgeTxt){ ctx.font="800 "+bfs+"px system-ui"; ctx.fillStyle=r.color; ctx.globalAlpha=alpha*0.9; ctx.fillText(badgeTxt, bx+padX, ty); }
     ctx.globalAlpha=alpha;
   }
 
@@ -42099,18 +42101,17 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
     var tBadges=[]; if(plan.tpManual) tBadges.push("MANUAL");
     var rows = [
       { f:"entry", price:plan.entry, color:COLORS.entry, solid:true, badges:eBadges, lines:[
-        {t:"ENTRY "+fmtP(plan.entry), s:mob?11:10.5},
-        {t:"LOT "+lotTxt, s:mob?18:16, strong:true},
-        {t:"RISCO "+moneyAbs(plan.netLoss!=null?plan.netLoss:plan.actualRisk), s:mob?12:11}
+        {t:"ENTRY "+fmtP(plan.entry), s:mob?8.5:9.5},
+        {t:"LOT "+lotTxt, s:mob?12:13, strong:true},
+        {t:"RISCO "+moneyAbs(plan.netLoss!=null?plan.netLoss:plan.actualRisk), s:mob?8.5:9.5}
       ]},
       { f:"tp", price:plan.tp, color:COLORS.tp, solid:false, badges:tBadges, lines:[
-        {t:"TP "+fmtP(plan.tp), s:mob?11:10.5},
-        {t:(plan.netProfit!=null?"+"+moneyAbs(plan.netProfit):"--")+" NET", s:mob?14:13, strong:true},
-        {t:"1:"+(plan.netRR!=null?Number(plan.netRR).toFixed(2):"--"), s:mob?11:10.5}
+        {t:"TP "+fmtP(plan.tp)+"  1:"+(plan.netRR!=null?Number(plan.netRR).toFixed(2):"--"), s:mob?8.5:9.5},
+        {t:(plan.netProfit!=null?"+"+moneyAbs(plan.netProfit):"--")+" NET", s:mob?10:11, strong:true}
       ]},
       { f:"stop", price:plan.stop, color:COLORS.stop, solid:false, badges:[], lines:[
-        {t:"SL "+fmtP(plan.stop), s:mob?11:10.5},
-        {t:"-"+moneyAbs(plan.netLoss!=null?plan.netLoss:plan.actualRisk)+" NET", s:mob?14:13, strong:true}
+        {t:"SL "+fmtP(plan.stop), s:mob?8.5:9.5},
+        {t:"-"+moneyAbs(plan.netLoss!=null?plan.netLoss:plan.actualRisk)+" NET", s:mob?10:11, strong:true}
       ]}
     ];
     ctx.save();
@@ -42120,8 +42121,8 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
       var yy = y(r.price); if(!Number.isFinite(yy)) continue;
       ctx.globalAlpha = alpha*(plan.valid?0.95:0.7);
       ctx.strokeStyle = r.color;
-      ctx.lineWidth = r.solid ? (mob?3.4:3) : (mob?3:2.4);
-      ctx.setLineDash(r.solid ? [] : [7,5]);
+      ctx.lineWidth = r.solid ? (mob?2:2.2) : (mob?1.5:1.8);
+      ctx.setLineDash(r.solid ? [] : [6,4]);
       ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke();
       ctx.setLineDash([]);
       drawLabelBox(ctx, x1-5, yy, r, alpha);
