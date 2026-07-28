@@ -210,7 +210,10 @@ function createServer() {
   /* DVL Bubbles history: ~2h of aggregated flow (1s-kline based) so the overlay
      starts populated. Server-side fetch avoids the browser's Binance geo-block. */
   app.get("/api/dvl/bubbles/history", async (req, res) => {
-    try { res.json(Object.assign({ ok: true }, await bubbleHistory.history(req.query.symbol, req.query.mins))); }
+    try {
+      const opts = { bucketMs: req.query.bucketMs, priceBucketTicks: req.query.priceBucketTicks, source: req.query.source };
+      res.json(Object.assign({ ok: true }, await bubbleHistory.history(req.query.symbol, req.query.mins, opts)));
+    }
     catch (e) { res.json({ ok: false, error: String(e && e.message || e), groups: [] }); }
   });
 

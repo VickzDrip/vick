@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.350';
+window.DVL_APP_VERSION = 'Beta 1.351';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16286,6 +16286,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.351", note: "DVL Bubbles — histórico agora usa aggTrades REAIS da Binance Futures (backend). A janela recente (~20 min) é agregada no servidor a partir dos negócios crus reais: bucket de tempo + faixa de preço por tickSize, lado agressor correto (comprador/vendedor via flag maker), dedup por aggId e contagem de execuções — contrato normalizado. O histórico mais antigo continua por klines de 1s (barato) pra cobrir até 2h sem puxar milhões de trades. O overlay abre populado com dados reais e segue no feed ao vivo por cima (sem duplicar). O endpoint aceita bucketMs e priceBucketTicks. Backend (bubbleHistory.js) — sem mudança de comportamento no frontend. (Escopo do live via WebSocket same-origin fica pra um passo futuro; o live atual continua via aggTrade do navegador.)" },
   { version: "Beta 1.350", note: "Hollow Candles — candles de VENDA agora também ficam ocos (hollow), igual aos de compra. Antes só o candle comprador ficava vazado; o vendedor era sólido. Agora ambos mostram o corpo vazio com a borda na cor direcional (verde compra / vermelho venda) e pavios na cor direcional. Dojis/corpos minúsculos mantêm ao menos uma borda visível. Modos Normal e Footprint inalterados; cores customizadas preservadas. Só frontend." },
   { version: "Beta 1.349", note: "DVL GEX Levels — o badge de regime agora mostra o VALOR do Net GEX com sinal (ex.: 'G+ · REJEIÇÃO · +34.7M' ou 'G− · EXPANSÃO · −12.3M'), formatado em K/M/B. Só frontend." },
   { version: "Beta 1.348", note: "DVL GEX Levels — integração backend same-origin. O overlay agora busca os níveis (Flip · Max Pain · faixa 1D · Net GEX) por uma rota do próprio DVL (/api/dvl/gex-levels?asset=BTC|ETH|SOL) que faz o proxy server-side pro GEX Monitor, normaliza a resposta (contrato estável com stale/availability), usa cache por ativo e nunca expõe chave no cliente. Prioridade: (1) backend do DVL → (2) API direta (fallback) → (3) valores manuais. Sem CORS, sem reload, stale-while-revalidate. Além disso, os fundos do Theme Studio foram reencodados de PNG (36MB) para WebP (1,6MB) — mesmas imagens, arquivo ~5MB (era 39MB) pra não sobrecarregar o servidor. Nenhum outro módulo alterado. Backend: novo src/gexLevels.js + rota no server.js." },
