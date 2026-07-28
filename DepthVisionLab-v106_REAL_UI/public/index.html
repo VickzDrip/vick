@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.353';
+window.DVL_APP_VERSION = 'Beta 1.354';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16286,6 +16286,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.354", note: "DVL Bubbles — motor de MESCLA de aglomerados. Quando muitas bolhas caíam na mesma região (mesmo preço + tempo), elas se sobrepunham e viravam um borrão ilegível. Agora um motor agrupa as bolhas que ficariam coladas numa só, SOMANDO o fluxo real (compra/venda, volume e nº de execuções) — o que faz sentido: uma rajada de prints no mesmo nível já é um único evento de agressão/absorção. É greedy ancorado no MAIOR print da região e acelerado por grade de pixels (barato e estável no pan/zoom). A bolha mesclada ganha um halo fininho concêntrico pra indicar que é um cluster, e o tooltip mostra o fluxo somado. Dois controles novos no painel: 'Mesclar aglomerados' (liga/desliga) e 'Força da mescla' (o quão perto elas precisam estar pra juntar). Ligado por padrão. Só frontend." },
   { version: "Beta 1.353", note: "Fix — a notificação de 'salvo' (toast) aparecia ATRÁS da barra de timeline do Replay. O toast tinha z-index 40 e a barra 45, então a barra cobria o aviso quando os dois se sobrepunham embaixo. Subi o z-index do toast pra ficar acima da barra de timeline (e também acima dos painéis de config), então a notificação fica sempre visível. Só frontend." },
   { version: "Beta 1.352", note: "DVL Bubbles — visual repaginado (estilo Tape Aggression): bolhas com tracinhos de preço (rastros) e agora SOBREPOSTAS aos candles em vez de atrás deles — o hook de desenho passou a rodar DEPOIS do render dos corpos/pavios das velas, então as bolhas ficam sempre visíveis por cima. O painel de ajustes ganhou controles numéricos '− valor +' (mais fáceis no mobile) pros parâmetros de sensibilidade/tamanho/rastro. Consome o mesmo histórico de aggTrades reais do backend (1.351). Só frontend." },
   { version: "Beta 1.351", note: "DVL Bubbles — histórico agora usa aggTrades REAIS da Binance Futures (backend). A janela recente (~20 min) é agregada no servidor a partir dos negócios crus reais: bucket de tempo + faixa de preço por tickSize, lado agressor correto (comprador/vendedor via flag maker), dedup por aggId e contagem de execuções — contrato normalizado. O histórico mais antigo continua por klines de 1s (barato) pra cobrir até 2h sem puxar milhões de trades. O overlay abre populado com dados reais e segue no feed ao vivo por cima (sem duplicar). O endpoint aceita bucketMs e priceBucketTicks. Backend (bubbleHistory.js) — sem mudança de comportamento no frontend. (Escopo do live via WebSocket same-origin fica pra um passo futuro; o live atual continua via aggTrade do navegador.)" },
@@ -79645,6 +79646,7 @@ window.DVL_DOM_CROSSHAIR_1205={
     grouping:"auto", timeWindow:400, priceBucketMode:"auto", priceBucket:0,
     scale:"sqrt", minSize:6, maxSize:36, opacity:0.72,
     outlineWidth:1.6, traces:true, traceLen:18,
+    merge:true, mergeTight:0.85,
     zones:false, labels:true, bubble3d:false
   };
   var st=(function(){
@@ -79819,6 +79821,76 @@ window.DVL_DOM_CROSSHAIR_1205={
   /* ── desenho overlay (chamado pela draw() do app via DVLBubblesDraw) ── */
   var hitList=[];   // {x,y,r,g}
   function bsearchTime(view,t){ var lo=0,hi=view.length-1,ans=-1; while(lo<=hi){ var m=(lo+hi)>>1; if(+view[m].time<=t){ans=m;lo=m+1;}else hi=m-1;} return ans; }
+
+  /* ── MOTOR DE MESCLA (coalesce) ─────────────────────────────────────────────
+     Quando muitas bolhas caem na MESMA região da tela (mesmo preço+tempo), elas
+     se sobrepõem e viram um borrão ilegível. Este motor agrupa as bolhas que
+     ficariam coladas numa só — SOMANDO o fluxo real (buyN/sellN/qty/execuções).
+     Isso "faz sentido": uma rajada de prints no mesmo nível JÁ é um único evento
+     de agressão/absorção; a mescla só usa um bucket mais grosso quando há
+     aglomeração. Greedy ancorado no MAIOR print (semente), acelerado por grade
+     de pixels (só vizinhos 3×3), então é barato e estável no pan/zoom.
+     A bolha mesclada mantém a mesma forma dos campos de um grupo (o loop de
+     desenho e o tooltip consomem sem mudança) + flags _merged/_n. */
+  function coalesceBubbles(vis,o,thr){
+    var view=o.view, x=o.x, y=o.y, slotOffset=o.slotOffset||0;
+    if(!view||!view.length) return vis;
+    var vFirst=+view[0].time, vLast=+view[view.length-1].time;
+    /* scaleMax provisório (mesmo percentil do desenho) só p/ estimar o raio de mescla */
+    var sv=vis.map(function(q){return q.__sig;}).sort(function(a,b){return a-b;});
+    var provMax=sv[Math.min(sv.length-1,Math.floor((sv.length-1)*0.92))]||1;
+    if(!(provMax>thr)) provMax=thr+1;
+    var tight=Math.max(0.3,Math.min(1.6,+st.mergeTight||0.85));
+    var cell=Math.max(10,(+st.maxSize||36)*tight);   // grade cobre a maior dist. de mescla em ±1 célula
+    var items=[], i, G, t, vi, px, price, cndl, lo, hi, py, r;
+    for(i=0;i<vis.length;i++){
+      G=vis[i];
+      t=G.firstTs;
+      if(t<=vFirst) vi=0; else if(t>=vLast) vi=view.length-1; else { vi=bsearchTime(view,t); if(vi<0) vi=0; }
+      px=x(slotOffset+vi);
+      price=G.pxQty/(G.qty||1);
+      cndl=view[vi];
+      if(cndl){ lo=+cndl.low; hi=+cndl.high; if(isFinite(lo)&&isFinite(hi)&&hi>=lo){ if(price<lo)price=lo; else if(price>hi)price=hi; } }
+      py=y(price);
+      r=radiusFor(G.__sig,provMax,thr);
+      items.push({px:px,py:py,r:r,G:G,used:false});
+    }
+    items.sort(function(a,b){ return b.G.__sig-a.G.__sig; });   // sementes = maiores primeiro
+    var grid={}, cx, cy, k;
+    for(k=0;k<items.length;k++){ var it=items[k]; cx=Math.floor(it.px/cell); cy=Math.floor(it.py/cell); var kk=cx+"|"+cy; (grid[kk]||(grid[kk]=[])).push(it); }
+    var out=[], s;
+    for(s=0;s<items.length;s++){
+      var seed=items[s]; if(seed.used) continue; seed.used=true;
+      var g0=seed.G;
+      var acc={ key:g0.key, firstTs:g0.firstTs, lastTs:g0.lastTs||g0.firstTs,
+        buyN:g0.buyN, sellN:g0.sellN, buyQ:g0.buyQ||0, sellQ:g0.sellQ||0,
+        qty:g0.qty||0, pxQty:g0.pxQty||0, rawCount:g0.rawCount||0, maxSingle:g0.maxSingle||0,
+        priceMin:g0.priceMin, priceMax:g0.priceMax, _n:1 };
+      var cx0=Math.floor(seed.px/cell), cy0=Math.floor(seed.py/cell);
+      var mergeDist=Math.max(seed.r*tight, cell*0.5), md2=mergeDist*mergeDist;
+      var gx, gy;
+      for(gx=cx0-1;gx<=cx0+1;gx++) for(gy=cy0-1;gy<=cy0+1;gy++){
+        var bucket=grid[gx+"|"+gy]; if(!bucket) continue;
+        for(var b=0;b<bucket.length;b++){
+          var it2=bucket[b]; if(it2.used) continue;
+          var dx=it2.px-seed.px, dy=it2.py-seed.py;
+          if(dx*dx+dy*dy>md2) continue;
+          it2.used=true; var g2=it2.G;
+          acc.buyN+=g2.buyN; acc.sellN+=g2.sellN; acc.buyQ+=g2.buyQ||0; acc.sellQ+=g2.sellQ||0;
+          acc.qty+=g2.qty||0; acc.pxQty+=g2.pxQty||0; acc.rawCount+=g2.rawCount||0;
+          if((g2.maxSingle||0)>acc.maxSingle) acc.maxSingle=g2.maxSingle||0;
+          if(g2.priceMin<acc.priceMin) acc.priceMin=g2.priceMin;
+          if(g2.priceMax>acc.priceMax) acc.priceMax=g2.priceMax;
+          if((g2.lastTs||g2.firstTs)>acc.lastTs) acc.lastTs=g2.lastTs||g2.firstTs;
+          acc._n++;
+        }
+      }
+      acc._merged=acc._n>1;
+      acc.__sig = st.mode==="big" ? Math.max(acc.buyN,acc.sellN) : (acc.buyN+acc.sellN);
+      out.push(acc);
+    }
+    return out;
+  }
   function drawOverlay(ctx,o){
     hitList.length=0;
     if(!st.on) return;
@@ -79846,6 +79918,8 @@ window.DVL_DOM_CROSSHAIR_1205={
     var thr = st.filterMode==="manual" ? Math.max(0,+st.minNotional||0) : autoThreshold();
     var vis=[], visMax=0;
     for(var k2=0;k2<inRange.length;k2++){ var gg=inRange[k2]; if(gg.__sig<thr) continue; vis.push(gg); if(gg.__sig>visMax) visMax=gg.__sig; }
+    /* MESCLA: junta bolhas que ficariam coladas na tela numa só (fluxo somado). */
+    if(st.merge && vis.length>1){ vis=coalesceBubbles(vis,o,thr); visMax=0; for(var mv=0;mv<vis.length;mv++){ if(vis[mv].__sig>visMax) visMax=vis[mv].__sig; } }
     /* se exceder o limite de render, mantém as MAIORES (seleção estável por tamanho),
        não as "primeiras 600" (que mudavam conforme o pan) → sem sumiço/reaparecimento. */
     if(vis.length>600){ vis.sort(function(a,b){return b.__sig-a.__sig;}); vis.length=600; }
@@ -79928,6 +80002,9 @@ window.DVL_DOM_CROSSHAIR_1205={
         else if(conc>=0.5){ fillCircle(ctx,px,py,r,rgbaHex(c3,op)); }                   // concentrado (poucos grandes)
         else { strokeCircle(ctx,px,py,r,rgbaHex(c3,Math.min(1,op+0.2)),1.6); }          // vazio (muitos pequenos)
       }
+
+      /* aglomerado mesclado → halo concêntrico fininho sinaliza "isto é um cluster". */
+      if(G._merged && r>=7){ strokeCircle(ctx,px,py,r+2.6,rgbaHex(domSide==="buy"?buyC:sellC,Math.min(.45,op*.5)),1); }
 
       if(st.labels && r>=8){
         var bubbleText;
@@ -80050,6 +80127,8 @@ window.DVL_DOM_CROSSHAIR_1205={
       +(st.labels?seg("Número","labelMetric",[["notional","Nocional"],["delta","Delta"],["exec","Exec."]]):"")
       +(st.visualStyle==="tape"?sw("Traço curto de preço","traces"):"")
       +(st.visualStyle==="tape"&&st.traces?stepCtl("Comprimento traço","traceLen",st.traceLen,4,50,1,0):"")
+      +sw("Mesclar aglomerados","merge")
+      +(st.merge?stepCtl("Força da mescla","mergeTight",st.mergeTight,0.3,1.6,.05,2):"")
       +sw("Zonas horizontais","zones")
       +'<div class="dvl-bb-note"><b>Tape</b>: círculos verdes/vermelhos presos ao preço, tamanho pela força e número central. Sem neon. Deep Proxy continua estimado, pois dados públicos não são MBO real.</div>';
   }
@@ -80057,7 +80136,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   function bind(b){
     var pw=b.querySelector("[data-bbpower]"); if(pw) pw.addEventListener("change",function(){ window.DVL_BUBBLES_API.setOn(pw.checked); renderPanel(); });
     b.querySelectorAll("[data-bbseg]").forEach(function(el){ el.addEventListener("click",function(){ st[el.getAttribute("data-bbseg")]=el.getAttribute("data-val"); save(); renderPanel(); requestDraw(); }); });
-    b.querySelectorAll("[data-bbsw]").forEach(function(el){ el.addEventListener("change",function(){ st[el.getAttribute("data-bbsw")]=el.checked; save(); requestDraw(); }); });
+    b.querySelectorAll("[data-bbsw]").forEach(function(el){ el.addEventListener("change",function(){ st[el.getAttribute("data-bbsw")]=el.checked; save(); renderPanel(); requestDraw(); }); });
     b.querySelectorAll("[data-bbnum]").forEach(function(el){ el.addEventListener("input",function(){ st[el.getAttribute("data-bbnum")]=Number(el.value)||0; save(); requestDraw(); }); });
     b.querySelectorAll("[data-bbrng]").forEach(function(el){ el.addEventListener("input",function(){ var sc=+el.getAttribute("data-scale")||1, unit=el.getAttribute("data-unit")||"", key=el.getAttribute("data-bbrng"), v=Number(el.value); st[key]=sc>1?v/sc:v; var lab=b.querySelector('[data-bbrngval="'+key+'"]'); if(lab) lab.textContent=v+unit; save(); requestDraw(); }); });
     function applyStep(id,v){
