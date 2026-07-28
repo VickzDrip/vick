@@ -186,7 +186,16 @@ async function history(symbol, mins, opts) {
   } catch (_) {}
   if (aggFrom > from) { try { oldGroups = await klineGroups(symbol, from, aggFrom - 1); } catch (_) {} }
 
-  const groups = oldGroups.concat(aggGroups).sort((a, b) => a.ts - b.ts);
+  let groups = oldGroups.concat(aggGroups);
+  // teto seguro de payload: se muito grande, mantém os MAIS SIGNIFICATIVOS por nocional
+  const GROUP_CAP = 6000, EVENT_CAP = 3500;
+  if (groups.length > GROUP_CAP) {
+    groups = groups.slice().sort((a, b) => (b.buyN + b.sellN) - (a.buyN + a.sellN)).slice(0, GROUP_CAP);
+  }
+  groups.sort((a, b) => a.ts - b.ts);
+  if (aggEvents.length > EVENT_CAP) {
+    aggEvents = aggEvents.slice().sort((a, b) => b.totalNotional - a.totalNotional).slice(0, EVENT_CAP).sort((a, b) => a.eventTime - b.eventTime);
+  }
   const data = {
     ok: true, symbol, source: aggGroups.length ? aggSource : "spot_1s_klines",
     generatedAt: now, from, to, tickSize, bucketMs, priceBucketTicks,
