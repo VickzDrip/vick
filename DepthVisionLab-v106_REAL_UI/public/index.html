@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.351';
+window.DVL_APP_VERSION = 'Beta 1.352';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16286,6 +16286,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.352", note: "DVL Bubbles — visual repaginado (estilo Tape Aggression): bolhas com tracinhos de preço (rastros) e agora SOBREPOSTAS aos candles em vez de atrás deles — o hook de desenho passou a rodar DEPOIS do render dos corpos/pavios das velas, então as bolhas ficam sempre visíveis por cima. O painel de ajustes ganhou controles numéricos '− valor +' (mais fáceis no mobile) pros parâmetros de sensibilidade/tamanho/rastro. Consome o mesmo histórico de aggTrades reais do backend (1.351). Só frontend." },
   { version: "Beta 1.351", note: "DVL Bubbles — histórico agora usa aggTrades REAIS da Binance Futures (backend). A janela recente (~20 min) é agregada no servidor a partir dos negócios crus reais: bucket de tempo + faixa de preço por tickSize, lado agressor correto (comprador/vendedor via flag maker), dedup por aggId e contagem de execuções — contrato normalizado. O histórico mais antigo continua por klines de 1s (barato) pra cobrir até 2h sem puxar milhões de trades. O overlay abre populado com dados reais e segue no feed ao vivo por cima (sem duplicar). O endpoint aceita bucketMs e priceBucketTicks. Backend (bubbleHistory.js) — sem mudança de comportamento no frontend. (Escopo do live via WebSocket same-origin fica pra um passo futuro; o live atual continua via aggTrade do navegador.)" },
   { version: "Beta 1.350", note: "Hollow Candles — candles de VENDA agora também ficam ocos (hollow), igual aos de compra. Antes só o candle comprador ficava vazado; o vendedor era sólido. Agora ambos mostram o corpo vazio com a borda na cor direcional (verde compra / vermelho venda) e pavios na cor direcional. Dojis/corpos minúsculos mantêm ao menos uma borda visível. Modos Normal e Footprint inalterados; cores customizadas preservadas. Só frontend." },
   { version: "Beta 1.349", note: "DVL GEX Levels — o badge de regime agora mostra o VALOR do Net GEX com sinal (ex.: 'G+ · REJEIÇÃO · +34.7M' ou 'G− · EXPANSÃO · −12.3M'), formatado em K/M/B. Só frontend." },
@@ -21400,9 +21401,8 @@ if(window.DVLSpikeZonesDraw){
     try{window.DVLFvgFirewallDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,priceBottom,priceH});}catch(_dvlFvg_e){}
   }
 
-  if(window.DVLBubblesDraw){
-    try{window.DVLBubblesDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,priceBottom,priceH});}catch(_dvlBub_e){}
-  }
+  /* Bubbles movido p/ DEPOIS do render das velas (ver abaixo) — usuário quer os
+     bubbles SOBREPOSTOS aos candles, não atrás deles. */
   /* mapping p/ o Replay Pro converter clique → candle (seletor de início) */
   try{ window.__DVL_DRAWCFG={x0:x0,x1:x1,y0:y0,y1:y1,slotOffset:slotOffset,totalSlots:(win&&win.totalSlots)||0,view:view}; }catch(_dvlCfg_e){}
   /* linha vertical de início do Replay (+ escurecido do futuro) */
@@ -21575,6 +21575,12 @@ if(window.DVLSpikeZonesDraw){
      de centenas). lineWidth 1.2 (igual ao inline antigo). */
   ctx.lineWidth = 1.2;
   _wickPaths.forEach((p, c)=>{ ctx.strokeStyle = c; ctx.stroke(p); });
+
+  /* DVL Bubbles — desenhado AQUI, DEPOIS dos corpos/pavios das velas, pra ficar
+     SOBREPOSTO aos candles (requisito do usuário). */
+  if(window.DVLBubblesDraw){
+    try{window.DVLBubblesDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,priceBottom,priceH});}catch(_dvlBub_e){}
+  }
 
   /* Beta 1.190 — triângulos de COMPRA/VENDA dos "vzinhos" do RSI de exaustão.
      Só quando o Exhaustion RSI está ligado. Os sinais (pivôs do RSI nas zonas)
@@ -79603,8 +79609,8 @@ window.DVL_DOM_CROSSHAIR_1205={
 /* Beta 1.276 — DVL Bubbles: tokens de cor (integra com o Theme Studio; o remapeador
    de tema reconhece verde→accent, mas aqui buy/sell têm tokens próprios). */
 :root{
-  --dvl-bubble-buy:#12b8ff;      /* compra agressiva no Ask */
-  --dvl-bubble-sell:#ff4d7d;     /* venda agressiva no Bid  */
+  --dvl-bubble-buy:#18d978;      /* compra agressiva no Ask */
+  --dvl-bubble-sell:#ff4058;     /* venda agressiva no Bid  */
   --dvl-bubble-absorption:#f4b942;
   --dvl-bubble-battle:#b370ff;
 }
@@ -79618,6 +79624,7 @@ window.DVL_DOM_CROSSHAIR_1205={
 .dvl-bb-rng{ display:flex; align-items:center; gap:8px; flex:1; justify-content:flex-end; }
 .dvl-bb-rng input[type=range]{ width:140px; }
 .dvl-bb-rng b{ font-size:11px; color:#dcebe4; min-width:34px; text-align:right; }
+.dvl-bb-note{font-size:9.5px;color:#7f9c8e;line-height:1.45;margin-top:7px;padding:7px 8px;border:1px solid rgba(129,166,151,.13);border-radius:9px;background:rgba(4,12,10,.22)}
 </style>
 <script id="DVL_BUBBLES_1276">
 /* ── DVL BUBBLES — indicador overlay nativo (Big Trades · Volume Bubbles · Deep Proxy)
@@ -79632,13 +79639,23 @@ window.DVL_DOM_CROSSHAIR_1205={
 
   var LS="dvl.indicator.bubbles.v1";
   var DEF={
-    on:false, mode:"big", bubbleMode:"split",
+    on:false, mode:"big", bubbleMode:"split", visualStyle:"tape", labelMetric:"notional",
     filterMode:"auto", intensity:"medium", minNotional:50000,
     grouping:"auto", timeWindow:400, priceBucketMode:"auto", priceBucket:0,
-    scale:"sqrt", minSize:5, maxSize:34, opacity:0.78,
-    zones:false, labels:false, bubble3d:false
+    scale:"sqrt", minSize:6, maxSize:36, opacity:0.72,
+    outlineWidth:1.6, traces:true, traceLen:18,
+    zones:false, labels:true, bubble3d:false
   };
-  var st=(function(){ try{ var s=JSON.parse(localStorage.getItem(LS)||"{}"); var o={}; for(var k in DEF) o[k]=(s&&k in s)?s[k]:DEF[k]; return o; }catch(_){ var d={}; for(var k2 in DEF) d[k2]=DEF[k2]; return d; } })();
+  var st=(function(){
+    try{
+      var saved=JSON.parse(localStorage.getItem(LS)||"{}")||{}, o={};
+      for(var k in DEF) o[k]=(k in saved)?saved[k]:DEF[k];
+      /* Migração visual única: configurações antigas ganham o preset Tape sem apagar
+         filtro, agrupamento, tamanho e estado ON/OFF que o usuário já tinha. */
+      if(!("visualStyle" in saved)){ o.visualStyle="tape"; o.labels=true; o.traces=true; }
+      return o;
+    }catch(_){ var d={}; for(var k2 in DEF) d[k2]=DEF[k2]; return d; }
+  })();
   var saveT=0; function save(){ clearTimeout(saveT); saveT=setTimeout(function(){ try{ localStorage.setItem(LS,JSON.stringify(st)); }catch(_){} },140); updateItem(); }
   function reset(){ for(var k in DEF) st[k]=DEF[k]; try{ localStorage.setItem(LS,JSON.stringify(st)); }catch(_){} updateItem(); if(panel) renderPanel(); requestDraw(); }
 
@@ -79671,6 +79688,7 @@ window.DVL_DOM_CROSSHAIR_1205={
 
   /* API pública do módulo (spec §5.1) */
   window.DVL_BUBBLES={
+    version:"1.348",
     get enabled(){ return !!st.on; }, get mode(){ return st.mode; }, get bubbleMode(){ return st.bubbleMode; },
     get trades(){ return raw; }, get groups(){ return groups; }, get settings(){ return st; },
     ingestTrade:function(t){
@@ -79783,12 +79801,13 @@ window.DVL_DOM_CROSSHAIR_1205={
   }
 
   /* ── escala visual (spec §9) ── */
-  function radiusFor(notional, visMax){
-    var nrm=visMax>0?Math.max(0,Math.min(1,notional/visMax)):0, sc;
+  function radiusFor(notional, scaleMax, floorN){
+    var lo=Math.max(0,+floorN||0), hi=Math.max(lo+1,+scaleMax||0);
+    var nrm=Math.max(0,Math.min(1,(notional-lo)/(hi-lo))), sc;
     if(st.scale==="linear") sc=nrm; else if(st.scale==="log") sc=Math.log1p(nrm*9)/Math.log(10); else sc=Math.sqrt(nrm);
-    var mn=+st.minSize||5, mx=+st.maxSize||34;
+    var mn=+st.minSize||6, mx=+st.maxSize||36;
     var r=mn+(mx-mn)*sc;
-    if(window.innerWidth<=760) r=Math.min(r, mx*0.72);   // cap mobile p/ não tapar candles
+    if(window.innerWidth<=760) r=Math.min(r, mx*0.78);   // mantém leitura sem cobrir o candle inteiro
     return r;
   }
 
@@ -79831,6 +79850,11 @@ window.DVL_DOM_CROSSHAIR_1205={
     if(vis.length>600){ vis.sort(function(a,b){return b.__sig-a.__sig;}); vis.length=600; }
     _dbg.shown=vis.length;
     if(!vis.length) return;
+    /* Escala robusta: o maior print não achata todas as outras bolhas. O percentil 92
+       vira o tamanho máximo visual; eventos acima dele continuam capados no maxSize. */
+    var scaleVals=vis.map(function(q){return q.__sig;}).sort(function(a,b){return a-b;});
+    var scaleMax=scaleVals[Math.min(scaleVals.length-1,Math.floor((scaleVals.length-1)*0.92))]||visMax;
+    if(!(scaleMax>thr)) scaleMax=visMax||thr+1;
 
     ctx.save();
     ctx.globalAlpha=1;
@@ -79863,11 +79887,23 @@ window.DVL_DOM_CROSSHAIR_1205={
       var domN=Math.max(G.buyN,G.sellN), totN=G.buyN+G.sellN;
       var domSide=G.buyN>=G.sellN?"buy":"sell";
       var sig=st.mode==="big"?domN:totN;
-      var r=radiusFor(sig,visMax);
+      var r=radiusFor(sig,scaleMax,thr);
       if(r<1.5) continue;
       _dbg.drawn++;
 
-      if(st.mode==="big"){
+      if(st.visualStyle==="tape"){
+        /* Tape Aggression: círculo puro como no vídeo. Cor = lado dominante,
+           tamanho = magnitude, transparência = dominância. Sem glow/shadow. */
+        var tapeC=domSide==="buy"?buyC:sellC;
+        var domFrac=totN>0?domN/totN:1;
+        if(st.traces){
+          ctx.beginPath(); ctx.moveTo(px+r*.55,py+.5); ctx.lineTo(px+r+Math.max(4,+st.traceLen||18),py+.5);
+          ctx.strokeStyle=rgbaHex(tapeC,Math.min(.9,op*(.48+.35*domFrac))); ctx.lineWidth=1; ctx.stroke();
+        }
+        fillCircle(ctx,px,py,r,rgbaHex(tapeC,op*(.62+.38*domFrac)));
+        strokeCircle(ctx,px,py,r,rgbaHex(tapeC,Math.min(1,op+.24)),Math.max(.5,+st.outlineWidth||1.6));
+        if(r>=16){ strokeCircle(ctx,px,py,r-2.2,"rgba(255,255,255,0.16)",.7); }
+      } else if(st.mode==="big"){
         var c=domSide==="buy"?buyC:sellC;
         fillCircle(ctx,px,py,r,rgbaHex(c,op)); strokeCircle(ctx,px,py,r,rgbaHex(c,Math.min(1,op+0.2)),1);
       } else if(st.mode==="volume"){
@@ -79892,9 +79928,15 @@ window.DVL_DOM_CROSSHAIR_1205={
         else { strokeCircle(ctx,px,py,r,rgbaHex(c3,Math.min(1,op+0.2)),1.6); }          // vazio (muitos pequenos)
       }
 
-      if(st.labels && r>=13){
-        ctx.fillStyle="rgba(240,246,255,0.92)";
-        ctx.fillText(fmtNotional(sig), px, py);
+      if(st.labels && r>=8){
+        var bubbleText;
+        if(st.labelMetric==="exec") bubbleText=String(Math.max(1,Math.round(G.rawCount||1)));
+        else if(st.labelMetric==="delta") bubbleText=fmtBubbleNumber(Math.abs(G.buyN-G.sellN));
+        else bubbleText=fmtBubbleNumber(sig);
+        var fsz=Math.max(8,Math.min(11,Math.round(r*.52)));
+        ctx.font="850 "+fsz+"px -apple-system,Segoe UI,Roboto,sans-serif";
+        ctx.lineWidth=2.2; ctx.strokeStyle="rgba(0,0,0,0.52)"; ctx.strokeText(bubbleText,px,py+.2);
+        ctx.fillStyle="rgba(255,255,255,0.96)"; ctx.fillText(bubbleText,px,py+.2);
       }
       hitList.push({x:px,y:py,r:r,g:G,side:domSide,sig:sig});
     }
@@ -79939,6 +79981,9 @@ window.DVL_DOM_CROSSHAIR_1205={
   function drawSquare(ctx,cx,cy,r,fill){ var s=r*1.6; ctx.fillStyle=fill; ctx.fillRect(cx-s/2,cy-s/2,s,s); ctx.lineWidth=1; ctx.strokeStyle="rgba(255,255,255,0.3)"; ctx.strokeRect(cx-s/2,cy-s/2,s,s); }
   function drawDiamond(ctx,cx,cy,r,fill){ ctx.beginPath(); ctx.moveTo(cx,cy-r); ctx.lineTo(cx+r,cy); ctx.lineTo(cx,cy+r); ctx.lineTo(cx-r,cy); ctx.closePath(); ctx.fillStyle=fill; ctx.fill(); ctx.lineWidth=1; ctx.strokeStyle="rgba(255,255,255,0.3)"; ctx.stroke(); }
   function fmtNotional(v){ v=+v||0; if(v>=1e9) return (v/1e9).toFixed(1)+"B"; if(v>=1e6) return (v/1e6).toFixed(1)+"M"; if(v>=1e3) return (v/1e3).toFixed(0)+"K"; return String(Math.round(v)); }
+  /* Número curto sem sufixo, igual ao tape do vídeo: 35 = ~35K USDT,
+     1.2M vira 1.2M para não perder escala. O tooltip mantém o valor completo. */
+  function fmtBubbleNumber(v){ v=Math.abs(+v||0); if(v>=1e7)return (v/1e6).toFixed(0)+"M"; if(v>=1e6)return (v/1e6).toFixed(1)+"M"; if(v>=1000)return String(Math.max(1,Math.round(v/1000))); return String(Math.round(v)); }
   function hitAt(px,py){ for(var i=hitList.length-1;i>=0;i--){ var h=hitList[i]; var dx=px-h.x, dy=py-h.y; if(dx*dx+dy*dy<=(h.r+3)*(h.r+3)) return h; } return null; }
   window.DVLBubblesDraw=function(ctx,o){ try{ drawOverlay(ctx,o); }catch(_){} };
 
@@ -79946,7 +79991,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   var tip=null;
   function ensureTip(){ if(tip) return tip; tip=document.createElement("div"); tip.id="dvlBubblesTip"; tip.style.cssText="position:fixed;z-index:100030;pointer-events:none;display:none;background:rgba(6,16,20,.96);border:1px solid rgba(140,174,190,.28);border-radius:8px;padding:7px 9px;font:600 11px system-ui;color:#eaf4ef;box-shadow:0 8px 26px rgba(0,0,0,.5)"; document.body.appendChild(tip); return tip; }
   function showTip(h,cx,cy){ var t=ensureTip(); var G=h.g; var price=G.pxQty/(G.qty||1); var d=new Date(G.firstTs);
-    t.innerHTML='<div style="color:'+(h.side==="buy"?"var(--dvl-bubble-buy,#12b8ff)":"var(--dvl-bubble-sell,#ff4d7d)")+';font-weight:900">'+(h.side==="buy"?"COMPRA agressiva":"VENDA agressiva")+'</div>'
+    t.innerHTML='<div style="color:'+(h.side==="buy"?"var(--dvl-bubble-buy,#18d978)":"var(--dvl-bubble-sell,#ff4058)")+';font-weight:900">'+(h.side==="buy"?"COMPRA agressiva":"VENDA agressiva")+'</div>'
       +'<div>nocional <b>'+fmtNotional(h.sig)+'</b> · preço '+price.toFixed(price>100?1:4)+'</div>'
       +'<div style="color:#9fb3c8">buy '+fmtNotional(G.buyN)+' · sell '+fmtNotional(G.sellN)+' · '+G.rawCount+' exec</div>'
       +'<div style="color:#7f9c8e">'+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)+":"+("0"+d.getSeconds()).slice(-2)+'</div>';
@@ -79961,7 +80006,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   window.DVL_BUBBLES_API={ isOn:function(){return !!st.on;}, on:function(){return !!st.on;},
     setOn:function(v){ st.on=(v===undefined?!st.on:!!v); if(st.on){ curSym=gsym(); bindTip(); openFeed(); seedHistory(); } else { hideTip(); closeFeed(); } save(); requestDraw(); },
     openPanel:function(){ openPanel(); }, open:function(){ openPanel(); }, refresh:requestDraw, getState:function(){var o={};for(var k in st)o[k]=st[k];return o;},
-    debug:function(){ return { on:st.on, mode:st.mode, curSym:curSym, appSym:gsym(), feedSrc:_feedSrc||"(conectando)", ownFeed:!!window.__DVL_BUB_OWN_FEED, seeded:_dbg.seeded, trades:_dbg.trades, rawLen:raw.length, groups:groups.length, drawCalls:_dbg.drawCalls, visibleGroups:_dbg.visibleGroups, passedFilter:_dbg.shown, drawnOnScreen:_dbg.drawn, offY:_dbg.skipY, offX:_dbg.skipX, secsSinceTrade:_dbg.lastTradeTs?Math.round((Date.now()-_dbg.lastTradeTs)/1000):null, secsSinceDraw:_dbg.lastDrawTs?Math.round((Date.now()-_dbg.lastDrawTs)/1000):null, drawFnPresent:typeof window.DVLBubblesDraw }; } };
+    debug:function(){ return { on:st.on, mode:st.mode, visualStyle:st.visualStyle, labelMetric:st.labelMetric, traces:st.traces, curSym:curSym, appSym:gsym(), feedSrc:_feedSrc||"(conectando)", ownFeed:!!window.__DVL_BUB_OWN_FEED, seeded:_dbg.seeded, trades:_dbg.trades, rawLen:raw.length, groups:groups.length, drawCalls:_dbg.drawCalls, visibleGroups:_dbg.visibleGroups, passedFilter:_dbg.shown, drawnOnScreen:_dbg.drawn, offY:_dbg.skipY, offX:_dbg.skipX, secsSinceTrade:_dbg.lastTradeTs?Math.round((Date.now()-_dbg.lastTradeTs)/1000):null, secsSinceDraw:_dbg.lastDrawTs?Math.round((Date.now()-_dbg.lastDrawTs)/1000):null, drawFnPresent:typeof window.DVLBubblesDraw }; } };
   try{ window.DVL_BUBBLES.debug = window.DVL_BUBBLES_API.debug; }catch(_){}   /* alias: DVL_BUBBLES.debug() também funciona */
 
   /* ── painel de config (shell padrão DVL) ── */
@@ -79971,6 +80016,10 @@ window.DVL_DOM_CROSSHAIR_1205={
   function sw(label,key){ return '<div class="dvl-bb-field"><label>'+label+'</label><label class="dvl-switch"><input type="checkbox" data-bbsw="'+key+'" '+(st[key]?"checked":"")+'><i></i><b></b></label></div>'; }
   function num(label,key,min,max,step){ return '<div class="dvl-bb-field"><label>'+label+'</label><input class="dvl-bb-num" type="number" data-bbnum="'+key+'" value="'+(st[key])+'" min="'+min+'" max="'+max+'" step="'+(step||1)+'"></div>'; }
   function rng(label,key,min,max,step,unit,scale){ scale=scale||1; unit=unit||""; var disp=scale>1?Math.round(st[key]*scale):st[key]; return '<div class="dvl-bb-field"><label>'+label+'</label><div class="dvl-bb-rng"><input type="range" data-bbrng="'+key+'" data-scale="'+scale+'" data-unit="'+unit+'" min="'+min+'" max="'+max+'" step="'+(step||1)+'" value="'+disp+'"><b data-bbrngval="'+key+'">'+disp+unit+'</b></div></div>'; }
+  function stepCtl(label,key,val,min,max,step,dec,suffix){
+    var shown=dec?(+val).toFixed(dec):String(Math.round(+val||0));
+    return '<div class="dvl-bb-field"><label>'+label+'</label><div class="dvl-feb-step-wrap"><button class="dvl-feb-step-btn dvl-feb-step-dec" type="button" data-id="bb_'+key+'" data-key="'+key+'" data-step="'+step+'" data-min="'+min+'" data-max="'+max+'" data-dec="'+dec+'" data-suffix="'+(suffix||'')+'">−</button><span class="dvl-feb-step-val" id="bb_'+key+'Val">'+shown+'</span><button class="dvl-feb-step-btn dvl-feb-step-inc" type="button" data-id="bb_'+key+'" data-key="'+key+'" data-step="'+step+'" data-min="'+min+'" data-max="'+max+'" data-dec="'+dec+'" data-suffix="'+(suffix||'')+'">+</button></div></div>';
+  }
   function statusLine(){
     if(!st.on) return '<span style="color:#f4b942">desligado — ligue no interruptor acima</span>';
     var src=_feedSrc?(" · fonte "+_feedSrc):" · conectando…";
@@ -79984,18 +80033,24 @@ window.DVL_DOM_CROSSHAIR_1205={
     var showBubbleMode = st.mode==="volume";
     return '<div class="dvl-bb-field" style="border-bottom:1px solid rgba(129,166,151,.16);padding-bottom:8px"><label>Indicador</label><label class="dvl-switch"><input type="checkbox" data-bbpower '+(st.on?"checked":"")+'><i></i><b></b></label></div>'
       +'<div style="font-size:10.5px;margin:2px 0 8px" id="dvlBubblesStatus">'+statusLine()+'</div>'
+      +seg("Visual","visualStyle",[["tape","Tape"],["dvl","DVL"]])
       +seg("Modo","mode",[["big","Big Trades"],["volume","Volume"],["deep","Deep Proxy"]])
-      +(showBubbleMode?seg("Bubble Mode","bubbleMode",[["split","Ask/Bid"],["delta","Delta"],["volume","Volume"]]):"")
+      +(showBubbleMode&&st.visualStyle!=="tape"?seg("Bubble Mode","bubbleMode",[["split","Ask/Bid"],["delta","Delta"],["volume","Volume"]]):"")
       +seg("Filtro","filterMode",[["auto","Automático"],["manual","Manual"]])
-      +(st.filterMode==="auto"?seg("Intensidade","intensity",[["low","Low"],["medium","Medium"],["strong","Strong"]]):num("Mín. nocional (USDT)","minNotional",0,1e9,1000))
+      +(st.filterMode==="auto"?seg("Intensidade","intensity",[["low","Low"],["medium","Medium"],["strong","Strong"]]):stepCtl("Mín. nocional (USDT)","minNotional",st.minNotional,0,1e9,1000,0))
       +seg("Agrupamento","grouping",[["auto","Auto"],["time","Tempo"],["price","Preço"]])
-      +(st.grouping==="time"?rng("Janela (ms)","timeWindow",100,3000,50):"")
-      +(st.grouping==="price"?num("Bucket de preço","priceBucket",0,100000,0.0001):"")
+      +(st.grouping==="time"?stepCtl("Janela (ms)","timeWindow",st.timeWindow,100,3000,50,0):"")
+      +(st.grouping==="price"?stepCtl("Bucket de preço","priceBucket",st.priceBucket,0,100000,.0001,4):"")
       +seg("Escala","scale",[["linear","Linear"],["sqrt","SQRT"],["log","Log"]])
-      +rng("Tamanho mín","minSize",2,20,1,"px")+rng("Tamanho máx","maxSize",10,60,1,"px")
-      +rng("Opacidade","opacity",20,100,1,"%",100)
-      +sw("Rótulos nas bolhas","labels")+sw("Zonas horizontais","zones")
-      +'<div style="font-size:10px;color:#7f9c8e;margin-top:6px">Deep Proxy usa dados públicos: absorção e batalha são <b>estimativas</b> (não é MBO real).</div>';
+      +stepCtl("Tamanho mín (px)","minSize",st.minSize,2,20,1,0)+stepCtl("Tamanho máx (px)","maxSize",st.maxSize,10,60,1,0)
+      +stepCtl("Opacidade %","opacityPct",Math.round(st.opacity*100),20,100,1,0)
+      +(st.visualStyle==="tape"?stepCtl("Contorno (px)","outlineWidth",st.outlineWidth,.5,4,.5,1):"")
+      +sw("Números nas bolhas","labels")
+      +(st.labels?seg("Número","labelMetric",[["notional","Nocional"],["delta","Delta"],["exec","Exec."]]):"")
+      +(st.visualStyle==="tape"?sw("Traço curto de preço","traces"):"")
+      +(st.visualStyle==="tape"&&st.traces?stepCtl("Comprimento traço","traceLen",st.traceLen,4,50,1,0):"")
+      +sw("Zonas horizontais","zones")
+      +'<div class="dvl-bb-note"><b>Tape</b>: círculos verdes/vermelhos presos ao preço, tamanho pela força e número central. Sem neon. Deep Proxy continua estimado, pois dados públicos não são MBO real.</div>';
   }
   function renderPanel(){ if(!panel) return; var b=panel.querySelector("#dvlBubblesBody"); if(!b) return; b.innerHTML=bodyHTML(); bind(b); }
   function bind(b){
@@ -80004,10 +80059,22 @@ window.DVL_DOM_CROSSHAIR_1205={
     b.querySelectorAll("[data-bbsw]").forEach(function(el){ el.addEventListener("change",function(){ st[el.getAttribute("data-bbsw")]=el.checked; save(); requestDraw(); }); });
     b.querySelectorAll("[data-bbnum]").forEach(function(el){ el.addEventListener("input",function(){ st[el.getAttribute("data-bbnum")]=Number(el.value)||0; save(); requestDraw(); }); });
     b.querySelectorAll("[data-bbrng]").forEach(function(el){ el.addEventListener("input",function(){ var sc=+el.getAttribute("data-scale")||1, unit=el.getAttribute("data-unit")||"", key=el.getAttribute("data-bbrng"), v=Number(el.value); st[key]=sc>1?v/sc:v; var lab=b.querySelector('[data-bbrngval="'+key+'"]'); if(lab) lab.textContent=v+unit; save(); requestDraw(); }); });
+    function applyStep(id,v){
+      var key=String(id||"").replace(/^bb_/,"");
+      if(key==="opacityPct") st.opacity=v/100; else st[key]=v;
+      save(); requestDraw();
+    }
+    b.querySelectorAll(".dvl-feb-step-btn[data-key]").forEach(function(btn){ btn.addEventListener("click",function(){
+      var id=btn.dataset.id, mn=+btn.dataset.min, mx=+btn.dataset.max, step=+btn.dataset.step, dec=+btn.dataset.dec;
+      var valEl=b.querySelector("#"+id+"Val"), v=+(valEl&&valEl.textContent||0);
+      v=Math.max(mn,Math.min(mx,v+(btn.classList.contains("dvl-feb-step-inc")?step:-step)));
+      if(valEl) valEl.textContent=dec?v.toFixed(dec):String(Math.round(v)); applyStep(id,v);
+    }); });
+    if(window.DVLVPRowLayout1345&&typeof window.DVLVPRowLayout1345.bindEditable==="function") window.DVLVPRowLayout1345.bindEditable(b,applyStep);
   }
   function openPanel(){
     if(!panel){ panel=document.createElement("div"); panel.id="dvlBubblesPanel"; panel.className="dvl-vt-panel dvl-bb-panel";
-      panel.innerHTML='<div class="dvl-vt-head"><div class="dvl-vt-title"><b>DVL Bubbles</b><small>big trades · volume · deep proxy</small></div><div class="dvl-vt-head-actions"><button class="dvl-vt-close" id="dvlBubblesReset" type="button" title="Restaurar" style="font-size:15px">⟲</button><button class="dvl-vt-close" id="dvlBubblesClose" type="button">×</button></div></div><div class="dvl-vt-body" id="dvlBubblesBody"></div>';
+      panel.innerHTML='<div class="dvl-vt-head"><div class="dvl-vt-title"><b>DVL Bubbles</b><small>tape aggression · live trades</small></div><div class="dvl-vt-head-actions"><button class="dvl-vt-close" id="dvlBubblesReset" type="button" title="Restaurar" style="font-size:15px">⟲</button><button class="dvl-vt-close" id="dvlBubblesClose" type="button">×</button></div></div><div class="dvl-vt-body" id="dvlBubblesBody"></div>';
       document.body.appendChild(panel);
       panel.addEventListener("pointerdown",function(e){ e.stopPropagation(); },true);
       panel.querySelector("#dvlBubblesClose").addEventListener("click",function(){ panel.classList.remove("is-open"); });
