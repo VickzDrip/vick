@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.349';
+window.DVL_APP_VERSION = 'Beta 1.350';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16286,6 +16286,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.350", note: "Hollow Candles — candles de VENDA agora também ficam ocos (hollow), igual aos de compra. Antes só o candle comprador ficava vazado; o vendedor era sólido. Agora ambos mostram o corpo vazio com a borda na cor direcional (verde compra / vermelho venda) e pavios na cor direcional. Dojis/corpos minúsculos mantêm ao menos uma borda visível. Modos Normal e Footprint inalterados; cores customizadas preservadas. Só frontend." },
   { version: "Beta 1.349", note: "DVL GEX Levels — o badge de regime agora mostra o VALOR do Net GEX com sinal (ex.: 'G+ · REJEIÇÃO · +34.7M' ou 'G− · EXPANSÃO · −12.3M'), formatado em K/M/B. Só frontend." },
   { version: "Beta 1.348", note: "DVL GEX Levels — integração backend same-origin. O overlay agora busca os níveis (Flip · Max Pain · faixa 1D · Net GEX) por uma rota do próprio DVL (/api/dvl/gex-levels?asset=BTC|ETH|SOL) que faz o proxy server-side pro GEX Monitor, normaliza a resposta (contrato estável com stale/availability), usa cache por ativo e nunca expõe chave no cliente. Prioridade: (1) backend do DVL → (2) API direta (fallback) → (3) valores manuais. Sem CORS, sem reload, stale-while-revalidate. Além disso, os fundos do Theme Studio foram reencodados de PNG (36MB) para WebP (1,6MB) — mesmas imagens, arquivo ~5MB (era 39MB) pra não sobrecarregar o servidor. Nenhum outro módulo alterado. Backend: novo src/gexLevels.js + rota no server.js." },
   { version: "Beta 1.347", note: "Novo overlay DVL GEX Levels com Flip, Max Pain, 1D Max e 1D Min, regime visual, zonas acima/abaixo do Flip, atualização automática pelos endpoints públicos do GEX Monitor e valores manuais como fallback. Fixed Range VP ganha âncora explícita no candle inicial/final; o padrão passa a ser Candle inicial e o preset Daily fica preso ao primeiro candle da janela 00:00→00:00 do timezone escolhido, em vez de desenhar o corpo no último candle da sessão. Rows Layout, RSI, Replay e cálculos de VP permanecem intactos." },
@@ -21536,10 +21537,12 @@ if(window.DVLSpikeZonesDraw){
       _wp.moveTo(cx, y(d.high)); _wp.lineTo(cx, topv);
       _wp.moveTo(cx, bottom);    _wp.lineTo(cx, y(d.low)); }
 
-    if(candleMode === "hollow" && up){
+    if(candleMode === "hollow"){
+      /* Hollow p/ AMBOS os lados: corpo vazio (fundo do gráfico) + borda na cor
+         direcional (col já é verde/vermelho). Vale pra compra e venda. */
       ctx.fillStyle = "rgba(2,8,6,.92)";
       ctx.fillRect(cx-candleW/2, topv, candleW, bodyH);
-      ctx.strokeRect(cx-candleW/2, topv, candleW, bodyH);
+      ctx.strokeRect(cx-candleW/2, topv, candleW, Math.max(1, bodyH));
     } else if(candleMode === "footprint"){
       const left = cx - candleW / 2;
       const _fpd = window._dvlFpCache && window._dvlFpCache.get(d.time);
@@ -50645,11 +50648,12 @@ function drawWick(ctx, g, payload, color){
     ctx.save();
     ctx.globalAlpha = Number.isFinite(Number(bodyProps.opacity)) ? Number(bodyProps.opacity) : 1;
 
-    if(mode === "hollow" && payload.up){
+    if(mode === "hollow"){
+      /* Hollow p/ AMBOS os lados (compra e venda): corpo vazio + borda direcional */
       ctx.fillStyle = "rgba(2,8,6,.92)";
       ctx.strokeStyle = color;
       ctx.lineWidth = Math.max(1, Number(bodyProps.borderWidth || 1));
-      drawRoundedRect(ctx, left, top, w, h, Number(bodyProps.radius || 0), true, true);
+      drawRoundedRect(ctx, left, top, w, Math.max(1, h), Number(bodyProps.radius || 0), true, true);
     }else if(mode === "footprint"){
       var fp = window._dvlFpCache && window._dvlFpCache.get(payload.candle.time);
       var buyRatio = (fp && fp.total > 0) ? Math.max(.05, Math.min(.95, fp.b / fp.total)) : (payload.up ? .62 : .38);
