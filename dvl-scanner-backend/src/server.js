@@ -27,6 +27,7 @@ const vrsiStore = require("./vrsiStore");
 const paperBot = require("./paperBot");
 const bubbleHistory = require("./bubbleHistory");
 const vpAlerts = require("./vpAlerts");
+const gexLevels = require("./gexLevels");
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -229,6 +230,23 @@ function createServer() {
   app.post("/api/dvl/vpalerts/discover", async (req, res) => {
     try { res.json(await vpAlerts.discoverChatId(req.body && req.body.tgToken)); }
     catch (e) { res.json({ ok: false, error: String(e && e.message || e) }); }
+  });
+
+  // ── DVL GEX Levels (proxy same-origin p/ GEX Monitor) ──
+  app.get("/api/dvl/gex-levels", async (req, res) => {
+    try {
+      res.json(await gexLevels.getLevels(req.query.asset));
+    } catch (e) {
+      const http = e && e.http ? e.http : 503;
+      const code = (e && e.code) || "GEX_UPSTREAM_UNAVAILABLE";
+      res.status(http).json({
+        ok: false,
+        asset: (e && e.asset) || (gexLevels.symbolToAsset(req.query.asset) || null),
+        code,
+        message: code === "ASSET_NOT_SUPPORTED" ? "Asset not supported (BTC, ETH, SOL)" : "GEX data is temporarily unavailable",
+        stale: true, availability: "missing"
+      });
+    }
   });
 
   const server = http.createServer(app);
