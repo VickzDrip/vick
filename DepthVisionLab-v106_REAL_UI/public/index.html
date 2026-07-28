@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.352';
+window.DVL_APP_VERSION = 'Beta 1.353';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -593,7 +593,7 @@ button{-webkit-tap-highlight-color:transparent;cursor:pointer;border:0;backgroun
 .short{color:var(--red)}
 .panelToggle{height:100%;border-radius:0;display:flex;align-items:center;justify-content:center;gap:7px;border:0;border-left:1px solid rgba(92,126,154,.22);font-size:12px;font-weight:900;color:#fff;background:rgba(5,14,12,.3)}
 
-.toast{position:fixed;left:16px;right:16px;bottom:96px;margin:auto;max-width:470px;color:#cad5e4;background:rgba(4,12,24,.94);border:1px solid rgba(16,223,119,.24);border-radius:14px;padding:10px 12px;font-size:11px;line-height:1.35;box-shadow:var(--shadow);display:none;z-index:40}
+.toast{position:fixed;left:16px;right:16px;bottom:96px;margin:auto;max-width:470px;color:#cad5e4;background:rgba(4,12,24,.94);border:1px solid rgba(16,223,119,.24);border-radius:14px;padding:10px 12px;font-size:11px;line-height:1.35;box-shadow:var(--shadow);display:none;z-index:100400}
 .toast.show{display:block}
 
 @media(max-width:420px){
@@ -16286,6 +16286,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.353", note: "Fix — a notificação de 'salvo' (toast) aparecia ATRÁS da barra de timeline do Replay. O toast tinha z-index 40 e a barra 45, então a barra cobria o aviso quando os dois se sobrepunham embaixo. Subi o z-index do toast pra ficar acima da barra de timeline (e também acima dos painéis de config), então a notificação fica sempre visível. Só frontend." },
   { version: "Beta 1.352", note: "DVL Bubbles — visual repaginado (estilo Tape Aggression): bolhas com tracinhos de preço (rastros) e agora SOBREPOSTAS aos candles em vez de atrás deles — o hook de desenho passou a rodar DEPOIS do render dos corpos/pavios das velas, então as bolhas ficam sempre visíveis por cima. O painel de ajustes ganhou controles numéricos '− valor +' (mais fáceis no mobile) pros parâmetros de sensibilidade/tamanho/rastro. Consome o mesmo histórico de aggTrades reais do backend (1.351). Só frontend." },
   { version: "Beta 1.351", note: "DVL Bubbles — histórico agora usa aggTrades REAIS da Binance Futures (backend). A janela recente (~20 min) é agregada no servidor a partir dos negócios crus reais: bucket de tempo + faixa de preço por tickSize, lado agressor correto (comprador/vendedor via flag maker), dedup por aggId e contagem de execuções — contrato normalizado. O histórico mais antigo continua por klines de 1s (barato) pra cobrir até 2h sem puxar milhões de trades. O overlay abre populado com dados reais e segue no feed ao vivo por cima (sem duplicar). O endpoint aceita bucketMs e priceBucketTicks. Backend (bubbleHistory.js) — sem mudança de comportamento no frontend. (Escopo do live via WebSocket same-origin fica pra um passo futuro; o live atual continua via aggTrade do navegador.)" },
   { version: "Beta 1.350", note: "Hollow Candles — candles de VENDA agora também ficam ocos (hollow), igual aos de compra. Antes só o candle comprador ficava vazado; o vendedor era sólido. Agora ambos mostram o corpo vazio com a borda na cor direcional (verde compra / vermelho venda) e pavios na cor direcional. Dojis/corpos minúsculos mantêm ao menos uma borda visível. Modos Normal e Footprint inalterados; cores customizadas preservadas. Só frontend." },
