@@ -33,52 +33,59 @@ async function getJSON(url, timeoutMs) {
   return res.json();
 }
 
-/* tickSize por símbolo (exchangeInfo futures, cache 12h, com fallback) */
+/* tickSize por símbolo. Prefere futures; cai pro SPOT (que o servidor alcança) e
+   por fim pro fallback fixo. Cache por símbolo (12h). */
 async function tickSizeFor(symbol) {
   symbol = cleanSym(symbol);
   const now = Date.now();
-  if (now - _tickCache.t > 12 * 3600000 || !Object.keys(_tickCache.map).length) {
+  if (_tickCache.map[symbol] && now - _tickCache.t < 12 * 3600000) return _tickCache.map[symbol];
+  const tries = [
+    FHOST + "/fapi/v1/exchangeInfo?symbol=" + symbol,
+    SHOSTS[0] + "/api/v3/exchangeInfo?symbol=" + symbol
+  ];
+  for (const url of tries) {
     try {
-      const info = await getJSON(FHOST + "/fapi/v1/exchangeInfo", 15000);
-      const map = {};
-      for (const s of (info.symbols || [])) {
-        const pf = (s.filters || []).find(f => f.filterType === "PRICE_FILTER");
-        if (pf && pf.tickSize) map[s.symbol] = Number(pf.tickSize);
-      }
-      if (Object.keys(map).length) _tickCache = { t: now, map };
-    } catch (_) { /* mantém cache/fallback */ }
+      const info = await getJSON(url, 12000);
+      const s = (info.symbols || [])[0];
+      const pf = s && (s.filters || []).find(f => f.filterType === "PRICE_FILTER");
+      if (pf && pf.tickSize) { _tickCache.t = now; _tickCache.map[symbol] = Number(pf.tickSize); return _tickCache.map[symbol]; }
+    } catch (_) { /* tenta o próximo host */ }
   }
-  return _tickCache.map[symbol] || TICK_FALLBACK[symbol] || 0.1;
+  return TICK_FALLBACK[symbol] || 0.1;
 }
 
-/* aggTrades reais paginados por janela [startMs, endMs] (teto de chamadas). */
+/* aggTrades reais paginados. Tenta Binance Futures; se indisponível (bloqueio de
+   região no servidor), usa Binance SPOT (mesma forma {a,p,q,T,m}). Retorna {trades, source}. */
+const AGG_SOURCES = [
+  { source: "binance_futures", base: FHOST + "/fapi/v1/aggTrades" },
+  { source: "binance_spot", base: SHOSTS[0] + "/api/v3/aggTrades" },
+  { source: "binance_spot", base: SHOSTS[1] + "/api/v3/aggTrades" }
+];
 async function fetchAggTrades(symbol, startMs, endMs, maxCalls) {
   symbol = cleanSym(symbol);
-  const out = [];
-  const seen = new Set();
-  let cursor = startMs, calls = 0;
-  while (cursor < endMs && calls < maxCalls) {
-    calls++;
-    const url = FHOST + "/fapi/v1/aggTrades?symbol=" + symbol + "&startTime=" + cursor + "&endTime=" + Math.min(endMs, cursor + 3600000) + "&limit=1000";
-    let d;
-    try { d = await getJSON(url, 12000); } catch (e) { break; }
-    if (!Array.isArray(d) || !d.length) { cursor += 60000; continue; }
-    for (const t of d) {
-      const a = Number(t.a);
-      if (seen.has(a)) continue;          // dedup por aggId
-      seen.add(a);
-      out.push(t);
+  for (const src of AGG_SOURCES) {
+    const out = [], seen = new Set();
+    let cursor = startMs, calls = 0, ok = false;
+    while (cursor < endMs && calls < maxCalls) {
+      calls++;
+      const url = src.base + "?symbol=" + symbol + "&startTime=" + cursor + "&endTime=" + Math.min(endMs, cursor + 3600000) + "&limit=1000";
+      let d;
+      try { d = await getJSON(url, 12000); ok = true; } catch (e) { ok = false; break; }
+      if (!Array.isArray(d) || !d.length) { cursor += 60000; continue; }
+      for (const t of d) { const a = Number(t.a); if (seen.has(a)) continue; seen.add(a); out.push(t); }
+      const lastT = Number(d[d.length - 1].T);
+      if (!(lastT > cursor)) break;
+      cursor = lastT + 1;
+      if (d.length < 1000 && cursor >= endMs) break;
     }
-    const lastT = Number(d[d.length - 1].T);
-    if (!(lastT > cursor)) break;
-    cursor = lastT + 1;
-    if (d.length < 1000 && cursor >= endMs) break;
+    if (ok && out.length) return { trades: out, source: src.source };
   }
-  return out;
+  return { trades: [], source: null };
 }
 
 /* agrega aggTrades → eventos normalizados + groups (forma legada). */
-function aggregate(trades, symbol, tickSize, bucketMs, priceBucketTicks) {
+function aggregate(trades, symbol, tickSize, bucketMs, priceBucketTicks, source) {
+  source = source || "binance_futures";
   const step = tickSize * priceBucketTicks;
   const map = {};
   for (const t of trades) {
@@ -114,7 +121,7 @@ function aggregate(trades, symbol, tickSize, bucketMs, priceBucketTicks) {
     const price = qty > 0 ? e.pxQty / qty : (e.priceMin + e.priceMax) / 2;
     events.push({
       id: symbol + ":" + e.bucketStart + ":" + e.side + ":" + e.priceBucket,
-      symbol, source: "binance_futures", eventTime: e.bucketStart,
+      symbol, source, eventTime: e.bucketStart,
       bucketStart: e.bucketStart, bucketEnd: e.bucketEnd,
       price, priceMin: e.priceMin, priceMax: e.priceMax, side: e.side,
       buyQty: e.buyQty, sellQty: e.sellQty, buyNotional: e.buyNotional, sellNotional: e.sellNotional,
@@ -169,18 +176,19 @@ async function history(symbol, mins, opts) {
   const to = now, from = now - mins * 60000;
   const aggFrom = Math.max(from, now - AGG_MINS * 60000);
 
-  let tickSize = 0.1, aggEvents = [], aggGroups = [], oldGroups = [];
+  let tickSize = 0.1, aggEvents = [], aggGroups = [], oldGroups = [], aggSource = null;
   try { tickSize = await tickSizeFor(symbol); } catch (_) {}
   try {
-    const trades = await fetchAggTrades(symbol, aggFrom, to, AGG_MAX_CALLS);
-    const agg = aggregate(trades, symbol, tickSize, bucketMs, priceBucketTicks);
+    const res = await fetchAggTrades(symbol, aggFrom, to, AGG_MAX_CALLS);
+    aggSource = res.source;
+    const agg = aggregate(res.trades, symbol, tickSize, bucketMs, priceBucketTicks, res.source);
     aggEvents = agg.events; aggGroups = agg.groups;
   } catch (_) {}
   if (aggFrom > from) { try { oldGroups = await klineGroups(symbol, from, aggFrom - 1); } catch (_) {} }
 
   const groups = oldGroups.concat(aggGroups).sort((a, b) => a.ts - b.ts);
   const data = {
-    ok: true, symbol, source: aggGroups.length ? "binance_futures" : "spot_1s_klines",
+    ok: true, symbol, source: aggGroups.length ? aggSource : "spot_1s_klines",
     generatedAt: now, from, to, tickSize, bucketMs, priceBucketTicks,
     aggFrom, aggMins: AGG_MINS, count: groups.length,
     groups,          // forma legada (frontend atual)
