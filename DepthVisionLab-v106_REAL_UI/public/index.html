@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.359';
+window.DVL_APP_VERSION = 'Beta 1.360';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16299,6 +16299,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.360", note: "Fix — botão Salvar dava 'Erro ao salvar'. Causa: o snapshot do perfil copiava TODAS as chaves 'DVL...' do localStorage, incluindo o PRÓPRIO snapshot anterior — então cada save embutia o snapshot antigo dentro do novo e o tamanho ~dobrava a cada vez, até estourar a cota do navegador (QuotaExceeded) e o save falhar. Agora o save exclui as chaves de snapshot/backup (DVL_USER_PROFILE_SNAPSHOT/LAST_SAVE/DRAWINGS_BACKUP), libera o snapshot antigo antes de gravar o novo e, se ainda faltar espaço, grava um snapshot 'lite' (sem o blob de localStorage) — mantendo drawings/chart/versão e nunca falhando. Só frontend." },
   { version: "Beta 1.359", note: "Risk Express — 2 correções: (1) as linhas/labels do Risk (Entry/SL/TP) agora têm PRIORIDADE máxima no gráfico — passaram a ser desenhadas por último, então nunca mais ficam cobertas por MAX PAIN, FLIP, Volume Profile, GEX etc. (2) o arraste do painel voltou a funcionar: a alça (⠿) estava sendo bloqueada por um stopPropagation em fase de captura na própria toolbar (matava o pointerdown da alça antes dele chegar); agora a alça é isenta e o arraste do painel funciona no toque e no mouse. Só UI." },
   { version: "Beta 1.358", note: "Risk Express — agora dá pra OCULTAR o painel deixando só as linhas no gráfico, e o painel virou ARRASTÁVEL. Botão '⌄ ocultar' na toolbar esconde o painel mantendo Entry/SL/TP no gráfico (as linhas continuam vivas e arrastáveis); o botão flutuante 🛡 ganha um pontinho âmbar quando o painel está oculto e um toque nele traz o painel de volta (outro toque oculta de novo). '✕ fechar' continua desligando tudo. A toolbar ganhou uma alça (⠿) à esquerda pra arrastar e reposicionar onde quiser — a posição fica salva. Só ajuste de UI; cálculo, drag das linhas e sincronização com o painel completo inalterados." },
   { version: "Beta 1.357", note: "Risk Express — proporção no mobile ajustada: as linhas e labels do Entry/SL/TP estavam exageradas e se sobrepondo no celular. Reduzi as fontes (LOT de 18→12px no mobile, valores NET de 14→10px), afinei as linhas (entry 3,4→2px, SL/TP 3→1,5px), diminuí o padding/raio das caixas e juntei o preço do TP com o R:R numa linha só (caixa do TP passou de 3 pra 2 linhas). Agora os labels ficam compactos e não cobrem os candles nem a escala de preço. Só ajuste visual — cálculo, drag e sincronização com o painel inalterados." },
@@ -36414,9 +36415,15 @@ drag = {
 
     try{
       const local = {};
+      /* NÃO incluir no snapshot as PRÓPRIAS chaves de snapshot/backup: o regex
+         abaixo casa com "DVL_..." e, sem esta exclusão, cada save embutia o
+         snapshot anterior dentro do novo → o snapshot ~dobrava de tamanho a cada
+         save até estourar a cota do localStorage → setItem lançava QuotaExceeded
+         → "Erro ao salvar". (A restauração já pulava essas chaves; o save não.) */
+      const SKIP_KEYS = { DVL_USER_PROFILE_SNAPSHOT:1, DVL_USER_PROFILE_LAST_SAVE:1, DVL_PROFILE_DRAWINGS_BACKUP:1 };
       for(let i=0; i<localStorage.length; i++){
         const k = localStorage.key(i);
-        if(!k) continue;
+        if(!k || SKIP_KEYS[k]) continue;
 
         /*
           Save site-specific settings and drawings.
@@ -36445,11 +36452,20 @@ drag = {
         localStorage:local
       };
 
-      localStorage.setItem("DVL_USER_PROFILE_SNAPSHOT", JSON.stringify(snapshot));
+      /* Libera o snapshot antigo ANTES de gravar o novo (dá espaço) e, se ainda
+         estourar a cota, cai pra um snapshot "lite" sem o blob de localStorage —
+         assim drawings/chart/versão continuam salvos e o save nunca falha. */
+      try{ localStorage.removeItem("DVL_USER_PROFILE_SNAPSHOT"); }catch(_){}
+      try{
+        localStorage.setItem("DVL_USER_PROFILE_SNAPSHOT", JSON.stringify(snapshot));
+      }catch(_quota){
+        const lite = Object.assign({}, snapshot, { localStorage:{}, _lite:true });
+        localStorage.setItem("DVL_USER_PROFILE_SNAPSHOT", JSON.stringify(lite));
+      }
       localStorage.setItem("DVL_USER_PROFILE_LAST_SAVE", snapshot.savedAt);
 
       if(window.S && Array.isArray(S.drawings)){
-        localStorage.setItem("DVL_PROFILE_DRAWINGS_BACKUP", JSON.stringify(S.drawings));
+        try{ localStorage.setItem("DVL_PROFILE_DRAWINGS_BACKUP", JSON.stringify(S.drawings)); }catch(_){}
       }
 
       if(typeof window.__dvlSave === "function") window.__dvlSave();
