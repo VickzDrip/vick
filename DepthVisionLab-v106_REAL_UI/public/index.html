@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.371';
+window.DVL_APP_VERSION = 'Beta 1.372';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.372", note: "Deep Heatmap — a detecção de CONSUMO agora roda também sobre o histórico de ~2h que abre pronto, não só ao vivo. Aquelas paredes de liquidez que ficavam fixas: agora dá pra ver, olhando o passado, se elas JÁ FORAM PEGAS (▲ compra / ▼ venda) ou se apenas foram retiradas — assim você sabe na hora se aquele nível de liquidez já foi consumido antes de você chegar. Ao semear o book e os trades das 2h, a varredura de consumo é reconstruída sobre todos os snapshots do histórico. Só frontend." },
   { version: "Beta 1.371", note: "Deep Heatmap — a matiz (liquidez já formada) agora abre pronta com ~2h TODA vez, sem re-acumular. O seed do histórico passou a bater direto no recorder de depth do próprio servidor DVL (same-origin), que já tem muitas horas gravadas — antes ia por um caminho que às vezes caía num backend recém-reiniciado com pouco histórico, dando a sensação de \"recomeçar\" ao religar o indicador. Ligar/desligar não perde mais o mapa (ele já persistia em memória e agora re-semeia na hora). Obs: é normal a matiz ser mais rala nas EXTREMIDADES (topo/base do preço e borda mais antiga) — a liquidez do book se concentra perto do preço; longe do meio há poucas ordens paradas. Só frontend." },
   { version: "Beta 1.370", note: "Deep Heatmap — modo \"Heatmap\" agora é estilo DeepCharts de verdade: PREENCHE a largura toda. No painel, em Visual, escolha Heatmap (ou Linha) — o eixo de preço passa a ser DIRIGIDO PELOS DADOS (cobre o book de todas as colunas visíveis) em vez do eixo fixo das velas, então a liquidez aparece de ponta a ponta, com escala de preço própria à direita e a linha de preço branca por cima (velas ocultas nesse modo). No modo Candles segue como overlay (mostra a liquidez perto do preço atual). Só frontend." },
   { version: "Beta 1.369", note: "Deep Heatmap — o histórico de ~2h (na real ~16h) já EXISTIA no servidor (/api/depth_history), mas o mapa não semeava porque o parser só aceitava {snapshots}/{data} e o endpoint devolve um array cru [{time,bids,asks}]. Agora o parser aceita o array cru também — então, ao ligar o DH, o heatmap já abre preenchido com o histórico do book do servidor (não começa mais vazio). Removido o gravador redundante que eu tinha posto no backend do scanner (o servidor DVL já grava). Frontend + backend (limpeza)." },
@@ -81030,6 +81031,19 @@ window.DVL_DOM_CROSSHAIR_1205={
     if(out.length){R.snapshots=out.concat(R.snapshots.filter(function(s){return s.t>out[out.length-1].t;}));var max=Math.max(300,Math.round(st.historyMinutes*60000/st.sampleMs));if(R.snapshots.length>max)R.snapshots=R.snapshots.slice(-max);R.snapVersion++;R.cache.key="";}
     return out.length;
   }
+  /* Beta 1.372 — roda a detecção de CONSUMO sobre o histórico semeado (2h), não
+     só ao vivo. Assim os ▲/▼ aparecem no passado e dá pra ver se a liquidez
+     (parede) que ficou fixa JÁ FOI PEGA ou não. Idempotente: reconstrói do
+     conjunto atual de snapshots (que já inclui o que veio ao vivo). */
+  var _histConsTimer=0;
+  function rebuildConsumption(){
+    if(!R.step||R.snapshots.length<2)return;
+    R.consumption=[];
+    for(var i=1;i<R.snapshots.length;i++) detectConsumption(R.snapshots[i-1],R.snapshots[i]);
+    R.consumptionVersion++;
+  }
+  function scheduleHistConsumption(){ clearTimeout(_histConsTimer); _histConsTimer=setTimeout(function(){ _histConsTimer=0; try{ rebuildConsumption(); safeDraw(); }catch(_){} },550); }
+
   function seedDepthHistory(){
     var tok=++R.depthSeedToken,sym=R.symbol||gsym();
     var mins=Math.max(120,Math.round(st.historyMinutes));
@@ -81040,7 +81054,7 @@ window.DVL_DOM_CROSSHAIR_1205={
        Fallback pro backendApi caso o same-origin não responda. */
     var soUrl="/api/depth_history?symbol="+encodeURIComponent(sym)+"&mins="+mins+"&levels=1000";
     var bkUrl=backendApi(soUrl);
-    function apply(j){ if(tok!==R.depthSeedToken||sym!==gsym()||!j)return false; var n=parseDepthHistory(j); safeDraw(); return n>0; }
+    function apply(j){ if(tok!==R.depthSeedToken||sym!==gsym()||!j)return false; var n=parseDepthHistory(j); if(n>0)scheduleHistConsumption(); safeDraw(); return n>0; }
     fetch(soUrl,{cache:"no-store"}).then(function(r){return r.ok?r.json():null;}).then(function(j){
       if(apply(j))return;
       if(bkUrl!==soUrl) fetch(bkUrl,{cache:"no-store"}).then(function(r){return r.ok?r.json():null;}).then(apply).catch(function(){});
@@ -81055,7 +81069,7 @@ window.DVL_DOM_CROSSHAIR_1205={
         if(tok!==R.tradeSeedToken||sym!==gsym()||!j||!Array.isArray(j.groups))return;
         var hist=[];j.groups.forEach(function(g){var t=Number(g.ts),p=Number(g.price),b=Number(g.buyN)||0,s=Number(g.sellN)||0;if(!t||!p)return;if(b>0)hist.push({t:t+250,p:p,n:b,buy:true});if(s>0)hist.push({t:t+650,p:p,n:s,buy:false});});
         hist.sort(function(a,b){return a.t-b.t;});var end=hist.length?hist[hist.length-1].t:0;
-        R.trades=hist.concat(R.trades.filter(function(x){return x.t>end;}));if(R.trades.length>24000)R.trades=R.trades.slice(-24000);R.historySeeded=hist.length;R.tradeVersion++;safeDraw();
+        R.trades=hist.concat(R.trades.filter(function(x){return x.t>end;}));if(R.trades.length>24000)R.trades=R.trades.slice(-24000);R.historySeeded=hist.length;R.tradeVersion++;scheduleHistConsumption();safeDraw();
       }).catch(function(){});
   }
 
@@ -81436,7 +81450,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   }
   window.DVL_DEEP_HEATMAP_API={
     version:'1.354',isOn:function(){return !!st.on;},on:function(){return !!st.on;},setOn:setOn,
-    openPanel:openPanel,open:openPanel,settings:st,_testInject:testInject,
+    openPanel:openPanel,open:openPanel,settings:st,_testInject:testInject,_rebuildConsumption:rebuildConsumption,
     debug:function(){return {on:st.on,symbol:R.symbol,source:R.source,status:R.status,connected:R.connected,synced:R.synced,step:R.step,snapshots:R.snapshots.length,trades:R.trades.length,historySeeded:R.historySeeded,consumptionEvents:R.consumption.length,consumption30s:R.lastConsumptionStats,lastThreshold:R.lastThreshold,lastDrawnBubbles:R.lastDrawnBubbles,error:R.err};}
   };
 
