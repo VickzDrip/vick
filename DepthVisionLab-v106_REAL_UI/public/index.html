@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.367';
+window.DVL_APP_VERSION = 'Beta 1.368';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.368", note: "Deep Heatmap — histórico de ~2h já carregado na entrada. Novo gravador de order book no BACKEND (depthHistory.js): faz polling do depth da Binance Spot a cada 8s e mantém um anel de ~2h por símbolo (BTC/ETH/SOL gravados desde o boot; outros sob demanda). Endpoint /api/depth_history serve os snapshots e o Deep Heatmap semeia o mapa com eles ao ligar (agora pede 120 min). Assim, ao abrir, o heatmap já vem preenchido em vez de começar vazio. OBS: como é em memória, logo após um deploy o servidor recomeça do zero e enche até ~2h. Frontend + backend." },
   { version: "Beta 1.367", note: "Deep Heatmap — visual repaginado pra ficar mais legível (estilo DeepCharts): nova rampa de cor \"hot\" (teal dim = liquidez leve → ciano → amarelo → laranja → VERMELHO nas paredes fortes), então dá pra ver num olhar pra onde a liquidez se acumula. O campo agora PREENCHE (contraste/gamma suavizados) em vez de mostrar só linhas esparsas, e ganhou um fundo escuro atrás das velas pra as cores ressaltarem (as velas seguem nítidas por cima). Os ▲/▼ de consumo continuam como marcadores. Só frontend." },
   { version: "Beta 1.366", note: "DVL Deep Heatmap — troquei o motor da Fase 1 pelo MODELO COMPLETO e comprovado (base 1.354) que você mandou, adaptado à base atual: agora carrega as zonas de verdade. Já inclui a Fase 2: consumo CONFIRMADO (verde ▲ compra consumindo ASK / vermelho ▼ venda consumindo BID, correlacionando queda do book com aggTrades do lado agressor), retiradas (pull) opcionais em cinza, e Volume Bubbles próprias. Heatmap azul/ciano=liquidez parada, amarelo=forte, com cache offscreen. Feed combinado depth+aggTrade com failover Futures→Spot e multi-host REST; opcionalmente semeia histórico do backend. Ao ligar, suspende Bubbles/Bookmap antigos e restaura ao desligar. Pausa no Replay. Painel completo no padrão DVL. Registrado no menu de Indicators (OVERLAY). Só frontend." },
   { version: "Beta 1.365", note: "Deep Heatmap — 2 correcoes: (1) o feed ficava travado em CONNECTING/RESYNC no Auto porque insistia no Futures (bloqueado no BR) e, se o snapshot REST falhava, entrava em loop na mesma fonte. Agora o Auto cai pro Spot de verdade: sem dados em 4s ou snapshot indisponivel numa fonte, avanca pra proxima; resync mantem a fonte que funciona (Spot) em vez de recomecar do Futures. (2) O HUD de status saiu de baixo (cobrindo os candles) pro CANTO SUPERIOR ESQUERDO do grafico. Teste: com Futures bloqueado, cai pro Spot e chega em LIVE SPOT com colunas amostradas. So frontend." },
@@ -80668,7 +80669,7 @@ window.DVL_DOM_CROSSHAIR_1205={
     showConsumptionLabels:true,
     showPulls:false,
     bubbleMode:"split",             // split | delta | volume
-    historyMinutes:60,
+    historyMinutes:120,
     sampleMs:650,
     spanPct:1.6,
     liquidityContrast:70,
@@ -81026,7 +81027,7 @@ window.DVL_DOM_CROSSHAIR_1205={
   }
   function seedDepthHistory(){
     var tok=++R.depthSeedToken,sym=R.symbol||gsym();
-    fetch(backendApi("/api/depth_history?symbol="+encodeURIComponent(sym)+"&mins="+Math.round(st.historyMinutes)+"&levels=1000"),{cache:"no-store"})
+    fetch(backendApi("/api/depth_history?symbol="+encodeURIComponent(sym)+"&mins="+Math.max(120,Math.round(st.historyMinutes))+"&levels=1000"),{cache:"no-store"})
       .then(function(r){return r.ok?r.json():null;}).then(function(j){if(tok!==R.depthSeedToken||sym!==gsym()||!j)return;parseDepthHistory(j);safeDraw();}).catch(function(){});
   }
   function seedTradeHistory(){
