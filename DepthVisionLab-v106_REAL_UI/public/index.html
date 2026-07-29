@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.366';
+window.DVL_APP_VERSION = 'Beta 1.367';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.367", note: "Deep Heatmap — visual repaginado pra ficar mais legível (estilo DeepCharts): nova rampa de cor \"hot\" (teal dim = liquidez leve → ciano → amarelo → laranja → VERMELHO nas paredes fortes), então dá pra ver num olhar pra onde a liquidez se acumula. O campo agora PREENCHE (contraste/gamma suavizados) em vez de mostrar só linhas esparsas, e ganhou um fundo escuro atrás das velas pra as cores ressaltarem (as velas seguem nítidas por cima). Os ▲/▼ de consumo continuam como marcadores. Só frontend." },
   { version: "Beta 1.366", note: "DVL Deep Heatmap — troquei o motor da Fase 1 pelo MODELO COMPLETO e comprovado (base 1.354) que você mandou, adaptado à base atual: agora carrega as zonas de verdade. Já inclui a Fase 2: consumo CONFIRMADO (verde ▲ compra consumindo ASK / vermelho ▼ venda consumindo BID, correlacionando queda do book com aggTrades do lado agressor), retiradas (pull) opcionais em cinza, e Volume Bubbles próprias. Heatmap azul/ciano=liquidez parada, amarelo=forte, com cache offscreen. Feed combinado depth+aggTrade com failover Futures→Spot e multi-host REST; opcionalmente semeia histórico do backend. Ao ligar, suspende Bubbles/Bookmap antigos e restaura ao desligar. Pausa no Replay. Painel completo no padrão DVL. Registrado no menu de Indicators (OVERLAY). Só frontend." },
   { version: "Beta 1.365", note: "Deep Heatmap — 2 correcoes: (1) o feed ficava travado em CONNECTING/RESYNC no Auto porque insistia no Futures (bloqueado no BR) e, se o snapshot REST falhava, entrava em loop na mesma fonte. Agora o Auto cai pro Spot de verdade: sem dados em 4s ou snapshot indisponivel numa fonte, avanca pra proxima; resync mantem a fonte que funciona (Spot) em vez de recomecar do Futures. (2) O HUD de status saiu de baixo (cobrindo os candles) pro CANTO SUPERIOR ESQUERDO do grafico. Teste: com Futures bloqueado, cai pro Spot e chega em LIVE SPOT com colunas amostradas. So frontend." },
   { version: "Beta 1.364", note: "Deep Heatmap agora aparece de verdade no menu de Indicators. O menu visível é o categorizado (FAVORITES/OSCILLATORS/OVERLAY/VOLUME & FLOW) montado por um registro próprio — e o item DH estava sendo inserido no dropdown legado escondido. Registrei o 'DVL Deep Heatmap' nesse registro, na seção OVERLAY (ao lado do Bookmap), com switch ON/OFF real e abertura do painel. Ajustei o contrato da API do DH (on() como função, settings, openPanel) pra casar com o registro. So frontend." },
@@ -81103,15 +81104,20 @@ window.DVL_DOM_CROSSHAIR_1205={
   function codeAt(s,absIdx){return sideCodeAt(s,absIdx,"all");}
 
   var PALETTE=(function(){
-    /* One meaning per color: blue/cyan = resting liquidity; yellow = strongest resting liquidity. */
+    /* Rampa "hot" estilo DeepCharts: base teal dim (liquidez leve) → ciano →
+       amarelo → laranja → VERMELHO nas paredes fortes. Assim dá pra ler pra onde
+       a liquidez se acumula (parede) num olhar. (Verde/vermelho dos ▲/▼ de consumo
+       são MARCADORES com forma própria, não a cor do campo.) */
     var stops=[
       [0.00,[0,0,0,0]],
-      [0.06,[4,10,22,72]],
-      [0.24,[8,28,62,138]],
-      [0.47,[12,74,126,190]],
-      [0.69,[18,151,188,226]],
-      [0.87,[235,205,70,244]],
-      [1.00,[255,239,154,252]]
+      [0.04,[6,26,34,70]],
+      [0.16,[10,58,80,140]],
+      [0.34,[14,110,138,185]],
+      [0.52,[24,168,168,212]],
+      [0.66,[120,205,120,228]],
+      [0.78,[236,206,74,240]],
+      [0.90,[243,138,36,250]],
+      [1.00,[252,58,46,255]]
     ],out=new Uint8ClampedArray(256*4);
     for(var i=0;i<256;i++){
       var n=i/255,a=stops[0],b=stops[stops.length-1];
@@ -81143,7 +81149,7 @@ window.DVL_DOM_CROSSHAIR_1205={
     var c=document.createElement("canvas");c.width=ow;c.height=oh;var cx=c.getContext("2d"),img=cx.createImageData(ow,oh),pix=img.data;
     if(!R.snapshots.length||!R.step){cx.putImageData(img,0,0);R.cache={key:key,canvas:c,at:now};return c;}
     var t0=slotToTime(0,cfg),t1=slotToTime(Math.max(1,cfg.win.totalSlots-1),cfg),thr=thresholds(cfg,t0,t1);
-    var cut=st.liquidityContrast/100*.46,gamma=.78+(100-st.liquidityContrast)/100*.92;
+    var cut=st.liquidityContrast/100*.24,gamma=.62+(100-st.liquidityContrast)/100*.46;
     var hint=0;
     for(var ix=0;ix<ow;ix++){
       var slot=(ix/(ow-1))*Math.max(1,cfg.win.totalSlots-1),t=slotToTime(slot,cfg),pair=snapshotAt(t,hint);if(!pair)continue;hint=pair.i;
@@ -81159,7 +81165,11 @@ window.DVL_DOM_CROSSHAIR_1205={
   }
   function drawHeat(ctx,cfg){
     if(!st.heatmap||!R.snapshots.length||!R.step)return;
-    var c=buildHeatCanvas(cfg);ctx.save();ctx.imageSmoothingEnabled=false;ctx.drawImage(c,cfg.x0,cfg.y0,cfg.x1-cfg.x0,cfg.y1-cfg.y0);ctx.restore();
+    var c=buildHeatCanvas(cfg);ctx.save();
+    /* backdrop escuro (só na área do gráfico, ATRÁS das velas) pra o mapa
+       "ressaltar" como no DeepCharts, sem apagar os candles que vêm por cima. */
+    ctx.fillStyle="rgba(2,6,10,0.34)";ctx.fillRect(cfg.x0,cfg.y0,cfg.x1-cfg.x0,cfg.y1-cfg.y0);
+    ctx.imageSmoothingEnabled=false;ctx.drawImage(c,cfg.x0,cfg.y0,cfg.x1-cfg.x0,cfg.y1-cfg.y0);ctx.restore();
   }
 
 
