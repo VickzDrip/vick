@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.364';
+window.DVL_APP_VERSION = 'Beta 1.365';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.365", note: "Deep Heatmap — 2 correcoes: (1) o feed ficava travado em CONNECTING/RESYNC no Auto porque insistia no Futures (bloqueado no BR) e, se o snapshot REST falhava, entrava em loop na mesma fonte. Agora o Auto cai pro Spot de verdade: sem dados em 4s ou snapshot indisponivel numa fonte, avanca pra proxima; resync mantem a fonte que funciona (Spot) em vez de recomecar do Futures. (2) O HUD de status saiu de baixo (cobrindo os candles) pro CANTO SUPERIOR ESQUERDO do grafico. Teste: com Futures bloqueado, cai pro Spot e chega em LIVE SPOT com colunas amostradas. So frontend." },
   { version: "Beta 1.364", note: "Deep Heatmap agora aparece de verdade no menu de Indicators. O menu visível é o categorizado (FAVORITES/OSCILLATORS/OVERLAY/VOLUME & FLOW) montado por um registro próprio — e o item DH estava sendo inserido no dropdown legado escondido. Registrei o 'DVL Deep Heatmap' nesse registro, na seção OVERLAY (ao lado do Bookmap), com switch ON/OFF real e abertura do painel. Ajustei o contrato da API do DH (on() como função, settings, openPanel) pra casar com o registro. So frontend." },
   { version: "Beta 1.363", note: "Deep Heatmap (DH) — reforço de registro no menu de Indicators: além do boot e do reintento periódico, o item 'DVL Deep Heatmap' agora é (re)inserido no exato momento em que você abre os Indicators, à prova de rebuild/timing do novo UI. Se não aparecia por conta de cache antigo, recarregar já resolve. (O item entra no topo da lista de Indicators.) Só frontend." },
   { version: "Beta 1.362", note: "DVL Deep Heatmap (Fase 1) — novo indicador nativo 'DH' na lista de Indicators: matriz preço×tempo do ORDER BOOK (Level 2) mostrando a liquidez resting — azul/ciano = normal, amarelo = concentração forte (percentil superior). Alimentado pelo feed @depth via WebSocket do navegador (tenta Binance Futures e cai pro Spot) + snapshot REST com resync automático em caso de gap de sequência. Camada de FUNDO (atrás das velas), presa a preço/tempo (acompanha zoom/pan). HUD de status (OFF/CONNECTING/SYNC/LIVE/RESYNC/PAUSED REPLAY/ERROR). Painel com Source, History, Sample, Price span, contrastes, opacidade e cell size (padrão DVL, sem dropdown nativo). Ao ligar, suspende o Bookmap antigo; ao desligar, restaura. Pausa no Replay; limpa socket/timers na troca de ativo e no OFF. 100% leitura. PRÓXIMA FASE: consumo confirmado (▲ compra→ASK / ▼ venda→BID por correlação com aggTrades), bubbles e pulls. Só frontend." },
@@ -80685,54 +80686,70 @@ window.DVL_DOM_CROSSHAIR_1205={
 
   function applyLevels(map, arr){ for(var i=0;i<arr.length;i++){ var p=+arr[i][0], q=+arr[i][1]; if(!(p>0)) continue; if(q>0) map[p]=q; else delete map[p]; } }
 
-  function seedSnapshot(feed){
-    var s=gsym();
-    var url=feed.snap(s.toLowerCase().toUpperCase());
-    fetch(url,{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }).then(function(d){
+  var _order=null, _idx=0, _feed=null, _resyncN=0;
+  function closeSock(){ if(ws){ try{ ws.onclose=null; ws.close(); }catch(_){} ws=null; } }
+  function seedSnapshot(){
+    if(!_feed) return; var s=gsym();
+    fetch(_feed.snap(s),{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }).then(function(d){
       if(!st.on || s!==gsym()) return;
       bids={}; asks={};
       applyLevels(bids, d.bids||[]); applyLevels(asks, d.asks||[]);
       lastUpdateId = Number(d.lastUpdateId||d.u||0);
       _dbg.snaps++;
-      /* aplica buffer acumulado após o snapshot (sequência) */
       var buf=diffBuf; diffBuf=[];
       for(var i=0;i<buf.length;i++){ var ev=buf[i]; if(Number(ev.u) <= lastUpdateId) continue; applyDiff(ev); }
-      synced=true; setStatus(feedSrc==="futures"?"LIVE FUTURES":"LIVE SPOT");
+      synced=true; _resyncN=0; setStatus(feedSrc==="futures"?"LIVE FUTURES":"LIVE SPOT");
       startSampling();
-    }).catch(function(){ if(st.on) setStatus("ERROR"); scheduleResync(); });
+    }).catch(function(){
+      /* snapshot REST indisponível nesta fonte (ex.: Futures bloqueado no BR) →
+         avança pra próxima fonte em vez de ficar em loop. */
+      if(!st.on) return; closeSock(); if(_order) tryFeed(_order, _idx+1);
+    });
   }
-  function applyDiff(ev){
-    applyLevels(bids, ev.b||[]); applyLevels(asks, ev.a||[]);
-    lastUpdateId = Number(ev.u||lastUpdateId);
-    _dbg.diffs++;
-  }
+  function applyDiff(ev){ applyLevels(bids, ev.b||[]); applyLevels(asks, ev.a||[]); lastUpdateId = Number(ev.u||lastUpdateId); _dbg.diffs++; }
   function onDiff(ev){
     if(!st.on) return;
-    if(!synced){ diffBuf.push(ev); if(diffBuf.length>500) diffBuf.shift(); return; }
-    /* gap de sequência (spot: U > lastUpdateId+1) → resync */
-    if(Number(ev.U) > lastUpdateId+1){ setStatus("RESYNC"); synced=false; resetBook(); scheduleResync(); return; }
+    if(!synced){ diffBuf.push(ev); if(diffBuf.length>800) diffBuf.shift(); return; }
+    if(Number(ev.U) > lastUpdateId+1){ synced=false; resetBook(); scheduleResync(); return; }   // gap → resync
     if(Number(ev.u) <= lastUpdateId) return;   // antigo
     applyDiff(ev);
   }
-  function scheduleResync(){ if(resyncTimer) return; resyncTimer=setTimeout(function(){ resyncTimer=0; if(st.on && !replayActive()) openFeed(); }, 1200); }
+  function scheduleResync(){
+    if(resyncTimer) return; setStatus("RESYNC");
+    resyncTimer=setTimeout(function(){ resyncTimer=0; if(!st.on||replayActive()) return;
+      _resyncN++;
+      if(_resyncN>4 && _order){ tryFeed(_order, _idx+1); return; }   // fonte instável → próxima
+      seedSnapshot();   // re-seed na MESMA fonte (mantém a que funciona, ex.: Spot)
+    }, 900);
+  }
 
   function openFeed(){
     if(!st.on || replayActive()) return;
     closeFeed(); resetBook();
-    curSym=gsym(); var order=feedOrder(); tryFeed(order,0);
+    curSym=gsym(); _resyncN=0; tryFeed(feedOrder(), 0);
   }
   function tryFeed(order, idx){
     if(!st.on || curSym!==gsym()) return;
-    if(idx>=order.length){ setStatus("ERROR"); setTimeout(function(){ if(st.on) openFeed(); }, 6000); return; }
-    var feed=order[idx], s=gsym().toLowerCase(), sock;
-    setStatus("CONNECTING");
-    try{ sock=new WebSocket(feed.ws(s)); }catch(_){ tryFeed(order, idx+1); return; }
-    ws=sock; var got=false;
-    var to=setTimeout(function(){ if(!got){ try{ sock.onclose=null; sock.close(); }catch(_){} tryFeed(order, idx+1); } }, 4500);
-    sock.onopen=function(){ feedSrc=feed.src; setStatus("SYNC"); seedSnapshot(feed); };
-    sock.onmessage=function(m){ got=true; if(to){ clearTimeout(to); to=0; } try{ var ev=JSON.parse(m.data); if(ev && (ev.b||ev.a)) onDiff(ev); }catch(_){} };
+    closeSock();
+    if(idx>=order.length){ setStatus("ERROR"); if(resyncTimer) clearTimeout(resyncTimer); resyncTimer=setTimeout(function(){ resyncTimer=0; if(st.on) openFeed(); }, 6000); return; }
+    _order=order; _idx=idx; _feed=order[idx];
+    var feed=_feed, s=gsym().toLowerCase(), sock, got=false, snapStarted=false, dead=false;
+    setStatus("CONNECTING"); feedSrc=feed.src; synced=false; resetBook();
+    function fail(){ if(dead) return; dead=true; try{ if(sock){ sock.onclose=null; sock.close(); } }catch(_){} if(ws===sock) ws=null; tryFeed(order, idx+1); }
+    try{ sock=new WebSocket(feed.ws(s)); }catch(_){ return fail(); }
+    ws=sock;
+    var to=setTimeout(function(){ if(!got) fail(); }, 4000);   // sem dados em 4s → próxima fonte
+    sock.onopen=function(){ setStatus("SYNC"); };
+    sock.onmessage=function(m){ got=true; if(to){ clearTimeout(to); to=0; } if(dead) return;
+      try{ var ev=JSON.parse(m.data); if(ev && (ev.b||ev.a)) onDiff(ev); }catch(_){}
+      if(!snapStarted){ snapStarted=true; seedSnapshot(); } };   // 1ª msg viva → busca snapshot
     sock.onerror=function(){};
-    sock.onclose=function(){ if(ws===sock){ ws=null; } if(to){ clearTimeout(to); to=0; } if(st.on && curSym===gsym() && !replayActive()){ setTimeout(function(){ if(st.on) tryFeed(order, got?idx:idx+1); }, 1400); } };
+    sock.onclose=function(){ if(ws===sock) ws=null; if(to){ clearTimeout(to); to=0; } if(dead) return;
+      if(st.on && curSym===gsym() && !replayActive()){
+        if(got && synced){ if(resyncTimer) clearTimeout(resyncTimer); resyncTimer=setTimeout(function(){ resyncTimer=0; if(st.on) openFeed(); }, 1500); }
+        else fail();   // nunca sincronizou nessa fonte → próxima
+      }
+    };
   }
 
   /* ── amostragem: captura o book dentro do span em uma coluna ── */
@@ -80814,7 +80831,7 @@ window.DVL_DOM_CROSSHAIR_1205={
 
   /* ── HUD ── */
   var hud=null;
-  function ensureHud(){ if(hud && document.body.contains(hud)) return hud; hud=document.createElement("div"); hud.id="dvlDHHud"; hud.setAttribute("data-dvl-ui","true"); document.body.appendChild(hud); return hud; }
+  function ensureHud(){ if(hud && hud.parentNode) return hud; var wrap=document.getElementById("chartWrap")||document.querySelector(".canvasWrap")||document.body; try{ if(wrap!==document.body && getComputedStyle(wrap).position==="static") wrap.style.position="relative"; }catch(_){} hud=document.createElement("div"); hud.id="dvlDHHud"; hud.setAttribute("data-dvl-ui","true"); wrap.appendChild(hud); return hud; }
   function paintHud(){ if(!hud) return; var col=status.indexOf("LIVE")===0?"#13dc8d":(status==="ERROR"?"#ff4a61":(status==="PAUSED REPLAY"?"#f4b942":"#8fb6ff"));
     hud.innerHTML='<b style="color:'+col+'">DH · '+status+'</b>  cols '+cols.length+'  ·  cells '+_dbg.drawn+(feedSrc?("  ·  "+feedSrc):""); }
   function showHud(v){ if(v){ ensureHud(); hud.style.display="block"; paintHud(); } else if(hud){ hud.style.display="none"; } }
@@ -80911,8 +80928,8 @@ window.DVL_DOM_CROSSHAIR_1205={
 </script>
 
 <style id="DVL_DEEP_HEATMAP_CSS_1362">
-#dvlDHHud{position:fixed;left:8px;top:44px;z-index:100650;display:none;pointer-events:none;font:700 10px/1.4 ui-monospace,Menlo,monospace;color:#cfe0f5;background:rgba(6,12,20,.82);border:1px solid rgba(120,160,220,.3);border-radius:8px;padding:5px 9px;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.4)}
-@media(max-width:760px){#dvlDHHud{top:auto;bottom:150px;font-size:9.5px}}
+/* HUD ancorado no TOPO-ESQUERDA do gráfico (dentro do #chartWrap, position:absolute) */
+#dvlDHHud{position:absolute;left:8px;top:8px;z-index:41;display:none;pointer-events:none;font:700 9.5px/1.4 ui-monospace,Menlo,monospace;color:#cfe0f5;background:rgba(6,12,20,.8);border:1px solid rgba(120,160,220,.3);border-radius:7px;padding:4px 8px;white-space:nowrap;box-shadow:0 3px 12px rgba(0,0,0,.35)}
 .dvl-dh-indicator-item .indicatorFxMark{background:linear-gradient(180deg,#1a3a5a,#0e2033);color:#7fc0ff}
 </style>
 
