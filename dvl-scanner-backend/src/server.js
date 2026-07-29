@@ -28,8 +28,6 @@ const paperBot = require("./paperBot");
 const bubbleHistory = require("./bubbleHistory");
 const vpAlerts = require("./vpAlerts");
 const gexLevels = require("./gexLevels");
-const depthHistory = require("./depthHistory");
-try { depthHistory.startDefault(); } catch (_) {}
 
 function normExchange(q) { return q === "mexc" ? "mexc" : "binance"; }
 function normTf(q) { return cfg.TF_LIST.indexOf(q) >= 0 ? q : cfg.SCAN_TF; }
@@ -217,16 +215,6 @@ function createServer() {
       res.json(Object.assign({ ok: true }, await bubbleHistory.history(req.query.symbol, req.query.mins, opts)));
     }
     catch (e) { res.json({ ok: false, error: String(e && e.message || e), groups: [] }); }
-  });
-
-  // ── Deep Heatmap: histórico de order book (gravado no servidor) ──
-  app.get("/api/depth_history", (req, res) => {
-    try { res.json(depthHistory.history(req.query.symbol, req.query.mins, req.query.levels)); }
-    catch (e) { res.json({ ok: false, error: String(e && e.message || e), snapshots: [] }); }
-  });
-  app.get("/api/depth_history/status", (req, res) => {
-    try { res.json({ ok: true, recorders: depthHistory.status() }); }
-    catch (e) { res.json({ ok: false, error: String(e && e.message || e) }); }
   });
 
   // ── Alertas VP (Telegram, vigiados no backend) ──
