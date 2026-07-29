@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.360';
+window.DVL_APP_VERSION = 'Beta 1.361';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -15877,6 +15877,12 @@ html.dvl-ui-1b-active #chartSettingsPanel.is-open{position:fixed!important;right
           <button id="dvlReplaySettingsBtn" type="button" style="width:100%;padding:7px 0;background:rgba(20,216,160,.12);border:1px solid rgba(20,216,160,.32);border-radius:7px;color:#14d8a0;font:700 11px system-ui;cursor:pointer;letter-spacing:.03em;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v4h4"/></svg>DVL Replay Pro</button>
         </div>
 
+        <label class="chartSettingRow switchRow" title="Painel de medição de performance (FPS, jank, draw, heap)">
+          <span>Propriedades</span>
+          <input id="dvlPerfPropsToggle" type="checkbox">
+          <i></i>
+        </label>
+
         <div class="chartSettingRow" style="margin-top:6px;padding-bottom:4px">
           <button id="dvlSaveSettingsBtn" type="button" style="width:100%;padding:7px 0;background:rgba(19,220,141,.12);border:1px solid rgba(19,220,141,.3);border-radius:7px;color:#13dc8d;font:700 11px system-ui;cursor:pointer;letter-spacing:.04em">Salvar configurações</button>
         </div>
@@ -16299,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.361", note: "Painel de performance (FPS/jank/draw/heap) agora liga/desliga APENAS por um botão nas Configurações do gráfico (⚙️ → 'Propriedades'). Removi os gestos antigos que o abriam sem querer — P×3 no desktop e 3 toques com 2 dedos no mobile — que disparavam durante o uso/arraste e atrapalhavam. O estado continua salvo por aparelho; ?perf=1/0 na URL ainda força. Só frontend." },
   { version: "Beta 1.360", note: "Fix — botão Salvar dava 'Erro ao salvar'. Causa: o snapshot do perfil copiava TODAS as chaves 'DVL...' do localStorage, incluindo o PRÓPRIO snapshot anterior — então cada save embutia o snapshot antigo dentro do novo e o tamanho ~dobrava a cada vez, até estourar a cota do navegador (QuotaExceeded) e o save falhar. Agora o save exclui as chaves de snapshot/backup (DVL_USER_PROFILE_SNAPSHOT/LAST_SAVE/DRAWINGS_BACKUP), libera o snapshot antigo antes de gravar o novo e, se ainda faltar espaço, grava um snapshot 'lite' (sem o blob de localStorage) — mantendo drawings/chart/versão e nunca falhando. Só frontend." },
   { version: "Beta 1.359", note: "Risk Express — 2 correções: (1) as linhas/labels do Risk (Entry/SL/TP) agora têm PRIORIDADE máxima no gráfico — passaram a ser desenhadas por último, então nunca mais ficam cobertas por MAX PAIN, FLIP, Volume Profile, GEX etc. (2) o arraste do painel voltou a funcionar: a alça (⠿) estava sendo bloqueada por um stopPropagation em fase de captura na própria toolbar (matava o pointerdown da alça antes dele chegar); agora a alça é isenta e o arraste do painel funciona no toque e no mouse. Só UI." },
   { version: "Beta 1.358", note: "Risk Express — agora dá pra OCULTAR o painel deixando só as linhas no gráfico, e o painel virou ARRASTÁVEL. Botão '⌄ ocultar' na toolbar esconde o painel mantendo Entry/SL/TP no gráfico (as linhas continuam vivas e arrastáveis); o botão flutuante 🛡 ganha um pontinho âmbar quando o painel está oculto e um toque nele traz o painel de volta (outro toque oculta de novo). '✕ fechar' continua desligando tudo. A toolbar ganhou uma alça (⠿) à esquerda pra arrastar e reposicionar onde quiser — a posição fica salva. Só ajuste de UI; cálculo, drag das linhas e sincronização com o painel completo inalterados." },
@@ -79444,26 +79451,22 @@ html body #tradeDrawer.is-open .tradeDrawerBody.dvl-risk-mode>.panelRowTop,html 
     unwrapDraw();
     try{ localStorage.setItem(KEY,"0"); }catch(_){}
   }
-  function toggle(){ on?stop():start(); }
+  function syncToggleUI(){ try{ var t=document.getElementById("dvlPerfPropsToggle"); if(t) t.checked=on; }catch(_){} }
+  function toggle(){ on?stop():start(); syncToggleUI(); }
 
-  /* Desktop: 'P' x3 rápido. Não usa preventDefault — o app segue recebendo a tecla. */
-  var kt=[];
-  window.addEventListener("keydown", function(e){
-    if((e.key==="p"||e.key==="P") && !e.metaKey && !e.ctrlKey && !e.altKey){
-      var t=Date.now(); kt.push(t); kt=kt.filter(function(x){return t-x<1200;});
-      if(kt.length>=3){ kt.length=0; toggle(); }
-    }
-  }, true);
-  /* Mobile: 3 toques rápidos com 2 dedos. */
-  var tt=[];
-  window.addEventListener("touchstart", function(e){
-    if(e.touches && e.touches.length===2){
-      var t=Date.now(); tt.push(t); tt=tt.filter(function(x){return t-x<1400;});
-      if(tt.length>=3){ tt.length=0; toggle(); }
-    }
-  }, {passive:true, capture:true});
+  /* Beta 1.361 — o painel de performance ("Propriedades") agora liga/desliga
+     APENAS pelo botão nas Configurações do gráfico (⚙️). Os antigos gestos
+     (P×3 no desktop, 3 toques com 2 dedos no mobile) foram removidos porque
+     disparavam sem querer durante o uso/arraste. ?perf=1/0 na URL ainda força. */
+  function bindSettingsToggle(){
+    var t=document.getElementById("dvlPerfPropsToggle");
+    if(!t || t.__dvlBound) return;
+    t.__dvlBound=true;
+    t.checked=on;
+    t.addEventListener("change", function(){ if(t.checked) start(); else stop(); syncToggleUI(); });
+  }
 
-  function boot(){ if(want()) start(); else { try{ if(/[?&]perf=0/.test(location.search)) localStorage.setItem(KEY,"0"); }catch(_){} } }
+  function boot(){ bindSettingsToggle(); if(want()) start(); else { try{ if(/[?&]perf=0/.test(location.search)) localStorage.setItem(KEY,"0"); }catch(_){} } syncToggleUI(); }
   if(document.readyState==="complete" || document.readyState==="interactive") setTimeout(boot,900);
   else window.addEventListener("DOMContentLoaded", function(){ setTimeout(boot,900); });
 
