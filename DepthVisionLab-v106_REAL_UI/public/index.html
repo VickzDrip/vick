@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.369';
+window.DVL_APP_VERSION = 'Beta 1.370';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.370", note: "Deep Heatmap — modo \"Heatmap\" agora é estilo DeepCharts de verdade: PREENCHE a largura toda. No painel, em Visual, escolha Heatmap (ou Linha) — o eixo de preço passa a ser DIRIGIDO PELOS DADOS (cobre o book de todas as colunas visíveis) em vez do eixo fixo das velas, então a liquidez aparece de ponta a ponta, com escala de preço própria à direita e a linha de preço branca por cima (velas ocultas nesse modo). No modo Candles segue como overlay (mostra a liquidez perto do preço atual). Só frontend." },
   { version: "Beta 1.369", note: "Deep Heatmap — o histórico de ~2h (na real ~16h) já EXISTIA no servidor (/api/depth_history), mas o mapa não semeava porque o parser só aceitava {snapshots}/{data} e o endpoint devolve um array cru [{time,bids,asks}]. Agora o parser aceita o array cru também — então, ao ligar o DH, o heatmap já abre preenchido com o histórico do book do servidor (não começa mais vazio). Removido o gravador redundante que eu tinha posto no backend do scanner (o servidor DVL já grava). Frontend + backend (limpeza)." },
   { version: "Beta 1.368", note: "Deep Heatmap — histórico de ~2h já carregado na entrada. Novo gravador de order book no BACKEND (depthHistory.js): faz polling do depth da Binance Spot a cada 8s e mantém um anel de ~2h por símbolo (BTC/ETH/SOL gravados desde o boot; outros sob demanda). Endpoint /api/depth_history serve os snapshots e o Deep Heatmap semeia o mapa com eles ao ligar (agora pede 120 min). Assim, ao abrir, o heatmap já vem preenchido em vez de começar vazio. OBS: como é em memória, logo após um deploy o servidor recomeça do zero e enche até ~2h. Frontend + backend." },
   { version: "Beta 1.367", note: "Deep Heatmap — visual repaginado pra ficar mais legível (estilo DeepCharts): nova rampa de cor \"hot\" (teal dim = liquidez leve → ciano → amarelo → laranja → VERMELHO nas paredes fortes), então dá pra ver num olhar pra onde a liquidez se acumula. O campo agora PREENCHE (contraste/gamma suavizados) em vez de mostrar só linhas esparsas, e ganhou um fundo escuro atrás das velas pra as cores ressaltarem (as velas seguem nítidas por cima). Os ▲/▼ de consumo continuam como marcadores. Só frontend." },
@@ -81279,6 +81280,31 @@ window.DVL_DOM_CROSSHAIR_1205={
     ctx.restore();
   }
 
+  /* Beta 1.370 — faixa de preço DIRIGIDA PELOS DADOS pro modo Heatmap/Linha.
+     No modo Candles o eixo é o do gráfico (fixo) → só mostra a liquidez perto do
+     preço atual. Nos modos Heatmap/Linha, o eixo passa a cobrir o book de TODAS
+     as colunas visíveis (união dos ranges), então o mapa PREENCHE a largura toda
+     estilo DeepCharts, com escala de preço própria e a linha de preço por cima. */
+  function computeHeatRange(cfg){
+    if(!R.step||!R.snapshots.length) return {min:cfg.min,max:cfg.max};
+    var t0=slotToTime(0,cfg), t1=slotToTime(Math.max(1,cfg.win.totalSlots-1),cfg);
+    var mnB=Infinity,mxB=-Infinity,c=0;
+    for(var i=R.snapshots.length-1;i>=0;i--){ var s=R.snapshots[i]; if(s.t<t0-120000)break; if(s.t>t1+120000)continue; if(s.base<mnB)mnB=s.base; if(s.base>mxB)mxB=s.base; c++; if(c>5000)break; }
+    if(!c||!isFinite(mnB)) return {min:cfg.min,max:cfg.max};
+    var min=mnB*R.step, max=(mxB+512)*R.step, pad=(max-min)*0.015;
+    if(!(max>min)) return {min:cfg.min,max:cfg.max};
+    return {min:min-pad, max:max+pad};
+  }
+  function drawHeatScale(ctx,cfg,rmin,rmax){
+    ctx.save();ctx.font="700 8px system-ui";ctx.textAlign="right";ctx.textBaseline="middle";
+    var n=7,dec=priceDecimals(R.step||1);
+    for(var i=0;i<=n;i++){ var p=rmax-(rmax-rmin)*i/n, yy=cfg.y0+(cfg.y1-cfg.y0)*i/n;
+      if(yy<cfg.y0+6||yy>cfg.y1-2) continue;
+      var tx=Number(p).toLocaleString("en-US",{minimumFractionDigits:dec,maximumFractionDigits:dec}),w=ctx.measureText(tx).width+8;
+      ctx.fillStyle="rgba(2,7,11,.72)";ctx.fillRect(cfg.x1-w-2,yy-7,w,14);
+      ctx.fillStyle="rgba(200,216,230,.85)";ctx.fillText(tx,cfg.x1-6,yy); }
+    ctx.restore();
+  }
   window.DVLDeepHeatmapDraw=function(ctx,cfg){
     if(!st.on||replayActive()||st.viewMode!=="candles")return;
     try{drawHeat(ctx,cfg);drawStatus(ctx,cfg);R.lastDrawAt=Date.now();}catch(e){R.err=String(e&&e.message||e);}
@@ -81287,10 +81313,15 @@ window.DVL_DOM_CROSSHAIR_1205={
     if(!st.on||replayActive())return;
     try{
       if(st.viewMode!=="candles"){
+        var hr=computeHeatRange(cfg),Y0=cfg.y0,Y1=cfg.y1,rmin=hr.min,rmax=hr.max,span=Math.max(1e-9,rmax-rmin);
+        var cfg2=Object.assign({},cfg,{min:rmin,max:rmax,y:function(p){return Y1-(p-rmin)/span*(Y1-Y0);}});
         ctx.save();ctx.fillStyle=st.viewMode==="heatmap"?"rgba(0,0,0,.96)":"rgba(0,0,0,.82)";ctx.fillRect(cfg.x0,cfg.y0,cfg.x1-cfg.x0,cfg.y1-cfg.y0);ctx.restore();
-        drawHeat(ctx,cfg);drawPriceLine(ctx,cfg);drawStatus(ctx,cfg);
+        drawHeat(ctx,cfg2);drawPriceLine(ctx,cfg2);drawHeatScale(ctx,cfg2,rmin,rmax);drawStatus(ctx,cfg2);
+        drawConsumption(ctx,cfg2);drawBubbles(ctx,cfg2);
+      } else {
+        drawConsumption(ctx,cfg);drawBubbles(ctx,cfg);
       }
-      drawConsumption(ctx,cfg);drawBubbles(ctx,cfg);R.lastDrawAt=Date.now();
+      R.lastDrawAt=Date.now();
     }catch(e){R.err=String(e&&e.message||e);}
   };
 
