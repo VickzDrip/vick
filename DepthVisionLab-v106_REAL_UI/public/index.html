@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.363';
+window.DVL_APP_VERSION = 'Beta 1.364';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.364", note: "Deep Heatmap agora aparece de verdade no menu de Indicators. O menu visível é o categorizado (FAVORITES/OSCILLATORS/OVERLAY/VOLUME & FLOW) montado por um registro próprio — e o item DH estava sendo inserido no dropdown legado escondido. Registrei o 'DVL Deep Heatmap' nesse registro, na seção OVERLAY (ao lado do Bookmap), com switch ON/OFF real e abertura do painel. Ajustei o contrato da API do DH (on() como função, settings, openPanel) pra casar com o registro. So frontend." },
   { version: "Beta 1.363", note: "Deep Heatmap (DH) — reforço de registro no menu de Indicators: além do boot e do reintento periódico, o item 'DVL Deep Heatmap' agora é (re)inserido no exato momento em que você abre os Indicators, à prova de rebuild/timing do novo UI. Se não aparecia por conta de cache antigo, recarregar já resolve. (O item entra no topo da lista de Indicators.) Só frontend." },
   { version: "Beta 1.362", note: "DVL Deep Heatmap (Fase 1) — novo indicador nativo 'DH' na lista de Indicators: matriz preço×tempo do ORDER BOOK (Level 2) mostrando a liquidez resting — azul/ciano = normal, amarelo = concentração forte (percentil superior). Alimentado pelo feed @depth via WebSocket do navegador (tenta Binance Futures e cai pro Spot) + snapshot REST com resync automático em caso de gap de sequência. Camada de FUNDO (atrás das velas), presa a preço/tempo (acompanha zoom/pan). HUD de status (OFF/CONNECTING/SYNC/LIVE/RESYNC/PAUSED REPLAY/ERROR). Painel com Source, History, Sample, Price span, contrastes, opacidade e cell size (padrão DVL, sem dropdown nativo). Ao ligar, suspende o Bookmap antigo; ao desligar, restaura. Pausa no Replay; limpa socket/timers na troca de ativo e no OFF. 100% leitura. PRÓXIMA FASE: consumo confirmado (▲ compra→ASK / ▼ venda→BID por correlação com aggTrades), bubbles e pulls. Só frontend." },
   { version: "Beta 1.361", note: "Painel de performance (FPS/jank/draw/heap) agora liga/desliga APENAS por um botão nas Configurações do gráfico (⚙️ → 'Propriedades'). Removi os gestos antigos que o abriam sem querer — P×3 no desktop e 3 toques com 2 dedos no mobile — que disparavam durante o uso/arraste e atrapalhavam. O estado continua salvo por aparelho; ?perf=1/0 na URL ainda força. Só frontend." },
@@ -66750,7 +66751,7 @@ body.dvl-osc-divider-dragging *{
   function catFor(m){
     if(m.missing) return "soon";
     if(m.key==="oi"||m.key==="ls"||m.key==="netlong"||m.key==="netshort"||m.key==="netdelta"||m.key==="dv"||m.key==="exr"||m.key==="tv"||m.key==="arion") return "osc";
-    if(m.key==="ma"||m.key==="bookmap"||m.key==="frvp"||m.key==="ifvgmagnet"||m.key==="gex") return "overlay";
+    if(m.key==="ma"||m.key==="bookmap"||m.key==="dh"||m.key==="frvp"||m.key==="ifvgmagnet"||m.key==="gex") return "overlay";
     return "flow";
   }
 
@@ -66771,6 +66772,7 @@ body.dvl-osc-divider-dragging *{
       {key:"smartdelta",mark:"SD",title:"DVL Smart Delta",sub:"institutional confluence",api:"DVL_SMART_DELTA_ENGINE_API",pill:"dvlSmartDeltaState",row:"dvlSmartDeltaItem"},
       {key:"ma",mark:"MA",title:"Moving Averages",sub:"10 médias · overlay",api:"DVLMovingAverages",pill:"dvlMaState",row:"dvlMovingAveragesItem"},
       {key:"bookmap",mark:"BM",title:"DVL Bookmap Zones",sub:"Order book heatmap · Bookmap style",api:"DVL_BOOKMAP_ZONES_0813"},
+      {key:"dh",mark:"DH",title:"DVL Deep Heatmap",sub:"order book · liquidez resting",api:"DVL_DEEP_HEATMAP"},
       {key:"tv",mark:"TV",title:"DVL Tick Volume",sub:"tick volume oscillator",api:"DVLTickVolume",pill:"dvlTickVolumeState",row:"dvlTickVolumeItem"}
     ].map(function(m){
       m.missing = m.key==="bookmap" ? false : (!apiName(m.api) && !(m.row&&document.getElementById(m.row)));
@@ -80888,7 +80890,10 @@ window.DVL_DOM_CROSSHAIR_1205={
   try{ window.addEventListener("dvl:replay-active", function(){ if(replayActive()){ setStatus("PAUSED REPLAY"); closeFeed(); } else if(st.on){ openFeed(); } }, {passive:true}); }catch(_){}
 
   window.DVL_DEEP_HEATMAP={
-    setOn:setOn, get on(){return st.on;}, suspendsBookmap:function(){ return !!st.on; },
+    /* contrato compatível com o registro de Indicators do 1b (isOn usa on()/settings;
+       toggle usa setOn; abrir usa openPanel). */
+    setOn:setOn, on:function(){ return !!st.on; }, settings:st, openPanel:openPanel,
+    suspendsBookmap:function(){ return !!st.on; },
     debug:function(){ return { on:st.on, status:status, feedSrc:feedSrc, curSym:curSym, cols:cols.length, snaps:_dbg.snaps, diffs:_dbg.diffs, drawn:_dbg.drawn, synced:synced }; }
   };
 
