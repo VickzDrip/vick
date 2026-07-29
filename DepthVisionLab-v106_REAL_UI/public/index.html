@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.361';
+window.DVL_APP_VERSION = 'Beta 1.362';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.362", note: "DVL Deep Heatmap (Fase 1) — novo indicador nativo 'DH' na lista de Indicators: matriz preço×tempo do ORDER BOOK (Level 2) mostrando a liquidez resting — azul/ciano = normal, amarelo = concentração forte (percentil superior). Alimentado pelo feed @depth via WebSocket do navegador (tenta Binance Futures e cai pro Spot) + snapshot REST com resync automático em caso de gap de sequência. Camada de FUNDO (atrás das velas), presa a preço/tempo (acompanha zoom/pan). HUD de status (OFF/CONNECTING/SYNC/LIVE/RESYNC/PAUSED REPLAY/ERROR). Painel com Source, History, Sample, Price span, contrastes, opacidade e cell size (padrão DVL, sem dropdown nativo). Ao ligar, suspende o Bookmap antigo; ao desligar, restaura. Pausa no Replay; limpa socket/timers na troca de ativo e no OFF. 100% leitura. PRÓXIMA FASE: consumo confirmado (▲ compra→ASK / ▼ venda→BID por correlação com aggTrades), bubbles e pulls. Só frontend." },
   { version: "Beta 1.361", note: "Painel de performance (FPS/jank/draw/heap) agora liga/desliga APENAS por um botão nas Configurações do gráfico (⚙️ → 'Propriedades'). Removi os gestos antigos que o abriam sem querer — P×3 no desktop e 3 toques com 2 dedos no mobile — que disparavam durante o uso/arraste e atrapalhavam. O estado continua salvo por aparelho; ?perf=1/0 na URL ainda força. Só frontend." },
   { version: "Beta 1.360", note: "Fix — botão Salvar dava 'Erro ao salvar'. Causa: o snapshot do perfil copiava TODAS as chaves 'DVL...' do localStorage, incluindo o PRÓPRIO snapshot anterior — então cada save embutia o snapshot antigo dentro do novo e o tamanho ~dobrava a cada vez, até estourar a cota do navegador (QuotaExceeded) e o save falhar. Agora o save exclui as chaves de snapshot/backup (DVL_USER_PROFILE_SNAPSHOT/LAST_SAVE/DRAWINGS_BACKUP), libera o snapshot antigo antes de gravar o novo e, se ainda faltar espaço, grava um snapshot 'lite' (sem o blob de localStorage) — mantendo drawings/chart/versão e nunca falhando. Só frontend." },
   { version: "Beta 1.359", note: "Risk Express — 2 correções: (1) as linhas/labels do Risk (Entry/SL/TP) agora têm PRIORIDADE máxima no gráfico — passaram a ser desenhadas por último, então nunca mais ficam cobertas por MAX PAIN, FLIP, Volume Profile, GEX etc. (2) o arraste do painel voltou a funcionar: a alça (⠿) estava sendo bloqueada por um stopPropagation em fase de captura na própria toolbar (matava o pointerdown da alça antes dele chegar); agora a alça é isenta e o arraste do painel funciona no toque e no mouse. Só UI." },
@@ -21377,7 +21378,15 @@ function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
   drawSessionsBackground(ctx, view, win, x, x0, x1, y0, y1, slotOffset);
   drawGrid(ctx,x0,y0,x1,y1,10,7);
 
-  if(window.DVL_BOOKMAP_CORE_DRAW_0827){
+  /* DVL Deep Heatmap — camada de FUNDO (atrás das velas): matriz de liquidez
+     resting (azul/ciano/amarelo). Desenhada aqui pra ficar sob candles/overlays. */
+  if(window.DVLDeepHeatmapDraw){
+    try{window.DVLDeepHeatmapDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlDH_e){}
+  }
+
+  /* quando o Deep Heatmap está ON, suspende o Bookmap antigo (evita conflito);
+     restaura ao desligar. */
+  if(window.DVL_BOOKMAP_CORE_DRAW_0827 && !(window.DVL_DEEP_HEATMAP && window.DVL_DEEP_HEATMAP.suspendsBookmap && window.DVL_DEEP_HEATMAP.suspendsBookmap())){
     try{
       window.DVL_BOOKMAP_CORE_DRAW_0827(ctx, {
         view: view,
@@ -80621,6 +80630,277 @@ window.DVL_DOM_CROSSHAIR_1205={
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true}); else boot();
 })();
 </script>
+
+<script id="DVL_DEEP_HEATMAP_1362">
+/* ── DVL Deep Heatmap + Consumption (Fase 1: heatmap MBP de liquidez resting) ──
+   Indicador nativo "DH": matriz preço×tempo do order book (Level 2) via WebSocket
+   @depth + snapshot REST, com resync por gap de sequência. Azul/ciano = liquidez
+   resting; amarelo = resting forte (percentil superior). NÃO infere consumo aqui
+   (▲/▼ vêm na próxima fase). Camada de FUNDO (atrás das velas). Isolado em IIFE,
+   canvas do próprio chart via hook window.DVLDeepHeatmapDraw (respeita zoom/pan/DPR).
+   Pausa no Replay. Ao ligar, suspende o Bookmap antigo; restaura ao desligar.
+   100% leitura — nunca envia ordem. */
+(function(){
+  "use strict";
+  if(window.DVL_DEEP_HEATMAP) return;
+
+  var LS="dvl.deepheatmap.v1";
+  var DEF={
+    on:false, source:"auto", viewMode:"candles",
+    historyMinutes:30, sampleInterval:650, priceSpanPct:1.2,
+    liquidityContrast:55, topContrast:97, heatOpacity:0.72, cellSize:2
+  };
+  var st=(function(){ try{ var s=JSON.parse(localStorage.getItem(LS)||"{}")||{},o={}; for(var k in DEF)o[k]=(k in s)?s[k]:DEF[k]; return o; }catch(_){ var d={}; for(var k2 in DEF)d[k2]=DEF[k2]; return d; } })();
+  var saveT=0; function save(){ clearTimeout(saveT); saveT=setTimeout(function(){ try{ localStorage.setItem(LS,JSON.stringify(st)); }catch(_){} },140); updateItem(); }
+  function reset(){ for(var k in DEF)st[k]=DEF[k]; try{ localStorage.setItem(LS,JSON.stringify(st)); }catch(_){} updateItem(); if(panel)renderPanel(); requestDraw(); }
+
+  function gsym(){ try{ if(typeof symbol!=="undefined"&&symbol) return String(symbol).toUpperCase(); }catch(_){} try{ if(window.ticker&&window.ticker.symbol) return String(window.ticker.symbol).toUpperCase(); }catch(_){} return "BTCUSDT"; }
+  function requestDraw(){ try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){} try{ if(typeof window.drawSoon==="function") window.drawSoon(); }catch(_){} }
+  function replayActive(){ try{ return !!(window.DVLReplay && window.DVLReplay.status && window.DVLReplay.status().active); }catch(_){ return false; } }
+
+  /* ── estado do book + colunas amostradas ── */
+  var bids={}, asks={}, lastUpdateId=0, synced=false;
+  var cols=[];            // {t, mid, b:[[price,qty]...], a:[[price,qty]...]}
+  var ws=null, feedSrc="", sampleTimer=0, diffBuf=[], resyncTimer=0, lastMid=0;
+  var status="OFF";       // OFF/CONNECTING/SYNC/LIVE FUTURES/LIVE SPOT/RESYNC/PAUSED REPLAY/ERROR
+  var curSym="";
+  var _dbg={snaps:0,diffs:0,cols:0,drawn:0};
+
+  var FHOST="https://fapi.binance.com", SHOSTS=["https://api.binance.com","https://data-api.binance.vision"];
+  var FEEDS=[
+    {src:"futures", ws:function(s){return "wss://fstream.binance.com/ws/"+s+"@depth@100ms";}, snap:function(s){return FHOST+"/fapi/v1/depth?symbol="+s+"&limit=1000";}},
+    {src:"spot",    ws:function(s){return "wss://stream.binance.com:9443/ws/"+s+"@depth@100ms";}, snap:function(s,h){return SHOSTS[h||0]+"/api/v3/depth?symbol="+s+"&limit=1000";}}
+  ];
+  function feedOrder(){ if(st.source==="futures")return [FEEDS[0]]; if(st.source==="spot")return [FEEDS[1]]; return [FEEDS[0],FEEDS[1]]; }
+  function colsCap(){ return Math.max(30, Math.min(2000, Math.round(st.historyMinutes*60000/Math.max(200,st.sampleInterval)))); }
+
+  function setStatus(s){ status=s; try{ if(hud) paintHud(); }catch(_){} }
+
+  /* ── feed ── */
+  function closeFeed(){ if(ws){ try{ ws.onclose=null; ws.close(); }catch(_){} ws=null; } if(sampleTimer){ clearInterval(sampleTimer); sampleTimer=0; } if(resyncTimer){ clearTimeout(resyncTimer); resyncTimer=0; } diffBuf=[]; synced=false; }
+  function resetBook(){ bids={}; asks={}; lastUpdateId=0; synced=false; diffBuf=[]; }
+
+  function applyLevels(map, arr){ for(var i=0;i<arr.length;i++){ var p=+arr[i][0], q=+arr[i][1]; if(!(p>0)) continue; if(q>0) map[p]=q; else delete map[p]; } }
+
+  function seedSnapshot(feed){
+    var s=gsym();
+    var url=feed.snap(s.toLowerCase().toUpperCase());
+    fetch(url,{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }).then(function(d){
+      if(!st.on || s!==gsym()) return;
+      bids={}; asks={};
+      applyLevels(bids, d.bids||[]); applyLevels(asks, d.asks||[]);
+      lastUpdateId = Number(d.lastUpdateId||d.u||0);
+      _dbg.snaps++;
+      /* aplica buffer acumulado após o snapshot (sequência) */
+      var buf=diffBuf; diffBuf=[];
+      for(var i=0;i<buf.length;i++){ var ev=buf[i]; if(Number(ev.u) <= lastUpdateId) continue; applyDiff(ev); }
+      synced=true; setStatus(feedSrc==="futures"?"LIVE FUTURES":"LIVE SPOT");
+      startSampling();
+    }).catch(function(){ if(st.on) setStatus("ERROR"); scheduleResync(); });
+  }
+  function applyDiff(ev){
+    applyLevels(bids, ev.b||[]); applyLevels(asks, ev.a||[]);
+    lastUpdateId = Number(ev.u||lastUpdateId);
+    _dbg.diffs++;
+  }
+  function onDiff(ev){
+    if(!st.on) return;
+    if(!synced){ diffBuf.push(ev); if(diffBuf.length>500) diffBuf.shift(); return; }
+    /* gap de sequência (spot: U > lastUpdateId+1) → resync */
+    if(Number(ev.U) > lastUpdateId+1){ setStatus("RESYNC"); synced=false; resetBook(); scheduleResync(); return; }
+    if(Number(ev.u) <= lastUpdateId) return;   // antigo
+    applyDiff(ev);
+  }
+  function scheduleResync(){ if(resyncTimer) return; resyncTimer=setTimeout(function(){ resyncTimer=0; if(st.on && !replayActive()) openFeed(); }, 1200); }
+
+  function openFeed(){
+    if(!st.on || replayActive()) return;
+    closeFeed(); resetBook();
+    curSym=gsym(); var order=feedOrder(); tryFeed(order,0);
+  }
+  function tryFeed(order, idx){
+    if(!st.on || curSym!==gsym()) return;
+    if(idx>=order.length){ setStatus("ERROR"); setTimeout(function(){ if(st.on) openFeed(); }, 6000); return; }
+    var feed=order[idx], s=gsym().toLowerCase(), sock;
+    setStatus("CONNECTING");
+    try{ sock=new WebSocket(feed.ws(s)); }catch(_){ tryFeed(order, idx+1); return; }
+    ws=sock; var got=false;
+    var to=setTimeout(function(){ if(!got){ try{ sock.onclose=null; sock.close(); }catch(_){} tryFeed(order, idx+1); } }, 4500);
+    sock.onopen=function(){ feedSrc=feed.src; setStatus("SYNC"); seedSnapshot(feed); };
+    sock.onmessage=function(m){ got=true; if(to){ clearTimeout(to); to=0; } try{ var ev=JSON.parse(m.data); if(ev && (ev.b||ev.a)) onDiff(ev); }catch(_){} };
+    sock.onerror=function(){};
+    sock.onclose=function(){ if(ws===sock){ ws=null; } if(to){ clearTimeout(to); to=0; } if(st.on && curSym===gsym() && !replayActive()){ setTimeout(function(){ if(st.on) tryFeed(order, got?idx:idx+1); }, 1400); } };
+  }
+
+  /* ── amostragem: captura o book dentro do span em uma coluna ── */
+  function startSampling(){ if(sampleTimer) clearInterval(sampleTimer); sampleTimer=setInterval(sampleColumn, Math.max(200, st.sampleInterval)); }
+  function bestBid(){ var mx=0; for(var p in bids){ p=+p; if(p>mx) mx=p; } return mx; }
+  function bestAsk(){ var mn=Infinity; for(var p in asks){ p=+p; if(p<mn) mn=p; } return isFinite(mn)?mn:0; }
+  function sampleColumn(){
+    if(!st.on || !synced || replayActive()) return;
+    var bb=bestBid(), ba=bestAsk(); if(!(bb>0)||!(ba>0)) return;
+    var mid=(bb+ba)/2; lastMid=mid;
+    var span=mid*(Math.max(0.4,Math.min(5,st.priceSpanPct))/100);
+    var lo=mid-span, hi=mid+span, b=[], a=[], p, q;
+    for(p in bids){ p=+p; if(p>=lo && p<=hi){ q=bids[p]; if(q>0) b.push([p,q]); } }
+    for(p in asks){ p=+p; if(p>=lo && p<=hi){ q=asks[p]; if(q>0) a.push([p,q]); } }
+    if(b.length>600) b=b.sort(function(x,y){return y[1]-x[1];}).slice(0,600);
+    if(a.length>600) a=a.sort(function(x,y){return y[1]-x[1];}).slice(0,600);
+    cols.push({t:Date.now(), mid:mid, b:b, a:a});
+    var cap=colsCap(); while(cols.length>cap) cols.shift();
+    _dbg.cols=cols.length;
+    requestDraw();
+  }
+
+  /* ── desenho (hook do chart; camada de fundo) ── */
+  var hitNone=null;
+  function bsearchTime(view,t){ var lo=0,hi=view.length-1,ans=-1; while(lo<=hi){ var m=(lo+hi)>>1; if(+view[m].time<=t){ans=m;lo=m+1;}else hi=m-1;} return ans; }
+  function pctl(arr,p){ if(!arr.length) return 0; var s=arr.slice().sort(function(a,b){return a-b;}); return s[Math.min(s.length-1, Math.max(0, Math.floor(p*(s.length-1))))]; }
+  function heatColor(frac, op){
+    frac=frac<0?0:frac>1?1:frac; var r,g,bl,t;
+    if(frac<0.7){ t=frac/0.7; r=18; g=Math.round(80+130*t); bl=Math.round(190+55*t); }   // azul → ciano
+    else { t=(frac-0.7)/0.3; r=Math.round(18+232*t); g=Math.round(210+30*t); bl=Math.round(245-215*t); } // ciano → amarelo
+    return "rgba("+r+","+g+","+bl+","+op+")";
+  }
+  window.DVLDeepHeatmapDraw=function(ctx,o){
+    _dbg.drawn=0;
+    if(!st.on) return;
+    if(replayActive()){ setStatus("PAUSED REPLAY"); return; }
+    var s2=gsym(); if(s2!==curSym){ setSymbol(s2); return; }
+    var view=o.view, x=o.x, y=o.y, x0=o.x0,x1=o.x1,y0=o.y0,y1=o.y1, slotOffset=o.slotOffset||0, min=o.min, max=o.max;
+    if(!view||!view.length||typeof x!=="function"||typeof y!=="function"||!cols.length) return;
+    if(!(max>min)) return;
+    var vFirst=+view[0].time, vLast=+view[view.length-1].time;
+    var slotW=(view.length>1)?Math.abs(x(slotOffset+1)-x(slotOffset)):8;
+    var colW=Math.max(2, slotW*0.94);
+    /* faixa de preço por pixel → altura de célula (cellSize px, com teto no bucket real) */
+    var cell=Math.max(1, Math.min(5, st.cellSize|0||2));
+    /* coleta valores visíveis pra escala robusta (percentis de contraste) */
+    var vals=[], visc=[], i, c, j, arr, k, px, vi;
+    for(i=cols.length-1;i>=0;i--){ c=cols[i]; if(c.t< vFirst-60000) break; if(c.t>vLast+60000) continue; visc.push(c);
+      for(j=0;j<c.b.length;j++) vals.push(c.b[j][1]); for(j=0;j<c.a.length;j++) vals.push(c.a[j][1]); if(vals.length>40000) break; }
+    if(!visc.length || !vals.length) return;
+    var loT=Math.max(0,Math.min(0.99, st.liquidityContrast/100));
+    var hiT=Math.max(0.9,Math.min(0.999, st.topContrast/100));
+    var lo=pctl(vals, loT), hi=pctl(vals, hiT); if(!(hi>lo)) hi=lo+1e-9;
+    var op=Math.max(0.2,Math.min(1,st.heatOpacity));
+    ctx.save();
+    for(i=0;i<visc.length;i++){
+      c=visc[i];
+      var t=c.t; if(t<=vFirst) vi=0; else if(t>=vLast) vi=view.length-1; else { vi=bsearchTime(view,t); if(vi<0) vi=0; }
+      px=x(slotOffset+vi); if(px<x0-colW||px>x1+colW) continue;
+      var cx=px-colW/2;
+      for(k=0;k<2;k++){
+        arr=k?c.a:c.b;
+        for(j=0;j<arr.length;j++){
+          var price=arr[j][0], qty=arr[j][1];
+          if(price<min||price>max) continue;
+          var yy=y(price); if(yy<y0-cell||yy>y1+cell) continue;
+          var frac=(qty-lo)/(hi-lo);
+          if(frac<0.02) continue;
+          ctx.fillStyle=heatColor(frac, op*(0.35+0.65*Math.min(1,frac)));
+          ctx.fillRect(cx, yy-cell/2, colW, cell);
+          _dbg.drawn++;
+        }
+      }
+    }
+    ctx.restore();
+  };
+
+  function setSymbol(s){ s=String(s||"").toUpperCase(); if(s && s!==curSym){ curSym=s; cols=[]; resetBook(); if(st.on){ openFeed(); } requestDraw(); } }
+
+  /* ── HUD ── */
+  var hud=null;
+  function ensureHud(){ if(hud && document.body.contains(hud)) return hud; hud=document.createElement("div"); hud.id="dvlDHHud"; hud.setAttribute("data-dvl-ui","true"); document.body.appendChild(hud); return hud; }
+  function paintHud(){ if(!hud) return; var col=status.indexOf("LIVE")===0?"#13dc8d":(status==="ERROR"?"#ff4a61":(status==="PAUSED REPLAY"?"#f4b942":"#8fb6ff"));
+    hud.innerHTML='<b style="color:'+col+'">DH · '+status+'</b>  cols '+cols.length+'  ·  cells '+_dbg.drawn+(feedSrc?("  ·  "+feedSrc):""); }
+  function showHud(v){ if(v){ ensureHud(); hud.style.display="block"; paintHud(); } else if(hud){ hud.style.display="none"; } }
+
+  /* ── ligar/desligar ── */
+  function setOn(v){
+    st.on=(v===undefined?!st.on:!!v);
+    if(st.on){ curSym=gsym(); showHud(true); setStatus("CONNECTING"); openFeed(); }
+    else { closeFeed(); resetBook(); cols=[]; setStatus("OFF"); showHud(false); }
+    save(); requestDraw();
+  }
+
+  /* ── item no menu de Indicators ── */
+  var panel=null;
+  function updateItem(){ var stt=document.getElementById("dvlDHState"); if(stt){ stt.textContent=st.on?"ON":"OFF"; stt.classList.toggle("is-on", !!st.on); } }
+  function insertItem(){
+    var menu=document.getElementById("indicatorDropdown");
+    if(!menu || document.getElementById("dvlDeepHeatmapItem")) return;
+    var item=document.createElement("div");
+    item.id="dvlDeepHeatmapItem"; item.className="indicatorItem dvl-dh-indicator-item";
+    item.innerHTML='<span class="indicatorFxMark">DH</span><span><b>DVL Deep Heatmap</b><small>order book · liquidez resting</small></span><i class="dvl-vt-state" id="dvlDHState">OFF</i>';
+    var head=menu.querySelector(".indicatorDropHead"); if(head && head.nextSibling) menu.insertBefore(item, head.nextSibling); else menu.appendChild(item);
+    var pill=item.querySelector("#dvlDHState");
+    if(pill) pill.addEventListener("click", function(ev){ ev.preventDefault(); ev.stopPropagation(); setOn(); updateItem(); });
+    item.addEventListener("click", function(ev){ ev.stopPropagation(); openPanel(); });
+    updateItem();
+  }
+
+  /* ── painel de config (shell padrão dvl-vt) ── */
+  function ensurePanel(){ if(panel) return panel; panel=document.createElement("div"); panel.id="dvlDHPanel"; panel.className="dvl-vt-panel dvl-dh-panel";
+    panel.innerHTML='<div class="dvl-vt-head"><div class="dvl-vt-title"><b>DVL Deep Heatmap</b><small>order book · liquidez resting</small></div><div class="dvl-vt-head-actions"><button class="dvl-vt-reset-icon" id="dvlDHReset" type="button" aria-label="Reset">↻</button><button class="dvl-vt-close" id="dvlDHClose" type="button">×</button></div></div><div class="dvl-vt-body" id="dvlDHBody"></div>';
+    document.body.appendChild(panel);
+    panel.addEventListener("pointerdown", function(ev){ ev.stopPropagation(); }, true);
+    panel.querySelector("#dvlDHClose").addEventListener("click", function(){ panel.classList.remove("is-open"); });
+    panel.querySelector("#dvlDHReset").addEventListener("click", reset);
+    return panel;
+  }
+  function seg(label,key,opts){ var cur=st[key]; return '<div class="dvl-vt-field"><label>'+label+'</label><div class="dvl-bb-seg">'+opts.map(function(o){ return '<button type="button" data-dhseg="'+key+'" data-val="'+o[0]+'" class="'+(String(cur)===String(o[0])?"is-on":"")+'">'+o[1]+'</button>'; }).join("")+'</div></div>'; }
+  function stepCtl(label,key,mn,mx,step,dec,suffix){ var v=st[key]; var shown=dec?(+v).toFixed(dec):String(Math.round(+v||0)); return '<div class="dvl-bb-field"><label>'+label+'</label><div class="dvl-feb-step-wrap"><button class="dvl-feb-step-btn dvl-feb-step-dec" type="button" data-dhstep="'+key+'" data-step="'+step+'" data-min="'+mn+'" data-max="'+mx+'" data-dec="'+dec+'">−</button><span class="dvl-feb-step-val" id="dhv_'+key+'">'+shown+(suffix||"")+'</span><button class="dvl-feb-step-btn dvl-feb-step-inc" type="button" data-dhstep="'+key+'" data-step="'+step+'" data-min="'+mn+'" data-max="'+mx+'" data-dec="'+dec+'">+</button></div></div>'; }
+  function bodyHTML(){
+    return '<div class="dvl-bb-field" style="border-bottom:1px solid rgba(129,166,151,.16);padding-bottom:8px"><label>Indicador</label><label class="dvl-switch"><input type="checkbox" data-dhpower '+(st.on?"checked":"")+'><i></i><b></b></label></div>'
+      +'<div style="font-size:10.5px;margin:2px 0 8px;color:#8fb6ff" id="dvlDHStatus">'+("DH · "+status)+'</div>'
+      +seg("Source","source",[["auto","Auto"],["futures","Futures"],["spot","Spot"]])
+      +stepCtl("History (min)","historyMinutes",10,120,5,0)
+      +stepCtl("Sample (ms)","sampleInterval",400,2000,50,0)
+      +stepCtl("Price span (%)","priceSpanPct",0.4,5,0.1,1)
+      +stepCtl("Liquidity contrast","liquidityContrast",0,100,1,0)
+      +stepCtl("Top contrast (%)","topContrast",90,99.9,0.1,1)
+      +stepCtl("Heat opacity","heatOpacity",0.2,1,0.05,2)
+      +stepCtl("Cell size (px)","cellSize",1,5,1,0)
+      +'<div class="dvl-bb-note"><b>Fase 1</b>: matriz de liquidez resting (azul/ciano = normal, amarelo = forte). Consumo confirmado (▲/▼), bubbles e pulls chegam na próxima versão. Feed L2 via WebSocket do navegador (Futures→Spot).</div>';
+  }
+  function renderPanel(){ ensurePanel(); var b=panel.querySelector("#dvlDHBody"); if(!b) return; b.innerHTML=bodyHTML(); bindPanel(b); }
+  function bindPanel(b){
+    var pw=b.querySelector("[data-dhpower]"); if(pw) pw.addEventListener("change",function(){ setOn(pw.checked); renderPanel(); });
+    b.querySelectorAll("[data-dhseg]").forEach(function(el){ el.addEventListener("click",function(){ st[el.getAttribute("data-dhseg")]=el.getAttribute("data-val"); save(); renderPanel(); if(st.on) openFeed(); requestDraw(); }); });
+    b.querySelectorAll(".dvl-feb-step-btn[data-dhstep]").forEach(function(btn){ btn.addEventListener("click",function(){
+      var key=btn.getAttribute("data-dhstep"), mn=+btn.dataset.min, mx=+btn.dataset.max, step=+btn.dataset.step, dec=+btn.dataset.dec;
+      var v=Math.max(mn,Math.min(mx,(+st[key]||0)+(btn.classList.contains("dvl-feb-step-inc")?step:-step)));
+      v=dec?+v.toFixed(dec):Math.round(v); st[key]=v; var el=b.querySelector("#dhv_"+key); if(el) el.textContent=dec?v.toFixed(dec):String(Math.round(v));
+      save();
+      if(key==="historyMinutes"||key==="sampleInterval"){ var cap=colsCap(); while(cols.length>cap) cols.shift(); if(key==="sampleInterval"&&st.on&&synced) startSampling(); }
+      requestDraw();
+    }); });
+  }
+  function openPanel(){ ensurePanel(); try{ var wrap=document.getElementById("fxIndicatorWrap"); if(wrap) wrap.classList.remove("is-open"); }catch(_){} panel.classList.add("is-open"); renderPanel(); if(!st.on) setOn(true); }
+
+  /* status ao vivo no painel/HUD */
+  setInterval(function(){ try{ if(panel&&panel.classList.contains("is-open")){ var s=panel.querySelector("#dvlDHStatus"); if(s) s.textContent="DH · "+status+"  ·  cols "+cols.length; } if(hud&&hud.style.display!=="none") paintHud(); }catch(_){} }, 700);
+
+  /* troca de ativo / replay */
+  try{ window.addEventListener("dvl-safe-asset-selected-0804", function(){ setSymbol(gsym()); }, {passive:true}); }catch(_){}
+  try{ window.addEventListener("dvl:replay-active", function(){ if(replayActive()){ setStatus("PAUSED REPLAY"); closeFeed(); } else if(st.on){ openFeed(); } }, {passive:true}); }catch(_){}
+
+  window.DVL_DEEP_HEATMAP={
+    setOn:setOn, get on(){return st.on;}, suspendsBookmap:function(){ return !!st.on; },
+    debug:function(){ return { on:st.on, status:status, feedSrc:feedSrc, curSym:curSym, cols:cols.length, snaps:_dbg.snaps, diffs:_dbg.diffs, drawn:_dbg.drawn, synced:synced }; }
+  };
+
+  function boot(){ insertItem(); updateItem(); if(st.on){ curSym=gsym(); showHud(true); setStatus("CONNECTING"); openFeed(); } setInterval(insertItem, 3000); }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true}); else boot();
+})();
+</script>
+
+<style id="DVL_DEEP_HEATMAP_CSS_1362">
+#dvlDHHud{position:fixed;left:8px;top:44px;z-index:100650;display:none;pointer-events:none;font:700 10px/1.4 ui-monospace,Menlo,monospace;color:#cfe0f5;background:rgba(6,12,20,.82);border:1px solid rgba(120,160,220,.3);border-radius:8px;padding:5px 9px;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+@media(max-width:760px){#dvlDHHud{top:auto;bottom:150px;font-size:9.5px}}
+.dvl-dh-indicator-item .indicatorFxMark{background:linear-gradient(180deg,#1a3a5a,#0e2033);color:#7fc0ff}
+</style>
 
 <script id="DVL_VP_ALERTS_1283">
 /* ── Alertas VP (Telegram) — vigiados no BACKEND ───────────────────────────
