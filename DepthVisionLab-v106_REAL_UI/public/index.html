@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.358';
+window.DVL_APP_VERSION = 'Beta 1.359';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16299,6 +16299,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.359", note: "Risk Express — 2 correções: (1) as linhas/labels do Risk (Entry/SL/TP) agora têm PRIORIDADE máxima no gráfico — passaram a ser desenhadas por último, então nunca mais ficam cobertas por MAX PAIN, FLIP, Volume Profile, GEX etc. (2) o arraste do painel voltou a funcionar: a alça (⠿) estava sendo bloqueada por um stopPropagation em fase de captura na própria toolbar (matava o pointerdown da alça antes dele chegar); agora a alça é isenta e o arraste do painel funciona no toque e no mouse. Só UI." },
   { version: "Beta 1.358", note: "Risk Express — agora dá pra OCULTAR o painel deixando só as linhas no gráfico, e o painel virou ARRASTÁVEL. Botão '⌄ ocultar' na toolbar esconde o painel mantendo Entry/SL/TP no gráfico (as linhas continuam vivas e arrastáveis); o botão flutuante 🛡 ganha um pontinho âmbar quando o painel está oculto e um toque nele traz o painel de volta (outro toque oculta de novo). '✕ fechar' continua desligando tudo. A toolbar ganhou uma alça (⠿) à esquerda pra arrastar e reposicionar onde quiser — a posição fica salva. Só ajuste de UI; cálculo, drag das linhas e sincronização com o painel completo inalterados." },
   { version: "Beta 1.357", note: "Risk Express — proporção no mobile ajustada: as linhas e labels do Entry/SL/TP estavam exageradas e se sobrepondo no celular. Reduzi as fontes (LOT de 18→12px no mobile, valores NET de 14→10px), afinei as linhas (entry 3,4→2px, SL/TP 3→1,5px), diminuí o padding/raio das caixas e juntei o preço do TP com o R:R numa linha só (caixa do TP passou de 3 pra 2 linhas). Agora os labels ficam compactos e não cobrem os candles nem a escala de preço. Só ajuste visual — cálculo, drag e sincronização com o painel inalterados." },
   { version: "Beta 1.356", note: "Risk Management Express — botão flutuante (🛡) no gráfico que, com um toque, plota Entry/SL/TP no ativo atual e mostra o LOTE líquido GRANDE na própria linha Entry, já com comissão, buffer, teto de notional e Net R:R. As três linhas continuam arrastáveis e recalculam lote/risco/comissões/TP líquido em tempo real. NÃO recria cálculo: chama a MESMA API do Risk Engine (1.355) que alimenta o painel completo — os valores são idênticos nos dois. Labels repaginados (maiores, com caixa de alto contraste): ENTRY|LOT|RISCO, SL|−$ NET, TP|+$ NET|1:1, e badges CAP/CUSTO ALTO/TP MANUAL/AJUSTE SL. Mini-toolbar compacta: BUY/SELL, chips de risco ($100/$250/$500/0,5%/1%), Net R:R ±, TP Auto/Manual, Copiar lote (toque no lote copia só o número), Reset e Fechar. Botão arrastável e com posição persistida; pressão longa abre o painel completo. Só planejamento/cópia — nunca envia ordem. Cenário de referência do spec valida lote 2.740 e risco líquido US$315,90. Replay Pro e demais módulos intactos. Só frontend." },
@@ -21427,9 +21428,9 @@ if(window.DVLSpikeZonesDraw){
   /* linha vertical de início do Replay (+ escurecido do futuro) */
   if(window.DVLReplayLineDraw){ try{ window.DVLReplayLineDraw(ctx,{view:view,win:win,x:x,x0:x0,x1:x1,y0:y0,y1:y1,slotOffset:slotOffset}); }catch(_dvlRl_e){} }
 
-  if(window.DVLRiskLinesDraw){
-    try{window.DVLRiskLinesDraw(ctx,{view,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlRiskLn_e){}
-  }
+  /* Risk Express/Engine — as linhas e labels são desenhadas por ÚLTIMO (ver
+     abaixo, após GEX/VP/bubbles) pra terem PRIORIDADE e nunca ficarem cobertas
+     por MAX PAIN, FLIP, VP etc. (pedido do usuário). */
 
   if(window.DVLSmartDeltaDraw){
     try{window.DVLSmartDeltaDraw(ctx,{view,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlSD_e){}
@@ -21662,6 +21663,10 @@ if(window.DVLMovingAveragesDraw){
   }
   if(window.DVLGEXLevelsDraw){
     try{window.DVLGEXLevelsDraw(ctx,{view,win,x,y,x0,x1,y0,y1,slotOffset,candleW,min,max,symbol});}catch(_dvlGex_e){}
+  }
+  /* Risk Express/Engine — POR ÚLTIMO: prioridade máxima, labels nunca cobertos. */
+  if(window.DVLRiskLinesDraw){
+    try{window.DVLRiskLinesDraw(ctx,{view,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlRiskLn_e){}
   }
   /* Beta 0.875: DVL Flow Event Bubbles removido do draw engine. */
 ctx.restore();
@@ -42351,7 +42356,9 @@ html.dvl-pv2p-dragging *{cursor:ns-resize!important;}
       +'<button type="button" class="dvlRmxBtn hide" id="dvlRmxHideBtn">⌄<small>ocultar</small></button>'
       +'<button type="button" class="dvlRmxBtn close" id="dvlRmxCloseBtn">✕<small>fechar</small></button>';
     document.body.appendChild(bar);
-    bar.addEventListener("pointerdown",function(e){ e.stopPropagation(); },true);
+    /* trava o pan do gráfico ao tocar na toolbar, MAS deixa passar na alça (⠿)
+       pro handler de arraste do painel receber o pointerdown. */
+    bar.addEventListener("pointerdown",function(e){ if(e.target&&e.target.closest&&e.target.closest("#dvlRmxGrip")) return; e.stopPropagation(); },true);
     bar.querySelectorAll("[data-rmx-side]").forEach(function(b){ b.addEventListener("click",function(){ var A=api(); if(A&&A.setSide){ A.setSide(b.dataset.rmxSide); dispatch("side-change",{side:b.dataset.rmxSide}); refresh(); } }); });
     bar.querySelectorAll("[data-rmx-risk]").forEach(function(b){ b.addEventListener("click",function(){ var A=api(); if(!A||!A.setRisk) return; var p=b.dataset.rmxRisk.split(":"); A.setRisk(p[0],Number(p[1])); refresh(); }); });
     q("dvlRmxRRDec").addEventListener("click",function(){ stepRR(-0.25); });
