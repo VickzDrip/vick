@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.387';
+window.DVL_APP_VERSION = 'Beta 1.388';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.388", note: "Feed não morre mais sozinho (fim do 'para de gerar e só volta no F5'). Os WebSockets da Binance às vezes ficavam 'abertos' mas paravam de mandar dados (morte silenciosa) — e como o reconnect só olhava se o socket estava fechado, o feed congelava até você dar F5 (ex.: barras de volume paravam de nascer). Agora tem um watchdog: se um feed fica mudo por >20s, ele é forçado a reconectar na hora. Também revalida os feeds ao voltar a aba do background. Isso mantém candle/volume/indicadores vivos sem refresh." },
   { version: "Beta 1.387", note: "Vela mais fluida (tick a tick). O render ao vivo ia por um setTimeout com 'gap adaptativo' (16–60ms) ANTES do requestAnimationFrame — isso adicionava latência e deixava a vela 'aos saltos'. Agora o update ao vivo vai DIRETO pro requestAnimationFrame (caminho rápido do spec §10): a vela desenha no próximo frame do monitor, coalescendo os negócios em 1 frame por refresh, sem gap extra. Deve ficar bem mais lisa em quem tem o gráfico leve. (Se ainda travar, o gargalo passa a ser o custo do desenho completo — aí eu faço o render só da última vela.)" },
   { version: "Beta 1.386", note: "Fim do 'candle piscando' — versão certa (a 1.385 quebrou o fluxo e foi revertida). Agora o @aggTrade continua movendo o OHLC da vela a cada negócio (fluidez), mas o @kline (em lote, atrasado) NÃO sobrescreve mais o OHLC no meio da vela — ele só traz o VOLUME e assume o OHLC inteiro no FECHAMENTO. E a 'cola' com o ticker REST (~2s) vira no-op quando há kline ao vivo. Não mexi na prioridade de preço que tinha quebrado a 1.385. Vela fluida e sem piscar em todos os TFs." },
   { version: "Beta 1.384", note: "P0 — CANDLE AO VIVO CONSERTADO em todos os timeframes. Causa raiz: os WebSockets do candle/preço ao vivo apontavam pra FUTUROS da Binance (fstream), que é geo-bloqueado no Brasil — então nenhum candle atualizava sozinho e a vela só mudava ao recarregar a página (o histórico funcionava porque o REST cai pro spot). Troquei os três feeds ao vivo do gráfico (kline, aggTrade e o kline base dos TFs agregados) pro SPOT (stream.binance.com), que é alcançável e casa com o histórico. O resto do pipeline (aplicar a vela aberta com closed=false, nascer vela nova na fronteira, roteamento por símbolo/TF, reconexão, isolamento do Replay) já estava correto. Agora a vela atual se mexe ao vivo, sem refresh. (15s/30s reais entram depois, conforme o P0.)" },
@@ -23112,6 +23113,12 @@ window.addEventListener("dvl:chart-price", function(ev){
 
 // ── Kline WebSocket: candle em formação em tempo real ───────────────────
 let _klWs = null, _klWsSym = null, _klWsIv = null, _klWsLastDraw = 0;
+/* Beta 1.388 — watchdog de "socket morto silencioso". Os WS da Binance às vezes
+   ficam readyState=OPEN mas param de mandar dados (rede/servidor derrubou sem
+   frame de close). O reconnect por readyState<2 não pega isso → o feed congela
+   e só volta no F5 (ex.: barras de volume param de nascer). Guardamos o horário
+   da última mensagem de cada WS e um watchdog força reconexão se ficar mudo. */
+let _klLastMsg = 0, _agLastMsg = 0, _nnLastMsg = 0;
 
 function _klWsConnect(){
   const s  = (symbol  || 'BTCUSDT').toUpperCase();
@@ -23129,8 +23136,10 @@ function _klWsConnect(){
        chegava e a vela só mudava no refresh. O spot (stream.binance.com) é
        alcançável e casa com o histórico (que já cai pro spot). */
     _klWs = new WebSocket('wss://stream.binance.com:9443/ws/'+s.toLowerCase()+'@kline_'+iv);
+    _klLastMsg = Date.now();
     _klWs.onmessage = ev => {
       try{
+        _klLastMsg = Date.now();
         if(window.__DVL_REPLAY_ACTIVE) return;   // Replay ativo: feed ao vivo não pode contaminar o histórico
         const msg = JSON.parse(ev.data);
         if(msg.e !== 'kline') return;
@@ -23181,8 +23190,10 @@ function _agWsConnect(){
   _agSym=s;
   try{
     _agWs=new WebSocket('wss://stream.binance.com:9443/ws/'+s.toLowerCase()+'@aggTrade');   /* Beta 1.384 (P0) — SPOT (futuros bloqueado em BR) */
+    _agLastMsg = Date.now();
     _agWs.onmessage=ev=>{
       try{
+        _agLastMsg = Date.now();
         if(window.__DVL_REPLAY_ACTIVE) return;   // Replay ativo: ignora trades ao vivo
         const d=JSON.parse(ev.data);
         if(d.e!=='aggTrade' || d.s!==(symbol||'BTCUSDT').toUpperCase()) return;
@@ -23222,8 +23233,10 @@ function _nnWsConnect(){
   _nnWsSym=s; _nnWsBase=base;
   try{
     _nnWs=new WebSocket('wss://stream.binance.com:9443/ws/'+s.toLowerCase()+'@kline_'+base);   /* Beta 1.384 (P0) — SPOT (futuros bloqueado em BR) */
+    _nnLastMsg = Date.now();
     _nnWs.onmessage=ev=>{
       try{
+        _nnLastMsg = Date.now();
         if(window.__DVL_REPLAY_ACTIVE) return;
         const msg=JSON.parse(ev.data);
         if(msg.e!=='kline') return;
@@ -23252,6 +23265,35 @@ function _nnWsConnect(){
 }
 _nnWsConnect();
 setInterval(_nnWsConnect, 10000);
+
+/* Beta 1.388 — WATCHDOG de socket mudo. Se um WS está OPEN mas parou de mandar
+   dados por >12s, ele morreu silenciosamente → força fechar (dispara reconexão)
+   e reconecta na hora. Isso mantém o feed vivo sem F5 (barras de volume, candle
+   ao vivo etc. não param mais depois de horas abertas). Só age fora do Replay. */
+setInterval(function(){
+  if(window.__DVL_REPLAY_ACTIVE || document.hidden) return;
+  var now = Date.now(), DEAD = 20000;
+  function kick(ws, lastMsg, reconnect){
+    try{
+      if(ws && ws.readyState === 1 && lastMsg && (now - lastMsg) > DEAD){
+        try{ ws.close(); }catch(_){}
+        return true;
+      }
+    }catch(_){}
+    return false;
+  }
+  if(kick(_klWs, _klLastMsg)){ _klWs=null; try{_klWsConnect();}catch(_){} }
+  if(kick(_agWs, _agLastMsg)){ _agWs=null; try{_agWsConnect();}catch(_){} }
+  if(kick(_nnWs, _nnLastMsg)){ _nnWs=null; try{_nnWsConnect();}catch(_){} }
+}, 4000);
+
+/* Ao voltar da aba em background, revalida os feeds na hora (resync sem F5). */
+document.addEventListener("visibilitychange", function(){
+  if(document.hidden || window.__DVL_REPLAY_ACTIVE) return;
+  try{ _klWsConnect(); }catch(_){}
+  try{ _agWsConnect(); }catch(_){}
+  try{ _nnWsConnect(); }catch(_){}
+}, {passive:true});
 
 
 /* ─────────────────────────────────────────────────────────────
