@@ -7,11 +7,8 @@ const fs = require("fs");
 const zlib = require("zlib");
 const crypto = require("crypto");
 const subsecond = require("./subsecondCandles");   // motor de candles reais 15s/30s (futuros)
-
-// Rede de segurança: o motor de candles (feed de futuros, WS, backfill) roda
-// isolado e NÃO pode derrubar o site. Loga e segue — o Express continua servindo.
-process.on("uncaughtException", (e) => { try { console.error("uncaughtException:", (e && e.stack) || e); } catch(_){} });
-process.on("unhandledRejection", (e) => { try { console.error("unhandledRejection:", (e && e.stack) || e); } catch(_){} });
+// (Guardas process.on removidas nesta versão de isolamento — Beta 1.377 — pra
+//  testar se eram elas que travavam o startup em produção. Motor segue OFF.)
 
 const app = express();
 const PORT = process.env.PORT || 3000;
