@@ -6,12 +6,6 @@ const path = require("path");
 const fs = require("fs");
 const zlib = require("zlib");
 const crypto = require("crypto");
-const subsecond = require("./subsecondCandles");   // motor de candles reais 15s/30s (futuros)
-
-// Rede de segurança: o motor de candles (feed de futuros, WS, backfill) roda
-// isolado e NÃO pode derrubar o site. Loga e segue — o Express continua servindo.
-process.on("uncaughtException", (e) => { try { console.error("uncaughtException:", (e && e.stack) || e); } catch(_){} });
-process.on("unhandledRejection", (e) => { try { console.error("unhandledRejection:", (e && e.stack) || e); } catch(_){} });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -145,25 +139,6 @@ function broadcast(obj){
   for(const c of state.clients){
     if(c.readyState === WebSocket.OPEN) c.send(msg);
   }
-}
-
-// ── Subsecond candle live channel ───────────────────────────────────────────
-// Cada cliente /ws pode assinar candles 15s/30s por símbolo. O engine emite
-// update/close/correction/status; roteamos só pros assinantes daquele
-// (símbolo, intervalo). Isolado do broadcast de trades/depth existente.
-const candleSubs = new Map();   // ws -> Set("SYMBOL|interval")
-function subKey(sym, interval){ return String(sym).toUpperCase() + "|" + interval; }
-function sendJson(ws, obj){ try { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); } catch(_){} }
-function onCandleEvent(type, data){
-  try {
-    if (type === "feed_status"){
-      const sym = String(data.symbol || "").toUpperCase();
-      for (const [ws, set] of candleSubs){ for (const k of set){ if (k.split("|")[0] === sym){ sendJson(ws, { type:"feed_status", status:data.status, lagMs:data.lagMs, symbol:sym, data }); break; } } }
-      return;
-    }
-    const key = subKey(data.symbol, data.interval);
-    for (const [ws, set] of candleSubs){ if (set.has(key)) sendJson(ws, { type, data }); }
-  } catch(_){}
 }
 
 async function getJson(url){
@@ -366,34 +341,6 @@ app.get("/api/depth_history", (req,res) => {
   } catch(e){ res.status(500).json({ error: e.message }); }
 });
 
-// ── Market data: candles reais subsegundo (15s/30s) ─────────────────────────
-app.get("/api/market/candles", (req,res) => {
-  try {
-    const symbol = String(req.query.symbol || "BTCUSDT").toUpperCase().replace(/[^A-Z0-9]/g,"");
-    const interval = String(req.query.interval || "15s");
-    if (interval !== "15s" && interval !== "30s") return res.status(400).json({ ok:false, error:"interval deve ser 15s ou 30s" });
-    const from = Number(req.query.from || 0);
-    const to = Number(req.query.to || Date.now());
-    const limit = Math.min(Number(req.query.limit || 1000), 5000);
-    const eng = subsecond.getEngine(symbol);
-    if (!eng) return res.json({ ok:true, market:subsecond.MARKET, symbol, interval, partial:true, status:"OFFLINE", serverTime:Date.now(), candles:[], nextFrom:null });
-    const candles = eng.getSnapshot(interval, from, to, limit) || [];
-    const h = eng.health();
-    const nextFrom = candles.length === limit ? (candles[candles.length-1].openTime + subsecond.LABEL_IV[interval]) : null;
-    res.json({ ok:true, market:subsecond.MARKET, symbol, interval,
-      partial: h.status !== "LIVE", status: h.status, serverTime: Date.now(),
-      candles, nextFrom });
-  } catch(e){ res.status(500).json({ ok:false, error: e.message }); }
-});
-app.get("/api/market/health", (req,res) => {
-  try {
-    const all = subsecond.healthAll();
-    let status = "OFFLINE";
-    for (const s in all){ if (all[s].status === "LIVE"){ status = "LIVE"; break; } status = all[s].status; }
-    res.json({ service:"dvl-market-data", market:subsecond.MARKET, status, symbols: all, serverTime: Date.now() });
-  } catch(e){ res.status(500).json({ error: e.message }); }
-});
-
 app.get("/api/klines", async (req,res) => {
   try{
     const interval = req.query.interval || "5m";
@@ -462,26 +409,7 @@ wss.on("connection", ws => {
   state.clients.add(ws);
   ws.send(JSON.stringify({ type:"status", data:{ price:state.price, symbol:SYMBOL }}));
   ws.send(JSON.stringify({ type:"depth", data:state.depth }));
-  ws.on("message", raw => {
-    let msg; try { msg = JSON.parse(raw); } catch(_){ return; }
-    if (!msg || typeof msg !== "object") return;
-    if (msg.type === "subscribe" && msg.channel === "candles"){
-      const sym = String(msg.symbol || SYMBOL).toUpperCase().replace(/[^A-Z0-9]/g,"");
-      const interval = msg.interval === "30s" ? "30s" : "15s";
-      if (!SUBSECOND_ON){ sendJson(ws, { type:"candle_snapshot", market:subsecond.MARKET, symbol:sym, interval, data:[], status:"OFFLINE" }); return; }
-      let set = candleSubs.get(ws); if (!set){ set = new Set(); candleSubs.set(ws, set); }
-      set.add(subKey(sym, interval));
-      const eng = subsecond.ensureEngine(sym, onCandleEvent, DATA_DIR);
-      try { eng.start(); } catch(_){}
-      sendJson(ws, { type:"candle_snapshot", market:subsecond.MARKET, symbol:sym, interval,
-        data: eng.getSnapshot(interval, 0, Date.now(), 2000) || [], status: eng.health().status });
-    } else if (msg.type === "unsubscribe" && msg.channel === "candles"){
-      const sym = String(msg.symbol || SYMBOL).toUpperCase().replace(/[^A-Z0-9]/g,"");
-      const set = candleSubs.get(ws);
-      if (set){ if (msg.interval){ set.delete(subKey(sym, msg.interval === "30s" ? "30s" : "15s")); } else { set.delete(subKey(sym,"15s")); set.delete(subKey(sym,"30s")); } }
-    }
-  });
-  ws.on("close", () => { state.clients.delete(ws); candleSubs.delete(ws); });
+  ws.on("close", () => state.clients.delete(ws));
 });
 
 loadPersisted();
@@ -490,19 +418,3 @@ setInterval(depthSnapshot, 15000);
 connectTrades();
 connectDepth();
 setTimeout(backfillTrades, 3000);
-
-// Motor de candles reais 15s/30s (futuros) — grava 24/7 mesmo sem frontend
-// aberto. GATED por env (DVL_SUBSECOND=1), DESLIGADO por padrão: assim o deploy
-// é idêntico ao comportamento estável do site (endpoints respondem OFFLINE, sem
-// WS/backfill de futuros). Ligue só quando quiser, e é reversível pela env —
-// nunca pode derrubar o site num deploy. Sobe 6s depois do listen; protegido
-// por process.on(uncaught*) lá em cima.
-const SUBSECOND_ON = process.env.DVL_SUBSECOND === "1";
-if (SUBSECOND_ON) {
-  setTimeout(() => {
-    try { subsecond.startDefault(onCandleEvent, DATA_DIR, ["BTCUSDT"]); }
-    catch(e){ console.log("subsecond engine start error:", e.message); }
-  }, 6000);
-} else {
-  console.log("subsecond candle engine DISABLED (set DVL_SUBSECOND=1 to enable)");
-}
