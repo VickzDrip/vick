@@ -468,10 +468,11 @@ wss.on("connection", ws => {
     if (msg.type === "subscribe" && msg.channel === "candles"){
       const sym = String(msg.symbol || SYMBOL).toUpperCase().replace(/[^A-Z0-9]/g,"");
       const interval = msg.interval === "30s" ? "30s" : "15s";
+      if (!SUBSECOND_ON){ sendJson(ws, { type:"candle_snapshot", market:subsecond.MARKET, symbol:sym, interval, data:[], status:"OFFLINE" }); return; }
       let set = candleSubs.get(ws); if (!set){ set = new Set(); candleSubs.set(ws, set); }
       set.add(subKey(sym, interval));
       const eng = subsecond.ensureEngine(sym, onCandleEvent, DATA_DIR);
-      if (!eng._started){ eng._started = true; try { eng.start(); } catch(_){} }
+      try { eng.start(); } catch(_){}
       sendJson(ws, { type:"candle_snapshot", market:subsecond.MARKET, symbol:sym, interval,
         data: eng.getSnapshot(interval, 0, Date.now(), 2000) || [], status: eng.health().status });
     } else if (msg.type === "unsubscribe" && msg.channel === "candles"){
@@ -491,11 +492,17 @@ connectDepth();
 setTimeout(backfillTrades, 3000);
 
 // Motor de candles reais 15s/30s (futuros) — grava 24/7 mesmo sem frontend
-// aberto. Aditivo e isolado: se os futuros não estiverem acessíveis, reporta
-// OFFLINE/DEGRADED sem afetar o resto do servidor. Sobe 6s DEPOIS do listen pra
-// garantir que o site já está saudável antes de qualquer atividade de rede do
-// motor. Protegido por process.on(uncaught*) lá em cima.
-setTimeout(() => {
-  try { subsecond.startDefault(onCandleEvent, DATA_DIR, ["BTCUSDT"]); }
-  catch(e){ console.log("subsecond engine start error:", e.message); }
-}, 6000);
+// aberto. GATED por env (DVL_SUBSECOND=1), DESLIGADO por padrão: assim o deploy
+// é idêntico ao comportamento estável do site (endpoints respondem OFFLINE, sem
+// WS/backfill de futuros). Ligue só quando quiser, e é reversível pela env —
+// nunca pode derrubar o site num deploy. Sobe 6s depois do listen; protegido
+// por process.on(uncaught*) lá em cima.
+const SUBSECOND_ON = process.env.DVL_SUBSECOND === "1";
+if (SUBSECOND_ON) {
+  setTimeout(() => {
+    try { subsecond.startDefault(onCandleEvent, DATA_DIR, ["BTCUSDT"]); }
+    catch(e){ console.log("subsecond engine start error:", e.message); }
+  }, 6000);
+} else {
+  console.log("subsecond candle engine DISABLED (set DVL_SUBSECOND=1 to enable)");
+}
