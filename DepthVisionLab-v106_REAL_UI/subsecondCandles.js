@@ -1,22 +1,31 @@
 "use strict";
 
 /* ── DVL Subsecond Candle Engine (15s / 30s reais) ───────────────────────────
-   Constrói candles OHLCV VERDADEIROS de 15s e 30s a partir de aggTrades reais
-   (Binance USDⓈ-M Futures). NUNCA corta/interpola candles de 1m — o timestamp
-   do negócio (T) escolhe o bucket UTC. Fase 1: motor intrabar interno do RSI
-   Exhaustion Pro (não vira timeframe global). Ver DVL_Spec_Backend_Candles_
-   Reais_15s_30s. Módulo genérico por símbolo/intervalo, aditivo e defensivo:
-   se o feed de futuros não estiver acessível, reporta OFFLINE/DEGRADED sem
-   afetar o resto do servidor. O agregador é PURO/testável (apply/flush) — a
+   Constrói candles OHLCV VERDADEIROS de 15s e 30s a partir de aggTrades reais.
+   NUNCA corta/interpola candles de 1m — o timestamp do negócio (T) escolhe o
+   bucket UTC. Fase 1: motor intrabar interno do RSI Exhaustion Pro (não vira
+   timeframe global). Ver DVL_Spec_Backend_Candles_Reais_15s_30s.
+   MERCADO: SPOT por padrão (o IP do VPS está banido do mercado de FUTUROS da
+   Binance — REST 418, WS sem dados). Configurável por env DVL_MKT=usdm se o host
+   um dia tiver acesso a futuros. Módulo genérico por símbolo/intervalo, aditivo
+   e defensivo: se o feed não estiver acessível, reporta OFFLINE/DEGRADED/STARVED
+   sem afetar o resto do servidor. O agregador é PURO/testável (apply/flush) — a
    rede é opcional e fica isolada no ingestor. */
 
 const WebSocket = require("ws");
 const fs = require("fs");
 const path = require("path");
 
-const MARKET      = "binance-usdm";
-const FUT_WS_BASE = process.env.DVL_FUT_WS   || "wss://fstream.binance.com/ws";
-const FUT_REST    = process.env.DVL_FUT_REST || "https://fapi.binance.com";
+// SPOT por padrão: o IP do VPS está banido do mercado de FUTUROS da Binance
+// (REST 418, WS sem dados). O spot funciona no host e é ~idêntico ao futuro pra
+// sinal de RSI Exhaustion. Dá pra voltar pra futuros por env se um dia o host
+// tiver acesso (DVL_MKT=usdm + as URLs).
+const MKT_MODE    = process.env.DVL_MKT || "spot";                 // spot | usdm
+const MARKET      = MKT_MODE === "usdm" ? "binance-usdm" : "binance-spot";
+const IS_FUT      = MKT_MODE === "usdm";
+const WS_BASE     = process.env.DVL_MKT_WS   || (IS_FUT ? "wss://fstream.binance.com/ws" : "wss://stream.binance.com:9443/ws");
+const REST_BASE   = process.env.DVL_MKT_REST || (IS_FUT ? "https://fapi.binance.com" : "https://api.binance.com");
+const AGG_PATH    = IS_FUT ? "/fapi/v1/aggTrades" : "/api/v3/aggTrades";
 const INTERVALS   = [15000, 30000];                 // 15s, 30s
 const IV_LABEL    = { 15000: "15s", 30000: "30s" };
 const LABEL_IV    = { "15s": 15000, "30s": 30000 };
@@ -254,7 +263,7 @@ Engine.prototype.health = function(){
     duplicates: this.duplicates, lateEvents: this.lateEvents, reconnects24h: this.reconnects24h,
     wsState: this.ws ? this.ws.readyState : -1, wsOpens: this.wsOpens, wsCloses: this.wsCloses,
     msgs: this.msgs, lastCloseCode: this.lastCloseCode, lastCloseReason: this.lastCloseReason,
-    lastWsErr: this.lastWsErr, backfillNote: this.backfillNote, wsUrl: FUT_WS_BASE };
+    lastWsErr: this.lastWsErr, backfillNote: this.backfillNote, wsUrl: WS_BASE, market: MARKET };
   var self = this;
   INTERVALS.forEach(function(iv){ h["open"+IV_LABEL[iv]] = self.aggs[iv].nextOpen; h["metrics_"+IV_LABEL[iv]] = self.aggs[iv].metrics; });
   return h;
@@ -333,7 +342,7 @@ Engine.prototype.checkStale = function(){
 };
 Engine.prototype.connect = function(){
   var self = this;
-  var url = FUT_WS_BASE + "/" + this.symbol.toLowerCase() + "@aggTrade";
+  var url = WS_BASE + "/" + this.symbol.toLowerCase() + "@aggTrade";
   var ws;
   try { ws = new WebSocket(url); } catch(e){ this.lastWsErr = String(e && e.message || e); this.setStatus("OFFLINE"); this.scheduleReconnect(); return; }
   this.ws = ws; this.wsOpens = (this.wsOpens||0);
@@ -374,7 +383,7 @@ Engine.prototype.backfill = async function(){
   try {
     while (start < endTime && loops < 24){
       loops++;
-      var url = FUT_REST + "/fapi/v1/aggTrades?symbol=" + this.symbol + "&startTime=" + start + "&endTime=" + Math.min(endTime, start + 55000) + "&limit=1000";
+      var url = REST_BASE + AGG_PATH + "?symbol=" + this.symbol + "&startTime=" + start + "&endTime=" + Math.min(endTime, start + 55000) + "&limit=1000";
       var res = await fetch(url, { cache: "no-store" });
       if (!res.ok){ this.backfillNote = "HTTP " + res.status; throw new Error("HTTP " + res.status); }
       var arr = await res.json();
