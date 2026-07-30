@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.386';
+window.DVL_APP_VERSION = 'Beta 1.387';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.387", note: "Vela mais fluida (tick a tick). O render ao vivo ia por um setTimeout com 'gap adaptativo' (16–60ms) ANTES do requestAnimationFrame — isso adicionava latência e deixava a vela 'aos saltos'. Agora o update ao vivo vai DIRETO pro requestAnimationFrame (caminho rápido do spec §10): a vela desenha no próximo frame do monitor, coalescendo os negócios em 1 frame por refresh, sem gap extra. Deve ficar bem mais lisa em quem tem o gráfico leve. (Se ainda travar, o gargalo passa a ser o custo do desenho completo — aí eu faço o render só da última vela.)" },
   { version: "Beta 1.386", note: "Fim do 'candle piscando' — versão certa (a 1.385 quebrou o fluxo e foi revertida). Agora o @aggTrade continua movendo o OHLC da vela a cada negócio (fluidez), mas o @kline (em lote, atrasado) NÃO sobrescreve mais o OHLC no meio da vela — ele só traz o VOLUME e assume o OHLC inteiro no FECHAMENTO. E a 'cola' com o ticker REST (~2s) vira no-op quando há kline ao vivo. Não mexi na prioridade de preço que tinha quebrado a 1.385. Vela fluida e sem piscar em todos os TFs." },
   { version: "Beta 1.384", note: "P0 — CANDLE AO VIVO CONSERTADO em todos os timeframes. Causa raiz: os WebSockets do candle/preço ao vivo apontavam pra FUTUROS da Binance (fstream), que é geo-bloqueado no Brasil — então nenhum candle atualizava sozinho e a vela só mudava ao recarregar a página (o histórico funcionava porque o REST cai pro spot). Troquei os três feeds ao vivo do gráfico (kline, aggTrade e o kline base dos TFs agregados) pro SPOT (stream.binance.com), que é alcançável e casa com o histórico. O resto do pipeline (aplicar a vela aberta com closed=false, nascer vela nova na fronteira, roteamento por símbolo/TF, reconexão, isolamento do Replay) já estava correto. Agora a vela atual se mexe ao vivo, sem refresh. (15s/30s reais entram depois, conforme o P0.)" },
   { version: "Beta 1.383", note: "Correção do clique em 15s/30s. O timeframe não trocava ao clicar em 15s/30s porque o sistema de TF tem módulos legados sobrepostos que engoliam a seleção de segundos. Agora um handler dedicado força a troca de forma confiável (só pra 15s/30s, sem tocar nos TFs de minuto). Além disso, os candles de 15s/30s passam a carregar PRIMEIRO do recorder do próprio servidor DVL (/api/market/candles) — candles reais com histórico mais confiável — caindo pro builder de aggTrades da corretora se precisar. Recarregue a página pra pegar a correção." },
@@ -22902,8 +22903,22 @@ function __dvlFlushLiveRender1204(force){
 }
 
 function requestLiveChartRender(force){
-  __dvlLiveRenderPending1204 = true;
-  __dvlFlushLiveRender1204(!!force);
+  /* Beta 1.387 — CAMINHO RÁPIDO tick-a-tick (spec §10). Antes o live passava por
+     um setTimeout com "gap adaptativo" (16–60ms) ANTES do requestAnimationFrame,
+     o que adicionava latência e deixava a vela "aos saltos". Agora vai DIRETO pro
+     rAF (drawSoon), que já coalesce em 1 frame por refresh e mede o custo — então
+     a vela anda no próximo frame, sem gap extra, e não sobrecarrega (no máximo 1
+     draw por frame). Durante pan/zoom, adia (não brigar com a interação). */
+  if(document.hidden){ __dvlLiveRenderPending1204 = true; return; }
+  if(window.__dvlChartInteracting && !force){
+    __dvlLiveRenderPending1204 = true;
+    clearTimeout(__dvlLiveRenderTimer1204);
+    __dvlLiveRenderTimer1204 = setTimeout(function(){ __dvlLiveRenderPending1204=false; if(!window.__dvlChartInteracting) drawSoon(); }, 80);
+    return;
+  }
+  __dvlLiveRenderPending1204 = false;
+  __dvlLiveRenderLast1204 = (typeof performance!=="undefined"&&performance.now)?performance.now():Date.now();
+  drawSoon();
 }
 window.DVL_REQUEST_LIVE_CHART_RENDER_1204 = requestLiveChartRender;
 
