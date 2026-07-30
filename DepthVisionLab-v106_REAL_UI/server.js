@@ -507,7 +507,9 @@ setTimeout(backfillTrades, 3000);
 // WS/backfill de futuros). Ligue só quando quiser, e é reversível pela env —
 // nunca pode derrubar o site num deploy. Sobe 6s depois do listen; protegido
 // por process.on(uncaught*) lá em cima.
-const SUBSECOND_ON = !!subsecond && process.env.DVL_SUBSECOND === "1";
+// Ligado por padrão (o crash era o arquivo faltando no deploy, já corrigido).
+// Desliga só com DVL_SUBSECOND=0. Módulo ausente também mantém desligado.
+const SUBSECOND_ON = !!subsecond && process.env.DVL_SUBSECOND !== "0";
 if (SUBSECOND_ON) {
   setTimeout(() => {
     try { subsecond.startDefault(onCandleEvent, DATA_DIR, ["BTCUSDT"]); }

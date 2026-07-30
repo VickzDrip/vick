@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.378';
+window.DVL_APP_VERSION = 'Beta 1.379';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.379", note: "Backend — motor de candles reais 15s/30s de FUTUROS LIGADO. Com o 502 resolvido (era o arquivo não copiado no deploy), o motor agora sobe por padrão e começa a gravar candles OHLCV verdadeiros de 15s/30s a partir dos aggTrades de futuros (binance-usdm), 24/7. Dá pra acompanhar em /api/market/health e /api/market/candles. Protegido: se os futuros não forem alcançáveis do servidor, reporta OFFLINE/DEGRADED sem afetar o site (e dá pra desligar com DVL_SUBSECOND=0). Assim que confirmar que está formando candles, entra a Fase 1b: Motor Intrabar no RSI Exhaustion Pro. Visual não muda ainda." },
   { version: "Beta 1.378", note: "Backend — CAUSA do 502 encontrada e corrigida. O motor de candles 15s/30s tinha caído porque o script de deploy do VPS copiava só server.js e index.html pro diretório vivo — o novo arquivo subsecondCandles.js nunca era copiado, então o require estourava 'Cannot find module' e o pm2 reiniciava em loop (502). Correção: (1) o server.js agora carrega o módulo de forma DEFENSIVA (se faltar, roda sem o motor em vez de derrubar o site) e (2) o deploy.sh passou a copiar subsecondCandles.js ANTES do server.js e reinicia uma vez só. O motor de candles reais de futuros (15s/30s, testado) continua DESLIGADO por padrão (liga com DVL_SUBSECOND=1). Nada no visual muda." },
   { version: "Beta 1.377 (revertida)", note: "Deploy de isolamento (sem guardas process.on) — usado só pra diagnosticar o 502; revertido." },
   { version: "Beta 1.376", note: "Backend — motor de candles REAIS de 15s/30s (Fase 1a) entregue DESLIGADO por padrão. O motor completo (aggTrades reais de futuros → OHLCV 15s/30s, volume buy/sell, delta, dedupe, reconnect, resync, candles vazios, correção com revision, REST /api/market/candles + /api/market/health + WebSocket ao vivo, 28 testes determinísticos passando) está no servidor, mas fica DESLIGADO até ligar a env DVL_SUBSECOND=1. Motivo: nas primeiras tentativas o feed de futuros ligado derrubou o servidor em produção (não reproduz local); então agora o deploy é seguro (site igual ao estável) e ligar o feed é um switch reversível pela env. Assim que o feed subir estável, entra a Fase 1b: Motor Intrabar no RSI Exhaustion Pro. Nada no visual muda." },
