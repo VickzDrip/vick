@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.383';
+window.DVL_APP_VERSION = 'Beta 1.384';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.384", note: "P0 — CANDLE AO VIVO CONSERTADO em todos os timeframes. Causa raiz: os WebSockets do candle/preço ao vivo apontavam pra FUTUROS da Binance (fstream), que é geo-bloqueado no Brasil — então nenhum candle atualizava sozinho e a vela só mudava ao recarregar a página (o histórico funcionava porque o REST cai pro spot). Troquei os três feeds ao vivo do gráfico (kline, aggTrade e o kline base dos TFs agregados) pro SPOT (stream.binance.com), que é alcançável e casa com o histórico. O resto do pipeline (aplicar a vela aberta com closed=false, nascer vela nova na fronteira, roteamento por símbolo/TF, reconexão, isolamento do Replay) já estava correto. Agora a vela atual se mexe ao vivo, sem refresh. (15s/30s reais entram depois, conforme o P0.)" },
   { version: "Beta 1.383", note: "Correção do clique em 15s/30s. O timeframe não trocava ao clicar em 15s/30s porque o sistema de TF tem módulos legados sobrepostos que engoliam a seleção de segundos. Agora um handler dedicado força a troca de forma confiável (só pra 15s/30s, sem tocar nos TFs de minuto). Além disso, os candles de 15s/30s passam a carregar PRIMEIRO do recorder do próprio servidor DVL (/api/market/candles) — candles reais com histórico mais confiável — caindo pro builder de aggTrades da corretora se precisar. Recarregue a página pra pegar a correção." },
   { version: "Beta 1.382", note: "Timeframes de 15s e 30s no gráfico. Agora 15s e 30s aparecem FIXADOS na barra de timeframe (e no menu de TFs) — é só clicar pra ver os candles reais de 15s/30s no gráfico, montados de aggTrades reais. Antes o menu de TF só listava de 1m pra cima; os segundos existiam no motor mas nunca eram mostrados. (Se você tirar o 15s/30s da barra, não volta sozinho.) Obs: o histórico inicial vem dos aggTrades da corretora; o recorder do servidor vai deixando o histórico mais fundo com o tempo." },
   { version: "Beta 1.381", note: "Backend — motor de candles reais 15s/30s agora usa SPOT. Confirmado que a Binance bloqueia o IP do VPS pro mercado de FUTUROS (REST HTTP 418 = IP banido, WebSocket sem dados). O spot funciona no host e é praticamente idêntico ao futuro pra sinal de RSI Exhaustion (a diferença de preço spot/futuro é mínima). O mesmo motor (OHLCV verdadeiro, volume buy/sell, delta, dedupe, reconnect, correção, candles vazios) agora grava candles de SPOT 24/7; acompanhe em /api/market/health e /api/market/candles. Configurável por env pra voltar a futuros se o host tiver acesso um dia. Próximo: Fase 1b (Motor Intrabar no RSI Exhaustion Pro). Visual não muda ainda." },
@@ -23101,7 +23102,11 @@ function _klWsConnect(){
   if(_klWs){ try{ _klWs.close(); }catch(_){} _klWs=null; }
   _klWsSym=s; _klWsIv=iv;
   try{
-    _klWs = new WebSocket('wss://fstream.binance.com/ws/'+s.toLowerCase()+'@kline_'+iv);
+    /* Beta 1.384 (P0) — SPOT, não futuros. O feed de futuros (fstream) é
+       geo-bloqueado em algumas regiões (ex.: BR), então o candle ao vivo NUNCA
+       chegava e a vela só mudava no refresh. O spot (stream.binance.com) é
+       alcançável e casa com o histórico (que já cai pro spot). */
+    _klWs = new WebSocket('wss://stream.binance.com:9443/ws/'+s.toLowerCase()+'@kline_'+iv);
     _klWs.onmessage = ev => {
       try{
         if(window.__DVL_REPLAY_ACTIVE) return;   // Replay ativo: feed ao vivo não pode contaminar o histórico
@@ -23143,7 +23148,7 @@ function _agWsConnect(){
   if(_agWs){ try{ _agWs.close(); }catch(_){} _agWs=null; }
   _agSym=s;
   try{
-    _agWs=new WebSocket('wss://fstream.binance.com/ws/'+s.toLowerCase()+'@aggTrade');
+    _agWs=new WebSocket('wss://stream.binance.com:9443/ws/'+s.toLowerCase()+'@aggTrade');   /* Beta 1.384 (P0) — SPOT (futuros bloqueado em BR) */
     _agWs.onmessage=ev=>{
       try{
         if(window.__DVL_REPLAY_ACTIVE) return;   // Replay ativo: ignora trades ao vivo
@@ -23184,7 +23189,7 @@ function _nnWsConnect(){
   if(_nnWs){try{_nnWs.close();}catch(_){}_nnWs=null;}
   _nnWsSym=s; _nnWsBase=base;
   try{
-    _nnWs=new WebSocket('wss://fstream.binance.com/ws/'+s.toLowerCase()+'@kline_'+base);
+    _nnWs=new WebSocket('wss://stream.binance.com:9443/ws/'+s.toLowerCase()+'@kline_'+base);   /* Beta 1.384 (P0) — SPOT (futuros bloqueado em BR) */
     _nnWs.onmessage=ev=>{
       try{
         if(window.__DVL_REPLAY_ACTIVE) return;
