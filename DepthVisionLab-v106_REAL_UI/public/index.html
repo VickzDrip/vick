@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.385';
+window.DVL_APP_VERSION = 'Beta 1.384';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,7 +16305,6 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
-  { version: "Beta 1.385", note: "Fim do 'candle piscando'. Com o live já funcionando (1.384), a vela atual piscava porque DOIS feeds mexiam nela: o @aggTrade (cada negócio, tempo real) e o @kline (em lote, levemente atrasado) — o kline sobrescrevia o high/low/close pra trás e a vela pulava entre dois valores. Agora: o high/low só ESTENDE (nunca regride), o volume vem do kline (autoritativo) e o close é do @aggTrade durante a formação, adotando o do @kline só no fechamento da vela (ou se o aggTrade cair). Também priorizei o preço ao vivo sobre o ticker REST (~2s) no ajuste da vela. Resultado: vela suave, sem piscar." },
   { version: "Beta 1.384", note: "P0 — CANDLE AO VIVO CONSERTADO em todos os timeframes. Causa raiz: os WebSockets do candle/preço ao vivo apontavam pra FUTUROS da Binance (fstream), que é geo-bloqueado no Brasil — então nenhum candle atualizava sozinho e a vela só mudava ao recarregar a página (o histórico funcionava porque o REST cai pro spot). Troquei os três feeds ao vivo do gráfico (kline, aggTrade e o kline base dos TFs agregados) pro SPOT (stream.binance.com), que é alcançável e casa com o histórico. O resto do pipeline (aplicar a vela aberta com closed=false, nascer vela nova na fronteira, roteamento por símbolo/TF, reconexão, isolamento do Replay) já estava correto. Agora a vela atual se mexe ao vivo, sem refresh. (15s/30s reais entram depois, conforme o P0.)" },
   { version: "Beta 1.383", note: "Correção do clique em 15s/30s. O timeframe não trocava ao clicar em 15s/30s porque o sistema de TF tem módulos legados sobrepostos que engoliam a seleção de segundos. Agora um handler dedicado força a troca de forma confiável (só pra 15s/30s, sem tocar nos TFs de minuto). Além disso, os candles de 15s/30s passam a carregar PRIMEIRO do recorder do próprio servidor DVL (/api/market/candles) — candles reais com histórico mais confiável — caindo pro builder de aggTrades da corretora se precisar. Recarregue a página pra pegar a correção." },
   { version: "Beta 1.382", note: "Timeframes de 15s e 30s no gráfico. Agora 15s e 30s aparecem FIXADOS na barra de timeframe (e no menu de TFs) — é só clicar pra ver os candles reais de 15s/30s no gráfico, montados de aggTrades reais. Antes o menu de TF só listava de 1m pra cima; os segundos existiam no motor mas nunca eram mostrados. (Se você tirar o 15s/30s da barra, não volta sozinho.) Obs: o histórico inicial vem dos aggTrades da corretora; o recorder do servidor vai deixando o histórico mais fundo com o tempo." },
@@ -23051,11 +23050,7 @@ setTimeout(function(){ if(!window.__DVL_REPLAY_ACTIVE && __dvlNeedFastPoll1206()
 function _glueFormingCandle(){
   if(window.__DVL_REPLAY_ACTIVE) return;
   if(!klines.length) return;
-  /* Beta 1.385 — prioriza o preço AO VIVO (marketEntryPrice, vindo do @aggTrade)
-     sobre o ticker REST (~2s, atrasado). Antes o ticker velho puxava a vela pra
-     um preço antigo e ela piscava contra o aggTrade. Para ativos Binance isto
-     agora é no-op (p === last.close), sem briga. */
-  const p = Number(marketEntryPrice || ticker?.lastPrice || klines.at(-1)?.close);
+  const p = Number(ticker?.lastPrice || marketEntryPrice || klines.at(-1)?.close);
   if(!(p > 0)) return;
   const last = klines[klines.length-1];
   if(!last || !(last.close > 0)) return;
@@ -23124,22 +23119,11 @@ function _klWsConnect(){
         const entry = { time:t, open:+k.o, high:+k.h, low:+k.l, close:+k.c,
                         volume:+k.v, quoteVolume:+k.q, buyVolume:+k.V };
         if(klines.length && klines[klines.length-1].time === t){
-          /* Beta 1.385 — MERGE sem regressão (fim do "candle piscando"). O
-             @aggTrade move close/high/low a cada negócio; o @kline chega em lote,
-             levemente atrasado. Um Object.assign puxava high/low/close de volta e
-             a vela piscava entre dois valores. Aqui: high/low só ESTENDEM, volume
-             é do kline (autoritativo) e o close só vem do kline no FECHAMENTO
-             (k.x) ou quando o aggTrade não está vivo. */
-          var lastK = klines[klines.length-1];
-          lastK.open = entry.open;
-          lastK.high = Math.max(Number(lastK.high)||entry.high, entry.high);
-          lastK.low  = Math.min(Number(lastK.low)||entry.low, entry.low);
-          lastK.volume = entry.volume; lastK.quoteVolume = entry.quoteVolume; lastK.buyVolume = entry.buyVolume;
-          if(k.x || !(_agWs && _agWs.readyState === 1)) lastK.close = entry.close;
+          Object.assign(klines[klines.length-1], entry);
         } else if(!klines.length || t > klines[klines.length-1].time){
           klines.push(entry);
         }
-        publishDvlChartPrice1204(k.x ? (+k.c) : (klines.length?klines[klines.length-1].close:+k.c), 'kline-ws', +k.T || Date.now());
+        publishDvlChartPrice1204(+k.c, 'kline-ws', +k.T || Date.now());
         requestLiveChartRender(!!k.x);
       }catch(_){}
     };
@@ -23222,10 +23206,8 @@ function _nnWsConnect(){
           const h=+k.h, l=+k.l, c=+k.c;
           if(h>last.high) last.high=h;
           if(l<last.low)  last.low=l;
-          /* Beta 1.385 — close só do kline no fechamento ou sem aggTrade vivo
-             (o aggTrade cuida do close em tempo real; evita a vela piscar). */
-          if(k.x || !(_agWs && _agWs.readyState === 1)) last.close=c;
-          publishDvlChartPrice1204(k.x ? c : last.close, 'aggregate-kline-ws', +k.T || Date.now());
+          last.close=c;
+          publishDvlChartPrice1204(c, 'aggregate-kline-ws', +k.T || Date.now());
           requestLiveChartRender(!!k.x);
         }
       }catch(_){}
