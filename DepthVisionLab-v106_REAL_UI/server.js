@@ -8,6 +8,11 @@ const zlib = require("zlib");
 const crypto = require("crypto");
 const subsecond = require("./subsecondCandles");   // motor de candles reais 15s/30s (futuros)
 
+// Rede de segurança: o motor de candles (feed de futuros, WS, backfill) roda
+// isolado e NÃO pode derrubar o site. Loga e segue — o Express continua servindo.
+process.on("uncaughtException", (e) => { try { console.error("uncaughtException:", (e && e.stack) || e); } catch(_){} });
+process.on("unhandledRejection", (e) => { try { console.error("unhandledRejection:", (e && e.stack) || e); } catch(_){} });
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SYMBOL = "BTCUSDT";
@@ -487,5 +492,10 @@ setTimeout(backfillTrades, 3000);
 
 // Motor de candles reais 15s/30s (futuros) — grava 24/7 mesmo sem frontend
 // aberto. Aditivo e isolado: se os futuros não estiverem acessíveis, reporta
-// OFFLINE/DEGRADED sem afetar o resto do servidor.
-try { subsecond.startDefault(onCandleEvent, DATA_DIR, ["BTCUSDT"]); } catch(e){ console.log("subsecond engine start error:", e.message); }
+// OFFLINE/DEGRADED sem afetar o resto do servidor. Sobe 6s DEPOIS do listen pra
+// garantir que o site já está saudável antes de qualquer atividade de rede do
+// motor. Protegido por process.on(uncaught*) lá em cima.
+setTimeout(() => {
+  try { subsecond.startDefault(onCandleEvent, DATA_DIR, ["BTCUSDT"]); }
+  catch(e){ console.log("subsecond engine start error:", e.message); }
+}, 6000);
