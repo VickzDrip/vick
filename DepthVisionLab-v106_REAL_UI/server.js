@@ -6,9 +6,20 @@ const path = require("path");
 const fs = require("fs");
 const zlib = require("zlib");
 const crypto = require("crypto");
-const subsecond = require("./subsecondCandles");   // motor de candles reais 15s/30s (futuros)
-// (Guardas process.on removidas nesta versão de isolamento — Beta 1.377 — pra
-//  testar se eram elas que travavam o startup em produção. Motor segue OFF.)
+// Motor de candles reais 15s/30s (futuros). Carregado DEFENSIVAMENTE: se o
+// arquivo subsecondCandles.js ainda não tiver sido copiado pro diretório vivo
+// (o deploy.sh copia server.js + subsecondCandles.js separadamente), o require
+// falha SEM derrubar o servidor — os endpoints só respondem OFFLINE até o
+// módulo chegar. (Foi exatamente isso que derrubou o site antes: o deploy
+// copiava só server.js, o require estourava "Cannot find module" e o pm2
+// entrava em loop de restart.)
+let subsecond = null;
+try { subsecond = require("./subsecondCandles"); }
+catch (e) { console.error("subsecondCandles indisponível (engine OFF):", e && e.message); }
+
+// Rede de segurança extra pra quando o feed de futuros estiver ligado.
+process.on("uncaughtException", (e) => { try { console.error("uncaughtException:", (e && e.stack) || e); } catch(_){} });
+process.on("unhandledRejection", (e) => { try { console.error("unhandledRejection:", (e && e.stack) || e); } catch(_){} });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -369,6 +380,7 @@ app.get("/api/market/candles", (req,res) => {
     const symbol = String(req.query.symbol || "BTCUSDT").toUpperCase().replace(/[^A-Z0-9]/g,"");
     const interval = String(req.query.interval || "15s");
     if (interval !== "15s" && interval !== "30s") return res.status(400).json({ ok:false, error:"interval deve ser 15s ou 30s" });
+    if (!subsecond) return res.json({ ok:true, market:"binance-usdm", symbol, interval, partial:true, status:"OFFLINE", serverTime:Date.now(), candles:[], nextFrom:null });
     const from = Number(req.query.from || 0);
     const to = Number(req.query.to || Date.now());
     const limit = Math.min(Number(req.query.limit || 1000), 5000);
@@ -384,6 +396,7 @@ app.get("/api/market/candles", (req,res) => {
 });
 app.get("/api/market/health", (req,res) => {
   try {
+    if (!subsecond) return res.json({ service:"dvl-market-data", market:"binance-usdm", status:"OFFLINE", symbols:{}, serverTime:Date.now() });
     const all = subsecond.healthAll();
     let status = "OFFLINE";
     for (const s in all){ if (all[s].status === "LIVE"){ status = "LIVE"; break; } status = all[s].status; }
@@ -465,7 +478,7 @@ wss.on("connection", ws => {
     if (msg.type === "subscribe" && msg.channel === "candles"){
       const sym = String(msg.symbol || SYMBOL).toUpperCase().replace(/[^A-Z0-9]/g,"");
       const interval = msg.interval === "30s" ? "30s" : "15s";
-      if (!SUBSECOND_ON){ sendJson(ws, { type:"candle_snapshot", market:subsecond.MARKET, symbol:sym, interval, data:[], status:"OFFLINE" }); return; }
+      if (!SUBSECOND_ON || !subsecond){ sendJson(ws, { type:"candle_snapshot", market:"binance-usdm", symbol:sym, interval, data:[], status:"OFFLINE" }); return; }
       let set = candleSubs.get(ws); if (!set){ set = new Set(); candleSubs.set(ws, set); }
       set.add(subKey(sym, interval));
       const eng = subsecond.ensureEngine(sym, onCandleEvent, DATA_DIR);
@@ -494,12 +507,12 @@ setTimeout(backfillTrades, 3000);
 // WS/backfill de futuros). Ligue só quando quiser, e é reversível pela env —
 // nunca pode derrubar o site num deploy. Sobe 6s depois do listen; protegido
 // por process.on(uncaught*) lá em cima.
-const SUBSECOND_ON = process.env.DVL_SUBSECOND === "1";
+const SUBSECOND_ON = !!subsecond && process.env.DVL_SUBSECOND === "1";
 if (SUBSECOND_ON) {
   setTimeout(() => {
     try { subsecond.startDefault(onCandleEvent, DATA_DIR, ["BTCUSDT"]); }
     catch(e){ console.log("subsecond engine start error:", e.message); }
   }, 6000);
 } else {
-  console.log("subsecond candle engine DISABLED (set DVL_SUBSECOND=1 to enable)");
+  console.log("subsecond candle engine DISABLED (module " + (subsecond?"present":"absent") + "; set DVL_SUBSECOND=1 to enable)");
 }
