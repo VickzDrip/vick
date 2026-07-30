@@ -43,6 +43,7 @@ function Aggregator(symbol, intervalMs, emit){
   this.label = IV_LABEL[intervalMs] || (intervalMs/1000 + "s");
   this.emit = emit || function(){};
   this.pending = new Map();     // openTime -> candle aberto (ainda não fechado)
+  this.pendingUpdate = false;   // coalescing: houve update desde o último tickEmit
   this.candles = [];            // ring de candles FECHADOS (crescente por openTime)
   this.byOpen = new Map();      // openTime -> candle fechado (p/ correção)
   this.nextOpen = null;         // próximo openTime a fechar (cursor de finalização)
@@ -103,7 +104,15 @@ Aggregator.prototype.apply = function(tr){
   var c = this.pending.get(start);
   if (!c){ c = this.createBucket(start); this.pending.set(start, c); }
   this.applyToCandle(c, tr);
-  this.emit("candle_update", this.serialize(c));
+  // NÃO emite por trade: coalescing (§16). O tickEmit do engine publica ~5/s.
+  this.pendingUpdate = true;
+};
+/* emite no máximo 1 candle_update do candle atual por tick (coalescing). */
+Aggregator.prototype.tickEmit = function(){
+  if (!this.pendingUpdate) return;
+  this.pendingUpdate = false;
+  var cur = this.current();
+  if (cur) this.emit("candle_update", cur);
 };
 /* finaliza todos os buckets cujo fim + REORDER já passou em relação a nowT,
    preenchendo candles vazios entre eles. */
@@ -197,7 +206,7 @@ function Engine(opts){
   this.dedup = new Set();
   this.dedupQ = [];
   this.status = "OFFLINE";
-  this.ws = null; this.wsAlive = false; this.reconnectAttempt = 0; this.reconnectTimer = 0;
+  this.ws = null; this.wsAlive = false; this.hasBeenLive = false; this.reconnectAttempt = 0; this.reconnectTimer = 0;
   this.lastEventTime = 0; this.lastTradeTime = 0; this.lastAggTradeId = null;
   this.connectedAt = 0; this.reconnects24h = 0; this.duplicates = 0; this.lateEvents = 0;
   this.flushTimer = 0; this.saveTimer = 0; this.staleTimer = 0;
@@ -205,8 +214,8 @@ function Engine(opts){
   this._dirty = false;
 }
 Engine.prototype.onEngineEvent = function(type, data){
-  if (type === "candle_correction"){ /* already counted */ }
-  this._dirty = true;
+  // só candle_close/correction mudam o estado persistido; updates são efêmeros.
+  if (type === "candle_close" || type === "candle_correction") this._dirty = true;
   try { this.emit(type, data); } catch(_){}
 };
 Engine.prototype.markDup = function(id){
@@ -230,7 +239,7 @@ Engine.prototype.ingest = function(ev){
 };
 Engine.prototype.flushAll = function(nowT){
   nowT = nowT || Date.now();
-  for (var i=0;i<INTERVALS.length;i++) this.aggs[INTERVALS[i]].flush(nowT);
+  for (var i=0;i<INTERVALS.length;i++){ var a = this.aggs[INTERVALS[i]]; a.flush(nowT); a.tickEmit(); }
 };
 Engine.prototype.getSnapshot = function(interval, from, to, limit){
   var iv = LABEL_IV[interval]; if (!iv) return null;
@@ -322,11 +331,11 @@ Engine.prototype.connect = function(){
   try { ws = new WebSocket(url); } catch(e){ this.setStatus("OFFLINE"); this.scheduleReconnect(); return; }
   this.ws = ws;
   ws.on("open", function(){
-    self.connectedAt = Date.now(); self.reconnectAttempt = 0; self.wsAlive = true;
-    self.setStatus(self.status === "BOOTSTRAP" ? "LIVE" : "LIVE");
+    self.connectedAt = Date.now(); self.reconnectAttempt = 0; self.wsAlive = true; self.hasBeenLive = true;
+    self.setStatus("LIVE");
   });
   ws.on("message", function(m){ try { self.lastEventTime = Date.now(); self.ingest(JSON.parse(m)); } catch(_){} });
-  ws.on("close", function(){ self.wsAlive = false; if (self.status !== "OFFLINE") self.setStatus("RECONNECTING"); self.scheduleReconnect(); });
+  ws.on("close", function(){ try { self.wsAlive = false; if (self.status !== "OFFLINE") self.setStatus("RECONNECTING"); self.scheduleReconnect(); } catch(_){} });
   ws.on("error", function(){ try { ws.close(); } catch(_){} });
 };
 Engine.prototype.scheduleReconnect = function(){
@@ -336,7 +345,13 @@ Engine.prototype.scheduleReconnect = function(){
   this.reconnects24h++;
   var base = Math.min(30000, 1000 * Math.pow(2, Math.min(6, this.reconnectAttempt)));
   var jitter = Math.floor(Math.random() * 500);
-  this.reconnectTimer = setTimeout(function(){ self.backfill().then(function(){ self.connect(); }).catch(function(){ self.connect(); }); }, base + jitter);
+  // Só faz o backfill pesado (120min) quando já esteve LIVE (buraco real). Se
+  // nunca conectou (futuros inacessível no host), apenas tenta reconectar —
+  // evita marteladas de REST enquanto o feed não sobe.
+  this.reconnectTimer = setTimeout(function(){
+    if (self.hasBeenLive){ self.backfill().then(function(){ self.connect(); }).catch(function(){ self.connect(); }); }
+    else { self.connect(); }
+  }, base + jitter);
   if (this.reconnectTimer.unref) this.reconnectTimer.unref();
 };
 /* recovery de buraco: puxa aggTrades recentes via REST de futuros e reprocessa
