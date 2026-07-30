@@ -271,7 +271,7 @@
    quando a mudança é 100% invisível ao usuário (ex.: refactor interno,
    teste, comentário). Na dúvida, BUMPA.
    ═══════════════════════════════════════════════════════════════ */
-window.DVL_APP_VERSION = 'Beta 1.382';
+window.DVL_APP_VERSION = 'Beta 1.383';
 /* DVL Beta 0.806 — Header De-overlap Fix
    Add dvl-has-ui-1b to <html> synchronously here in <head>, before
    any body HTML is parsed, so the old chrome (.top/.marketRow/.toolbar)
@@ -16305,6 +16305,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.383", note: "Correção do clique em 15s/30s. O timeframe não trocava ao clicar em 15s/30s porque o sistema de TF tem módulos legados sobrepostos que engoliam a seleção de segundos. Agora um handler dedicado força a troca de forma confiável (só pra 15s/30s, sem tocar nos TFs de minuto). Além disso, os candles de 15s/30s passam a carregar PRIMEIRO do recorder do próprio servidor DVL (/api/market/candles) — candles reais com histórico mais confiável — caindo pro builder de aggTrades da corretora se precisar. Recarregue a página pra pegar a correção." },
   { version: "Beta 1.382", note: "Timeframes de 15s e 30s no gráfico. Agora 15s e 30s aparecem FIXADOS na barra de timeframe (e no menu de TFs) — é só clicar pra ver os candles reais de 15s/30s no gráfico, montados de aggTrades reais. Antes o menu de TF só listava de 1m pra cima; os segundos existiam no motor mas nunca eram mostrados. (Se você tirar o 15s/30s da barra, não volta sozinho.) Obs: o histórico inicial vem dos aggTrades da corretora; o recorder do servidor vai deixando o histórico mais fundo com o tempo." },
   { version: "Beta 1.381", note: "Backend — motor de candles reais 15s/30s agora usa SPOT. Confirmado que a Binance bloqueia o IP do VPS pro mercado de FUTUROS (REST HTTP 418 = IP banido, WebSocket sem dados). O spot funciona no host e é praticamente idêntico ao futuro pra sinal de RSI Exhaustion (a diferença de preço spot/futuro é mínima). O mesmo motor (OHLCV verdadeiro, volume buy/sell, delta, dedupe, reconnect, correção, candles vazios) agora grava candles de SPOT 24/7; acompanhe em /api/market/health e /api/market/candles. Configurável por env pra voltar a futuros se o host tiver acesso um dia. Próximo: Fase 1b (Motor Intrabar no RSI Exhaustion Pro). Visual não muda ainda." },
   { version: "Beta 1.380", note: "Backend — diagnóstico do feed de futuros. O motor conectava mas não chegava nenhum trade (provável restrição geo/IP da Binance derivativos pro IP do VPS). Adicionado diagnóstico em /api/market/health (estado do WebSocket, nº de mensagens, código de fechamento, erro, status do REST) e um status STARVED pra quando conecta sem receber dados. Sem impacto no visual." },
@@ -19587,6 +19588,46 @@ async function fetchKlinesFromAggTrades(sym, iv, targetLimit){
   throw new Error("Real aggTrades failover failed [" + errors.join(" | ") + "]");
 }
 
+async function fetchDvlSubsecondCandles(sym, iv, targetLimit){
+  if(iv !== "15s" && iv !== "30s") return null;
+  const lim = Math.min(Math.max(50, Number(targetLimit) || 1000), 5000);
+  const url = "/api/market/candles?symbol=" + encodeURIComponent(sym) + "&interval=" + iv + "&limit=" + lim;
+  const r = await fetch(url, { cache: "no-store" });
+  if(!r.ok) return null;
+  const j = await r.json();
+  if(!j || j.ok !== true || j.status === "OFFLINE" || !Array.isArray(j.candles) || !j.candles.length) return null;
+  // formato de linha estilo Binance kline: [t,o,h,l,c,vol,closeTime,quoteVol,trades,buyVol,...]
+  const rows = j.candles.map(c => [
+    Number(c.openTime), String(c.open), String(c.high), String(c.low), String(c.close),
+    String(c.baseVolume), Number(c.closeTime), String(c.quoteVolume),
+    Number(c.tradeCount) || 0, String(c.takerBuyBase), String(c.takerBuyQuote || "0"), "0"
+  ]);
+  return __dvlTagRows(rows, { source: "DVL_BACKEND_SUBSECOND_" + iv, endpoint: "/api/market/candles", market: j.market || "binance-spot" });
+}
+
+/* Beta 1.383 — Fix da SELEÇÃO de 15s/30s. O sistema de timeframe tem módulos
+   legados sobrepostos que às vezes "engolem" a troca pra segundos (o TF não
+   muda). Este handler isolado age SÓ em 15s/30s e força a troca pelo caminho
+   autoritativo (setIntervalUi), em capture, antes dos handlers legados. Não
+   toca nos TFs de minuto — não pode quebrar o que já funciona. */
+(function(){
+  if(window.__DVL_SECONDS_TF_FIX_1383) return; window.__DVL_SECONDS_TF_FIX_1383 = true;
+  function secTfOf(el){ if(!el||!el.getAttribute) return null; var tf=el.getAttribute("data-tf")||el.getAttribute("data-tf-choice"); return (tf==="15s"||tf==="30s")?tf:null; }
+  document.addEventListener("click", function(ev){
+    try{
+      var el = ev.target && ev.target.closest ? ev.target.closest(".dvl1b-tf[data-tf],[data-tf-choice]") : null;
+      if(!el) return;
+      var tf = secTfOf(el);
+      if(!tf) return;   // TFs de minuto seguem o fluxo normal
+      ev.preventDefault(); ev.stopPropagation(); if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+      try{ if(window.DVL_REAL_TIMEFRAME_STATE) window.DVL_REAL_TIMEFRAME_STATE.activeTf = tf; }catch(_){}
+      try{ if(typeof setIntervalUi === "function") setIntervalUi(tf); else if(window.setIntervalUi) window.setIntervalUi(tf); }catch(_){}
+      try{ document.querySelectorAll("#dvl1b_tfScroll .dvl1b-tf[data-tf]").forEach(function(b){ b.classList.toggle("is-active", b.getAttribute("data-tf")===tf); }); }catch(_){}
+      try{ var m=document.getElementById("dvl1b_tfDropMenu"); if(m) m.setAttribute("aria-hidden","true"); var w=document.getElementById("dvl1b_tfDropWrap"); if(w) w.classList.remove("is-open"); }catch(_){}
+    }catch(_){}
+  }, true);
+})();
+
 async function fetchKlinesSmart(sym, iv, targetLimit){
   const parsed = parseTimeframe(iv);
 
@@ -19594,6 +19635,16 @@ async function fetchKlinesSmart(sym, iv, targetLimit){
   // Binance Futures kline REST is not reliable for every seconds interval, so
   // build seconds candles from real aggTrades instead of falling to generic data.
   if(parsed.unit === "s"){
+    // Beta 1.383 — 15s/30s: tenta PRIMEIRO o recorder do próprio servidor DVL
+    // (/api/market/candles, mesma origem, candles reais de aggTrades, histórico
+    // longo e confiável). Cai no builder de aggTrades da corretora se o backend
+    // não tiver aquele símbolo.
+    if(iv === "15s" || iv === "30s"){
+      try{
+        const beRows = await fetchDvlSubsecondCandles(sym, iv, targetLimit);
+        if(Array.isArray(beRows) && beRows.length) return beRows;
+      }catch(_){}
+    }
     const rows = await fetchKlinesFromAggTrades(sym, iv, targetLimit);
     if(Array.isArray(rows) && rows.length) return rows;
     throw new Error("Sem aggTrades reais para " + iv);
