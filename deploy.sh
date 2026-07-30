@@ -32,12 +32,25 @@ if [ -f "$SRC_HTML" ] && ! cmp -s "$SRC_HTML" "$DST/public/index.html"; then
   echo "[$(date -Iseconds)] DVL deployed html @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
 fi
 
-# ALWAYS reconcile server.js — copy + pm2 restart only when it differs.
+# ALWAYS reconcile server.js E os módulos JS que ele carrega (subsecondCandles.js).
+# O server.js faz require("./subsecondCandles"), então o MÓDULO tem que ser
+# copiado ANTES do server.js e estar presente no restart — senão o require
+# estoura "Cannot find module" e o pm2 entra em loop (foi o que derrubou o site).
+# Reinicia o pm2 UMA vez se qualquer um dos arquivos do backend mudar.
+RESTART_NODE=0
+SRC_SSC="$REPO/DepthVisionLab-v106_REAL_UI/subsecondCandles.js"
+if [ -f "$SRC_SSC" ] && ! cmp -s "$SRC_SSC" "$DST/subsecondCandles.js"; then
+  cp "$SRC_SSC" "$DST/subsecondCandles.js"; RESTART_NODE=1
+  echo "[$(date -Iseconds)] DVL deployed subsecondCandles.js @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
+fi
 SRC_SRV="$REPO/DepthVisionLab-v106_REAL_UI/server.js"
 if [ -f "$SRC_SRV" ] && ! cmp -s "$SRC_SRV" "$DST/server.js"; then
-  cp "$SRC_SRV" "$DST/server.js"
+  cp "$SRC_SRV" "$DST/server.js"; RESTART_NODE=1
+  echo "[$(date -Iseconds)] DVL deployed server.js @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
+fi
+if [ "$RESTART_NODE" = "1" ]; then
   pm2 restart all --silent 2>/dev/null
-  echo "[$(date -Iseconds)] DVL deployed server.js + pm2 restarted @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
+  echo "[$(date -Iseconds)] DVL pm2 restarted @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
 fi
 
 # ALWAYS reconcile the SCANNER BACKEND (the API on :8090 — pump-backtest, scanner,
