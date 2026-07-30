@@ -207,6 +207,7 @@ function Engine(opts){
   this.dedupQ = [];
   this.status = "OFFLINE";
   this.ws = null; this.wsAlive = false; this.hasBeenLive = false; this.reconnectAttempt = 0; this.reconnectTimer = 0;
+  this.wsOpens = 0; this.wsCloses = 0; this.msgs = 0; this.lastCloseCode = null; this.lastCloseReason = ""; this.lastWsErr = ""; this.backfillNote = "";
   this.lastEventTime = 0; this.lastTradeTime = 0; this.lastAggTradeId = null;
   this.connectedAt = 0; this.reconnects24h = 0; this.duplicates = 0; this.lateEvents = 0;
   this.flushTimer = 0; this.saveTimer = 0; this.staleTimer = 0;
@@ -250,7 +251,10 @@ Engine.prototype.health = function(){
   var h = { market: MARKET, symbol: this.symbol, status: this.status,
     lastAggTradeId: this.lastAggTradeId, lastTradeTime: this.lastTradeTime, lastEventTime: this.lastEventTime,
     lagMs: this.lastEventTime ? Math.max(0, Date.now() - this.lastTradeTime) : null,
-    duplicates: this.duplicates, lateEvents: this.lateEvents, reconnects24h: this.reconnects24h };
+    duplicates: this.duplicates, lateEvents: this.lateEvents, reconnects24h: this.reconnects24h,
+    wsState: this.ws ? this.ws.readyState : -1, wsOpens: this.wsOpens, wsCloses: this.wsCloses,
+    msgs: this.msgs, lastCloseCode: this.lastCloseCode, lastCloseReason: this.lastCloseReason,
+    lastWsErr: this.lastWsErr, backfillNote: this.backfillNote, wsUrl: FUT_WS_BASE };
   var self = this;
   INTERVALS.forEach(function(iv){ h["open"+IV_LABEL[iv]] = self.aggs[iv].nextOpen; h["metrics_"+IV_LABEL[iv]] = self.aggs[iv].metrics; });
   return h;
@@ -320,23 +324,26 @@ Engine.prototype.start = function(){
   this.backfill().then(function(){ self.connect(); }).catch(function(){ self.connect(); });
 };
 Engine.prototype.checkStale = function(){
-  if (this.status === "LIVE" && this.lastEventTime && Date.now() - this.lastEventTime > STALE_MS){
-    this.setStatus("STALE");
+  // "conectado mas sem dados": se abriu o WS mas nenhum trade chega em STALE_MS,
+  // não é LIVE de verdade — marca STARVED (provável bloqueio geo/IP do feed).
+  if (this.status === "LIVE"){
+    var ref = this.lastEventTime || this.connectedAt;
+    if (ref && Date.now() - ref > STALE_MS) this.setStatus(this.msgs > 0 ? "STALE" : "STARVED");
   }
 };
 Engine.prototype.connect = function(){
   var self = this;
   var url = FUT_WS_BASE + "/" + this.symbol.toLowerCase() + "@aggTrade";
   var ws;
-  try { ws = new WebSocket(url); } catch(e){ this.setStatus("OFFLINE"); this.scheduleReconnect(); return; }
-  this.ws = ws;
+  try { ws = new WebSocket(url); } catch(e){ this.lastWsErr = String(e && e.message || e); this.setStatus("OFFLINE"); this.scheduleReconnect(); return; }
+  this.ws = ws; this.wsOpens = (this.wsOpens||0);
   ws.on("open", function(){
-    self.connectedAt = Date.now(); self.reconnectAttempt = 0; self.wsAlive = true; self.hasBeenLive = true;
+    self.connectedAt = Date.now(); self.reconnectAttempt = 0; self.wsAlive = true; self.hasBeenLive = true; self.wsOpens++;
     self.setStatus("LIVE");
   });
-  ws.on("message", function(m){ try { self.lastEventTime = Date.now(); self.ingest(JSON.parse(m)); } catch(_){} });
-  ws.on("close", function(){ try { self.wsAlive = false; if (self.status !== "OFFLINE") self.setStatus("RECONNECTING"); self.scheduleReconnect(); } catch(_){} });
-  ws.on("error", function(){ try { ws.close(); } catch(_){} });
+  ws.on("message", function(m){ try { self.msgs = (self.msgs||0)+1; self.lastEventTime = Date.now(); self.ingest(JSON.parse(m)); } catch(_){} });
+  ws.on("close", function(code, reason){ try { self.wsAlive = false; self.wsCloses = (self.wsCloses||0)+1; self.lastCloseCode = code; self.lastCloseReason = reason ? String(reason).slice(0,120) : ""; if (self.status !== "OFFLINE") self.setStatus("RECONNECTING"); self.scheduleReconnect(); } catch(_){} });
+  ws.on("error", function(e){ try { self.lastWsErr = String(e && e.message || e).slice(0,160); ws.close(); } catch(_){} });
 };
 Engine.prototype.scheduleReconnect = function(){
   var self = this;
@@ -369,7 +376,7 @@ Engine.prototype.backfill = async function(){
       loops++;
       var url = FUT_REST + "/fapi/v1/aggTrades?symbol=" + this.symbol + "&startTime=" + start + "&endTime=" + Math.min(endTime, start + 55000) + "&limit=1000";
       var res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
+      if (!res.ok){ this.backfillNote = "HTTP " + res.status; throw new Error("HTTP " + res.status); }
       var arr = await res.json();
       if (!Array.isArray(arr) || !arr.length){ start += 55000; continue; }
       for (var i=0;i<arr.length;i++){ this.ingest(arr[i]); added++; }
