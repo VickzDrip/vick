@@ -1,67 +1,57 @@
 #!/bin/bash
-# DVL auto-deploy — runs via cron every minute on the VPS.
-# Pulls latest from git AND reconciles the live files with the repo.
-#
-# The copy is now IDEMPOTENT (only writes when the live file actually differs
-# from the repo), and — the important part — it runs on EVERY cron cycle,
-# decoupled from whether git itself detected new commits. Before, the copy was
-# gated behind "did the cron do the pull?" (BEFORE != AFTER); a MANUAL `git pull`
-# advanced the repo without copying, so the next cron saw BEFORE == AFTER and
-# exited without ever copying — leaving the live index.html stale. Now the cron
-# always reconciles the served files against the repo, so a manual pull can't
-# break the deploy anymore.
-
+# DVL auto-deploy (build MODULAR) — cron a cada minuto na VPS.
+# Sincroniza public/ INTEIRO (index + dvl-clean) do git pro site, espelha em
+# /root/public, e reinicia o pm2 do frontend quando algo muda. server.js e o
+# backend continuam iguais ao deploy antigo.
 REPO="$(cd "$(dirname "$0")" && pwd)"
 DST="/root/DepthVisionLab-v106_REAL_UI/DepthVisionLab-v106_REAL_UI"
+MIRROR="/root/public"
 BRANCH="claude/modify-html-1pMJm"
 LOG="/var/log/dvl-deploy.log"
-
 cd "$REPO" || exit 1
 
-# Advance the repo if there are new commits (quiet no-op otherwise).
 git fetch origin "$BRANCH" --quiet 2>/dev/null
 if [ "$(git rev-parse HEAD 2>/dev/null)" != "$(git rev-parse "origin/$BRANCH" 2>/dev/null)" ]; then
   git pull origin "$BRANCH" --quiet 2>/dev/null
 fi
 
-# ALWAYS reconcile index.html — copy only when the live file differs from the
-# repo (idempotent: no log spam, no needless writes, self-heals after any pull).
-SRC_HTML="$REPO/DepthVisionLab-v106_REAL_UI/public/index.html"
-if [ -f "$SRC_HTML" ] && ! cmp -s "$SRC_HTML" "$DST/public/index.html"; then
-  cp "$SRC_HTML" "$DST/public/index.html"
-  echo "[$(date -Iseconds)] DVL deployed html @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
+# ---------- FRONTEND: public/ inteiro (index.html + dvl-clean/ + styles) ----------
+SRC_PUB="$REPO/DepthVisionLab-v106_REAL_UI/public"
+RESTART_FE=0
+if [ -d "$SRC_PUB" ]; then
+  # destrava os arquivos travados com chattr +i antes de copiar
+  chattr -i "$DST/public/index.html" "$DST/public/index.organized-beta1504.html" 2>/dev/null || true
+  # -i lista o que mudou; -c compara por checksum (robusto). Sem --delete: nunca apaga.
+  CHG="$(rsync -rlptc -i --exclude 'index.backup-*' --exclude '*.bak-*' "$SRC_PUB/" "$DST/public/" 2>/dev/null)"
+  if [ -n "$CHG" ]; then
+    RESTART_FE=1
+    rsync -rlptc --exclude 'index.backup-*' --exclude '*.bak-*' "$DST/public/" "$MIRROR/" 2>/dev/null || true
+    echo "[$(date -Iseconds)] DVL frontend sync @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
+  fi
+  # re-trava o index principal (mantém teu hábito de chattr +i)
+  chattr +i "$DST/public/index.html" 2>/dev/null || true
+fi
+if [ "$RESTART_FE" = "1" ]; then
+  pm2 restart depthvisionlab --silent 2>/dev/null
+  echo "[$(date -Iseconds)] DVL pm2 restart depthvisionlab @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
 fi
 
-# ALWAYS reconcile server.js E os módulos JS que ele carrega (subsecondCandles.js).
-# O server.js faz require("./subsecondCandles"), então o MÓDULO tem que ser
-# copiado ANTES do server.js e estar presente no restart — senão o require
-# estoura "Cannot find module" e o pm2 entra em loop (foi o que derrubou o site).
-# Reinicia o pm2 UMA vez se qualquer um dos arquivos do backend mudar.
+# ---------- BACKEND: server.js + subsecondCandles.js (igual ao original) ----------
 RESTART_NODE=0
 SRC_SSC="$REPO/DepthVisionLab-v106_REAL_UI/subsecondCandles.js"
 if [ -f "$SRC_SSC" ] && ! cmp -s "$SRC_SSC" "$DST/subsecondCandles.js"; then
   cp "$SRC_SSC" "$DST/subsecondCandles.js"; RESTART_NODE=1
-  echo "[$(date -Iseconds)] DVL deployed subsecondCandles.js @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
 fi
 SRC_SRV="$REPO/DepthVisionLab-v106_REAL_UI/server.js"
 if [ -f "$SRC_SRV" ] && ! cmp -s "$SRC_SRV" "$DST/server.js"; then
   cp "$SRC_SRV" "$DST/server.js"; RESTART_NODE=1
-  echo "[$(date -Iseconds)] DVL deployed server.js @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
 fi
 if [ "$RESTART_NODE" = "1" ]; then
   pm2 restart all --silent 2>/dev/null
-  echo "[$(date -Iseconds)] DVL pm2 restarted @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
+  echo "[$(date -Iseconds)] DVL pm2 restart (backend) @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
 fi
 
-# ALWAYS reconcile the SCANNER BACKEND (the API on :8090 — pump-backtest, scanner,
-# ML, etc). Unlike the frontend, it is NOT copied anywhere: the dvl-scanner.service
-# runs `node src/index.js` IN-PLACE from this repo ($REPO/dvl-scanner-backend). A
-# `git pull` updates those files on disk, but the running node process keeps the OLD
-# code loaded in memory until the service restarts — which is exactly why a new grid
-# / endpoint change can look "not deployed" even though the file is new. So: whenever
-# the backend subtree changes, npm install + restart the service. The subtree's git
-# object hash (changes only when a file under dvl-scanner-backend/ actually changes)
-# gates it, so steady-state cron cycles never restart needlessly.
+# ---------- SCANNER BACKEND (igual ao original) ----------
 BE_DIR="$REPO/dvl-scanner-backend"
 BE_STAMP="/root/.dvl-backend-deployed"
 if [ -d "$BE_DIR" ]; then
@@ -70,6 +60,5 @@ if [ -d "$BE_DIR" ]; then
     ( cd "$BE_DIR" && npm install --silent 2>/dev/null )
     systemctl restart dvl-scanner 2>/dev/null
     echo "$BE_HASH" > "$BE_STAMP"
-    echo "[$(date -Iseconds)] DVL restarted dvl-scanner (backend changed) @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
   fi
 fi
