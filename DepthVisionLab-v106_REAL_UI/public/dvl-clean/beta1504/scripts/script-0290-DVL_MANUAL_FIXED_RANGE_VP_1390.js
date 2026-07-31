@@ -11,7 +11,14 @@
 #dvlManualFRVPToast.is-show{opacity:1;transform:translateX(-50%) translateY(0);}
 #dvlManualFRVPPanel .dvl-vt-btn-primary{background:linear-gradient(180deg,#b06bff,#8a3fe0);color:#fff;border:none;font:800 11px system-ui;padding:8px 14px;border-radius:9px;cursor:pointer;}
 #dvlManualFRVPPanel .dvl-vt-btn-primary:active{transform:translateY(1px);}
-#dvlManualFRVPPanel .dvl-vt-btn-ghost{background:transparent;color:#c7b8e6;border:1px solid rgba(176,107,255,.4);font:800 11px system-ui;padding:8px 14px;border-radius:9px;cursor:pointer;}`;(document.head||document.documentElement).appendChild(s);}catch(_){}})();
+#dvlManualFRVPPanel .dvl-vt-btn-ghost{background:transparent;color:#c7b8e6;border:1px solid rgba(176,107,255,.4);font:800 11px system-ui;padding:8px 14px;border-radius:9px;cursor:pointer;}
+#dvlManualFRVPFab{position:fixed;right:14px;bottom:104px;display:none;flex-direction:column;gap:9px;z-index:99997;align-items:center;}
+#dvlManualFRVPFab.is-on{display:flex;}
+#dvlManualFRVPFab .dvl-mfrvp-fab-cap{font:800 8.5px system-ui;letter-spacing:.4px;color:#c7b8e6;background:rgba(14,10,26,.82);border:1px solid rgba(176,107,255,.4);border-radius:6px;padding:2px 6px;pointer-events:none;text-transform:uppercase;}
+.dvl-mfrvp-fab-btn{width:46px;height:46px;border-radius:50%;border:1px solid rgba(176,107,255,.55);background:linear-gradient(180deg,#b06bff,#8a3fe0);color:#fff;font-size:19px;line-height:1;cursor:pointer;box-shadow:0 5px 16px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
+.dvl-mfrvp-fab-btn:active{transform:translateY(1px) scale(.97);}
+.dvl-mfrvp-fab-btn.dvl-mfrvp-fab-clear{width:38px;height:38px;font-size:16px;background:rgba(20,14,32,.94);color:#ffb3c0;border-color:rgba(255,74,97,.5);box-shadow:0 4px 12px rgba(0,0,0,.4);}
+.dvl-mfrvp-fab-btn.dvl-mfrvp-fab-clear.is-disabled{opacity:.35;pointer-events:none;}`;(document.head||document.documentElement).appendChild(s);}catch(_){}})();
   /* DVL Beta 1.390 — Fixed Range VP MANUAL.
      Igual ao Fixed Range VP, porém gera UM ÚNICO profile e o usuário escolhe
      de onde até onde ele é plotado (seleção manual no gráfico).
@@ -318,7 +325,7 @@
     ov.addEventListener("pointerup",onSelUp);
     window.addEventListener("resize",positionOverlay);
     window.addEventListener("scroll",positionOverlay,true);
-    updateHint();
+    updateHint();updateFab();
   }
   function positionOverlay(){
     const cv=canvasEl();if(!cv||!sel.overlay)return;const r=cv.getBoundingClientRect();
@@ -366,7 +373,7 @@
     if(sel.overlay){try{sel.overlay.remove();}catch(_){}sel.overlay=null;}
     window.removeEventListener("resize",positionOverlay);
     window.removeEventListener("scroll",positionOverlay,true);
-    redraw();
+    updateFab();redraw();
   }
   function updateHint(){const h=sel.overlay&&sel.overlay.querySelector("#dvlManualFRVPSelHint");if(h)h.textContent=sel.awaitingSecond?"Agora toque no FIM do range":"Toque no início e no fim do range (ou arraste)";}
   function clearRange(){state.startTime=0;state.endTime=0;profileCache=null;save();updateRow();renderPanel();redraw();}
@@ -454,7 +461,27 @@
     const clrBtn=body.querySelector("#mfrClear");if(clrBtn)clrBtn.addEventListener("click",clearRange);
   }
 
-  function updateRow(){const p=document.getElementById("dvlManualFRVPState");if(p){p.textContent=state.on?"ON":"OFF";p.classList.toggle("is-on",!!state.on);}}
+  function updateRow(){const p=document.getElementById("dvlManualFRVPState");if(p){p.textContent=state.on?"ON":"OFF";p.classList.toggle("is-on",!!state.on);}updateFab();}
+  // Botão flutuante: aparece quando o indicador está ON. 📐 abre a reguinha
+  // (seleção de range), 🗑 limpa. Some ao desativar o indicador.
+  let fab=null;
+  function ensureFab(){
+    if(fab&&document.body.contains(fab))return;
+    fab=document.createElement("div");fab.id="dvlManualFRVPFab";fab.setAttribute("data-dvl-ui","true");
+    fab.innerHTML='<button type="button" class="dvl-mfrvp-fab-btn dvl-mfrvp-fab-sel" title="Selecionar range no gráfico" aria-label="Selecionar range">📐</button><button type="button" class="dvl-mfrvp-fab-btn dvl-mfrvp-fab-clear" title="Limpar range" aria-label="Limpar range">🗑</button><span class="dvl-mfrvp-fab-cap">FR·Manual</span>';
+    document.body.appendChild(fab);
+    fab.addEventListener("pointerdown",function(e){e.stopPropagation();},true);
+    fab.querySelector(".dvl-mfrvp-fab-sel").addEventListener("click",function(e){e.preventDefault();e.stopPropagation();startSelect();});
+    fab.querySelector(".dvl-mfrvp-fab-clear").addEventListener("click",function(e){e.preventDefault();e.stopPropagation();clearRange();});
+  }
+  function updateFab(){
+    try{
+      ensureFab();
+      fab.classList.toggle("is-on",!!state.on && !sel.active);
+      const clr=fab.querySelector(".dvl-mfrvp-fab-clear");
+      if(clr)clr.classList.toggle("is-disabled",!hasRange());
+    }catch(_){}
+  }
   function insertRow(){
     const menu=document.getElementById("indicatorDropdown");if(!menu)return;
     let item=document.getElementById("dvlManualFixedRangeVPItem");
