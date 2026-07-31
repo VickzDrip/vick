@@ -39331,15 +39331,48 @@ drag = {
     if(!item.dataset.bound){item.dataset.bound="1";const p=item.querySelector("#dvlManualFRVPState");if(p)p.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();setOn(!state.on);});item.addEventListener("click",e=>{e.stopPropagation();openPanel();});}
     updateRow();
   }
-  function boot(){insertRow();updateRow();}
+  // Inserção resiliente: tenta agora e re-tenta até o menu de indicadores existir
+  // (no build modular a ordem de carregamento não é garantida).
+  function boot(){
+    let tries=0;
+    (function attempt(){
+      insertRow();updateRow();
+      if(document.getElementById("dvlManualFixedRangeVPItem"))return;
+      if(tries++<60)setTimeout(attempt,250);
+    })();
+    try{
+      const mo=new MutationObserver(()=>{ if(!document.getElementById("dvlManualFixedRangeVPItem"))insertRow(); });
+      mo.observe(document.documentElement,{childList:true,subtree:true});
+      setTimeout(()=>{try{mo.disconnect();}catch(_){}} ,20000);
+    }catch(_){}
+  }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
 
-  /* ---------- registro do draw: WRAP do hook existente (não altera o pipeline) ---------- */
-  const _prevFRVPDraw=window.DVLFixedRangeVPDraw;
-  window.DVLFixedRangeVPDraw=function(ctx,cfg){
-    if(_prevFRVPDraw){try{_prevFRVPDraw(ctx,cfg);}catch(_){}}
-    try{draw(ctx,cfg);}catch(e){try{console.warn("[DVL Manual Fixed Range VP]",e);}catch(_){}}
-  };
+  /* ---------- registro do draw: WRAP resiliente à ORDEM de carga ---------- */
+  /* draw() do MANUAL sempre roda depois do session Fixed Range VP, esteja ele
+     definido antes OU depois deste módulo. Usa getter/setter para capturar
+     qualquer atribuição futura de window.DVLFixedRangeVPDraw (ex.: o próprio
+     script-0095 sendo carregado depois deste). */
+  (function installWrap(){
+    let inner=window.DVLFixedRangeVPDraw;
+    function combined(ctx,cfg){
+      if(typeof inner==="function"){try{inner(ctx,cfg);}catch(_){}}
+      try{draw(ctx,cfg);}catch(e){try{console.warn("[DVL Manual Fixed Range VP]",e);}catch(_){}}
+    }
+    try{
+      Object.defineProperty(window,"DVLFixedRangeVPDraw",{
+        configurable:true,
+        get(){return combined;},
+        set(v){inner=v;}
+      });
+    }catch(_){
+      const prev=(typeof inner==="function")?inner:null;
+      window.DVLFixedRangeVPDraw=function(ctx,cfg){
+        if(prev){try{prev(ctx,cfg);}catch(_){}}
+        try{draw(ctx,cfg);}catch(e){try{console.warn("[DVL Manual Fixed Range VP]",e);}catch(_){}}
+      };
+    }
+  })();
 
   window.DVLManualFixedRangeVP={version:"1.390",on,setOn,openPanel,startSelect,clearRange,get state(){return Object.assign({},state);}};
 })();
