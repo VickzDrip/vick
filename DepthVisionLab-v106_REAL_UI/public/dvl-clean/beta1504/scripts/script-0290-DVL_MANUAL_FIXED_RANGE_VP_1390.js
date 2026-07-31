@@ -308,9 +308,87 @@
           const pc=currentProfile(cfg);
           drawRangeMarkers(ctx,cfg,bounds);
           if(pc&&pc.p)drawProfile(ctx,cfg,pc.p,bounds);
+          if(!sel.active)drawEdgeHandles(ctx,cfg,bounds);
         }
       }
     }finally{ctx.restore();}
+  }
+
+  /* ---------- alças nas bordas: arraste o início/fim do range já fixado ----------
+     Depois de fixar o profile dá pra continuar ajustando: arrastar a alça do FIM
+     empurra o endTime pra frente (mantendo o início fixo) e o profile recalcula.
+     Só captura o gesto quando o ponteiro encosta numa borda (tolerância pequena),
+     então o pan normal do gráfico continua funcionando no resto do chart. */
+  const EDGE_TOL=13, EDGE_H=22, EDGE_HW=3;
+  let edgeDrag=null;
+  function drawEdgeHandles(ctx,cfg,bounds){
+    const col=state.rangeColor||"#b06bff";
+    const y=cfg.y0+1,hh=Math.min(EDGE_H,Math.max(12,(cfg.y1-cfg.y0)*0.06));
+    [[bounds.x0,"start"],[bounds.x1,"end"]].forEach(function(pair){
+      const xx=pair[0],edge=pair[1];
+      if(xx<cfg.x0-8||xx>cfg.x1+8)return;
+      const active=!!(edgeDrag&&edgeDrag.edge===edge);
+      ctx.save();
+      ctx.globalAlpha=active?1:.9;ctx.fillStyle=col;
+      ctx.fillRect(xx-EDGE_HW,y,EDGE_HW*2,hh);
+      ctx.globalAlpha=active?1:.85;ctx.fillStyle="rgba(255,255,255,.92)";
+      ctx.fillRect(xx-.6,y+3,1.2,hh-6);
+      ctx.restore();
+    });
+  }
+  function edgeAt(lx,ly,cfg){
+    if(!cfg)return null;
+    if(ly<cfg.y0-6||ly>cfg.y1+6)return null;
+    const bounds=xBounds(cfg);if(!bounds)return null;
+    const dEnd=Math.abs(lx-bounds.x1),dStart=Math.abs(lx-bounds.x0);
+    if(dEnd<=EDGE_TOL&&dEnd<=dStart)return{edge:"end"};
+    if(dStart<=EDGE_TOL)return{edge:"start"};
+    return null;
+  }
+  function onEdgeDown(ev){
+    if(edgeDrag||sel.active||!state.on||!hasRange()||!lastCfg)return;
+    if(ev.pointerType==="mouse"&&ev.button!==0)return;
+    const cv=canvasEl();if(!cv)return;
+    const r=cv.getBoundingClientRect();
+    const lx=ev.clientX-r.left,ly=ev.clientY-r.top;
+    const hit=edgeAt(lx,ly,lastCfg);if(!hit)return;
+    ev.preventDefault();ev.stopPropagation();if(ev.stopImmediatePropagation)ev.stopImmediatePropagation();
+    const a=Math.min(+state.startTime,+state.endTime),b=Math.max(+state.startTime,+state.endTime);
+    edgeDrag={edge:hit.edge,pid:ev.pointerId,fixedTime:hit.edge==="end"?a:b};
+    try{cv.setPointerCapture&&cv.setPointerCapture(ev.pointerId);}catch(_){}
+    window.addEventListener("pointermove",onEdgeMove,true);
+    window.addEventListener("pointerup",onEdgeUp,true);
+    window.addEventListener("pointercancel",onEdgeUp,true);
+    document.documentElement.style.cursor="ew-resize";
+    redraw();
+  }
+  function onEdgeMove(ev){
+    if(!edgeDrag)return;
+    if(ev.pointerType==="mouse"&&typeof ev.buttons==="number"&&ev.buttons===0){onEdgeUp(ev);return;}
+    ev.preventDefault();ev.stopPropagation();
+    const cfg=lastCfg,cv=canvasEl();if(!cfg||!cv)return;
+    const r=cv.getBoundingClientRect();
+    let moving=timeFromLocalX(cfg,ev.clientX-r.left);
+    if(!isFinite(moving))return;
+    const step=Math.max(1,chartStepMs());
+    if(edgeDrag.edge==="end"){moving=Math.max(moving,edgeDrag.fixedTime+step);state.startTime=edgeDrag.fixedTime;state.endTime=moving;}
+    else{moving=Math.min(moving,edgeDrag.fixedTime-step);state.endTime=edgeDrag.fixedTime;state.startTime=moving;}
+    profileCache=null;redraw();
+  }
+  function onEdgeUp(){
+    window.removeEventListener("pointermove",onEdgeMove,true);
+    window.removeEventListener("pointerup",onEdgeUp,true);
+    window.removeEventListener("pointercancel",onEdgeUp,true);
+    document.documentElement.style.cursor="";
+    if(!edgeDrag)return;
+    edgeDrag=null;profileCache=null;save();updateRow();
+    try{if(panel&&panel.classList.contains("is-open"))renderPanel();}catch(_){}
+    redraw();
+  }
+  function installEdgeDrag(){
+    window.addEventListener("pointerdown",onEdgeDown,true);
+    window.addEventListener("blur",function(){if(edgeDrag){edgeDrag=null;document.documentElement.style.cursor="";save();redraw();}},true);
+    document.addEventListener("visibilitychange",function(){if(document.hidden&&edgeDrag){edgeDrag=null;document.documentElement.style.cursor="";save();redraw();}});
   }
 
   /* ---------- seleção do range (overlay sobre o canvas) ---------- */
@@ -567,6 +645,7 @@
     }catch(_){}
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
+  installEdgeDrag();
 
   /* ---------- registro do draw: WRAP resiliente à ORDEM de carga ---------- */
   /* draw() do MANUAL sempre roda depois do session Fixed Range VP, esteja ele
