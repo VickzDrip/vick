@@ -1587,6 +1587,7 @@ let crossMovedBeforeHold = false;
 // Touch: quando o crosshair já está visível, um novo toque NÃO agarra o
 // crosshair — ele vira pan e o crosshair some (tap = some, swipe = pan+some).
 let crossDismissPending = false;
+let crossGestureDownX = 0, crossGestureDownY = 0, crossVisibleAtDown = false;
 const CHART_DRAG_SENSITIVITY = 1.0;
 const PRICE_DRAG_SENSITIVITY = 1.0;
 const PRICE_SCALE_W = 80;
@@ -6119,6 +6120,9 @@ function setupChartInteractions(){
       crosshair.active  = false;
       crossDragState    = null;
       crossDismissPending = false;
+      crossGestureDownX = ev.clientX;   // origem do gesto — usada p/ classificar tap vs arrasto no _onEnd
+      crossGestureDownY = ev.clientY;
+      crossVisibleAtDown = !!crosshair.visible;
 
       const onScale    = isOnPriceScale(ev.clientX);
       const insidePrice = pointInsidePriceArea(ev.clientX, ev.clientY);
@@ -6331,9 +6335,16 @@ function setupChartInteractions(){
       ((crosshair.active && crossDragState && crossDragState.fromVisibleCross && !crossDragState.moved) ||
        (wasTap && chartPointers.size === 0));
 
+    // Toque num crosshair que JÁ estava visível: classifica tap vs arrasto pelo
+    // deslocamento TOTAL do dedo (não pelo flag 'moved', que dispara com 3px de
+    // tremida). Tap (movimento pequeno) → dispensa; arrasto grande → leitura, mantém.
+    const totalMove = Math.hypot(ev.clientX - crossGestureDownX, ev.clientY - crossGestureDownY);
+    const tapOnCross = crossVisibleAtDown && crosshair.visible && insidePrice &&
+      ev.pointerType !== "mouse" && totalMove < 12 && !dvlDrawingModeActive();
+
     clearCrossPressTimer();
 
-    if(crossTapToHide){
+    if(crossTapToHide || tapOnCross){
       hideCrosshair();
     } else if(crossDismissPending && !crosshair.active){
       hideCrosshair();   // touch: tap no crosshair visível → some
