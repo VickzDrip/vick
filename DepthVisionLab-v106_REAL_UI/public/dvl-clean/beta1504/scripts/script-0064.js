@@ -1584,6 +1584,9 @@ let crosshair = { visible:false, x:0, y:0, active:false };
 let crossDragState = null;
 let crossPressTimer = null;
 let crossMovedBeforeHold = false;
+// Touch: quando o crosshair já está visível, um novo toque NÃO agarra o
+// crosshair — ele vira pan e o crosshair some (tap = some, swipe = pan+some).
+let crossDismissPending = false;
 const CHART_DRAG_SENSITIVITY = 1.0;
 const PRICE_DRAG_SENSITIVITY = 1.0;
 const PRICE_SCALE_W = 80;
@@ -6111,19 +6114,27 @@ function setupChartInteractions(){
       crossMovedBeforeHold = false;
       crosshair.active  = false;
       crossDragState    = null;
+      crossDismissPending = false;
 
       const onScale    = isOnPriceScale(ev.clientX);
       const insidePrice = pointInsidePriceArea(ev.clientX, ev.clientY);
 
       if(crosshair.visible && insidePrice && !onScale && !(window.__dvlDesktopHoverCrosshair && ev.pointerType === "mouse")){
-        crosshair.active = true;
-        crossDragState = {
-          startPointerX: ev.clientX, startPointerY: ev.clientY,
-          startCrossX: crosshair.x, startCrossY: crosshair.y,
-          moved: false, fromVisibleCross: true
-        };
-        chartDragState = null;
-        return;
+        if(ev.pointerType === "mouse"){
+          // Desktop (sem hover): mantém arrastar o crosshair.
+          crosshair.active = true;
+          crossDragState = {
+            startPointerX: ev.clientX, startPointerY: ev.clientY,
+            startCrossX: crosshair.x, startCrossY: crosshair.y,
+            moved: false, fromVisibleCross: true
+          };
+          chartDragState = null;
+          return;
+        }
+        // Touch: NÃO agarra o crosshair. Marca p/ dispensá-lo e segue para o
+        // setup de pan abaixo — tap dispensa, swipe dá pan e dispensa. Se o dedo
+        // ficar parado 240ms, o timer abaixo reativa o crosshair p/ leitura.
+        crossDismissPending = true;
       }
 
       chartDragState = {
@@ -6135,6 +6146,7 @@ function setupChartInteractions(){
       if(!onScale && insidePrice && ev.pointerType !== "mouse"){
         crossPressTimer = setTimeout(() => {
           if(!crossMovedBeforeHold && chartPointers.has(ev.pointerId)){
+            crossDismissPending = false; // segurou p/ ler: não dispensa o crosshair
             crosshair.active = true;
             const rect = chartRect();
             crossDragState = {
@@ -6236,7 +6248,10 @@ function setupChartInteractions(){
     if(chartDragState){
       const dx = ev.clientX - chartDragState.x;
       const dy = ev.clientY - chartDragState.y;
-      if(Math.hypot(dx, dy) > 7){ crossMovedBeforeHold = true; clearCrossPressTimer(); }
+      if(Math.hypot(dx, dy) > 7){
+        crossMovedBeforeHold = true; clearCrossPressTimer();
+        if(crossDismissPending){ crossDismissPending = false; hideCrosshair(); } // swipe: crosshair some e vira pan
+      }
       if(chartDragState.onScale){
         if(Number.isFinite(chartDragState.priceRange)){
           const zf = Math.exp(dy * 0.0075);
@@ -6316,12 +6331,15 @@ function setupChartInteractions(){
 
     if(crossTapToHide){
       hideCrosshair();
+    } else if(crossDismissPending && !crosshair.active){
+      hideCrosshair();   // touch: tap no crosshair visível → some
     } else if(wasTap && !crosshair.active && chartPointers.size === 0 && !crosshair.visible && !dvlDrawingModeActive()){
       setCrosshairFromClient(ev.clientX, ev.clientY);
     }
 
     crosshair.active = false;
     crossDragState   = null;
+    crossDismissPending = false;
     if(chartPointers.size < 2) chartPinchState = null;
     if(chartPointers.size === 0) chartDragState = null;
   }
