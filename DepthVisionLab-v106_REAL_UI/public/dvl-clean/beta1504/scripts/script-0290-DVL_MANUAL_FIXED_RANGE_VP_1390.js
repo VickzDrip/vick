@@ -202,10 +202,12 @@
     const cap=Math.max(1,span*.98);
     if(totalW>cap){const available=Math.max(.5,cap-dividerGap),pair=Math.max(.0001,profileW+deltaW),k=available/pair;profileW*=k;deltaW*=k;totalW=profileW+deltaW+dividerGap;}
     const atOrigin=(state.anchorMode||"origin")!=="end";
-    const anchor=atOrigin?bounds.x0:bounds.x1;
-    const blockX=atOrigin?anchor:anchor-totalW;
-    const dividerX=blockX+deltaW+(state.deltaOn?Math.min(2,dividerGap*.5):0);
-    const profileX0=blockX+deltaW+dividerGap;
+    // Profile fica ANCORADO na borda do range, independente do delta.
+    // Ligar/desligar o delta NÃO move mais o profile: o delta cresce para a
+    // ESQUERDA do profile (para fora), em vez de empurrar o profile todo.
+    const profileX0=atOrigin?bounds.x0:(bounds.x1-profileW);
+    const dividerX=profileX0-(state.deltaOn?dividerGap:0);
+    const blockX=state.deltaOn?(dividerX-deltaW):profileX0;
     return {span,profileW,deltaW,dividerGap,totalW,blockX,dividerX,profileX0};
   }
   function nodeTipX(p,layout,idx){
