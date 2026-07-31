@@ -223,22 +223,39 @@
     const st = document.getElementById("dvlVwapSessionState");
     if(st){ st.textContent = state.on ? "ON" : "OFF"; st.classList.toggle("is-on", !!state.on); }
   }
+  // Coloca o item SEMPRE num ponto visível: logo após as Moving Averages
+  // (topo da lista). Nunca no fim — o .indicatorDropdown tem overflow:hidden
+  // sem scroll, então itens no fim ficam cortados fora da tela no mobile.
+  function placeItem(menu, item){
+    const ma = document.getElementById("dvlMovingAveragesItem");
+    if(ma && ma.parentNode){
+      if(ma.nextSibling !== item) ma.parentNode.insertBefore(item, ma.nextSibling);
+      return;
+    }
+    const head = menu.querySelector(".indicatorDropHead");
+    if(head && head.parentNode){
+      if(head.nextSibling !== item) menu.insertBefore(item, head.nextSibling);
+    } else if(menu.firstChild !== item){
+      menu.insertBefore(item, menu.firstChild);
+    }
+  }
   function insertItem(){
     const menu = document.getElementById("indicatorDropdown");
-    if(!menu || document.getElementById("dvlVwapSessionItem")) return;
-    const item = document.createElement("div");
-    item.id = "dvlVwapSessionItem";
-    item.className = "indicatorItem dvl-vwap-indicator-item";
-    item.innerHTML =
-      '<span class="indicatorFxMark">VW</span>' +
-      '<span><b>VWAP Session</b><small>overlay · reset por sessão</small></span>' +
-      '<i class="dvl-vt-state" id="dvlVwapSessionState">OFF</i>';
-    const ma = document.getElementById("dvlMovingAveragesItem");
-    if(ma && ma.parentNode) ma.parentNode.insertBefore(item, ma.nextSibling);
-    else menu.appendChild(item);
-    const pill = item.querySelector("#dvlVwapSessionState");
-    if(pill) pill.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); state.on = !state.on; save(); });
-    item.addEventListener("click", ev => { ev.stopPropagation(); openPanel(); });
+    if(!menu) return;
+    let item = document.getElementById("dvlVwapSessionItem");
+    if(!item){
+      item = document.createElement("div");
+      item.id = "dvlVwapSessionItem";
+      item.className = "indicatorItem dvl-vwap-indicator-item";
+      item.innerHTML =
+        '<span class="indicatorFxMark">VW</span>' +
+        '<span><b>VWAP Session</b><small>overlay · reset por sessão</small></span>' +
+        '<i class="dvl-vt-state" id="dvlVwapSessionState">OFF</i>';
+      const pill = item.querySelector("#dvlVwapSessionState");
+      if(pill) pill.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); state.on = !state.on; save(); });
+      item.addEventListener("click", ev => { ev.stopPropagation(); openPanel(); });
+    }
+    placeItem(menu, item); // insere ou re-encaixa ao lado das MAs
     updateItem();
   }
 
@@ -326,17 +343,22 @@
   function closePalette(){ if(palette){ try{ palette.remove(); }catch(_){} palette=null; } document.removeEventListener("pointerdown", outsidePalette, true); }
 
   /* ---------- boot resiliente ---------- */
+  function homed(){
+    const item = document.getElementById("dvlVwapSessionItem");
+    const ma = document.getElementById("dvlMovingAveragesItem");
+    return !!(item && ma && item.previousSibling === ma);
+  }
   function boot(){
     let tries = 0;
     (function attempt(){
-      insertItem(); updateItem();
-      if(document.getElementById("dvlVwapSessionItem")) return;
-      if(tries++ < 60) setTimeout(attempt, 250);
+      insertItem();
+      if(homed()) return;                 // só para quando está do lado das MAs
+      if(tries++ < 80) setTimeout(attempt, 250);   // ~20s
     })();
     try{
-      const mo = new MutationObserver(() => { if(!document.getElementById("dvlVwapSessionItem")) insertItem(); });
+      const mo = new MutationObserver(() => { if(!homed()) insertItem(); });
       mo.observe(document.documentElement, {childList:true, subtree:true});
-      setTimeout(() => { try{ mo.disconnect(); }catch(_){} }, 20000);
+      setTimeout(() => { try{ mo.disconnect(); }catch(_){} }, 30000);
     }catch(_){}
   }
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
