@@ -743,10 +743,11 @@
     }
   }
   function endDrag(ev){
-    if(!drag || drag.pointerId !== ev.pointerId) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+    // Encerra SEMPRE que houver drag ativo — não exige que o pointerId bata.
+    // Um pointerup/cancel/mouseup/touchend/blur perdido era o que deixava a
+    // position "grudada" no cursor (não soltava). Espelha o Paper V2 Pro.
+    if(!drag) return;
+    if(ev){ try{ ev.preventDefault(); ev.stopPropagation(); if(ev.stopImmediatePropagation) ev.stopImmediatePropagation(); }catch(_){} }
 
     drag = null;
     try{
@@ -780,7 +781,12 @@
     }, {capture:true, passive:false});
 
     window.addEventListener("pointermove", function(ev){
-      if(drag) applyDrag(ev);
+      if(!drag) return;
+      // Rede de segurança: se o botão do mouse já foi solto mas o pointerup
+      // se perdeu (release fora da janela, re-render, etc), encerra aqui no
+      // próximo movimento sem botão pressionado. Só p/ mouse (touch tem buttons=0).
+      if(ev && ev.type !== "touchmove" && typeof ev.buttons === "number" && ev.buttons === 0){ endDrag(ev); return; }
+      applyDrag(ev);
     }, {capture:true, passive:false});
 
     window.addEventListener("pointerup", function(ev){
@@ -790,6 +796,12 @@
     window.addEventListener("pointercancel", function(ev){
       if(drag) endDrag(ev);
     }, {capture:true, passive:false});
+
+    // Caminhos extras de liberação (espelham o Paper V2 Pro que não gruda):
+    window.addEventListener("mouseup", function(ev){ if(drag) endDrag(ev); }, {capture:true});
+    window.addEventListener("touchend", function(ev){ if(drag) endDrag(ev); }, {capture:true});
+    window.addEventListener("blur", function(){ if(drag) endDrag(); }, {capture:true});
+    document.addEventListener("visibilitychange", function(){ if(document.hidden && drag) endDrag(); });
 
     document.addEventListener("pointerdown", function(ev){
       if(drag) return;
