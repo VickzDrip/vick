@@ -368,6 +368,7 @@
     on: () => !!state.on,
     setOn: v => { state.on = !!v; save(); },
     open: openPanel,
+    openPanel: openPanel,
     save: save, load: () => { state = load(); computed = null; updateItem(); redraw(); }
   };
 })();
