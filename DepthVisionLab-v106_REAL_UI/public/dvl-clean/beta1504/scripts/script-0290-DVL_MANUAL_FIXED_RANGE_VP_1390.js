@@ -12,13 +12,15 @@
 #dvlManualFRVPPanel .dvl-vt-btn-primary{background:linear-gradient(180deg,#b06bff,#8a3fe0);color:#fff;border:none;font:800 11px system-ui;padding:8px 14px;border-radius:9px;cursor:pointer;}
 #dvlManualFRVPPanel .dvl-vt-btn-primary:active{transform:translateY(1px);}
 #dvlManualFRVPPanel .dvl-vt-btn-ghost{background:transparent;color:#c7b8e6;border:1px solid rgba(176,107,255,.4);font:800 11px system-ui;padding:8px 14px;border-radius:9px;cursor:pointer;}
-#dvlManualFRVPFab{position:fixed;right:14px;bottom:104px;display:none;flex-direction:column;gap:9px;z-index:99997;align-items:center;}
+#dvlManualFRVPFab{position:fixed;right:14px;bottom:104px;display:none;flex-direction:column;gap:8px;z-index:99997;align-items:center;touch-action:none;user-select:none;-webkit-user-select:none;}
 #dvlManualFRVPFab.is-on{display:flex;}
-#dvlManualFRVPFab .dvl-mfrvp-fab-cap{font:800 8.5px system-ui;letter-spacing:.4px;color:#c7b8e6;background:rgba(14,10,26,.82);border:1px solid rgba(176,107,255,.4);border-radius:6px;padding:2px 6px;pointer-events:none;text-transform:uppercase;}
-.dvl-mfrvp-fab-btn{width:46px;height:46px;border-radius:50%;border:1px solid rgba(176,107,255,.55);background:linear-gradient(180deg,#b06bff,#8a3fe0);color:#fff;font-size:19px;line-height:1;cursor:pointer;box-shadow:0 5px 16px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
-.dvl-mfrvp-fab-btn:active{transform:translateY(1px) scale(.97);}
-.dvl-mfrvp-fab-btn.dvl-mfrvp-fab-clear{width:38px;height:38px;font-size:16px;background:rgba(20,14,32,.94);color:#ffb3c0;border-color:rgba(255,74,97,.5);box-shadow:0 4px 12px rgba(0,0,0,.4);}
-.dvl-mfrvp-fab-btn.dvl-mfrvp-fab-clear.is-disabled{opacity:.35;pointer-events:none;}`;(document.head||document.documentElement).appendChild(s);}catch(_){}})();
+#dvlManualFRVPFab.is-dragging{opacity:.92;cursor:grabbing;}
+.dvl-mfrvp-fab-btn{width:46px;height:46px;border-radius:14px;border:1px solid rgba(16,223,119,.55);background:linear-gradient(180deg,rgba(18,26,23,.96),rgba(12,18,16,.96));color:#10df77;cursor:grab;box-shadow:0 5px 16px rgba(0,0,0,.45),inset 0 0 0 1px rgba(16,223,119,.08);display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
+.dvl-mfrvp-fab-btn svg{display:block;pointer-events:none;}
+.dvl-mfrvp-fab-btn.dvl-mfrvp-fab-sel:active{transform:scale(.96);}
+.dvl-mfrvp-fab-btn.dvl-mfrvp-fab-sel{box-shadow:0 5px 18px rgba(0,0,0,.5),0 0 0 1px rgba(16,223,119,.14),0 0 14px rgba(16,223,119,.18);}
+.dvl-mfrvp-fab-btn.dvl-mfrvp-fab-clear{width:38px;height:38px;border-radius:12px;color:#ff6b7d;border-color:rgba(255,90,110,.5);box-shadow:0 4px 12px rgba(0,0,0,.4);}
+.dvl-mfrvp-fab-btn.dvl-mfrvp-fab-clear.is-disabled{opacity:.3;pointer-events:none;}`;(document.head||document.documentElement).appendChild(s);}catch(_){}})();
   /* DVL Beta 1.390 — Fixed Range VP MANUAL.
      Igual ao Fixed Range VP, porém gera UM ÚNICO profile e o usuário escolhe
      de onde até onde ele é plotado (seleção manual no gráfico).
@@ -462,24 +464,77 @@
   }
 
   function updateRow(){const p=document.getElementById("dvlManualFRVPState");if(p){p.textContent=state.on?"ON":"OFF";p.classList.toggle("is-on",!!state.on);}updateFab();}
-  // Botão flutuante: aparece quando o indicador está ON. 📐 abre a reguinha
-  // (seleção de range), 🗑 limpa. Some ao desativar o indicador.
-  let fab=null;
+  // Botão flutuante: aparece quando o indicador está ON. Ícone de Volume
+  // Profile abre a seleção de range; ✕ limpa. Arrastável (posição salva).
+  // Some ao desativar o indicador.
+  let fab=null,fabDrag=null,fabJustDragged=false;
+  const FAB_POS_KEY="dvl_manual_frvp_fab_pos";
+  // Ícone de Volume Profile: barras horizontais (POC = a mais longa).
+  const VP_ICON='<svg viewBox="0 0 24 24" width="23" height="23" aria-hidden="true"><g fill="currentColor"><rect x="3" y="3.5" width="8" height="2.3" rx="1.1"/><rect x="3" y="7.6" width="13" height="2.3" rx="1.1"/><rect x="3" y="11.7" width="18" height="2.3" rx="1.1"/><rect x="3" y="15.8" width="10" height="2.3" rx="1.1"/><rect x="3" y="19.9" width="5.5" height="2.3" rx="1.1"/></g></svg>';
+  const CLEAR_ICON='<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/></svg>';
+  function clampFab(){
+    if(!fab)return;const r=fab.getBoundingClientRect();const m=6;
+    if(r.width===0&&r.height===0)return; // escondido: sem dimensões, não dá pra clampar
+    let left=parseFloat(fab.style.left),top=parseFloat(fab.style.top);
+    if(!isFinite(left)||!isFinite(top))return;
+    left=Math.max(m,Math.min(window.innerWidth-r.width-m,left));
+    top=Math.max(m,Math.min(window.innerHeight-r.height-m,top));
+    fab.style.left=left+"px";fab.style.top=top+"px";
+  }
+  function applyFabPos(){
+    if(!fab)return;
+    try{const p=JSON.parse(localStorage.getItem(FAB_POS_KEY)||"null");
+      if(p&&isFinite(p.left)&&isFinite(p.top)){fab.style.left=p.left+"px";fab.style.top=p.top+"px";fab.style.right="auto";fab.style.bottom="auto";clampFab();}
+    }catch(_){}
+  }
   function ensureFab(){
     if(fab&&document.body.contains(fab))return;
     fab=document.createElement("div");fab.id="dvlManualFRVPFab";fab.setAttribute("data-dvl-ui","true");
-    fab.innerHTML='<button type="button" class="dvl-mfrvp-fab-btn dvl-mfrvp-fab-sel" title="Selecionar range no gráfico" aria-label="Selecionar range">📐</button><button type="button" class="dvl-mfrvp-fab-btn dvl-mfrvp-fab-clear" title="Limpar range" aria-label="Limpar range">🗑</button><span class="dvl-mfrvp-fab-cap">FR·Manual</span>';
+    fab.innerHTML='<button type="button" class="dvl-mfrvp-fab-btn dvl-mfrvp-fab-sel" title="Selecionar range no gráfico (arraste para mover)" aria-label="Selecionar range">'+VP_ICON+'</button><button type="button" class="dvl-mfrvp-fab-btn dvl-mfrvp-fab-clear" title="Limpar range" aria-label="Limpar range">'+CLEAR_ICON+'</button>';
     document.body.appendChild(fab);
-    fab.addEventListener("pointerdown",function(e){e.stopPropagation();},true);
-    fab.querySelector(".dvl-mfrvp-fab-sel").addEventListener("click",function(e){e.preventDefault();e.stopPropagation();startSelect();});
-    fab.querySelector(".dvl-mfrvp-fab-clear").addEventListener("click",function(e){e.preventDefault();e.stopPropagation();clearRange();});
+    applyFabPos();
+    fab.addEventListener("pointerdown",onFabDown,true);
+    fab.querySelector(".dvl-mfrvp-fab-sel").addEventListener("click",function(e){e.preventDefault();e.stopPropagation();if(fabJustDragged)return;startSelect();});
+    fab.querySelector(".dvl-mfrvp-fab-clear").addEventListener("click",function(e){e.preventDefault();e.stopPropagation();if(fabJustDragged)return;clearRange();});
+    window.addEventListener("resize",clampFab);
+  }
+  function onFabDown(e){
+    e.stopPropagation();
+    const r=fab.getBoundingClientRect();
+    fabDrag={sx:e.clientX,sy:e.clientY,ox:r.left,oy:r.top,moved:false,pid:e.pointerId};
+    window.addEventListener("pointermove",onFabMove,true);
+    window.addEventListener("pointerup",onFabUp,true);
+    window.addEventListener("pointercancel",onFabUp,true);
+  }
+  function onFabMove(e){
+    if(!fabDrag)return;
+    const dx=e.clientX-fabDrag.sx,dy=e.clientY-fabDrag.sy;
+    if(!fabDrag.moved&&Math.abs(dx)+Math.abs(dy)<6)return;
+    fabDrag.moved=true;fab.classList.add("is-dragging");
+    e.preventDefault();e.stopPropagation();
+    fab.style.left=(fabDrag.ox+dx)+"px";fab.style.top=(fabDrag.oy+dy)+"px";
+    fab.style.right="auto";fab.style.bottom="auto";
+  }
+  function onFabUp(e){
+    window.removeEventListener("pointermove",onFabMove,true);
+    window.removeEventListener("pointerup",onFabUp,true);
+    window.removeEventListener("pointercancel",onFabUp,true);
+    if(fabDrag&&fabDrag.moved){
+      clampFab();fab.classList.remove("is-dragging");
+      try{localStorage.setItem(FAB_POS_KEY,JSON.stringify({left:parseFloat(fab.style.left),top:parseFloat(fab.style.top)}));}catch(_){}
+      fabJustDragged=true;                       // ignora o 'click' que vem logo após o arrasto
+      setTimeout(function(){fabJustDragged=false;},0);
+    }
+    fabDrag=null;
   }
   function updateFab(){
     try{
       ensureFab();
-      fab.classList.toggle("is-on",!!state.on && !sel.active);
+      const vis=!!state.on && !sel.active;
+      fab.classList.toggle("is-on",vis);
       const clr=fab.querySelector(".dvl-mfrvp-fab-clear");
       if(clr)clr.classList.toggle("is-disabled",!hasRange());
+      if(vis)clampFab(); // agora visível: garante que não ficou fora da tela
     }catch(_){}
   }
   function insertRow(){
