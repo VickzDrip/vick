@@ -70,7 +70,7 @@
   function catFor(m){
     if(m.missing) return "soon";
     if(m.key==="oi"||m.key==="ls"||m.key==="netlong"||m.key==="netshort"||m.key==="netdelta"||m.key==="dv"||m.key==="exr"||m.key==="tv"||m.key==="arion") return "osc";
-    if(m.key==="ma"||m.key==="bookmap"||m.key==="dh"||m.key==="frvp"||m.key==="ifvgmagnet"||m.key==="gex") return "overlay";
+    if(m.key==="ma"||m.key==="bookmap"||m.key==="dh"||m.key==="frvp"||m.key==="mfrvp"||m.key==="ifvgmagnet"||m.key==="gex") return "overlay";
     return "flow";
   }
 
@@ -82,6 +82,7 @@
       {key:"exr",mark:"EXR",title:"DVL RSI Exhaustion Pro",sub:"multi-TF exhaustion · beyond 0/100",api:"DVLExhaustionRSI",pill:"dvlExhaustionRSIState",row:"dvlExhaustionRSIItem"},
       {key:"vp",mark:"VP",title:"Volume Profile",sub:"range visível · POC / VAH / VAL",api:"DVLVolumeProfile",pill:"dvlVPState",row:"dvlVolProfileItem"},
       {key:"frvp",mark:"FR",title:"Fixed Range VP",sub:"Delta | Profile · LVN",api:"DVLFixedRangeVP",pill:"dvlFRVPState",row:"dvlFixedRangeVPItem"},
+      {key:"mfrvp",mark:"FRM",title:"Fixed Range VP · Manual",sub:"1 VP · range escolhido no gráfico",api:"DVLManualFixedRangeVP",pill:"dvlManualFRVPState",row:"dvlManualFixedRangeVPItem"},
       {key:"gex",mark:"GX",title:"DVL GEX Levels",sub:"Flip · Max Pain · 1D range",api:"DVLGEXLevels",pill:"dvlGEXState",row:"dvlGEXItem"},
       {key:"sz",mark:"SZ",title:"DVL Spike Zones",sub:"overlay",api:"DVLSpikeZones",pill:"dvlSzState",row:"dvlSpikeZonesItem"},
       {key:"fvg",mark:"FV",title:"DVL FVG Firewall",sub:"order flow · smart money",api:"DVL_FVG_FIREWALL_API",pill:"dvlFvgState",row:"dvlFvgFirewallItem"},
