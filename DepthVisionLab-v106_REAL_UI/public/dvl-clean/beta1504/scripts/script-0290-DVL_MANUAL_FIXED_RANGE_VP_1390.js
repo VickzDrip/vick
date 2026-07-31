@@ -20,7 +20,12 @@
 .dvl-mfrvp-fab-btn.dvl-mfrvp-fab-sel:active{transform:scale(.96);}
 .dvl-mfrvp-fab-btn.dvl-mfrvp-fab-sel{box-shadow:0 5px 18px rgba(0,0,0,.5),0 0 0 1px rgba(16,223,119,.14),0 0 14px rgba(16,223,119,.18);}
 .dvl-mfrvp-fab-btn.dvl-mfrvp-fab-clear{width:38px;height:38px;border-radius:12px;color:#ff6b7d;border-color:rgba(255,90,110,.5);box-shadow:0 4px 12px rgba(0,0,0,.4);}
-.dvl-mfrvp-fab-btn.dvl-mfrvp-fab-clear.is-disabled{opacity:.3;pointer-events:none;}`;(document.head||document.documentElement).appendChild(s);}catch(_){}})();
+.dvl-mfrvp-fab-btn.dvl-mfrvp-fab-clear.is-disabled{opacity:.3;pointer-events:none;}
+.dvl-mfrvp-edge{position:fixed;width:18px;margin-left:-9px;display:none;z-index:57;cursor:ew-resize;touch-action:none;-webkit-tap-highlight-color:transparent;}
+.dvl-mfrvp-edge::before{content:"";position:absolute;left:8px;top:0;width:2px;height:100%;background:var(--dvl-edge,#b06bff);opacity:.5;}
+.dvl-mfrvp-edge::after{content:"";position:absolute;left:3px;top:2px;width:12px;height:26px;border-radius:4px;background:var(--dvl-edge,#b06bff);box-shadow:0 2px 8px rgba(0,0,0,.5);opacity:.92;}
+.dvl-mfrvp-edge.is-active::before{opacity:.85;}
+.dvl-mfrvp-edge.is-active::after{opacity:1;transform:scaleX(1.15);}`;(document.head||document.documentElement).appendChild(s);}catch(_){}})();
   /* DVL Beta 1.390 — Fixed Range VP MANUAL.
      Igual ao Fixed Range VP, porém gera UM ÚNICO profile e o usuário escolhe
      de onde até onde ele é plotado (seleção manual no gráfico).
@@ -298,6 +303,7 @@
   function draw(ctx,cfg){
     if(!cfg||!cfg.view||!cfg.view.length)return;
     lastCfg=cfg;
+    let hbounds=null;
     ctx.save();
     try{
       ctx.beginPath();ctx.rect(cfg.x0,cfg.y0,cfg.x1-cfg.x0,cfg.y1-cfg.y0);ctx.clip();
@@ -305,13 +311,15 @@
       if(state.on&&hasRange()){
         const bounds=xBounds(cfg);
         if(bounds&&bounds.x1-bounds.x0>=2){
+          hbounds=bounds;
           const pc=currentProfile(cfg);
           drawRangeMarkers(ctx,cfg,bounds);
           if(pc&&pc.p)drawProfile(ctx,cfg,pc.p,bounds);
-          if(!sel.active)drawEdgeHandles(ctx,cfg,bounds);
         }
       }
     }finally{ctx.restore();}
+    // sincroniza as alças DOM (fora do clip do canvas)
+    try{ if(hbounds&&!sel.active) updateHandles(cfg,hbounds); else hideHandles(); }catch(_){}
   }
 
   /* ---------- alças nas bordas: arraste o início/fim do range já fixado ----------
@@ -319,43 +327,50 @@
      empurra o endTime pra frente (mantendo o início fixo) e o profile recalcula.
      Só captura o gesto quando o ponteiro encosta numa borda (tolerância pequena),
      então o pan normal do gráfico continua funcionando no resto do chart. */
-  const EDGE_TOL=13, EDGE_H=22, EDGE_HW=3;
-  let edgeDrag=null;
-  function drawEdgeHandles(ctx,cfg,bounds){
-    const col=state.rangeColor||"#b06bff";
-    const y=cfg.y0+1,hh=Math.min(EDGE_H,Math.max(12,(cfg.y1-cfg.y0)*0.06));
-    [[bounds.x0,"start"],[bounds.x1,"end"]].forEach(function(pair){
-      const xx=pair[0],edge=pair[1];
-      if(xx<cfg.x0-8||xx>cfg.x1+8)return;
-      const active=!!(edgeDrag&&edgeDrag.edge===edge);
-      ctx.save();
-      ctx.globalAlpha=active?1:.9;ctx.fillStyle=col;
-      ctx.fillRect(xx-EDGE_HW,y,EDGE_HW*2,hh);
-      ctx.globalAlpha=active?1:.85;ctx.fillStyle="rgba(255,255,255,.92)";
-      ctx.fillRect(xx-.6,y+3,1.2,hh-6);
-      ctx.restore();
+  /* As alças são ELEMENTOS DOM marcados com data-dvl-ui="true". Isso faz o
+     chart (que intercepta pointerdown no window em captura) ignorar o toque na
+     alça — mesmo protocolo do FAB e das caixas de Long/Short —, então o clique
+     chega no handler da alça em vez de virar pan do gráfico. */
+  let edgeDrag=null, handleEls=null;
+  function ensureHandles(){
+    if(handleEls&&document.body.contains(handleEls.start))return;
+    handleEls={};
+    ["start","end"].forEach(function(edge){
+      const h=document.createElement("div");
+      h.className="dvl-mfrvp-edge dvl-mfrvp-edge-"+edge;
+      h.setAttribute("data-dvl-ui","true");
+      h.addEventListener("pointerdown",function(ev){startEdgeDrag(edge,ev);},true);
+      document.body.appendChild(h);
+      handleEls[edge]=h;
     });
   }
-  function edgeAt(lx,ly,cfg){
-    if(!cfg)return null;
-    if(ly<cfg.y0-6||ly>cfg.y1+6)return null;
-    const bounds=xBounds(cfg);if(!bounds)return null;
-    const dEnd=Math.abs(lx-bounds.x1),dStart=Math.abs(lx-bounds.x0);
-    if(dEnd<=EDGE_TOL&&dEnd<=dStart)return{edge:"end"};
-    if(dStart<=EDGE_TOL)return{edge:"start"};
-    return null;
+  function hideHandles(){ if(handleEls){handleEls.start.style.display="none";handleEls.end.style.display="none";} }
+  function updateHandles(cfg,bounds){
+    ensureHandles();
+    const cv=canvasEl();
+    if(!(state.on&&hasRange()&&!sel.active)||!cv||!bounds){hideHandles();return;}
+    const r=cv.getBoundingClientRect();
+    const col=state.rangeColor||"#b06bff";
+    const top=r.top+cfg.y0, h=Math.max(8,cfg.y1-cfg.y0);
+    [["start",bounds.x0],["end",bounds.x1]].forEach(function(pair){
+      const el=handleEls[pair[0]], xx=pair[1];
+      if(!isFinite(xx)||xx<cfg.x0-10||xx>cfg.x1+10){el.style.display="none";return;}
+      el.style.setProperty("--dvl-edge",col);
+      el.style.left=(r.left+xx)+"px";
+      el.style.top=top+"px";
+      el.style.height=h+"px";
+      el.style.display="block";
+    });
   }
-  function onEdgeDown(ev){
+  function startEdgeDrag(edge,ev){
     if(edgeDrag||sel.active||!state.on||!hasRange()||!lastCfg)return;
     if(ev.pointerType==="mouse"&&ev.button!==0)return;
-    const cv=canvasEl();if(!cv)return;
-    const r=cv.getBoundingClientRect();
-    const lx=ev.clientX-r.left,ly=ev.clientY-r.top;
-    const hit=edgeAt(lx,ly,lastCfg);if(!hit)return;
     ev.preventDefault();ev.stopPropagation();if(ev.stopImmediatePropagation)ev.stopImmediatePropagation();
     const a=Math.min(+state.startTime,+state.endTime),b=Math.max(+state.startTime,+state.endTime);
-    edgeDrag={edge:hit.edge,pid:ev.pointerId,fixedTime:hit.edge==="end"?a:b};
-    try{cv.setPointerCapture&&cv.setPointerCapture(ev.pointerId);}catch(_){}
+    edgeDrag={edge:edge,pid:ev.pointerId,fixedTime:edge==="end"?a:b};
+    window.__dvlPositionDragActive=true; // impede o pan/pinça do chart durante o drag
+    try{handleEls[edge].setPointerCapture&&handleEls[edge].setPointerCapture(ev.pointerId);}catch(_){}
+    try{handleEls[edge].classList.add("is-active");}catch(_){}
     window.addEventListener("pointermove",onEdgeMove,true);
     window.addEventListener("pointerup",onEdgeUp,true);
     window.addEventListener("pointercancel",onEdgeUp,true);
@@ -364,7 +379,7 @@
   }
   function onEdgeMove(ev){
     if(!edgeDrag)return;
-    if(ev.pointerType==="mouse"&&typeof ev.buttons==="number"&&ev.buttons===0){onEdgeUp(ev);return;}
+    if(ev.pointerType==="mouse"&&typeof ev.buttons==="number"&&ev.buttons===0){onEdgeUp();return;}
     ev.preventDefault();ev.stopPropagation();
     const cfg=lastCfg,cv=canvasEl();if(!cfg||!cv)return;
     const r=cv.getBoundingClientRect();
@@ -380,15 +395,17 @@
     window.removeEventListener("pointerup",onEdgeUp,true);
     window.removeEventListener("pointercancel",onEdgeUp,true);
     document.documentElement.style.cursor="";
+    window.__dvlPositionDragActive=false;
+    try{if(handleEls){handleEls.start.classList.remove("is-active");handleEls.end.classList.remove("is-active");}}catch(_){}
     if(!edgeDrag)return;
     edgeDrag=null;profileCache=null;save();updateRow();
     try{if(panel&&panel.classList.contains("is-open"))renderPanel();}catch(_){}
     redraw();
   }
   function installEdgeDrag(){
-    window.addEventListener("pointerdown",onEdgeDown,true);
-    window.addEventListener("blur",function(){if(edgeDrag){edgeDrag=null;document.documentElement.style.cursor="";save();redraw();}},true);
-    document.addEventListener("visibilitychange",function(){if(document.hidden&&edgeDrag){edgeDrag=null;document.documentElement.style.cursor="";save();redraw();}});
+    ensureHandles();
+    window.addEventListener("blur",function(){if(edgeDrag)onEdgeUp();},true);
+    document.addEventListener("visibilitychange",function(){if(document.hidden&&edgeDrag)onEdgeUp();});
   }
 
   /* ---------- seleção do range (overlay sobre o canvas) ---------- */
