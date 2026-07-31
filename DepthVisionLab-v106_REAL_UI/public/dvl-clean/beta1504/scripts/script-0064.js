@@ -5478,6 +5478,10 @@ if(window.DVLMovingAveragesDraw){
     });
   }
 
+  if(window.DVLVwapSessionDraw){
+    try{ window.DVLVwapSessionDraw(ctx, { view, drawView, win, x, y, x0, x1, y0, y1, slotOffset, candleW, priceBottom, priceH }); }catch(_dvlVwap_e){}
+  }
+
   if(window.DVLVolumeProfileDraw){
     window.DVLVolumeProfileDraw(ctx, {
       view, win, x, y, x0, x1, y0, y1, slotOffset, candleW, min, max, symbol
