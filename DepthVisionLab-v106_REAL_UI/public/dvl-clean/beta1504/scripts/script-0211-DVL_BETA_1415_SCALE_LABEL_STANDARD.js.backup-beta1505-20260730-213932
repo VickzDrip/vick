@@ -1,0 +1,65 @@
+(function(){
+  if(window.__DVL_BETA_1415_SCALE_LABEL_STANDARD) return;
+  window.__DVL_BETA_1415_SCALE_LABEL_STANDARD = true;
+
+  try{
+    window.DVL_APP_VERSION = "Beta 1.504";
+    if(typeof window.DVL_syncVersionBadge === "function") window.DVL_syncVersionBadge();
+  }catch(_){}
+
+  function fitFont(ctx, text, maxWidth, start, min){
+    var size = start;
+    while(size > min){
+      ctx.font = ctx.font.replace(/\b\d+(\.\d+)?px\b/, size + "px");
+      if(ctx.measureText(String(text)).width <= maxWidth) break;
+      size -= 0.5;
+    }
+    return size;
+  }
+
+  window.DVL_SCALE_LABEL_FIT_1415 = function(ctx, text, opts){
+    opts = opts || {};
+    text = String(text == null ? "" : text);
+
+    var canvasW = ctx && ctx.canvas ? ctx.canvas.width : 0;
+    var scaleX = Number(opts.x);
+    var w = Number(opts.w);
+    var h = Number(opts.h || 20);
+    var y = Number(opts.y || 0);
+    var bg = opts.bg || "#10df77";
+    var fg = opts.fg || "#02120b";
+    var radius = Number(opts.radius || 6);
+    var pad = Number(opts.pad || 6);
+    var fontSize = Number(opts.fontSize || 10);
+    var minFont = Number(opts.minFont || 7);
+
+    if(!(w > 0)) w = Math.max(48, Math.min(74, canvasW - scaleX - 2));
+    w = Math.max(44, Math.min(w, canvasW - 2));
+    scaleX = Math.max(1, Math.min(scaleX, canvasW - w - 1));
+    y = Math.max(1, Math.min(y, (ctx.canvas ? ctx.canvas.height : y + h) - h - 1));
+
+    try{
+      if(typeof roundRect === "function") roundRect(ctx, scaleX, y, w, h, radius, true, false, bg);
+      else { ctx.fillStyle = bg; ctx.fillRect(scaleX, y, w, h); }
+    }catch(_){
+      ctx.fillStyle = bg;
+      ctx.fillRect(scaleX, y, w, h);
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(scaleX + 1, y + 1, Math.max(1, w - 2), Math.max(1, h - 2));
+    ctx.clip();
+
+    ctx.fillStyle = fg;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "900 " + fontSize + "px system-ui";
+    fitFont(ctx, text, w - pad * 2, fontSize, minFont);
+    ctx.fillText(text, scaleX + w / 2, y + h / 2 + 0.5);
+
+    ctx.restore();
+
+    return {x:scaleX, y:y, w:w, h:h};
+  };
+})();

@@ -1,0 +1,90 @@
+/*
+  DVL Beta 0.401
+  - Box the timer/chart toolbar with a clean lower separator line.
+  - Make the chart continue from that line down to the top of the footer.
+  - Keep the Trade drawer controlled only by the footer Trade button.
+*/
+:root{
+  --dvl-panel-line: rgba(110,140,130,.24);
+  --dvl-panel-line-strong: rgba(110,140,130,.34);
+}
+
+/* Keep the app site-like and remove the extra dead gap above the footer */
+html, body{
+  height:100%;
+  overflow:hidden!important;
+}
+
+.app{
+  height:100svh!important;
+  min-height:100svh!important;
+  max-height:100svh!important;
+  overflow:hidden!important;
+  padding-bottom:calc(var(--dvl-footer-h) + env(safe-area-inset-bottom))!important;
+}
+
+/* The toolbar becomes a clearly boxed hotbar */
+.chartCard{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  overflow:hidden!important;
+  border-top:1px solid var(--dvl-panel-line)!important;
+  border-bottom:1px solid var(--dvl-panel-line)!important;
+}
+
+.toolbar{
+  position:relative!important;
+  z-index:2!important;
+  height:var(--dvl-chart-toolbar-h)!important;
+  min-height:var(--dvl-chart-toolbar-h)!important;
+  max-height:var(--dvl-chart-toolbar-h)!important;
+  background:linear-gradient(180deg,rgba(5,15,28,.55),rgba(3,11,22,.35))!important;
+  border-top:1px solid rgba(31,63,96,.18)!important;
+  border-bottom:1px solid var(--dvl-panel-line-strong)!important;
+  box-shadow:inset 0 1px 0 rgba(6,24,42,.65)!important;
+}
+
+/* Horizontal separator directly under the timer hotbar */
+.toolbar::after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:-1px;
+  height:1px;
+  background:var(--dvl-panel-line-strong);
+  pointer-events:none;
+}
+
+/* Chart must start exactly after the toolbar and run until the footer */
+.canvasWrap{
+  position:relative!important;
+  flex:1 1 auto!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  margin-top:0!important;
+  border-top:0!important;
+  border-bottom:0!important;
+  background:transparent!important;
+  overflow:hidden!important;
+}
+
+#chart{
+  width:100%!important;
+  height:100%!important;
+  display:block!important;
+}
+
+/* Keep footer always visible */
+.bottomNav{
+  z-index:40!important;
+}
+
+/* Drawer still sits just above footer when opened, but no visible block when closed */
+.tradeDrawer{
+  bottom:calc(var(--dvl-footer-h) + env(safe-area-inset-bottom))!important;
+}

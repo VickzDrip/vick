@@ -1,0 +1,65 @@
+#dvlReplayBtn{ display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 9px; border-radius:7px;
+    background:rgba(20,216,160,.12); border:1px solid rgba(20,216,160,.35); color:#14d8a0; font:700 11px system-ui;
+    cursor:pointer; white-space:nowrap; }
+  #dvlReplayBtn.is-on{ background:#14d8a0; color:#03110c; }
+  #dvlReplayBtn svg{ width:13px; height:13px; }
+  #dvlReplayBtn.floating{ position:fixed; z-index:90035; top:calc(var(--dvl-header-h,52px) + var(--dvl-assetbar-h,50px) + 6px); right:12px; height:26px; box-shadow:0 4px 14px rgba(0,0,0,.4); }
+  #dvlReplayBar{ position:fixed; left:50%; transform:translateX(-50%); bottom:calc(var(--dvl-footer-h,44px) + 31px);
+    z-index:90040; display:none; align-items:center; gap:6px; padding:7px 9px; max-width:min(760px,96vw);
+    background:rgba(6,16,20,.97); border:1px solid rgba(41,68,81,.9); border-radius:12px; box-shadow:0 10px 34px rgba(0,0,0,.55);
+    backdrop-filter:blur(6px); font:600 11px system-ui; color:#eaf4ef; }
+  #dvlReplayBar.is-open{ display:flex; }
+  #dvlReplayBar button{ display:inline-flex; align-items:center; justify-content:center; height:28px; min-width:28px; padding:0 8px;
+    border-radius:8px; background:rgba(255,255,255,.05); border:1px solid rgba(129,166,151,.22); color:#dCEbe4; cursor:pointer; font:700 12px system-ui; }
+  #dvlReplayBar button:hover{ background:rgba(255,255,255,.1); }
+  #dvlReplayBar button.play{ background:rgba(20,216,160,.16); border-color:rgba(20,216,160,.5); color:#14d8a0; min-width:64px; }
+  #dvlReplayBar button.exit{ background:rgba(255,90,90,.12); border-color:rgba(255,90,90,.4); color:#ff8f8f; }
+  #dvlReplayBar .sep{ width:1px; height:20px; background:rgba(129,166,151,.24); }
+  #dvlReplayBar .rp-clock{ font:700 11px ui-monospace,monospace; color:#9fd8c6; min-width:118px; text-align:center; }
+  #dvlReplayBar .rp-track{ position:relative; width:180px; height:22px; display:flex; align-items:center; cursor:pointer; }
+  #dvlReplayBar .rp-track .rail{ position:absolute; left:0; right:0; height:4px; border-radius:3px; background:rgba(129,166,151,.25); }
+  #dvlReplayBar .rp-track .fill{ position:absolute; left:0; height:4px; border-radius:3px; background:#14d8a0; }
+  #dvlReplayBar .rp-track .knob{ position:absolute; width:12px; height:12px; border-radius:50%; background:#14d8a0; border:2px solid #03110c; transform:translateX(-50%); }
+  #dvlReplaySpeedWrap{ position:relative; }
+  #dvlReplaySpeedMenu{ position:absolute; bottom:36px; left:0; display:none; flex-direction:column; gap:2px; padding:5px;
+    background:rgba(6,16,20,.98); border:1px solid rgba(41,68,81,.9); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.5); }
+  #dvlReplaySpeedMenu.is-open{ display:flex; }
+  #dvlReplaySpeedMenu button{ min-width:56px; height:26px; }
+  #dvlReplaySpeedMenu button.is-on{ background:#14d8a0; color:#03110c; border-color:#14d8a0; }
+  @media (max-width:760px){ #dvlReplayBar{ max-width:96vw; gap:4px; padding:6px; } #dvlReplayBar .rp-track{ width:110px; } #dvlReplayBar .rp-clock{ min-width:88px; font-size:10px; } #dvlReplayBar .lbl{ display:none; } }
+  #dvlBottomTimeline1314{position:fixed;left:0;top:0;bottom:auto;height:20px;z-index:89980;display:none;pointer-events:none;touch-action:none;background:rgb(2,8,6);contain:strict;transform:translateZ(0);backface-visibility:hidden;will-change:left,top}
+  body.dvl-replay-dragging #chartWrap, body.dvl-replay-dragging #chart{touch-action:none!important;overscroll-behavior:none!important;}
+  /* marca d'água "replay" bem fosca no fundo do gráfico */
+  #dvlReplayMark{ position:fixed; z-index:20; display:none; pointer-events:none; left:50%; top:calc(var(--dvl-header-h,52px) + var(--dvl-assetbar-h,50px) + 38%);
+    transform:translate(-50%,-50%); font:900 clamp(60px,14vw,190px) system-ui,sans-serif; letter-spacing:.06em;
+    color:rgba(20,216,160,.045); text-transform:lowercase; user-select:none; white-space:nowrap; }
+  #dvlReplayMark.on{ display:block; }
+  /* dica do modo "escolher início" */
+  #dvlReplayPickHint{ position:fixed; z-index:90045; display:none; left:50%; transform:translateX(-50%);
+    top:calc(var(--dvl-header-h,52px) + var(--dvl-assetbar-h,50px) + 14px); padding:8px 14px; border-radius:999px;
+    background:rgba(20,216,160,.14); border:1px solid rgba(20,216,160,.5); color:#7ff0d0; font:700 12px system-ui; box-shadow:0 6px 20px rgba(0,0,0,.4); }
+  #dvlReplayPickHint.on{ display:block; }
+  body.dvl-replay-picking #chart, body.dvl-replay-picking canvas{ cursor:crosshair !important; }
+  body.dvl-replay-dragging{ touch-action:none !important; user-select:none !important; }
+  body.dvl-replay-dragging #chart, body.dvl-replay-dragging canvas{ touch-action:none !important; cursor:ew-resize !important; }
+  /* alça invisível pra arrastar a linha de início (fica acima das camadas do gráfico) */
+  #dvlReplayLineHandle{ position:fixed; width:76px; z-index:100020; display:none; cursor:ew-resize; touch-action:none !important; pointer-events:auto; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; overscroll-behavior:none; }
+  #dvlReplayLineHandle::after{ content:""; position:absolute; left:50%; top:0; bottom:0; width:3px; transform:translateX(-50%); background:transparent; border-radius:3px; }
+  #dvlReplayLineHandle::before{ content:"⇆"; position:absolute; left:50%; top:2px; transform:translateX(-50%); width:34px; height:25px; display:flex; align-items:center; justify-content:center; border-radius:7px; background:rgba(20,216,160,.96); color:#03110c; font:800 14px system-ui; box-shadow:0 3px 12px rgba(0,0,0,.35); pointer-events:none; }
+  #dvlReplayLineHandle:hover::after, #dvlReplayLineHandle.is-dragging::after{ background:rgba(20,216,160,.30); }
+  #dvlReplayLineHandle .dvlReplayLineActions{position:absolute;left:50%;top:2px;width:118px;height:25px;transform:translateX(-50%);display:flex;align-items:center;justify-content:space-between;z-index:4;pointer-events:auto}
+  #dvlReplayLineHandle .dvlReplayLineActions button{width:30px;height:25px;padding:0;display:grid;place-items:center;border-radius:7px;border:1px solid;cursor:pointer;touch-action:manipulation;font:900 14px system-ui;box-shadow:0 3px 12px rgba(0,0,0,.38);pointer-events:auto}
+  #dvlReplayLineHandle .dvlReplayLineActions .cancel{background:rgba(255,74,97,.96);border-color:rgba(255,130,145,.72);color:#fff}
+  #dvlReplayLineHandle .dvlReplayLineActions .confirm{background:rgba(20,216,160,.98);border-color:rgba(124,240,200,.75);color:#03110c}
+  #dvlReplayLineHandle .dvlReplayLineActions button:disabled{opacity:.34;filter:saturate(.45);cursor:default}
+  #dvlReplayLineHandle.has-pending::after{background:rgba(20,216,160,.28)}
+  #dvlReplayBar button.pick{ background:rgba(53,224,255,.12); border-color:rgba(53,224,255,.4); color:#7fe3ff; }
+  /* diálogo nativo DVL (substitui o confirm do navegador) */
+  #dvlReplayConfirm{ position:fixed; inset:0; z-index:100050; display:none; align-items:center; justify-content:center; background:rgba(3,9,12,.55); backdrop-filter:blur(3px); }
+  #dvlReplayConfirm.on{ display:flex; }
+  #dvlReplayConfirm .box{ width:min(340px,92vw); background:rgba(9,20,26,.99); border:1px solid rgba(41,68,81,.9); border-radius:14px; padding:18px 18px 14px; box-shadow:0 18px 50px rgba(0,0,0,.6); }
+  #dvlReplayConfirm .box h4{ margin:0 0 6px; color:#eaf4ef; font:800 15px system-ui; }
+  #dvlReplayConfirm .box p{ margin:0 0 14px; color:#9fb3c8; font:500 12.5px system-ui; line-height:1.5; }
+  #dvlReplayConfirm .row{ display:flex; gap:8px; justify-content:flex-end; }
+  #dvlReplayConfirm .row button{ height:34px; padding:0 14px; border-radius:9px; font:700 12.5px system-ui; cursor:pointer; border:1px solid rgba(129,166,151,.28); background:rgba(255,255,255,.05); color:#dCEbe4; }
+  #dvlReplayConfirm .row button.ok{ background:rgba(255,90,90,.16); border-color:rgba(255,90,90,.5); color:#ff9b9b; }

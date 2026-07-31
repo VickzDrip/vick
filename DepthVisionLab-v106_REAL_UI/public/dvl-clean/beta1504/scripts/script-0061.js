@@ -1,0 +1,1 @@
+/* Sync the badge to the real version synchronously, before this region is painted, so a stale hardcoded number never flashes on reload. */try{var _vb1b=document.getElementById('dvl1b_versionBadge');if(_vb1b&&window.DVL_APP_VERSION)_vb1b.textContent=String(window.DVL_APP_VERSION).toUpperCase();}catch(_){}

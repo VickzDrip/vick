@@ -1,0 +1,24 @@
+(function(){
+  try{
+    window.DVL_APP_VERSION = "Beta 1.508";
+    document.title = "DVL - Beta 1.506";
+    var b = document.getElementById("dvl1b_versionBadge");
+    if(b) b.textContent = "BETA 1.508";
+
+    document.documentElement.style.setProperty("--dvl-price-scale-w","80px","important");
+
+    function killUpdateNotices(){
+      var words = /update|atualiza|nova vers|new version|reload|refresh/i;
+      document.querySelectorAll('[id*="update" i],[class*="update" i],[id*="toast" i],[class*="toast" i],[id*="notice" i],[class*="notice" i],[id*="snack" i],[class*="snack" i]').forEach(function(el){
+        var t = (el.textContent || "") + " " + el.id + " " + el.className;
+        if(words.test(t)){
+          el.style.setProperty("display","none","important");
+          el.setAttribute("aria-hidden","true");
+        }
+      });
+    }
+
+    killUpdateNotices();
+    setInterval(killUpdateNotices, 1200);
+  }catch(_){}
+})();

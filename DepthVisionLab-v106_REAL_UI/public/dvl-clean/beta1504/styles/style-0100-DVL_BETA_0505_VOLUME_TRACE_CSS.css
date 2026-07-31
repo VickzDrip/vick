@@ -1,0 +1,342 @@
+/* DVL Beta 0.505 — DVL Volume Trace indicator */
+.dvl-vt-indicator-item{
+  cursor:pointer!important;
+  opacity:1!important;
+}
+
+.dvl-vt-indicator-item .indicatorFxMark{
+  color:#021018!important;
+  background:linear-gradient(180deg,#10df77,#10df77)!important;
+  box-shadow:0 0 16px rgba(16,223,119,.14)!important;
+}
+
+.dvl-vt-state{
+  min-width:34px;
+  height:20px;
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:8px;
+  font-weight:950;
+  letter-spacing:.04em;
+  border:1px solid rgba(94,135,178,.24);
+  color:#8fa0b6;
+  background:rgba(5,14,12,.74);
+}
+
+.dvl-vt-state.is-on{
+  color:#061018;
+  border-color:rgba(16,223,119,.48);
+  background:linear-gradient(180deg,#10df77,#13dc8d);
+}
+
+.dvl-vt-panel{
+  position:fixed;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%) scale(.98);
+  width:min(430px,calc(100vw - 18px));
+  max-height:min(78svh,690px);
+  z-index:99999;
+  border:1px solid rgba(16,223,119,.28);
+  border-radius:18px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(16,223,119,.10), transparent 56%),
+    linear-gradient(180deg,rgba(5,14,12,.985),rgba(3,10,8,.995));
+  box-shadow:0 24px 64px rgba(0,0,0,.58), inset 0 0 0 1px rgba(255,255,255,.018);
+  display:none;
+  overflow:hidden;
+  color:#f5f9ff;
+}
+
+.dvl-vt-panel.is-open{
+  display:block;
+}
+
+.dvl-vt-head{
+  height:48px;
+  padding:0 12px 0 14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border-bottom:1px solid rgba(110,140,130,.22);
+}
+
+.dvl-vt-title{
+  min-width:0;
+}
+
+.dvl-vt-title b{
+  display:block;
+  font-size:14px;
+  font-weight:950;
+  letter-spacing:.04em;
+}
+
+.dvl-vt-title small{
+  display:block;
+  margin-top:2px;
+  font-size:9px;
+  font-weight:800;
+  color:#7f91a7;
+}
+
+.dvl-vt-close{
+  width:32px;
+  height:32px;
+  border-radius:11px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(94,135,178,.24);
+  background:rgba(7,18,14,.78);
+  color:#ff4a61;
+  font-size:24px;
+  line-height:1;
+}
+
+.dvl-vt-body{
+  max-height:calc(min(78svh,690px) - 48px);
+  overflow:auto;
+  padding:10px;
+  -webkit-overflow-scrolling:touch;
+}
+
+.dvl-vt-section{
+  border:1px solid rgba(94,135,178,.18);
+  border-radius:15px;
+  background:rgba(5,14,12,.52);
+  padding:10px;
+  margin-bottom:10px;
+}
+
+.dvl-vt-section-title{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:9px;
+  color:#dbe9f8;
+  font-size:11px;
+  font-weight:950;
+  letter-spacing:.055em;
+  text-transform:uppercase;
+}
+
+.dvl-vt-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.dvl-vt-field{
+  min-width:0;
+}
+
+.dvl-vt-field.full{
+  grid-column:1 / -1;
+}
+
+.dvl-vt-field label{
+  display:block;
+  color:#8fa0b6;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.03em;
+  margin:0 0 5px 1px;
+}
+
+.dvl-vt-input,
+.dvl-vt-select{
+  width:100%;
+  height:32px;
+  border:1px solid rgba(94,135,178,.24);
+  border-radius:11px;
+  background:rgba(7,18,14,.78);
+  color:#dfeeff;
+  padding:0 9px;
+  outline:none;
+  font-size:11px;
+  font-weight:850;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.012);
+}
+
+.dvl-vt-select{
+  appearance:none;
+  -webkit-appearance:none;
+  background:
+    linear-gradient(180deg,rgba(7,18,14,.84),rgba(5,14,12,.84));
+}
+
+.dvl-vt-check{
+  height:32px;
+  border:1px solid rgba(94,135,178,.24);
+  border-radius:11px;
+  background:rgba(7,18,14,.72);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:0 9px;
+  color:#dfeeff;
+  font-size:10px;
+  font-weight:900;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+.dvl-vt-check input{
+  appearance:none;
+  -webkit-appearance:none;
+  width:16px;
+  height:16px;
+  border-radius:5px;
+  border:1px solid rgba(16,223,119,.42);
+  background:rgba(2,8,16,.84);
+  position:relative;
+  flex:0 0 auto;
+}
+
+.dvl-vt-check input:checked{
+  background:linear-gradient(180deg,#10df77,#13dc8d);
+  border-color:rgba(16,223,119,.88);
+}
+
+.dvl-vt-check input:checked::after{
+  content:"";
+  position:absolute;
+  left:4px;
+  top:1px;
+  width:5px;
+  height:9px;
+  border-right:2px solid #021018;
+  border-bottom:2px solid #021018;
+  transform:rotate(45deg);
+}
+
+.dvl-vt-row-btns{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.dvl-vt-action{
+  height:32px;
+  border-radius:11px;
+  border:1px solid rgba(16,223,119,.26);
+  background:linear-gradient(180deg,rgba(7,34,56,.90),rgba(4,16,30,.92));
+  color:#dff8ff;
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:.04em;
+}
+
+.dvl-vt-action.reset{
+  color:#f3c768;
+  border-color:rgba(243,199,104,.26);
+}
+
+.dvl-vt-level{
+  border:1px solid rgba(94,135,178,.17);
+  border-radius:14px;
+  background:rgba(2,8,16,.30);
+  padding:9px;
+  margin-top:8px;
+}
+
+.dvl-vt-level-head{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:8px;
+  margin-bottom:8px;
+}
+
+.dvl-vt-level-badge{
+  width:26px;
+  height:26px;
+  border-radius:9px;
+  display:grid;
+  place-items:center;
+  color:#021018;
+  font-size:11px;
+  font-weight:950;
+  box-shadow:0 0 14px rgba(16,223,119,.10);
+}
+
+.dvl-vt-level-name{
+  min-width:0;
+  height:28px;
+  border:0;
+  border-radius:9px;
+  padding:0 8px;
+  background:rgba(7,18,14,.74);
+  color:#f5f9ff;
+  font-size:11px;
+  font-weight:900;
+  outline:none;
+}
+
+.dvl-vt-color-btn{
+  height:32px;
+  border-radius:11px;
+  border:1px solid rgba(94,135,178,.24);
+  background:rgba(7,18,14,.78);
+  color:#dfeeff;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:0 9px;
+  font-size:10px;
+  font-weight:900;
+}
+
+.dvl-vt-color-btn i{
+  width:20px;
+  height:20px;
+  border-radius:7px;
+  border:1px solid rgba(255,255,255,.16);
+}
+
+.dvl-vt-range-wrap{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.dvl-vt-range{
+  flex:1 1 auto;
+  appearance:none;
+  -webkit-appearance:none;
+  height:6px;
+  border-radius:999px;
+  background:rgba(28,47,70,.95);
+  outline:none;
+}
+
+.dvl-vt-range::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  background:#10df77;
+  border:2px solid #07111d;
+}
+
+.dvl-vt-range-val{
+  min-width:38px;
+  text-align:right;
+  color:#dfeeff;
+  font-size:10px;
+  font-weight:900;
+}
+
+.dvl-vt-note{
+  color:#74859a;
+  font-size:9px;
+  font-weight:800;
+  line-height:1.35;
+  margin-top:7px;
+}

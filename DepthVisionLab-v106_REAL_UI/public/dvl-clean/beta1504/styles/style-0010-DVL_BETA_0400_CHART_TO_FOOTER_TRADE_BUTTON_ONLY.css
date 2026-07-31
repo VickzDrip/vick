@@ -1,0 +1,182 @@
+/*
+  DVL Beta 0.400
+  - Chart fills all remaining vertical space until the footer menu.
+  - No visible collapsed trade strip/handle above footer.
+  - Footer Trade button alone opens/closes the full trading drawer.
+*/
+:root{
+  --dvl-header-h:65px;
+  --dvl-assetbar-h:60px;
+  --dvl-chart-toolbar-h:40px;
+  --dvl-footer-h:75px;
+}
+
+/* Page becomes a true fixed-height site/app viewport */
+html,
+body{
+  height:100%;
+  min-height:100%;
+  overflow:hidden!important;
+}
+
+.app{
+  height:100svh!important;
+  min-height:100svh!important;
+  max-height:100svh!important;
+  overflow:hidden!important;
+  padding-bottom:calc(var(--dvl-footer-h) + env(safe-area-inset-bottom))!important;
+}
+
+/* Fixed chrome */
+.top{
+  height:var(--dvl-header-h)!important;
+  min-height:var(--dvl-header-h)!important;
+  max-height:var(--dvl-header-h)!important;
+}
+
+.marketRow{
+  height:var(--dvl-assetbar-h)!important;
+  min-height:var(--dvl-assetbar-h)!important;
+  max-height:var(--dvl-assetbar-h)!important;
+}
+
+.toolbar{
+  height:var(--dvl-chart-toolbar-h)!important;
+  min-height:var(--dvl-chart-toolbar-h)!important;
+  max-height:var(--dvl-chart-toolbar-h)!important;
+}
+
+/* Chart takes every remaining pixel until footer */
+.chartCard{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  height:auto!important;
+  display:flex!important;
+  flex-direction:column!important;
+  overflow:hidden!important;
+}
+
+/* ── DESKTOP TERMINAL (Beta 1.176) — layout 2 colunas SÓ em telas grandes ───
+   No PC: gráfico GRANDE em largura cheia + as páginas (Copilot/Scanner/Positions/
+   Watchlist) docam num PAINEL LATERAL fixo à DIREITA, ao lado do gráfico (sem
+   cobrir). O rodapé fica na base da coluna do gráfico. TODO o CSS mobile usa
+   max-width, então este @media (min-width:1000px) NUNCA dispara no celular —
+   o mobile continua 100% igual. */
+@media (min-width:1000px){
+  :root{ --dvl-pc-panel:440px; --dvl-pc-rail:66px; --dvl-pc-hd:64px; }
+  html{ background:#05070a!important; }
+
+  /* Gráfico usa a tela toda; quando um painel abre, ele fica à direita por cima
+     da borda direita do gráfico (que continua enorme à esquerda). */
+  .app{ width:100vw!important;max-width:none!important;margin:0!important; }
+
+  /* Páginas → painel lateral direito (altura cheia), não mais tela cheia.
+     Prefixo `html` eleva a especificidade (1,0,1) pra vencer as regras
+     `#id` (1,0,0) definidas bem depois no arquivo (que docavam à esquerda). */
+  html #dvlCopilotPage0974,
+  html #dvlScannerPanel0780,
+  html #dvlPositionsPanelV2,
+  html #dvlWatchlistPanel{
+    left:auto!important; right:0!important;
+    top:0!important; bottom:0!important;
+    width:var(--dvl-pc-panel)!important; max-width:var(--dvl-pc-panel)!important;
+    max-height:100svh!important; height:100svh!important;
+    margin:0!important; border-radius:0!important;
+    border-left:1px solid rgba(145,175,165,.16)!important;
+    box-shadow:-26px 0 70px rgba(0,0,0,.55)!important;
+  }
+
+  /* ── ETAPA 2: rodapé vira BARRA DE ÍCONES VERTICAL na lateral direita
+     (sidebar do TradingView). Os painéis acima docam à ESQUERDA dela.
+     Prefixo `html` pra vencer as regras #id definidas depois no arquivo. */
+  html #dvlBottomNavV2{
+    left:0!important; right:auto!important; top:var(--dvl-pc-hd)!important; bottom:0!important;
+    width:var(--dvl-pc-rail)!important; max-width:var(--dvl-pc-rail)!important;
+    height:auto!important; max-height:none!important;
+    display:flex!important; flex-direction:column!important;
+    justify-content:flex-start!important; align-items:stretch!important;
+    gap:4px!important; padding:12px 7px!important; margin:0!important;
+    border-radius:0!important; border:0!important; border-left:1px solid rgba(145,175,165,.16)!important;
+    grid-template-columns:none!important; grid-template-rows:none!important;
+    transform:none!important;
+  }
+  html #dvlBottomNavV2 .dvlNavV2Btn{
+    height:auto!important; min-height:58px!important; max-height:none!important; flex:0 0 auto!important;
+    border-radius:12px!important; width:auto!important;
+  }
+  .homeLine{ display:none!important; }  /* indicador de "home" do celular não faz sentido no PC */
+
+  /* ── ETAPA 1: barra superior estilo TradingView (compacta, sem esticar) ──
+     O header Phase1B escala por var(--px), que no PC bate no teto (.62px) e
+     incha todos os controles. Aqui travo --px num valor compacto e impeço o
+     seletor de ativo de esticar → botões em tamanho normal de desktop. */
+  #DVL_UI_OVERLAY_PHASE_1B{ --px:0.40px!important; }
+  #DVL_UI_OVERLAY_PHASE_1B .dvl1b-symbol{
+    flex:0 0 auto!important; width:auto!important; min-width:0!important; max-width:260px!important;
+  }
+  /* row1 e row2 encostadas à esquerda (não espalhadas) */
+  #DVL_UI_OVERLAY_PHASE_1B .dvl1b-row2{ justify-content:flex-start!important; }
+}
+
+.canvasWrap{
+  flex:1 1 auto!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  margin-top:0!important;
+  overflow:hidden!important;
+  border-top:1px solid rgba(122,155,145,.28)!important;
+  border-bottom:1px solid rgba(122,155,145,.28)!important;
+}
+
+/* Full-width chart: no side gutters */
+#chart{
+  width:100%!important;
+  height:100%!important;
+}
+
+/* No collapsed trade bar, no handle line, no accidental visible drawer edge */
+.tradeDrawer{
+  display:none!important;
+  pointer-events:none!important;
+  bottom:calc(var(--dvl-footer-h) + env(safe-area-inset-bottom))!important;
+}
+
+.tradeDrawer.is-open{
+  display:flex!important;
+  pointer-events:auto!important;
+}
+
+.tradeDrawerSheet{
+  transform:none!important;
+  transition:none!important;
+  border-radius:18px 18px 0 0!important;
+}
+
+/* Remove the giant expand/retract handle block */
+.tradeDrawerHandle{
+  display:none!important;
+}
+
+/* Panel content starts directly; Trade footer button is the only toggle */
+.tradeDrawerBody{
+  padding-top:12px!important;
+}
+
+/* Footer stays fixed and always visible */
+.bottomNav{
+  height:var(--dvl-footer-h)!important;
+  min-height:var(--dvl-footer-h)!important;
+  max-height:var(--dvl-footer-h)!important;
+  z-index:50!important;
+}
+
+.homeLine{
+  z-index:52!important;
+}
+
+/* Give the active Trade button a clearer "this opens panel" feel */
+#tradeNavBtn.active{
+  background:linear-gradient(180deg,rgba(16,223,119,.08),rgba(16,223,119,.025))!important;
+  border:1px solid rgba(16,223,119,.14)!important;
+}

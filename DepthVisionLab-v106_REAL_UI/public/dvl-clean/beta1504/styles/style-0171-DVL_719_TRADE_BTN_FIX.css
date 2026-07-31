@@ -1,0 +1,46 @@
+/* ─── Beta 0.719 — Trade button visual fix ─── */
+/* Problem in 0.718: tradePullGlyph b had CSS triangle borders PLUS ::before content
+   = double visual. Fix: hide tradePullGlyph entirely, inject ↑↓ via button ::before. */
+
+/* Hide entire tradePullGlyph (triangle + text) */
+.bottomNav .tradePullGlyph,
+nav.bottomNav .tradePullGlyph{
+  display:none !important;
+}
+
+/* Clean ↑↓ via #tradeNavBtn::before — avoids all triangle CSS conflicts */
+.bottomNav #tradeNavBtn::before,
+nav.bottomNav #tradeNavBtn::before{
+  content:"↑↓" !important;
+  display:block !important;
+  font-size:17px !important;
+  font-weight:600 !important;
+  line-height:.7 !important;
+  letter-spacing:-.04em !important;
+  color:inherit !important;
+  text-align:center !important;
+  margin-bottom:1px !important;
+}
+
+/* Keep old swap-arrows SVG hidden (set in 0.718, confirmed here) */
+.bottomNav #tradeNavBtn > svg,
+nav.bottomNav #tradeNavBtn > svg{
+  display:none !important;
+}
+
+/* Active Trade button proportions (match 0.728) */
+.bottomNav #tradeNavBtn,
+nav.bottomNav #tradeNavBtn{
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:2px !important;
+}
+
+/* Non-trade navItem: no ::before content leaks */
+.bottomNav .navItem:not(#tradeNavBtn)::before,
+nav.bottomNav .navItem:not(#tradeNavBtn)::before{
+  content:none !important;
+  display:none !important;
+}

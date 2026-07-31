@@ -1,0 +1,16 @@
+/* Keep the Copilot page from ever escaping the viewport width ("não pode
+   fugir da página"). Root cause: the page content is a single-column grid
+   (.dvlCp0976Shell); a grid item defaults to min-width:auto, so one child
+   that can't shrink — notably the Scanner mini-table, whose row has FIXED
+   px columns summing ~341px — drags the whole column, and every card in it,
+   past narrow (~360px) phones. Fix: pin the column to the available width,
+   let cards shrink, let the wide table scroll inside its own box, and
+   hard-clip any residual horizontal bleed. Loaded last so it wins the
+   cascade over the earlier duplicate shell/table rules. */
+#dvlCopilotPage0974{overflow-x:hidden!important;}
+#dvlCopilotPage0974 .dvlCp0974Shell,
+#dvlCopilotPage0974 .dvlCp0976Shell{grid-template-columns:minmax(0,1fr)!important;max-width:100%!important;}
+#dvlCopilotPage0974 .dvlCp0974Shell>*,
+#dvlCopilotPage0974 .dvlCp0976Shell>*,
+#dvlCopilotPage0974 [data-dvl-cp-section]{min-width:0!important;max-width:100%!important;}
+#dvlCopilotPage0974 .dvlCp0976ScannerTable{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
