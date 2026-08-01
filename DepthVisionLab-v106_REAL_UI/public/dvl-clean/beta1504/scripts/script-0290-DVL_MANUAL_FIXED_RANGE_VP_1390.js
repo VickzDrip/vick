@@ -160,7 +160,14 @@
       if(!(buy>=0)||!(sell>=0)){if(buy>=0&&!(sell>=0))sell=Math.max(0,v-buy);}
       if(!(buy>=0)||!(sell>=0)||buy+sell<=0){const lo=+c.low,hi=+c.high,cl=+c.close,op=+c.open;const full=Math.max(1e-12,hi-lo);const closePos=Math.max(0,Math.min(1,(cl-lo)/full));const bodyBias=Math.max(-1,Math.min(1,(cl-op)/full));const buyShare=Math.max(.08,Math.min(.92,.25+.50*closePos+.25*Math.max(0,bodyBias)));buy=v*buyShare;sell=v-buy;}
       else{const sum=buy+sell;if(sum>0&&Math.abs(sum-v)>v*.01){const k=v/sum;buy*=k;sell*=k;}}
-      distribute(bins,c,v);distribute(buyBins,c,buy);distribute(sellBins,c,sell);
+      distribute(bins,c,v);
+      // Delta realista: a compra concentra na parte de CIMA do range da vela e a
+      // venda na parte de BAIXO. Antes buy e sell usavam a MESMA distribuição, então
+      // cada vela pintava todo o seu range de uma cor só (uma vela bearish grande
+      // deixava "tudo vermelho"). Agora o delta vira gradiente (verde em cima /
+      // vermelho embaixo), como num footprint.
+      fillInto(buyBins,+c.low,+c.high,buy,+c.high);
+      fillInto(sellBins,+c.low,+c.high,sell,+c.low);
     }
     let total=0,maxBucket=0,pocIdx=0,maxDelta=0;const deltaBins=new Float64Array(rows);
     for(let i=0;i<rows;i++){total+=bins[i];if(bins[i]>maxBucket){maxBucket=bins[i];pocIdx=i;}const d=buyBins[i]-sellBins[i];deltaBins[i]=d;if(Math.abs(d)>maxDelta)maxDelta=Math.abs(d);}
