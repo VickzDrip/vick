@@ -39,7 +39,12 @@
     bubbleScale:0.58,
     bubbleOpacity:0.58,
     groupingMs:900,
-    showStatus:true
+    showStatus:true,
+    /* Níveis / memória de liquidez (persistent levels) */
+    levelsOn:false,
+    levelsMinRefills:2,
+    levelsMinNotional:100000,
+    levelsOpacity:0.30
   };
 
   function clean(s){
@@ -67,6 +72,10 @@
     o.bubbleScale=clampNum(o.bubbleScale,.25,2.5,.58);
     o.bubbleOpacity=clampNum(o.bubbleOpacity,.15,1,.58);
     o.groupingMs=clampNum(o.groupingMs,100,5000,900);
+    o.levelsOn=!!o.levelsOn;
+    o.levelsMinRefills=clampNum(o.levelsMinRefills,1,10,2);
+    o.levelsMinNotional=clampNum(o.levelsMinNotional,5000,50000000,100000);
+    o.levelsOpacity=clampNum(o.levelsOpacity,0.05,1,0.30);
     return o;
   }
   function clampNum(v,a,b,d){v=Number(v);if(!Number.isFinite(v))v=d;return Math.max(a,Math.min(b,v));}
@@ -775,6 +784,99 @@
     }catch(e){R.err=String(e&&e.message||e);}
   };
 
+  /* ── Níveis / memória de liquidez (persistent levels) ─────────────────
+     Detecta preços onde uma parede (>= levelsMinNotional) REAPARECE (refill/
+     iceberg) >= levelsMinRefills vezes e crava uma FAIXA que sobrevive à
+     retirada da ordem E ao desligar o heatmap ao vivo (o desenho depende só
+     de st.levelsOn, nunca de st.on). Rompe quando o preço atravessa a faixa. */
+  var LV={ledger:new Map(),sym:"",saveT:0,lastMid:0};
+  function lvBandTol(price){return Math.max((R.step||1)*3, price*0.0004);}
+  function lvKey(price){return Math.round(price/lvBandTol(price));}
+  function lvStore(){return "DVL_DH_LEVELS_"+(gsym()||"GLOBAL");}
+  function lvPrice(){ if(R.mid>0)return R.mid; try{ if(typeof klines!=="undefined"&&klines.length)return +klines[klines.length-1].close; }catch(_){ } return LV.lastMid; }
+  function lvLoad(){
+    LV.ledger=new Map(); LV.sym=gsym();
+    try{ var raw=JSON.parse(localStorage.getItem(lvStore())||"null");
+      if(raw&&raw.levels)raw.levels.forEach(function(l){ LV.ledger.set(l.k,{side:l.side,pLo:+l.pLo,pHi:+l.pHi,maxNotional:+l.maxNotional,refills:+l.refills,present:false,lastSeen:+l.lastSeen||0,firstSeen:+l.firstSeen||0,broken:!!l.broken}); });
+    }catch(_){ }
+  }
+  function lvSave(){
+    clearTimeout(LV.saveT);
+    LV.saveT=setTimeout(function(){ LV.saveT=0;
+      try{ var arr=[]; LV.ledger.forEach(function(v,k){ if(!v.broken&&v.refills>=1)arr.push({k:k,side:v.side,pLo:v.pLo,pHi:v.pHi,maxNotional:v.maxNotional,refills:v.refills,lastSeen:v.lastSeen,firstSeen:v.firstSeen,broken:v.broken}); });
+        arr.sort(function(a,b){return (b.refills*b.maxNotional)-(a.refills*a.maxNotional);});
+        if(arr.length>60)arr=arr.slice(0,60);
+        localStorage.setItem(lvStore(),JSON.stringify({levels:arr}));
+      }catch(_){ }
+    },800);
+  }
+  function lvScanSide(map,side,minN){
+    if(!map||!map.size)return [];
+    var cells=[]; map.forEach(function(q,p){ var n=q*p; if(n>=minN)cells.push([p,n]); });
+    if(!cells.length)return [];
+    cells.sort(function(a,b){return a[0]-b[0];});
+    var tol=lvBandTol(cells[0][0])*1.5, bands=[], cur=null;
+    for(var i=0;i<cells.length;i++){ var p=cells[i][0],n=cells[i][1];
+      if(cur&&(p-cur.pHi)<=tol){ cur.pHi=p; if(n>cur.peak)cur.peak=n; }
+      else { if(cur)bands.push(cur); cur={pLo:p,pHi:p,peak:n,side:side}; } }
+    if(cur)bands.push(cur);
+    return bands;
+  }
+  function lvTick(){
+    if(!st.levelsOn)return;
+    if(gsym()!==LV.sym){ lvSave(); lvLoad(); }
+    var minN=st.levelsMinNotional, now=Date.now(), mid=lvPrice();
+    if(st.on && ((R.bids&&R.bids.size)||(R.asks&&R.asks.size)) && mid>0){
+      var bands=lvScanSide(R.bids,"bid",minN).concat(lvScanSide(R.asks,"ask",minN));
+      var seen={};
+      bands.forEach(function(bd){
+        var key=bd.side+":"+lvKey((bd.pLo+bd.pHi)/2); seen[key]=1;
+        var e=LV.ledger.get(key);
+        if(!e){ LV.ledger.set(key,{side:bd.side,pLo:bd.pLo,pHi:bd.pHi,maxNotional:bd.peak,refills:1,present:true,lastSeen:now,firstSeen:now,broken:false}); }
+        else { if(!e.present)e.refills++; e.present=true; e.lastSeen=now; e.broken=false;
+          if(bd.peak>e.maxNotional)e.maxNotional=bd.peak; e.pLo=Math.min(e.pLo,bd.pLo); e.pHi=Math.max(e.pHi,bd.pHi); }
+      });
+      LV.ledger.forEach(function(e,key){ if(!seen[key])e.present=false; });
+      LV.lastMid=mid;
+    }
+    if(mid>0){ LV.ledger.forEach(function(e){ if(e.broken)return;
+      var mgn=Math.max((R.step||1)*2,(e.pHi-e.pLo)*0.6);
+      if(e.side==="bid"&&mid<e.pLo-mgn)e.broken=true;
+      else if(e.side==="ask"&&mid>e.pHi+mgn)e.broken=true;
+    }); }
+    if(LV.ledger.size>200){ var arr=[]; LV.ledger.forEach(function(v,k){arr.push([k,v]);});
+      arr.sort(function(a,b){return (a[1].refills*a[1].maxNotional)-(b[1].refills*b[1].maxNotional);});
+      for(var i=0;i<arr.length-140;i++)LV.ledger.delete(arr[i][0]); }
+    lvSave();
+  }
+  function lvWipe(){ LV.ledger=new Map(); try{localStorage.removeItem(lvStore());}catch(_){ } safeDraw(); }
+  window.DVLDeepHeatmapLevelsDraw=function(ctx,cfg){
+    if(!st.levelsOn)return;
+    try{
+      if(gsym()!==LV.sym){ lvSave(); lvLoad(); }
+      var minRef=st.levelsMinRefills, opBase=st.levelsOpacity;
+      ctx.save();
+      LV.ledger.forEach(function(e){
+        if(e.broken||e.refills<minRef)return;
+        var yA=cfg.y(e.pHi),yB=cfg.y(e.pLo),yTop=Math.min(yA,yB),yBot=Math.max(yA,yB);
+        if(yBot<cfg.y0||yTop>cfg.y1)return;
+        var yy=Math.max(cfg.y0,yTop),hh=Math.min(cfg.y1,yBot)-yy; if(hh<2)hh=2;
+        var col=e.side==="bid"?[19,220,141]:[255,74,97];
+        var strength=Math.min(1,(e.refills-minRef+1)/4)*0.6+Math.min(1,e.maxNotional/(st.levelsMinNotional*6))*0.4;
+        var alpha=Math.max(0.05,Math.min(0.9,opBase*(0.5+strength)));
+        ctx.fillStyle="rgba("+col[0]+","+col[1]+","+col[2]+","+alpha+")";
+        ctx.fillRect(cfg.x0,yy,cfg.x1-cfg.x0,hh);
+        ctx.strokeStyle="rgba("+col[0]+","+col[1]+","+col[2]+","+Math.min(1,alpha+0.35)+")";ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(cfg.x0,yy+0.5);ctx.lineTo(cfg.x1,yy+0.5);ctx.moveTo(cfg.x0,yy+hh-0.5);ctx.lineTo(cfg.x1,yy+hh-0.5);ctx.stroke();
+        ctx.fillStyle="rgba("+col[0]+","+col[1]+","+col[2]+",0.95)";ctx.font="700 9px system-ui";ctx.textAlign="right";ctx.textBaseline="middle";
+        ctx.fillText("×"+e.refills,cfg.x1-6,yy+hh/2);
+      });
+      ctx.restore();
+    }catch(err){R.err=String(err&&err.message||err);}
+  };
+  lvLoad();
+  setInterval(lvTick,700);
+
   /* ── UI ─────────────────────────────────────────────────────────────── */
   var panel=null,panelTimer=0;
   function seg(label,key,opts){return '<div class="dvl-dh-field"><label>'+label+'</label><div class="dvl-dh-seg">'+opts.map(function(o){return '<button type="button" data-dhseg="'+key+'" data-val="'+o[0]+'" class="'+(String(st[key])===String(o[0])?'is-on':'')+'">'+o[1]+'</button>';}).join('')+'</div></div>';}
@@ -805,7 +907,12 @@
       seg('Filtro','filterMode',[["auto","Auto"],["manual","Manual"]])+ 
       (st.filterMode==='manual'?step('Mínimo nocional','minNotional',0,50000000,25000,0,' USDT'):step('Percentil','bubblePercentile',80,99.9,0.5,1,'%'))+ 
       step('Tamanho','bubbleScale',0.25,2.5,0.05,2,'x')+step('Opacidade bubbles','bubbleOpacity',0.15,1,0.05,2,'')+ 
-      step('Agrupamento','groupingMs',100,5000,100,0,'ms')+sw('Status no gráfico','showStatus')+ 
+      step('Agrupamento','groupingMs',100,5000,100,0,'ms')+sw('Status no gráfico','showStatus')+
+      '<div class="dvl-dh-sub">NÍVEIS / MEMÓRIA DE LIQUIDEZ</div>'+
+      sw('Níveis persistentes','levelsOn')+
+      step('Min. refills','levelsMinRefills',1,10,1,0,'x')+
+      step('Min. notional','levelsMinNotional',5000,50000000,25000,0,' USDT')+
+      step('Opacidade níveis','levelsOpacity',0.05,1,0.05,2,'')+
       '<div class="dvl-dh-note"><b>Leitura simples:</b> azul/ciano é liquidez parada; amarelo é liquidez forte. Verde aparece somente quando compras agressivas coincidem com redução da ASK. Vermelho aparece somente quando vendas agressivas coincidem com redução da BID. Redução sem trades compatíveis é tratada como retirada e fica cinza quando habilitada.</div>';
   }
   function commitStep(box,text){
@@ -874,6 +981,8 @@
     version:'1.354',isOn:function(){return !!st.on;},on:function(){return !!st.on;},setOn:setOn,
     openPanel:openPanel,open:openPanel,settings:st,_testInject:testInject,_rebuildConsumption:rebuildConsumption,
     _persist:persistSnapshots,_restore:restoreSnapshots,_wipeSnaps:function(){R.snapshots=[];R.snapVersion++;R.cache.key="";},
+    _wipeLevels:lvWipe,_levels:function(){var a=[];LV.ledger.forEach(function(v,k){a.push(Object.assign({k:k},v));});return a;},_lvTick:lvTick,
+    _injectBook:function(bids,asks,mid){R.bids=new Map(bids);R.asks=new Map(asks);if(mid)R.mid=mid;},
     debug:function(){return {on:st.on,symbol:R.symbol,source:R.source,status:R.status,connected:R.connected,synced:R.synced,step:R.step,snapshots:R.snapshots.length,trades:R.trades.length,historySeeded:R.historySeeded,consumptionEvents:R.consumption.length,consumption30s:R.lastConsumptionStats,lastThreshold:R.lastThreshold,lastDrawnBubbles:R.lastDrawnBubbles,error:R.err};}
   };
 
