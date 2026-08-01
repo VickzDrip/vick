@@ -6172,7 +6172,7 @@ function setupChartInteractions(){
               drawSoon();
             }
           }
-        }, 500); // long-press deliberado; taps normais no mobile (200-400ms) não invocam o crosshair
+        }, 400); // long-press deliberado; taps rápidos (<400ms) não invocam o crosshair
       }
       return;
     }
@@ -6256,7 +6256,7 @@ function setupChartInteractions(){
     if(chartDragState){
       const dx = ev.clientX - chartDragState.x;
       const dy = ev.clientY - chartDragState.y;
-      if(Math.hypot(dx, dy) > 7){
+      if(Math.hypot(dx, dy) > 16){ // tolerância maior: dedo parado tremendo não cancela o long-press
         crossMovedBeforeHold = true; clearCrossPressTimer();
         if(crossDismissPending){ crossDismissPending = false; hideCrosshair(); } // swipe: crosshair some e vira pan
       }
