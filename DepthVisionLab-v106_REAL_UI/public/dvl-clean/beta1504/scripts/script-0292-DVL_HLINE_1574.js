@@ -29,7 +29,7 @@
 .dvl-hl-line.is-sel::before{left:0;}
 .dvl-hl-line.is-sel::after{right:0;}
 .dvl-hl-tag{position:fixed;z-index:57;transform:translateY(-50%);font:800 10px/1 system-ui;padding:2px 6px;border-radius:4px;color:#03140d;touch-action:none;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4);pointer-events:none;}
-.dvl-hl-ctrl{position:fixed;z-index:58;transform:translateY(-50%);display:none;gap:4px;touch-action:none;-webkit-tap-highlight-color:transparent;}
+.dvl-hl-ctrl{position:fixed;z-index:58;display:none;gap:6px;touch-action:none;-webkit-tap-highlight-color:transparent;}
 .dvl-hl-ctrl.is-on{display:flex;}
 .dvl-hl-btn{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(120,150,180,.45);background:rgba(10,16,22,.96);color:#cfe6ff;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.5);font:900 14px system-ui;}
 .dvl-hl-btn.is-del{color:#ff6b7d;border-color:rgba(255,90,110,.5);}
@@ -137,8 +137,10 @@
         // gear/X aparecem só quando a linha está SELECIONADA (padrão dos desenhos)
         if(String(selId)===String(l.id)){
           e.ctrl.classList.add("is-on");
-          e.ctrl.style.left = Math.max(left+4, left+wpx-58)+"px";
-          e.ctrl.style.top = (top-20)+"px";
+          // Botões FIXOS no topo-direito do plot (não seguem a linha) e sem
+          // invadir a escala de preço — igual aos outros desenhos.
+          e.ctrl.style.left = (r.left + cfg.x1 - 62)+"px";
+          e.ctrl.style.top = (r.top + cfg.y0 + 10)+"px";
         }else{ e.ctrl.classList.remove("is-on"); }
       });
     }catch(_){ hideAll(); }
