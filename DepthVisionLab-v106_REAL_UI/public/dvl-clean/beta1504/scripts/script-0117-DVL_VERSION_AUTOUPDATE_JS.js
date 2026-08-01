@@ -24,8 +24,12 @@
        infinite reload loop. */
 (function(){
   if(window.__DVL_VER_GUARD) return; window.__DVL_VER_GUARD = true;
-  var RUNNING = String(window.DVL_APP_VERSION || "").trim();
-  if(!RUNNING) return;
+  // RUNNING é lido TARDE (no 1º check), não na carga do script: a versão
+  // autoritativa é setada por um <script> inline mais ABAIXO no index.html, então
+  // ler window.DVL_APP_VERSION agora pegaria um valor provisório antigo (ex.: o
+  // hardcode do script-0003) e o banner "Nova versão" ficaria aparecendo pra
+  // sempre / reaparecendo após atualizar.
+  var RUNNING = "";
   var pending = null, banner = null, reloading = false, autoBlocked = false;
   var LAST_TRIED = null;
   try { LAST_TRIED = sessionStorage.getItem("dvlUpdTo"); } catch(_){}
@@ -62,6 +66,8 @@
     return m ? (parseInt(m[1], 10) * 100000 + parseInt(m[2], 10)) : NaN;
   }
   function check(){
+    if(!RUNNING){ RUNNING = String(window.DVL_APP_VERSION || "").trim(); }
+    if(!RUNNING) return;
     fetch("/api/version", { cache: "no-store" })
       .then(function(r){ return r && r.ok ? r.json() : null; })
       .then(function(j){
