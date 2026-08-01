@@ -6335,16 +6335,16 @@ function setupChartInteractions(){
       ((crosshair.active && crossDragState && crossDragState.fromVisibleCross && !crossDragState.moved) ||
        (wasTap && chartPointers.size === 0));
 
-    // Toque num crosshair que JÁ estava visível: classifica tap vs arrasto pelo
-    // deslocamento TOTAL do dedo (não pelo flag 'moved', que dispara com 3px de
-    // tremida). Tap (movimento pequeno) → dispensa; arrasto grande → leitura, mantém.
-    const totalMove = Math.hypot(ev.clientX - crossGestureDownX, ev.clientY - crossGestureDownY);
-    const tapOnCross = crossVisibleAtDown && crosshair.visible && insidePrice &&
-      ev.pointerType !== "mouse" && totalMove < 12 && !dvlDrawingModeActive();
+    // Se o crosshair JÁ estava na tela quando o dedo encostou, QUALQUER toque no
+    // touch (tap, tap torto, arrasto curto ou longo) dispensa — sem depender de
+    // limiar de movimento nem do timer de hold, que deixavam ele "grudado".
+    // Para reposicionar o crosshair, é só dar long-press de novo.
+    const dismissVisibleCross = crossVisibleAtDown && crosshair.visible &&
+      ev.pointerType !== "mouse" && !dvlDrawingModeActive();
 
     clearCrossPressTimer();
 
-    if(crossTapToHide || tapOnCross){
+    if(crossTapToHide || dismissVisibleCross){
       hideCrosshair();
     } else if(crossDismissPending && !crosshair.active){
       hideCrosshair();   // touch: tap no crosshair visível → some
