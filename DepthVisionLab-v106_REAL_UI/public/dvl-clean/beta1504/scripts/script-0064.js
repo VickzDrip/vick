@@ -6172,7 +6172,7 @@ function setupChartInteractions(){
               drawSoon();
             }
           }
-        }, 240);
+        }, 500); // long-press deliberado; taps normais no mobile (200-400ms) não invocam o crosshair
       }
       return;
     }
