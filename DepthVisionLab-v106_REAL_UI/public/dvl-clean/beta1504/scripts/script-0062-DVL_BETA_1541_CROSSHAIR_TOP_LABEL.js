@@ -116,6 +116,7 @@
   }
 
   function move(ev){
+    if(ev && ev.pointerType && ev.pointerType !== "mouse") return; // crosshair de hover só no desktop; no touch quem controla é o long-press
     lastEv = ev;
     if(!raf) raf = requestAnimationFrame(function(){ paint(lastEv); });
   }

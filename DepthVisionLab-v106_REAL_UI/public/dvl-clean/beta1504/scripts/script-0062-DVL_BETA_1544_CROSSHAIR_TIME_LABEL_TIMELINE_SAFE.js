@@ -137,6 +137,7 @@ function paint(){
 }
 function schedule(){if(!raf)raf=requestAnimationFrame(paint)}
 function move(ev){
+  if(ev && ev.pointerType && ev.pointerType !== "mouse") return; // hover só no desktop
   lastEv=ev;
   try{window.__dvlDesktopHoverCrosshair=true}catch(_){}
   try{if(typeof setCrosshairFromClient==="function")setCrosshairFromClient(ev.clientX,ev.clientY)}catch(_){}
