@@ -42,6 +42,7 @@
     profileColor:"#b06bff", opacity:0.42, valueAreaPct:0.70, colRadius:1,
     deltaOn:false, deltaWidthPct:0.24, deltaOpacity:0.78,
     deltaBuyColor:"#13dc8d", deltaSellColor:"#ff4a61",
+    deltaPower:0.62, deltaDpoc:true, deltaImbalance:true, deltaImbalanceRatio:1.65, deltaMinPct:0,
     lvnOn:false, lvnCount:2, lvnLabels:true,
     lvnBelowColor:"#f3c768", lvnAboveColor:"#3fa9ff",
     lvnLineStyle:"dotted", lvnLineWidth:1.0, lvnOpacity:0.88,
@@ -238,7 +239,7 @@
   }
   function drawProfile(ctx,cfg,p,bounds){
     const layout=calcLayout(bounds);
-    const {profileW,deltaW,dividerX,profileX0}=layout;
+    const {profileW,deltaW,dividerX,profileX0,blockX}=layout;
     const bodyLeft=Math.min(layout.blockX,profileX0),bodyRight=Math.max(profileX0+profileW,dividerX);
     const color=state.profileColor||"#b06bff",op=Math.max(.03,Math.min(1,+state.opacity||.42)),r=Math.max(0,Math.min(3,+state.colRadius||0));
     ctx.save();
@@ -252,17 +253,22 @@
         ctx.globalAlpha=inVA?op:op*.42;roundRectRight(ctx,profileX0,y,bw,h,Math.min(r,h/2,bw/2));ctx.fill();
       }
       if(state.deltaOn&&p.maxDelta>0){
+        /* DVL_MANUAL_DELTA_VISUAL_BOOST_SAFE */
         const dop=Math.max(.05,Math.min(1,+state.deltaOpacity||.78));
+        const gamma=Math.max(.35,Math.min(1,+state.deltaPower||.62));
+        const minAbs=p.maxDelta*Math.max(0,Math.min(.60,+state.deltaMinPct||0));
+        let dpocI=-1,dpocAbs=0,dpocY=NaN;
         for(let i=0;i<p.rows;i++){
-          const d=p.deltaBins[i];if(!d)continue;const bw=(Math.abs(d)/p.maxDelta)*deltaW;if(bw<.5)continue;
-          const plo=p.min+i*p.ppr,phi=p.min+(i+1)*p.ppr;const yt=cfg.y(phi),yb=cfg.y(plo);
-          if((yt<cfg.y0&&yb<cfg.y0)||(yt>cfg.y1&&yb>cfg.y1))continue;
+          const d=p.deltaBins[i];if(!d)continue;const ad=Math.abs(d);if(ad<minAbs)continue;const bw=Math.pow(Math.min(1,ad/p.maxDelta),gamma)*deltaW;if(bw<.5)continue;
+          const plo=p.min+i*p.ppr,phi=p.min+(i+1)*p.ppr;const yt=cfg.y(phi),yb=cfg.y(plo);if((yt<cfg.y0&&yb<cfg.y0)||(yt>cfg.y1&&yb>cfg.y1))continue;
           const y=Math.min(yt,yb),h=Math.max(.5,Math.abs(yb-yt));const inVA=i>=p.vaLo&&i<=p.vaHi;
           ctx.globalAlpha=inVA?dop:dop*.55;ctx.fillStyle=d>=0?(state.deltaBuyColor||"#13dc8d"):(state.deltaSellColor||"#ff4a61");
           roundRectLeft(ctx,dividerX-bw,y,bw,h,Math.min(r,h/2,bw/2));ctx.fill();
+          if(ad>dpocAbs){dpocAbs=ad;dpocI=i;dpocY=y+h*.5;}
+          if(state.deltaImbalance!==false){const bv=+(p.buyBins&&p.buyBins[i])||0,sv=+(p.sellBins&&p.sellBins[i])||0,mn=Math.min(bv,sv),mx=Math.max(bv,sv),ratio=mn>0?mx/mn:(mx>0?99:0);if(ratio>=Math.max(1.05,+state.deltaImbalanceRatio||1.65)){ctx.globalAlpha=Math.min(1,dop+.12);ctx.fillStyle=bv>=sv?(state.deltaBuyColor||"#13dc8d"):(state.deltaSellColor||"#ff4a61");ctx.fillRect(bv>=sv?dividerX-2:blockX,y,2,h);}}
         }
-        const yTop=Math.max(cfg.y0,Math.min(cfg.y(p.max),cfg.y(p.min))),yBot=Math.min(cfg.y1,Math.max(cfg.y(p.max),cfg.y(p.min)));
-        ctx.globalAlpha=.58;ctx.strokeStyle="rgba(142,174,190,.55)";ctx.lineWidth=1;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(dividerX,yTop);ctx.lineTo(dividerX,yBot);ctx.stroke();
+        if(state.deltaDpoc!==false&&dpocI>=0&&isFinite(dpocY)){ctx.globalAlpha=.92;ctx.strokeStyle=state.colorPOC||"#f3c768";ctx.lineWidth=1;ctx.setLineDash([3,2]);ctx.beginPath();ctx.moveTo(blockX,dpocY);ctx.lineTo(dividerX,dpocY);ctx.stroke();ctx.setLineDash([]);}
+        const yTop=Math.max(cfg.y0,Math.min(cfg.y(p.max),cfg.y(p.min))),yBot=Math.min(cfg.y1,Math.max(cfg.y(p.max),cfg.y(p.min)));ctx.globalAlpha=.58;ctx.strokeStyle="rgba(142,174,190,.55)";ctx.lineWidth=1;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(dividerX,yTop);ctx.lineTo(dividerX,yBot);ctx.stroke();
       }
     }
     // Linhas POC/VAH/VAL
@@ -532,7 +538,7 @@
       +'<div class="dvl-vt-field"><label>Delta</label><label class="dvl-switch"><input id="mfrDeltaOn" type="checkbox" '+(state.deltaOn?'checked':'')+'><i></i><b></b></label></div>'
       +'<div class="dvl-vt-field"><label>Largura %</label>'+stepFld("mfrDeltaWidth",Math.round(state.deltaWidthPct*100),5,55,1,0)+'</div>'
       +'<div class="dvl-vt-field"><label>Opacidade %</label>'+stepFld("mfrDeltaOpacity",Math.round(state.deltaOpacity*100),5,100,5,0)+'</div>'
-      +colorFld("mfrDeltaBuyColor","Compradores","deltaBuyColor")+colorFld("mfrDeltaSellColor","Vendedores","deltaSellColor")+'</div></div>'
+      +colorFld("mfrDeltaBuyColor","Compradores","deltaBuyColor")+colorFld("mfrDeltaSellColor","Vendedores","deltaSellColor")+'<div class="dvl-vt-field"><label>Forca</label>'+stepFld("mfrDeltaPower",Math.round((+state.deltaPower||.62)*100),35,100,5,0)+'</div>'+'<div class="dvl-vt-field"><label>DPOC</label><label class="dvl-switch"><input id="mfrDeltaDpoc" type="checkbox" '+(state.deltaDpoc!==false?'checked':'')+'> <i></i><b></b></label></div>'+'<div class="dvl-vt-field"><label>Imbalance</label><label class="dvl-switch"><input id="mfrDeltaImbalance" type="checkbox" '+(state.deltaImbalance!==false?'checked':'')+'> <i></i><b></b></label></div>'+'<div class="dvl-vt-field"><label>Ratio</label>'+stepFld("mfrDeltaImbRatio",+state.deltaImbalanceRatio||1.65,1.05,8,.05,2)+'</div>'+'<div class="dvl-vt-field"><label>Filtro %</label>'+stepFld("mfrDeltaMinPct",Math.round((+state.deltaMinPct||0)*100),0,60,1,0)+'</div>'+'<div class="dvl-vt-field" style="grid-column:1/-1"><label>Motor</label><strong style="font-size:9px;color:var(--green,#13dc8d);font-weight:900">DVL_MANUAL_DELTA_VISUAL_BOOST_SAFE</strong></div></div></div>'
       +'<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Linhas</span></div><div class="dvl-vt-grid">'
       +'<div class="dvl-vt-field"><label>Estende p/ direita</label><label class="dvl-switch"><input id="mfrExtend" type="checkbox" '+(state.extendRight!==false?'checked':'')+'><i></i><b></b></label></div>'
       +'<div class="dvl-vt-field"><label>Labels</label><label class="dvl-switch"><input id="mfrLabels" type="checkbox" '+(state.labels?'checked':'')+'><i></i><b></b></label></div>'
@@ -548,9 +554,9 @@
       +colorFld("mfrLVNBelowColor","LVN abaixo","lvnBelowColor")+colorFld("mfrLVNAboveColor","LVN acima","lvnAboveColor")
       +'<div class="dvl-vt-field" style="flex-direction:column;align-items:flex-start;gap:4px"><label>Estilo</label>'+dropFld("mfrLVNStyle",STYLE_OPTS,state.lvnLineStyle)+'</div><div class="dvl-vt-field"><label>Espessura</label>'+stepFld("mfrLVNWidth",state.lvnLineWidth,.5,5,.5,1)+'</div></div></div>';
 
-    const boolMap={mfrOn:"on",mfrDeltaOn:"deltaOn",mfrExtend:"extendRight",mfrLabels:"labels",mfrPOC:"showPOC",mfrVAH:"showVAH",mfrVAL:"showVAL",mfrLVNOn:"lvnOn",mfrLVNLabels:"lvnLabels"};
+    const boolMap={mfrOn:"on",mfrDeltaOn:"deltaOn",mfrDeltaDpoc:"deltaDpoc",mfrDeltaImbalance:"deltaImbalance",mfrExtend:"extendRight",mfrLabels:"labels",mfrPOC:"showPOC",mfrVAH:"showVAH",mfrVAL:"showVAL",mfrLVNOn:"lvnOn",mfrLVNLabels:"lvnLabels"};
     Object.keys(boolMap).forEach(id=>{const e=body.querySelector("#"+id);if(e)e.addEventListener("change",()=>{state[boolMap[id]]=!!e.checked;if(id==="mfrOn")updateRow();save();redraw();});});
-    const stepMap={mfrWidth:["widthPct",.01],mfrOpacity:["opacity",.01],mfrVA:["valueAreaPct",.01],mfrRadius:["colRadius",1],mfrDeltaWidth:["deltaWidthPct",.01],mfrDeltaOpacity:["deltaOpacity",.01],mfrLineWidth:["lineWidth",1],mfrLVNCount:["lvnCount",1],mfrLVNOpacity:["lvnOpacity",.01],mfrLVNWidth:["lvnLineWidth",1]};
+    const stepMap={mfrWidth:["widthPct",.01],mfrOpacity:["opacity",.01],mfrVA:["valueAreaPct",.01],mfrRadius:["colRadius",1],mfrDeltaWidth:["deltaWidthPct",.01],mfrDeltaOpacity:["deltaOpacity",.01],mfrDeltaPower:["deltaPower",.01],mfrDeltaImbRatio:["deltaImbalanceRatio",1],mfrDeltaMinPct:["deltaMinPct",.01],mfrLineWidth:["lineWidth",1],mfrLVNCount:["lvnCount",1],mfrLVNOpacity:["lvnOpacity",.01],mfrLVNWidth:["lvnLineWidth",1]};
     function applyStep(id,shown){
       if(id==="mfrRowSize"){if(state.rowLayout==="ticks")state.ticksPerRow=Math.max(1,Math.min(100000,Math.round(shown)));else state.rows=Math.max(20,Math.min(300,Math.round(shown)));profileCache=null;save();redraw();return;}
       const m=stepMap[id];if(!m)return;state[m[0]]=shown*m[1];if(id==="mfrVA")profileCache=null;save();redraw();
