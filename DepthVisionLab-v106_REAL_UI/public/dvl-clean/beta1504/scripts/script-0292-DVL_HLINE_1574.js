@@ -229,9 +229,8 @@
     body.querySelector("#hlDelete").addEventListener("click",()=>removeLine(l.id));
   }
 
-  /* ---------- boot ---------- */
-  function boot(){ ensureFab(); }
-  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+  /* O acionamento é pelo ícone "Linha H" na aba de Desenhos (script-0066),
+     que chama window.DVLHLines.add(). Sem FAB. */
 
   window.DVLHLinesDraw = draw;
   window.DVLHLines = { add:addLine, open:openPanel, count:()=>state.lines.length };

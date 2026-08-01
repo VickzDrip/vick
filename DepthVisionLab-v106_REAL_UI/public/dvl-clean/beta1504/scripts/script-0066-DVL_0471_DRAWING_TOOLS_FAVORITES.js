@@ -7,7 +7,8 @@
     short: '<svg viewBox="0 0 48 48" aria-hidden="true" class="dvl-oc-pos-icon dvl-oc-pos-short"><path class="dvl-oc-solid" d="M7 11H41M7 37H41"/><path class="dvl-oc-dash" d="M7 24H41"/><path class="dvl-oc-arrow" d="M24 13V32M15.5 23.5L24 32l8.5-8.5"/></svg>',
     ruler: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="10" rx="1"/><line x1="6" y1="7" x2="6" y2="11"/><line x1="10" y1="7" x2="10" y2="13"/><line x1="14" y1="7" x2="14" y2="11"/><line x1="18" y1="7" x2="18" y2="13"/></svg>',
     arrow: '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg>',
-    text: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M12 6v12M9 18h6"/></svg>'
+    text: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M12 6v12M9 18h6"/></svg>',
+    hline: '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="7" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="17"/></svg>'
   };
 
   const TOOLS = [
@@ -18,7 +19,8 @@
     { id:"short", label:"Short", cls:"toolShort" },
     { id:"ruler", label:"Ruler", cls:"" },
     { id:"arrow", label:"Arrow", cls:"" },
-    { id:"text", label:"Text", cls:"textIcon" }
+    { id:"text", label:"Text", cls:"textIcon" },
+    { id:"hline", label:"Linha H", cls:"" }
   ];
 
   const DEFAULT_FAVS = ["cross","trend","rect"];
@@ -140,6 +142,11 @@
 
   function selectTool(id){
     if(!toolById(id)) return;
+    if(id === "hline"){
+      // Linha horizontal: ação one-shot (adiciona uma linha) — não é ferramenta persistente.
+      try{ if(window.DVLHLines && typeof window.DVLHLines.add === "function") window.DVLHLines.add(); }catch(_){}
+      return;
+    }
     selectedTool = id;
     renderFavoriteTools();
     renderToolsMenu();
