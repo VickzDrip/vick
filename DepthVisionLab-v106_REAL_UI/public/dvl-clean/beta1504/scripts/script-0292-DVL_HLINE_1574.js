@@ -24,9 +24,16 @@
 #dvlHLineFab svg{display:block;pointer-events:none;}
 .dvl-hl-line{position:fixed;height:18px;margin-top:-9px;z-index:56;cursor:ns-resize;touch-action:none;-webkit-tap-highlight-color:transparent;}
 .dvl-hl-line>i{position:absolute;left:0;right:0;top:9px;height:0;display:block;}
-.dvl-hl-line.is-active>i{filter:drop-shadow(0 0 3px currentColor);}
-.dvl-hl-tag{position:fixed;z-index:57;transform:translateY(-50%);font:800 10px/1 system-ui;padding:2px 6px;border-radius:4px;color:#03140d;cursor:pointer;touch-action:none;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4);}
-.dvl-hl-del{margin-left:5px;font-weight:900;opacity:.85;}
+.dvl-hl-line.is-sel>i{filter:drop-shadow(0 0 4px currentColor);}
+.dvl-hl-line.is-sel::before,.dvl-hl-line.is-sel::after{content:"";position:absolute;top:6px;width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.5);}
+.dvl-hl-line.is-sel::before{left:0;}
+.dvl-hl-line.is-sel::after{right:0;}
+.dvl-hl-tag{position:fixed;z-index:57;transform:translateY(-50%);font:800 10px/1 system-ui;padding:2px 6px;border-radius:4px;color:#03140d;touch-action:none;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4);pointer-events:none;}
+.dvl-hl-ctrl{position:fixed;z-index:58;transform:translateY(-50%);display:none;gap:4px;touch-action:none;-webkit-tap-highlight-color:transparent;}
+.dvl-hl-ctrl.is-on{display:flex;}
+.dvl-hl-btn{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(120,150,180,.45);background:rgba(10,16,22,.96);color:#cfe6ff;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.5);font:900 14px system-ui;}
+.dvl-hl-btn.is-del{color:#ff6b7d;border-color:rgba(255,90,110,.5);}
+.dvl-hl-btn svg{width:15px;height:15px;pointer-events:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 `;(document.head||document.documentElement).appendChild(s);
   }catch(_){}})();
 
@@ -67,24 +74,39 @@
   }
 
   /* ---------- elementos DOM por linha ---------- */
-  let els = {}; // id -> {line, tag, i}
+  let els = {}; // id -> {line, tag, i, ctrl}
+  let selId = null; // linha selecionada (mostra gear/X)
+  const GEAR='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+  const XICO='<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   function ensureEls(l){
     if(els[l.id]) return els[l.id];
     const line=document.createElement("div"); line.className="dvl-hl-line"; line.setAttribute("data-dvl-ui","true"); line.dataset.id=l.id;
     const i=document.createElement("i"); line.appendChild(i);
     const tag=document.createElement("div"); tag.className="dvl-hl-tag"; tag.setAttribute("data-dvl-ui","true"); tag.dataset.id=l.id;
-    document.body.appendChild(line); document.body.appendChild(tag);
-    line.addEventListener("pointerdown", ev=>startDrag(ev, l.id), true);
-    tag.addEventListener("pointerdown", ev=>{ ev.stopPropagation(); }, true);
-    tag.addEventListener("click", ev=>{
-      ev.preventDefault(); ev.stopPropagation();
-      if(ev.target && ev.target.classList && ev.target.classList.contains("dvl-hl-del")){ removeLine(l.id); return; }
-      openPanel(l.id);
-    });
-    return (els[l.id]={line, tag, i});
+    const ctrl=document.createElement("div"); ctrl.className="dvl-hl-ctrl"; ctrl.setAttribute("data-dvl-ui","true");
+    const gear=document.createElement("button"); gear.type="button"; gear.className="dvl-hl-btn"; gear.title="Configurar"; gear.innerHTML=GEAR;
+    const del=document.createElement("button"); del.type="button"; del.className="dvl-hl-btn is-del"; del.title="Excluir"; del.innerHTML=XICO;
+    ctrl.appendChild(gear); ctrl.appendChild(del);
+    document.body.appendChild(line); document.body.appendChild(tag); document.body.appendChild(ctrl);
+    line.addEventListener("pointerdown", ev=>onLineDown(ev, l.id), true);
+    // gear/X: só agem quando clicados (padrão dos outros desenhos)
+    gear.addEventListener("pointerdown", ev=>ev.stopPropagation(), true);
+    del.addEventListener("pointerdown", ev=>ev.stopPropagation(), true);
+    gear.addEventListener("click", ev=>{ ev.preventDefault(); ev.stopPropagation(); openPanel(l.id); });
+    del.addEventListener("click", ev=>{ ev.preventDefault(); ev.stopPropagation(); removeLine(l.id); });
+    return (els[l.id]={line, tag, i, ctrl});
   }
-  function removeEls(id){ const e=els[id]; if(e){ try{e.line.remove();e.tag.remove();}catch(_){} delete els[id]; } }
-  function hideAll(){ Object.keys(els).forEach(id=>{ els[id].line.style.display="none"; els[id].tag.style.display="none"; }); }
+  function removeEls(id){ const e=els[id]; if(e){ try{e.line.remove();e.tag.remove();e.ctrl.remove();}catch(_){} delete els[id]; } }
+  function hideAll(){ Object.keys(els).forEach(id=>{ const e=els[id]; e.line.style.display="none"; e.tag.style.display="none"; e.ctrl.classList.remove("is-on"); }); }
+  function select(id){ selId=id; Object.keys(els).forEach(k=>els[k].line.classList.toggle("is-sel", String(k)===String(id))); redraw(); }
+  function deselect(){ if(selId==null) return; selId=null; Object.keys(els).forEach(k=>els[k].line.classList.remove("is-sel")); redraw(); }
+  // clique fora de qualquer linha/controle/painel → desseleciona
+  document.addEventListener("pointerdown", ev=>{
+    if(selId==null) return;
+    const t=ev.target;
+    if(t && t.closest && (t.closest(".dvl-hl-line")||t.closest(".dvl-hl-ctrl")||t.closest("#dvlHLinePanel"))) return;
+    deselect();
+  }, true);
 
   function fmt(p){ try{ if(typeof fmtPrice==="function") return fmtPrice(p); }catch(_){} return Number(p).toFixed(2); }
 
@@ -104,27 +126,34 @@
       state.lines.forEach(l=>{
         const yy = cfg.y(l.price);
         const e = ensureEls(l);
-        if(!(yy>=cfg.y0-2 && yy<=cfg.y1+2)){ e.line.style.display="none"; e.tag.style.display="none"; return; }
+        if(!(yy>=cfg.y0-2 && yy<=cfg.y1+2)){ e.line.style.display="none"; e.tag.style.display="none"; e.ctrl.classList.remove("is-on"); return; }
         const top = r.top + yy;
         e.line.style.left = left+"px"; e.line.style.top = top+"px"; e.line.style.width = wpx+"px"; e.line.style.display="block";
         e.i.style.color = l.color;
         e.i.style.borderTop = Math.max(0.5,l.width)+"px "+l.dash+" "+l.color;
         e.i.style.opacity = l.opacity;
         e.tag.style.left = (left+wpx+3)+"px"; e.tag.style.top = top+"px"; e.tag.style.background = l.color; e.tag.style.display="block";
-        e.tag.innerHTML = fmt(l.price)+'<span class="dvl-hl-del" title="Remover">×</span>';
+        e.tag.textContent = fmt(l.price);
+        // gear/X aparecem só quando a linha está SELECIONADA (padrão dos desenhos)
+        if(String(selId)===String(l.id)){
+          e.ctrl.classList.add("is-on");
+          e.ctrl.style.left = Math.max(left+4, left+wpx-58)+"px";
+          e.ctrl.style.top = (top-20)+"px";
+        }else{ e.ctrl.classList.remove("is-on"); }
       });
     }catch(_){ hideAll(); }
   }
 
-  /* ---------- arrastar (vertical) ---------- */
+  /* ---------- interação: tap = seleciona · arrastar = move o preço ---------- */
   let drag=null;
-  function startDrag(ev, id){
+  function onLineDown(ev, id){
     if(drag) return;
     if(ev.pointerType==="mouse" && ev.button!==0) return;
     ev.preventDefault(); ev.stopPropagation(); if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
-    drag = { id, pid:ev.pointerId };
+    drag = { id, pid:ev.pointerId, y0:ev.clientY, moved:false };
     window.__dvlPositionDragActive = true;
-    const e=els[id]; if(e){ try{e.line.setPointerCapture&&e.line.setPointerCapture(ev.pointerId);}catch(_){} e.line.classList.add("is-active"); }
+    const e=els[id]; if(e){ try{e.line.setPointerCapture&&e.line.setPointerCapture(ev.pointerId);}catch(_){} }
+    select(id); // clicar no desenho SELECIONA (mostra gear/X); config só pela engrenagem
     window.addEventListener("pointermove", onMove, true);
     window.addEventListener("pointerup", onUp, true);
     window.addEventListener("pointercancel", onUp, true);
@@ -133,6 +162,8 @@
     if(!drag) return;
     if(ev.pointerType==="mouse" && typeof ev.buttons==="number" && ev.buttons===0){ onUp(); return; }
     ev.preventDefault(); ev.stopPropagation();
+    if(!drag.moved && Math.abs(ev.clientY-drag.y0) < 4) return; // ainda pode ser um tap
+    drag.moved = true;
     const cfg=lastCfg, cv=canvasEl(); if(!cfg||!cv) return;
     const r=cv.getBoundingClientRect();
     const p = priceFromY(cfg, ev.clientY - r.top);
@@ -145,7 +176,9 @@
     window.removeEventListener("pointerup", onUp, true);
     window.removeEventListener("pointercancel", onUp, true);
     window.__dvlPositionDragActive = false;
-    if(drag){ const e=els[drag.id]; if(e) e.line.classList.remove("is-active"); drag=null; save(); }
+    if(!drag) return;
+    const d=drag; drag=null;
+    if(d.moved) save();                   // arrastou → salva o novo preço (já está selecionada)
   }
   window.addEventListener("blur", ()=>{ if(drag) onUp(); }, true);
 
@@ -155,10 +188,10 @@
     const price = cfg && isFinite(cfg.min) && isFinite(cfg.max) ? (cfg.min+cfg.max)/2 : 0;
     const l = normLine(Object.assign({ price }, state.def));
     state.lines.push(l); save(); redraw();
-    setTimeout(()=>openPanel(l.id), 60);
+    setTimeout(()=>select(l.id), 40);   // já nasce selecionada (gear/X visíveis), sem abrir config
     toast("Linha adicionada — arraste para posicionar");
   }
-  function removeLine(id){ state.lines = state.lines.filter(l=>String(l.id)!==String(id)); removeEls(id); if(panelId===id) closePanel(); save(); redraw(); }
+  function removeLine(id){ state.lines = state.lines.filter(l=>String(l.id)!==String(id)); removeEls(id); if(String(selId)===String(id))selId=null; if(panelId===id) closePanel(); save(); redraw(); }
 
   /* ---------- FAB ---------- */
   let fab=null;
