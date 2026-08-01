@@ -6348,7 +6348,9 @@ function setupChartInteractions(){
       hideCrosshair();
     } else if(crossDismissPending && !crosshair.active){
       hideCrosshair();   // touch: tap no crosshair visível → some
-    } else if(wasTap && !crosshair.active && chartPointers.size === 0 && !crosshair.visible && !dvlDrawingModeActive()){
+    } else if(ev.pointerType === "mouse" && wasTap && !crosshair.active && chartPointers.size === 0 && !crosshair.visible && !dvlDrawingModeActive()){
+      // No touch o crosshair aparece SÓ no long-press (click+hold); um tap simples
+      // não o invoca mais. No desktop (mouse) o clique ainda posiciona.
       setCrosshairFromClient(ev.clientX, ev.clientY);
     }
 
