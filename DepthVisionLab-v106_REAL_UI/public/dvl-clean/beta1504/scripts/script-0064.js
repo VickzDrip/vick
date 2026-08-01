@@ -5429,6 +5429,9 @@ if(window.DVLSpikeZonesDraw){
   if(window.DVLDeepHeatmapForegroundDraw){
     try{window.DVLDeepHeatmapForegroundDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlDHFg_e){}
   }
+  if(window.DVLDeepHeatmapLevelsDraw){
+    try{window.DVLDeepHeatmapLevelsDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlDHLv_e){}
+  }
 
   /* Beta 1.554 — triângulos de COMPRA/VENDA dos "vzinhos" do RSI de exaustão.
      Só quando o Exhaustion RSI está ligado. Os sinais (pivôs do RSI nas zonas)
