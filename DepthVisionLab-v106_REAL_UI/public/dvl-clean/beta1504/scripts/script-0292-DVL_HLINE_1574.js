@@ -139,7 +139,7 @@
           e.ctrl.classList.add("is-on");
           // Botões FIXOS no topo-direito do plot (não seguem a linha) e sem
           // invadir a escala de preço — igual aos outros desenhos.
-          e.ctrl.style.left = (r.left + cfg.x1 - 62)+"px";
+          e.ctrl.style.left = (r.left + cfg.x1 - 104)+"px";
           e.ctrl.style.top = (r.top + cfg.y0 + 10)+"px";
         }else{ e.ctrl.classList.remove("is-on"); }
       });
