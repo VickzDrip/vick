@@ -747,13 +747,36 @@
     var s=recentConsumptionStats(),dom=s.buy-s.sell,domTxt=Math.abs(dom)<1?"NEUTRO":(dom>0?"BUY +":"SELL +")+fmtN(Math.abs(dom));
     var line1="DEEP HEATMAP · "+(R.status||"")+" · "+R.snapshots.length+" cols";
     var line2=s.count?("30s  COMPRA→ASK "+fmtN(s.buy)+"  ·  VENDA→BID "+fmtN(s.sell)+"  ·  "+domTxt):"30s · SEM CONSUMO CONFIRMADO";
-    ctx.save();ctx.textAlign="left";ctx.textBaseline="middle";ctx.font = "800 9px system-ui";
-    var maxW=Math.max(ctx.measureText(line1).width,ctx.measureText(line2).width)+16,w=Math.min(cfg.x1-cfg.x0-16,maxW);
-    ctx.fillStyle="rgba(2,7,11,.84)";ctx.fillRect(cfg.x0+8,cfg.y0+24,w,36);ctx.strokeStyle="rgba(139,167,190,.18)";ctx.strokeRect(cfg.x0+8.5,cfg.y0+24.5,w-1,35);
-    ctx.fillStyle="rgba(206,224,239,.82)";ctx.fillText(line1,cfg.x0+15,cfg.y0+34);
-    ctx.fillStyle=s.count?(dom>=0?"rgba(43,226,138,.96)":"rgba(255,82,107,.96)"):"rgba(151,168,179,.80)";ctx.fillText(line2,cfg.x0+15,cfg.y0+49);
-    /* Tiny fixed legend: resting uses blue/yellow only; green/red are reserved for confirmed consumption. */
-    var lx=cfg.x0+10,ly=cfg.y0+66;if(ly<cfg.y1-8){ctx.font="750 7px system-ui";ctx.fillStyle="rgba(18,151,188,.9)";ctx.fillRect(lx,ly-3,6,6);ctx.fillStyle="rgba(185,202,213,.78)";ctx.fillText("LIQUIDEZ",lx+9,ly);lx+=58;ctx.fillStyle="rgba(242,211,72,.95)";ctx.fillRect(lx,ly-3,6,6);ctx.fillStyle="rgba(185,202,213,.78)";ctx.fillText("FORTE",lx+9,ly);lx+=45;ctx.fillStyle="rgba(43,226,138,.95)";ctx.fillText("▲ BUY CONSOME ASK",lx,ly);lx+=94;ctx.fillStyle="rgba(255,82,107,.95)";ctx.fillText("▼ SELL CONSOME BID",lx,ly);}
+    /* legenda dinâmica: [cor, texto, quadradinho?]. Inclui os elementos novos. */
+    var leg=[
+      ["rgba(18,151,188,.9)","LIQUIDEZ",1],
+      ["rgba(242,211,72,.95)","FORTE",1],
+      ["rgba(43,226,138,.95)","▲ BUY CONSOME ASK",0],
+      ["rgba(255,82,107,.95)","▼ SELL CONSOME BID",0]
+    ];
+    if(st.levelsOn){ leg.push([st.colBid||"#13dc8d","━ NÍVEL / PAREDE",0]);
+      if(st.zonesOn)leg.push([st.colZoneUp||"#b478ff","┄ MÉDIA ↑ / ↓",0]); }
+    ctx.save();ctx.textAlign="left";ctx.textBaseline="middle";
+    /* mede pra caixa AUTO-AJUSTAR (largura = maior conteúdo; nada de folga). */
+    ctx.font="800 9px system-ui";
+    var wLines=Math.max(ctx.measureText(line1).width,ctx.measureText(line2).width);
+    ctx.font="750 7px system-ui";
+    var gap=12,wLeg=0; leg.forEach(function(it){ wLeg+=(it[2]?9:0)+ctx.measureText(it[1]).width+gap; });
+    var pad=8, boxW=Math.min(cfg.x1-cfg.x0-16, Math.max(wLines,wLeg-gap)+pad*2), boxH=58;
+    var bx=cfg.x0+8, by=cfg.y0+22;
+    ctx.fillStyle="rgba(2,7,11,.84)";ctx.fillRect(bx,by,boxW,boxH);
+    ctx.strokeStyle="rgba(139,167,190,.18)";ctx.strokeRect(bx+0.5,by+0.5,boxW-1,boxH-1);
+    ctx.font="800 9px system-ui";
+    ctx.fillStyle="rgba(206,224,239,.82)";ctx.fillText(line1,bx+pad,by+13);
+    ctx.fillStyle=s.count?(dom>=0?"rgba(43,226,138,.96)":"rgba(255,82,107,.96)"):"rgba(151,168,179,.80)";ctx.fillText(line2,bx+pad,by+28);
+    /* legenda medida item a item (sem offsets fixos que desalinhavam). */
+    ctx.font="750 7px system-ui";
+    var lx=bx+pad,ly=by+boxH-9;
+    leg.forEach(function(it){
+      if(it[2]){ ctx.fillStyle=it[0];ctx.fillRect(lx,ly-3,6,6);lx+=9;ctx.fillStyle="rgba(185,202,213,.80)"; }
+      else ctx.fillStyle=it[0];
+      ctx.fillText(it[1],lx,ly); lx+=ctx.measureText(it[1]).width+gap;
+    });
     ctx.restore();
   }
 
