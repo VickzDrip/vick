@@ -931,18 +931,17 @@
       /* Zonas de atividade (atrás das linhas): faixa acima e faixa abaixo do preço,
          onde mais entram/saem ordens. Cores próprias e customizáveis. */
       if(st.zonesOn){
-        [[LV.zoneUp,hexRgb(st.colZoneUp)],[LV.zoneDn,hexRgb(st.colZoneDn)]].forEach(function(pair){
-          var z=pair[0],c=pair[1]; if(!z)return;
-          var zlo=Math.max(lo,Math.min(z.lo,z.hi)),zhi=Math.min(hi,Math.max(z.lo,z.hi)); if(zhi<=zlo)return;
-          var ya=cfg.y(zhi),yb=cfg.y(zlo),yt=Math.min(ya,yb),hh=Math.abs(yb-ya); if(hh<2)hh=2;
-          ctx.fillStyle="rgba("+c[0]+","+c[1]+","+c[2]+","+st.zonesOpacity+")";
-          ctx.fillRect(cfg.x0,yt,cfg.x1-cfg.x0,hh);
-          ctx.strokeStyle="rgba("+c[0]+","+c[1]+","+c[2]+","+Math.min(0.85,st.zonesOpacity+0.35)+")";
-          ctx.lineWidth=1;ctx.setLineDash([4,3]);
-          ctx.beginPath();ctx.moveTo(cfg.x0,yt+0.5);ctx.lineTo(cfg.x1,yt+0.5);ctx.moveTo(cfg.x0,yt+hh-0.5);ctx.lineTo(cfg.x1,yt+hh-0.5);ctx.stroke();
+        [[LV.zoneUp,hexRgb(st.colZoneUp),"média ↑"],[LV.zoneDn,hexRgb(st.colZoneDn),"média ↓"]].forEach(function(pair){
+          var z=pair[0],c=pair[1]; if(!z||!z.mean||z.mean<lo||z.mean>hi)return;
+          /* UMA linha no preço MÉDIO das ordens do lado (não uma zona). Tracejada
+             pra diferenciar das linhas de nível (paredes). */
+          var y=Math.round(cfg.y(z.mean))+0.5,a=Math.max(0.45,Math.min(0.95,st.zonesOpacity*4));
+          ctx.strokeStyle="rgba("+c[0]+","+c[1]+","+c[2]+","+a+")";
+          ctx.lineWidth=1.5;ctx.setLineDash([7,4]);
+          ctx.beginPath();ctx.moveTo(cfg.x0,y);ctx.lineTo(cfg.x1,y);ctx.stroke();
           ctx.setLineDash([]);
-          ctx.fillStyle="rgba("+c[0]+","+c[1]+","+c[2]+",0.92)";ctx.font="700 8px system-ui";ctx.textAlign="left";ctx.textBaseline="middle";
-          ctx.fillText("zona ativa",cfg.x0+5,yt+Math.min(hh/2,9));
+          ctx.fillStyle="rgba("+c[0]+","+c[1]+","+c[2]+",0.95)";ctx.font="700 8px system-ui";ctx.textAlign="left";ctx.textBaseline="middle";
+          ctx.fillText(pair[2],cfg.x0+5,y-6);
         });
       }
       vis.forEach(function(e){
@@ -1010,12 +1009,12 @@
       step('Opacidade níveis','levelsOpacity',0.05,1,0.05,2,'')+
       colr('Cor suporte (bid)','colBid')+
       colr('Cor resistência (ask)','colAsk')+
-      '<div class="dvl-dh-sub">ZONAS DE ATIVIDADE</div>'+
-      sw('Zonas (onde mais entram/saem ordens)','zonesOn')+
-      step('Janela das zonas','zonesMinutes',2,30,1,0,'m')+
-      step('Opacidade zonas','zonesOpacity',0.03,0.6,0.02,2,'')+
-      colr('Cor zona de cima','colZoneUp')+
-      colr('Cor zona de baixo','colZoneDn')+
+      '<div class="dvl-dh-sub">PREÇO MÉDIO DE ORDENS</div>'+
+      sw('Linhas de preço médio (↑ / ↓)','zonesOn')+
+      step('Janela (fluxo)','zonesMinutes',2,30,1,0,'m')+
+      step('Intensidade','zonesOpacity',0.03,0.6,0.02,2,'')+
+      colr('Cor linha de cima','colZoneUp')+
+      colr('Cor linha de baixo','colZoneDn')+
       '<div class="dvl-dh-note"><b>Leitura simples:</b> azul/ciano é liquidez parada; amarelo é liquidez forte. Verde aparece somente quando compras agressivas coincidem com redução da ASK. Vermelho aparece somente quando vendas agressivas coincidem com redução da BID. Redução sem trades compatíveis é tratada como retirada e fica cinza quando habilitada.</div>';
   }
   function commitStep(box,text){
