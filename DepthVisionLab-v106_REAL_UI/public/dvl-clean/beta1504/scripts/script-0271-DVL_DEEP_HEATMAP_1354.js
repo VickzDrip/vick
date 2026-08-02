@@ -807,7 +807,10 @@
   }
   window.DVLDeepHeatmapDraw=function(ctx,cfg){
     if(!st.on||replayActive()||st.viewMode!=="candles")return;
-    try{drawHeat(ctx,cfg);drawStatus(ctx,cfg);R.lastDrawAt=Date.now();}catch(e){R.err=String(e&&e.message||e);}
+    /* Beta 1.590 — NÃO desenha o status aqui (camada de FUNDO): as velas passavam
+       por cima e cobriam o texto (caixa escura sem texto). Agora o status vai no
+       primeiro plano, no ForegroundDraw. */
+    try{drawHeat(ctx,cfg);R.lastDrawAt=Date.now();}catch(e){R.err=String(e&&e.message||e);}
   };
   window.DVLDeepHeatmapForegroundDraw=function(ctx,cfg){
     if(!st.on||replayActive())return;
@@ -819,7 +822,7 @@
         drawHeat(ctx,cfg2);drawPriceLine(ctx,cfg2);drawHeatScale(ctx,cfg2,rmin,rmax);drawStatus(ctx,cfg2);
         drawConsumption(ctx,cfg2);drawBubbles(ctx,cfg2);
       } else {
-        drawConsumption(ctx,cfg);drawBubbles(ctx,cfg);
+        drawConsumption(ctx,cfg);drawBubbles(ctx,cfg);drawStatus(ctx,cfg);
       }
       R.lastDrawAt=Date.now();
     }catch(e){R.err=String(e&&e.message||e);}
