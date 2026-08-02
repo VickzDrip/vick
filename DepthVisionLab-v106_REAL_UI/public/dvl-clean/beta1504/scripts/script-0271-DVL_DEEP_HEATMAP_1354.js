@@ -792,18 +792,20 @@
   var LV={ledger:new Map(),sym:"",saveT:0,lastMid:0};
   function lvBandTol(price){return Math.max((R.step||1)*3, price*0.0004);}
   function lvKey(price){return Math.round(price/lvBandTol(price));}
-  function lvStore(){return "DVL_DH_LEVELS_"+(gsym()||"GLOBAL");}
+  /* v2: formato mudou de zona (pLo/pHi) pra linha de preço (price) no 1.585 —
+     chave nova pra ignorar os níveis "gordos" antigos e começar limpo. */
+  function lvStore(){return "DVL_DH_LEVELS2_"+(gsym()||"GLOBAL");}
   function lvPrice(){ if(R.mid>0)return R.mid; try{ if(typeof klines!=="undefined"&&klines.length)return +klines[klines.length-1].close; }catch(_){ } return LV.lastMid; }
   function lvLoad(){
     LV.ledger=new Map(); LV.sym=gsym();
     try{ var raw=JSON.parse(localStorage.getItem(lvStore())||"null");
-      if(raw&&raw.levels)raw.levels.forEach(function(l){ LV.ledger.set(l.k,{side:l.side,pLo:+l.pLo,pHi:+l.pHi,maxNotional:+l.maxNotional,refills:+l.refills,present:false,lastSeen:+l.lastSeen||0,firstSeen:+l.firstSeen||0,broken:!!l.broken}); });
+      if(raw&&raw.levels)raw.levels.forEach(function(l){ LV.ledger.set(l.k,{side:l.side,price:(l.price!=null?+l.price:(l.pLo!=null&&l.pHi!=null?(+l.pLo+ +l.pHi)/2:0)),maxNotional:+l.maxNotional,refills:+l.refills,present:false,lastSeen:+l.lastSeen||0,firstSeen:+l.firstSeen||0,broken:!!l.broken}); });
     }catch(_){ }
   }
   function lvSave(){
     clearTimeout(LV.saveT);
     LV.saveT=setTimeout(function(){ LV.saveT=0;
-      try{ var arr=[]; LV.ledger.forEach(function(v,k){ if(!v.broken&&v.refills>=1)arr.push({k:k,side:v.side,pLo:v.pLo,pHi:v.pHi,maxNotional:v.maxNotional,refills:v.refills,lastSeen:v.lastSeen,firstSeen:v.firstSeen,broken:v.broken}); });
+      try{ var arr=[]; LV.ledger.forEach(function(v,k){ if(!v.broken&&v.refills>=1)arr.push({k:k,side:v.side,price:v.price,maxNotional:v.maxNotional,refills:v.refills,lastSeen:v.lastSeen,firstSeen:v.firstSeen,broken:v.broken}); });
         arr.sort(function(a,b){return (b.refills*b.maxNotional)-(a.refills*a.maxNotional);});
         if(arr.length>60)arr=arr.slice(0,60);
         localStorage.setItem(lvStore(),JSON.stringify({levels:arr}));
@@ -817,8 +819,8 @@
     cells.sort(function(a,b){return a[0]-b[0];});
     var tol=lvBandTol(cells[0][0])*1.5, bands=[], cur=null;
     for(var i=0;i<cells.length;i++){ var p=cells[i][0],n=cells[i][1];
-      if(cur&&(p-cur.pHi)<=tol){ cur.pHi=p; if(n>cur.peak)cur.peak=n; }
-      else { if(cur)bands.push(cur); cur={pLo:p,pHi:p,peak:n,side:side}; } }
+      if(cur&&(p-cur.pHi)<=tol){ cur.pHi=p; if(n>cur.peak){cur.peak=n;cur.peakP=p;} }
+      else { if(cur)bands.push(cur); cur={pLo:p,pHi:p,peak:n,peakP:p,side:side}; } }
     if(cur)bands.push(cur);
     return bands;
   }
@@ -830,24 +832,29 @@
       var bands=lvScanSide(R.bids,"bid",minN).concat(lvScanSide(R.asks,"ask",minN));
       var seen={};
       bands.forEach(function(bd){
-        var key=bd.side+":"+lvKey((bd.pLo+bd.pHi)/2); seen[key]=1;
+        /* Beta 1.585 — chaveia pelo PICO da parede (célula mais forte), que é
+           estável, em vez do centro da banda (que variava e trocava de bucket a
+           cada tick → duplicava/piscava). */
+        var key=bd.side+":"+lvKey(bd.peakP); seen[key]=1;
         var e=LV.ledger.get(key);
-        if(!e){ LV.ledger.set(key,{side:bd.side,pLo:bd.pLo,pHi:bd.pHi,maxNotional:bd.peak,refills:1,present:true,lastSeen:now,firstSeen:now,broken:false}); }
+        if(!e){ LV.ledger.set(key,{side:bd.side,price:bd.peakP,maxNotional:bd.peak,refills:1,present:true,lastSeen:now,firstSeen:now,broken:false}); }
         else { if(!e.present)e.refills++; e.present=true; e.lastSeen=now; e.broken=false;
           if(bd.peak>e.maxNotional)e.maxNotional=bd.peak;
-          /* Beta 1.584 — a faixa ACOMPANHA a extensão atual da parede (não mais a
-             união histórica de todos os preços já vistos, que inchava o nível até
-             virar um blobão cobrindo meia tela). Quando a ordem é retirada
-             (present=false) mantém o último lugar como memória até o preço romper. */
-          e.pLo=bd.pLo; e.pHi=bd.pHi; }
+          /* Linha ancorada no preço do pico, suavizada (EMA leve) só pra não tremer
+             pixel a pixel. Fica praticamente fixa no preço da parede. */
+          e.price=(e.price==null?bd.peakP:e.price+(bd.peakP-e.price)*0.25); }
       });
       LV.ledger.forEach(function(e,key){ if(!seen[key])e.present=false; });
       LV.lastMid=mid;
     }
-    if(mid>0){ LV.ledger.forEach(function(e){ if(e.broken)return;
-      var mgn=Math.max((R.step||1)*2,(e.pHi-e.pLo)*0.6);
-      if(e.side==="bid"&&mid<e.pLo-mgn)e.broken=true;
-      else if(e.side==="ask"&&mid>e.pHi+mgn)e.broken=true;
+    /* Rompimento: só marca quando a parede JÁ SUMIU do livro (present=false) E o
+       preço passou claramente do nível. Enquanto a parede existe, a linha fica firme
+       (é isso que matava o "pisca": antes rompia/voltava com o preço encostando). */
+    if(mid>0){ LV.ledger.forEach(function(e){ if(e.broken||e.present)return;
+      var p=(e.price!=null?e.price:0); if(!p)return;
+      var mgn=Math.max((R.step||1)*3, p*0.0006);
+      if(e.side==="bid"&&mid<p-mgn)e.broken=true;
+      else if(e.side==="ask"&&mid>p+mgn)e.broken=true;
     }); }
     if(LV.ledger.size>200){ var arr=[]; LV.ledger.forEach(function(v,k){arr.push([k,v]);});
       arr.sort(function(a,b){return (a[1].refills*a[1].maxNotional)-(b[1].refills*b[1].maxNotional);});
@@ -863,18 +870,25 @@
       ctx.save();
       LV.ledger.forEach(function(e){
         if(e.broken||e.refills<minRef)return;
-        var yA=cfg.y(e.pHi),yB=cfg.y(e.pLo),yTop=Math.min(yA,yB),yBot=Math.max(yA,yB);
-        if(yBot<cfg.y0||yTop>cfg.y1)return;
-        var yy=Math.max(cfg.y0,yTop),hh=Math.min(cfg.y1,yBot)-yy; if(hh<2)hh=2;
+        var price=(e.price!=null)?e.price:0; if(!price)return;
+        var y=Math.round(cfg.y(price))+0.5;
+        if(y<cfg.y0-1||y>cfg.y1+1)return;
         var col=e.side==="bid"?[19,220,141]:[255,74,97];
-        var strength=Math.min(1,(e.refills-minRef+1)/4)*0.6+Math.min(1,e.maxNotional/(st.levelsMinNotional*6))*0.4;
-        var alpha=Math.max(0.05,Math.min(0.9,opBase*(0.5+strength)));
-        ctx.fillStyle="rgba("+col[0]+","+col[1]+","+col[2]+","+alpha+")";
-        ctx.fillRect(cfg.x0,yy,cfg.x1-cfg.x0,hh);
-        ctx.strokeStyle="rgba("+col[0]+","+col[1]+","+col[2]+","+Math.min(1,alpha+0.35)+")";ctx.lineWidth=1;
-        ctx.beginPath();ctx.moveTo(cfg.x0,yy+0.5);ctx.lineTo(cfg.x1,yy+0.5);ctx.moveTo(cfg.x0,yy+hh-0.5);ctx.lineTo(cfg.x1,yy+hh-0.5);ctx.stroke();
-        ctx.fillStyle="rgba("+col[0]+","+col[1]+","+col[2]+",0.95)";ctx.font="700 9px system-ui";ctx.textAlign="right";ctx.textBaseline="middle";
-        ctx.fillText("×"+e.refills,cfg.x1-6,yy+hh/2);
+        var strength=Math.min(1,(e.refills-minRef+1)/5)*0.4+Math.min(1,e.maxNotional/(st.levelsMinNotional*8))*0.6;
+        var alpha=Math.max(0.22,Math.min(0.96,opBase*(1.1+strength*1.6)));
+        /* linha FINA no preço da parede (não uma zona). Sólida = parede viva no
+           livro; tracejada = ordem retirada mas nível guardado (memória). */
+        ctx.strokeStyle="rgba("+col[0]+","+col[1]+","+col[2]+","+alpha+")";
+        ctx.lineWidth=(e.maxNotional>=st.levelsMinNotional*4)?2:1;
+        ctx.setLineDash(e.present?[]:[6,4]);
+        ctx.beginPath();ctx.moveTo(cfg.x0,y);ctx.lineTo(cfg.x1,y);ctx.stroke();
+        ctx.setLineDash([]);
+        var lbl=fmtN(e.maxNotional)+(e.refills>1?"  ×"+e.refills:"");
+        ctx.font="700 9px system-ui";ctx.textAlign="right";ctx.textBaseline="middle";
+        var tw=ctx.measureText(lbl).width+10;
+        ctx.fillStyle="rgba(6,10,14,0.7)";ctx.fillRect(cfg.x1-tw,y-7.5,tw,15);
+        ctx.fillStyle="rgba("+col[0]+","+col[1]+","+col[2]+",0.98)";
+        ctx.fillText(lbl,cfg.x1-5,y);
       });
       ctx.restore();
     }catch(err){R.err=String(err&&err.message||err);}
