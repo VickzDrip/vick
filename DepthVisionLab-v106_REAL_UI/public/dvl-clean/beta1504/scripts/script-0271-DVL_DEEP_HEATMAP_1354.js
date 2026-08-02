@@ -42,7 +42,7 @@
     showStatus:true,
     /* Níveis / memória de liquidez (persistent levels) */
     levelsOn:false,
-    levelsMinRefills:2,
+    levelsMinRefills:1,
     levelsMinNotional:100000,
     levelsOpacity:0.30
   };
@@ -73,7 +73,7 @@
     o.bubbleOpacity=clampNum(o.bubbleOpacity,.15,1,.58);
     o.groupingMs=clampNum(o.groupingMs,100,5000,900);
     o.levelsOn=!!o.levelsOn;
-    o.levelsMinRefills=clampNum(o.levelsMinRefills,1,10,2);
+    o.levelsMinRefills=clampNum(o.levelsMinRefills,1,10,1);
     o.levelsMinNotional=clampNum(o.levelsMinNotional,5000,50000000,100000);
     o.levelsOpacity=clampNum(o.levelsOpacity,0.05,1,0.30);
     return o;
@@ -834,7 +834,12 @@
         var e=LV.ledger.get(key);
         if(!e){ LV.ledger.set(key,{side:bd.side,pLo:bd.pLo,pHi:bd.pHi,maxNotional:bd.peak,refills:1,present:true,lastSeen:now,firstSeen:now,broken:false}); }
         else { if(!e.present)e.refills++; e.present=true; e.lastSeen=now; e.broken=false;
-          if(bd.peak>e.maxNotional)e.maxNotional=bd.peak; e.pLo=Math.min(e.pLo,bd.pLo); e.pHi=Math.max(e.pHi,bd.pHi); }
+          if(bd.peak>e.maxNotional)e.maxNotional=bd.peak;
+          /* Beta 1.584 — a faixa ACOMPANHA a extensão atual da parede (não mais a
+             união histórica de todos os preços já vistos, que inchava o nível até
+             virar um blobão cobrindo meia tela). Quando a ordem é retirada
+             (present=false) mantém o último lugar como memória até o preço romper. */
+          e.pLo=bd.pLo; e.pHi=bd.pHi; }
       });
       LV.ledger.forEach(function(e,key){ if(!seen[key])e.present=false; });
       LV.lastMid=mid;
