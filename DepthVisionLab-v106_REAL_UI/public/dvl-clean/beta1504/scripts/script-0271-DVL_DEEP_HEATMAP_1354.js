@@ -819,10 +819,10 @@
         var hr=computeHeatRange(cfg),Y0=cfg.y0,Y1=cfg.y1,rmin=hr.min,rmax=hr.max,span=Math.max(1e-9,rmax-rmin);
         var cfg2=Object.assign({},cfg,{min:rmin,max:rmax,y:function(p){return Y1-(p-rmin)/span*(Y1-Y0);}});
         ctx.save();ctx.fillStyle=st.viewMode==="heatmap"?"rgba(0,0,0,.96)":"rgba(0,0,0,.82)";ctx.fillRect(cfg.x0,cfg.y0,cfg.x1-cfg.x0,cfg.y1-cfg.y0);ctx.restore();
-        drawHeat(ctx,cfg2);drawPriceLine(ctx,cfg2);drawHeatScale(ctx,cfg2,rmin,rmax);drawStatus(ctx,cfg2);
+        drawHeat(ctx,cfg2);drawPriceLine(ctx,cfg2);drawHeatScale(ctx,cfg2,rmin,rmax);
         drawConsumption(ctx,cfg2);drawBubbles(ctx,cfg2);
       } else {
-        drawConsumption(ctx,cfg);drawBubbles(ctx,cfg);drawStatus(ctx,cfg);
+        drawConsumption(ctx,cfg);drawBubbles(ctx,cfg);
       }
       R.lastDrawAt=Date.now();
     }catch(e){R.err=String(e&&e.message||e);}
@@ -1027,7 +1027,7 @@
       seg('Filtro','filterMode',[["auto","Auto"],["manual","Manual"]])+ 
       (st.filterMode==='manual'?step('Mínimo nocional','minNotional',0,50000000,25000,0,' USDT'):step('Percentil','bubblePercentile',80,99.9,0.5,1,'%'))+ 
       step('Tamanho','bubbleScale',0.25,2.5,0.05,2,'x')+step('Opacidade bubbles','bubbleOpacity',0.15,1,0.05,2,'')+ 
-      step('Agrupamento','groupingMs',100,5000,100,0,'ms')+sw('Status no gráfico','showStatus')+
+      step('Agrupamento','groupingMs',100,5000,100,0,'ms')+
       '<div class="dvl-dh-sub">NÍVEIS / MEMÓRIA DE LIQUIDEZ</div>'+
       sw('Níveis persistentes','levelsOn')+
       step('Min. refills','levelsMinRefills',1,10,1,0,'x')+
