@@ -941,6 +941,7 @@
      helper global roundRect com fundo escuro rgba(3,10,20,.72), texto na cor da
      linha, fonte 900 8px, encostado na direita. Assim níveis/média ficam iguais
      às outras labels da escala. */
+  function lvFmtPrice(p){var dec=priceDecimals(R.step||1);return Number(p).toLocaleString("en-US",{minimumFractionDigits:dec,maximumFractionDigits:dec});}
   function lvTag(ctx,cfg,y,text,rgb,alpha){
     ctx.font="900 8px system-ui";ctx.textBaseline="middle";ctx.textAlign="left";
     var tw=ctx.measureText(text).width, lx=Math.max(cfg.x0+2,(cfg.x1-4)-tw-7);
@@ -979,7 +980,7 @@
           ctx.lineWidth=1.5;ctx.setLineDash([7,4]);
           ctx.beginPath();ctx.moveTo(cfg.x0,y);ctx.lineTo(cfg.x1,y);ctx.stroke();
           ctx.setLineDash([]);
-          lvTag(ctx,cfg,y,pair[2],c,Math.min(1,a+0.15));
+          lvTag(ctx,cfg,y,lvFmtPrice(z.mean),c,Math.min(1,a+0.15));
         });
       }
       vis.forEach(function(e){
@@ -995,7 +996,7 @@
         ctx.setLineDash(e.present?[]:[6,4]);
         ctx.beginPath();ctx.moveTo(cfg.x0,y);ctx.lineTo(cfg.x1,y);ctx.stroke();
         ctx.setLineDash([]);
-        lvTag(ctx,cfg,y,fmtN(e.maxNotional)+(e.refills>1?" ×"+e.refills:""),col,Math.min(1,alpha+0.2));
+        lvTag(ctx,cfg,y,lvFmtPrice(e.price),col,Math.min(1,alpha+0.2));
       });
       ctx.restore();
     }catch(err){R.err=String(err&&err.message||err);}
