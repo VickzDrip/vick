@@ -44,7 +44,16 @@
     levelsOn:false,
     levelsMinRefills:1,
     levelsMinNotional:100000,
-    levelsOpacity:0.30
+    levelsOpacity:0.30,
+    /* Cores das linhas de nível (customizáveis) */
+    colBid:"#13dc8d",
+    colAsk:"#ff4a61",
+    /* Zonas de atividade (onde mais entram/saem ordens) — acima e abaixo do preço */
+    zonesOn:true,
+    zonesOpacity:0.14,
+    zonesMinutes:8,
+    colZoneUp:"#b478ff",
+    colZoneDn:"#4db6ff"
   };
 
   function clean(s){
@@ -76,9 +85,18 @@
     o.levelsMinRefills=clampNum(o.levelsMinRefills,1,10,1);
     o.levelsMinNotional=clampNum(o.levelsMinNotional,5000,50000000,100000);
     o.levelsOpacity=clampNum(o.levelsOpacity,0.05,1,0.30);
+    o.zonesOn=o.zonesOn!==false;
+    o.zonesOpacity=clampNum(o.zonesOpacity,0.03,0.6,0.14);
+    o.zonesMinutes=clampNum(o.zonesMinutes,2,30,8);
+    o.colBid=okHex(o.colBid,"#13dc8d");
+    o.colAsk=okHex(o.colAsk,"#ff4a61");
+    o.colZoneUp=okHex(o.colZoneUp,"#b478ff");
+    o.colZoneDn=okHex(o.colZoneDn,"#4db6ff");
     return o;
   }
   function clampNum(v,a,b,d){v=Number(v);if(!Number.isFinite(v))v=d;return Math.max(a,Math.min(b,v));}
+  function okHex(v,d){v=String(v||"");return /^#[0-9a-fA-F]{6}$/.test(v)?v.toLowerCase():d;}
+  function hexRgb(h){h=String(h||"#888888").replace('#','');if(h.length===3)h=h.replace(/(.)/g,'$1$1');var n=parseInt(h,16);if(!isFinite(n))return[136,136,136];return[(n>>16)&255,(n>>8)&255,n&255];}
   var st=clean((function(){try{return JSON.parse(localStorage.getItem(LS)||"{}");}catch(_){return {};}})());
   function save(){try{localStorage.setItem(LS,JSON.stringify(st));}catch(_){} }
   function safeDraw(){try{if(typeof window.drawSoon==="function")window.drawSoon();else if(typeof drawSoon==="function")drawSoon();}catch(_){} }
@@ -789,7 +807,31 @@
      iceberg) >= levelsMinRefills vezes e crava uma FAIXA que sobrevive à
      retirada da ordem E ao desligar o heatmap ao vivo (o desenho depende só
      de st.levelsOn, nunca de st.on). Rompe quando o preço atravessa a faixa. */
-  var LV={ledger:new Map(),sym:"",saveT:0,lastMid:0};
+  var LV={ledger:new Map(),sym:"",saveT:0,lastMid:0,zoneUp:null,zoneDn:null};
+  /* Zonas de atividade — onde mais ENTRAM/SAEM ordens perto do preço. Usa o fluxo
+     real recente (trades executados + eventos de consumo), ponderado por tamanho:
+     pra cada lado (acima/abaixo do preço) acha a média ponderada e a dispersão
+     (±0.9σ) => a faixa central onde a ação se concentra. Recalcula no lvTick. */
+  function lvWeightedBand(arr,mid,dir){
+    if(!arr||arr.length<3)return null;
+    var sw=0,swp=0,i;
+    for(i=0;i<arr.length;i++){sw+=arr[i][1];swp+=arr[i][0]*arr[i][1];}
+    if(sw<=0)return null;
+    var mean=swp/sw,sv=0;
+    for(i=0;i<arr.length;i++){var d=arr[i][0]-mean;sv+=arr[i][1]*d*d;}
+    var sd=Math.sqrt(sv/Math.max(1,sw)),lo=mean-sd*0.9,hi=mean+sd*0.9;
+    if(dir>0)lo=Math.max(lo,mid); else hi=Math.min(hi,mid);   // mantém do lado certo
+    if(hi-lo<(R.step||1))return null;
+    return {lo:lo,hi:hi,mean:mean,score:sw};
+  }
+  function lvComputeZones(mid){
+    if(!st.zonesOn||!mid){LV.zoneUp=LV.zoneDn=null;return;}
+    var cut=Date.now()-Math.max(2,st.zonesMinutes)*60000,maxDist=256*(R.step||1),up=[],dn=[],i,x;
+    for(i=R.trades.length-1;i>=0;i--){x=R.trades[i];if(x.t<cut)break;if(Math.abs(x.p-mid)>maxDist)continue;(x.p>=mid?up:dn).push([x.p,x.n]);}
+    for(i=R.consumption.length-1;i>=0;i--){x=R.consumption[i];if(x.t<cut)break;if(Math.abs(x.p-mid)>maxDist)continue;(x.p>=mid?up:dn).push([x.p,x.n]);}
+    LV.zoneUp=lvWeightedBand(up,mid,+1);
+    LV.zoneDn=lvWeightedBand(dn,mid,-1);
+  }
   function lvBandTol(price){return Math.max((R.step||1)*3, price*0.0004);}
   function lvKey(price){return Math.round(price/lvBandTol(price));}
   /* v3 (1.586): detecção agora é só perto do preço + soma do cluster — chave nova
@@ -865,6 +907,7 @@
     if(LV.ledger.size>200){ var arr=[]; LV.ledger.forEach(function(v,k){arr.push([k,v]);});
       arr.sort(function(a,b){return (a[1].refills*a[1].maxNotional)-(b[1].refills*b[1].maxNotional);});
       for(var i=0;i<arr.length-140;i++)LV.ledger.delete(arr[i][0]); }
+    lvComputeZones(mid);
     lvSave();
   }
   function lvWipe(){ LV.ledger=new Map(); try{localStorage.removeItem(lvStore());}catch(_){ } safeDraw(); }
@@ -885,10 +928,27 @@
       vis.sort(function(a,b){return b.maxNotional-a.maxNotional;});
       vis=vis.slice(0,16);
       ctx.save();
+      /* Zonas de atividade (atrás das linhas): faixa acima e faixa abaixo do preço,
+         onde mais entram/saem ordens. Cores próprias e customizáveis. */
+      if(st.zonesOn){
+        [[LV.zoneUp,hexRgb(st.colZoneUp)],[LV.zoneDn,hexRgb(st.colZoneDn)]].forEach(function(pair){
+          var z=pair[0],c=pair[1]; if(!z)return;
+          var zlo=Math.max(lo,Math.min(z.lo,z.hi)),zhi=Math.min(hi,Math.max(z.lo,z.hi)); if(zhi<=zlo)return;
+          var ya=cfg.y(zhi),yb=cfg.y(zlo),yt=Math.min(ya,yb),hh=Math.abs(yb-ya); if(hh<2)hh=2;
+          ctx.fillStyle="rgba("+c[0]+","+c[1]+","+c[2]+","+st.zonesOpacity+")";
+          ctx.fillRect(cfg.x0,yt,cfg.x1-cfg.x0,hh);
+          ctx.strokeStyle="rgba("+c[0]+","+c[1]+","+c[2]+","+Math.min(0.85,st.zonesOpacity+0.35)+")";
+          ctx.lineWidth=1;ctx.setLineDash([4,3]);
+          ctx.beginPath();ctx.moveTo(cfg.x0,yt+0.5);ctx.lineTo(cfg.x1,yt+0.5);ctx.moveTo(cfg.x0,yt+hh-0.5);ctx.lineTo(cfg.x1,yt+hh-0.5);ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle="rgba("+c[0]+","+c[1]+","+c[2]+",0.92)";ctx.font="700 8px system-ui";ctx.textAlign="left";ctx.textBaseline="middle";
+          ctx.fillText("zona ativa",cfg.x0+5,yt+Math.min(hh/2,9));
+        });
+      }
       vis.forEach(function(e){
         var price=e.price;
         var y=Math.round(cfg.y(price))+0.5;
-        var col=e.side==="bid"?[19,220,141]:[255,74,97];
+        var col=e.side==="bid"?hexRgb(st.colBid):hexRgb(st.colAsk);
         var strength=Math.min(1,(e.refills-minRef+1)/5)*0.4+Math.min(1,e.maxNotional/(st.levelsMinNotional*8))*0.6;
         var alpha=Math.max(0.22,Math.min(0.96,opBase*(1.1+strength*1.6)));
         /* linha FINA no preço da parede (não uma zona). Sólida = parede viva no
@@ -916,6 +976,7 @@
   function seg(label,key,opts){return '<div class="dvl-dh-field"><label>'+label+'</label><div class="dvl-dh-seg">'+opts.map(function(o){return '<button type="button" data-dhseg="'+key+'" data-val="'+o[0]+'" class="'+(String(st[key])===String(o[0])?'is-on':'')+'">'+o[1]+'</button>';}).join('')+'</div></div>';}
   function sw(label,key){return '<div class="dvl-dh-field"><label>'+label+'</label><label class="dvl-switch"><input type="checkbox" data-dhsw="'+key+'" '+(st[key]?'checked':'')+'><i></i><b></b></label></div>';}
   function step(label,key,min,max,inc,dec,suffix){var v=Number(st[key]),text=dec?v.toFixed(dec):String(Math.round(v));return '<div class="dvl-dh-field"><label>'+label+'</label><div class="dvl-dh-step" data-key="'+key+'" data-min="'+min+'" data-max="'+max+'" data-step="'+inc+'" data-dec="'+dec+'"><button type="button" data-dir="-1">−</button><span contenteditable="plaintext-only" inputmode="decimal" spellcheck="false">'+text+'</span><i>'+(suffix||'')+'</i><button type="button" data-dir="1">+</button></div></div>';}
+  function colr(label,key){return '<div class="dvl-dh-field"><label>'+label+'</label><input type="color" data-dhcol="'+key+'" value="'+st[key]+'" style="width:44px;height:24px;padding:0;border:1px solid rgba(255,255,255,.18);border-radius:5px;background:none;cursor:pointer"></div>';}
   function statusLine(){
     var c=R.connected?'#58e5a4':'#f4b942';
     return '<b style="color:'+c+'">'+(R.status||'OFF')+'</b> · '+R.snapshots.length+' colunas · '+R.trades.length+' trades'+(R.historySeeded?' · '+R.historySeeded+' históricos':'')+(R.err?'<br><span style="color:#ff7588">'+String(R.err).slice(0,110)+'</span>':'');
@@ -947,6 +1008,14 @@
       step('Min. refills','levelsMinRefills',1,10,1,0,'x')+
       step('Min. notional','levelsMinNotional',5000,50000000,25000,0,' USDT')+
       step('Opacidade níveis','levelsOpacity',0.05,1,0.05,2,'')+
+      colr('Cor suporte (bid)','colBid')+
+      colr('Cor resistência (ask)','colAsk')+
+      '<div class="dvl-dh-sub">ZONAS DE ATIVIDADE</div>'+
+      sw('Zonas (onde mais entram/saem ordens)','zonesOn')+
+      step('Janela das zonas','zonesMinutes',2,30,1,0,'m')+
+      step('Opacidade zonas','zonesOpacity',0.03,0.6,0.02,2,'')+
+      colr('Cor zona de cima','colZoneUp')+
+      colr('Cor zona de baixo','colZoneDn')+
       '<div class="dvl-dh-note"><b>Leitura simples:</b> azul/ciano é liquidez parada; amarelo é liquidez forte. Verde aparece somente quando compras agressivas coincidem com redução da ASK. Vermelho aparece somente quando vendas agressivas coincidem com redução da BID. Redução sem trades compatíveis é tratada como retirada e fica cinza quando habilitada.</div>';
   }
   function commitStep(box,text){
@@ -958,6 +1027,7 @@
     var p=b.querySelector('[data-dhpower]');if(p)p.addEventListener('change',function(){setOn(p.checked);});
     b.querySelectorAll('[data-dhseg]').forEach(function(el){el.addEventListener('click',function(){var k=el.dataset.dhseg,v=el.dataset.val;setState(k,v,k==='source');});});
     b.querySelectorAll('[data-dhsw]').forEach(function(el){el.addEventListener('change',function(){setState(el.dataset.dhsw,el.checked,false);});});
+    b.querySelectorAll('[data-dhcol]').forEach(function(el){el.addEventListener('input',function(){setState(el.dataset.dhcol,el.value,false);});});
     b.querySelectorAll('.dvl-dh-step').forEach(function(box){
       var val=box.querySelector('span'),old=val.textContent;
       box.querySelectorAll('button[data-dir]').forEach(function(bt){bt.addEventListener('click',function(){var stepN=Number(box.dataset.step),cur=Number(String(val.textContent).replace(',','.'));if(!Number.isFinite(cur))cur=Number(st[box.dataset.key]);commitStep(box,cur+Number(bt.dataset.dir)*stepN);});});
