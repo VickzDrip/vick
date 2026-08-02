@@ -943,13 +943,17 @@
      às outras labels da escala. */
   function lvFmtPrice(p){var dec=priceDecimals(R.step||1);return Number(p).toLocaleString("en-US",{minimumFractionDigits:dec,maximumFractionDigits:dec});}
   function lvTag(ctx,cfg,y,text,rgb,alpha){
-    ctx.font="900 8px system-ui";ctx.textBaseline="middle";ctx.textAlign="left";
-    var tw=ctx.measureText(text).width, lx=Math.max(cfg.x0+2,(cfg.x1-4)-tw-7);
-    ctx.fillStyle="rgba(3,10,20,.72)";
-    if(typeof roundRect==="function")roundRect(ctx,lx-3,y-7,tw+7,14,5,true,false,"rgba(3,10,20,.72)");
-    else ctx.fillRect(lx-3,y-7,tw+7,14);
-    ctx.fillStyle="rgba("+rgb[0]+","+rgb[1]+","+rgb[2]+","+(alpha==null?0.98:alpha)+")";
-    ctx.fillText(text,lx,y);
+    /* Beta 1.594 — pílula PREENCHIDA na cor da linha com o valor em texto escuro
+       (igual à pílula do preço atual), encostada na direita/escala. Bem mais
+       visível que o fundo escuro + texto colorido (que sumia no heatmap). */
+    ctx.font="800 9px system-ui";ctx.textBaseline="middle";ctx.textAlign="left";
+    var tw=ctx.measureText(text).width, w=tw+10, lx=Math.max(cfg.x0+2,(cfg.x1-3)-w);
+    var col="rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
+    ctx.fillStyle=col;
+    if(typeof roundRect==="function")roundRect(ctx,lx,y-8,w,16,4,true,false,col);
+    else ctx.fillRect(lx,y-8,w,16);
+    ctx.fillStyle="rgba(6,10,16,0.96)";
+    ctx.fillText(text,lx+5,y+0.5);
   }
   window.DVLDeepHeatmapLevelsDraw=function(ctx,cfg){
     if(!st.levelsOn)return;
