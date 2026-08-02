@@ -937,6 +937,19 @@
     lvSave();
   }
   function lvWipe(){ LV.ledger=new Map(); try{localStorage.removeItem(lvStore());}catch(_){ } safeDraw(); }
+  /* Beta 1.592 — etiqueta na ESCALA no MESMO padrão do resto (VWAP etc.): usa o
+     helper global roundRect com fundo escuro rgba(3,10,20,.72), texto na cor da
+     linha, fonte 900 8px, encostado na direita. Assim níveis/média ficam iguais
+     às outras labels da escala. */
+  function lvTag(ctx,cfg,y,text,rgb,alpha){
+    ctx.font="900 8px system-ui";ctx.textBaseline="middle";ctx.textAlign="left";
+    var tw=ctx.measureText(text).width, lx=Math.max(cfg.x0+2,(cfg.x1-4)-tw-7);
+    ctx.fillStyle="rgba(3,10,20,.72)";
+    if(typeof roundRect==="function")roundRect(ctx,lx-3,y-7,tw+7,14,5,true,false,"rgba(3,10,20,.72)");
+    else ctx.fillRect(lx-3,y-7,tw+7,14);
+    ctx.fillStyle="rgba("+rgb[0]+","+rgb[1]+","+rgb[2]+","+(alpha==null?0.98:alpha)+")";
+    ctx.fillText(text,lx,y);
+  }
   window.DVLDeepHeatmapLevelsDraw=function(ctx,cfg){
     if(!st.levelsOn)return;
     try{
@@ -957,7 +970,7 @@
       /* Zonas de atividade (atrás das linhas): faixa acima e faixa abaixo do preço,
          onde mais entram/saem ordens. Cores próprias e customizáveis. */
       if(st.zonesOn){
-        [[LV.zoneUp,hexRgb(st.colZoneUp),"média ↑"],[LV.zoneDn,hexRgb(st.colZoneDn),"média ↓"]].forEach(function(pair){
+        [[LV.zoneUp,hexRgb(st.colZoneUp),"MÉD ↑"],[LV.zoneDn,hexRgb(st.colZoneDn),"MÉD ↓"]].forEach(function(pair){
           var z=pair[0],c=pair[1]; if(!z||!z.mean||z.mean<lo||z.mean>hi)return;
           /* UMA linha no preço MÉDIO das ordens do lado (não uma zona). Tracejada
              pra diferenciar das linhas de nível (paredes). */
@@ -966,8 +979,7 @@
           ctx.lineWidth=1.5;ctx.setLineDash([7,4]);
           ctx.beginPath();ctx.moveTo(cfg.x0,y);ctx.lineTo(cfg.x1,y);ctx.stroke();
           ctx.setLineDash([]);
-          ctx.fillStyle="rgba("+c[0]+","+c[1]+","+c[2]+",0.95)";ctx.font="700 8px system-ui";ctx.textAlign="left";ctx.textBaseline="middle";
-          ctx.fillText(pair[2],cfg.x0+5,y-6);
+          lvTag(ctx,cfg,y,pair[2],c,Math.min(1,a+0.15));
         });
       }
       vis.forEach(function(e){
@@ -983,12 +995,7 @@
         ctx.setLineDash(e.present?[]:[6,4]);
         ctx.beginPath();ctx.moveTo(cfg.x0,y);ctx.lineTo(cfg.x1,y);ctx.stroke();
         ctx.setLineDash([]);
-        var lbl=fmtN(e.maxNotional)+(e.refills>1?"  ×"+e.refills:"");
-        ctx.font="700 9px system-ui";ctx.textAlign="right";ctx.textBaseline="middle";
-        var tw=ctx.measureText(lbl).width+10;
-        ctx.fillStyle="rgba(6,10,14,0.7)";ctx.fillRect(cfg.x1-tw,y-7.5,tw,15);
-        ctx.fillStyle="rgba("+col[0]+","+col[1]+","+col[2]+",0.98)";
-        ctx.fillText(lbl,cfg.x1-5,y);
+        lvTag(ctx,cfg,y,fmtN(e.maxNotional)+(e.refills>1?" ×"+e.refills:""),col,Math.min(1,alpha+0.2));
       });
       ctx.restore();
     }catch(err){R.err=String(err&&err.message||err);}
