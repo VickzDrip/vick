@@ -792,9 +792,9 @@
   var LV={ledger:new Map(),sym:"",saveT:0,lastMid:0};
   function lvBandTol(price){return Math.max((R.step||1)*3, price*0.0004);}
   function lvKey(price){return Math.round(price/lvBandTol(price));}
-  /* v2: formato mudou de zona (pLo/pHi) pra linha de preço (price) no 1.585 —
-     chave nova pra ignorar os níveis "gordos" antigos e começar limpo. */
-  function lvStore(){return "DVL_DH_LEVELS2_"+(gsym()||"GLOBAL");}
+  /* v3 (1.586): detecção agora é só perto do preço + soma do cluster — chave nova
+     pra descartar os níveis-lixo do fundo do livro acumulados nas versões antigas. */
+  function lvStore(){return "DVL_DH_LEVELS3_"+(gsym()||"GLOBAL");}
   function lvPrice(){ if(R.mid>0)return R.mid; try{ if(typeof klines!=="undefined"&&klines.length)return +klines[klines.length-1].close; }catch(_){ } return LV.lastMid; }
   function lvLoad(){
     LV.ledger=new Map(); LV.sym=gsym();
@@ -812,39 +812,45 @@
       }catch(_){ }
     },800);
   }
-  function lvScanSide(map,side,minN){
+  function lvScanSide(map,side,minN,mid,maxDist){
     if(!map||!map.size)return [];
-    var cells=[]; map.forEach(function(q,p){ var n=q*p; if(n>=minN)cells.push([p,n]); });
+    /* Beta 1.586 — só células DENTRO da janela perto do preço (±maxDist). */
+    var cells=[]; map.forEach(function(q,p){ if(mid&&maxDist&&Math.abs(p-mid)>maxDist)return; var n=q*p; if(n>0)cells.push([p,n]); });
     if(!cells.length)return [];
     cells.sort(function(a,b){return a[0]-b[0];});
     var tol=lvBandTol(cells[0][0])*1.5, bands=[], cur=null;
     for(var i=0;i<cells.length;i++){ var p=cells[i][0],n=cells[i][1];
-      if(cur&&(p-cur.pHi)<=tol){ cur.pHi=p; if(n>cur.peak){cur.peak=n;cur.peakP=p;} }
-      else { if(cur)bands.push(cur); cur={pLo:p,pHi:p,peak:n,peakP:p,side:side}; } }
+      if(cur&&(p-cur.pHi)<=tol){ cur.pHi=p; cur.sum+=n; if(n>cur.peak){cur.peak=n;cur.peakP=p;} }
+      else { if(cur)bands.push(cur); cur={pLo:p,pHi:p,peak:n,peakP:p,sum:n,side:side}; } }
     if(cur)bands.push(cur);
-    return bands;
+    /* limiar pela SOMA do cluster (parede), não pela célula isolada — pega a
+       liquidez espalhada perto do preço, não só ordens gigantes fundas. */
+    return bands.filter(function(b){return b.sum>=minN;});
   }
   function lvTick(){
     if(!st.levelsOn)return;
     if(gsym()!==LV.sym){ lvSave(); lvLoad(); }
     var minN=st.levelsMinNotional, now=Date.now(), mid=lvPrice();
     if(st.on && ((R.bids&&R.bids.size)||(R.asks&&R.asks.size)) && mid>0){
-      var bands=lvScanSide(R.bids,"bid",minN).concat(lvScanSide(R.asks,"ask",minN));
+      /* Beta 1.586 — só a janela visível do heatmap (±256*step ao redor do preço).
+         Antes varria o livro todo e pegava paredes fundas a ±10% que nunca entram
+         na tela (44 níveis, nenhum útil). */
+      var maxDist=256*(R.step||1);
+      var bands=lvScanSide(R.bids,"bid",minN,mid,maxDist).concat(lvScanSide(R.asks,"ask",minN,mid,maxDist));
       var seen={};
       bands.forEach(function(bd){
-        /* Beta 1.585 — chaveia pelo PICO da parede (célula mais forte), que é
-           estável, em vez do centro da banda (que variava e trocava de bucket a
-           cada tick → duplicava/piscava). */
+        /* chaveia pelo PICO da parede (célula mais forte da soma), estável. */
         var key=bd.side+":"+lvKey(bd.peakP); seen[key]=1;
         var e=LV.ledger.get(key);
-        if(!e){ LV.ledger.set(key,{side:bd.side,price:bd.peakP,maxNotional:bd.peak,refills:1,present:true,lastSeen:now,firstSeen:now,broken:false}); }
+        if(!e){ LV.ledger.set(key,{side:bd.side,price:bd.peakP,maxNotional:bd.sum,refills:1,present:true,lastSeen:now,firstSeen:now,broken:false}); }
         else { if(!e.present)e.refills++; e.present=true; e.lastSeen=now; e.broken=false;
-          if(bd.peak>e.maxNotional)e.maxNotional=bd.peak;
-          /* Linha ancorada no preço do pico, suavizada (EMA leve) só pra não tremer
-             pixel a pixel. Fica praticamente fixa no preço da parede. */
+          if(bd.sum>e.maxNotional)e.maxNotional=bd.sum;
+          /* linha ancorada no preço do pico, EMA leve só pra não tremer pixel. */
           e.price=(e.price==null?bd.peakP:e.price+(bd.peakP-e.price)*0.25); }
       });
-      LV.ledger.forEach(function(e,key){ if(!seen[key])e.present=false; });
+      /* present "grudento": só vira gone depois de 2s sumido (o livro oscila; sem
+         isso a linha piscava live/gone). */
+      LV.ledger.forEach(function(e,key){ if(!seen[key] && now-e.lastSeen>2000)e.present=false; });
       LV.lastMid=mid;
     }
     /* Rompimento: só marca quando a parede JÁ SUMIU do livro (present=false) E o
@@ -867,12 +873,21 @@
     try{
       if(gsym()!==LV.sym){ lvSave(); lvLoad(); }
       var minRef=st.levelsMinRefills, opBase=st.levelsOpacity;
-      ctx.save();
+      /* Beta 1.586 — só desenha o que está DENTRO da tela (cfg.min..max) e as 16
+         mais fortes, ordenadas por tamanho. Assim os slots não são gastos com
+         paredes fundas fora da vista. */
+      var lo=Math.min(cfg.min,cfg.max),hi=Math.max(cfg.min,cfg.max),vis=[];
       LV.ledger.forEach(function(e){
         if(e.broken||e.refills<minRef)return;
-        var price=(e.price!=null)?e.price:0; if(!price)return;
+        if(e.price==null||!e.price||e.price<lo||e.price>hi)return;
+        vis.push(e);
+      });
+      vis.sort(function(a,b){return b.maxNotional-a.maxNotional;});
+      vis=vis.slice(0,16);
+      ctx.save();
+      vis.forEach(function(e){
+        var price=e.price;
         var y=Math.round(cfg.y(price))+0.5;
-        if(y<cfg.y0-1||y>cfg.y1+1)return;
         var col=e.side==="bid"?[19,220,141]:[255,74,97];
         var strength=Math.min(1,(e.refills-minRef+1)/5)*0.4+Math.min(1,e.maxNotional/(st.levelsMinNotional*8))*0.6;
         var alpha=Math.max(0.22,Math.min(0.96,opBase*(1.1+strength*1.6)));
