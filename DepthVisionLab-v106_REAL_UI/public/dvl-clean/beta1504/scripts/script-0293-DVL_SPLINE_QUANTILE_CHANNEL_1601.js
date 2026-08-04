@@ -80,13 +80,26 @@
 
   /* ───────────────────────── worker + scheduler ──────────────────────────── */
   let worker = null, workerOk = false, busy = false, generation = 0, pendingJob = null;
-  let debTimer = null, lastSig = "";
+  let debTimer = null, lastSig = "", inflightJob = null, lastErr = "";
 
-  function solverURL(){
+  function mainThreadFit(job){
     try{
-      const s = (document.currentScript && document.currentScript.src) || "";
-      if(s) return s.replace(/[^\/?]*(\?.*)?$/, SOLVER_FILE);
-    }catch(_){}
+      if(window.DVLSplineSolver){
+        const r = window.DVLSplineSolver.fit(job.closes, Object.assign({generation:job.generation}, job.config));
+        if(r && r.generation===generation){ r.meta=job.meta; lastResult=r; redraw(); }
+        return true;
+      }
+    }catch(e){ lastErr="mainfit:"+e; }
+    return false;
+  }
+
+  // Captura o src DESTE script no load (document.currentScript é null depois).
+  const THIS_SRC = (function(){ try{ return (document.currentScript && document.currentScript.src) || ""; }catch(_){ return ""; } })();
+  function solverURL(){
+    // Precisa ser ABSOLUTA: num Blob worker, importScripts com URL root-relative
+    // ('/dvl-clean/...') é inválida (o blob: não tem host).
+    try{ if(THIS_SRC) return THIS_SRC.replace(/[^\/?]*(\?.*)?$/, SOLVER_FILE); }catch(_){}
+    try{ return location.origin + "/dvl-clean/beta1504/scripts/" + SOLVER_FILE; }catch(_){}
     return "/dvl-clean/beta1504/scripts/"+SOLVER_FILE;
   }
   let triedWorker = false;
@@ -118,23 +131,22 @@
   function onWorkerMessage(ev){
     const r = ev.data; busy=false;
     if(r && !r.error && r.generation===generation){ r.meta=inflightMeta; lastResult=r; redraw(); }
-    else if(r && r.error && /no-solver/.test(r.error)){ workerOk=false; /* cai no fallback nas próximas */ }
+    else if(r && r.error){
+      lastErr = "worker:"+r.error; workerOk=false;
+      if(inflightJob) mainThreadFit(inflightJob);   // não perde o job: computa no main thread
+    }
+    inflightJob=null;
     flush();
   }
   function post(job){
-    busy=true; inflightMeta=job.meta;
+    busy=true; inflightMeta=job.meta; inflightJob=job;
     if(workerOk && worker){
       try{ worker.postMessage({closes:job.closes, config:job.config, generation:job.generation}); return; }
-      catch(_){ workerOk=false; }
+      catch(e){ workerOk=false; lastErr="post:"+e; }
     }
-    // fallback main-thread (síncrono; janela é pequena → aceitável)
-    busy=false;
-    try{
-      if(window.DVLSplineSolver){
-        const r = window.DVLSplineSolver.fit(job.closes, Object.assign({generation:job.generation}, job.config));
-        if(r.generation===generation){ r.meta=job.meta; lastResult=r; redraw(); }
-      }
-    }catch(_){}
+    // sem worker → fallback main-thread síncrono (janela pequena → aceitável)
+    busy=false; inflightJob=null;
+    mainThreadFit(job);
   }
   function flush(){ if(busy||!pendingJob) return; const j=pendingJob; pendingJob=null; post(j); }
   function schedule(){
@@ -336,18 +348,31 @@
   }
 
   /* ───────────────────────────── boot ────────────────────────────────────── */
+  function homed(){ return !!document.getElementById("dvlSplineQuantItem"); }
   function boot(){
-    insertItem();
-    // re-encaixa o item se o menu for reconstruído
+    // O #indicatorDropdown e os itens-âncora (MAs/VWAP) só existem DEPOIS do
+    // boot deste script, então tenta repetidamente até encaixar (~20s) e observa
+    // o DOM inteiro para reencaixar se o menu for reconstruído.
+    let tries = 0;
+    (function attempt(){
+      insertItem();
+      if(homed()) return;
+      if(tries++ < 80) setTimeout(attempt, 250);
+    })();
     try{
-      const mo = new MutationObserver(()=>{ if(!document.getElementById("dvlSplineQuantItem")) insertItem(); });
-      const menu = document.getElementById("indicatorDropdown");
-      if(menu) mo.observe(menu, {childList:true});
+      const mo = new MutationObserver(()=>{ if(!homed()) insertItem(); });
+      mo.observe(document.documentElement, {childList:true, subtree:true});
+      setTimeout(()=>{ try{ mo.disconnect(); }catch(_){} }, 30000);
     }catch(_){}
     if(state.on){ initWorker(); maybeCompute(); }
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 
   window.DVLSplineQuantChannelDraw = draw;
-  window.DVLSplineQuantChannel = { get state(){return state;}, open:openPanel, toggle:toggle };
+  window.DVLSplineQuantChannel = {
+    get state(){return state;}, open:openPanel, toggle:toggle,
+    _debug:()=>({ on:state.on, hasResult:!!lastResult, resultLens:lastResult?[lastResult.upperHistory&&lastResult.upperHistory.length, (lastResult.upperForecast||[]).length]:null,
+      workerOk, busy, generation, triedWorker, lastErr, hasSolver:!!window.DVLSplineSolver,
+      klen:(function(){try{return Array.isArray(klines)?klines.length:-1;}catch(_){return -2;}})() })
+  };
 })();
