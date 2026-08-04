@@ -122,6 +122,13 @@ function serveIndex(req, res) {
   buildIndexCache();
   if (!idxRaw) return res.status(500).send("index unavailable");
   res.set("Cache-Control", "no-cache, must-revalidate");
+  // Edge/CDN: NUNCA guardar o HTML no Cloudflare. Sem isso, um cache regional do
+  // edge pode servir uma versao antiga da pagina depois de um deploy (a origem
+  // ja esta nova, mas o PoP entrega a copia velha ate expirar). Estes cabecalhos
+  // padrao dizem ao Cloudflare para nao cachear o HTML, mantendo todo deploy
+  // visivel na hora. Os scripts versionados (?v=) continuam cacheaveis.
+  res.set("CDN-Cache-Control", "no-store");
+  res.set("Cloudflare-CDN-Cache-Control", "no-store");
   res.set("ETag", idxEtag);
   res.set("Content-Type", "text/html; charset=utf-8");
   res.set("Vary", "Accept-Encoding");
