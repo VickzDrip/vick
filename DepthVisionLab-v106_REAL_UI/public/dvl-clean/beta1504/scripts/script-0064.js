@@ -2391,7 +2391,7 @@ function dvlPaintPermanentTimeline1324(force){
     const ctx=__dvlPermanentTimelineCtx1324||c.getContext("2d",{alpha:false});
     ctx.setTransform(dpr,0,0,dpr,0,0);
     // Reusa a escala global já estabilizada, mas no próprio canvas de 22px.
-    dvlDrawBottomTimeAxis1310(ctx,0,55,cssW,cssH,true);
+    dvlDrawBottomTimeAxis1310(ctx,0,PRICE_SCALE_W,cssW,cssH,true);
     c.style.display="block";c.style.visibility="visible";c.style.opacity="1";
   }catch(_dvlPermanentTimeline1324){}
 }
@@ -4747,7 +4747,11 @@ function draw(){
   try{ if(els && els.loading) els.loading.classList.add("hidden"); }catch(_){}
 
   const testOscOn = dvlLowerPanelOn();
-  const padL = 0, padR = 55;
+  /* Beta 1.596 — padR reservado pra escala AGORA = PRICE_SCALE_W (80). Antes era
+     55 fixo, mas a escala tem 80px, então o conteúdo (heatmap, perfil, linhas)
+     era clipado em w-55 e invadia os 25px finais onde ficam os números. Alinhado
+     ao PRICE_SCALE_W (fonte única) e ao crosshair, que já usava w-80. */
+  const padL = 0, padR = PRICE_SCALE_W;
   const top = 0;
   const priceH = dvlPricePanelHeight(h);
   const timeH = dvlMainTimeScaleHeight();
