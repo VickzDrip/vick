@@ -5139,18 +5139,35 @@ try{ if(typeof window!=="undefined"){ window.__dvlStabilizeAutoScale1235=__dvlSt
 /* Empilhamento anti-colisão: items ordenados por cy (centro desejado) recebem
    .py (topo). Guloso p/ baixo, depois desloca o bloco pra caber em [top,bottom];
    no overflow (labels demais) faz clamp por item (aceita leve sobreposição). */
-function __dvlDecollideScaleLabels(items, top, bottom, H, gap){
-  var n = items.length; if(!n) return items;
-  items.sort(function(a,b){return a.cy-b.cy;});
+function __dvlGreedyPack(list, top, bottom, H, gap){
+  var n = list.length; if(!n) return;
+  list.sort(function(a,b){return a.cy-b.cy;});
   for(var i=0;i<n;i++){
-    var py = items[i].cy - H/2;
-    if(i>0 && py < items[i-1].py + H + gap) py = items[i-1].py + H + gap;
-    items[i].py = py;
+    var py = list[i].cy - H/2;
+    if(i>0 && py < list[i-1].py + H + gap) py = list[i-1].py + H + gap;
+    list[i].py = py;
   }
-  var blockBottom = items[n-1].py + H;
-  if(blockBottom > bottom){ var s1 = blockBottom - bottom; for(var a=0;a<n;a++) items[a].py -= s1; }
-  if(items[0].py < top){ var s2 = top - items[0].py; for(var b=0;b<n;b++) items[b].py += s2; }
-  for(var c=0;c<n;c++) items[c].py = Math.max(top, Math.min(bottom - H, items[c].py));
+  var bb = list[n-1].py + H;
+  if(bb > bottom){ var s1 = bb - bottom; for(var a=0;a<n;a++) list[a].py -= s1; }
+  if(list[0].py < top){ var s2 = top - list[0].py; for(var b=0;b<n;b++) list[b].py += s2; }
+  for(var c=0;c<n;c++) list[c].py = Math.max(top, Math.min(bottom - H, list[c].py));
+}
+function __dvlDecollideScaleLabels(items, top, bottom, H, gap, anchorCy){
+  var n = items.length; if(!n) return items;
+  if(anchorCy==null){ __dvlGreedyPack(items, top, bottom, H, gap); return items; }
+  /* modo ÂNCORA: a faixa da pílula do preço [aTop,aBot] é RESERVADA. Os labels
+     acima vão pra região [top,aTop] e os de baixo pra [aBot,bottom] — nunca em
+     cima do preço. Se um lado não tem espaço (preço na borda), tudo vai pro outro. */
+  var aTop = Math.max(top, Math.min(bottom - H, anchorCy - H/2)), aBot = aTop + H;
+  var above, below;
+  if(aTop - top < H + gap){ above = []; below = items.slice(); }
+  else if(bottom - aBot < H + gap){ above = items.slice(); below = []; }
+  else {
+    above = []; below = [];
+    for(var i=0;i<n;i++){ (items[i].cy < anchorCy ? above : below).push(items[i]); }
+  }
+  __dvlGreedyPack(above, top, aTop, H, gap);      // pílulas acima do preço
+  __dvlGreedyPack(below, aBot, bottom, H, gap);   // pílulas abaixo do preço
   return items;
 }
 function __dvlContrastText(color){
@@ -5164,7 +5181,7 @@ function __dvlContrastText(color){
 }
 /* Desenha uma pílula por registro na canaleta [x1, w], estilo do label do preço,
    de-colidido. Chamado depois do restore (fora do clip). */
-function drawRegisteredScaleLabels(ctx, x1, y0, y1, w, min, max, y){
+function drawRegisteredScaleLabels(ctx, x1, y0, y1, w, min, max, y, anchorCy){
   var arr = window.__dvlScaleLabels;
   if(!arr || !arr.length) return [];
   var H = DVL_SCALE_LABEL_H, tagW = PRICE_LABEL_W, gap = 1;
@@ -5180,7 +5197,7 @@ function drawRegisteredScaleLabels(ctx, x1, y0, y1, w, min, max, y){
     items.push({ value:o.value, color:o.color, textColor:o.textColor, label:o.label, text:o.text, cy:cy });
   }
   if(!items.length) return [];
-  __dvlDecollideScaleLabels(items, y0+2, y1-2, H, gap);
+  __dvlDecollideScaleLabels(items, y0+2, y1-2, H, gap, anchorCy);
   var tagX = Math.max(1, Math.min(x1 + Math.max(0,(PRICE_SCALE_W - tagW)/2), w - tagW - 1));
   ctx.save();
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -5612,14 +5629,16 @@ ctx.restore();
      3) números CINZAS da escala, PULANDO qualquer faixa ocupada (não sobrepõem
         mais os labels);
      4) pílula do preço por cima. */
-  const __occ = drawRegisteredScaleLabels(ctx, x1, y0, y1, w, min, max, y) || [];
-
   const tagText = fmtPrice(last);
   const timerText = candleCloseTimerText();
   const liveTagW = Math.max(54, Math.min(PRICE_LABEL_W, w - 4));
   const liveTagH = DVL_SCALE_LABEL_H;
   const liveTx = Math.max(1, Math.min(x1 + Math.max(0, (PRICE_SCALE_W - liveTagW) / 2), w - liveTagW - 1));
   const liveTy = Math.max(y0 + 2, Math.min(y1 - liveTagH - 2, (Number.isFinite(ly)?ly:y0) - liveTagH / 2));
+
+  /* pílulas dos indicadores são de-colididas DESVIANDO da faixa da pílula do preço
+     (âncora) — assim nenhum label é coberto/esvaziado pela pílula do preço. */
+  const __occ = drawRegisteredScaleLabels(ctx, x1, y0, y1, w, min, max, y, liveTy + liveTagH/2) || [];
   __occ.push([liveTy, liveTy + liveTagH]);
 
   ctx.font = "11.5px system-ui";
