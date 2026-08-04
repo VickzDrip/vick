@@ -707,6 +707,7 @@
       vpSetLevelStyle(ctx, 'cur');
       ctx.beginPath(); ctx.moveTo(x0, pocY); ctx.lineTo(x1, pocY); ctx.stroke();
       ctx.setLineDash([]);
+      if(window.dvlRegisterScaleLabel) window.dvlRegisterScaleLabel({value:vpStableLevels.poc,color:state.colorPOC||"#f3c768",label:"POC"});
       const _lPOC = vpLevelLabel("POC", vpStableLevels.poc);
       if(_lPOC){
         ctx.fillStyle    = state.colorPOC || "#f3c768";
@@ -726,6 +727,7 @@
       vpSetLevelStyle(ctx, 'cur');
       ctx.beginPath(); ctx.moveTo(x0, vahY); ctx.lineTo(x1, vahY); ctx.stroke();
       ctx.setLineDash([]);
+      if(window.dvlRegisterScaleLabel) window.dvlRegisterScaleLabel({value:vpStableLevels.vah,color:state.colorVAH||"#13dc8d",label:"VAH"});
       const _lVAH = vpLevelLabel("VAH", vpStableLevels.vah);
       if(_lVAH){
         ctx.fillStyle    = state.colorVAH || "#13dc8d";
@@ -745,6 +747,7 @@
       vpSetLevelStyle(ctx, 'cur');
       ctx.beginPath(); ctx.moveTo(x0, valY); ctx.lineTo(x1, valY); ctx.stroke();
       ctx.setLineDash([]);
+      if(window.dvlRegisterScaleLabel) window.dvlRegisterScaleLabel({value:vpStableLevels.val,color:state.colorVAL||"#ff4a61",label:"VAL"});
       const _lVAL = vpLevelLabel("VAL", vpStableLevels.val);
       if(_lVAL){
         ctx.fillStyle    = state.colorVAL || "#ff4a61";
@@ -809,6 +812,7 @@
 
             const drawWLine=(show,color,price,name,baseline)=>{
               if(show===false || price==null) return;
+              if(window.dvlRegisterScaleLabel) window.dvlRegisterScaleLabel({value:price,color:color,label:name});
               const yy=rowP(price);
               ctx.strokeStyle=color;
               vpSetLevelStyle(ctx,'s2');
@@ -853,6 +857,7 @@
             const dW=Math.max(1,+state.devWidth||1.6), dDash=vpDashFor(state.devStyle||'solid', dW);
             const drawDevLine=(show,color,price,name,baseline)=>{
               if(show===false) return;
+              if(window.dvlRegisterScaleLabel && price!=null) window.dvlRegisterScaleLabel({value:price,color:color,label:name});
               const yy=rowP(price);
               ctx.strokeStyle=color; ctx.lineWidth=dW; ctx.setLineDash(dDash);
               ctx.beginPath(); ctx.moveTo(x0,yy); ctx.lineTo(x1,yy); ctx.stroke(); ctx.setLineDash([]);
@@ -891,6 +896,7 @@
             const oW=Math.max(1,+state.onWidth||1.4), oDash=vpDashFor(state.onStyle||'dashed', oW);
             const drawOnLine=(show,color,price,name,baseline)=>{
               if(show===false) return;
+              if(window.dvlRegisterScaleLabel && price!=null) window.dvlRegisterScaleLabel({value:price,color:color,label:name});
               const yy=rowP(price);
               ctx.strokeStyle=color; ctx.lineWidth=oW; ctx.setLineDash(oDash);
               ctx.beginPath(); ctx.moveTo(x0,yy); ctx.lineTo(x1,yy); ctx.stroke(); ctx.setLineDash([]);
@@ -929,6 +935,7 @@
             const pW=Math.max(1,+state.pdWidth||1.4), pDash=vpDashFor(state.pdStyle||'dashed', pW);
             const drawPdLine=(show,color,price,name,baseline)=>{
               if(show===false || !(price>0)) return;
+              if(window.dvlRegisterScaleLabel) window.dvlRegisterScaleLabel({value:price,color:color,label:name});
               const yy=rowP(price);
               ctx.strokeStyle=color; ctx.lineWidth=pW; ctx.setLineDash(pDash);
               ctx.beginPath(); ctx.moveTo(x0,yy); ctx.lineTo(x1,yy); ctx.stroke(); ctx.setLineDash([]);

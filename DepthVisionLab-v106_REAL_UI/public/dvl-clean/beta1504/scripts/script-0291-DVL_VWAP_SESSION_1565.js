@@ -198,6 +198,9 @@
         let li=-1, lv=null;
         for(let j=end;j>=start;j--){ if(vwap[j]!=null && Number.isFinite(vwap[j])){ li=j; lv=vwap[j]; break; } }
         if(li>=0){
+          /* Beta 1.597 — registra a linha na ESCALA (pílula VWAP + preço, na cor),
+             de-colidida junto das outras. O núcleo desenha na canaleta. */
+          if(window.dvlRegisterScaleLabel) window.dvlRegisterScaleLabel({value:lv, color:state.color, label:"VWAP"});
           const py = cfg.y(lv);
           if(py>cfg.y0 && py<cfg.y1){
             const label = "VWAP";

@@ -983,7 +983,8 @@
           ctx.lineWidth=1.5;ctx.setLineDash([7,4]);
           ctx.beginPath();ctx.moveTo(cfg.x0,y);ctx.lineTo(cfg.x1,y);ctx.stroke();
           ctx.setLineDash([]);
-          lvTag(ctx,cfg,y,lvFmtPrice(z.mean),c,Math.min(1,a+0.15));
+          /* média vai pra escala: nome + preço, na cor da linha. */
+          if(window.dvlRegisterScaleLabel) window.dvlRegisterScaleLabel({value:z.mean, color:"rgb("+c[0]+","+c[1]+","+c[2]+")", label:pair[2]});
         });
       }
       vis.forEach(function(e){
@@ -999,7 +1000,9 @@
         ctx.setLineDash(e.present?[]:[6,4]);
         ctx.beginPath();ctx.moveTo(cfg.x0,y);ctx.lineTo(cfg.x1,y);ctx.stroke();
         ctx.setLineDash([]);
-        lvTag(ctx,cfg,y,fmtN(e.maxNotional)+(e.refills>1?" ×"+e.refills:""),col,Math.min(1,alpha+0.2));
+        /* Beta 1.597 — a etiqueta vai pra ESCALA via registro central (padrão do
+           label do preço), de-colidida. Nível mostra o VALOR das ordens. */
+        if(window.dvlRegisterScaleLabel) window.dvlRegisterScaleLabel({value:price, color:"rgb("+col[0]+","+col[1]+","+col[2]+")", text:fmtN(e.maxNotional)+(e.refills>1?" ×"+e.refills:"")});
       });
       ctx.restore();
     }catch(err){R.err=String(err&&err.message||err);}

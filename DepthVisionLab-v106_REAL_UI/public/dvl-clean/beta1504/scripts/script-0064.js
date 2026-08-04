@@ -1605,6 +1605,29 @@ window.DVL_SCALE_LABEL_FONT   = DVL_SCALE_LABEL_FONT;
 window.DVL_SCALE_LABEL_RADIUS = DVL_SCALE_LABEL_RADIUS;
 window.DVL_SCALE_LABEL_PAD_X  = DVL_SCALE_LABEL_PAD_X;
 
+/* ── Beta 1.597 — Registro CENTRAL de labels na escala ───────────────────────
+   Como o conteúdo é clipado em x1 (w-80), indicadores não conseguem mais
+   desenhar na canaleta da escala sozinhos. Então qualquer indicador com uma
+   linha horizontal que "toca" a escala REGISTRA aqui {value,color,label} durante
+   seu draw; depois do clip, o gráfico principal desenha uma pílula por registro
+   na canaleta (mesma proporção do label do preço), com empilhamento anti-colisão.
+   O registro é limpo a cada frame no início do drawPriceSection e consumido no fim. */
+window.__dvlScaleLabels = [];
+window.dvlRegisterScaleLabel = function(o){
+  try{
+    var v = Number(o && o.value);
+    if(!Number.isFinite(v)) return;
+    window.__dvlScaleLabels.push({
+      value: v,
+      color: (o.color!=null ? String(o.color) : "#8aa0b6"),
+      textColor: (o.textColor!=null ? String(o.textColor) : null),
+      label: (o.label!=null ? String(o.label) : "").slice(0,9),
+      text: (o.text!=null ? String(o.text) : null),   // override do valor (ex.: níveis mostram notional)
+      priority: Number(o.priority)||0
+    });
+  }catch(_){}
+};
+
 let gridOn = true;
 let candleBullColor = "#10df77";
 let candleBearColor = "#ff3037";
@@ -5113,7 +5136,70 @@ function __dvlStabilizeAutoScale1235(center, range, win){
 }
 try{ if(typeof window!=="undefined"){ window.__dvlStabilizeAutoScale1235=__dvlStabilizeAutoScale1235; window.__dvlAutoScaleStab1235=__dvlAutoScaleStab1235; } }catch(_){}
 
+/* Empilhamento anti-colisão: items ordenados por cy (centro desejado) recebem
+   .py (topo). Guloso p/ baixo, depois desloca o bloco pra caber em [top,bottom];
+   no overflow (labels demais) faz clamp por item (aceita leve sobreposição). */
+function __dvlDecollideScaleLabels(items, top, bottom, H, gap){
+  var n = items.length; if(!n) return items;
+  items.sort(function(a,b){return a.cy-b.cy;});
+  for(var i=0;i<n;i++){
+    var py = items[i].cy - H/2;
+    if(i>0 && py < items[i-1].py + H + gap) py = items[i-1].py + H + gap;
+    items[i].py = py;
+  }
+  var blockBottom = items[n-1].py + H;
+  if(blockBottom > bottom){ var s1 = blockBottom - bottom; for(var a=0;a<n;a++) items[a].py -= s1; }
+  if(items[0].py < top){ var s2 = top - items[0].py; for(var b=0;b<n;b++) items[b].py += s2; }
+  for(var c=0;c<n;c++) items[c].py = Math.max(top, Math.min(bottom - H, items[c].py));
+  return items;
+}
+function __dvlContrastText(color){
+  var r=136,g=136,bl=136;
+  try{
+    var s=String(color).trim();
+    if(s.charAt(0)==="#"){ var h=s.slice(1); var f=h.length===3?h.replace(/(.)/g,"$1$1"):h; var num=parseInt(f,16); if(isFinite(num)){ r=(num>>16)&255; g=(num>>8)&255; bl=num&255; } }
+    else { var m=s.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/); if(m){ r=+m[1]; g=+m[2]; bl=+m[3]; } }
+  }catch(_){}
+  return (0.299*r+0.587*g+0.114*bl) > 140 ? "#0a0f16" : "#f2f6ff";
+}
+/* Desenha uma pílula por registro na canaleta [x1, w], estilo do label do preço,
+   de-colidido. Chamado depois do restore (fora do clip). */
+function drawRegisteredScaleLabels(ctx, x1, y0, y1, w, min, max, y){
+  var arr = window.__dvlScaleLabels;
+  if(!arr || !arr.length) return;
+  var lo = Math.min(min,max), hi = Math.max(min,max);
+  var H = DVL_SCALE_LABEL_H, tagW = PRICE_LABEL_W, gap = 1;
+  var items = [];
+  for(var i=0;i<arr.length;i++){
+    var o = arr[i];
+    if(o.value < lo || o.value > hi) continue;
+    var cy = y(o.value);
+    if(!Number.isFinite(cy) || cy < y0 - H || cy > y1 + H) continue;
+    items.push({ value:o.value, color:o.color, textColor:o.textColor, label:o.label, text:o.text, cy:cy });
+  }
+  if(!items.length) return;
+  __dvlDecollideScaleLabels(items, y0+2, y1-2, H, gap);
+  var tagX = Math.max(1, Math.min(x1 + Math.max(0,(PRICE_SCALE_W - tagW)/2), w - tagW - 1));
+  ctx.save();
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for(var k=0;k<items.length;k++){
+    var it = items[k], cyc = it.py + H/2, mainTxt = (it.text!=null ? it.text : fmtPrice(it.value));
+    roundRect(ctx, tagX, it.py, tagW, H, DVL_SCALE_LABEL_RADIUS, true, false, it.color);
+    ctx.fillStyle = it.textColor || __dvlContrastText(it.color);
+    if(it.label){
+      ctx.font = "800 8px system-ui";
+      ctx.fillText(it.label, tagX + tagW/2, cyc - 5);
+      ctx.font = "950 10px system-ui";
+      ctx.fillText(mainTxt, tagX + tagW/2, cyc + 5.5);
+    } else {
+      ctx.font = "900 10px system-ui";
+      ctx.fillText(mainTxt, tagX + tagW/2, cyc);
+    }
+  }
+  ctx.restore();
+}
 function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
+  window.__dvlScaleLabels.length = 0;   // limpa o registro no início do frame
   const win = visibleWindow();
   const view = win.candles;
   if(!view.length) return;
@@ -5523,6 +5609,9 @@ ctx.restore();
     const val = max - (max-min)*i/11;
     ctx.fillText(fmtPrice(val), scaleTextX, y(val));
   }
+  /* Beta 1.597 — pílulas dos indicadores registrados (VWAP, VAH/POC/VAL, níveis,
+     média…) na canaleta, de-colididas, no mesmo padrão do label do preço. */
+  drawRegisteredScaleLabels(ctx, x1, y0, y1, w, min, max, y);
 
   {
   {
