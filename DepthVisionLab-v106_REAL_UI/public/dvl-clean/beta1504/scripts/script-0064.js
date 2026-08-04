@@ -5166,18 +5166,20 @@ function __dvlContrastText(color){
    de-colidido. Chamado depois do restore (fora do clip). */
 function drawRegisteredScaleLabels(ctx, x1, y0, y1, w, min, max, y){
   var arr = window.__dvlScaleLabels;
-  if(!arr || !arr.length) return;
-  var lo = Math.min(min,max), hi = Math.max(min,max);
+  if(!arr || !arr.length) return [];
   var H = DVL_SCALE_LABEL_H, tagW = PRICE_LABEL_W, gap = 1;
   var items = [];
   for(var i=0;i<arr.length;i++){
     var o = arr[i];
-    if(o.value < lo || o.value > hi) continue;
-    var cy = y(o.value);
-    if(!Number.isFinite(cy) || cy < y0 - H || cy > y1 + H) continue;
+    var cyRaw = y(o.value);
+    if(!Number.isFinite(cyRaw)) continue;
+    /* Beta 1.598 — sem restrição de range: quando o valor entra na faixa sem
+       preço (fora da vista), o label GRUDA na borda (clamp) e continua aparecendo,
+       em vez de esvaziar/sumir. */
+    var cy = Math.max(y0 + H/2, Math.min(y1 - H/2, cyRaw));
     items.push({ value:o.value, color:o.color, textColor:o.textColor, label:o.label, text:o.text, cy:cy });
   }
-  if(!items.length) return;
+  if(!items.length) return [];
   __dvlDecollideScaleLabels(items, y0+2, y1-2, H, gap);
   var tagX = Math.max(1, Math.min(x1 + Math.max(0,(PRICE_SCALE_W - tagW)/2), w - tagW - 1));
   ctx.save();
@@ -5197,6 +5199,9 @@ function drawRegisteredScaleLabels(ctx, x1, y0, y1, w, min, max, y){
     }
   }
   ctx.restore();
+  var ranges = [];
+  for(var q=0;q<items.length;q++) ranges.push([items[q].py, items[q].py + H]);
+  return ranges;   // faixas ocupadas → os ticks cinzas as evitam
 }
 function drawPriceSection(ctx,padL,padR,top,priceBottom,timeH,w,priceH){
   window.__dvlScaleLabels.length = 0;   // limpa o registro no início do frame
@@ -5600,6 +5605,23 @@ if(window.DVLMovingAveragesDraw){
   /* Beta 0.875: DVL Flow Event Bubbles removido do draw engine. */
 ctx.restore();
 
+  /* Beta 1.598 — ORDEM da escala:
+     1) pílulas dos indicadores (VWAP/POC/VAH/VAL/PD/W/níveis/média) — retornam as
+        faixas ocupadas;
+     2) faixa da pílula do preço ao vivo;
+     3) números CINZAS da escala, PULANDO qualquer faixa ocupada (não sobrepõem
+        mais os labels);
+     4) pílula do preço por cima. */
+  const __occ = drawRegisteredScaleLabels(ctx, x1, y0, y1, w, min, max, y) || [];
+
+  const tagText = fmtPrice(last);
+  const timerText = candleCloseTimerText();
+  const liveTagW = Math.max(54, Math.min(PRICE_LABEL_W, w - 4));
+  const liveTagH = DVL_SCALE_LABEL_H;
+  const liveTx = Math.max(1, Math.min(x1 + Math.max(0, (PRICE_SCALE_W - liveTagW) / 2), w - liveTagW - 1));
+  const liveTy = Math.max(y0 + 2, Math.min(y1 - liveTagH - 2, (Number.isFinite(ly)?ly:y0) - liveTagH / 2));
+  __occ.push([liveTy, liveTy + liveTagH]);
+
   ctx.font = "11.5px system-ui";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -5607,20 +5629,14 @@ ctx.restore();
   const scaleTextX = x1 + PRICE_SCALE_W / 2;
   for(let i=0;i<=11;i++){
     const val = max - (max-min)*i/11;
-    ctx.fillText(fmtPrice(val), scaleTextX, y(val));
+    const __ty = y(val);
+    let __blk = false;
+    for(let r=0;r<__occ.length;r++){ if(__ty > __occ[r][0]-2 && __ty < __occ[r][1]+2){ __blk = true; break; } }
+    if(!__blk) ctx.fillText(fmtPrice(val), scaleTextX, __ty);
   }
-  /* Beta 1.597 — pílulas dos indicadores registrados (VWAP, VAH/POC/VAL, níveis,
-     média…) na canaleta, de-colididas, no mesmo padrão do label do preço. */
-  drawRegisteredScaleLabels(ctx, x1, y0, y1, w, min, max, y);
 
   {
   {
-  const tagText = fmtPrice(last);
-  const timerText = candleCloseTimerText();
-  const liveTagW = Math.max(54, Math.min(PRICE_LABEL_W, w - 4));
-  const liveTagH = DVL_SCALE_LABEL_H;
-  const liveTx = Math.max(1, Math.min(x1 + Math.max(0, (PRICE_SCALE_W - liveTagW) / 2), w - liveTagW - 1));
-  const liveTy = Math.max(y0 + 2, Math.min(y1 - liveTagH - 2, ly - liveTagH / 2));
   roundRect(ctx, liveTx, liveTy, liveTagW, liveTagH, DVL_SCALE_LABEL_RADIUS, true, false, "#10df77");
   ctx.save();
   ctx.beginPath();
