@@ -558,6 +558,9 @@
   }
 
   async function refresh(){
+    /* Beta 1.601 — SCANNER DESATIVADO: abre normalmente, mas NÃO gera nada.
+       Reusa o caminho de estado vazio (seguro) e retorna sem nenhum scan/fetch. */
+    state.rawRows=[]; state.rows=[]; try{renderRows();}catch(_){} try{updateLive("Desativado");}catch(_){} return;
     if(state.loading) return;
     var ex=EX[state.exchange];
     if(!ex||!ex.enabled){state.rawRows=[];state.rows=[];renderRows();updateLive("Indisponível");return;}

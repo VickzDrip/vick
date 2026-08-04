@@ -113,6 +113,9 @@
      but there's only ever a LONG model to look up now. */
   var _learnedModel = null;
   function fetchLearnedModel(){
+    /* Beta 1.601 — SCANNER DESATIVADO: sem poll de /api/dvl/scanner/health nem
+       geração do modelo. Abre normal, só não gera nada. */
+    _learnedModel = null; try{ renderMetricsSection(); }catch(_){} return;
     fetch("/api/dvl/scanner/health",{cache:"no-store"})
       .then(function(r){ if(!r.ok) throw new Error("health "+r.status); return r.json(); })
       .then(function(j){
