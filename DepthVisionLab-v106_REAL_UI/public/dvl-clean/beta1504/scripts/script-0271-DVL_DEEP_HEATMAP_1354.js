@@ -168,10 +168,10 @@
       src:"futures",
       ws:"wss://fstream.binance.com/stream?streams="+lo+"@depth@100ms/"+lo+"@aggTrade",
       rests:[
-        "https://fapi.binance.com/fapi/v1/depth?symbol="+sym+"&limit=1000",
-        "https://fapi1.binance.com/fapi/v1/depth?symbol="+sym+"&limit=1000",
-        "https://fapi2.binance.com/fapi/v1/depth?symbol="+sym+"&limit=1000",
-        "https://fapi3.binance.com/fapi/v1/depth?symbol="+sym+"&limit=1000"
+        /* Beta 1.600 — só fapi.binance.com. Os fapi1/2/3 redirecionam (302) e o
+           browser bloqueia por CORS: nunca funcionam aqui e só poluíam o console
+           + atrasavam o fallback pro Spot. */
+        "https://fapi.binance.com/fapi/v1/depth?symbol="+sym+"&limit=1000"
       ]
     };
   }

@@ -117,6 +117,7 @@ function syncTimer1207(){
   }else if(_timer){ clearInterval(_timer); _timer=null; }
 }
 function boot(){
+  return; /* Beta 1.600 — BACKTEST DESATIVADO: sem poll (fim dos 404 em /api/dvl/scanner/backtest) nem UI. */
   render();
   [300,900,1500,2500,4000,6000,9000].forEach(function(ms){ setTimeout(function(){if(copilotOpen1207())render();},ms); });
   window.addEventListener("dvl:copilot-state-change",function(){setTimeout(syncTimer1207,0);},true);
