@@ -470,7 +470,11 @@ app.get("/api/trades", async (req,res) => {
   }catch(e){ res.status(500).json({ error: e.message }); }
 });
 
-const server = app.listen(PORT, "0.0.0.0", () => {
+// Escuta em dual-stack (IPv4 + IPv6): sem host, o Node binda em "::", que num
+// Linux dual-stack aceita TANTO 127.0.0.1 QUANTO [::1]. Antes, com "0.0.0.0"
+// (só IPv4), quando o nginx resolvia "localhost" para [::1] a conexão era
+// recusada (111) -> 521. Agora conecta em qualquer uma das duas famílias.
+const server = app.listen(PORT, () => {
   console.log(`DepthVisionLab running on port ${PORT}`);
 });
 

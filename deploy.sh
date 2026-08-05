@@ -47,8 +47,11 @@ if [ -f "$SRC_SRV" ] && ! cmp -s "$SRC_SRV" "$DST/server.js"; then
   cp "$SRC_SRV" "$DST/server.js"; RESTART_NODE=1
 fi
 if [ "$RESTART_NODE" = "1" ]; then
-  pm2 restart all --silent 2>/dev/null
-  echo "[$(date -Iseconds)] DVL pm2 restart (backend) @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
+  # Reinicia SÓ o frontend (server.js/subsecondCandles). Antes era 'pm2 restart
+  # all', que sacudia todos os processos de uma vez a cada deploy de backend —
+  # churn desnecessário. O tick-collector e o scanner não dependem do server.js.
+  pm2 restart depthvisionlab --silent 2>/dev/null
+  echo "[$(date -Iseconds)] DVL pm2 restart depthvisionlab (backend) @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
 fi
 
 # ---------- SCANNER BACKEND (igual ao original) ----------
