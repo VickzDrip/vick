@@ -285,6 +285,9 @@
   }
 
   /* ───────────────────────────── painel ──────────────────────────────────── */
+  const PALETTE = ["#22d3ee","#f5c542","#a855f7","#ef4444","#34d399","#60a5fa","#f97316","#e879f9","#4ade80","#fb7185","#ffffff","#7f91a7"];
+  let palette = null, paletteKey = null;
+
   function ensurePanel(){
     if(panel) return panel;
     panel = document.createElement("div");
@@ -292,10 +295,9 @@
     panel.className = "dvl-vt-panel dvl-splineq-panel";
     panel.setAttribute("data-dvl-ui","true");
     panel.innerHTML =
-      '<div class="dvl-vt-head"><b>Spline Quantile Channel</b>'+
-      '<span style="flex:1"></span>'+
-      '<button class="dvl-vt-btn" id="dvlSQReset">Reset</button>'+
-      '<button class="dvl-vt-btn" id="dvlSQClose">✕</button></div>'+
+      '<div class="dvl-vt-head"><div class="dvl-vt-title"><b>Spline Quantile Channel</b><small>DVL overlay · canal quantílico</small></div>'+
+      '<div class="dvl-vt-head-actions"><button class="dvl-vt-reset-icon" id="dvlSQReset" type="button" aria-label="Reset">↻</button>'+
+      '<button class="dvl-vt-close" id="dvlSQClose" type="button">×</button></div></div>'+
       '<div class="dvl-vt-body" id="dvlSQBody"></div>';
     document.body.appendChild(panel);
     panel.addEventListener("pointerdown", ev=>ev.stopPropagation(), true);
@@ -304,31 +306,39 @@
     return panel;
   }
   function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderPanel(); }
-  function closePanel(){ if(panel) panel.classList.remove("is-open"); }
+  function closePanel(){ closePalette(); if(panel) panel.classList.remove("is-open"); }
   function reset(){ state = clone(DEFAULTS); persist(); updateItem(); lastResult=null; lastSig=""; if(state.on) maybeCompute(); redraw(); renderPanel(); }
 
-  function row(label, control){ return '<label class="dvl-vt-row"><span>'+label+'</span>'+control+'</label>'; }
-  function num(id,val,mn,mx,step){ return '<input type="number" id="'+id+'" value="'+val+'" min="'+mn+'" max="'+mx+'" step="'+(step||1)+'" class="dvl-vt-num">'; }
-  function color(id,val){ return '<input type="color" id="'+id+'" value="'+val+'" class="dvl-vt-color">'; }
-  function chk(id,on){ return '<input type="checkbox" id="'+id+'"'+(on?' checked':'')+'>'; }
+  function field(label, ctrl){ return '<div class="dvl-vt-field"><label>'+label+'</label>'+ctrl+'</div>'; }
+  function sw(id, on){ return '<label class="dvl-switch"><input id="'+id+'" type="checkbox"'+(on?' checked':'')+'><i></i><b></b></label>'; }
+  function numIn(id, val, mn, mx, st){ return '<input class="dvl-vt-input" id="'+id+'" type="number" min="'+mn+'" max="'+mx+'" step="'+(st||1)+'" value="'+val+'">'; }
+  function sel(id, list, cur){ return '<select class="dvl-vt-select" id="'+id+'">'+list.map(function(v){return '<option value="'+v+'"'+(String(v)===String(cur)?' selected':'')+'>'+v+'</option>';}).join('')+'</select>'; }
+  function colorBtn(key, c){ return '<button type="button" class="dvl-ma-color-btn" data-clr="'+key+'"><i style="background:'+c+'"></i></button>'; }
+  function section(title, inner){ return '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>'+title+'</span></div><div class="dvl-vt-grid">'+inner+'</div></div>'; }
 
   function renderPanel(){
     ensurePanel();
     const b = panel.querySelector("#dvlSQBody");
     b.innerHTML =
-      row("Ativado", chk("sqOn", state.on))+
-      row("Janela (barras)", num("sqLen", state.length,20,1000,10))+
-      row("Nós (knots)", num("sqKnots", state.knots,1,15,1))+
-      row("Iterações IRLS", num("sqIter", state.iterations,1,200,1))+
-      row("Quantil superior %", num("sqUq", state.upperQ,50,99,1))+
-      row("Quantil inferior %", num("sqLq", state.lowerQ,1,50,1))+
-      row("Forecast", chk("sqFcOn", state.forecastOn))+
-      row("Barras de forecast", num("sqFc", state.forecast,0,100,1))+
-      row("Preenchimento", chk("sqFill", state.fillOn))+
-      row("Espessura", num("sqW", state.width,1,6,1))+
-      row("Cor superior", color("sqUc", state.upColor))+
-      row("Cor mediana", color("sqMc", state.midColor))+
-      row("Cor inferior", color("sqLc", state.loColor));
+      section("Geral",
+        field("Indicador", sw("sqOn", state.on))+
+        field("Janela (barras)", numIn("sqLen", state.length,20,1000,10))+
+        field("Nós (knots)", numIn("sqKnots", state.knots,1,15,1))+
+        field("Iterações IRLS", numIn("sqIter", state.iterations,1,200,1))+
+        field("Espessura", sel("sqW", ["1","2","3","4","5","6"], String(state.width)))+
+        field("Preenchimento", sw("sqFill", state.fillOn))
+      )+
+      section("Quantis & Forecast",
+        field("Quantil superior %", numIn("sqUq", state.upperQ,50,99,1))+
+        field("Quantil inferior %", numIn("sqLq", state.lowerQ,1,50,1))+
+        field("Forecast", sw("sqFcOn", state.forecastOn))+
+        field("Barras de forecast", numIn("sqFc", state.forecast,0,100,1))
+      )+
+      section("Cores",
+        field("Superior", colorBtn("upColor", state.upColor))+
+        field("Mediana", colorBtn("midColor", state.midColor))+
+        field("Inferior", colorBtn("loColor", state.loColor))
+      );
 
     const bind=(id,ev,fn)=>{ const e=b.querySelector("#"+id); if(e) e.addEventListener(ev,fn); };
     const commit=()=>{ persist(); updateItem(); lastSig=""; if(state.on){ initWorker(); maybeCompute(); } else lastResult=null; redraw(); };
@@ -342,10 +352,30 @@
     bind("sqFc","change",e=>{ state.forecast=clampN(e.target.value,0,100,DEFAULTS.forecast); commit(); });
     bind("sqFill","change",e=>{ state.fillOn=e.target.checked; persist(); redraw(); });
     bind("sqW","change",e=>{ state.width=clampN(e.target.value,1,6,DEFAULTS.width); persist(); redraw(); });
-    bind("sqUc","change",e=>{ state.upColor=isHex(e.target.value)?e.target.value:state.upColor; persist(); redraw(); });
-    bind("sqMc","change",e=>{ state.midColor=isHex(e.target.value)?e.target.value:state.midColor; persist(); redraw(); });
-    bind("sqLc","change",e=>{ state.loColor=isHex(e.target.value)?e.target.value:state.loColor; persist(); redraw(); });
+    b.querySelectorAll(".dvl-ma-color-btn").forEach(btn=>btn.addEventListener("click",ev=>{ ev.stopPropagation(); openPalette(btn, btn.dataset.clr); }));
+    updateItem();
   }
+
+  function openPalette(btn, key){
+    closePalette(); paletteKey = key;
+    palette = document.createElement("div");
+    palette.className = "dvl-ma-palette dvl-splineq-palette";
+    palette.style.cssText = "position:fixed;z-index:100001;display:flex;flex-wrap:wrap;gap:6px;max-width:180px;padding:8px;border-radius:10px;background:rgba(10,16,22,.97);border:1px solid rgba(34,211,238,.4);box-shadow:0 8px 24px rgba(0,0,0,.5);";
+    PALETTE.forEach(c=>{
+      const cell = document.createElement("button");
+      cell.type="button";
+      cell.style.cssText="width:20px;height:20px;border-radius:5px;border:1px solid rgba(255,255,255,.25);cursor:pointer;background:"+c+";";
+      cell.addEventListener("click", ()=>{ if(isHex(c)){ state[paletteKey]=c; persist(); redraw(); renderPanel(); } closePalette(); });
+      palette.appendChild(cell);
+    });
+    document.body.appendChild(palette);
+    const r = btn.getBoundingClientRect();
+    palette.style.left = Math.min(window.innerWidth-190, Math.max(6, r.left)) + "px";
+    palette.style.top  = (r.bottom+6) + "px";
+    setTimeout(()=>document.addEventListener("pointerdown", outsidePalette, true), 0);
+  }
+  function outsidePalette(e){ if(palette && !palette.contains(e.target) && !(e.target.closest && e.target.closest(".dvl-ma-color-btn"))) closePalette(); }
+  function closePalette(){ if(palette){ try{ palette.remove(); }catch(_){} palette=null; } document.removeEventListener("pointerdown", outsidePalette, true); }
 
   /* ───────────────────────────── boot ────────────────────────────────────── */
   function homed(){ return !!document.getElementById("dvlSplineQuantItem"); }
