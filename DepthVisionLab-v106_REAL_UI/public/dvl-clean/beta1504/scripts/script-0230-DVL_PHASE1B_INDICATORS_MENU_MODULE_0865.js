@@ -70,7 +70,7 @@
   function catFor(m){
     if(m.missing) return "soon";
     if(m.key==="oi"||m.key==="ls"||m.key==="netlong"||m.key==="netshort"||m.key==="netdelta"||m.key==="dv"||m.key==="exr"||m.key==="tv"||m.key==="arion") return "osc";
-    if(m.key==="ma"||m.key==="vwapsession"||m.key==="splinequant"||m.key==="bookmap"||m.key==="dh"||m.key==="frvp"||m.key==="mfrvp"||m.key==="ifvgmagnet"||m.key==="gex") return "overlay";
+    if(m.key==="ma"||m.key==="vwapsession"||m.key==="splinequant"||m.key==="liqbands"||m.key==="bookmap"||m.key==="dh"||m.key==="frvp"||m.key==="mfrvp"||m.key==="ifvgmagnet"||m.key==="gex") return "overlay";
     return "flow";
   }
 
@@ -95,6 +95,7 @@
       {key:"splinequant",mark:"SQ",title:"Spline Quantile Channel",sub:"canal quantílico · spline · forecast",api:"DVLSplineQuantChannel",pill:"dvlSplineQuantState",row:"dvlSplineQuantItem"},
       {key:"bookmap",mark:"BM",title:"DVL Bookmap Zones",sub:"Order book heatmap · Bookmap style",api:"DVL_BOOKMAP_ZONES_0813"},
       {key:"dh",mark:"DH",title:"DVL Deep Heatmap",sub:"liquidez + consumo confirmado",api:"DVL_DEEP_HEATMAP_API"},
+      {key:"liqbands",mark:"LB",title:"Liquidity Bands",sub:"paredes que cercam o preço · order book",api:"DVL_LIQ_BANDS_API",pill:"dvlLiqBandsState",row:"dvlLiqBandsItem"},
       {key:"tv",mark:"TV",title:"DVL Tick Volume",sub:"tick volume oscillator",api:"DVLTickVolume",pill:"dvlTickVolumeState",row:"dvlTickVolumeItem"}
     ].map(function(m){
       m.missing = m.key==="bookmap" ? false : (!apiName(m.api) && !(m.row&&document.getElementById(m.row)));

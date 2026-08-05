@@ -28,6 +28,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.609", note: "Novo indicador: DVL Liquidity Bands — usa o motor do Deep Heatmap (order book) pra desenhar duas bandas que rodeiam o preço: a parede de ASK dominante acima e a de BID dominante abaixo, suavizadas (o 'caminho' das ordens), com canal sombreado e marcadores de liquidez absorvida (consume) e retirada (pull). Fica no menu de indicadores (seção Overlay, selo LB); liga o motor do Deep Heatmap sozinho ao ativar. Cálculo por solver isolado testado offline. Só frontend." },
   { version: "Beta 1.608", note: "Crosshair do mouse agora ATRAVESSA o painel dos osciladores (RSI Exhaustion etc.): a linha vertical (tempo) se estende do preço até o fundo do painel inferior, alinhando o candle com o valor do oscilador. Antes ela parava no fim do painel de preço. Ajustado nos renderizadores do crosshair native (1547/1550/1551) usando dvlCrossPanelBottom; a horizontal e o rótulo de preço seguem restritos ao painel de preço. Só frontend." },
   { version: "Beta 1.607", note: "Causa raiz do RSI Exhaustion não plotar a linha (em NENHUM timeframe): o objeto global window.__dvlLastCrossCfg — que carrega a view e a função x do gráfico — deixou de ser publicado quando o app foi extraído do HTML monolítico para o build modular (o setter ficou só nos index-*.html antigos). Sem ele, o xForTime do RSI retornava NaN e nenhum ponto era plotado. Restaurado o setter no render do core (junto do __DVL_DRAWCFG). Também beneficia os labels de crosshair, que liam esse config. Só frontend." },
   { version: "Beta 1.606", note: "Fix do RSI Exhaustion nos timeframes em segundos (15s/30s): a linha não plotava. Causa: a função tfMs() do indicador só reconhecia m/h/d e ignorava o sufixo 's', caindo no default de 60000ms — então no 15s/30s o closeTime das velas (filtro do normalizeRows) e o mapeamento do desenho (bounds/step por tfMs(chartTf())) ficavam errados e a série era descartada, independente do TF de cálculo. Agora tfMs aceita segundos (15s→15000, 30s→30000), com m/h/d idênticos ao anterior (zero mudança no 1m+). Só frontend." },
@@ -5613,6 +5614,10 @@ if(window.DVLMovingAveragesDraw){
 
   if(window.DVLSplineQuantChannelDraw){
     try{ window.DVLSplineQuantChannelDraw(ctx, { view, drawView, win, x, y, x0, x1, y0, y1, slotOffset, candleW, priceBottom, priceH }); }catch(_dvlSQ_e){}
+  }
+
+  if(window.DVLLiquidityBandsDraw){
+    try{ window.DVLLiquidityBandsDraw(ctx, { view, drawView, win, x, y, x0, x1, y0, y1, slotOffset, candleW, min, max, priceBottom, priceH, symbol }); }catch(_dvlLB_e){}
   }
 
   if(window.DVLHLinesDraw){

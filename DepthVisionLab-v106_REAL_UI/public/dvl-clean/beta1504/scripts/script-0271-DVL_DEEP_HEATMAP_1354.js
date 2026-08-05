@@ -1126,6 +1126,9 @@
     _persist:persistSnapshots,_restore:restoreSnapshots,_wipeSnaps:function(){R.snapshots=[];R.snapVersion++;R.cache.key="";},
     _wipeLevels:lvWipe,_levels:function(){var a=[];LV.ledger.forEach(function(v,k){a.push(Object.assign({k:k},v));});return a;},_lvTick:lvTick,
     _injectBook:function(bids,asks,mid){R.bids=new Map(bids);R.asks=new Map(asks);if(mid)R.mid=mid;},
+    /* Acessores read-only p/ o indicador Liquidity Bands consumir o motor. */
+    _snapshots:function(){return R.snapshots;},_step:function(){return R.step;},
+    _consumption:function(){return R.consumption;},_snapVersion:function(){return R.snapVersion;},
     debug:function(){return {on:st.on,symbol:R.symbol,source:R.source,status:R.status,connected:R.connected,synced:R.synced,step:R.step,snapshots:R.snapshots.length,trades:R.trades.length,historySeeded:R.historySeeded,consumptionEvents:R.consumption.length,consumption30s:R.lastConsumptionStats,lastThreshold:R.lastThreshold,lastDrawnBubbles:R.lastDrawnBubbles,error:R.err};}
   };
 
