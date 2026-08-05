@@ -52,7 +52,13 @@ function clampNativeDom(){
   }
   if(y1===null)y1=Math.max(0,r.height-24);
 
-  var h=Math.max(0,y1-y0);
+  /* Estende a linha VERTICAL até o fundo do painel do oscilador (RSI/etc.),
+     se houver — assim o crosshair "atravessa" o painel inferior. A horizontal
+     e o rótulo de preço seguem limitados ao painel de preço (y1). */
+  var yBottom=y1;
+  try{ if(typeof dvlCrossPanelBottom==="function"){ var cb=Number(dvlCrossPanelBottom(r.height)); if(Number.isFinite(cb)&&cb>yBottom) yBottom=cb; } }catch(_){}
+
+  var h=Math.max(0,yBottom-y0);
   var v=root.querySelector(".dvl-x-v");
   var line=root.querySelector(".dvl-x-h");
   var dot=root.querySelector(".dvl-x-dot");

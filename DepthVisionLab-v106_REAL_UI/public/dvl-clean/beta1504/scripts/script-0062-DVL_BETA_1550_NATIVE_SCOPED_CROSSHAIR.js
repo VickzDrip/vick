@@ -120,8 +120,9 @@ function paint(){
     var v=root.querySelector(".dvl-x-v");
     var h=root.querySelector(".dvl-x-h");
     if(v){
+      var _yB=y1; try{ if(typeof dvlCrossPanelBottom==="function"){ var _cb=Number(dvlCrossPanelBottom(r.height)); if(Number.isFinite(_cb)&&_cb>_yB)_yB=_cb; } }catch(_){}
       v.style.setProperty("top",Math.round(y0)+"px","important");
-      v.style.setProperty("height",Math.round(y1-y0)+"px","important");
+      v.style.setProperty("height",Math.round(_yB-y0)+"px","important");   // vertical atravessa o painel do oscilador (RSI)
     }
     if(h)h.style.setProperty("width",Math.round(x1-x0)+"px","important");
   }
