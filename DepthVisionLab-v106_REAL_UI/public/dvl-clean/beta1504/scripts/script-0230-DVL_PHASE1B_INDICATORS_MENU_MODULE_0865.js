@@ -70,7 +70,7 @@
   function catFor(m){
     if(m.missing) return "soon";
     if(m.key==="oi"||m.key==="ls"||m.key==="netlong"||m.key==="netshort"||m.key==="netdelta"||m.key==="dv"||m.key==="exr"||m.key==="tv"||m.key==="arion") return "osc";
-    if(m.key==="ma"||m.key==="vwapsession"||m.key==="bookmap"||m.key==="dh"||m.key==="frvp"||m.key==="mfrvp"||m.key==="ifvgmagnet"||m.key==="gex") return "overlay";
+    if(m.key==="ma"||m.key==="vwapsession"||m.key==="splinequant"||m.key==="bookmap"||m.key==="dh"||m.key==="frvp"||m.key==="mfrvp"||m.key==="ifvgmagnet"||m.key==="gex") return "overlay";
     return "flow";
   }
 
@@ -92,6 +92,7 @@
       {key:"smartdelta",mark:"SD",title:"DVL Smart Delta",sub:"institutional confluence",api:"DVL_SMART_DELTA_ENGINE_API",pill:"dvlSmartDeltaState",row:"dvlSmartDeltaItem"},
       {key:"ma",mark:"MA",title:"Moving Averages",sub:"10 médias · overlay",api:"DVLMovingAverages",pill:"dvlMaState",row:"dvlMovingAveragesItem"},
       {key:"vwapsession",mark:"VW",title:"VWAP Session",sub:"reset por sessão · bandas σ",api:"DVLVwapSession",pill:"dvlVwapSessionState",row:"dvlVwapSessionItem"},
+      {key:"splinequant",mark:"SQ",title:"Spline Quantile Channel",sub:"canal quantílico · spline · forecast",api:"DVLSplineQuantChannel",pill:"dvlSplineQuantState",row:"dvlSplineQuantItem"},
       {key:"bookmap",mark:"BM",title:"DVL Bookmap Zones",sub:"Order book heatmap · Bookmap style",api:"DVL_BOOKMAP_ZONES_0813"},
       {key:"dh",mark:"DH",title:"DVL Deep Heatmap",sub:"liquidez + consumo confirmado",api:"DVL_DEEP_HEATMAP_API"},
       {key:"tv",mark:"TV",title:"DVL Tick Volume",sub:"tick volume oscillator",api:"DVLTickVolume",pill:"dvlTickVolumeState",row:"dvlTickVolumeItem"}
