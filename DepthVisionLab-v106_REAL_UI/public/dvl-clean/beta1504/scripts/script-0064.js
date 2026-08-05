@@ -28,6 +28,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.607", note: "Causa raiz do RSI Exhaustion não plotar a linha (em NENHUM timeframe): o objeto global window.__dvlLastCrossCfg — que carrega a view e a função x do gráfico — deixou de ser publicado quando o app foi extraído do HTML monolítico para o build modular (o setter ficou só nos index-*.html antigos). Sem ele, o xForTime do RSI retornava NaN e nenhum ponto era plotado. Restaurado o setter no render do core (junto do __DVL_DRAWCFG). Também beneficia os labels de crosshair, que liam esse config. Só frontend." },
   { version: "Beta 1.606", note: "Fix do RSI Exhaustion nos timeframes em segundos (15s/30s): a linha não plotava. Causa: a função tfMs() do indicador só reconhecia m/h/d e ignorava o sufixo 's', caindo no default de 60000ms — então no 15s/30s o closeTime das velas (filtro do normalizeRows) e o mapeamento do desenho (bounds/step por tfMs(chartTf())) ficavam errados e a série era descartada, independente do TF de cálculo. Agora tfMs aceita segundos (15s→15000, 30s→30000), com m/h/d idênticos ao anterior (zero mudança no 1m+). Só frontend." },
   { version: "Beta 1.605", note: "Painel do Spline Quantile Channel padronizado no visual do app: seções (Geral / Quantis & Forecast / Cores) com grid, switches ON-OFF, inputs e select no tema escuro, e seletor de cor por paleta — igual aos demais indicadores (VWAP etc.). Antes os controles vinham crus/amontoados. Só frontend." },
   { version: "Beta 1.604", note: "Spline Quantile Channel finalmente aparece no menu de Indicators. Causa raiz: o menu novo (Phase 1B) é montado a partir de um registro interno de módulos (modules()), não do #indicatorDropdown legado onde o indicador se registrava — então ele nunca era listado, apesar de carregado. Agora o Spline Quantile Channel está no registro, na seção Overlay (ao lado do VWAP), com toggle/painel/estado ON-OFF integrados ao UI novo. Só frontend." },
@@ -5361,6 +5362,12 @@ if(window.DVLSpikeZonesDraw){
      bubbles SOBREPOSTOS aos candles, não atrás deles. */
   /* mapping p/ o Replay Pro converter clique → candle (seletor de início) */
   try{ window.__DVL_DRAWCFG={x0:x0,x1:x1,y0:y0,y1:y1,slotOffset:slotOffset,totalSlots:(win&&win.totalSlots)||0,view:view}; }catch(_dvlCfg_e){}
+  /* Restaura o config global do crosshair/coordenadas que se PERDEU na extração
+     do monolito p/ o build modular (existia como window.__dvlLastCrossCfg no
+     index antigo). O RSI Exhaustion e os labels de crosshair leem esse objeto
+     pra mapear tempo→X (precisam de `view` + da função `x`); sem ele, o xForTime
+     do RSI retornava NaN e a LINHA NÃO PLOTAVA EM NENHUM TIMEFRAME. */
+  try{ window.__dvlLastCrossCfg={x0:x0,x1:x1,y0:y0,y1:y1,min:min,max:max,win:win,view:view,slotOffset:slotOffset,x:x}; }catch(_dvlXCfg_e){}
   /* linha vertical de início do Replay (+ escurecido do futuro) */
   if(window.DVLReplayLineDraw){ try{ window.DVLReplayLineDraw(ctx,{view:view,win:win,x:x,x0:x0,x1:x1,y0:y0,y1:y1,slotOffset:slotOffset}); }catch(_dvlRl_e){} }
 
