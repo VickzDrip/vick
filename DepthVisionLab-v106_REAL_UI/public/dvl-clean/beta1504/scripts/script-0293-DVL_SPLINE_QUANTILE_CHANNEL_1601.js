@@ -364,6 +364,16 @@
       mo.observe(document.documentElement, {childList:true, subtree:true});
       setTimeout(()=>{ try{ mo.disconnect(); }catch(_){} }, 30000);
     }catch(_){}
+    // À PROVA DE REBUILD/TIMING: o "novo UI" reconstroi o menu de indicators em
+    // vários momentos (troca de ativo, load de dados), possivelmente depois que
+    // o observer acima já desligou — e a reconstrução não conhece meu item. Por
+    // isso, re-insere no exato instante em que o usuário ABRE os Indicadores
+    // (delegação no botão #toggleIndicators). É o padrão dos indicadores novos.
+    try{
+      document.addEventListener("click", ev=>{
+        try{ if(ev.target && ev.target.closest && ev.target.closest("#toggleIndicators")) setTimeout(insertItem, 0); }catch(_){}
+      }, true);
+    }catch(_){}
     if(state.on){ initWorker(); maybeCompute(); }
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot); else boot();
