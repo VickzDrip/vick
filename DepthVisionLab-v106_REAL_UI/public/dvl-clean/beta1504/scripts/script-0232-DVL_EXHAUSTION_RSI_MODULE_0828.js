@@ -154,10 +154,14 @@
   }
   function tfMs(tf){
     tf = tfApi(tf);
-    var m = String(tf).match(/^(\d+)(m|h|d)$/i);
+    // Aceita SEGUNDOS (15s/30s) além de m/h/d. Antes o regex ignorava o sufixo
+    // "s" e caía no default 60000 (1 min): no gráfico 15s/30s o closeTime das
+    // velas (filtro em normalizeRows) e o mapeamento do draw (bounds/step por
+    // tfMs(chartTf())) ficavam errados -> série descartada / linha nao plotava.
+    var m = String(tf).match(/^(\d+)(s|m|h|d)$/i);
     if(!m) return 60000;
     var n = Math.max(1, Number(m[1]) || 1), u = m[2].toLowerCase();
-    return u === "m" ? n*60000 : u === "h" ? n*3600000 : n*86400000;
+    return u === "s" ? n*1000 : u === "m" ? n*60000 : u === "h" ? n*3600000 : n*86400000;
   }
 
   function closeTime(c, tf){
