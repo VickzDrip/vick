@@ -9,20 +9,20 @@ const config = require("./config");
 let _worker = null;
 
 function install(app) {
-  const dbmod = require("./db");
+  const store = require("./store");
 
-  // 1) Testa o driver SQLite ANTES de montar qualquer rota que dependa dele.
-  //    Se falhar, monta só um /status estático (enabled:false) — sem erros.
-  let dbErr = null;
-  try { dbmod.open(); } catch (e) { dbErr = e; }
-  if (dbErr) {
+  // 1) Carrega o store puro-JS (sem SQLite/nativo). Se por algum motivo falhar,
+  //    monta só um /status estático — sem derrubar nada.
+  let stErr = null;
+  try { store.load(); } catch (e) { stErr = e; }
+  if (stErr) {
     app.get("/api/telegram/status", (req, res) =>
-      res.json({ enabled: false, reason: "no_sqlite_driver", detail: String(dbErr && dbErr.message || dbErr) }));
-    console.warn("[DVL Telegram] SQLite indisponível — feature OFF. Instale better-sqlite3 (npm i better-sqlite3) ou Node>=22.5. " + (dbErr && dbErr.message));
+      res.json({ enabled: false, reason: "store_unavailable", detail: String(stErr && stErr.message || stErr) }));
+    console.warn("[DVL Telegram] store indisponível — feature OFF. " + (stErr && stErr.message));
     return { enabled: false, dbOk: false };
   }
 
-  // 2) DB ok — monta tudo.
+  // 2) Store ok — monta tudo.
   const identity = require("./identity");
   const { makeHandler } = require("./webhook");
   const { makeRouter } = require("./routes");
@@ -35,9 +35,9 @@ function install(app) {
 
   if (enabled) {
     _worker = makeWorker().start();
-    console.log("[DVL Telegram] ENABLED (" + dbmod.driver() + ") — worker started · bot=@" + config.botUsername + " · webhook=" + config.webhookUrl + " · mode=" + config.mode);
+    console.log("[DVL Telegram] ENABLED (store puro-JS) — worker started · bot=@" + config.botUsername + " · webhook=" + config.webhookUrl + " · mode=" + config.mode);
   } else {
-    console.log("[DVL Telegram] driver=" + dbmod.driver() + " ok, mas sem TELEGRAM_BOT_TOKEN — rotas respondem enabled:false");
+    console.log("[DVL Telegram] store ok, mas sem TELEGRAM_BOT_TOKEN — rotas respondem enabled:false");
   }
   return { enabled, dbOk: true, worker: _worker };
 }

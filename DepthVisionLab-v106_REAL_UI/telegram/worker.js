@@ -31,8 +31,7 @@ function makeWorker(opts) {
     const t = now();
     if (t - last < PER_CHAT_MIN_GAP) {
       repo.markRetry(d.id, last + PER_CHAT_MIN_GAP + 50, "rate_local", null);
-      // devolve a tentativa que o claim consumiu (adiamento não conta)
-      try { require("./db").db().prepare("UPDATE alert_deliveries SET attempt_count=attempt_count-1 WHERE id=?").run(d.id); } catch (_) {}
+      repo.bumpAttempt(d.id, -1); // adiamento não conta como tentativa
       return;
     }
 
