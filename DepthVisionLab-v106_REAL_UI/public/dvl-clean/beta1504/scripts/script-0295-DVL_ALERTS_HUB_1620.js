@@ -28,6 +28,39 @@
   function shortSym(s){ return String(s||"").replace(/USDT$/,""); }
   function maLabelFor(idx){ try{ var api=window.DVLMovingAverages, l=(api&&typeof api.list==="function")?api.list():[]; for(var i=0;i<l.length;i++) if(l[i].idx===Number(idx)) return l[i].label; }catch(_){} return "média"; }
 
+  /* ── registro de LINHAS (p/ a fonte "Cruzamentos") ────────────────────────
+     Cada linha tem um id, um label e um valor atual. Só aparecem as linhas
+     disponíveis agora (indicador ligado). */
+  function lineOptions(){
+    var out=[{value:"price",label:"Preço"}];
+    try{ var mas=(window.DVLMovingAverages&&window.DVLMovingAverages.list)?window.DVLMovingAverages.list():[]; mas.forEach(function(m){ out.push({value:"ma:"+m.idx,label:m.label}); }); }catch(_){}
+    try{ var vw=(window.DVLVwapSession&&window.DVLVwapSession.levels)?window.DVLVwapSession.levels():null;
+      if(vw){ out.push({value:"vwap",label:"VWAP"});
+        if(vw.bandsOn){ out.push({value:"vwap_u1",label:"VWAP +1σ"}); out.push({value:"vwap_l1",label:"VWAP −1σ"}); }
+        if(vw.band2On){ out.push({value:"vwap_u2",label:"VWAP +2σ"}); out.push({value:"vwap_l2",label:"VWAP −2σ"}); }
+      } }catch(_){}
+    try{ var vp=(window.DVLVolumeProfile&&window.DVLVolumeProfile.getLevels)?((window.DVLVolumeProfile.getLevels()||{}).current||null):null;
+      if(vp && vp.poc!=null){ out.push({value:"vp_poc",label:"VP POC"}); out.push({value:"vp_vah",label:"VP VAH"}); out.push({value:"vp_val",label:"VP VAL"}); } }catch(_){}
+    return out;
+  }
+  function lineValue(id){
+    if(!id) return null;
+    if(id==="price") return gprice();
+    if(id.indexOf("ma:")===0){ var idx=Number(id.slice(3)); try{ return (window.DVLMovingAverages&&window.DVLMovingAverages.valueAt)?window.DVLMovingAverages.valueAt(idx):null; }catch(_){ return null; } }
+    if(id.indexOf("vwap")===0){ try{ var vw=(window.DVLVwapSession&&window.DVLVwapSession.levels)?window.DVLVwapSession.levels():null; if(!vw) return null;
+      return id==="vwap"?vw.vwap:id==="vwap_u1"?vw.upper1:id==="vwap_l1"?vw.lower1:id==="vwap_u2"?vw.upper2:id==="vwap_l2"?vw.lower2:null; }catch(_){ return null; } }
+    if(id.indexOf("vp_")===0){ try{ var vp=(window.DVLVolumeProfile&&window.DVLVolumeProfile.getLevels)?((window.DVLVolumeProfile.getLevels()||{}).current||{}):{}; return id==="vp_poc"?vp.poc:id==="vp_vah"?vp.vah:id==="vp_val"?vp.val:null; }catch(_){ return null; } }
+    return null;
+  }
+  function lineLabelFor(id){
+    var o=lineOptions(); for(var i=0;i<o.length;i++) if(o[i].value===id) return o[i].label;
+    if(id==="price") return "Preço";
+    if(id&&id.indexOf("ma:")===0) return maLabelFor(id.slice(3));
+    var map={vwap:"VWAP",vwap_u1:"VWAP +1σ",vwap_l1:"VWAP −1σ",vwap_u2:"VWAP +2σ",vwap_l2:"VWAP −2σ",vp_poc:"VP POC",vp_vah:"VP VAH",vp_val:"VP VAL"};
+    return map[id]||id||"linha";
+  }
+  var crossPrev = {}; // id da regra → sinal anterior de (A-B)
+
   /* ── catálogo de fontes ──────────────────────────────────────────────────
      Cada fonte: {key,title,mark,signals:[{id,label,dirs?,needsLevel?,levelLabel?,
      levelUnit?,levelDefault?,desc}]}. dirs presente => o sinal tem direção
@@ -84,6 +117,14 @@
         {value:"poc",label:"POC"},{value:"vah",label:"VAH"},{value:"val",label:"VAL"},{value:"all",label:"Qualquer (POC/VAH/VAL)"}
       ]; } }] }
   ]});
+  registerSource({ key:"cross", title:"Cruzamentos (combinar)", mark:"✕", signals:[
+    { id:"line_cross", label:"Linha A cruza Linha B", dirs:true,
+      desc:"combine dois indicadores: ex. EMA × VWAP, ou Preço × borda do VWAP. Direção = A cruzando pra cima/baixo de B (ou ambas). Só aparecem as linhas dos indicadores LIGADOS.",
+      params:[
+        { id:"lhs", label:"Linha A", kind:"select", options:lineOptions },
+        { id:"rhs", label:"Linha B", kind:"select", options:lineOptions }
+      ] }
+  ]});
 
   /* ── regras (localStorage) ── */
   var LS_RULES = "dvl_alerts_rules_v1";
@@ -117,7 +158,7 @@
     rules.push(rule); saveRules(rules); return rule;
   }
   function updateRule(id, patch){ for(var i=0;i<rules.length;i++){ if(rules[i].id===id){ Object.assign(rules[i], patch||{}); saveRules(rules); return rules[i]; } } return null; }
-  function deleteRule(id){ rules = rules.filter(function(r){ return r.id!==id; }); saveRules(rules); }
+  function deleteRule(id){ rules = rules.filter(function(r){ return r.id!==id; }); try{ delete crossPrev[id]; }catch(_){} saveRules(rules); }
 
   /* ── entrega ──────────────────────────────────────────────────────────── */
   var _audioCtx = null;
@@ -180,6 +221,7 @@
     if(rule.params){
       if(rule.source==="ma" && rule.params.maId!=null && rule.params.maId!=="") extra = " ("+maLabelFor(rule.params.maId)+")";
       else if(rule.source==="vp" && rule.params.level) extra = " ("+String(rule.params.level).toUpperCase()+")";
+      else if(rule.source==="cross" && rule.params.lhs && rule.params.rhs) extra = " ("+lineLabelFor(rule.params.lhs)+" ✕ "+lineLabelFor(rule.params.rhs)+")";
     }
     var px = payload&&payload.price!=null ? (" · "+fmtPx(payload.price)) : "";
     return title+": "+label+extra+px;
@@ -252,7 +294,7 @@
     // avalia regras que dependem do preço x nível dinâmico: Preço, Médias, VP
     for(var i=0;i<rules.length;i++){
       var r = rules[i];
-      if(!r.enabled || (r.source!=="price" && r.source!=="ma" && r.source!=="vp")) continue;
+      if(!r.enabled || (r.source!=="price" && r.source!=="ma" && r.source!=="vp" && r.source!=="cross")) continue;
       if(r.symbol && String(r.symbol).toUpperCase()!==sym) continue; // são por símbolo
       if(r.tf && String(r.tf)!==String(tf)) continue;
       // re-arme é tratado dentro de fire()
@@ -269,6 +311,25 @@
               var _mlbl = maLabelFor(_mi);
               fire(r, {dir:_mdir, price:p, symbol:sym, tf:tf, message:"Preço cruzou "+(_mdir==="up"?"ACIMA":"ABAIXO")+" da "+_mlbl+" ("+shortSym(sym)+")"});
             }
+          }
+        }
+        continue;
+      }
+      // ── Cruzamentos: linha A cruza linha B (combina indicadores) ──
+      if(r.source==="cross"){
+        if(r.signal==="line_cross"){
+          var _la=r.params&&r.params.lhs, _lb=r.params&&r.params.rhs;
+          var _a=lineValue(_la), _b=lineValue(_lb);
+          if(_a!=null && _b!=null && Number.isFinite(_a) && Number.isFinite(_b)){
+            var _sign = (_a-_b)>=0 ? 1 : -1;
+            var _prev = crossPrev[r.id];
+            if(_prev!=null && _sign!==_prev){
+              var _cdir = _sign>0 ? "up" : "down"; // A cruzou pra CIMA/BAIXO de B
+              if(r.dir==="any" || !r.dir || r.dir===_cdir){
+                fire(r, {dir:_cdir, price:(gprice()), symbol:sym, tf:tf, message:lineLabelFor(_la)+" cruzou "+(_cdir==="up"?"ACIMA":"ABAIXO")+" de "+lineLabelFor(_lb)});
+              }
+            }
+            crossPrev[r.id] = _sign;
           }
         }
         continue;
@@ -394,6 +455,10 @@
         var opts=paramOptions(pr); if(opts.length) draft.params[pr.id]=String(opts[0].value);
       }
     });
+    // Cruzamentos: evita A e B iguais por padrão (linha B = 2ª opção disponível)
+    if(draft.source==="cross" && draft.params.lhs===draft.params.rhs){
+      var lo=lineOptions(); if(lo.length>1) draft.params.rhs=String(lo[1].value);
+    }
   }
 
   function newRuleHTML(){
@@ -446,6 +511,7 @@
       if(r.params){
         if(r.source==="ma" && r.params.maId!=null && r.params.maId!=="") pTag='<span class="dvl-alert-tag">'+esc(maLabelFor(r.params.maId))+'</span>';
         else if(r.source==="vp" && r.params.level) pTag='<span class="dvl-alert-tag">'+esc(String(r.params.level).toUpperCase())+'</span>';
+        else if(r.source==="cross" && r.params.lhs && r.params.rhs) pTag='<span class="dvl-alert-tag">'+esc(lineLabelFor(r.params.lhs))+' ✕ '+esc(lineLabelFor(r.params.rhs))+'</span>';
       }
       var tfTag = r.tf ? '<span class="dvl-alert-tag tf">TF '+esc(r.tf)+'</span>' : '';
       var chans = (r.toast?"toast":"") + (r.sound?(r.toast?"+som":"som"):"");
@@ -561,7 +627,8 @@
       }
       // validação de parâmetros obrigatórios (ex.: escolher a média)
       if(sg&&sg.params){ for(var pi=0;pi<sg.params.length;pi++){ var pid=sg.params[pi].id; if(draft.params[pid]==null||draft.params[pid]===""){ flash(add, sg.params[pi].id==="maId"?"ligue e escolha a média":"escolha "+(sg.params[pi].label||"o parâmetro")); return; } } }
-      var scoped = (draft.source==="price"||draft.source==="ma"||draft.source==="vp");
+      if(draft.source==="cross" && draft.params.lhs===draft.params.rhs){ flash(add,"escolha duas linhas diferentes"); return; }
+      var scoped = (draft.source==="price"||draft.source==="ma"||draft.source==="vp"||draft.source==="cross");
       addRule({
         source:draft.source, signal:draft.signal, dir:draft.dir,
         level:(sg&&sg.needsLevel)?Number(draft.level):null,

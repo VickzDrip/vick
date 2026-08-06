@@ -366,12 +366,33 @@
   }
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 
+  /* Beta 1.626 — valores atuais (VWAP + bandas) para o DVL Alerts Hub
+     (fonte "Cruzamentos"). Retorna null se o indicador estiver desligado. */
+  function currentLevels(){
+    try{
+      if(!state.on) return null;
+      const cs = candles(); if(!cs || !cs.length) return null;
+      const s = series(cs);
+      let vwap=null, sd=null;
+      for(let j=cs.length-1;j>=0;j--){ if(s.vwap[j]!=null && Number.isFinite(s.vwap[j])){ vwap=s.vwap[j]; sd=s.sd[j]; break; } }
+      if(vwap==null) return null;
+      sd = Number.isFinite(sd)?sd:0;
+      return {
+        vwap:vwap,
+        upper1: vwap + state.mult1*sd, lower1: vwap - state.mult1*sd,
+        upper2: vwap + state.mult2*sd, lower2: vwap - state.mult2*sd,
+        bandsOn: !!state.bandsOn, band2On: !!state.band2On
+      };
+    }catch(_){ return null; }
+  }
+
   window.DVLVwapSessionDraw = draw;
   window.DVLVwapSession = {
     on: () => !!state.on,
     setOn: v => { state.on = !!v; save(); },
     open: openPanel,
     openPanel: openPanel,
+    levels: currentLevels,
     save: save, load: () => { state = load(); computed = null; updateItem(); redraw(); }
   };
 })();
