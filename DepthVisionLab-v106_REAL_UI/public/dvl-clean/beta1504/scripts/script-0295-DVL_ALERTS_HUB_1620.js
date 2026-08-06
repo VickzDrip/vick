@@ -102,6 +102,7 @@
       level: (r.level==null?null:Number(r.level)),
       tf: r.tf||"",
       symbol: r.symbol||"",
+      rearm: r.rearm||"time",
       cooldownSec: Number(r.cooldownSec)||30,
       toast: r.toast!==false,
       sound: r.sound!==false,
@@ -109,6 +110,8 @@
       enabled: r.enabled!==false,
       created: now(),
       lastFired: 0,
+      lastBar: 0,
+      lastDir: "",
       fires: 0
     };
     rules.push(rule); saveRules(rules); return rule;
@@ -182,12 +185,32 @@
     return title+": "+label+extra+px;
   }
 
-  function fire(rule, payload){
+  function currentBarTime(){ try{ if(typeof klines!=="undefined" && klines && klines.length) return Number(klines[klines.length-1].time); }catch(_){} return 0; }
+  /* Gating de re-arme: por tempo (cooldown s), por candle fechado (1× por
+     candle), ou por candle + direção (1× por candle E por direção — permite,
+     no mesmo candle, um disparo de alta e outro de baixa). */
+  function canFire(rule, payload){
+    var mode = rule.rearm || "time";
+    if(mode==="bar" || mode==="bar_dir"){
+      var cb = currentBarTime();
+      if(cb && rule.lastBar===cb){
+        if(mode==="bar") return false;
+        var d=(payload&&payload.dir)||"";
+        if(rule.lastDir===d) return false;
+      }
+      return true;
+    }
+    if(rule.lastFired && (now() - rule.lastFired) < ((rule.cooldownSec||0)*1000)) return false;
+    return true;
+  }
+
+  function fire(rule, payload, force){
     payload = payload||{};
+    if(!force && !canFire(rule, payload)) return;
     var dir = payload.dir || (rule.dir!=="any"?rule.dir:"");
     var msg = autoMessage(rule, payload);
     var sub = (payload.tf?("TF "+payload.tf):"") + (payload.symbol?("  "+shortSym(payload.symbol)):"");
-    rule.lastFired = now(); rule.fires = (rule.fires||0)+1;
+    rule.lastFired = now(); rule.lastBar = currentBarTime(); rule.lastDir = payload.dir||""; rule.fires = (rule.fires||0)+1;
     if(rule.once) rule.enabled = false;
     saveRules(rules);
     logAdd({ msg:msg, ts:now(), tf:(payload.tf||rule.tf||""), sym:(payload.symbol||rule.symbol||""), kind:("alert:"+rule.source) });
@@ -210,8 +233,7 @@
       if(r.tf && payload.tf && String(r.tf)!==String(payload.tf)) continue;
       // filtro de símbolo (só quando ambos existem)
       if(r.symbol && payload.symbol && String(r.symbol).toUpperCase()!==String(payload.symbol).toUpperCase()) continue;
-      // cooldown por regra
-      if(r.lastFired && (t - r.lastFired) < (r.cooldownSec*1000)) continue;
+      // re-arme (tempo / candle / candle+direção) é tratado dentro de fire()
       fire(r, payload);
     }
   }
@@ -233,7 +255,7 @@
       if(!r.enabled || (r.source!=="price" && r.source!=="ma" && r.source!=="vp")) continue;
       if(r.symbol && String(r.symbol).toUpperCase()!==sym) continue; // são por símbolo
       if(r.tf && String(r.tf)!==String(tf)) continue;
-      if(r.lastFired && (t - r.lastFired) < (r.cooldownSec*1000)) continue;
+      // re-arme é tratado dentro de fire()
 
       // ── Médias Móveis: preço cruza a média escolhida ──
       if(r.source==="ma"){
@@ -317,12 +339,27 @@
     signalDef: signalDef,
     rules: function(){ return rules.slice(); },
     addRule: addRule, updateRule: updateRule, deleteRule: deleteRule,
-    test: function(id){ var r=null; for(var i=0;i<rules.length;i++) if(rules[i].id===id) r=rules[i]; if(!r) return; fire(Object.assign({},r,{lastFired:0}), {tf:(r.tf||gtf()), symbol:(r.symbol||gsym()), message:"[TESTE] "+autoMessage(r,{})}); }
+    test: function(id){ var r=null; for(var i=0;i<rules.length;i++) if(rules[i].id===id) r=rules[i]; if(!r) return; fire(r, {tf:(r.tf||gtf()), symbol:(r.symbol||gsym()), message:"[TESTE] "+autoMessage(r,{})}, true); }
   };
 
   /* ══ UI: painel central ══════════════════════════════════════════════════ */
   injectCSS();
-  var panel=null, draft={ source:"price", signal:"cross_up", dir:"any", level:"", tf:"", cooldownSec:30, toast:true, sound:true, once:false, params:{} };
+  var panel=null, draft={ source:"price", signal:"cross_up", dir:"any", level:"", tf:"", rearm:"time", cooldownSec:30, toast:true, sound:true, once:false, params:{} };
+
+  // TFs do dropdown: favoritos do hotbar (DVL_TF_MENU) + TF atual, senão padrão
+  function tfAselOptions(){
+    var favs=[], cur="";
+    try{ if(window.DVL_TF_MENU && typeof window.DVL_TF_MENU.favorites==="function") favs=window.DVL_TF_MENU.favorites()||[]; }catch(_){}
+    try{ if(window.DVL_TF_MENU && typeof window.DVL_TF_MENU.active==="function") cur=window.DVL_TF_MENU.active()||""; }catch(_){}
+    var list=[];
+    favs.forEach(function(tf){ tf=String(tf); if(tf && list.indexOf(tf)<0) list.push(tf); });
+    if(cur && list.indexOf(cur)<0) list.push(cur);
+    if(!list.length) list=["1m","5m","15m","1h","4h","1d"];
+    var opts=[{value:"",label:"Qualquer"}];
+    list.forEach(function(tf){ opts.push({value:tf,label:tf}); });
+    return opts;
+  }
+  var REARM_OPTS=[{value:"time",label:"Por tempo (s)"},{value:"bar",label:"A cada candle fechado"},{value:"bar_dir",label:"A cada candle + direção"}];
 
   // fecha o dropdown customizado ao tocar fora dele
   document.addEventListener("click", function(ev){
@@ -383,8 +420,9 @@
     if(hasDir){
       h += '<div class="dvl-vt-field"><label>Direção</label>'+aselHTML("dir", [{value:"any",label:"Qualquer"},{value:"up",label:"Alta ▲"},{value:"down",label:"Baixa ▼"}], draft.dir)+'</div>';
     }
-    h += '<div class="dvl-vt-field"><label>Timeframe</label><input class="dvl-vt-input" type="text" data-al="tf" value="'+esc(draft.tf)+'" placeholder="qualquer"></div>'
-      + '<div class="dvl-vt-field"><label>Cooldown (s)</label><input class="dvl-vt-input" type="number" min="0" step="5" data-al="cooldownSec" value="'+esc(draft.cooldownSec)+'"></div>'
+    h += '<div class="dvl-vt-field"><label>Timeframe</label>'+aselHTML("tf", tfAselOptions(), draft.tf)+'</div>'
+      + '<div class="dvl-vt-field"><label>Rearmar</label>'+aselHTML("rearm", REARM_OPTS, draft.rearm)+'</div>'
+      + (draft.rearm==="time" ? '<div class="dvl-vt-field"><label>Cooldown (s)</label><input class="dvl-vt-input" type="number" min="0" step="5" data-al="cooldownSec" value="'+esc(draft.cooldownSec)+'"></div>' : '')
       + '<div class="dvl-vt-field"><label>Toast no gráfico</label><label class="dvl-switch"><input type="checkbox" data-al="toast"'+(draft.toast?" checked":"")+'><i></i><b></b></label></div>'
       + '<div class="dvl-vt-field"><label>Som</label><label class="dvl-switch"><input type="checkbox" data-al="sound"'+(draft.sound?" checked":"")+'><i></i><b></b></label></div>'
       + '<div class="dvl-vt-field"><label>Só uma vez</label><label class="dvl-switch"><input type="checkbox" data-al="once"'+(draft.once?" checked":"")+'><i></i><b></b></label></div>'
@@ -411,7 +449,8 @@
       }
       var tfTag = r.tf ? '<span class="dvl-alert-tag tf">TF '+esc(r.tf)+'</span>' : '';
       var chans = (r.toast?"toast":"") + (r.sound?(r.toast?"+som":"som"):"");
-      var meta = (r.fires?(r.fires+"× · "+ago(r.lastFired)):"nunca disparou") + (chans?(" · "+chans):"") + " · cd "+r.cooldownSec+"s";
+      var rearmTxt = r.rearm==="bar" ? "1×/candle" : r.rearm==="bar_dir" ? "1×/candle+dir" : ("cd "+r.cooldownSec+"s");
+      var meta = (r.fires?(r.fires+"× · "+ago(r.lastFired)):"nunca disparou") + (chans?(" · "+chans):"") + " · "+rearmTxt;
       return '<div class="dvl-alert-row'+(r.enabled?"":" off")+'" data-id="'+r.id+'">'
         + '<label class="dvl-switch sm"><input type="checkbox" data-al-toggle'+(r.enabled?" checked":"")+'><i></i><b></b></label>'
         + '<div class="dvl-alert-row-main"><div class="dvl-alert-row-title">'+esc(title)+' · '+esc(label)+' '+pTag+dirTag+lvlTag+tfTag+'</div>'
@@ -487,6 +526,8 @@
     if(id==="source"){ draft.source=val; var s=SOURCES[val]; draft.signal=(s&&s.signals[0])?s.signals[0].id:""; draft.level=""; draft.params={}; renderBody(); }
     else if(id==="signal"){ draft.signal=val; draft.level=""; draft.params={}; renderBody(); }
     else if(id==="dir"){ draft.dir=val; renderBody(); }
+    else if(id==="tf"){ draft.tf=val; renderBody(); }
+    else if(id==="rearm"){ draft.rearm=val; renderBody(); }
     else if(id.indexOf("alp:")===0){ draft.params=draft.params||{}; draft.params[id.slice(4)]=val; renderBody(); }
   }
   function bindBody(b){
@@ -525,7 +566,7 @@
         source:draft.source, signal:draft.signal, dir:draft.dir,
         level:(sg&&sg.needsLevel)?Number(draft.level):null,
         params:Object.assign({}, draft.params),
-        tf:draft.tf, cooldownSec:Number(draft.cooldownSec)||0,
+        tf:draft.tf, rearm:draft.rearm, cooldownSec:Number(draft.cooldownSec)||0,
         toast:draft.toast, sound:draft.sound, once:draft.once,
         symbol:scoped?gsym():""
       });
