@@ -42,6 +42,20 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 app.use(cors());
 
+// ── DVL Telegram Alerts (V1) ────────────────────────────────────────────────
+// Ativa SÓ quando o operador definiu TELEGRAM_BOT_TOKEN no ambiente do servidor
+// (segredos nunca no frontend). require lazy + guardado: se o módulo ou o
+// node:sqlite não estiverem disponíveis, o servidor segue normal sem Telegram.
+try {
+  if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_ENABLED !== "0") {
+    require("./telegram").install(app);
+  } else {
+    console.log("[DVL Telegram] skip (sem TELEGRAM_BOT_TOKEN)");
+  }
+} catch (e) {
+  console.warn("[DVL Telegram] desativado — falha ao instalar:", e && e.message);
+}
+
 // ── Cache policy ────────────────────────────────────────────────────────────
 // HTML: "no-cache" (NOT "no-store") so the browser MUST revalidate on every
 // load but can answer with a 304 when the ETag is unchanged — repeat loads /

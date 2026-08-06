@@ -46,6 +46,14 @@ SRC_SRV="$REPO/DepthVisionLab-v106_REAL_UI/server.js"
 if [ -f "$SRC_SRV" ] && ! cmp -s "$SRC_SRV" "$DST/server.js"; then
   cp "$SRC_SRV" "$DST/server.js"; RESTART_NODE=1
 fi
+# DVL Telegram Alerts V1 — sincroniza a pasta telegram/ inteira (module usado
+# pelo server.js via require lazy+guardado; só ativa com TELEGRAM_BOT_TOKEN).
+SRC_TG="$REPO/DepthVisionLab-v106_REAL_UI/telegram"
+if [ -d "$SRC_TG" ]; then
+  mkdir -p "$DST/telegram"
+  TGCHG="$(rsync -rlptc -i --delete "$SRC_TG/" "$DST/telegram/" 2>/dev/null)"
+  if [ -n "$TGCHG" ]; then RESTART_NODE=1; fi
+fi
 if [ "$RESTART_NODE" = "1" ]; then
   # Reinicia SÓ o frontend (server.js/subsecondCandles). Antes era 'pm2 restart
   # all', que sacudia todos os processos de uma vez a cada deploy de backend —

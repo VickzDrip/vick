@@ -12,7 +12,7 @@ function env(name, def) {
 const config = {
   // liga a feature só quando há token; TELEGRAM_ENABLED=0 força desligar
   get botToken() { return env("TELEGRAM_BOT_TOKEN", ""); },
-  get botUsername() { return env("TELEGRAM_BOT_USERNAME", "DVLAlertsBot"); },
+  get botUsername() { return env("TELEGRAM_BOT_USERNAME", "DvlalertsBot"); },
   get webhookSecret() { return env("TELEGRAM_WEBHOOK_SECRET", ""); },
   get publicUrl() { return env("DVL_PUBLIC_URL", "https://depthvisionlab.com").replace(/\/+$/, ""); },
   get webhookPath() { return "/api/telegram/webhook"; },

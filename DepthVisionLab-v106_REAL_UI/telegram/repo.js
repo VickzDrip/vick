@@ -99,6 +99,9 @@ function consumeStartToken(rawToken, tg) {
 function getConnection(dvlUserId) {
   return db().prepare(`SELECT * FROM telegram_connections WHERE dvl_user_id=?`).get(dvlUserId) || null;
 }
+function getConnectionByChat(chatId) {
+  return db().prepare(`SELECT * FROM telegram_connections WHERE telegram_chat_id=?`).get(Number(chatId)) || null;
+}
 function isSendable(conn) {
   if (!conn) return false;
   if (conn.status !== "active") return false;
@@ -191,7 +194,7 @@ module.exports = {
   now, activeUntilFrom, TOKEN_TTL_MS,
   touchDevice,
   createConnectIntent, consumeStartToken,
-  getConnection, isSendable, setStatus, pause, renew, disconnect, markSuccess, markError,
+  getConnection, getConnectionByChat, isSendable, setStatus, pause, renew, disconnect, markSuccess, markError,
   enqueue, claimBatch, markSent, markRetry, markFailed, markSkipped, deliveryStatus,
   seenUpdate
 };
