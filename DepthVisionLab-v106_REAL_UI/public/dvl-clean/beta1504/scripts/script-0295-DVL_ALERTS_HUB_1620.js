@@ -96,6 +96,7 @@
     { id:"confluence",  label:"Confluência (forte)",dirs:false, desc:"alerta de confluência do Smart Delta" }
   ]});
   registerSource({ key:"exr", title:"RSI Exhaustion", mark:"EXR", signals:[
+    { id:"exhaustion_any",  label:"Exaustão (topo ou fundo)", desc:"uma regra só cobre as DUAS exaustões; a notificação diz se foi TOPO (▼) ou FUNDO (▲)" },
     { id:"exhaustion_up",   label:"Exaustão de TOPO",  desc:"RSI em exaustão de alta (possível reversão p/ baixo)" },
     { id:"exhaustion_down", label:"Exaustão de FUNDO", desc:"RSI em exaustão de baixa (possível reversão p/ cima)" }
   ]});
@@ -271,8 +272,8 @@
       if(!r.enabled || r.source!==sourceKey || r.signal!==signalId) continue;
       // filtro de direção
       if(r.dir && r.dir!=="any" && payload.dir && payload.dir!==r.dir) continue;
-      // filtro de TF (se a regra fixou um TF e o payload traz TF)
-      if(r.tf && payload.tf && String(r.tf)!==String(payload.tf)) continue;
+      // filtro de TF ("chart" = TF do gráfico; TF fixo casa só naquele TF)
+      if(!tfMatches(r, payload.tf)) continue;
       // filtro de símbolo (só quando ambos existem)
       if(r.symbol && payload.symbol && String(r.symbol).toUpperCase()!==String(payload.symbol).toUpperCase()) continue;
       // re-arme (tempo / candle / candle+direção) é tratado dentro de fire()
@@ -296,7 +297,7 @@
       var r = rules[i];
       if(!r.enabled || (r.source!=="price" && r.source!=="ma" && r.source!=="vp" && r.source!=="cross")) continue;
       if(r.symbol && String(r.symbol).toUpperCase()!==sym) continue; // são por símbolo
-      if(r.tf && String(r.tf)!==String(tf)) continue;
+      if(!tfMatches(r, tf)) continue; // "chart" casa sempre; TF fixo só no seu TF
       // re-arme é tratado dentro de fire()
 
       // ── Médias Móveis: preço cruza a média escolhida ──
@@ -405,9 +406,10 @@
 
   /* ══ UI: painel central ══════════════════════════════════════════════════ */
   injectCSS();
-  var panel=null, draft={ source:"price", signal:"cross_up", dir:"any", level:"", tf:"", rearm:"time", cooldownSec:30, toast:true, sound:true, once:false, params:{} };
+  var panel=null, draft={ source:"price", signal:"cross_up", dir:"any", level:"", tf:"chart", rearm:"time", cooldownSec:30, toast:true, sound:true, once:false, params:{} };
 
-  // TFs do dropdown: favoritos do hotbar (DVL_TF_MENU) + TF atual, senão padrão
+  // TFs do dropdown: "Chart" (TF atual do gráfico) + favoritos do hotbar.
+  // Removido o "Qualquer" pra evitar disparo em vários TFs de uma vez.
   function tfAselOptions(){
     var favs=[], cur="";
     try{ if(window.DVL_TF_MENU && typeof window.DVL_TF_MENU.favorites==="function") favs=window.DVL_TF_MENU.favorites()||[]; }catch(_){}
@@ -416,9 +418,18 @@
     favs.forEach(function(tf){ tf=String(tf); if(tf && list.indexOf(tf)<0) list.push(tf); });
     if(cur && list.indexOf(cur)<0) list.push(cur);
     if(!list.length) list=["1m","5m","15m","1h","4h","1d"];
-    var opts=[{value:"",label:"Qualquer"}];
+    var opts=[{value:"chart",label:"Chart (TF atual)"}];
     list.forEach(function(tf){ opts.push({value:tf,label:tf}); });
     return opts;
+  }
+  /* "chart" (ou vazio, legado) = casa com o TF atual do gráfico; um TF fixo só
+     casa quando o contexto/gráfico está naquele TF. Evita 1 regra disparar em
+     vários TFs de uma vez. */
+  function tfMatches(rule, ctxTf){
+    var rt = rule.tf;
+    if(!rt || rt==="chart") rt = gtf();
+    if(!ctxTf) return true;
+    return String(rt)===String(ctxTf);
   }
   var REARM_OPTS=[{value:"time",label:"Por tempo (s)"},{value:"bar",label:"A cada candle fechado"},{value:"bar_dir",label:"A cada candle + direção"}];
 
@@ -513,7 +524,8 @@
         else if(r.source==="vp" && r.params.level) pTag='<span class="dvl-alert-tag">'+esc(String(r.params.level).toUpperCase())+'</span>';
         else if(r.source==="cross" && r.params.lhs && r.params.rhs) pTag='<span class="dvl-alert-tag">'+esc(lineLabelFor(r.params.lhs))+' ✕ '+esc(lineLabelFor(r.params.rhs))+'</span>';
       }
-      var tfTag = r.tf ? '<span class="dvl-alert-tag tf">TF '+esc(r.tf)+'</span>' : '';
+      var tfLabel = (!r.tf||r.tf==="chart") ? "Chart" : r.tf;
+      var tfTag = '<span class="dvl-alert-tag tf">'+esc(tfLabel)+'</span>';
       var chans = (r.toast?"toast":"") + (r.sound?(r.toast?"+som":"som"):"");
       var rearmTxt = r.rearm==="bar" ? "1×/candle" : r.rearm==="bar_dir" ? "1×/candle+dir" : ("cd "+r.cooldownSec+"s");
       var meta = (r.fires?(r.fires+"× · "+ago(r.lastFired)):"nunca disparou") + (chans?(" · "+chans):"") + " · "+rearmTxt;

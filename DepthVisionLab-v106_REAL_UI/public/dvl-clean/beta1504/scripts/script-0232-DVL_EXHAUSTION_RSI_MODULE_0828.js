@@ -923,8 +923,12 @@
             if(_exZone!==0 && _exZone!==window.__dvlExrZone && window.DVL_ALERTS && typeof window.DVL_ALERTS.emit==="function"){
               var _exSym=(typeof symbol!=="undefined"&&symbol)?String(symbol):"";
               var _exTf=(state.calculationTF&&state.calculationTF!=="Chart")?String(state.calculationTF):((typeof interval!=="undefined")?String(interval):"");
-              if(_exZone>0) window.DVL_ALERTS.emit("exr","exhaustion_up",{dir:"down",tf:_exTf,symbol:_exSym,message:"RSI Exhaustion: exaustão de TOPO — possível reversão ▼"});
-              else          window.DVL_ALERTS.emit("exr","exhaustion_down",{dir:"up",tf:_exTf,symbol:_exSym,message:"RSI Exhaustion: exaustão de FUNDO — possível reversão ▲"});
+              var _exDir=_exZone>0?"down":"up";
+              var _exMsg=_exZone>0?"RSI Exhaustion: exaustão de TOPO — possível reversão ▼":"RSI Exhaustion: exaustão de FUNDO — possível reversão ▲";
+              var _exPayload={dir:_exDir,tf:_exTf,symbol:_exSym,message:_exMsg};
+              window.DVL_ALERTS.emit("exr",_exZone>0?"exhaustion_up":"exhaustion_down",_exPayload);
+              // sinal combinado: uma regra só cobre topo E fundo (a msg diz qual)
+              window.DVL_ALERTS.emit("exr","exhaustion_any",_exPayload);
             }
             window.__dvlExrZone=_exZone;
           }catch(_exrAlertErr){}
