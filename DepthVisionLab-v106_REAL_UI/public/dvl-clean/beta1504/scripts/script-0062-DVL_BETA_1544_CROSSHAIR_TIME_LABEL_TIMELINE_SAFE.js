@@ -136,6 +136,14 @@ function paint(){
   tag.style.display="block";
 }
 function schedule(){if(!raf)raf=requestAnimationFrame(paint)}
+/* Beta 1.613 — hook p/ o crosshair MOBILE. No desktop o tag de tempo é
+   agendado pelo pointermove (move), mas no mobile o move() sai cedo p/ touch,
+   então o cross de long-press nunca reagendava paint() e a data/hora não
+   aparecia na timeline. A draw() do canvas chama este sync toda vez que
+   repinta enquanto o cross mobile está ativo (e quando é dispensado), então o
+   tag DOM — que fica acima do canvas da timeline (z-index alto) — mostra/some
+   seguindo crosshair.visible. */
+window.DVL_CROSS_TIME_TAG_1544_SYNC=function(){try{schedule()}catch(_){}};
 function move(ev){
   if(ev && ev.pointerType && ev.pointerType !== "mouse") return; // hover só no desktop
   lastEv=ev;

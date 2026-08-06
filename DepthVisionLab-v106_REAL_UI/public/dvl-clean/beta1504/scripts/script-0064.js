@@ -28,6 +28,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.613", note: "Crosshair MOBILE agora mostra a data/hora na timeline. O rotulo de tempo e um elemento DOM (#dvlCross1544TimeTag) que fica acima do canvas da timeline; no desktop ele era agendado pelo pointermove, mas o handler saia cedo p/ toque, entao no mobile o cross de long-press nunca reagendava e a data/hora nao aparecia. Exposto um hook (DVL_CROSS_TIME_TAG_1544_SYNC) que a draw() chama enquanto o cross mobile esta ativo (e ao ser dispensado), mostrando/escondendo o tag conforme crosshair.visible. Removido o rotulo de tempo redundante do canvas (ficava coberto pela timeline). So frontend." },
   { version: "Beta 1.612", note: "Crosshair MOBILE corrigido: no celular o cross 'nem aparecia de forma alguma'. Causa raiz — a funcao drawCrosshair (que pinta o cross direto no canvas) foi perdida na extracao monolito->modular; o crosshair DOM so funciona no desktop, entao no mobile a draw() caia no ramo que chamava drawCrosshair e batia num ReferenceError, abortando o render do cross. Restaurei a funcao original (perna vertical atravessando os dois paineis, perna horizontal + dot, tag de preco e label de tempo). Desktop segue usando o cross DOM, intacto. So frontend." },
   { version: "Beta 1.611", note: "Liquidity Bands: voltou a ser BANDAS (serie temporal) que ficam no historico pra estudar pontos passados — a parede ASK dominante (topo) e BID (base) tracam o trajeto da liquidez ao longo do tempo, com canal sombreado. O grab de liquidez agora e um LABEL (triangulo) no topo (buscou ask) ou na base (buscou bid) do candle que varreu a banda e voltou pra dentro, mostrando qual lado foi buscado. So frontend." },
   { version: "Beta 1.610", note: "Liquidity Bands redesenhado como NIVEIS HORIZONTAIS VIVOS: em vez de bandas presas ao tempo dos candles, agora as paredes de liquidez dominantes (ASK acima / BID abaixo) sao linhas horizontais no preco delas, atravessando o grafico e se movendo conforme a liquidez sobe/desce (o trajeto). Quando um candle recente toca o nivel (foi buscar liquidez), o nivel ganha glow + marcador. Motor e solver iguais; mudou so o render. So frontend." },
@@ -4924,6 +4925,15 @@ function draw(){
     }
   }
 
+  /* Beta 1.613 — no mobile (sem crosshair DOM desktop) sincroniza o tag DOM de
+     data/hora da timeline (#dvlCross1544TimeTag). Fica FORA do guard de
+     visibilidade de propósito: quando o cross é dispensado, o paint() do 1544
+     lê crosshair.visible=false e esconde o tag. No desktop o tag é agendado
+     pelo pointermove, então aqui só age quando não há crosshair DOM. */
+  if(!dvlDesktopCrosshair1205() && typeof window.DVL_CROSS_TIME_TAG_1544_SYNC === "function"){
+    try{ window.DVL_CROSS_TIME_TAG_1544_SYNC(); }catch(_dvlCrossTimeTag1613){}
+  }
+
   /* Beta 1.554 — a escala final mora num canvas permanente dentro do
      chartWrap. Mesmo que o canvas principal seja limpo, redimensionado ou um
      frame pesado seja descartado, a timeline não desaparece. */
@@ -4951,17 +4961,6 @@ function drawCrosshair(ctx, cfg){
   const cx = clamp(crosshair.x, cfg.x0, cfg.x1);
   const cy = clamp(crosshair.y, fullY0, fullY1);
   const insidePricePanel = cy >= cfg.y0 && cy <= cfg.y1;
-
-  const slotRaw = ((cx - cfg.x0) / Math.max(cfg.x1 - cfg.x0, 1)) * Math.max(cfg.win.totalSlots - 1, 1);
-  const candleIdx = Math.round(slotRaw - cfg.slotOffset);
-
-  let timeText = "";
-  if(candleIdx >= 0 && candleIdx < cfg.view.length){
-    timeText = chartDateTimeLabel(cfg.view[candleIdx].time);
-  } else if(candleIdx >= cfg.view.length && cfg.view.length){
-    const futureSteps = candleIdx - cfg.view.length + 1;
-    timeText = chartDateTimeLabel(cfg.view.at(-1).time + futureSteps * intervalMs(interval));
-  }
 
   ctx.save();
   ctx.setLineDash([4,4]);
@@ -4997,25 +4996,10 @@ function drawCrosshair(ctx, cfg){
     ctx.fillText(priceText, tagX + tagW / 2, cy);
   }
 
-  if(timeText){
-    const textW = Math.max(42, ctx.measureText(timeText).width + 14);
-    const scaleBandH = (typeof dvlMainTimeScaleHeight === "function" ? dvlMainTimeScaleHeight() : 20);
-    const timeBoxH = 18;
-    /*
-      Keep the cross date label LIMITED to the main chart time-scale band.
-      Only the vertical cross leg may transcend into panel 2.
-    */
-    const boxY = cfg.y1 + Math.max(0, (scaleBandH - timeBoxH) / 2);
-    const boxX = clamp(cx - textW / 2, cfg.x0 + 2, cfg.x1 - textW - 2);
-    roundRect(ctx, boxX, boxY, textW, timeBoxH, 6, true, false, "rgba(6,18,32,.96)");
-    ctx.strokeStyle = "rgba(33,223,255,.42)";
-    ctx.stroke();
-    ctx.fillStyle = "#dff8ff";
-    ctx.font = "850 9px system-ui";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(timeText, boxX + textW / 2, boxY + timeBoxH / 2);
-  }
+  /* Nota: o rótulo de data/hora NÃO é pintado aqui no canvas — o canvas da
+     timeline permanente (z-index maior) o cobriria. O tag de tempo é um
+     elemento DOM (#dvlCross1544TimeTag) sincronizado via
+     DVL_CROSS_TIME_TAG_1544_SYNC, que fica acima da timeline. */
 
   ctx.restore();
 }
