@@ -324,12 +324,12 @@
   injectCSS();
   var panel=null, draft={ source:"price", signal:"cross_up", dir:"any", level:"", tf:"", cooldownSec:30, toast:true, sound:true, once:false, params:{} };
 
-  // fecha qualquer dropdown customizado aberto ao tocar fora dele
+  // fecha o dropdown customizado ao tocar fora dele
   document.addEventListener("click", function(ev){
-    if(!panel) return;
-    if(ev.target && ev.target.closest && ev.target.closest(".dvl-asel")) return;
-    panel.querySelectorAll(".dvl-asel.open").forEach(function(w){ w.classList.remove("open"); });
+    if(ev.target && ev.target.closest && (ev.target.closest(".dvl-asel") || ev.target.closest("#dvlAselFloat1620"))) return;
+    closeAselFloat();
   }, true);
+  window.addEventListener("resize", function(){ closeAselFloat(); }, {passive:true});
 
   /* Dropdown CUSTOMIZADO (o <select> nativo do Android pinta a opção marcada de
      verde sólido, tapando o texto — e ignora CSS). Aqui controlamos 100%: a
@@ -441,21 +441,49 @@
     bindBody(b);
   }
 
-  /* posiciona o menu (position:fixed) logo abaixo do botão; se não couber pra
-     baixo, abre pra cima. Escapa do overflow:auto do corpo do painel. */
-  function positionAselMenu(wrap, btn){
-    var menu=wrap.querySelector(".dvl-asel-menu"); if(!menu) return;
+  /* O menu é renderizado como filho do <body> (o painel tem transform +
+     overflow:hidden, o que quebraria/cortaria um menu fixed/absolute interno).
+     Um float singleton recebe as opções do dropdown clicado e é posicionado na
+     viewport, abrindo pra baixo ou pra cima conforme o espaço. */
+  var _aselOpenWrap = null;
+  function ensureAselFloat(){
+    var f=document.getElementById("dvlAselFloat1620");
+    if(!f){
+      f=document.createElement("div"); f.id="dvlAselFloat1620"; f.className="dvl-asel-float"; f.setAttribute("data-dvl-ui","true");
+      document.body.appendChild(f);
+      f.addEventListener("pointerdown", function(e){ e.stopPropagation(); }, true);
+      f.addEventListener("click", function(ev){
+        var o=ev.target&&ev.target.closest?ev.target.closest(".dvl-asel-opt"):null; if(!o) return;
+        ev.stopPropagation();
+        applyAsel(f.getAttribute("data-asel"), o.getAttribute("data-val"));
+      });
+    }
+    return f;
+  }
+  function closeAselFloat(){
+    var f=document.getElementById("dvlAselFloat1620"); if(f) f.classList.remove("open");
+    if(_aselOpenWrap){ _aselOpenWrap.classList.remove("open"); _aselOpenWrap=null; }
+  }
+  function openAselFloat(wrap, btn){
+    var f=ensureAselFloat();
+    var src=wrap.querySelector(".dvl-asel-menu");
+    f.innerHTML = src?src.innerHTML:"";
+    f.setAttribute("data-asel", wrap.getAttribute("data-asel"));
     var r=btn.getBoundingClientRect();
+    var vw=window.innerWidth||document.documentElement.clientWidth;
     var vh=window.innerHeight||document.documentElement.clientHeight;
-    menu.style.width=Math.round(r.width)+"px";
-    menu.style.left=Math.round(r.left)+"px";
-    // mede a altura provável (limitada a 230)
-    var mh=Math.min(230, menu.scrollHeight||230);
+    var w=Math.min(Math.max(Math.round(r.width),210), vw-16);
+    var left=Math.round(r.left); if(left+w>vw-8) left=vw-8-w; if(left<8) left=8;
+    f.style.width=w+"px"; f.style.left=left+"px"; f.style.right="auto";
+    f.classList.add("open");
+    var mh=Math.min(260, f.scrollHeight||260);
     var below=vh-r.bottom-8, above=r.top-8;
-    if(below>=mh || below>=above){ menu.style.top=Math.round(r.bottom+4)+"px"; menu.style.bottom="auto"; menu.style.maxHeight=Math.max(120,Math.min(230,below))+"px"; }
-    else { menu.style.top="auto"; menu.style.bottom=Math.round(vh-r.top+4)+"px"; menu.style.maxHeight=Math.max(120,Math.min(230,above))+"px"; }
+    if(below>=mh || below>=above){ f.style.top=Math.round(r.bottom+4)+"px"; f.style.bottom="auto"; f.style.maxHeight=Math.max(120,Math.min(260,below))+"px"; }
+    else { f.style.top="auto"; f.style.bottom=Math.round(vh-r.top+4)+"px"; f.style.maxHeight=Math.max(120,Math.min(260,above))+"px"; }
+    wrap.classList.add("open"); _aselOpenWrap=wrap;
   }
   function applyAsel(id, val){
+    closeAselFloat();
     if(id==="source"){ draft.source=val; var s=SOURCES[val]; draft.signal=(s&&s.signals[0])?s.signals[0].id:""; draft.level=""; draft.params={}; renderBody(); }
     else if(id==="signal"){ draft.signal=val; draft.level=""; draft.params={}; renderBody(); }
     else if(id==="dir"){ draft.dir=val; renderBody(); }
@@ -470,24 +498,18 @@
         if(el.type==="checkbox") draft[key]=el.checked; else draft[key]=el.value;
       });
     });
-    // dropdowns customizados
+    // dropdowns customizados (menu renderizado no body via float)
     b.querySelectorAll(".dvl-asel-btn").forEach(function(btn){
       btn.addEventListener("click", function(ev){
         ev.stopPropagation();
-        var wrap=btn.closest(".dvl-asel"), wasOpen=wrap.classList.contains("open");
-        b.querySelectorAll(".dvl-asel.open").forEach(function(w){ w.classList.remove("open"); });
-        if(!wasOpen){ wrap.classList.add("open"); positionAselMenu(wrap, btn); }
+        var wrap=btn.closest(".dvl-asel");
+        if(_aselOpenWrap===wrap){ closeAselFloat(); return; }
+        closeAselFloat();
+        openAselFloat(wrap, btn);
       });
     });
-    // fecha os dropdowns ao rolar o corpo do painel (o menu é position:fixed)
-    b.addEventListener("scroll", function(){ b.querySelectorAll(".dvl-asel.open").forEach(function(w){ w.classList.remove("open"); }); }, {passive:true});
-    b.querySelectorAll(".dvl-asel-opt").forEach(function(o){
-      o.addEventListener("click", function(ev){
-        ev.stopPropagation();
-        var wrap=o.closest(".dvl-asel");
-        applyAsel(wrap.getAttribute("data-asel"), o.getAttribute("data-val"));
-      });
-    });
+    // fecha o dropdown ao rolar o corpo do painel (o menu é fixed no body)
+    b.addEventListener("scroll", function(){ closeAselFloat(); }, {passive:true});
     var add=b.querySelector("[data-al-add]");
     if(add) add.addEventListener("click", function(){
       var sg=currentSignalDef();
@@ -533,7 +555,7 @@
     return panel;
   }
   function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderBody(); var b=document.getElementById("dvlAlertsNavBadge1620"); if(b) b.style.display="none"; }
-  function closePanel(){ if(panel) panel.classList.remove("is-open"); }
+  function closePanel(){ if(panel) panel.classList.remove("is-open"); closeAselFloat(); }
   function togglePanel(){ ensurePanel(); if(panel.classList.contains("is-open")) closePanel(); else openPanel(); }
 
   window.addEventListener("dvl:alerts-rules-update", function(){ if(panel&&panel.classList.contains("is-open")) renderBody(); });
@@ -590,9 +612,11 @@
       ".dvl-asel-chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #7f9c8e;flex:0 0 auto;transition:transform .16s}",
       ".dvl-asel.open .dvl-asel-chev{transform:rotate(180deg)}",
       ".dvl-asel.open .dvl-asel-btn{border-color:rgba(53,224,255,.5)}",
-      ".dvl-asel-menu{display:none;position:fixed;z-index:2147483500;background:#0c141a;border:1px solid rgba(129,166,151,.34);border-radius:10px;box-shadow:0 14px 34px rgba(0,0,0,.6);max-height:230px;overflow-y:auto;padding:4px;-webkit-overflow-scrolling:touch}",
-      ".dvl-asel.open .dvl-asel-menu{display:block}",
-      ".dvl-asel-opt{padding:9px 10px 9px 10px;border-radius:7px;color:#cfe0d8;font:650 12px system-ui;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+      ".dvl-asel-menu{display:none}", /* fonte de dados: nunca visível inline */
+      /* menu flutuante (filho do body, escapa do transform+overflow do painel) */
+      "#dvlAselFloat1620{display:none;position:fixed;z-index:2147483600;background:#0c141a;border:1px solid rgba(129,166,151,.34);border-radius:10px;box-shadow:0 16px 40px rgba(0,0,0,.62);overflow-y:auto;padding:4px;-webkit-overflow-scrolling:touch}",
+      "#dvlAselFloat1620.open{display:block}",
+      ".dvl-asel-opt{padding:9px 10px;border-radius:7px;color:#cfe0d8;font:650 12px/1.3 system-ui;cursor:pointer;white-space:normal;word-break:break-word}",
       ".dvl-asel-opt:active{background:rgba(129,166,151,.14)}",
       ".dvl-asel-opt.is-sel{color:#eafff4;background:rgba(53,224,255,.1);position:relative;padding-left:18px}",
       ".dvl-asel-opt.is-sel::before{content:'';position:absolute;left:7px;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:#35e0ff}",
