@@ -86,51 +86,56 @@
       ctx.beginPath(); ctx.rect(x0,y0,Math.max(0,x1-x0),Math.max(0,y1-y0)); ctx.clip();
       ctx.lineJoin="round"; ctx.lineCap="round";
 
-      // pré-mapeia pontos visíveis
-      var pts=[];
-      for(var i=0;i<bands.length;i++){
-        var b=bands[i], slot=timeToSlot(b.t,cfg), px=X(slot);
-        if(px<x0-30||px>x1+30) continue;
-        pts.push({ px:px, yu:Y(b.upper), yl:Y(b.lower) });
-      }
-      if(pts.length<2){ ctx.restore(); return; }
+      // NÍVEIS HORIZONTAIS VIVOS: a parede dominante ATUAL (último snapshot) vira
+      // uma linha horizontal no preço dela, atravessando o gráfico. Conforme a
+      // liquidez sobe/desce, a linha se move — isso é o "trajeto". Não prende ao
+      // tempo dos candles.
+      var last=bands[bands.length-1];
+      var upper=Number(last.upper), lower=Number(last.lower);
+      if(!Number.isFinite(upper)||!Number.isFinite(lower)){ ctx.restore(); return; }
+      var yU=Y(upper), yL=Y(lower);
 
-      // canal sombreado entre as bandas
-      if(state.showFill){
-        ctx.beginPath();
-        ctx.moveTo(pts[0].px, clipY(pts[0].yu));
-        for(var a=1;a<pts.length;a++) ctx.lineTo(pts[a].px, clipY(pts[a].yu));
-        for(var d=pts.length-1;d>=0;d--) ctx.lineTo(pts[d].px, clipY(pts[d].yl));
-        ctx.closePath();
-        ctx.globalAlpha=0.05; ctx.fillStyle=state.askColor; ctx.fill(); ctx.globalAlpha=1;
-      }
-
-      // banda superior (parede ASK) e inferior (parede BID)
-      var line=function(key,color){
-        ctx.strokeStyle=color; ctx.lineWidth=Math.max(1,state.width); ctx.beginPath();
-        for(var i=0;i<pts.length;i++){ var py=clipY(pts[i][key]); if(i===0)ctx.moveTo(pts[i].px,py); else ctx.lineTo(pts[i].px,py); }
-        ctx.stroke();
+      // candle recente (na view) cuja mecha TOCOU o nível = foi buscar liquidez
+      var touchX=function(level){
+        var v=cfg.view||[], so=Number(cfg.slotOffset)||0, n=v.length;
+        for(var j=n-1;j>=0 && j>=n-80;j--){ var c=v[j]; if(!c) continue;
+          var hi=Number(c.high), lo=Number(c.low);
+          if(Number.isFinite(hi)&&Number.isFinite(lo)&&lo<=level&&level<=hi) return X(so+j); }
+        return null;
       };
-      line("yl", state.bidColor);
-      line("yu", state.askColor);
+      // linha horizontal no nível + glow/marcador quando houve grab
+      var hLevel=function(y,color,grabX){
+        if(grabX!=null){ ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=Math.max(2,state.width)+3; ctx.shadowColor=color; ctx.shadowBlur=9; ctx.globalAlpha=0.9;
+          ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke(); ctx.restore(); }
+        ctx.strokeStyle=color; ctx.lineWidth=Math.max(1,state.width);
+        ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+        if(grabX!=null){ ctx.fillStyle=color; ctx.beginPath(); ctx.arc(grabX,y,3.4,0,Math.PI*2); ctx.fill(); }
+      };
 
-      // marcadores: absorvido (bolinha cheia) / retirado (x)
+      // canal sombreado entre os dois níveis
+      if(state.showFill && yU<yL){
+        var fy0=Math.max(y0,yU), fy1=Math.min(y1,yL);
+        if(fy1>fy0){ ctx.globalAlpha=0.05; ctx.fillStyle=state.askColor; ctx.fillRect(x0,fy0,x1-x0,fy1-fy0); ctx.globalAlpha=1; }
+      }
+      // níveis: BID (base) e ASK (topo), com destaque de grab
+      if(yL>=y0-40 && yL<=y1+40) hLevel(yL, state.bidColor, touchX(lower));
+      if(yU>=y0-40 && yU<=y1+40) hLevel(yU, state.askColor, touchX(upper));
+
+      // marcadores absorvido/retirado (opcional)
       if(state.showMarkers && cache.events.length){
         for(var e=0;e<cache.events.length;e++){
           var ev=cache.events[e], sx=X(timeToSlot(ev.t,cfg)), sy=Y(ev.price);
           if(sx<x0-6||sx>x1+6||sy<y0-6||sy>y1+6) continue;
           var col = ev.side==="ask" ? state.askColor : state.bidColor;
-          ctx.globalAlpha=0.35+0.6*Math.min(1,ev.strength||0.3);
-          if(ev.kind==="absorbed"){ ctx.fillStyle=col; ctx.beginPath(); ctx.arc(sx,sy,2.6,0,Math.PI*2); ctx.fill(); }
-          else { ctx.strokeStyle=col; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(sx-2.4,sy-2.4); ctx.lineTo(sx+2.4,sy+2.4); ctx.moveTo(sx+2.4,sy-2.4); ctx.lineTo(sx-2.4,sy+2.4); ctx.stroke(); }
+          ctx.globalAlpha=0.3+0.5*Math.min(1,ev.strength||0.3);
+          if(ev.kind==="absorbed"){ ctx.fillStyle=col; ctx.beginPath(); ctx.arc(sx,sy,2.2,0,Math.PI*2); ctx.fill(); }
+          else { ctx.strokeStyle=col; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(sx-2,sy-2); ctx.lineTo(sx+2,sy+2); ctx.moveTo(sx+2,sy-2); ctx.lineTo(sx-2,sy+2); ctx.stroke(); }
           ctx.globalAlpha=1;
         }
       }
-
-      // pílulas na escala (último nível de cada banda)
+      // pílulas na escala (nível atual de cada parede)
       if(window.dvlRegisterScaleLabel){
-        var last=bands[bands.length-1];
-        try{ window.dvlRegisterScaleLabel({value:last.upper,color:state.askColor,label:"ASK"}); window.dvlRegisterScaleLabel({value:last.lower,color:state.bidColor,label:"BID"}); }catch(_){}
+        try{ window.dvlRegisterScaleLabel({value:upper,color:state.askColor,label:"ASK"}); window.dvlRegisterScaleLabel({value:lower,color:state.bidColor,label:"BID"}); }catch(_){}
       }
       ctx.restore();
     }catch(_){ try{ctx.restore();}catch(__){} }
