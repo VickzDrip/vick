@@ -22,7 +22,10 @@ const EMPTY = () => ({
   deliveries: [],    // [delivery]
   nextDeliveryId: 1,
   updates: {},       // updateId -> ts (dedup de webhook)
-  devices: {}        // dvlUserId -> {created_at,last_seen_at,label}
+  devices: {},       // dvlUserId -> {created_at,last_seen_at,label}
+  userRules: {},     // dvlUserId -> { rules:[...], updatedAt }  (regras sincronizadas p/ avaliação 24/7)
+  evalState: {},     // "dvlUserId:ruleId" -> { lastFired,lastBar,lastDir } (estado da avaliação server-side)
+  clientActive: {}   // dvlUserId -> ts até quando o DVL está aberto no cliente (heartbeat)
 });
 
 let _data = null;

@@ -173,6 +173,55 @@ function deliveryStatus(triggerId) {
   return null;
 }
 
+/* ── regras sincronizadas (avaliação server-side 24/7) ───────────────────── */
+function setUserRules(dvlUserId, rules) {
+  const d = store.data();
+  d.userRules = d.userRules || {};
+  d.userRules[dvlUserId] = { rules: Array.isArray(rules) ? rules : [], updatedAt: now() };
+  store.commit();
+  return d.userRules[dvlUserId];
+}
+function getUserRules(dvlUserId) {
+  const d = store.data(); const u = (d.userRules || {})[dvlUserId];
+  return u && Array.isArray(u.rules) ? u.rules : [];
+}
+/* Regras avaliáveis no servidor: usuário com conexão ENVIÁVEL, regra habilitada
+   e com telegram ligado. Retorna [{userId, conn, rule}]. */
+function listEvalRules() {
+  const d = store.data(); const out = [];
+  const ur = d.userRules || {};
+  for (const userId in ur) {
+    const conn = d.connections[userId];
+    if (!isSendable(conn)) continue;
+    const rules = (ur[userId] && ur[userId].rules) || [];
+    for (const r of rules) { if (r && r.enabled !== false && r.telegram) out.push({ userId, conn, rule: r }); }
+  }
+  return out;
+}
+/* heartbeat: o cliente (DVL aberto) marca presença; o evaluador pula esses
+   usuários pra não duplicar o que o cliente já entrega via /trigger. */
+function markClientActive(dvlUserId, ttlMs) {
+  const d = store.data(); d.clientActive = d.clientActive || {};
+  d.clientActive[dvlUserId] = now() + (Number(ttlMs) || 45000);
+  store.commit();
+}
+function isClientActive(dvlUserId) {
+  const d = store.data(); const t = (d.clientActive || {})[dvlUserId];
+  return !!(t && t > now());
+}
+function evalKey(userId, ruleId) { return userId + ":" + ruleId; }
+function getEvalState(userId, ruleId) {
+  const d = store.data(); d.evalState = d.evalState || {};
+  return d.evalState[evalKey(userId, ruleId)] || null;
+}
+function setEvalState(userId, ruleId, patch, persist) {
+  const d = store.data(); d.evalState = d.evalState || {};
+  const k = evalKey(userId, ruleId);
+  d.evalState[k] = Object.assign({}, d.evalState[k] || {}, patch || {});
+  if (persist !== false) store.commit(); // prevPrice churn passa persist=false (fica só em memória)
+  return d.evalState[k];
+}
+
 /* ── dedup de webhook ────────────────────────────────────────────────────── */
 function seenUpdate(updateId) {
   const d = store.data(); const k = String(updateId);
@@ -187,5 +236,7 @@ module.exports = {
   createConnectIntent, consumeStartToken,
   getConnection, getConnectionByChat, isSendable, setStatus, pause, renew, disconnect, markSuccess, markError,
   enqueue, claimBatch, bumpAttempt, markSent, markRetry, markFailed, markSkipped, deliveryStatus,
+  setUserRules, getUserRules, listEvalRules, getEvalState, setEvalState,
+  markClientActive, isClientActive,
   seenUpdate
 };

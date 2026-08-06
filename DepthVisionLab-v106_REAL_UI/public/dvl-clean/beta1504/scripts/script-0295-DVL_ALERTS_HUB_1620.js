@@ -157,10 +157,10 @@
       lastDir: "",
       fires: 0
     };
-    rules.push(rule); saveRules(rules); return rule;
+    rules.push(rule); saveRules(rules); tgSyncRules(); return rule;
   }
-  function updateRule(id, patch){ for(var i=0;i<rules.length;i++){ if(rules[i].id===id){ Object.assign(rules[i], patch||{}); saveRules(rules); return rules[i]; } } return null; }
-  function deleteRule(id){ rules = rules.filter(function(r){ return r.id!==id; }); try{ delete crossPrev[id]; }catch(_){} saveRules(rules); }
+  function updateRule(id, patch){ for(var i=0;i<rules.length;i++){ if(rules[i].id===id){ Object.assign(rules[i], patch||{}); saveRules(rules); tgSyncRules(); return rules[i]; } } return null; }
+  function deleteRule(id){ rules = rules.filter(function(r){ return r.id!==id; }); try{ delete crossPrev[id]; }catch(_){} saveRules(rules); tgSyncRules(); }
 
   /* ── entrega ──────────────────────────────────────────────────────────── */
   var _audioCtx = null;
@@ -461,9 +461,35 @@
     clearInterval(TG.pollTimer); TG.pollUntil = Date.now()+60000; // polling curto (doc: ~60s)
     TG.pollTimer = setInterval(function(){
       if(Date.now() > TG.pollUntil){ clearInterval(TG.pollTimer); return; }
-      tgLoadStatus().then(function(j){ if(j && j.connected){ clearInterval(TG.pollTimer); } });
+      tgLoadStatus().then(function(j){ if(j && j.connected){ clearInterval(TG.pollTimer); tgSyncRules(); } });
     }, 2000);
   }
+  /* Sync das regras com Telegram ligado → servidor (avaliação 24/7). Debounced.
+     Resolve "chart" pro TF atual (evalTf), pra o servidor ter um TF concreto. */
+  var _tgSyncTimer=0;
+  function tgSyncRules(){
+    if(!tgConnected()) return;
+    clearTimeout(_tgSyncTimer);
+    _tgSyncTimer=setTimeout(function(){
+      try{
+        var iv=gtf();
+        var payload=rules.filter(function(r){ return r.telegram; }).map(function(r){
+          return { id:r.id, source:r.source, signal:r.signal, dir:r.dir, level:r.level, params:r.params,
+                   tf:r.tf, evalTf:((!r.tf||r.tf==="chart")?iv:r.tf), rearm:r.rearm, cooldownSec:r.cooldownSec,
+                   symbol:r.symbol, telegram:r.telegram, enabled:r.enabled };
+        });
+        tgApi("/api/telegram/rules",{ method:"POST", body:JSON.stringify({rules:payload}) });
+      }catch(_){}
+    }, 400);
+  }
+  /* Heartbeat: enquanto o DVL está aberto e conectado, avisa o servidor pra ele
+     NÃO avaliar (o cliente já entrega) — evita duplicidade. */
+  function tgHeartbeat(){ if(tgConnected()) tgApi("/api/telegram/heartbeat",{method:"POST"}); }
+  function tgBoot(){
+    tgLoadStatus().then(function(j){ if(j && j.connected){ tgSyncRules(); tgHeartbeat(); } });
+    setInterval(tgHeartbeat, 15000);
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", tgBoot, {once:true}); else setTimeout(tgBoot, 1500);
 
   // TFs do dropdown: "Chart" (TF atual do gráfico) + favoritos do hotbar.
   // Removido o "Qualquer" pra evitar disparo em vários TFs de uma vez.

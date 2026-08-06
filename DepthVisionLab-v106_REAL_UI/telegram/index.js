@@ -7,6 +7,7 @@ const express = require("express");
 const config = require("./config");
 
 let _worker = null;
+let _evaluator = null;
 
 function install(app) {
   const store = require("./store");
@@ -35,7 +36,11 @@ function install(app) {
 
   if (enabled) {
     _worker = makeWorker().start();
-    console.log("[DVL Telegram] ENABLED (store puro-JS) — worker started · bot=@" + config.botUsername + " · webhook=" + config.webhookUrl + " · mode=" + config.mode);
+    // avaliação server-side 24/7 (só no modo "server")
+    if (config.mode === "server") {
+      try { _evaluator = require("./evaluator").makeEvaluator().start(); } catch (e) { console.warn("[DVL Telegram] evaluator não iniciou:", e && e.message); }
+    }
+    console.log("[DVL Telegram] ENABLED (store puro-JS) — worker" + (_evaluator ? "+evaluator" : "") + " started · bot=@" + config.botUsername + " · webhook=" + config.webhookUrl + " · mode=" + config.mode);
   } else {
     console.log("[DVL Telegram] store ok, mas sem TELEGRAM_BOT_TOKEN — rotas respondem enabled:false");
   }

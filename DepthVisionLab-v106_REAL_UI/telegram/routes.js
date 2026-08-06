@@ -76,6 +76,32 @@ function makeRouter(deps) {
     res.json({ ok: true });
   });
 
+  /* sync das regras (avaliação server-side 24/7). O cliente envia as regras com
+     Telegram ligado; o servidor guarda e o evaluador as roda quando o DVL está
+     fechado. Aceita só campos de regra — nunca destino/token. */
+  router.post("/rules", (req, res) => {
+    if (!config.enabled()) return res.status(503).json({ ok: false, error: "telegram_disabled" });
+    if (!allow("rules:" + req.dvlUserId, 30, 60000)) return res.status(429).json({ ok: false, error: "rate_limited" });
+    const rules = Array.isArray(req.body && req.body.rules) ? req.body.rules : [];
+    const clean = rules.slice(0, 200).map(r => ({
+      id: String(r.id || ""), source: String(r.source || ""), signal: String(r.signal || ""),
+      dir: r.dir || "any", level: (r.level == null ? null : Number(r.level)),
+      params: (r.params && typeof r.params === "object") ? r.params : {},
+      tf: r.tf || "", evalTf: r.evalTf || "", rearm: r.rearm || "time", cooldownSec: Number(r.cooldownSec) || 0,
+      symbol: r.symbol ? String(r.symbol).toUpperCase() : "", telegram: !!r.telegram, enabled: r.enabled !== false
+    })).filter(r => r.id && r.source && r.signal);
+    repo.setUserRules(req.dvlUserId, clean);
+    res.json({ ok: true, stored: clean.length });
+  });
+
+  /* heartbeat: o DVL aberto marca presença; o evaluador pula esse usuário
+     (o cliente já entrega via /trigger) — evita duplicidade. */
+  router.post("/heartbeat", (req, res) => {
+    if (!config.enabled()) return res.json({ ok: false, error: "telegram_disabled" });
+    repo.markClientActive(req.dvlUserId, 45000);
+    res.json({ ok: true });
+  });
+
   router.post("/test", (req, res) => {
     if (!config.enabled()) return res.status(503).json({ ok: false, error: "telegram_disabled" });
     const conn = repo.getConnection(req.dvlUserId);
