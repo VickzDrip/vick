@@ -26,6 +26,7 @@
   }
   function fmtPx(p){ p=Number(p); if(!Number.isFinite(p)) return "?"; if(p>=1000) return p.toLocaleString("en-US",{maximumFractionDigits:2}); if(p>=1) return p.toFixed(2); return p.toPrecision(5); }
   function shortSym(s){ return String(s||"").replace(/USDT$/,""); }
+  function maLabelFor(idx){ try{ var api=window.DVLMovingAverages, l=(api&&typeof api.list==="function")?api.list():[]; for(var i=0;i<l.length;i++) if(l[i].idx===Number(idx)) return l[i].label; }catch(_){} return "média"; }
 
   /* ── catálogo de fontes ──────────────────────────────────────────────────
      Cada fonte: {key,title,mark,signals:[{id,label,dirs?,needsLevel?,levelLabel?,
@@ -69,6 +70,20 @@
     { id:"grab_up",   label:"Buscou liquidez em CIMA (ask)", desc:"o candle varreu a banda superior e voltou" },
     { id:"grab_down", label:"Buscou liquidez em BAIXO (bid)", desc:"o candle varreu a banda inferior e voltou" }
   ]});
+  registerSource({ key:"ma", title:"Médias Móveis", mark:"MA", signals:[
+    { id:"cross", label:"Preço cruza a média", dirs:true, desc:"escolha QUAL média receber o alerta e a direção do cruzamento",
+      params:[{ id:"maId", label:"Média", kind:"select", options:function(){
+        var api=window.DVLMovingAverages, l=(api&&typeof api.list==="function")?api.list():[];
+        if(!l.length) return [{value:"",label:"— ligue médias no indicador —"}];
+        return l.map(function(m){ return { value:String(m.idx), label:m.label+(m.value!=null?(" · "+fmtPx(m.value)):"") }; });
+      } }] }
+  ]});
+  registerSource({ key:"vp", title:"Volume Profile", mark:"VP", signals:[
+    { id:"touch", label:"Preço bate no nível", desc:"quando o preço encosta/cruza o nível do VP (precisa do Volume Profile ligado)",
+      params:[{ id:"level", label:"Nível", kind:"select", options:function(){ return [
+        {value:"poc",label:"POC"},{value:"vah",label:"VAH"},{value:"val",label:"VAL"},{value:"all",label:"Qualquer (POC/VAH/VAL)"}
+      ]; } }] }
+  ]});
 
   /* ── regras (localStorage) ── */
   var LS_RULES = "dvl_alerts_rules_v1";
@@ -83,6 +98,7 @@
       source: r.source, signal: r.signal,
       name: r.name||"",
       dir: r.dir||"any",
+      params: (r.params&&typeof r.params==="object")?r.params:{},
       level: (r.level==null?null:Number(r.level)),
       tf: r.tf||"",
       symbol: r.symbol||"",
@@ -157,8 +173,13 @@
     var src = SOURCES[rule.source], sig = signalDef(rule.source, rule.signal);
     var label = (sig&&sig.label)|| rule.signal;
     var title = (src&&src.title)|| rule.source;
+    var extra = "";
+    if(rule.params){
+      if(rule.source==="ma" && rule.params.maId!=null && rule.params.maId!=="") extra = " ("+maLabelFor(rule.params.maId)+")";
+      else if(rule.source==="vp" && rule.params.level) extra = " ("+String(rule.params.level).toUpperCase()+")";
+    }
     var px = payload&&payload.price!=null ? (" · "+fmtPx(payload.price)) : "";
-    return title+": "+label+px;
+    return title+": "+label+extra+px;
   }
 
   function fire(rule, payload){
@@ -206,13 +227,54 @@
     while(priceHist.length && priceHist[0].t < cutoff) priceHist.shift();
     var sym = gsym(), tf = gtf();
 
-    // avalia regras de preço
+    // avalia regras que dependem do preço x nível dinâmico: Preço, Médias, VP
     for(var i=0;i<rules.length;i++){
       var r = rules[i];
-      if(!r.enabled || r.source!=="price") continue;
-      if(r.symbol && String(r.symbol).toUpperCase()!==sym) continue; // preço é por símbolo
+      if(!r.enabled || (r.source!=="price" && r.source!=="ma" && r.source!=="vp")) continue;
+      if(r.symbol && String(r.symbol).toUpperCase()!==sym) continue; // são por símbolo
+      if(r.tf && String(r.tf)!==String(tf)) continue;
       if(r.lastFired && (t - r.lastFired) < (r.cooldownSec*1000)) continue;
 
+      // ── Médias Móveis: preço cruza a média escolhida ──
+      if(r.source==="ma"){
+        if(r.signal==="cross" && prevPrice!=null){
+          var _mi = (r.params && r.params.maId!=null && r.params.maId!=="") ? Number(r.params.maId) : null;
+          var _api = window.DVLMovingAverages;
+          var _mv = (_mi!=null && _api && typeof _api.valueAt==="function") ? _api.valueAt(_mi) : null;
+          if(_mv!=null && Number.isFinite(_mv)){
+            var _mdir = (prevPrice < _mv && p >= _mv) ? "up" : (prevPrice > _mv && p <= _mv) ? "down" : null;
+            if(_mdir && (r.dir==="any" || r.dir===_mdir)){
+              var _mlbl = maLabelFor(_mi);
+              fire(r, {dir:_mdir, price:p, symbol:sym, tf:tf, message:"Preço cruzou "+(_mdir==="up"?"ACIMA":"ABAIXO")+" da "+_mlbl+" ("+shortSym(sym)+")"});
+            }
+          }
+        }
+        continue;
+      }
+      // ── Volume Profile: preço bate no nível escolhido ──
+      if(r.source==="vp"){
+        if(r.signal==="touch" && prevPrice!=null){
+          var _vapi = window.DVLVolumeProfile;
+          if(_vapi && typeof _vapi.getLevels==="function" && (!_vapi.on || _vapi.on())){
+            var _lv = (_vapi.getLevels()||{}).current || {};
+            var _which = (r.params && r.params.level) ? r.params.level : "all";
+            var _targets = [];
+            if(_which==="all"){ ["poc","vah","val"].forEach(function(kk){ if(_lv[kk]!=null) _targets.push([kk,_lv[kk]]); }); }
+            else if(_lv[_which]!=null) _targets.push([_which,_lv[_which]]);
+            for(var _ti=0;_ti<_targets.length;_ti++){
+              var _nm=String(_targets[_ti][0]).toUpperCase(), _lvl=Number(_targets[_ti][1]);
+              if(Number.isFinite(_lvl) && ((prevPrice<_lvl && p>=_lvl) || (prevPrice>_lvl && p<=_lvl))){
+                var _vdir = p>=_lvl ? "up" : "down";
+                fire(r, {dir:_vdir, price:p, symbol:sym, tf:tf, message:"Preço bateu no "+_nm+" do VP ("+fmtPx(_lvl)+")"});
+                break;
+              }
+            }
+          }
+        }
+        continue;
+      }
+
+      // ── Preço (embutido) ──
       if(r.signal==="cross_up" && r.level!=null && prevPrice!=null){
         if(prevPrice < r.level && p >= r.level) fire(r, {dir:"up", price:p, symbol:sym, tf:tf, message:"Preço cruzou ACIMA de "+fmtPx(r.level)+" ("+shortSym(sym)+")"});
       } else if(r.signal==="cross_down" && r.level!=null && prevPrice!=null){
@@ -260,16 +322,28 @@
 
   /* ══ UI: painel central ══════════════════════════════════════════════════ */
   injectCSS();
-  var panel=null, draft={ source:"price", signal:"cross_up", dir:"any", level:"", tf:"", cooldownSec:30, toast:true, sound:true, once:false };
+  var panel=null, draft={ source:"price", signal:"cross_up", dir:"any", level:"", tf:"", cooldownSec:30, toast:true, sound:true, once:false, params:{} };
 
   function opt(v,label,cur){ return '<option value="'+esc(v)+'"'+(String(v)===String(cur)?" selected":"")+'>'+esc(label)+'</option>'; }
   function sourceOptions(cur){ return DVL_ALERTS.sources().map(function(s){ return opt(s.key, s.title, cur); }).join(""); }
   function signalOptions(srcKey, cur){ var s=SOURCES[srcKey]; if(!s) return ""; return s.signals.map(function(sg){ return opt(sg.id, sg.label, cur); }).join(""); }
 
   function currentSignalDef(){ return signalDef(draft.source, draft.signal); }
+  function paramOptions(param){ try{ var o=(typeof param.options==="function")?param.options():param.options; return Array.isArray(o)?o:[]; }catch(_){ return []; } }
+  // garante um valor default (1ª opção) p/ cada parâmetro do sinal atual
+  function syncDraftParams(){
+    var sg=currentSignalDef(); if(!sg||!sg.params) return;
+    draft.params = draft.params||{};
+    sg.params.forEach(function(pr){
+      if(draft.params[pr.id]==null || draft.params[pr.id]===""){
+        var opts=paramOptions(pr); if(opts.length) draft.params[pr.id]=String(opts[0].value);
+      }
+    });
+  }
 
   function newRuleHTML(){
     var sg = currentSignalDef();
+    syncDraftParams();
     var needsLevel = sg && sg.needsLevel;
     var hasDir = sg && sg.dirs;
     var levelLabel = (sg&&sg.levelLabel)||"Nível";
@@ -279,6 +353,13 @@
       + '<div class="dvl-vt-grid">'
       + '<div class="dvl-vt-field"><label>Indicador</label><select class="dvl-vt-select" data-al="source">'+sourceOptions(draft.source)+'</select></div>'
       + '<div class="dvl-vt-field"><label>Sinal</label><select class="dvl-vt-select" data-al="signal">'+signalOptions(draft.source, draft.signal)+'</select></div>';
+    if(sg && sg.params){
+      sg.params.forEach(function(pr){
+        var opts=paramOptions(pr), cur=draft.params[pr.id];
+        h += '<div class="dvl-vt-field"><label>'+esc(pr.label||pr.id)+'</label><select class="dvl-vt-select" data-alp="'+esc(pr.id)+'">'
+          + opts.map(function(o){ return opt(o.value, o.label, cur); }).join("") + '</select></div>';
+      });
+    }
     if(needsLevel){
       h += '<div class="dvl-vt-field"><label>'+esc(levelLabel)+(levelUnit?(" ("+esc(levelUnit)+")"):"")+'</label><input class="dvl-vt-input" type="number" step="any" data-al="level" value="'+esc(draft.level)+'" placeholder="'+esc(lvlPlace)+'"></div>';
     }
@@ -306,12 +387,17 @@
       var title=(src&&src.title)||r.source, label=(sg&&sg.label)||r.signal;
       var dirTag = r.dir&&r.dir!=="any" ? '<span class="dvl-alert-tag '+(r.dir==="down"?"down":"up")+'">'+(r.dir==="down"?"▼":"▲")+'</span>' : '';
       var lvlTag = r.level!=null ? '<span class="dvl-alert-tag">'+fmtPx(r.level)+((sg&&sg.levelUnit==="%")?"%":"")+'</span>' : '';
+      var pTag = "";
+      if(r.params){
+        if(r.source==="ma" && r.params.maId!=null && r.params.maId!=="") pTag='<span class="dvl-alert-tag">'+esc(maLabelFor(r.params.maId))+'</span>';
+        else if(r.source==="vp" && r.params.level) pTag='<span class="dvl-alert-tag">'+esc(String(r.params.level).toUpperCase())+'</span>';
+      }
       var tfTag = r.tf ? '<span class="dvl-alert-tag tf">TF '+esc(r.tf)+'</span>' : '';
       var chans = (r.toast?"toast":"") + (r.sound?(r.toast?"+som":"som"):"");
       var meta = (r.fires?(r.fires+"× · "+ago(r.lastFired)):"nunca disparou") + (chans?(" · "+chans):"") + " · cd "+r.cooldownSec+"s";
       return '<div class="dvl-alert-row'+(r.enabled?"":" off")+'" data-id="'+r.id+'">'
         + '<label class="dvl-switch sm"><input type="checkbox" data-al-toggle'+(r.enabled?" checked":"")+'><i></i><b></b></label>'
-        + '<div class="dvl-alert-row-main"><div class="dvl-alert-row-title">'+esc(title)+' · '+esc(label)+' '+dirTag+lvlTag+tfTag+'</div>'
+        + '<div class="dvl-alert-row-main"><div class="dvl-alert-row-title">'+esc(title)+' · '+esc(label)+' '+pTag+dirTag+lvlTag+tfTag+'</div>'
         + '<div class="dvl-alert-row-meta">'+esc(meta)+'</div></div>'
         + '<button type="button" class="dvl-alert-mini" data-al-test title="Testar">▶</button>'
         + '<button type="button" class="dvl-alert-mini del" data-al-del title="Excluir">×</button>'
@@ -344,23 +430,31 @@
       var evt = (el.tagName==="SELECT"||el.type==="checkbox") ? "change" : "input";
       el.addEventListener(evt, function(){
         if(el.type==="checkbox") draft[key]=el.checked; else draft[key]=el.value;
-        if(key==="source"){ var s=SOURCES[draft.source]; draft.signal = s&&s.signals[0]?s.signals[0].id:""; draft.level=""; renderBody(); }
-        else if(key==="signal"){ draft.level=""; renderBody(); }
+        if(key==="source"){ var s=SOURCES[draft.source]; draft.signal = s&&s.signals[0]?s.signals[0].id:""; draft.level=""; draft.params={}; renderBody(); }
+        else if(key==="signal"){ draft.level=""; draft.params={}; renderBody(); }
       });
+    });
+    b.querySelectorAll("[data-alp]").forEach(function(el){
+      el.addEventListener("change", function(){ draft.params=draft.params||{}; draft.params[el.getAttribute("data-alp")]=el.value; });
     });
     var add=b.querySelector("[data-al-add]");
     if(add) add.addEventListener("click", function(){
       var sg=currentSignalDef();
+      syncDraftParams();
       if(sg&&sg.needsLevel && (draft.level===""||draft.level==null||!Number.isFinite(Number(draft.level)))){
         if(draft.source==="price" && (draft.signal==="cross_up"||draft.signal==="cross_down")){ var gp=gprice(); if(gp!=null) draft.level=String(Math.round(gp)); }
         if(draft.level===""||draft.level==null||!Number.isFinite(Number(draft.level))){ flash(add,"informe o nível"); return; }
       }
+      // validação de parâmetros obrigatórios (ex.: escolher a média)
+      if(sg&&sg.params){ for(var pi=0;pi<sg.params.length;pi++){ var pid=sg.params[pi].id; if(draft.params[pid]==null||draft.params[pid]===""){ flash(add, sg.params[pi].id==="maId"?"ligue e escolha a média":"escolha "+(sg.params[pi].label||"o parâmetro")); return; } } }
+      var scoped = (draft.source==="price"||draft.source==="ma"||draft.source==="vp");
       addRule({
         source:draft.source, signal:draft.signal, dir:draft.dir,
         level:(sg&&sg.needsLevel)?Number(draft.level):null,
+        params:Object.assign({}, draft.params),
         tf:draft.tf, cooldownSec:Number(draft.cooldownSec)||0,
         toast:draft.toast, sound:draft.sound, once:draft.once,
-        symbol:(draft.source==="price")?gsym():""
+        symbol:scoped?gsym():""
       });
       draft.level="";
       renderBody();
@@ -436,6 +530,11 @@
       ".dvl-alert-toast-x:hover{color:#dcebe4}",
       /* panel bits (herda .dvl-vt-*) */
       ".dvl-alerts-panel .dvl-vt-body{max-height:min(74vh,620px);overflow-y:auto}",
+      /* dropdown: força tema escuro nativo + contraste na opção selecionada
+         (antes a opção marcada virava uma barra verde sólida tapando o texto) */
+      ".dvl-alerts-panel .dvl-vt-select{color-scheme:dark;accent-color:#35e0ff}",
+      ".dvl-alerts-panel .dvl-vt-select option{background:#0b1218;color:#dcebe4}",
+      ".dvl-alerts-panel .dvl-vt-select option:checked,.dvl-alerts-panel .dvl-vt-select option:hover{background:#12352a;color:#eafff4;font-weight:700}",
       ".dvl-alert-hint{color:#8aa99b;font:600 10px/1.45 system-ui;margin:2px 2px 0}",
       ".dvl-alert-actions{margin-top:10px}",
       ".dvl-alert-btn{border:1px solid rgba(53,224,255,.34);background:rgba(53,224,255,.12);color:#cdeffb;font:800 12px system-ui;border-radius:9px;padding:8px 14px;cursor:pointer;width:100%}",

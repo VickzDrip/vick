@@ -577,12 +577,34 @@
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
+  /* Beta 1.621 — valor atual de uma média (última barra finita). */
+  function maCurrentValue(idx){
+    try{
+      var m = state.items[idx];
+      if(!m || !m.enabled || m.period < 1) return null;
+      var cs = candles(); if(!cs || !cs.length) return null;
+      var vals = cached(cs, m.period, m.type); if(!vals || !vals.length) return null;
+      for(var j=vals.length-1;j>=0;j--){ if(vals[j]!=null && Number.isFinite(vals[j])) return vals[j]; }
+    }catch(_){}
+    return null;
+  }
+
   window.DVLMovingAverages = {
     version:"0.577",
     get state(){ return state; },
     open:openPanel,
     reset,
-    draw
+    draw,
+    /* Beta 1.621 — para o DVL Alerts Hub: lista das médias LIGADAS (id estável
+       pelo slot, label tipo "SMA 20", valor atual) e valor por índice. */
+    list:function(){
+      var out=[];
+      try{ state.items.forEach(function(m,idx){ if(!m || !m.enabled) return;
+        out.push({ idx:idx, id:"ma"+idx, label:(m.type||"SMA")+m.period, period:m.period, type:m.type, color:m.color, value:maCurrentValue(idx) });
+      }); }catch(_){}
+      return out;
+    },
+    valueAt:maCurrentValue
   };
   window.DVLMovingAveragesDraw = draw;
 })();
