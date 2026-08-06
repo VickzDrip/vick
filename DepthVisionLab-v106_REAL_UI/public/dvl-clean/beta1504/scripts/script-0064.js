@@ -28,6 +28,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.631", note: "Novo indicador — DVL Dominant Wick Candles (DWC). Em candles com VOLUME acima da media (SMA/EMA configuravel, padrao 20), o MAIOR pavio vira o corpo do candle e a direcao passa a ser definida pelo pavio dominante — nao pela cor original (um candle verde com pavio superior maior vira VENDEDOR; um vermelho com pavio inferior maior vira COMPRADOR). O lado que virou corpo some como pavio (fica so 1 pavio). Empate de pavios mantem o candle original. 3 modos de render: Replace (padrao, substitui visualmente), Overlay (desenha por cima translucido) e Markers (so um marcador de direcao). Reage intrabar: o candle atual pode cruzar a media e mudar de dominancia durante a barra. E uma camada VISUAL derivada — nao altera o OHLCV base (Volume/RSI/VP/Risk/Replay seguem lendo a serie original). Painel padrao DVL (Main/Volume Filter/Rendering/Visual). So frontend." },
   { version: "Beta 1.630", note: "Alertas — Recentes agora inclui os alertas do Telegram disparados com o DVL FECHADO. O servidor guarda um historico dos alertas que foram pro Telegram (inclusive os avaliados server-side com o navegador fechado); ao abrir o painel, o 'Recentes' MESCLA esse historico com o log local, deduplicando e marcando com a tag TG. Antes o Recentes so tinha o que disparava com a aba aberta. Frontend + backend." },
   { version: "Beta 1.629", note: "Alertas Telegram — avaliacao SERVER-SIDE 24/7 (Fase 4a: Preco). As regras com Telegram ligado sao sincronizadas pro servidor; quando o DVL esta FECHADO, o backend roda as condicoes de Preco (cruza nivel, movimento rapido %) a partir dos klines da Binance e entrega no Telegram — sem precisar do site aberto. Enquanto o DVL esta aberto, um heartbeat avisa o servidor pra NAO avaliar (o cliente ja entrega), evitando duplicidade. Idempotencia por candle no triggerId. Fontes MA/VWAP/VP/Cruzamento entram nas proximas etapas; por ora seguem client-session. So a fonte Preco ja funciona com o site fechado. Frontend + backend." },
   { version: "Beta 1.628", note: "Alertas — canal Telegram (UI). Nova secao 'Telegram' no painel de Alertas (entre Novo alerta e Meus alertas): estado da conexao (Nao conectado / Conectado · Chat privado / Ativo ate… / Pausado), seletor de duracao e botoes Conectar / Testar / Pausar / Renovar / Desconectar. O 'Conectar Telegram' abre o bot @DvlalertsBot por deep-link e detecta a confirmacao automaticamente. Cada alerta ganhou um switch 'Telegram' (desligado ate conectar; tocar leva a secao). Quando um alerta com Telegram dispara, o evento vai pro backend (fila assincrona) alem do toast/som; Recentes marca as entradas com uma tag 'TG'. O disparo, o cooldown e o rearme continuam sendo do motor local — o Telegram e so mais um canal. So frontend (backend ja no ar)." },
@@ -5629,6 +5630,14 @@ if(window.DVLSpikeZonesDraw){
      de centenas). lineWidth 1.2 (igual ao inline antigo). */
   ctx.lineWidth = 1.2;
   _wickPaths.forEach((p, c)=>{ ctx.strokeStyle = c; ctx.stroke(p); });
+
+  /* DVL Dominant Wick Candles — camada VISUAL derivada: transforma candles
+     elegíveis (volume > média) trocando o maior pavio pelo corpo. Desenhado
+     AQUI, logo após os candles, pra "Replace" cobrir o candle original. Não
+     altera o OHLCV base. */
+  if(window.DVLDominantWickCandlesDraw){
+    try{window.DVLDominantWickCandlesDraw(ctx,{view,drawView,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlDwc_e){}
+  }
 
   /* DVL Bubbles — desenhado AQUI, DEPOIS dos corpos/pavios das velas, pra ficar
      SOBREPOSTO aos candles (requisito do usuário). */
