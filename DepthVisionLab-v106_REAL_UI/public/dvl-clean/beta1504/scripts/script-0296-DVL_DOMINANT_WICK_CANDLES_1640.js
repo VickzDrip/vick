@@ -53,7 +53,8 @@
   function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(_){} }
 
   var state=load(), panel=null;
-  var volCache={ ref:null, period:0, type:"", map:null };
+  var volCache={ ref:null, len:-1, sig:"", period:0, type:"", map:null };
+  var placing=false; // guarda de re-entrância p/ o MutationObserver não entrar em loop
 
   function redraw(){ if(typeof drawSoon==="function"){ try{ drawSoon(); }catch(_){} } }
 
@@ -62,8 +63,12 @@
      conforme o volume dele cresce. Cacheado por referência da série. */
   function volBaselineMap(){
     var ks=(typeof klines!=="undefined" && Array.isArray(klines))?klines:[];
-    if(volCache.ref===ks && volCache.period===state.volMaPeriod && volCache.type===state.volMaType && volCache.map) return volCache.map;
-    var n=ks.length, P=state.volMaPeriod, map={};
+    var n=ks.length;
+    // chave por comprimento + tempo do 1º/último candle (evita rebuild quando a
+    // referência do array muda mas o conteúdo é o mesmo — comum a cada frame).
+    var sig = n ? (ks[0].time+"|"+ks[n-1].time) : "";
+    if(volCache.len===n && volCache.sig===sig && volCache.period===state.volMaPeriod && volCache.type===state.volMaType && volCache.map) return volCache.map;
+    var P=state.volMaPeriod, map={};
     if(state.volMaType==="EMA"){
       var k=2/(P+1), ema=null;
       for(var i=0;i<n;i++){
@@ -79,7 +84,7 @@
         if(j>=P) sum -= Number(ks[j-P].volume)||0;
       }
     }
-    volCache={ ref:ks, period:P, type:state.volMaType, map:map };
+    volCache={ ref:ks, len:n, sig:sig, period:P, type:state.volMaType, map:map };
     return map;
   }
 
@@ -147,22 +152,34 @@
 
   /* ── menu (Phase1B registra; aqui o row legado + pill p/ o pill do menu) ─── */
   function updateItem(){ var st=document.getElementById("dvlDwcState"); if(st){ st.textContent=state.on?"ON":"OFF"; st.classList.toggle("is-on",!!state.on); } }
+  // já está no lugar certo? (logo após o anchor, ou como 1º filho do menu)
+  function isPlaced(menu,item){
+    if(!item||item.parentNode!==menu&&!(item.parentNode)) return false;
+    var anchor=document.getElementById("dvlVwapSessionItem")||document.getElementById("dvlMovingAveragesItem");
+    if(anchor&&anchor.parentNode) return anchor.nextSibling===item;
+    return menu.firstChild===item;
+  }
   function placeItem(menu,item){
     var anchor=document.getElementById("dvlVwapSessionItem")||document.getElementById("dvlMovingAveragesItem");
     if(anchor&&anchor.parentNode){ if(anchor.nextSibling!==item)anchor.parentNode.insertBefore(item,anchor.nextSibling); return; }
     if(menu.firstChild!==item)menu.insertBefore(item,menu.firstChild);
   }
   function insertItem(){
+    if(placing) return;                                   // ignora mutações causadas por nós mesmos
     var menu=document.getElementById("indicatorDropdown"); if(!menu) return;
     var item=document.getElementById("dvlDwcItem");
-    if(!item){
-      item=document.createElement("div"); item.id="dvlDwcItem"; item.className="indicatorItem dvl-dwc-indicator-item";
-      item.innerHTML='<span class="indicatorFxMark">DWC</span><span><b>Dominant Wick Candles</b><small>maior pavio vira corpo · filtro de volume</small></span><i class="dvl-vt-state" id="dvlDwcState">OFF</i>';
-      var pill=item.querySelector("#dvlDwcState");
-      if(pill) pill.addEventListener("click",function(ev){ ev.preventDefault(); ev.stopPropagation(); toggle(); });
-      item.addEventListener("click",function(ev){ ev.stopPropagation(); openPanel(); });
-    }
-    placeItem(menu,item); updateItem();
+    if(item && isPlaced(menu,item)){ updateItem(); return; } // já posicionado → não mexe no DOM (sem feedback)
+    placing=true;
+    try{
+      if(!item){
+        item=document.createElement("div"); item.id="dvlDwcItem"; item.className="indicatorItem dvl-dwc-indicator-item";
+        item.innerHTML='<span class="indicatorFxMark">DWC</span><span><b>Dominant Wick Candles</b><small>maior pavio vira corpo · filtro de volume</small></span><i class="dvl-vt-state" id="dvlDwcState">OFF</i>';
+        var pill=item.querySelector("#dvlDwcState");
+        if(pill) pill.addEventListener("click",function(ev){ ev.preventDefault(); ev.stopPropagation(); toggle(); });
+        item.addEventListener("click",function(ev){ ev.stopPropagation(); openPanel(); });
+      }
+      placeItem(menu,item); updateItem();
+    } finally { placing=false; }
   }
 
   function setOn(v){ state.on=(v===undefined)?!state.on:!!v; persist(); updateItem(); redraw(); }
@@ -253,7 +270,18 @@
     insertItem(); updateItem();
     // à prova de rebuild do menu
     var n=0, iv=setInterval(function(){ insertItem(); if(++n>20) clearInterval(iv); }, 1000);
-    try{ var mo=new MutationObserver(function(){ insertItem(); }); mo.observe(document.documentElement,{childList:true,subtree:true}); setTimeout(function(){ try{mo.disconnect();}catch(_){}} ,30000); }catch(_){}
+    // observer com debounce + guarda de re-entrância: nunca reprocessa dentro de
+    // uma mutação que nós mesmos causamos (evita tempestade de microtasks/freeze).
+    try{
+      var pend=false;
+      var mo=new MutationObserver(function(){
+        if(placing||pend) return;
+        pend=true;
+        setTimeout(function(){ pend=false; insertItem(); }, 200);
+      });
+      mo.observe(document.documentElement,{childList:true,subtree:true});
+      setTimeout(function(){ try{mo.disconnect();}catch(_){}} ,30000);
+    }catch(_){}
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true}); else boot();
 
