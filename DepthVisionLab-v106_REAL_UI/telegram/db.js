@@ -8,17 +8,40 @@ const path = require("path");
 const config = require("./config");
 
 let _db = null;
+let _driver = null;
+
+/* Abre um handle SQLite agnóstico de driver. Tenta o node:sqlite nativo
+   (Node >= 22.5); se não existir, cai pro better-sqlite3 (native). Ambos
+   expõem exec()/prepare().run|get|all() com a mesma semântica que o repo usa.
+   Se nenhum estiver disponível, lança — e o install() trata (feature off). */
+function openDriver(dbPath) {
+  try {
+    const { DatabaseSync } = require("node:sqlite");
+    _driver = "node:sqlite";
+    return new DatabaseSync(dbPath);
+  } catch (e1) {
+    try {
+      const Database = require("better-sqlite3");
+      _driver = "better-sqlite3";
+      return new Database(dbPath);
+    } catch (e2) {
+      const err = new Error("Nenhum driver SQLite disponível. Instale better-sqlite3 (npm i better-sqlite3) ou use Node >= 22.5 (node:sqlite). node:sqlite=" + (e1 && e1.message) + " | better-sqlite3=" + (e2 && e2.message));
+      err.code = "NO_SQLITE_DRIVER";
+      throw err;
+    }
+  }
+}
 
 function open() {
   if (_db) return _db;
-  const { DatabaseSync } = require("node:sqlite");
   const dbPath = config.dbPath;
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-  _db = new DatabaseSync(dbPath);
+  _db = openDriver(dbPath);
   _db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 4000;");
   migrate(_db);
   return _db;
 }
+function driver() { return _driver; }
 
 function migrate(db) {
   db.exec(`
@@ -93,4 +116,4 @@ function migrate(db) {
 function db() { return open(); }
 function close() { if (_db) { try { _db.close(); } catch (_) {} _db = null; } }
 
-module.exports = { db, open, close };
+module.exports = { db, open, close, driver };
