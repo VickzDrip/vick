@@ -402,43 +402,16 @@
       +'<path d="M18 8.5a6 6 0 1 0-12 0c0 6-2.2 7.5-2.2 7.5h16.4S18 14.5 18 8.5z"/>'
       +'<path d="M10.3 20.2a2 2 0 0 0 3.4 0"/></svg>';
   }
-  function enforceNavButton(){
-    var btn = document.getElementById("alertsNavBtn");
-    if(!btn){
-      // pega o 2º item da bottom nav e converte (caso o markup antigo do Scanner reapareça)
-      btn = document.getElementById("scannerNavBtn") || document.querySelector(".bottomNav .navInner .navItem:nth-child(2)");
-      if(!btn) return;
-      btn.id="alertsNavBtn";
-    }
-    btn.type="button";
-    btn.setAttribute("aria-label","Alertas");
-    btn.setAttribute("title","Alertas");
-    btn.removeAttribute("data-dvl-scanner-nav");
-    if(!btn.querySelector(".dvlAlertsBell1620") || !/Alertas/.test(btn.textContent||"")){
-      btn.innerHTML = '<span class="dvlAlertsBell1620">'+bellSVG()+'<i id="dvlAlertsNavBadge1620" class="dvlAlertsNavBadge"></i></span><span>Alertas</span>';
-    } else if(!document.getElementById("dvlAlertsNavBadge1620")){
-      var bell=btn.querySelector(".dvlAlertsBell1620"); if(bell){ var i=document.createElement("i"); i.id="dvlAlertsNavBadge1620"; i.className="dvlAlertsNavBadge"; bell.appendChild(i); }
-    }
-  }
-  // clique (capture) — vence o handler antigo do scanner
+  /* O botão da bottom nav (data-dvl-nav-key="markets", agora rotulado "Alertas")
+     é dono do script-0120, que chama window.DVL_ALERTS_HUB_API.toggle(). Aqui só
+     mantemos um clique delegado de reserva para um eventual #alertsNavBtn (nav
+     legada) — inofensivo se não existir. */
   window.addEventListener("click", function(ev){
     var btn = ev.target && ev.target.closest ? ev.target.closest("#alertsNavBtn") : null;
     if(!btn) return;
     ev.preventDefault(); ev.stopPropagation(); if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
     togglePanel();
   }, true);
-
-  function boot(){
-    enforceNavButton();
-    // à prova de rebuild: reassert por um tempo + observer
-    var n=0, iv=setInterval(function(){ enforceNavButton(); if(++n>20) clearInterval(iv); }, 1000);
-    try{
-      var mo=new MutationObserver(function(){ enforceNavButton(); });
-      mo.observe(document.documentElement,{childList:true,subtree:true});
-      setTimeout(function(){ try{ mo.disconnect(); }catch(_){} }, 30000);
-    }catch(_){}
-  }
-  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot,{once:true}); else boot();
 
   /* ══ CSS ══════════════════════════════════════════════════════════════════ */
   function injectCSS(){

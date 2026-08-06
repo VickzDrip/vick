@@ -20,7 +20,7 @@
   var tabLabels = ["Abertas","Pendentes","Histórico"];
 
   var navKeys = ["home","markets","trade","positions","watchlist"];
-  var navLabels = ["Copilot","Scanner","Trade","Positions","Watchlist"];
+  var navLabels = ["Copilot","Alertas","Trade","Positions","Watchlist"];
 
   var data = {
     open: [],
@@ -41,7 +41,7 @@
   function svgIcon(name){
     var icons = {
       home: '<svg class="dvlCopilotLogo0974" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><rect x="5.2" y="7.2" width="13.6" height="10.8" rx="4"/><path d="M12 7.2V4.6"/><circle class="bot-dot" cx="12" cy="3.9" r="1.1"/><circle class="bot-eye" cx="9.55" cy="12.2" r="1.05"/><circle class="bot-eye" cx="14.45" cy="12.2" r="1.05"/><path d="M9.8 15.1c1.25.9 3.15.9 4.4 0"/><path d="M5.2 11.1H3.8M20.2 11.1h-1.4"/></g></svg>',
-      markets: '<svg class="dvlScannerLogo0969" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 17.9A9.6 9.6 0 1 1 19.8 17.9"/><path d="M7.05 17.9a6.75 6.75 0 1 1 9.9 0"/><path d="M12 12l5.35-3.2"/><circle class="scan-dot" cx="12" cy="12" r="1.65"/><path d="M12 4.1v1.55M4.1 12h1.55M18.35 12h1.55"/><path d="M8.2 15.8l-1.15 1.15M15.8 15.8l1.15 1.15"/></g></svg>',
+      markets: '<span class="dvlAlertsBell1620"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8.5a6 6 0 1 0-12 0c0 6-2.2 7.5-2.2 7.5h16.4S18 14.5 18 8.5z"/><path d="M10.3 20.2a2 2 0 0 0 3.4 0"/></svg><i id="dvlAlertsNavBadge1620" class="dvlAlertsNavBadge"></i></span>',
       trade: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>',
       positions: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16H6z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>',
       watchlist: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.7l2.5 5.1 5.6.8-4 3.9.95 5.5L12 16.4 7.05 19l.95-5.5-4-3.9 5.5-.8L12 3.7z"/></svg>'
@@ -141,7 +141,7 @@
   }
 
   function activeNavKey(){
-    if(scannerOpen()) return "markets";
+    if(window.DVL_ALERTS_HUB_API && typeof window.DVL_ALERTS_HUB_API.isOn === "function" && window.DVL_ALERTS_HUB_API.isOn()) return "markets";
     if(state.panelOpen) return "positions";
     if(watchlistOpen()) return "watchlist";
     if(tradeOpen()) return "trade";
@@ -367,17 +367,17 @@
           return;
         }
         if(key === "markets"){
+          /* Beta 1.620 — este botão agora é "Alertas" (DVL Alerts Hub), não mais
+             o Scanner. Abre/fecha o hub central de alertas. */
           try{ if(window.DVL_COPILOT_PAGE_0974) window.DVL_COPILOT_PAGE_0974.close(); }catch(_){}
           closeWatchlistIfOpen();
           closeTradeIfOpen();
           state.panelOpen = false;
           state.activeNav = "markets";
           renderNav();
-          if(window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780 && typeof window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780.toggle === "function"){
-            window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780.toggle(ev);
-          }else{
-            bridgeClick(oldNavBtn(1));
-          }
+          try{
+            if(window.DVL_ALERTS_HUB_API && typeof window.DVL_ALERTS_HUB_API.toggle === "function") window.DVL_ALERTS_HUB_API.toggle();
+          }catch(_){}
           setTimeout(renderNav, 0);
           setTimeout(renderNav, 180);
         }

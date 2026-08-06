@@ -970,7 +970,10 @@
     window.DVL_MEXC_VOLUME_SPIKE_SCANNER_0780 = window.DVL_SCANNER_PRO_FORCE_OPEN_1013;
 
     window.addEventListener("click",function(ev){
-      var btn=ev.target && ev.target.closest ? ev.target.closest('#dvlBottomNavV2 [data-dvl-nav-key="markets"], #scannerNavBtn, [data-dvl-scanner-nav="true"]') : null;
+      /* Beta 1.620 — o botão da bottom nav ([data-dvl-nav-key="markets"]) virou
+         "Alertas" (abre o DVL Alerts Hub via script-0120). NÃO abrir mais o
+         Scanner por ele: mantém só os gatilhos legados explícitos do scanner. */
+      var btn=ev.target && ev.target.closest ? ev.target.closest('#scannerNavBtn, [data-dvl-scanner-nav="true"]') : null;
       if(!btn) return;
       ev.preventDefault();
       ev.stopPropagation();
