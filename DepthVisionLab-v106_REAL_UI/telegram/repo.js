@@ -222,6 +222,25 @@ function setEvalState(userId, ruleId, patch, persist) {
   return d.evalState[k];
 }
 
+/* ── histórico de alertas que foram pro Telegram (inclui os server-side com o
+   DVL fechado). O painel mescla isto com o log local em "Recentes". ────────── */
+function addHistory(dvlUserId, entry) {
+  const d = store.data(); d.history = d.history || {};
+  const arr = d.history[dvlUserId] || (d.history[dvlUserId] = []);
+  arr.push({
+    msg: String(entry && entry.msg || ""), ts: (entry && entry.ts) || now(),
+    tf: (entry && entry.tf) || "", sym: (entry && entry.sym) || "",
+    source: (entry && entry.source) || "", dir: (entry && entry.dir) || ""
+  });
+  if (arr.length > 60) arr.splice(0, arr.length - 60); // cap
+  store.commit();
+}
+function getHistory(dvlUserId, limit) {
+  const d = store.data(); const arr = (d.history || {})[dvlUserId] || [];
+  const n = Number(limit) || 30;
+  return arr.slice(Math.max(0, arr.length - n));
+}
+
 /* ── dedup de webhook ────────────────────────────────────────────────────── */
 function seenUpdate(updateId) {
   const d = store.data(); const k = String(updateId);
@@ -238,5 +257,6 @@ module.exports = {
   enqueue, claimBatch, bumpAttempt, markSent, markRetry, markFailed, markSkipped, deliveryStatus,
   setUserRules, getUserRules, listEvalRules, getEvalState, setEvalState,
   markClientActive, isClientActive,
+  addHistory, getHistory,
   seenUpdate
 };

@@ -127,7 +127,15 @@ function makeRouter(deps) {
     };
     const triggerId = String(b.triggerId || (req.dvlUserId + ":" + (b.alertId || "a") + ":" + Date.now()));
     const r = repo.enqueue({ triggerId, alertId: b.alertId, dvlUserId: req.dvlUserId, text: messages.alertText(ev), destinationId: conn.telegram_chat_id });
+    if (r.inserted) repo.addHistory(req.dvlUserId, { msg: b.message || messages.alertText(ev), ts: Date.now(), tf: ev.timeframe, sym: ev.symbol, source: b.source, dir: b.dir });
     res.json({ ok: true, queued: r.inserted, duplicate: !r.inserted });
+  });
+
+  /* histórico dos alertas que foram pro Telegram (inclui os disparados no
+     servidor com o DVL fechado). O painel mescla isto com o log local. */
+  router.get("/recent", (req, res) => {
+    if (!config.enabled()) return res.json({ ok: false, enabled: false, entries: [] });
+    res.json({ ok: true, entries: repo.getHistory(req.dvlUserId, 30) });
   });
 
   return router;

@@ -25,7 +25,8 @@ const EMPTY = () => ({
   devices: {},       // dvlUserId -> {created_at,last_seen_at,label}
   userRules: {},     // dvlUserId -> { rules:[...], updatedAt }  (regras sincronizadas p/ avaliação 24/7)
   evalState: {},     // "dvlUserId:ruleId" -> { lastFired,lastBar,lastDir } (estado da avaliação server-side)
-  clientActive: {}   // dvlUserId -> ts até quando o DVL está aberto no cliente (heartbeat)
+  clientActive: {},  // dvlUserId -> ts até quando o DVL está aberto no cliente (heartbeat)
+  history: {}        // dvlUserId -> [ {msg,ts,tf,sym,source,dir} ]  (alertas que foram pro Telegram)
 });
 
 let _data = null;

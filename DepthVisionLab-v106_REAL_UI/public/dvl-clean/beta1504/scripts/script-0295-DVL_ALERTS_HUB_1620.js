@@ -432,7 +432,7 @@
   /* ══ Telegram (canal externo · backend) ══════════════════════════════════
      Estado global da conexão do usuário. A UI aqui só administra a conexão e
      seleciona o canal por alerta; o disparo real vai pro backend em fire(). */
-  var TG = { status:null, loaded:false, pollTimer:0, pollUntil:0 };
+  var TG = { status:null, loaded:false, pollTimer:0, pollUntil:0, recent:[] };
   var TG_DURATIONS = [
     {value:"1h",label:"1 hora"},{value:"today",label:"Hoje"},{value:"24h",label:"24 horas"},
     {value:"7d",label:"7 dias"},{value:"30d",label:"30 dias"},{value:"forever",label:"Até cancelar"}
@@ -453,6 +453,15 @@
     return tgApi("/api/telegram/status").then(function(j){
       if(j && typeof j==="object") TG.status = j;
       TG.loaded = true;
+      if(panel && panel.classList.contains("is-open")) renderBody();
+      return j;
+    });
+  }
+  /* histórico do servidor (alertas que foram pro Telegram, inclusive com o DVL
+     fechado). Mesclado com o log local em "Recentes". */
+  function tgLoadRecent(){
+    return tgApi("/api/telegram/recent").then(function(j){
+      if(j && Array.isArray(j.entries)) TG.recent = j.entries;
       if(panel && panel.classList.contains("is-open")) renderBody();
       return j;
     });
@@ -486,7 +495,7 @@
      NÃO avaliar (o cliente já entrega) — evita duplicidade. */
   function tgHeartbeat(){ if(tgConnected()) tgApi("/api/telegram/heartbeat",{method:"POST"}); }
   function tgBoot(){
-    tgLoadStatus().then(function(j){ if(j && j.connected){ tgSyncRules(); tgHeartbeat(); } });
+    tgLoadStatus().then(function(j){ if(j && j.connected){ tgSyncRules(); tgHeartbeat(); tgLoadRecent(); } });
     setInterval(tgHeartbeat, 15000);
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", tgBoot, {once:true}); else setTimeout(tgBoot, 1500);
@@ -626,8 +635,22 @@
   }
 
   function recentHTML(){
-    var list=[]; try{ if(window.DVL_ALERTS_LOG) list=window.DVL_ALERTS_LOG.list()||[]; }catch(_){}
-    list = list.slice().reverse().slice(0,8);
+    var local=[]; try{ if(window.DVL_ALERTS_LOG) local=(window.DVL_ALERTS_LOG.list()||[]).map(function(e){ return {msg:e.msg, ts:e.ts, tg:!!e.tg}; }); }catch(_){}
+    // histórico do servidor (Telegram, inclusive com o DVL fechado) → sempre tg
+    var srv=(TG.recent||[]).map(function(e){ return {msg:e.msg, ts:e.ts, tg:true}; });
+    // mescla + dedup (mesma msg dentro de ~8s) + ordena desc
+    var all=local.concat(srv).filter(function(e){ return e && e.msg; });
+    all.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
+    var seen=[], list=[];
+    all.forEach(function(e){
+      var dup=seen.some(function(s){ return s.msg===e.msg && Math.abs((s.ts||0)-(e.ts||0))<8000; });
+      if(dup){ // se o duplicado veio do servidor, garante a marca TG
+        seen.forEach(function(s){ if(s.msg===e.msg && Math.abs((s.ts||0)-(e.ts||0))<8000 && e.tg) s.tg=true; });
+        return;
+      }
+      seen.push(e); list.push(e);
+    });
+    list = list.slice(0,12);
     if(!list.length) return '';
     var rows = list.map(function(e){
       var c = /COMPRA|compra|ACIMA|alta|\+/.test(e.msg)?"#13dc8d":/VENDA|venda|ABAIXO|baixa/.test(e.msg)?"#ff6b81":"#9fb6ab";
@@ -833,7 +856,7 @@
     panel.querySelector("#dvlAlertsHubClose").addEventListener("click", closePanel);
     return panel;
   }
-  function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderBody(); tgLoadStatus(); var b=document.getElementById("dvlAlertsNavBadge1620"); if(b) b.style.display="none"; }
+  function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderBody(); tgLoadStatus(); tgLoadRecent(); var b=document.getElementById("dvlAlertsNavBadge1620"); if(b) b.style.display="none"; }
   function closePanel(){ if(panel) panel.classList.remove("is-open"); closeAselFloat(); clearInterval(TG.pollTimer); }
   function togglePanel(){ ensurePanel(); if(panel.classList.contains("is-open")) closePanel(); else openPanel(); }
 

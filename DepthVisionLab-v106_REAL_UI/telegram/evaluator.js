@@ -80,6 +80,8 @@ function makeEvaluator(opts) {
     const text = messages.alertText({ symbol: ev.symbol, timeframe: ev.tf, source: rule.source, title: "Preço", message: ev.message, price: ev.price });
     const triggerId = "srv:" + userId + ":" + rule.id + ":" + (ev.barTime || now()) + ":" + (ev.dir || "");
     repo.enqueue({ triggerId, alertId: rule.id, dvlUserId: userId, text, destinationId: conn.telegram_chat_id });
+    // histórico p/ o painel (Recentes) — mesmo com o DVL fechado
+    repo.addHistory(userId, { msg: ev.message, ts: now(), tf: ev.tf, sym: ev.symbol, source: rule.source, dir: ev.dir });
     return true;
   }
 
