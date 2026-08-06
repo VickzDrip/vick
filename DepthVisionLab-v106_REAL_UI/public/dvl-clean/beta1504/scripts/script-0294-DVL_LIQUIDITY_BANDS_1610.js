@@ -86,56 +86,55 @@
       ctx.beginPath(); ctx.rect(x0,y0,Math.max(0,x1-x0),Math.max(0,y1-y0)); ctx.clip();
       ctx.lineJoin="round"; ctx.lineCap="round";
 
-      // NÍVEIS HORIZONTAIS VIVOS: a parede dominante ATUAL (último snapshot) vira
-      // uma linha horizontal no preço dela, atravessando o gráfico. Conforme a
-      // liquidez sobe/desce, a linha se move — isso é o "trajeto". Não prende ao
-      // tempo dos candles.
-      var last=bands[bands.length-1];
-      var upper=Number(last.upper), lower=Number(last.lower);
-      if(!Number.isFinite(upper)||!Number.isFinite(lower)){ ctx.restore(); return; }
-      var yU=Y(upper), yL=Y(lower);
-
-      // candle recente (na view) cuja mecha TOCOU o nível = foi buscar liquidez
-      var touchX=function(level){
-        var v=cfg.view||[], so=Number(cfg.slotOffset)||0, n=v.length;
-        for(var j=n-1;j>=0 && j>=n-80;j--){ var c=v[j]; if(!c) continue;
-          var hi=Number(c.high), lo=Number(c.low);
-          if(Number.isFinite(hi)&&Number.isFinite(lo)&&lo<=level&&level<=hi) return X(so+j); }
-        return null;
-      };
-      // linha horizontal no nível + glow/marcador quando houve grab
-      var hLevel=function(y,color,grabX){
-        if(grabX!=null){ ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=Math.max(2,state.width)+3; ctx.shadowColor=color; ctx.shadowBlur=9; ctx.globalAlpha=0.9;
-          ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke(); ctx.restore(); }
-        ctx.strokeStyle=color; ctx.lineWidth=Math.max(1,state.width);
-        ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
-        if(grabX!=null){ ctx.fillStyle=color; ctx.beginPath(); ctx.arc(grabX,y,3.4,0,Math.PI*2); ctx.fill(); }
-      };
-
-      // canal sombreado entre os dois níveis
-      if(state.showFill && yU<yL){
-        var fy0=Math.max(y0,yU), fy1=Math.min(y1,yL);
-        if(fy1>fy0){ ctx.globalAlpha=0.05; ctx.fillStyle=state.askColor; ctx.fillRect(x0,fy0,x1-x0,fy1-fy0); ctx.globalAlpha=1; }
+      // BANDAS (série temporal): registram o TRAJETO da liquidez ao longo do
+      // tempo — ficam no histórico pra estudar pontos passados. Parede ASK
+      // dominante (topo) e BID (base) a cada instante, mapeadas por tempo→X.
+      var pts=[];
+      for(var i=0;i<bands.length;i++){
+        var b=bands[i], px=X(timeToSlot(b.t,cfg));
+        if(px<x0-40||px>x1+40) continue;
+        pts.push({ px:px, up:b.upper, lo:b.lower, yu:Y(b.upper), yl:Y(b.lower) });
       }
-      // níveis: BID (base) e ASK (topo), com destaque de grab
-      if(yL>=y0-40 && yL<=y1+40) hLevel(yL, state.bidColor, touchX(lower));
-      if(yU>=y0-40 && yU<=y1+40) hLevel(yU, state.askColor, touchX(upper));
+      if(pts.length>=2){
+        if(state.showFill){
+          ctx.beginPath(); ctx.moveTo(pts[0].px, clipY(pts[0].yu));
+          for(var a=1;a<pts.length;a++) ctx.lineTo(pts[a].px, clipY(pts[a].yu));
+          for(var d=pts.length-1;d>=0;d--) ctx.lineTo(pts[d].px, clipY(pts[d].yl));
+          ctx.closePath(); ctx.globalAlpha=0.05; ctx.fillStyle=state.askColor; ctx.fill(); ctx.globalAlpha=1;
+        }
+        var poly=function(key,color){ ctx.strokeStyle=color; ctx.lineWidth=Math.max(1,state.width); ctx.beginPath();
+          for(var i=0;i<pts.length;i++){ var py=clipY(pts[i][key]); if(i===0)ctx.moveTo(pts[i].px,py); else ctx.lineTo(pts[i].px,py); } ctx.stroke(); };
+        poly("yl", state.bidColor); poly("yu", state.askColor);
+      }
 
-      // marcadores absorvido/retirado (opcional)
-      if(state.showMarkers && cache.events.length){
-        for(var e=0;e<cache.events.length;e++){
-          var ev=cache.events[e], sx=X(timeToSlot(ev.t,cfg)), sy=Y(ev.price);
-          if(sx<x0-6||sx>x1+6||sy<y0-6||sy>y1+6) continue;
-          var col = ev.side==="ask" ? state.askColor : state.bidColor;
-          ctx.globalAlpha=0.3+0.5*Math.min(1,ev.strength||0.3);
-          if(ev.kind==="absorbed"){ ctx.fillStyle=col; ctx.beginPath(); ctx.arc(sx,sy,2.2,0,Math.PI*2); ctx.fill(); }
-          else { ctx.strokeStyle=col; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(sx-2,sy-2); ctx.lineTo(sx+2,sy+2); ctx.moveTo(sx+2,sy-2); ctx.lineTo(sx-2,sy+2); ctx.stroke(); }
-          ctx.globalAlpha=1;
+      // GRAB: candle cuja mecha varreu a banda (no tempo dele) e o corpo voltou
+      // pra dentro = foi BUSCAR liquidez daquele lado. Label no TOPO (ask) ou
+      // na BASE (bid) do candle, mostrando qual lado foi buscado.
+      if(state.showMarkers && bands.length){
+        var bandAt=function(ct){
+          var n=bands.length; if(ct<=bands[0].t) return bands[0]; if(ct>=bands[n-1].t) return bands[n-1];
+          var lo=0,hi=n-1; while(lo+1<hi){ var m=(lo+hi)>>1; if(bands[m].t<=ct) lo=m; else hi=m; }
+          var A=bands[lo],B=bands[hi],f=(ct-A.t)/Math.max(1,B.t-A.t);
+          return { upper:A.upper+f*(B.upper-A.upper), lower:A.lower+f*(B.lower-A.lower) };
+        };
+        var tri=function(cx,y,color,up){ ctx.save(); ctx.fillStyle=color; ctx.globalAlpha=0.95; ctx.beginPath();
+          if(up){ ctx.moveTo(cx,y+5); ctx.lineTo(cx-3.6,y-1.5); ctx.lineTo(cx+3.6,y-1.5); }
+          else  { ctx.moveTo(cx,y-5); ctx.lineTo(cx-3.6,y+1.5); ctx.lineTo(cx+3.6,y+1.5); }
+          ctx.closePath(); ctx.fill(); ctx.restore(); };
+        var v=cfg.view||[], so=Number(cfg.slotOffset)||0;
+        for(var j=0;j<v.length;j++){
+          var c=v[j]; if(!c) continue;
+          var hi=Number(c.high), lo=Number(c.low), cl=Number(c.close);
+          if(!Number.isFinite(hi)||!Number.isFinite(lo)) continue;
+          var ba=bandAt(Number(c.time)); var cx=X(so+j);
+          if(cx<x0-4||cx>x1+4) continue;
+          if(hi>=ba.upper && cl<ba.upper) tri(cx, Y(hi)-6, state.askColor, true);   // buscou ASK → topo
+          if(lo<=ba.lower && cl>ba.lower) tri(cx, Y(lo)+6, state.bidColor, false);   // buscou BID → base
         }
       }
       // pílulas na escala (nível atual de cada parede)
-      if(window.dvlRegisterScaleLabel){
-        try{ window.dvlRegisterScaleLabel({value:upper,color:state.askColor,label:"ASK"}); window.dvlRegisterScaleLabel({value:lower,color:state.bidColor,label:"BID"}); }catch(_){}
+      if(window.dvlRegisterScaleLabel){ var lastB=bands[bands.length-1];
+        try{ window.dvlRegisterScaleLabel({value:lastB.upper,color:state.askColor,label:"ASK"}); window.dvlRegisterScaleLabel({value:lastB.lower,color:state.bidColor,label:"BID"}); }catch(_){}
       }
       ctx.restore();
     }catch(_){ try{ctx.restore();}catch(__){} }
@@ -201,7 +200,7 @@
       )+
       section("Visual",
         field("Preenchimento", sw("lbFill",state.showFill))+
-        field("Marcadores (absorvido/retirado)", sw("lbMk",state.showMarkers))
+        field("Labels de grab (busca de liquidez)", sw("lbMk",state.showMarkers))
       )+
       section("Cores",
         field("Parede ASK (topo)", colorBtn("askColor",state.askColor))+
