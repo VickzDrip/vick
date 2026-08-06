@@ -148,6 +148,7 @@
       cooldownSec: Number(r.cooldownSec)||30,
       toast: r.toast!==false,
       sound: r.sound!==false,
+      telegram: !!r.telegram,
       once: !!r.once,
       enabled: r.enabled!==false,
       created: now(),
@@ -256,9 +257,29 @@
     rule.lastFired = now(); rule.lastBar = currentBarTime(); rule.lastDir = payload.dir||""; rule.fires = (rule.fires||0)+1;
     if(rule.once) rule.enabled = false;
     saveRules(rules);
-    logAdd({ msg:msg, ts:now(), tf:(payload.tf||rule.tf||""), sym:(payload.symbol||rule.symbol||""), kind:("alert:"+rule.source) });
+    logAdd({ msg:msg, ts:now(), tf:(payload.tf||rule.tf||""), sym:(payload.symbol||rule.symbol||""), kind:("alert:"+rule.source), tg:!!rule.telegram });
     if(rule.toast) toast(msg, dir, sub.trim());
     if(rule.sound) beep(dir);
+    /* canal Telegram (backend): NUNCA manda chat_id/destino — só o evento. O
+       servidor valida a conexão do usuário e enfileira. triggerId estável por
+       disparo (dedup idempotente no backend). */
+    if(rule.telegram){
+      try{
+        var src=SOURCES[rule.source];
+        tgApi("/api/telegram/trigger", { method:"POST", body: JSON.stringify({
+          triggerId: rule.id+":"+rule.lastFired,
+          alertId: rule.id,
+          symbol: (payload.symbol||rule.symbol||gsym()),
+          tf: (payload.tf||rule.tf||gtf()),
+          source: rule.source,
+          title: (src&&src.title)||rule.source,
+          message: msg,
+          price: (payload.price!=null?payload.price:null),
+          values: (payload.values||null),
+          channels: { telegram:true }
+        }) });
+      }catch(_tgTrig){}
+    }
     bumpNavBadge();
     try{ window.dispatchEvent(new CustomEvent("dvl:alerts-fired",{detail:{rule:rule,payload:payload,message:msg}})); }catch(_){}
   }
@@ -406,7 +427,43 @@
 
   /* ══ UI: painel central ══════════════════════════════════════════════════ */
   injectCSS();
-  var panel=null, draft={ source:"price", signal:"cross_up", dir:"any", level:"", tf:"chart", rearm:"time", cooldownSec:30, toast:true, sound:true, once:false, params:{} };
+  var panel=null, draft={ source:"price", signal:"cross_up", dir:"any", level:"", tf:"chart", rearm:"time", cooldownSec:30, toast:true, sound:true, telegram:false, once:false, params:{} };
+
+  /* ══ Telegram (canal externo · backend) ══════════════════════════════════
+     Estado global da conexão do usuário. A UI aqui só administra a conexão e
+     seleciona o canal por alerta; o disparo real vai pro backend em fire(). */
+  var TG = { status:null, loaded:false, pollTimer:0, pollUntil:0 };
+  var TG_DURATIONS = [
+    {value:"1h",label:"1 hora"},{value:"today",label:"Hoje"},{value:"24h",label:"24 horas"},
+    {value:"7d",label:"7 dias"},{value:"30d",label:"30 dias"},{value:"forever",label:"Até cancelar"}
+  ];
+  var tgDur = "7d";
+  function tgApi(path, opts){
+    opts = opts || {};
+    var headers = { "content-type":"application/json" };
+    try{ var did=localStorage.getItem("dvl_tg_did"); if(did) headers["x-dvl-device"]=did; }catch(_){}
+    return fetch(path, Object.assign({ credentials:"include", headers:headers }, opts, { headers:Object.assign(headers, opts.headers||{}) }))
+      .then(function(r){ return r.json().catch(function(){ return null; }); })
+      .catch(function(){ return null; });
+  }
+  function tgEnabled(){ return !!(TG.status && TG.status.enabled); }
+  function tgConnected(){ return !!(TG.status && TG.status.connected); }
+  function tgActive(){ return !!(TG.status && TG.status.status==="active" && (TG.status.activeUntil==null || TG.status.activeUntil>Date.now())); }
+  function tgLoadStatus(){
+    return tgApi("/api/telegram/status").then(function(j){
+      if(j && typeof j==="object") TG.status = j;
+      TG.loaded = true;
+      if(panel && panel.classList.contains("is-open")) renderBody();
+      return j;
+    });
+  }
+  function tgStartConnectPoll(){
+    clearInterval(TG.pollTimer); TG.pollUntil = Date.now()+60000; // polling curto (doc: ~60s)
+    TG.pollTimer = setInterval(function(){
+      if(Date.now() > TG.pollUntil){ clearInterval(TG.pollTimer); return; }
+      tgLoadStatus().then(function(j){ if(j && j.connected){ clearInterval(TG.pollTimer); } });
+    }, 2000);
+  }
 
   // TFs do dropdown: "Chart" (TF atual do gráfico) + favoritos do hotbar.
   // Removido o "Qualquer" pra evitar disparo em vários TFs de uma vez.
@@ -501,6 +558,7 @@
       + (draft.rearm==="time" ? '<div class="dvl-vt-field"><label>Cooldown (s)</label><input class="dvl-vt-input" type="number" min="0" step="5" data-al="cooldownSec" value="'+esc(draft.cooldownSec)+'"></div>' : '')
       + '<div class="dvl-vt-field"><label>Toast no gráfico</label><label class="dvl-switch"><input type="checkbox" data-al="toast"'+(draft.toast?" checked":"")+'><i></i><b></b></label></div>'
       + '<div class="dvl-vt-field"><label>Som</label><label class="dvl-switch"><input type="checkbox" data-al="sound"'+(draft.sound?" checked":"")+'><i></i><b></b></label></div>'
+      + (tgEnabled() ? '<div class="dvl-vt-field"><label>Telegram</label><label class="dvl-switch'+(tgConnected()?'':' is-disabled')+'" data-tg-switch><input type="checkbox" data-al="telegram"'+((draft.telegram&&tgConnected())?" checked":"")+(tgConnected()?'':' disabled')+'><i></i><b></b></label></div>' : '')
       + '<div class="dvl-vt-field"><label>Só uma vez</label><label class="dvl-switch"><input type="checkbox" data-al="once"'+(draft.once?" checked":"")+'><i></i><b></b></label></div>'
       + '</div>';
     if(sg&&sg.desc){ h += '<div class="dvl-alert-hint">'+esc(sg.desc)+'</div>'; }
@@ -547,14 +605,56 @@
     if(!list.length) return '';
     var rows = list.map(function(e){
       var c = /COMPRA|compra|ACIMA|alta|\+/.test(e.msg)?"#13dc8d":/VENDA|venda|ABAIXO|baixa/.test(e.msg)?"#ff6b81":"#9fb6ab";
-      return '<div class="dvl-alert-recent"><span class="dot" style="background:'+c+'"></span><span class="txt">'+esc(e.msg)+'</span><span class="t">'+ago(e.ts)+'</span></div>';
+      var tg = e.tg ? '<span class="dvl-tg-chip">TG</span>' : '';
+      return '<div class="dvl-alert-recent"><span class="dot" style="background:'+c+'"></span><span class="txt">'+esc(e.msg)+'</span>'+tg+'<span class="t">'+ago(e.ts)+'</span></div>';
     }).join("");
     return '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Recentes</span><button type="button" class="dvl-alert-linkbtn" data-al-clear>limpar</button></div>'+rows+'</div>';
   }
 
+  function tgStatePill(s){
+    var cls="off", txt="Não conectado";
+    if(s && s.connected){
+      if(s.status==="active"){ cls="on"; txt="Conectado"; }
+      else if(s.status==="paused"){ cls="warn"; txt="Pausado"; }
+      else if(s.status==="expired"){ cls="warn"; txt="Expirado"; }
+      else { cls="warn"; txt=String(s.status||""); }
+    }
+    return '<span class="dvl-tg-pill '+cls+'">'+esc(txt)+'</span>';
+  }
+  function telegramSectionHTML(){
+    var s = TG.status;
+    if(!TG.loaded) return '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Telegram</span></div><div class="dvl-alert-empty">carregando…</div></div>';
+    if(!s || !s.enabled) return ''; // feature desligada no servidor → não mostra
+    var head = '<div class="dvl-vt-section dvl-tg-section" id="dvlTgSection"><div class="dvl-vt-section-title"><span>Telegram</span>'+tgStatePill(s)+'</div>';
+    var body;
+    if(!s.connected){
+      body = '<div class="dvl-alert-hint">Receba seus alertas no Telegram (chat privado com @'+esc(s.botUsername||"DvlalertsBot")+'). '
+        + (s.mode==="server" ? "Funciona mesmo com o DVL fechado." : "Funciona enquanto o DVL estiver aberto.") + '</div>'
+        + '<div class="dvl-vt-grid"><div class="dvl-vt-field"><label>Receber por</label>'+aselHTML("tgdur", TG_DURATIONS, tgDur)+'</div></div>'
+        + '<div class="dvl-alert-actions"><button type="button" class="dvl-alert-btn primary" data-tg-connect>Conectar Telegram</button></div>'
+        + '<div class="dvl-tg-msg" data-tg-msg></div>';
+    } else {
+      var until = s.activeUntil ? ("Ativo até " + new Date(s.activeUntil).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})) : "Ativo até você cancelar";
+      var stTxt = s.status==="paused" ? "Pausado — envio suspenso" : s.status==="expired" ? "Expirado — renove para voltar" : "Conectado · Chat privado";
+      body = '<div class="dvl-tg-conn"><div class="dvl-tg-conn-line">'+esc(stTxt)+'</div><div class="dvl-tg-conn-sub">'+esc(until)+'</div></div>'
+        + '<div class="dvl-vt-grid"><div class="dvl-vt-field"><label>Renovar por</label>'+aselHTML("tgdur", TG_DURATIONS, tgDur)+'</div></div>'
+        + '<div class="dvl-tg-btns">'
+        + '<button type="button" class="dvl-alert-mini-btn" data-tg-test>Testar</button>'
+        + (s.status==="paused" ? '' : '<button type="button" class="dvl-alert-mini-btn" data-tg-pause>Pausar</button>')
+        + '<button type="button" class="dvl-alert-mini-btn" data-tg-renew>Renovar</button>'
+        + '<button type="button" class="dvl-alert-mini-btn danger" data-tg-disconnect>Desconectar</button>'
+        + '</div><div class="dvl-tg-msg" data-tg-msg></div>';
+    }
+    return head + body + '</div>';
+  }
+  function tgMsg(b, txt, kind){
+    var el = b ? b.querySelector("[data-tg-msg]") : (panel && panel.querySelector("[data-tg-msg]"));
+    if(el){ el.textContent = txt||""; el.className = "dvl-tg-msg" + (kind?(" "+kind):""); }
+  }
+
   function renderBody(){
     if(!panel) return; var b=panel.querySelector("#dvlAlertsBody"); if(!b) return;
-    b.innerHTML = newRuleHTML() + rulesHTML() + recentHTML();
+    b.innerHTML = newRuleHTML() + telegramSectionHTML() + rulesHTML() + recentHTML();
     bindBody(b);
   }
 
@@ -606,6 +706,7 @@
     else if(id==="dir"){ draft.dir=val; renderBody(); }
     else if(id==="tf"){ draft.tf=val; renderBody(); }
     else if(id==="rearm"){ draft.rearm=val; renderBody(); }
+    else if(id==="tgdur"){ tgDur=val; renderBody(); }
     else if(id.indexOf("alp:")===0){ draft.params=draft.params||{}; draft.params[id.slice(4)]=val; renderBody(); }
   }
   function bindBody(b){
@@ -646,7 +747,7 @@
         level:(sg&&sg.needsLevel)?Number(draft.level):null,
         params:Object.assign({}, draft.params),
         tf:draft.tf, rearm:draft.rearm, cooldownSec:Number(draft.cooldownSec)||0,
-        toast:draft.toast, sound:draft.sound, once:draft.once,
+        toast:draft.toast, sound:draft.sound, telegram:(draft.telegram && tgConnected()), once:draft.once,
         symbol:scoped?gsym():""
       });
       draft.level="";
@@ -659,6 +760,38 @@
       var tst=row.querySelector("[data-al-test]"); if(tst) tst.addEventListener("click",function(){ DVL_ALERTS.test(id); });
     });
     var clr=b.querySelector("[data-al-clear]"); if(clr) clr.addEventListener("click",function(){ try{ if(window.DVL_ALERTS_LOG) window.DVL_ALERTS_LOG.clear(); }catch(_){} renderBody(); });
+
+    // ── Telegram ──
+    // clicar no switch desabilitado leva à seção de conexão (destaque)
+    var tgsw=b.querySelector("[data-tg-switch]");
+    if(tgsw && !tgConnected()){ tgsw.addEventListener("click", function(ev){ ev.preventDefault(); var sec=b.querySelector("#dvlTgSection"); if(sec){ sec.scrollIntoView({behavior:"smooth",block:"center"}); sec.classList.add("dvl-tg-flash"); setTimeout(function(){ sec.classList.remove("dvl-tg-flash"); },1200); } }); }
+    var tgConnectBtn=b.querySelector("[data-tg-connect]");
+    if(tgConnectBtn) tgConnectBtn.addEventListener("click", function(){
+      tgMsg(b,"abrindo o Telegram…");
+      tgApi("/api/telegram/connect-intent", { method:"POST", body:JSON.stringify({duration:tgDur}) }).then(function(j){
+        if(j && j.ok && j.deepLink){
+          try{ if(j.deviceToken) localStorage.setItem("dvl_tg_did", j.deviceToken); }catch(_){}
+          var w=window.open(j.deepLink, "_blank"); if(!w){ location.href=j.deepLink; }
+          tgMsg(b,"toque em INICIAR no Telegram… aguardando confirmação","ok");
+          tgStartConnectPoll();
+        } else { tgMsg(b, (j&&j.error==="rate_limited")?"muitas tentativas, aguarde":"não consegui iniciar a conexão","err"); }
+      });
+    });
+    function tgAction(sel, path, body, okMsg){
+      var el=b.querySelector(sel); if(!el) return;
+      el.addEventListener("click", function(){
+        el.disabled=true;
+        tgApi(path, { method:"POST", body: JSON.stringify(body||{}) }).then(function(j){
+          if(okMsg && j && (j.ok || j.queued!==undefined)) tgMsg(b, (j.ok===false?("falhou: "+(j.error||"?")):okMsg), j.ok===false?"err":"ok");
+          tgLoadStatus();
+        });
+      });
+    }
+    tgAction("[data-tg-test]", "/api/telegram/test", {}, "teste enviado — confira o Telegram");
+    tgAction("[data-tg-pause]", "/api/telegram/pause", {}, "pausado");
+    tgAction("[data-tg-renew]", "/api/telegram/renew", {duration:tgDur}, "renovado");
+    var tgDisc=b.querySelector("[data-tg-disconnect]");
+    if(tgDisc) tgDisc.addEventListener("click", function(){ tgApi("/api/telegram/disconnect",{method:"POST"}).then(function(){ tgLoadStatus(); }); });
   }
 
   function flash(btn,txt){ var old=btn.textContent; btn.textContent=txt; btn.classList.add("warn"); setTimeout(function(){ btn.textContent=old; btn.classList.remove("warn"); },1400); }
@@ -674,8 +807,8 @@
     panel.querySelector("#dvlAlertsHubClose").addEventListener("click", closePanel);
     return panel;
   }
-  function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderBody(); var b=document.getElementById("dvlAlertsNavBadge1620"); if(b) b.style.display="none"; }
-  function closePanel(){ if(panel) panel.classList.remove("is-open"); closeAselFloat(); }
+  function openPanel(){ ensurePanel(); panel.classList.add("is-open"); renderBody(); tgLoadStatus(); var b=document.getElementById("dvlAlertsNavBadge1620"); if(b) b.style.display="none"; }
+  function closePanel(){ if(panel) panel.classList.remove("is-open"); closeAselFloat(); clearInterval(TG.pollTimer); }
   function togglePanel(){ ensurePanel(); if(panel.classList.contains("is-open")) closePanel(); else openPanel(); }
 
   window.addEventListener("dvl:alerts-rules-update", function(){ if(panel&&panel.classList.contains("is-open")) renderBody(); });
@@ -764,7 +897,24 @@
       ".dvl-alert-recent .dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto}",
       ".dvl-alert-recent .txt{flex:1;min-width:0;color:#cfe0d8;font:600 10px/1.3 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
       ".dvl-alert-recent .t{color:#7f9c8e;font:600 9px system-ui;flex:0 0 auto}",
-      ".dvl-alert-linkbtn{background:none;border:0;color:#7f9c8e;font:700 9.5px system-ui;cursor:pointer;text-decoration:underline}"
+      ".dvl-alert-linkbtn{background:none;border:0;color:#7f9c8e;font:700 9.5px system-ui;cursor:pointer;text-decoration:underline}",
+      /* ── Telegram ── */
+      ".dvl-tg-pill{font:800 8.5px/1 system-ui;border-radius:5px;padding:3px 7px;border:1px solid rgba(129,166,151,.28);color:#9fb6ab;background:rgba(129,166,151,.08)}",
+      ".dvl-tg-pill.on{color:#13dc8d;background:rgba(19,220,141,.12);border-color:rgba(19,220,141,.30)}",
+      ".dvl-tg-pill.warn{color:#e6c04a;background:rgba(230,192,74,.1);border-color:rgba(230,192,74,.28)}",
+      ".dvl-tg-section.dvl-tg-flash{outline:2px solid rgba(53,224,255,.6);outline-offset:2px;transition:outline .3s}",
+      ".dvl-tg-conn{margin:2px 0 8px}",
+      ".dvl-tg-conn-line{color:#eafff4;font:800 12px system-ui}",
+      ".dvl-tg-conn-sub{color:#8fb0a3;font:700 10px system-ui;margin-top:2px}",
+      ".dvl-tg-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}",
+      ".dvl-alert-mini-btn{border:1px solid rgba(129,166,151,.26);background:rgba(129,166,151,.08);color:#cfe0d8;font:750 10.5px system-ui;border-radius:8px;padding:6px 11px;cursor:pointer}",
+      ".dvl-alert-mini-btn:active{background:rgba(129,166,151,.18)}",
+      ".dvl-alert-mini-btn.danger{color:#ff8ea0;border-color:rgba(255,107,129,.3)}",
+      ".dvl-tg-msg{color:#8fb0a3;font:650 10px/1.4 system-ui;margin-top:7px;min-height:0}",
+      ".dvl-tg-msg.ok{color:#13dc8d}",
+      ".dvl-tg-msg.err{color:#ff6b81}",
+      ".dvl-switch.is-disabled{opacity:.4}",
+      ".dvl-tg-chip{font:800 8px/1 system-ui;color:#3aa0ff;background:rgba(58,160,255,.14);border:1px solid rgba(58,160,255,.3);border-radius:4px;padding:2px 4px;flex:0 0 auto}"
     ].join("\n");
     (document.head||document.documentElement).appendChild(st);
   }
