@@ -36,6 +36,16 @@
 
   var state = load(), panel=null, palette=null, paletteKey=null;
   var cache = { ver:-1, at:0, bands:[], events:[] };
+  var _grabEmit = { t:0, up:false, down:false }; // dedup do alerta de grab (por candle+lado)
+  function emitGrab(side){
+    try{
+      if(!window.DVL_ALERTS || typeof window.DVL_ALERTS.emit!=="function") return;
+      var sym=(typeof symbol!=="undefined"&&symbol)?String(symbol):"";
+      var tf=(typeof interval!=="undefined")?String(interval):"";
+      if(side==="up") window.DVL_ALERTS.emit("liqbands","grab_up",{dir:"down",tf:tf,symbol:sym,message:"Liquidity Bands: buscou liquidez em CIMA (ask) — possível reversão ▼"});
+      else            window.DVL_ALERTS.emit("liqbands","grab_down",{dir:"up",tf:tf,symbol:sym,message:"Liquidity Bands: buscou liquidez em BAIXO (bid) — possível reversão ▲"});
+    }catch(_){}
+  }
 
   function redraw(){ if(typeof drawSoon==="function"){ try{ drawSoon(); }catch(_){} } }
   function hm(){ return window.DVL_DEEP_HEATMAP_API || null; }
@@ -128,8 +138,20 @@
           if(!Number.isFinite(hi)||!Number.isFinite(lo)) continue;
           var ba=bandAt(Number(c.time)); var cx=X(so+j);
           if(cx<x0-4||cx>x1+4) continue;
-          if(hi>=ba.upper && cl<ba.upper) tri(cx, Y(hi)-6, state.askColor, true);   // buscou ASK → topo
-          if(lo<=ba.lower && cl>ba.lower) tri(cx, Y(lo)+6, state.bidColor, false);   // buscou BID → base
+          var grabUp = hi>=ba.upper && cl<ba.upper;
+          var grabDn = lo<=ba.lower && cl>ba.lower;
+          if(grabUp) tri(cx, Y(hi)-6, state.askColor, true);   // buscou ASK → topo
+          if(grabDn) tri(cx, Y(lo)+6, state.bidColor, false);   // buscou BID → base
+          // alerta só no candle VIVO real (não o último visível ao rolar o
+          // histórico), deduplicado por candle+lado
+          var _isLive=false;
+          try{ _isLive = (typeof klines!=="undefined" && klines.length && Number(c.time)===Number(klines[klines.length-1].time)); }catch(_){}
+          if(_isLive){
+            var ct=Number(c.time);
+            if(ct!==_grabEmit.t) _grabEmit={t:ct,up:false,down:false};
+            if(grabUp && !_grabEmit.up){ _grabEmit.up=true; emitGrab("up"); }
+            if(grabDn && !_grabEmit.down){ _grabEmit.down=true; emitGrab("down"); }
+          }
         }
       }
       // pílulas na escala (nível atual de cada parede)

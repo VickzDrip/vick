@@ -185,7 +185,12 @@
   }
 
   function scannerBtn(){
-    return document.getElementById("scannerNavBtn")||document.querySelector(".bottomNav .navInner .navItem:nth-child(2)");
+    /* Beta 1.620 — o 2º item da bottom nav virou o botão "Alertas" (DVL Alerts
+       Hub). NÃO usar mais o fallback nth-child(2): senão o forceButton()/handlers
+       do scanner reivindicavam o botão de Alertas e o revertiam pra "Scanner".
+       Agora o scanner só se liga a um #scannerNavBtn explícito (não existe mais
+       no markup), então o botão da nav fica 100% do hub de Alertas. */
+    return document.getElementById("scannerNavBtn");
   }
 
   function forceButton(){

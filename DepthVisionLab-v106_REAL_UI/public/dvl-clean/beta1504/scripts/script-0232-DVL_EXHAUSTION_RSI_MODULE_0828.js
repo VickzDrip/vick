@@ -914,6 +914,21 @@
           No labels, no arrows, no chart-main pollution.
         */
         var tip = pts[pts.length - 1];
+        /* Alerta (DVL Alerts Hub): dispara ao ENTRAR na exaustão — transição
+           normal→topo ou normal→fundo. O estado por-zona vive em window.__dvlExrZone
+           e evita re-disparo enquanto continuar na mesma zona. */
+        if(tip){
+          try{
+            var _exZone = tip.v >= upper ? 1 : (tip.v <= lower ? -1 : 0);
+            if(_exZone!==0 && _exZone!==window.__dvlExrZone && window.DVL_ALERTS && typeof window.DVL_ALERTS.emit==="function"){
+              var _exSym=(typeof symbol!=="undefined"&&symbol)?String(symbol):"";
+              var _exTf=(state.calculationTF&&state.calculationTF!=="Chart")?String(state.calculationTF):((typeof interval!=="undefined")?String(interval):"");
+              if(_exZone>0) window.DVL_ALERTS.emit("exr","exhaustion_up",{dir:"down",tf:_exTf,symbol:_exSym,message:"RSI Exhaustion: exaustão de TOPO — possível reversão ▼"});
+              else          window.DVL_ALERTS.emit("exr","exhaustion_down",{dir:"up",tf:_exTf,symbol:_exSym,message:"RSI Exhaustion: exaustão de FUNDO — possível reversão ▲"});
+            }
+            window.__dvlExrZone=_exZone;
+          }catch(_exrAlertErr){}
+        }
         var tipViz = tip ? Math.max(Math.max(0, Math.min(1, Math.max(tip.buy, tip.sell) * 2.4)),proVisualStrength(tip.v)) : 0;
         /* Pulso no candle atual: dispara na zona OU quando os TFs rápidos estão
            acelerando forte (tipViz alto), mesmo antes de chegar na zona. */
