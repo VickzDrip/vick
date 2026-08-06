@@ -28,6 +28,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.612", note: "Crosshair MOBILE corrigido: no celular o cross 'nem aparecia de forma alguma'. Causa raiz — a funcao drawCrosshair (que pinta o cross direto no canvas) foi perdida na extracao monolito->modular; o crosshair DOM so funciona no desktop, entao no mobile a draw() caia no ramo que chamava drawCrosshair e batia num ReferenceError, abortando o render do cross. Restaurei a funcao original (perna vertical atravessando os dois paineis, perna horizontal + dot, tag de preco e label de tempo). Desktop segue usando o cross DOM, intacto. So frontend." },
   { version: "Beta 1.611", note: "Liquidity Bands: voltou a ser BANDAS (serie temporal) que ficam no historico pra estudar pontos passados — a parede ASK dominante (topo) e BID (base) tracam o trajeto da liquidez ao longo do tempo, com canal sombreado. O grab de liquidez agora e um LABEL (triangulo) no topo (buscou ask) ou na base (buscou bid) do candle que varreu a banda e voltou pra dentro, mostrando qual lado foi buscado. So frontend." },
   { version: "Beta 1.610", note: "Liquidity Bands redesenhado como NIVEIS HORIZONTAIS VIVOS: em vez de bandas presas ao tempo dos candles, agora as paredes de liquidez dominantes (ASK acima / BID abaixo) sao linhas horizontais no preco delas, atravessando o grafico e se movendo conforme a liquidez sobe/desce (o trajeto). Quando um candle recente toca o nivel (foi buscar liquidez), o nivel ganha glow + marcador. Motor e solver iguais; mudou so o render. So frontend." },
   { version: "Beta 1.609", note: "Novo indicador: DVL Liquidity Bands — usa o motor do Deep Heatmap (order book) pra desenhar duas bandas que rodeiam o preço: a parede de ASK dominante acima e a de BID dominante abaixo, suavizadas (o 'caminho' das ordens), com canal sombreado e marcadores de liquidez absorvida (consume) e retirada (pull). Fica no menu de indicadores (seção Overlay, selo LB); liga o motor do Deep Heatmap sozinho ao ativar. Cálculo por solver isolado testado offline. Só frontend." },
@@ -4931,6 +4932,94 @@ function draw(){
   /* Scale dock is synchronized by __dvlScheduleLayoutSync1209 only when
      geometry changes; pan/zoom/ticks do not alter its dock position. */
 }
+
+/* Beta 1.612 — canvas crosshair RESTAURADO (perdido na extração monólito→modular,
+   mesmo padrão de __dvlLastCrossCfg). O crosshair DOM (#dvlCrosshairDom1205) é
+   desktop-only; no mobile dvlDesktopCrosshair1205() retorna null e a draw() caía
+   no `else` chamando drawCrosshair — que não existia → ReferenceError → o cross
+   mobile "não aparecia de forma alguma". Esta função pinta o cross direto no
+   canvas: perna vertical transcende os dois painéis, perna horizontal + dot no
+   centro, tag de preço à direita e label de tempo na faixa de escala. */
+function drawCrosshair(ctx, cfg){
+  if(!crosshair.visible) return;
+
+  const fullY0 = Number.isFinite(cfg.fullY0) ? cfg.fullY0 : cfg.y0;
+  const fullY1 = Number.isFinite(cfg.fullY1) ? cfg.fullY1 : cfg.y1;
+  const fullX0 = Number.isFinite(cfg.fullX0) ? cfg.fullX0 : cfg.x0;
+  const fullX1 = Number.isFinite(cfg.fullX1) ? cfg.fullX1 : cfg.x1;
+
+  const cx = clamp(crosshair.x, cfg.x0, cfg.x1);
+  const cy = clamp(crosshair.y, fullY0, fullY1);
+  const insidePricePanel = cy >= cfg.y0 && cy <= cfg.y1;
+
+  const slotRaw = ((cx - cfg.x0) / Math.max(cfg.x1 - cfg.x0, 1)) * Math.max(cfg.win.totalSlots - 1, 1);
+  const candleIdx = Math.round(slotRaw - cfg.slotOffset);
+
+  let timeText = "";
+  if(candleIdx >= 0 && candleIdx < cfg.view.length){
+    timeText = chartDateTimeLabel(cfg.view[candleIdx].time);
+  } else if(candleIdx >= cfg.view.length && cfg.view.length){
+    const futureSteps = candleIdx - cfg.view.length + 1;
+    timeText = chartDateTimeLabel(cfg.view.at(-1).time + futureSteps * intervalMs(interval));
+  }
+
+  ctx.save();
+  ctx.setLineDash([4,4]);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(33,223,255,.68)";
+  ctx.beginPath();
+
+  /* Horizontal leg follows the cross center; vertical leg transcends both chart panels. */
+  ctx.moveTo(fullX0, cy);
+  ctx.lineTo(fullX1, cy);
+  ctx.moveTo(cx, fullY0);
+  ctx.lineTo(cx, fullY1);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = "rgba(33,223,255,.98)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  if(insidePricePanel){
+    const price = cfg.max - ((cy - cfg.y0) / Math.max(cfg.y1 - cfg.y0, 1)) * (cfg.max - cfg.min);
+    const priceText = fmtPrice(price);
+    const tagW = PRICE_LABEL_W;
+    const tagH = 24;
+    const tagX = cfg.x1 + PRICE_LABEL_GAP;
+    const tagY = cy - tagH / 2;
+    roundRect(ctx, tagX, tagY, tagW, tagH, 6, true, false, "#21dfff");
+    ctx.fillStyle = "#02111d";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "900 8.5px system-ui";
+    ctx.fillText(priceText, tagX + tagW / 2, cy);
+  }
+
+  if(timeText){
+    const textW = Math.max(42, ctx.measureText(timeText).width + 14);
+    const scaleBandH = (typeof dvlMainTimeScaleHeight === "function" ? dvlMainTimeScaleHeight() : 20);
+    const timeBoxH = 18;
+    /*
+      Keep the cross date label LIMITED to the main chart time-scale band.
+      Only the vertical cross leg may transcend into panel 2.
+    */
+    const boxY = cfg.y1 + Math.max(0, (scaleBandH - timeBoxH) / 2);
+    const boxX = clamp(cx - textW / 2, cfg.x0 + 2, cfg.x1 - textW - 2);
+    roundRect(ctx, boxX, boxY, textW, timeBoxH, 6, true, false, "rgba(6,18,32,.96)");
+    ctx.strokeStyle = "rgba(33,223,255,.42)";
+    ctx.stroke();
+    ctx.fillStyle = "#dff8ff";
+    ctx.font = "850 9px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(timeText, boxX + textW / 2, boxY + timeBoxH / 2);
+  }
+
+  ctx.restore();
+}
+
 function drawEmpty(ctx,w,h){
   ctx.fillStyle = "#6b7d6e";
   ctx.font = "700 12px system-ui";
