@@ -324,9 +324,27 @@
   injectCSS();
   var panel=null, draft={ source:"price", signal:"cross_up", dir:"any", level:"", tf:"", cooldownSec:30, toast:true, sound:true, once:false, params:{} };
 
-  function opt(v,label,cur){ return '<option value="'+esc(v)+'"'+(String(v)===String(cur)?" selected":"")+'>'+esc(label)+'</option>'; }
-  function sourceOptions(cur){ return DVL_ALERTS.sources().map(function(s){ return opt(s.key, s.title, cur); }).join(""); }
-  function signalOptions(srcKey, cur){ var s=SOURCES[srcKey]; if(!s) return ""; return s.signals.map(function(sg){ return opt(sg.id, sg.label, cur); }).join(""); }
+  // fecha qualquer dropdown customizado aberto ao tocar fora dele
+  document.addEventListener("click", function(ev){
+    if(!panel) return;
+    if(ev.target && ev.target.closest && ev.target.closest(".dvl-asel")) return;
+    panel.querySelectorAll(".dvl-asel.open").forEach(function(w){ w.classList.remove("open"); });
+  }, true);
+
+  /* Dropdown CUSTOMIZADO (o <select> nativo do Android pinta a opção marcada de
+     verde sólido, tapando o texto — e ignora CSS). Aqui controlamos 100%: a
+     opção selecionada ganha só um leve realce + marcador, sem cobrir o texto. */
+  function aselHTML(id, options, cur){
+    var curLabel="";
+    for(var i=0;i<options.length;i++){ if(String(options[i].value)===String(cur)){ curLabel=options[i].label; break; } }
+    if(curLabel==="" && options.length) curLabel=options[0].label;
+    var opts=options.map(function(o){ return '<div class="dvl-asel-opt'+(String(o.value)===String(cur)?" is-sel":"")+'" data-val="'+esc(o.value)+'" role="option">'+esc(o.label)+'</div>'; }).join("");
+    return '<div class="dvl-asel" data-asel="'+esc(id)+'">'
+      + '<button type="button" class="dvl-asel-btn"><span class="dvl-asel-lbl">'+esc(curLabel)+'</span><i class="dvl-asel-chev" aria-hidden="true"></i></button>'
+      + '<div class="dvl-asel-menu" role="listbox">'+opts+'</div></div>';
+  }
+  function sourceAselOptions(){ return DVL_ALERTS.sources().map(function(s){ return {value:s.key,label:s.title}; }); }
+  function signalAselOptions(srcKey){ var s=SOURCES[srcKey]; if(!s) return []; return s.signals.map(function(sg){ return {value:sg.id,label:sg.label}; }); }
 
   function currentSignalDef(){ return signalDef(draft.source, draft.signal); }
   function paramOptions(param){ try{ var o=(typeof param.options==="function")?param.options():param.options; return Array.isArray(o)?o:[]; }catch(_){ return []; } }
@@ -351,20 +369,19 @@
     var lvlPlace = draft.source==="price" && (draft.signal==="cross_up"||draft.signal==="cross_down") ? String(Math.round(gprice()||0)) : ((sg&&sg.levelDefault!=null)?String(sg.levelDefault):"");
     var h = '<div class="dvl-vt-section"><div class="dvl-vt-section-title"><span>Novo alerta</span></div>'
       + '<div class="dvl-vt-grid">'
-      + '<div class="dvl-vt-field"><label>Indicador</label><select class="dvl-vt-select" data-al="source">'+sourceOptions(draft.source)+'</select></div>'
-      + '<div class="dvl-vt-field"><label>Sinal</label><select class="dvl-vt-select" data-al="signal">'+signalOptions(draft.source, draft.signal)+'</select></div>';
+      + '<div class="dvl-vt-field"><label>Indicador</label>'+aselHTML("source", sourceAselOptions(), draft.source)+'</div>'
+      + '<div class="dvl-vt-field"><label>Sinal</label>'+aselHTML("signal", signalAselOptions(draft.source), draft.signal)+'</div>';
     if(sg && sg.params){
       sg.params.forEach(function(pr){
         var opts=paramOptions(pr), cur=draft.params[pr.id];
-        h += '<div class="dvl-vt-field"><label>'+esc(pr.label||pr.id)+'</label><select class="dvl-vt-select" data-alp="'+esc(pr.id)+'">'
-          + opts.map(function(o){ return opt(o.value, o.label, cur); }).join("") + '</select></div>';
+        h += '<div class="dvl-vt-field"><label>'+esc(pr.label||pr.id)+'</label>'+aselHTML("alp:"+pr.id, opts, cur)+'</div>';
       });
     }
     if(needsLevel){
       h += '<div class="dvl-vt-field"><label>'+esc(levelLabel)+(levelUnit?(" ("+esc(levelUnit)+")"):"")+'</label><input class="dvl-vt-input" type="number" step="any" data-al="level" value="'+esc(draft.level)+'" placeholder="'+esc(lvlPlace)+'"></div>';
     }
     if(hasDir){
-      h += '<div class="dvl-vt-field"><label>Direção</label><select class="dvl-vt-select" data-al="dir">'+opt("any","Qualquer",draft.dir)+opt("up","Alta ▲",draft.dir)+opt("down","Baixa ▼",draft.dir)+'</select></div>';
+      h += '<div class="dvl-vt-field"><label>Direção</label>'+aselHTML("dir", [{value:"any",label:"Qualquer"},{value:"up",label:"Alta ▲"},{value:"down",label:"Baixa ▼"}], draft.dir)+'</div>';
     }
     h += '<div class="dvl-vt-field"><label>Timeframe</label><input class="dvl-vt-input" type="text" data-al="tf" value="'+esc(draft.tf)+'" placeholder="qualquer"></div>'
       + '<div class="dvl-vt-field"><label>Cooldown (s)</label><input class="dvl-vt-input" type="number" min="0" step="5" data-al="cooldownSec" value="'+esc(draft.cooldownSec)+'"></div>'
@@ -424,18 +441,52 @@
     bindBody(b);
   }
 
+  /* posiciona o menu (position:fixed) logo abaixo do botão; se não couber pra
+     baixo, abre pra cima. Escapa do overflow:auto do corpo do painel. */
+  function positionAselMenu(wrap, btn){
+    var menu=wrap.querySelector(".dvl-asel-menu"); if(!menu) return;
+    var r=btn.getBoundingClientRect();
+    var vh=window.innerHeight||document.documentElement.clientHeight;
+    menu.style.width=Math.round(r.width)+"px";
+    menu.style.left=Math.round(r.left)+"px";
+    // mede a altura provável (limitada a 230)
+    var mh=Math.min(230, menu.scrollHeight||230);
+    var below=vh-r.bottom-8, above=r.top-8;
+    if(below>=mh || below>=above){ menu.style.top=Math.round(r.bottom+4)+"px"; menu.style.bottom="auto"; menu.style.maxHeight=Math.max(120,Math.min(230,below))+"px"; }
+    else { menu.style.top="auto"; menu.style.bottom=Math.round(vh-r.top+4)+"px"; menu.style.maxHeight=Math.max(120,Math.min(230,above))+"px"; }
+  }
+  function applyAsel(id, val){
+    if(id==="source"){ draft.source=val; var s=SOURCES[val]; draft.signal=(s&&s.signals[0])?s.signals[0].id:""; draft.level=""; draft.params={}; renderBody(); }
+    else if(id==="signal"){ draft.signal=val; draft.level=""; draft.params={}; renderBody(); }
+    else if(id==="dir"){ draft.dir=val; renderBody(); }
+    else if(id.indexOf("alp:")===0){ draft.params=draft.params||{}; draft.params[id.slice(4)]=val; renderBody(); }
+  }
   function bindBody(b){
-    b.querySelectorAll("[data-al]").forEach(function(el){
+    // inputs (nível, tf, cooldown) + switches (toast, som, once)
+    b.querySelectorAll("input[data-al]").forEach(function(el){
       var key=el.getAttribute("data-al");
-      var evt = (el.tagName==="SELECT"||el.type==="checkbox") ? "change" : "input";
+      var evt = (el.type==="checkbox") ? "change" : "input";
       el.addEventListener(evt, function(){
         if(el.type==="checkbox") draft[key]=el.checked; else draft[key]=el.value;
-        if(key==="source"){ var s=SOURCES[draft.source]; draft.signal = s&&s.signals[0]?s.signals[0].id:""; draft.level=""; draft.params={}; renderBody(); }
-        else if(key==="signal"){ draft.level=""; draft.params={}; renderBody(); }
       });
     });
-    b.querySelectorAll("[data-alp]").forEach(function(el){
-      el.addEventListener("change", function(){ draft.params=draft.params||{}; draft.params[el.getAttribute("data-alp")]=el.value; });
+    // dropdowns customizados
+    b.querySelectorAll(".dvl-asel-btn").forEach(function(btn){
+      btn.addEventListener("click", function(ev){
+        ev.stopPropagation();
+        var wrap=btn.closest(".dvl-asel"), wasOpen=wrap.classList.contains("open");
+        b.querySelectorAll(".dvl-asel.open").forEach(function(w){ w.classList.remove("open"); });
+        if(!wasOpen){ wrap.classList.add("open"); positionAselMenu(wrap, btn); }
+      });
+    });
+    // fecha os dropdowns ao rolar o corpo do painel (o menu é position:fixed)
+    b.addEventListener("scroll", function(){ b.querySelectorAll(".dvl-asel.open").forEach(function(w){ w.classList.remove("open"); }); }, {passive:true});
+    b.querySelectorAll(".dvl-asel-opt").forEach(function(o){
+      o.addEventListener("click", function(ev){
+        ev.stopPropagation();
+        var wrap=o.closest(".dvl-asel");
+        applyAsel(wrap.getAttribute("data-asel"), o.getAttribute("data-val"));
+      });
     });
     var add=b.querySelector("[data-al-add]");
     if(add) add.addEventListener("click", function(){
@@ -530,11 +581,21 @@
       ".dvl-alert-toast-x:hover{color:#dcebe4}",
       /* panel bits (herda .dvl-vt-*) */
       ".dvl-alerts-panel .dvl-vt-body{max-height:min(74vh,620px);overflow-y:auto}",
-      /* dropdown: força tema escuro nativo + contraste na opção selecionada
-         (antes a opção marcada virava uma barra verde sólida tapando o texto) */
-      ".dvl-alerts-panel .dvl-vt-select{color-scheme:dark;accent-color:#35e0ff}",
-      ".dvl-alerts-panel .dvl-vt-select option{background:#0b1218;color:#dcebe4}",
-      ".dvl-alerts-panel .dvl-vt-select option:checked,.dvl-alerts-panel .dvl-vt-select option:hover{background:#12352a;color:#eafff4;font-weight:700}",
+      /* dropdown CUSTOMIZADO — substitui o <select> nativo (que no Android
+         pintava a opção marcada de verde sólido tapando o texto). */
+      ".dvl-asel{position:relative}",
+      ".dvl-asel-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0b1218;border:1px solid rgba(129,166,151,.28);border-radius:9px;padding:8px 10px;color:#eafff4;font:700 12px system-ui;cursor:pointer;text-align:left;line-height:1.2}",
+      ".dvl-asel-btn:active{background:#0e1720}",
+      ".dvl-asel-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+      ".dvl-asel-chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #7f9c8e;flex:0 0 auto;transition:transform .16s}",
+      ".dvl-asel.open .dvl-asel-chev{transform:rotate(180deg)}",
+      ".dvl-asel.open .dvl-asel-btn{border-color:rgba(53,224,255,.5)}",
+      ".dvl-asel-menu{display:none;position:fixed;z-index:2147483500;background:#0c141a;border:1px solid rgba(129,166,151,.34);border-radius:10px;box-shadow:0 14px 34px rgba(0,0,0,.6);max-height:230px;overflow-y:auto;padding:4px;-webkit-overflow-scrolling:touch}",
+      ".dvl-asel.open .dvl-asel-menu{display:block}",
+      ".dvl-asel-opt{padding:9px 10px 9px 10px;border-radius:7px;color:#cfe0d8;font:650 12px system-ui;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+      ".dvl-asel-opt:active{background:rgba(129,166,151,.14)}",
+      ".dvl-asel-opt.is-sel{color:#eafff4;background:rgba(53,224,255,.1);position:relative;padding-left:18px}",
+      ".dvl-asel-opt.is-sel::before{content:'';position:absolute;left:7px;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:#35e0ff}",
       ".dvl-alert-hint{color:#8aa99b;font:600 10px/1.45 system-ui;margin:2px 2px 0}",
       ".dvl-alert-actions{margin-top:10px}",
       ".dvl-alert-btn{border:1px solid rgba(53,224,255,.34);background:rgba(53,224,255,.12);color:#cdeffb;font:800 12px system-ui;border-radius:9px;padding:8px 14px;cursor:pointer;width:100%}",
