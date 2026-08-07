@@ -63,7 +63,7 @@
     var map={vwap:"VWAP",vwap_u1:"VWAP +1σ",vwap_l1:"VWAP −1σ",vwap_u2:"VWAP +2σ",vwap_l2:"VWAP −2σ",vp_poc:"VP POC",vp_vah:"VP VAH",vp_val:"VP VAL"};
     return map[id]||id||"linha";
   }
-  var crossPrev = {}; // id da regra → sinal anterior de (A-B)
+  var crossState = {}; // id da regra → {bar, sign, confirmed} — confirmação no fechamento do candle
 
   /* ── catálogo de fontes ──────────────────────────────────────────────────
      Cada fonte: {key,title,mark,signals:[{id,label,dirs?,needsLevel?,levelLabel?,
@@ -164,7 +164,7 @@
     rules.push(rule); saveRules(rules); tgSyncRules(); return rule;
   }
   function updateRule(id, patch){ for(var i=0;i<rules.length;i++){ if(rules[i].id===id){ Object.assign(rules[i], patch||{}); saveRules(rules); tgSyncRules(); return rules[i]; } } return null; }
-  function deleteRule(id){ rules = rules.filter(function(r){ return r.id!==id; }); try{ delete crossPrev[id]; }catch(_){} saveRules(rules); tgSyncRules(); }
+  function deleteRule(id){ rules = rules.filter(function(r){ return r.id!==id; }); try{ delete crossState[id]; }catch(_){} saveRules(rules); tgSyncRules(); }
 
   /* ── entrega ──────────────────────────────────────────────────────────── */
   var _audioCtx = null;
@@ -288,6 +288,33 @@
     try{ window.dispatchEvent(new CustomEvent("dvl:alerts-fired",{detail:{rule:rule,payload:payload,message:msg}})); }catch(_){}
   }
 
+  /* Confirmação no FECHAMENTO do candle (Beta 1.634) — PADRÃO para todas as
+     fontes de cruzamento (linha×linha, preço×média, preço×nível). Em vez de
+     disparar com o candle ABERTO (o que faz a linha "chicotear"/samambaiar a
+     cada tick de 1,5s), guardamos o sinal do candle EM FORMAÇÃO e só
+     confirmamos quando ele FECHA (o candle atual troca). Resultado: cada
+     cruzamento sai no máximo 1× por candle, já confirmado — nada de alerta no
+     meio de um candle de 5m. `sign` = lado atual (+1/−1); `allowedDir` filtra a
+     direção desejada ("any"/"up"/"down"); `makePayload(dir)` monta o disparo. */
+  function crossOnClose(rule, sign, allowedDir, makePayload){
+    var bar = currentBarTime();
+    if(!bar) return; // sem candle de referência não dá pra confirmar fechamento
+    var st = crossState[rule.id];
+    if(st==null){ crossState[rule.id] = { bar:bar, sign:sign, confirmed:sign }; return; }
+    if(bar !== st.bar){
+      // novo candle começou → o anterior FECHOU com st.sign; confirma se mudou de lado
+      if(st.sign !== st.confirmed){
+        var dir = st.sign>0 ? "up" : "down";
+        if(allowedDir==="any" || allowedDir===dir){
+          var pl = makePayload(dir); if(pl) fire(rule, pl);
+        }
+        st.confirmed = st.sign;
+      }
+      st.bar = bar;
+    }
+    st.sign = sign; // sinal "ao vivo" do candle atual — vira o de fechamento quando fechar
+  }
+
   /* ── emit: o coração. Indicadores chamam DVL_ALERTS.emit(src,sig,payload) ── */
   function emit(sourceKey, signalId, payload){
     payload = payload||{};
@@ -327,16 +354,16 @@
 
       // ── Médias Móveis: preço cruza a média escolhida ──
       if(r.source==="ma"){
-        if(r.signal==="cross" && prevPrice!=null){
+        if(r.signal==="cross"){
           var _mi = (r.params && r.params.maId!=null && r.params.maId!=="") ? Number(r.params.maId) : null;
           var _api = window.DVLMovingAverages;
           var _mv = (_mi!=null && _api && typeof _api.valueAt==="function") ? _api.valueAt(_mi) : null;
           if(_mv!=null && Number.isFinite(_mv)){
-            var _mdir = (prevPrice < _mv && p >= _mv) ? "up" : (prevPrice > _mv && p <= _mv) ? "down" : null;
-            if(_mdir && (r.dir==="any" || r.dir===_mdir)){
+            // confirma no fechamento do candle (sem chicotear com o candle aberto)
+            crossOnClose(r, (p - _mv) >= 0 ? 1 : -1, (r.dir||"any"), function(dir){
               var _mlbl = maLabelFor(_mi);
-              fire(r, {dir:_mdir, price:p, symbol:sym, tf:tf, message:"Preço cruzou "+(_mdir==="up"?"ACIMA":"ABAIXO")+" da "+_mlbl+" ("+shortSym(sym)+")"});
-            }
+              return {dir:dir, price:p, symbol:sym, tf:tf, message:"Preço cruzou "+(dir==="up"?"ACIMA":"ABAIXO")+" da "+_mlbl+" ("+shortSym(sym)+")"};
+            });
           }
         }
         continue;
@@ -347,15 +374,10 @@
           var _la=r.params&&r.params.lhs, _lb=r.params&&r.params.rhs;
           var _a=lineValue(_la), _b=lineValue(_lb);
           if(_a!=null && _b!=null && Number.isFinite(_a) && Number.isFinite(_b)){
-            var _sign = (_a-_b)>=0 ? 1 : -1;
-            var _prev = crossPrev[r.id];
-            if(_prev!=null && _sign!==_prev){
-              var _cdir = _sign>0 ? "up" : "down"; // A cruzou pra CIMA/BAIXO de B
-              if(r.dir==="any" || !r.dir || r.dir===_cdir){
-                fire(r, {dir:_cdir, price:(gprice()), symbol:sym, tf:tf, message:lineLabelFor(_la)+" cruzou "+(_cdir==="up"?"ACIMA":"ABAIXO")+" de "+lineLabelFor(_lb)});
-              }
-            }
-            crossPrev[r.id] = _sign;
+            // confirma no fechamento do candle (A cruzou de lado só vale ao fechar)
+            crossOnClose(r, (_a-_b)>=0 ? 1 : -1, (r.dir||"any"), function(dir){
+              return {dir:dir, price:(gprice()), symbol:sym, tf:tf, message:lineLabelFor(_la)+" cruzou "+(dir==="up"?"ACIMA":"ABAIXO")+" de "+lineLabelFor(_lb)};
+            });
           }
         }
         continue;
@@ -384,10 +406,14 @@
       }
 
       // ── Preço (embutido) ──
-      if(r.signal==="cross_up" && r.level!=null && prevPrice!=null){
-        if(prevPrice < r.level && p >= r.level) fire(r, {dir:"up", price:p, symbol:sym, tf:tf, message:"Preço cruzou ACIMA de "+fmtPx(r.level)+" ("+shortSym(sym)+")"});
-      } else if(r.signal==="cross_down" && r.level!=null && prevPrice!=null){
-        if(prevPrice > r.level && p <= r.level) fire(r, {dir:"down", price:p, symbol:sym, tf:tf, message:"Preço cruzou ABAIXO de "+fmtPx(r.level)+" ("+shortSym(sym)+")"});
+      if(r.signal==="cross_up" && r.level!=null){
+        crossOnClose(r, (p - r.level) >= 0 ? 1 : -1, "up", function(){
+          return {dir:"up", price:p, symbol:sym, tf:tf, message:"Preço cruzou ACIMA de "+fmtPx(r.level)+" ("+shortSym(sym)+")"};
+        });
+      } else if(r.signal==="cross_down" && r.level!=null){
+        crossOnClose(r, (p - r.level) >= 0 ? 1 : -1, "down", function(){
+          return {dir:"down", price:p, symbol:sym, tf:tf, message:"Preço cruzou ABAIXO de "+fmtPx(r.level)+" ("+shortSym(sym)+")"};
+        });
       } else if(r.signal==="pct_fast" && r.level!=null){
         // preço ~60s atrás
         var ref=null, want=t-60000;
