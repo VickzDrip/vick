@@ -581,7 +581,10 @@
   function maCurrentValue(idx){
     try{
       var m = state.items[idx];
-      if(!m || !m.enabled || m.period < 1) return null;
+      // Beta 1.628 — o valor é calculado a partir dos candles (função pura),
+      // independente de a média estar LIGADA no gráfico. Assim os alertas de
+      // cruzamento continuam funcionando mesmo com o indicador desligado/removido.
+      if(!m || m.period < 1) return null;
       var cs = candles(); if(!cs || !cs.length) return null;
       var vals = cached(cs, m.period, m.type); if(!vals || !vals.length) return null;
       for(var j=vals.length-1;j>=0;j--){ if(vals[j]!=null && Number.isFinite(vals[j])) return vals[j]; }

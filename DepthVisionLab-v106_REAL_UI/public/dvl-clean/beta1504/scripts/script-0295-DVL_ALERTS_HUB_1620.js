@@ -34,7 +34,11 @@
   function lineOptions(){
     var out=[{value:"price",label:"Preço"}];
     try{ var mas=(window.DVLMovingAverages&&window.DVLMovingAverages.list)?window.DVLMovingAverages.list():[]; mas.forEach(function(m){ out.push({value:"ma:"+m.idx,label:m.label}); }); }catch(_){}
-    try{ var vw=(window.DVLVwapSession&&window.DVLVwapSession.levels)?window.DVLVwapSession.levels():null;
+    // Beta 1.628 — no dropdown de criação mostramos só indicadores ATIVOS (o
+    // VWAP.levels() agora calcula mesmo desligado; usamos on() p/ o menu). A
+    // avaliação da regra (lineValue) roda independente disso.
+    try{ var _vwOn=(window.DVLVwapSession&&window.DVLVwapSession.on)?window.DVLVwapSession.on():false;
+      var vw=_vwOn?window.DVLVwapSession.levels():null;
       if(vw){ out.push({value:"vwap",label:"VWAP"});
         if(vw.bandsOn){ out.push({value:"vwap_u1",label:"VWAP +1σ"}); out.push({value:"vwap_l1",label:"VWAP −1σ"}); }
         if(vw.band2On){ out.push({value:"vwap_u2",label:"VWAP +2σ"}); out.push({value:"vwap_l2",label:"VWAP −2σ"}); }

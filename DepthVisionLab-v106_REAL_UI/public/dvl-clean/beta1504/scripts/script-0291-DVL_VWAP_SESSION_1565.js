@@ -367,10 +367,11 @@
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 
   /* Beta 1.626 — valores atuais (VWAP + bandas) para o DVL Alerts Hub
-     (fonte "Cruzamentos"). Retorna null se o indicador estiver desligado. */
+     (fonte "Cruzamentos"). Beta 1.628: o VWAP é calculado a partir dos candles
+     (série pura, memoizada), independente de o overlay estar ligado. Assim os
+     alertas de cruzamento continuam funcionando mesmo com o VWAP desligado. */
   function currentLevels(){
     try{
-      if(!state.on) return null;
       const cs = candles(); if(!cs || !cs.length) return null;
       const s = series(cs);
       let vwap=null, sd=null;
