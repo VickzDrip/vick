@@ -120,6 +120,16 @@
     return [];
   }
 
+  /* Beta 1.634 — candles FECHADOS (exclui o último, que é o candle em formação).
+     A média é DESENHADA só sobre candles fechados: a linha para de "sambar" com
+     o candle aberto (subir/voltar junto com o preço ao vivo) e só avança quando
+     o candle fecha. Bônus: a chave do cache de MA para de mudar a cada tick, então
+     recalcula 1× por candle em vez de a cada 1,5s. */
+  function closedCandles(){
+    var cs = candles();
+    return (cs && cs.length > 1) ? cs.slice(0, cs.length - 1) : cs;
+  }
+
   function calcSMA(cs,p){
     const n=cs.length,res=new Array(n).fill(null); let sum=0;
     for(let i=0;i<n;i++){
@@ -494,7 +504,7 @@
   function draw(ctx, cfg){
     try{
       if(!state.on || !cfg || !cfg.win) return;
-      const cs = candles();
+      const cs = closedCandles(); // congela a linha no último candle FECHADO (sem samba)
       if(!cs.length) return;
 
       const start = Math.max(0, Math.floor(cfg.win.start) - 2);
