@@ -234,11 +234,14 @@
   }
 
   function currentBarTime(){ try{ if(typeof klines!=="undefined" && klines && klines.length) return Number(klines[klines.length-1].time); }catch(_){} return 0; }
-  /* Gating de re-arme: por tempo (cooldown s), por candle fechado (1× por
-     candle), ou por candle + direção (1× por candle E por direção — permite,
-     no mesmo candle, um disparo de alta e outro de baixa). */
+  /* Gating de re-arme: "a cada cruzamento" (sem trava — todo disparo passa; para
+     cruzamentos, o crossOnClose já garante no máx. 1× por candle), por tempo
+     (cooldown s), por candle fechado (1× por candle), ou por candle + direção
+     (1× por candle E por direção — permite, no mesmo candle, um disparo de alta
+     e outro de baixa). */
   function canFire(rule, payload){
     var mode = rule.rearm || "time";
+    if(mode==="always") return true;
     if(mode==="bar" || mode==="bar_dir"){
       var cb = currentBarTime();
       if(cb && rule.lastBar===cb){
@@ -553,7 +556,7 @@
     if(!ctxTf) return true;
     return String(rt)===String(ctxTf);
   }
-  var REARM_OPTS=[{value:"time",label:"Por tempo (s)"},{value:"bar",label:"A cada candle fechado"},{value:"bar_dir",label:"A cada candle + direção"}];
+  var REARM_OPTS=[{value:"always",label:"A cada cruzamento"},{value:"time",label:"Por tempo (s)"},{value:"bar",label:"A cada candle fechado"},{value:"bar_dir",label:"A cada candle + direção"}];
 
   // fecha o dropdown customizado ao tocar fora dele
   document.addEventListener("click", function(ev){
@@ -780,7 +783,7 @@
   }
   function applyAsel(id, val){
     closeAselFloat();
-    if(id==="source"){ draft.source=val; var s=SOURCES[val]; draft.signal=(s&&s.signals[0])?s.signals[0].id:""; draft.level=""; draft.params={}; renderBody(); }
+    if(id==="source"){ draft.source=val; var s=SOURCES[val]; draft.signal=(s&&s.signals[0])?s.signals[0].id:""; draft.level=""; draft.params={}; if(val==="cross") draft.rearm="always"; renderBody(); }
     else if(id==="signal"){ draft.signal=val; draft.level=""; draft.params={}; renderBody(); }
     else if(id==="dir"){ draft.dir=val; renderBody(); }
     else if(id==="tf"){ draft.tf=val; renderBody(); }
