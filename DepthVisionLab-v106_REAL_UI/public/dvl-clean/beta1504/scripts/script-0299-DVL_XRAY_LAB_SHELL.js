@@ -15,12 +15,12 @@
   var MODES = [
     { id:"effort",  label:"Effort", ready:true  },
     { id:"battle",  label:"Battle", ready:true  },
-    { id:"stress",  label:"Stress", ready:false },
+    { id:"stress",  label:"Stress", ready:true  },
     { id:"debt",    label:"Debt",   ready:false }
   ];
 
   var state = { open:false, mode:"effort", sheet:false };
-  var cache = { effort:null, battle:[], battleLatest:null, at:0, symbol:"", tf:"" };
+  var cache = { effort:null, battle:[], battleLatest:null, stress:[], stressTop:null, at:0, symbol:"", tf:"" };
   var timer = null;
 
   /* leitura de candles/símbolo/tf pelo padrão do app (bare + typeof guard) */
@@ -142,6 +142,11 @@
         cache.battle = (csb && csb.length>=5) ? window.DVLXRayBattle.detect(csb, {lookback:50}) : [];
         cache.battleLatest = cache.battle.length ? cache.battle[cache.battle.length-1] : null;
         cache.at = Date.now(); cache.symbol=sym(); cache.tf=tf();
+      } else if(state.mode==="stress" && window.DVLXRayStress){
+        var css = candles();
+        cache.stress = (css && css.length>=6) ? window.DVLXRayStress.detect(css, {lookback:50}) : [];
+        cache.stressTop = cache.stress.length ? cache.stress[0] : null; // já vem ordenado por stress
+        cache.at = Date.now(); cache.symbol=sym(); cache.tf=tf();
       }
       if(state.sheet) renderSheet();
       try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){}
@@ -152,6 +157,7 @@
   function renderSheet(){
     if(!sheet) return; var body=sheet.querySelector("#dvlLabSheetBody"); if(!body) return;
     if(state.mode==="battle"){ return renderBattleSheet(body); }
+    if(state.mode==="stress"){ return renderStressSheet(body); }
     if(state.mode!=="effort"){
       body.innerHTML='<h4>'+(state.mode.toUpperCase())+'</h4><div class="sub">Em breve neste Lab.</div>'; return;
     }
@@ -174,6 +180,7 @@
       if(!state.open || !cfg) return;
       if(state.mode==="effort") drawEffort(ctx,cfg);
       else if(state.mode==="battle") drawBattle(ctx,cfg);
+      else if(state.mode==="stress") drawStress(ctx,cfg);
     }catch(_labDrawRoot){}
   }
   function drawEffort(ctx, cfg){
@@ -253,6 +260,58 @@
       '<div class="dvl-lab-read '+cls+'"><b>'+wlabel+'</b></div>';
   }
   function priceDp(p){ p=Math.abs(Number(p)||0); return p>=1000?1:(p>=1?2:5); }
+
+  /* Stress overlay: banda discreta na faixa da zona, do candle de origem até a
+     borda direita. Buyers trapped = VERMELHO, Sellers trapped = VERDE (§15).
+     Intensidade acompanha o score. Só lê cache. */
+  function drawStress(ctx, cfg){
+    try{
+      var list=cache.stress; if(!list || !list.length) return;
+      if(!cfg.win || typeof cfg.x!=="function" || typeof cfg.y!=="function") return;
+      var winStart=Number(cfg.win.start)||0, x0=cfg.x0, x1=cfg.x1, y0=cfg.y0, y1=cfg.y1, slot=cfg.slotOffset||0;
+      ctx.save();
+      for(var i=0;i<list.length;i++){
+        var z=list[i];
+        var xs=cfg.x(slot + (z.startIndex - winStart));
+        if(!isFinite(xs)) continue;
+        xs=Math.max(x0, xs);
+        var pTop=cfg.y(z.priceHigh), pBot=cfg.y(z.priceLow);
+        if(!isFinite(pTop)||!isFinite(pBot)) continue;
+        var yTop=Math.max(y0, Math.min(pTop,pBot)), yBot=Math.min(y1, Math.max(pTop,pBot));
+        if(yBot<=yTop) { yBot=yTop+1.5; }
+        var col = z.side==="buyers" ? "244,90,90" : "47,208,138"; // buyers=vermelho, sellers=verde
+        var a = 0.08 + 0.16*(Math.max(0,Math.min(100,z.stress))/100);
+        ctx.fillStyle="rgba("+col+","+a.toFixed(3)+")";
+        ctx.fillRect(xs, yTop, Math.max(2, x1-xs), Math.max(1.5, yBot-yTop));
+        // borda superior/inferior fininha + label curto na origem
+        ctx.strokeStyle="rgba("+col+",0.6)"; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(xs, yTop); ctx.lineTo(x1, yTop); ctx.moveTo(xs, yBot); ctx.lineTo(x1, yBot); ctx.stroke();
+        var lbl=(z.side==="buyers"?"BUY TRAP ":"SELL TRAP ")+z.stress+(z.status==="resolved"?" ·r":"");
+        ctx.font="800 9px system-ui"; ctx.textBaseline="bottom"; ctx.textAlign="left";
+        ctx.fillStyle="rgba("+col+",0.95)";
+        if(yTop-2>y0+8) ctx.fillText(lbl, Math.min(xs+3, x1-70), yTop-2);
+      }
+      ctx.restore();
+    }catch(_dse){}
+  }
+
+  function renderStressSheet(body){
+    var list=cache.stress||[], z=cache.stressTop;
+    var buyers=list.filter(function(x){return x.side==="buyers";}).length;
+    var sellers=list.filter(function(x){return x.side==="sellers";}).length;
+    var head='<h4>Inventory Stress</h4><div class="sub">'+(cache.symbol||sym())+' · '+(cache.tf||tf())+' · presos: ▤'+buyers+' compra · ▤'+sellers+' venda</div>';
+    if(!z){ body.innerHTML=head+'<div class="dvl-lab-read flat">Nenhuma zona de participantes presos na janela.</div>'; return; }
+    var cls=z.side==="buyers"?"sell":"buy"; // buyers presos = pressão de baixa → visual vermelho(sell)
+    var sideLbl=z.side==="buyers"?"COMPRADORES presos (acima)":"VENDEDORES presos (abaixo)";
+    body.innerHTML=head+
+      '<div class="dvl-lab-row"><span>Zona</span><b>'+fmt(z.priceLow,priceDp(z.priceLow))+' – '+fmt(z.priceHigh,priceDp(z.priceHigh))+'</b></div>'+
+      '<div class="dvl-lab-row"><span>Stress</span><b>'+z.stress+'/100</b></div>'+
+      '<div class="dvl-lab-row"><span>Agressão inicial</span><b>'+fmt(z.aggression)+'× · '+fmt(z.imbalance*100,0)+'% '+(z.side==="buyers"?"compra":"venda")+'</b></div>'+
+      '<div class="dvl-lab-row"><span>Deslocamento adverso</span><b>'+fmt(z.adverseATR)+' ATR (pico '+fmt(z.adverseExtremeATR)+')</b></div>'+
+      '<div class="dvl-lab-row"><span>Idade</span><b>'+z.ageCandles+' candles</b></div>'+
+      '<div class="dvl-lab-row"><span>Status</span><b>'+(z.status==="live"?"VIVA":"resolvida")+'</b></div>'+
+      '<div class="dvl-lab-read '+cls+'"><b>'+sideLbl+'</b><br>Inferência de pressão (não é posição real) — reação provável se o preço voltar à zona.</div>';
+  }
 
   function roundRectSafe(ctx,x,y,w,h,r){
     try{ if(typeof roundRect==="function"){ roundRect(ctx,x,y,w,h,r,true,false); return; } }catch(_){}
