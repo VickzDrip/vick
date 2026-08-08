@@ -69,6 +69,15 @@ app.use((req, res, next) => {
   } else if (req.path === "/manifest.json") {
     res.set("Content-Type", "application/manifest+json");
     res.set("Cache-Control", "no-cache, must-revalidate");
+  } else if (/\.(js|mjs|css)$/i.test(req.path)) {
+    // Código do app (JS/CSS): revalida por ETag, igual ao HTML. Assim um deploy
+    // é pego NA HORA (arquivo mudou → ETag novo → 200 fresco) e um refresh de
+    // arquivo inalterado custa ~0 (304). Isso ELIMINA a necessidade de cache-bust
+    // manual (?v=NNNN) — a origem do "saco" de versões. CDN-Cache-Control força o
+    // Cloudflare a revalidar também, em vez de servir cópia velha do edge.
+    res.set("Cache-Control", "no-cache, must-revalidate");
+    res.set("CDN-Cache-Control", "no-cache");
+    res.set("Vary", "Accept-Encoding");
   } else {
     res.set("Cache-Control", "public, max-age=600");
   }
@@ -155,7 +164,22 @@ function serveIndex(req, res) {
 app.get("/", serveIndex);
 app.get("/index.html", serveIndex);
 
-app.use(express.static(path.join(__dirname, "public"), { etag: false, lastModified: false, index: false }));
+// ETag/Last-Modified LIGADOS: dão ao browser/Cloudflare um validador pra
+// revalidar o JS/CSS. Antes ficavam desligados, então a única forma de furar o
+// cache era trocar a URL (?v=NNNN) na mão — a causa do problema de versões.
+// Com ETag, arquivo inalterado responde 304 (barato) e deploy novo aparece na
+// hora, sem tocar em nada no HTML. setHeaders tem a última palavra no header.
+app.use(express.static(path.join(__dirname, "public"), {
+  etag: true,
+  lastModified: true,
+  index: false,
+  setHeaders: (res, filePath) => {
+    if (/\.(js|mjs|css)$/i.test(filePath)) {
+      res.set("Cache-Control", "no-cache, must-revalidate");
+      res.set("CDN-Cache-Control", "no-cache");
+    }
+  }
+}));
 
 const state = {
   price: 0,
