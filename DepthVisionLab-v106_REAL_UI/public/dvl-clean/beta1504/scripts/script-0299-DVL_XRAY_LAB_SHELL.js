@@ -16,11 +16,11 @@
     { id:"effort",  label:"Effort", ready:true  },
     { id:"battle",  label:"Battle", ready:true  },
     { id:"stress",  label:"Stress", ready:true  },
-    { id:"debt",    label:"Debt",   ready:false }
+    { id:"debt",    label:"Debt",   ready:true  }
   ];
 
   var state = { open:false, mode:"effort", sheet:false };
-  var cache = { effort:null, battle:[], battleLatest:null, stress:[], stressTop:null, at:0, symbol:"", tf:"" };
+  var cache = { effort:null, battle:[], battleLatest:null, stress:[], stressTop:null, debt:[], debtTop:null, at:0, symbol:"", tf:"" };
   var timer = null;
 
   /* leitura de candles/símbolo/tf pelo padrão do app (bare + typeof guard) */
@@ -147,6 +147,11 @@
         cache.stress = (css && css.length>=6) ? window.DVLXRayStress.detect(css, {lookback:50}) : [];
         cache.stressTop = cache.stress.length ? cache.stress[0] : null; // já vem ordenado por stress
         cache.at = Date.now(); cache.symbol=sym(); cache.tf=tf();
+      } else if(state.mode==="debt" && window.DVLXRayDebt){
+        var csd = candles();
+        cache.debt = (csd && csd.length>=6) ? window.DVLXRayDebt.detect(csd, {lookback:50}) : [];
+        cache.debtTop = cache.debt.length ? cache.debt[0] : null; // mais recente primeiro
+        cache.at = Date.now(); cache.symbol=sym(); cache.tf=tf();
       }
       if(state.sheet) renderSheet();
       try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){}
@@ -158,6 +163,7 @@
     if(!sheet) return; var body=sheet.querySelector("#dvlLabSheetBody"); if(!body) return;
     if(state.mode==="battle"){ return renderBattleSheet(body); }
     if(state.mode==="stress"){ return renderStressSheet(body); }
+    if(state.mode==="debt"){ return renderDebtSheet(body); }
     if(state.mode!=="effort"){
       body.innerHTML='<h4>'+(state.mode.toUpperCase())+'</h4><div class="sub">Em breve neste Lab.</div>'; return;
     }
@@ -181,6 +187,7 @@
       if(state.mode==="effort") drawEffort(ctx,cfg);
       else if(state.mode==="battle") drawBattle(ctx,cfg);
       else if(state.mode==="stress") drawStress(ctx,cfg);
+      else if(state.mode==="debt") drawDebt(ctx,cfg);
     }catch(_labDrawRoot){}
   }
   function drawEffort(ctx, cfg){
@@ -311,6 +318,62 @@
       '<div class="dvl-lab-row"><span>Idade</span><b>'+z.ageCandles+' candles</b></div>'+
       '<div class="dvl-lab-row"><span>Status</span><b>'+(z.status==="live"?"VIVA":"resolvida")+'</b></div>'+
       '<div class="dvl-lab-read '+cls+'"><b>'+sideLbl+'</b><br>Inferência de pressão (não é posição real) — reação provável se o preço voltar à zona.</div>';
+  }
+
+  /* Debt (FVG) overlay: faixa do gap, da origem até a borda direita. OPEN =
+     tracejada; PARTIAL = mesma faixa com preenchimento proporcional (§15).
+     Bull (suporte, embaixo) = verde; Bear (resistência, em cima) = vermelho. */
+  function drawDebt(ctx, cfg){
+    try{
+      var list=cache.debt; if(!list||!list.length) return;
+      if(!cfg.win || typeof cfg.x!=="function" || typeof cfg.y!=="function") return;
+      var winStart=Number(cfg.win.start)||0, x0=cfg.x0, x1=cfg.x1, y0=cfg.y0, y1=cfg.y1, slot=cfg.slotOffset||0;
+      ctx.save();
+      for(var i=0;i<list.length;i++){
+        var d=list[i];
+        var xs=cfg.x(slot+(d.startIndex-winStart)); if(!isFinite(xs)) continue; xs=Math.max(x0,xs);
+        var pHi=cfg.y(d.gapHigh), pLo=cfg.y(d.gapLow); if(!isFinite(pHi)||!isFinite(pLo)) continue;
+        var yTop=Math.max(y0, Math.min(pHi,pLo)), yBot=Math.min(y1, Math.max(pHi,pLo));
+        if(yBot<yTop) continue;
+        var col = d.dir==="bull" ? "47,208,138" : "244,90,90";
+        var w=Math.max(2, x1-xs), h=Math.max(1.5, yBot-yTop);
+        // fundo do gap
+        ctx.fillStyle="rgba("+col+",0.06)"; ctx.fillRect(xs,yTop,w,h);
+        // preenchimento parcial (do lado por onde o preço entra)
+        if(d.fillPct>0){
+          var fh=Math.max(1, h*Math.min(1,d.fillPct));
+          ctx.fillStyle="rgba("+col+",0.20)";
+          if(d.dir==="bull") ctx.fillRect(xs, yTop, w, fh);          // bull preenche de cima p/ baixo
+          else ctx.fillRect(xs, yBot-fh, w, fh);                     // bear de baixo p/ cima
+        }
+        // bordas tracejadas
+        ctx.strokeStyle="rgba("+col+",0.7)"; ctx.lineWidth=1; ctx.setLineDash([5,4]);
+        ctx.beginPath(); ctx.moveTo(xs,yTop); ctx.lineTo(x1,yTop); ctx.moveTo(xs,yBot); ctx.lineTo(x1,yBot); ctx.stroke();
+        ctx.setLineDash([]);
+        // label curto
+        var lbl="FVG "+(d.dir==="bull"?"▲":"▼")+" "+d.status.toUpperCase()+(d.status==="partial"?(" "+Math.round(d.fillPct*100)+"%"):"");
+        ctx.font="800 9px system-ui"; ctx.textAlign="left"; ctx.textBaseline="bottom"; ctx.fillStyle="rgba("+col+",0.95)";
+        if(yTop-2>y0+8) ctx.fillText(lbl, Math.min(xs+3, x1-78), yTop-2);
+      }
+      ctx.restore();
+    }catch(_dde){}
+  }
+
+  function renderDebtSheet(body){
+    var list=cache.debt||[], d=cache.debtTop;
+    var opens=list.filter(function(x){return x.status==="open";}).length;
+    var parts=list.filter(function(x){return x.status==="partial";}).length;
+    var head='<h4>Liquidity Debt</h4><div class="sub">'+(cache.symbol||sym())+' · '+(cache.tf||tf())+' · '+opens+' OPEN · '+parts+' PARTIAL</div>';
+    if(!d){ body.innerHTML=head+'<div class="dvl-lab-read flat">Nenhuma dívida de liquidez pendente na janela.</div>'; return; }
+    var cls=d.dir==="bull"?"buy":"sell";
+    body.innerHTML=head+
+      '<div class="dvl-lab-row"><span>Tipo</span><b>FVG '+(d.dir==="bull"?"alta (suporte)":"baixa (resistência)")+'</b></div>'+
+      '<div class="dvl-lab-row"><span>Faixa</span><b>'+fmt(d.gapLow,priceDp(d.gapLow))+' – '+fmt(d.gapHigh,priceDp(d.gapHigh))+'</b></div>'+
+      '<div class="dvl-lab-row"><span>Origem</span><b>'+fmt(d.aggression)+'× · '+fmt(d.imbalance*100,0)+'% '+(d.dir==="bull"?"compra":"venda")+'</b></div>'+
+      '<div class="dvl-lab-row"><span>Idade</span><b>'+d.ageCandles+' candles</b></div>'+
+      '<div class="dvl-lab-row"><span>Resolvido</span><b>'+Math.round(d.fillPct*100)+'%</b></div>'+
+      '<div class="dvl-lab-row"><span>Status</span><b>'+d.status.toUpperCase()+'</b></div>'+
+      '<div class="dvl-lab-read '+cls+'"><b>Dívida pendente</b><br>Zona deixada para trás com fluxo forte — tende a atrair o preço até ser preenchida.</div>';
   }
 
   function roundRectSafe(ctx,x,y,w,h,r){
