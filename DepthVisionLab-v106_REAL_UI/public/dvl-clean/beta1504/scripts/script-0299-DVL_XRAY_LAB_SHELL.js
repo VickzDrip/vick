@@ -43,6 +43,8 @@
       " background:rgba(6,14,11,.94);border:1px solid #163a2b;border-radius:14px;padding:8px;display:none;",
       " backdrop-filter:blur(6px);box-shadow:0 10px 30px rgba(0,0,0,.5)}",
       ".dvl-lab-bar.open{display:block}",
+      ".dvl-lab-summary{font:800 10px/1.35 system-ui;color:#9fe8c8;padding:1px 3px 8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}",
+      ".dvl-lab-summary b{color:#eafff5;font-weight:900;letter-spacing:.4px}",
       ".dvl-lab-chips{display:flex;gap:6px;overflow-x:auto}",
       ".dvl-lab-chip{flex:0 0 auto;background:#0c1c15;border:1px solid #1c4634;color:#cfeede;font:800 12px/1 system-ui;",
       " padding:9px 14px;border-radius:999px;cursor:pointer;position:relative}",
@@ -76,7 +78,7 @@
       var chips = MODES.map(function(m){
         return '<div class="dvl-lab-chip'+(m.ready?"":" soon")+(m.id===state.mode?" active":"")+'" data-lab-mode="'+m.id+'">'+m.label+(m.ready?"":'<span class="soon-tag">em breve</span>')+'</div>';
       }).join("");
-      bar.innerHTML='<div class="dvl-lab-chips">'+chips+'</div>';
+      bar.innerHTML='<div class="dvl-lab-summary" id="dvlLabSummary1635">LAB</div><div class="dvl-lab-chips">'+chips+'</div>';
       bar.addEventListener("click", function(ev){
         var c = ev.target && ev.target.closest ? ev.target.closest("[data-lab-mode]") : null;
         if(!c) return; var id=c.getAttribute("data-lab-mode");
@@ -153,9 +155,33 @@
         cache.debtTop = cache.debt.length ? cache.debt[0] : null; // mais recente primeiro
         cache.at = Date.now(); cache.symbol=sym(); cache.tf=tf();
       }
+      renderSummary();
       if(state.sheet) renderSheet();
       try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){}
     }catch(_labTick){}
+  }
+
+  /* Resumo sempre visível na barra (§9): prova que o Lab está ativo + contagens
+     ao vivo da camada, mesmo quando não há marcações no gráfico. */
+  function renderSummary(){
+    try{
+      if(!bar) return; var el=bar.querySelector("#dvlLabSummary1635"); if(!el) return;
+      var s="<b>LAB</b> · "+(cache.symbol||sym()||"—")+" · "+(cache.tf||tf()||"—")+" · ";
+      if(state.mode==="effort"){
+        var r=cache.effort;
+        s+= r ? ("Effort "+(r.dominantSide==="buy"?"▲ compra":r.dominantSide==="sell"?"▼ venda":"• neutro")+" · ef "+fmt(r.effort)+"× · efic "+fmt(r.efficiency)) : "Effort · coletando fluxo…";
+      } else if(state.mode==="battle"){
+        var b=cache.battle||[], w={buyers:0,sellers:0,draw:0}; b.forEach(function(x){ w[x.winner]=(w[x.winner]||0)+1; });
+        s+= "Battle · "+b.length+" disputas · ▲"+w.buyers+" ▼"+w.sellers+" ◆"+w.draw;
+      } else if(state.mode==="stress"){
+        var z=cache.stress||[], bu=0,se=0; z.forEach(function(x){ if(x.side==="buyers")bu++; else se++; });
+        s+= "Stress · presos: "+bu+" compra / "+se+" venda"+(cache.stressTop?(" · máx "+cache.stressTop.stress):"");
+      } else if(state.mode==="debt"){
+        var d=cache.debt||[], op=0,pa=0; d.forEach(function(x){ if(x.status==="open")op++; else if(x.status==="partial")pa++; });
+        s+= "Debt · "+op+" OPEN · "+pa+" PARTIAL";
+      } else { s+= (state.mode||"").toUpperCase()+" · em breve"; }
+      el.innerHTML=s;
+    }catch(_rs){}
   }
 
   /* ── bottom sheet ───────────────────────────────────────────────────────── */
