@@ -331,7 +331,11 @@
           return;
         }
         if(key === "home"){
-          var copilotWasOpen = document.body.classList.contains("dvlCopilotOpen0974") ||
+          // Beta 1.638 — o botão "home" agora é o "Lab" (X-Ray). O estado de
+          // aberto/fechado vem do próprio Lab, não das classes antigas do Copilot
+          // (que faziam UI do Copilot vazar — VRSI card, live-context, etc).
+          var copilotWasOpen = !!(window.DVL_LAB && typeof window.DVL_LAB.isOpen === "function" && window.DVL_LAB.isOpen()) ||
+            document.body.classList.contains("dvlCopilotOpen0974") ||
             !!(document.getElementById("dvlCopilotPage0974") && document.getElementById("dvlCopilotPage0974").classList.contains("is-open"));
 
           if(copilotWasOpen){

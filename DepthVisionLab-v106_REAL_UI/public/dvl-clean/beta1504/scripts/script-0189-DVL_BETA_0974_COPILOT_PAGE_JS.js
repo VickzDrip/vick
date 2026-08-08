@@ -155,7 +155,9 @@
        overlay). A classe no body é mantida só para a lógica de TOGGLE da nav
        continuar detectando "aberto/fechado". */
     try{ if(window.DVL_LAB && typeof window.DVL_LAB.open === "function") window.DVL_LAB.open(); }catch(_){}
-    document.body.classList.add("dvlCopilotOpen0974");
+    /* Beta 1.638 — NÃO seta mais a classe dvlCopilotOpen0974 no body: outros
+       módulos do Copilot (VRSI card, live-context, pump) reagiam a ela e vazavam
+       UI antiga por cima do Lab. O toggle da nav agora lê DVL_LAB.isOpen(). */
     setHomeActive(true);
     try{ window.dispatchEvent(new CustomEvent("dvl:copilot-state-change",{detail:{open:true}})); }catch(_){}
   }
@@ -170,6 +172,15 @@
   }
 
   function boot(){
+    /* Beta 1.638 — o Copilot foi substituído pelo Lab: garante que a página antiga
+       do Copilot NUNCA apareça, mesmo se algum módulo legado tentar abri-la. */
+    try{
+      if(!document.getElementById("dvlLabHideCopilot0638")){
+        var _hs=document.createElement("style"); _hs.id="dvlLabHideCopilot0638";
+        _hs.textContent="#dvlCopilotPage0974{display:none!important}";
+        (document.head||document.documentElement).appendChild(_hs);
+      }
+    }catch(_){}
     ensure();
 
     try{
