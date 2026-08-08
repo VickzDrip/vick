@@ -150,15 +150,18 @@
 
   function open(){
     closeOthers();
-    var p = ensure();
-    refreshSymbol();
-    p.classList.add("is-open");
+    /* Beta 1.635 — o botão "Copilot" virou "Lab" (X-Ray Lab). Em vez de abrir a
+       antiga página do Copilot, este botão agora abre o Lab (chips + camadas +
+       overlay). A classe no body é mantida só para a lógica de TOGGLE da nav
+       continuar detectando "aberto/fechado". */
+    try{ if(window.DVL_LAB && typeof window.DVL_LAB.open === "function") window.DVL_LAB.open(); }catch(_){}
     document.body.classList.add("dvlCopilotOpen0974");
     setHomeActive(true);
     try{ window.dispatchEvent(new CustomEvent("dvl:copilot-state-change",{detail:{open:true}})); }catch(_){}
   }
 
   function close(){
+    try{ if(window.DVL_LAB && typeof window.DVL_LAB.close === "function") window.DVL_LAB.close(); }catch(_){}
     var p = document.getElementById("dvlCopilotPage0974");
     if(p) p.classList.remove("is-open");
     document.body.classList.remove("dvlCopilotOpen0974");
@@ -171,12 +174,23 @@
 
     try{
       if(window.DVL_BOTTOM_NAV_SINGLETON_0970 && typeof window.DVL_BOTTOM_NAV_SINGLETON_0970.replaceItem === "function"){
-        window.DVL_BOTTOM_NAV_SINGLETON_0970.replaceItem("home","Copilot",'<svg class="dvlCopilotLogo0974" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><rect x="5.2" y="7.2" width="13.6" height="10.8" rx="4"/><path d="M12 7.2V4.6"/><circle class="bot-dot" cx="12" cy="3.9" r="1.1"/><circle class="bot-eye" cx="9.55" cy="12.2" r="1.05"/><circle class="bot-eye" cx="14.45" cy="12.2" r="1.05"/><path d="M9.8 15.1c1.25.9 3.15.9 4.4 0"/><path d="M5.2 11.1H3.8M20.2 11.1h-1.4"/></g></svg>');
+        // Beta 1.635 — "Copilot" → "Lab" (X-Ray Lab). Ícone de béquer/laboratório.
+        window.DVL_BOTTOM_NAV_SINGLETON_0970.replaceItem("home","Lab",'<svg class="dvlLabLogo0635" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6l-4.2 7.3A2 2 0 0 0 7.5 19h9a2 2 0 0 0 1.7-2.7L14 9V3"/><path d="M7.7 14h8.6"/></g></svg>');
       }
     }catch(_){}
 
     window.addEventListener("dvl:scanner-state-change", close, true);
     window.addEventListener("dvl:watchlist-state-change", close, true);
+    /* Beta 1.635 — quando o Lab é fechado pela própria UI dele (swipe/chip), sincroniza
+       a nav (tira o destaque do botão e limpa a classe de toggle do body). */
+    window.addEventListener("dvl:lab-state-change", function(ev){
+      try{
+        if(ev && ev.detail && ev.detail.open === false){
+          document.body.classList.remove("dvlCopilotOpen0974");
+          setHomeActive(false);
+        }
+      }catch(_){}
+    }, true);
 
     try{
       var st = document.getElementById("symbolText");

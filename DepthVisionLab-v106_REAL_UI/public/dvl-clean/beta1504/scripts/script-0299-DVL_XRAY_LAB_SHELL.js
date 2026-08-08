@@ -39,7 +39,7 @@
       " box-shadow:0 6px 20px rgba(0,0,0,.45);display:flex;gap:7px;align-items:center;cursor:pointer}",
       ".dvl-lab-launch.on{background:#0f2a1e;border-color:#2fd08a;color:#aef7d6}",
       ".dvl-lab-launch b{font-weight:900;letter-spacing:.4px}",
-      ".dvl-lab-bar{position:fixed;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 118px);z-index:9401;",
+      ".dvl-lab-bar{position:fixed;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 72px);z-index:9401;",
       " background:rgba(6,14,11,.94);border:1px solid #163a2b;border-radius:14px;padding:8px;display:none;",
       " backdrop-filter:blur(6px);box-shadow:0 10px 30px rgba(0,0,0,.5)}",
       ".dvl-lab-bar.open{display:block}",
@@ -67,16 +67,9 @@
   }
 
   /* ── DOM ────────────────────────────────────────────────────────────────── */
-  var launch, bar, sheet;
+  var launch = null, bar, sheet; // launch: sem botão flutuante — a entrada é o botão "Lab" da nav (era Copilot)
   function ensureDom(){
     ensureStyle();
-    if(!launch){
-      launch = document.createElement("div");
-      launch.className="dvl-lab-launch"; launch.setAttribute("data-dvl-ui","true");
-      launch.innerHTML='<b>LAB</b><span style="opacity:.7">·</span><span id="dvlLabLaunchMode">Effort</span>';
-      launch.addEventListener("click", toggle);
-      document.body.appendChild(launch);
-    }
     if(!bar){
       bar = document.createElement("div");
       bar.className="dvl-lab-bar"; bar.setAttribute("data-dvl-ui","true");
@@ -108,16 +101,20 @@
   }
 
   function toggle(){ state.open ? close() : open(); }
+  function emitState(isOpen){ try{ window.dispatchEvent(new CustomEvent("dvl:lab-state-change",{detail:{open:!!isOpen,mode:state.mode}})); }catch(_){} }
   function open(){
     ensureDom(); state.open=true;
-    launch.classList.add("on"); bar.classList.add("open");
+    if(launch) launch.classList.add("on");
+    if(bar) bar.classList.add("open");
     startTimer(); tick(); openSheet();
+    emitState(true);
   }
   function close(){
     state.open=false;
     if(launch) launch.classList.remove("on");
     if(bar) bar.classList.remove("open");
     closeSheet(); stopTimer();
+    emitState(false);
     try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){}
   }
   function setMode(id){
