@@ -5792,6 +5792,11 @@ if(window.DVLMovingAveragesDraw){
   if(window.DVLRiskLinesDraw){
     try{window.DVLRiskLinesDraw(ctx,{view,win,x,y,x0,x1,y0,y1,slotOffset,candleW:candleW,min,max,priceBottom,priceH,symbol});}catch(_dvlRiskLn_e){}
   }
+  /* Lab (X-Ray) — overlay opt-in; só desenha quando a aba Lab está aberta. Só lê
+     cache (o motor roda em timer próprio), então não pesa no render. */
+  if(window.DVLXRayLabDraw){
+    try{ window.DVLXRayLabDraw(ctx,{view,win,x,y,x0,x1,y0,y1,slotOffset,candleW,min,max,priceBottom,priceH,symbol}); }catch(_dvlLab_e){}
+  }
   /* Beta 0.875: DVL Flow Event Bubbles removido do draw engine. */
 ctx.restore();
 
