@@ -4561,16 +4561,19 @@ function resizeCanvas(){
      work. Desktop uses DPR 1.0 and touch 1.15 only during the gesture; the
      existing final repaint restores full DPR immediately on release. */
   const __dvlDesktopFast = !!(window.matchMedia && window.matchMedia("(min-width:1100px)").matches);
-  /* Beta 1.634 — DPR de interação ADAPTATIVO (resolve o "estalo" do pan sem
-     regredir fluidez). O downscale fixo durante o arrasto deixava a tela borrar
-     ao arrastar e "estalar" nítida ao soltar — a "recomposição" percebida. Agora
-     a decisão vem da MEDIÇÃO real do custo de render em DPR cheio
-     (window.__dvlFullDprEquivMs, amostrado nos frames que já rodam em qualidade
-     máxima — tipicamente os ociosos — e que JÁ incluem o glow). Se o frame cheio
-     cabe no orçamento (~11ms → folga sob 16,7ms/60fps), mantemos a nitidez E o
-     glow durante o pan (zero estalo); senão, mantemos o downscale de antes.
-     Seguro por construção: só sobe a qualidade quando o frame cheio já é barato.
-     Override manual: DVL_SHARP_PAN('on'|'off'|'auto'). */
+  /* Beta 1.634 — o GLOW dos indicadores não some mais ao mover o gráfico + DPR
+     de interação adaptativo. Antes, durante o arrasto o glow era desligado e o
+     DPR caía — os indicadores (e o RSI/label) ficavam "apagados"/chapados até
+     soltar. Agora:
+       • GLOW: fica ACESO durante o pan por padrão. É seguro em qualquer aparelho
+         que já roda liso PARADO, porque o glow no pan sai no DPR (possivelmente)
+         reduzido — ou seja, custa SEMPRE ≤ o estado ocioso (DPR cheio + glow) que
+         o aparelho já aguenta. Só desliga no modo 'off' (máxima performance).
+       • DPR: adaptativo pela medição real do custo em DPR cheio
+         (window.__dvlFullDprEquivMs, amostrado nos frames ociosos, que já incluem
+         o glow). Cabe no orçamento (~11ms) → nitidez cheia no pan; senão →
+         downscale de antes (sem regredir fluidez).
+     Override: DVL_SHARP_PAN('on' nítido+glow | 'off' downscale+sem glow | 'auto'). */
   const __dvlFullCap = Math.min(__dvlDeviceDpr, 2.5);
   var __dvlSharpMode = "auto"; try{ __dvlSharpMode = localStorage.getItem("dvl_sharp_pan") || "auto"; }catch(_){}
   var __dvlSharpInteract;
@@ -4578,6 +4581,8 @@ function resizeCanvas(){
   else if(__dvlSharpMode === "off") __dvlSharpInteract = false;
   else __dvlSharpInteract = (typeof window.__dvlFullDprEquivMs === "number" && window.__dvlFullDprEquivMs > 0 && window.__dvlFullDprEquivMs <= 11);
   window.__dvlSharpInteract = __dvlSharpInteract;
+  // Glow desacoplado do DPR: fica aceso no pan exceto no modo 'off' (máx. perf).
+  window.__dvlKeepGlowOnPan = (__dvlSharpMode !== "off");
   window.__dvlFullDprCap = __dvlFullCap;
   const __dvlInteractCap = __dvlSharpInteract ? __dvlFullCap : (__dvlDesktopFast ? 1.0 : 1.15);
   const __dvlDprCap = window.__dvlChartInteracting ? __dvlInteractCap : 2.5;
@@ -4605,7 +4610,7 @@ function resizeCanvas(){
         Object.defineProperty(ctx, "shadowBlur", {
           configurable:true,
           get:function(){ return _sbVal; },
-          set:function(v){ _sbVal = v; _sbDesc.set.call(ctx, ((window.__dvlChartInteracting && !window.__dvlSharpInteract) || window.__dvlGlowForceOff) ? 0 : v); }
+          set:function(v){ _sbVal = v; _sbDesc.set.call(ctx, ((window.__dvlChartInteracting && !window.__dvlKeepGlowOnPan) || window.__dvlGlowForceOff) ? 0 : v); }
         });
       }
     }catch(_){}
@@ -4639,13 +4644,14 @@ window.DVL_PERF = { fps:0, frameMs:0, renderMs:0, tickMs:0, wsMs:0, gap:33 };
 let __dvlRenderMsAvg = 8, __dvlPerfLastFrame = 0, __dvlPerfFrames = 0, __dvlPerfAcc = 0, __dvlPerfFpsAt = 0, __dvlPerfHudEl = null;
 function __dvlPerfHudOn(){ try{ if(/[?&]perf=1/.test(location.search)) return true; return localStorage.getItem("dvl_perf_hud")==="1"; }catch(_){ return false; } }
 window.DVL_PERF_HUD = function(on){ try{ localStorage.setItem("dvl_perf_hud", on?"1":"0"); }catch(_){} if(!on && __dvlPerfHudEl){ try{__dvlPerfHudEl.remove();}catch(_){} __dvlPerfHudEl=null; } };
-/* Beta 1.634 — controle da nitidez durante o pan. 'auto' (padrão) decide pelo
-   custo medido; 'on' força nitidez cheia sempre; 'off' volta ao downscale antigo. */
+/* Beta 1.634 — controle do pan. 'auto' (padrão): glow ACESO no pan + DPR decidido
+   pelo custo medido. 'on': nitidez cheia + glow sempre. 'off': downscale + glow
+   desligado (máxima performance, comportamento antigo). */
 window.DVL_SHARP_PAN = function(v){
   var mode = (v===true||v==="on") ? "on" : (v===false||v==="off") ? "off" : "auto";
   try{ localStorage.setItem("dvl_sharp_pan", mode); }catch(_){}
   try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){}
-  return "DVL sharp-pan: " + mode + " (auto=decide pelo custo medido)";
+  return "DVL pan: " + mode + " (auto=glow aceso + DPR pelo custo; off=máx. perf)";
 };
 function __dvlPerfOnFrame(renderMs, now){
   __dvlRenderMsAvg = __dvlRenderMsAvg*0.82 + renderMs*0.18;
