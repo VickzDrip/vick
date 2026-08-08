@@ -4579,7 +4579,16 @@ function resizeCanvas(){
   var __dvlSharpInteract;
   if(__dvlSharpMode === "on") __dvlSharpInteract = true;
   else if(__dvlSharpMode === "off") __dvlSharpInteract = false;
-  else __dvlSharpInteract = (typeof window.__dvlFullDprEquivMs === "number" && window.__dvlFullDprEquivMs > 0 && window.__dvlFullDprEquivMs <= 11);
+  else if(window.__dvlChartInteracting){
+    /* Durante o gesto usa o valor TRAVADO (decidido enquanto parado). Recalcular
+       a cada frame fazia a decisão oscilar perto do orçamento → o DPR mudava →
+       c.width mudava → o canvas redimensionava/limpava todo frame = FLICKER
+       (o candle atual "não parava quieto"). Travado = DPR constante no gesto. */
+    __dvlSharpInteract = !!window.__dvlPanSharpLatch;
+  } else {
+    __dvlSharpInteract = (typeof window.__dvlFullDprEquivMs === "number" && window.__dvlFullDprEquivMs > 0 && window.__dvlFullDprEquivMs <= 11);
+    window.__dvlPanSharpLatch = __dvlSharpInteract; // trava pro próximo gesto
+  }
   window.__dvlSharpInteract = __dvlSharpInteract;
   // Glow desacoplado do DPR: fica aceso no pan exceto no modo 'off' (máx. perf).
   window.__dvlKeepGlowOnPan = (__dvlSharpMode !== "off");
@@ -4661,7 +4670,7 @@ function __dvlPerfOnFrame(renderMs, now){
      pra não contaminar a média com os frames de downscale. */
   try{
     var _ud = window.__dvlLastRenderDpr || 0, _fc = window.__dvlFullDprCap || 2.5;
-    if(_ud >= _fc - 0.01){
+    if(_ud >= _fc - 0.01 && !window.__dvlChartInteracting){ // só frames OCIOSOS em DPR cheio
       var _p = window.__dvlFullDprEquivMs;
       window.__dvlFullDprEquivMs = (typeof _p === "number" && _p > 0) ? (_p*0.8 + renderMs*0.2) : renderMs;
     }
