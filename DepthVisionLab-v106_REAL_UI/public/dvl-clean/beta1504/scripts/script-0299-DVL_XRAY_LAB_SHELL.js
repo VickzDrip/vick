@@ -14,13 +14,13 @@
   "use strict";
   var MODES = [
     { id:"effort",  label:"Effort", ready:true  },
-    { id:"battle",  label:"Battle", ready:false },
+    { id:"battle",  label:"Battle", ready:true  },
     { id:"stress",  label:"Stress", ready:false },
     { id:"debt",    label:"Debt",   ready:false }
   ];
 
   var state = { open:false, mode:"effort", sheet:false };
-  var cache = { effort:null, at:0, symbol:"", tf:"" };
+  var cache = { effort:null, battle:[], battleLatest:null, at:0, symbol:"", tf:"" };
   var timer = null;
 
   /* leitura de candles/símbolo/tf pelo padrão do app (bare + typeof guard) */
@@ -137,6 +137,11 @@
         var cs = candles();
         cache.effort = (cs && cs.length>=5) ? window.DVLXRayEffort.latest(cs, {lookback:50, window:1}) : null;
         cache.at = Date.now(); cache.symbol=sym(); cache.tf=tf();
+      } else if(state.mode==="battle" && window.DVLXRayBattle){
+        var csb = candles();
+        cache.battle = (csb && csb.length>=5) ? window.DVLXRayBattle.detect(csb, {lookback:50}) : [];
+        cache.battleLatest = cache.battle.length ? cache.battle[cache.battle.length-1] : null;
+        cache.at = Date.now(); cache.symbol=sym(); cache.tf=tf();
       }
       if(state.sheet) renderSheet();
       try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){}
@@ -146,6 +151,7 @@
   /* ── bottom sheet ───────────────────────────────────────────────────────── */
   function renderSheet(){
     if(!sheet) return; var body=sheet.querySelector("#dvlLabSheetBody"); if(!body) return;
+    if(state.mode==="battle"){ return renderBattleSheet(body); }
     if(state.mode!=="effort"){
       body.innerHTML='<h4>'+(state.mode.toUpperCase())+'</h4><div class="sub">Em breve neste Lab.</div>'; return;
     }
@@ -165,7 +171,13 @@
   /* ── overlay no gráfico (chamado pelo draw do chart; SÓ lê o cache) ──────── */
   function draw(ctx, cfg){
     try{
-      if(!state.open || state.mode!=="effort" || !cfg) return;
+      if(!state.open || !cfg) return;
+      if(state.mode==="effort") drawEffort(ctx,cfg);
+      else if(state.mode==="battle") drawBattle(ctx,cfg);
+    }catch(_labDrawRoot){}
+  }
+  function drawEffort(ctx, cfg){
+    try{
       var r = cache.effort; if(!r) return;
       var x0=cfg.x0, y0=cfg.y0, y1=cfg.y1;
       var side = r.reading.side;
@@ -189,6 +201,59 @@
       ctx.restore();
     }catch(_labDraw){}
   }
+  /* Battle overlay: markers ▲ (buyers) / ▼ (sellers) / ◆ (draw) no candle final de
+     cada batalha VISÍVEL, no meio da faixa. Mapeia tempo→x pelo índice do candle
+     (mesmo padrão das médias: x(slotOffset + idx - win.start)). SÓ lê cache. */
+  function drawBattle(ctx, cfg){
+    try{
+      var list = cache.battle; if(!list || !list.length) return;
+      if(!cfg.win || typeof cfg.x!=="function" || typeof cfg.y!=="function") return;
+      var winStart = Number(cfg.win.start)||0, winEnd = Number(cfg.win.end);
+      var x0=cfg.x0, x1=cfg.x1, y0=cfg.y0, y1=cfg.y1, slot=cfg.slotOffset||0;
+      ctx.save(); ctx.textAlign="center"; ctx.textBaseline="middle";
+      for(var i=0;i<list.length;i++){
+        var b=list[i];
+        if(Number.isFinite(winEnd) && (b.endIndex<winStart-1 || b.endIndex>winEnd+1)) continue;
+        var local=b.endIndex - winStart;
+        var px=cfg.x(slot+local);
+        if(!isFinite(px) || px<x0-6 || px>x1+6) continue;
+        var mid=(b.priceLow+b.priceHigh)/2;
+        var py=cfg.y(mid); if(!isFinite(py)) continue;
+        py=Math.max(y0+10, Math.min(y1-10, py));
+        var win = b.winner;
+        var col = win==="buyers" ? "#2fd08a" : win==="sellers" ? "#f05a5a" : "#c9b56a";
+        var glyph = win==="buyers" ? "▲" : win==="sellers" ? "▼" : "◆";
+        // faixa discreta da batalha (topo→base) no x do fim
+        var pTop=cfg.y(b.priceHigh), pBot=cfg.y(b.priceLow);
+        if(isFinite(pTop)&&isFinite(pBot)){
+          ctx.globalAlpha=.16; ctx.fillStyle=col;
+          ctx.fillRect(px-3, Math.min(pTop,pBot), 6, Math.abs(pBot-pTop)); ctx.globalAlpha=1;
+        }
+        ctx.font="900 13px system-ui"; ctx.fillStyle=col;
+        ctx.fillText(glyph, px, py);
+      }
+      ctx.restore();
+    }catch(_dbe){}
+  }
+
+  function renderBattleSheet(body){
+    var list=cache.battle||[], b=cache.battleLatest;
+    var wins={buyers:0,sellers:0,draw:0}; list.forEach(function(x){ wins[x.winner]=(wins[x.winner]||0)+1; });
+    var head='<h4>Battle Map</h4><div class="sub">'+(cache.symbol||sym())+' · '+(cache.tf||tf())+' · '+list.length+' disputas · ▲'+wins.buyers+' ▼'+wins.sellers+' ◆'+wins.draw+'</div>';
+    if(!b){ body.innerHTML=head+'<div class="dvl-lab-read flat">Nenhuma disputa relevante na janela ainda.</div>'; return; }
+    var cls=b.winner==="buyers"?"buy":(b.winner==="sellers"?"sell":"flat");
+    var wlabel=b.winner==="buyers"?"COMPRADORES venceram":(b.winner==="sellers"?"VENDEDORES venceram":"EMPATE (muito esforço, sem resultado)");
+    body.innerHTML=head+
+      '<div class="dvl-lab-row"><span>Última disputa</span><b>'+b.len+' candles</b></div>'+
+      '<div class="dvl-lab-row"><span>Faixa</span><b>'+fmt(b.priceLow, priceDp(b.priceLow))+' – '+fmt(b.priceHigh, priceDp(b.priceHigh))+'</b></div>'+
+      '<div class="dvl-lab-row"><span>Esforço (×média)</span><b>'+fmt(b.effort)+'×</b></div>'+
+      '<div class="dvl-lab-row"><span>Resultado (ATR)</span><b>'+fmt(b.result)+'</b></div>'+
+      '<div class="dvl-lab-row"><span>Eficiência</span><b>'+fmt(b.efficiency)+'</b></div>'+
+      '<div class="dvl-lab-row"><span>Bilateralidade</span><b>'+fmt(b.twoSided*100,0)+'%</b></div>'+
+      '<div class="dvl-lab-read '+cls+'"><b>'+wlabel+'</b></div>';
+  }
+  function priceDp(p){ p=Math.abs(Number(p)||0); return p>=1000?1:(p>=1?2:5); }
+
   function roundRectSafe(ctx,x,y,w,h,r){
     try{ if(typeof roundRect==="function"){ roundRect(ctx,x,y,w,h,r,true,false); return; } }catch(_){}
     ctx.beginPath();
