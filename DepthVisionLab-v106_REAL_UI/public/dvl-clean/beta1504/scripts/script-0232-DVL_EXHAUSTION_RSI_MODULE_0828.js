@@ -1030,10 +1030,19 @@
       if(Math.abs(yy-_lastY)>=10 || v===scaleHi || v===scaleLo){ exrScaleLabel(v); _lastY=yy; }
     });
 
-    if(values.length){
-      var exrLast = values[values.length - 1];
-      if(exrLast && Number.isFinite(Number(exrLast.value))){
-        var tagVal = Number(exrLast.value);
+    /* Badge da escala: mostra o RSI do último candle VISÍVEL na borda direita do
+       viewport — o MESMO ponto que a curva desenha ali (pts é a série já filtrada
+       pelo range visível em xForTime). Ao navegar no histórico o badge acompanha
+       a curva; no live edge, pts termina no candle atual. Antes usava
+       values[values.length-1] (sempre o último da série = live), o que deixava o
+       badge "preso" no valor live durante o pan. Caminha pra trás até o último
+       valor finito visível e some se nada válido estiver visível. Valor textual e
+       posição Y saem do MESMO valor RSI. (Não altera fórmula/thresholds/sinais.) */
+    if(typeof pts !== "undefined" && pts.length){
+      var _bi = pts.length - 1;
+      while(_bi >= 0 && !(pts[_bi] && Number.isFinite(Number(pts[_bi].v)))) _bi--;
+      if(_bi >= 0){
+        var tagVal = Number(pts[_bi].v);
         var tagY = clamp(yScaleFit(tagVal,y0,y1,scaleLo,scaleHi), y0 + 12, y1 - 12);
         var tagH = (typeof DVL_SCALE_LABEL_H !== "undefined" ? DVL_SCALE_LABEL_H : 20);
         var tagR = (typeof DVL_SCALE_LABEL_RADIUS !== "undefined" ? DVL_SCALE_LABEL_RADIUS : 6);
