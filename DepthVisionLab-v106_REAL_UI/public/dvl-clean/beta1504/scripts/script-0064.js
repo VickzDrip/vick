@@ -4561,8 +4561,28 @@ function resizeCanvas(){
      work. Desktop uses DPR 1.0 and touch 1.15 only during the gesture; the
      existing final repaint restores full DPR immediately on release. */
   const __dvlDesktopFast = !!(window.matchMedia && window.matchMedia("(min-width:1100px)").matches);
-  const __dvlDprCap = window.__dvlChartInteracting ? (__dvlDesktopFast ? 1.0 : 1.15) : 2.5;
+  /* Beta 1.634 — DPR de interação ADAPTATIVO (resolve o "estalo" do pan sem
+     regredir fluidez). O downscale fixo durante o arrasto deixava a tela borrar
+     ao arrastar e "estalar" nítida ao soltar — a "recomposição" percebida. Agora
+     a decisão vem da MEDIÇÃO real do custo de render em DPR cheio
+     (window.__dvlFullDprEquivMs, amostrado nos frames que já rodam em qualidade
+     máxima — tipicamente os ociosos — e que JÁ incluem o glow). Se o frame cheio
+     cabe no orçamento (~11ms → folga sob 16,7ms/60fps), mantemos a nitidez E o
+     glow durante o pan (zero estalo); senão, mantemos o downscale de antes.
+     Seguro por construção: só sobe a qualidade quando o frame cheio já é barato.
+     Override manual: DVL_SHARP_PAN('on'|'off'|'auto'). */
+  const __dvlFullCap = Math.min(__dvlDeviceDpr, 2.5);
+  var __dvlSharpMode = "auto"; try{ __dvlSharpMode = localStorage.getItem("dvl_sharp_pan") || "auto"; }catch(_){}
+  var __dvlSharpInteract;
+  if(__dvlSharpMode === "on") __dvlSharpInteract = true;
+  else if(__dvlSharpMode === "off") __dvlSharpInteract = false;
+  else __dvlSharpInteract = (typeof window.__dvlFullDprEquivMs === "number" && window.__dvlFullDprEquivMs > 0 && window.__dvlFullDprEquivMs <= 11);
+  window.__dvlSharpInteract = __dvlSharpInteract;
+  window.__dvlFullDprCap = __dvlFullCap;
+  const __dvlInteractCap = __dvlSharpInteract ? __dvlFullCap : (__dvlDesktopFast ? 1.0 : 1.15);
+  const __dvlDprCap = window.__dvlChartInteracting ? __dvlInteractCap : 2.5;
   const dpr = Math.max(1, Math.min(__dvlDeviceDpr, __dvlDprCap));
+  window.__dvlLastRenderDpr = dpr;
   const w = Math.floor(rect.width * dpr);
   const h = Math.floor(rect.height * dpr);
   if(c.width !== w || c.height !== h){
@@ -4585,7 +4605,7 @@ function resizeCanvas(){
         Object.defineProperty(ctx, "shadowBlur", {
           configurable:true,
           get:function(){ return _sbVal; },
-          set:function(v){ _sbVal = v; _sbDesc.set.call(ctx, (window.__dvlChartInteracting || window.__dvlGlowForceOff) ? 0 : v); }
+          set:function(v){ _sbVal = v; _sbDesc.set.call(ctx, ((window.__dvlChartInteracting && !window.__dvlSharpInteract) || window.__dvlGlowForceOff) ? 0 : v); }
         });
       }
     }catch(_){}
@@ -4619,8 +4639,27 @@ window.DVL_PERF = { fps:0, frameMs:0, renderMs:0, tickMs:0, wsMs:0, gap:33 };
 let __dvlRenderMsAvg = 8, __dvlPerfLastFrame = 0, __dvlPerfFrames = 0, __dvlPerfAcc = 0, __dvlPerfFpsAt = 0, __dvlPerfHudEl = null;
 function __dvlPerfHudOn(){ try{ if(/[?&]perf=1/.test(location.search)) return true; return localStorage.getItem("dvl_perf_hud")==="1"; }catch(_){ return false; } }
 window.DVL_PERF_HUD = function(on){ try{ localStorage.setItem("dvl_perf_hud", on?"1":"0"); }catch(_){} if(!on && __dvlPerfHudEl){ try{__dvlPerfHudEl.remove();}catch(_){} __dvlPerfHudEl=null; } };
+/* Beta 1.634 — controle da nitidez durante o pan. 'auto' (padrão) decide pelo
+   custo medido; 'on' força nitidez cheia sempre; 'off' volta ao downscale antigo. */
+window.DVL_SHARP_PAN = function(v){
+  var mode = (v===true||v==="on") ? "on" : (v===false||v==="off") ? "off" : "auto";
+  try{ localStorage.setItem("dvl_sharp_pan", mode); }catch(_){}
+  try{ if(typeof drawSoon==="function") drawSoon(); }catch(_){}
+  return "DVL sharp-pan: " + mode + " (auto=decide pelo custo medido)";
+};
 function __dvlPerfOnFrame(renderMs, now){
   __dvlRenderMsAvg = __dvlRenderMsAvg*0.82 + renderMs*0.18;
+  /* Beta 1.634 — amostra o custo de render em DPR CHEIO (frame que rodou na
+     qualidade máxima, com glow — tipicamente os ociosos). Alimenta a decisão de
+     nitidez-durante-o-pan em resizeCanvas. Só amostra quando o frame foi cheio,
+     pra não contaminar a média com os frames de downscale. */
+  try{
+    var _ud = window.__dvlLastRenderDpr || 0, _fc = window.__dvlFullDprCap || 2.5;
+    if(_ud >= _fc - 0.01){
+      var _p = window.__dvlFullDprEquivMs;
+      window.__dvlFullDprEquivMs = (typeof _p === "number" && _p > 0) ? (_p*0.8 + renderMs*0.2) : renderMs;
+    }
+  }catch(_){}
   __DVL_LIVE_RENDER_GAP_1204 = Math.max(16, Math.min(60, Math.round(__dvlRenderMsAvg*1.15)));  // adaptativo
   if(__dvlPerfLastFrame){ __dvlPerfAcc += (now - __dvlPerfLastFrame); __dvlPerfFrames++; }
   __dvlPerfLastFrame = now;
