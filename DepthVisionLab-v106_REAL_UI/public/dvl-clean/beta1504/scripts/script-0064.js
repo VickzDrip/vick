@@ -7128,12 +7128,27 @@ function _klWsConnect(){
                         volume:+k.v, quoteVolume:+k.q, buyVolume:+k.V };
         var lastK = klines.length ? klines[klines.length-1] : null;
         if(lastK && lastK.time === t){
-          /* Com o @aggTrade movendo o OHLC a cada negócio, o @kline (em lote) NÃO
-             sobrescreve OHLC no meio da vela — só volume. No fechamento (k.x) ou
-             sem aggTrade vivo, o kline assume tudo. */
-          if(_agAlive() && !k.x){
+          /* Beta 1.643 — o @kline vem EM LOTE e ATRASADO. No meio da vela ele
+             NUNCA pode DESFAZER o OHLC ao vivo (Spec Fluidez §4/§18: high/low não
+             retrocedem; a wick nunca volta de um extremo já registrado). Era o
+             Object.assign no meio da vela que causava a "piscada pro oposto":
+             sobrescrevia o OHLC vivo (do @aggTrade) por um close/high/low mais
+             velho do lote. Rollback: window.__DVL_CANDLE_LEGACY_MERGE = true. */
+          if(window.__DVL_CANDLE_LEGACY_MERGE){
+            if(_agAlive() && !k.x){ lastK.volume=entry.volume; lastK.quoteVolume=entry.quoteVolume; lastK.buyVolume=entry.buyVolume; }
+            else { Object.assign(lastK, entry); }
+          } else if(!k.x){
+            // meio da vela: volume sempre; OHLC só ESTENDE (nunca encolhe)
             lastK.volume = entry.volume; lastK.quoteVolume = entry.quoteVolume; lastK.buyVolume = entry.buyVolume;
+            if(!_agAlive()){
+              // sem @aggTrade vivo, o kline é a única fonte de preço: segue o close
+              // e estende high/low monotonicamente — sem desfazer extremos.
+              lastK.close = entry.close;
+              if(entry.high > lastK.high) lastK.high = entry.high;
+              if(entry.low  < lastK.low)  lastK.low  = entry.low;
+            }
           } else {
+            // FECHAMENTO (k.x): o kline é a fonte autoritativa do OHLC final real.
             Object.assign(lastK, entry);
           }
         } else if(!lastK || t > lastK.time){
