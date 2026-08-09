@@ -28,6 +28,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.650", note: "DVL_LIVE_VOLUME_FALLBACK_1650 - Volume intrabar agora acompanha os candles ao vivo. Em 15s/30s, se aggTrade falhar mas o kline-base continuar, o delta cumulativo de volume preenche a barra sem duplicar quando os trades voltam. O poll REST tambem recupera volume nativo e os aliases volume/v/baseVolume ficam sincronizados." },
   { version: "Beta 1.633", note: "Remocao de indicadores. Sairam do menu de indicadores: ARION Zone Profile MTF, DVL FVG Firewall, DVL FVG Magnet IFVG, Alertas VP (o INDICADOR — os alertas do novo Alerts Hub NAO foram mexidos), DVL Smart Delta, DVL Bookmap Zones e Liquidity Bands. Alem de tira-los do menu, um passo de limpeza desliga quem porventura estava com algum deles ligado (pra ninguem ficar com o desenho na tela sem ter como desligar) e remove a linha residual do menu antigo. Os engines seguem carregados nos bastidores porque outros indicadores mantidos dependem deles (ex.: Deep Heatmap usa o Bookmap, RSI Exhaustion referencia o ARION). So frontend." },
   { version: "Beta 1.632", note: "Correcao — o site travava (freeze) logo apos carregar por causa do novo DWC. O 'a prova de rebuild' do menu do DWC observava a arvore inteira do documento e, ao reposicionar o proprio item, disparava o observer de novo, entrando numa tempestade de mutacoes/microtasks que congelava a aba (acontecia pra todos, mesmo com o DWC desligado, pois o observer roda no boot). Agora a insercao e IDEMPOTENTE (nao mexe no DOM se o item ja esta no lugar), com guarda de re-entrancia (ignora as mutacoes que nos mesmos causamos) e debounce de 200ms no observer. O cache do baseline de volume tambem passou a usar comprimento+tempo dos candles em vez da referencia do array (evita rebuild por frame). So frontend." },
   { version: "Beta 1.631", note: "Novo indicador — DVL Dominant Wick Candles (DWC). Em candles com VOLUME acima da media (SMA/EMA configuravel, padrao 20), o MAIOR pavio vira o corpo do candle e a direcao passa a ser definida pelo pavio dominante — nao pela cor original (um candle verde com pavio superior maior vira VENDEDOR; um vermelho com pavio inferior maior vira COMPRADOR). O lado que virou corpo some como pavio (fica so 1 pavio). Empate de pavios mantem o candle original. 3 modos de render: Replace (padrao, substitui visualmente), Overlay (desenha por cima translucido) e Markers (so um marcador de direcao). Reage intrabar: o candle atual pode cruzar a media e mudar de dominancia durante a barra. E uma camada VISUAL derivada — nao altera o OHLCV base (Volume/RSI/VP/Risk/Replay seguem lendo a serie original). Painel padrao DVL (Main/Volume Filter/Rendering/Visual). So frontend." },
@@ -7021,6 +7022,19 @@ async function _fastPoll(){
         if(h>last.high) last.high=h;
         if(l<last.low)  last.low=l;
         if(!_agAlive()) last.close=c;
+        if(isNativeTimeframe(interval)){
+          /* Native REST rows own cumulative volume. Never move it backwards if
+             this poll is a little older than the live WebSocket. */
+          last.volume=Math.max(Number(last.volume)||0,Number(row[5])||0);
+          last.quoteVolume=Math.max(Number(last.quoteVolume)||0,Number(row[7])||0);
+          last.buyVolume=Math.max(Number(last.buyVolume)||0,Number(row[9])||0);
+          _dvlSyncCandleVolumeAliases1650(last);
+        }else{
+          _dvlApplyCumulativeVolumeFallback1650(
+            String(symbol||"")+"|"+String(pollIv)+"|"+String(baseT),
+            row[5],row[7],row[9],last,_agAlive()
+          );
+        }
         __dvlTraceCandle('poll-REST');
       } else if(last && targetT>last.time && !_agAlive()){
         klines.push({time:targetT,open:+row[1],high:+row[2],low:+row[3],close:+row[4],
@@ -7159,8 +7173,57 @@ function _dvlFindCandleIndex1647(time){
   }
   return -1;
 }
-function _dvlApplyLivePriceToBucket1647(price, eventTime){
+/* DVL_LIVE_VOLUME_ENGINE_1650_START
+   Keep one canonical numeric volume while exposing the aliases used by newer
+   indicator modules. For aggregated TFs, the base kline cumulative volume is
+   also a lossless fallback when aggTrade becomes unavailable. */
+const __dvlBaseVolumeState1650 = { key:"", volume:0, quoteVolume:0, buyVolume:0 };
+function _dvlSyncCandleVolumeAliases1650(candle){
+  if(!candle) return candle;
+  const volume=Math.max(0,Number(candle.volume ?? candle.v ?? candle.baseVolume)||0);
+  candle.volume=volume;
+  candle.v=volume;
+  candle.baseVolume=volume;
+  return candle;
+}
+function _dvlApplyCumulativeVolumeFallback1650(key, volume, quoteVolume, buyVolume, target, aggLive){
+  const s=__dvlBaseVolumeState1650;
+  const nextVolume=Math.max(0,Number(volume)||0);
+  const nextQuote=Math.max(0,Number(quoteVolume)||0);
+  const nextBuy=Math.max(0,Number(buyVolume)||0);
+  key=String(key||"");
+
+  if(!key || s.key!==key){
+    s.key=key;
+    s.volume=nextVolume;
+    s.quoteVolume=nextQuote;
+    s.buyVolume=nextBuy;
+    _dvlSyncCandleVolumeAliases1650(target);
+    return {applied:false,bootstrap:true,volumeDelta:0};
+  }
+
+  const volumeDelta=Math.max(0,nextVolume-s.volume);
+  const quoteDelta=Math.max(0,nextQuote-s.quoteVolume);
+  const buyDelta=Math.max(0,nextBuy-s.buyVolume);
+  s.volume=nextVolume;
+  s.quoteVolume=nextQuote;
+  s.buyVolume=nextBuy;
+
+  if(aggLive || !target || !(volumeDelta>0)){
+    _dvlSyncCandleVolumeAliases1650(target);
+    return {applied:false,volumeDelta:volumeDelta};
+  }
+
+  target.volume=(Number(target.volume)||0)+volumeDelta;
+  target.quoteVolume=(Number(target.quoteVolume)||0)+quoteDelta;
+  target.buyVolume=(Number(target.buyVolume)||0)+Math.min(volumeDelta,buyDelta);
+  _dvlSyncCandleVolumeAliases1650(target);
+  return {applied:true,volumeDelta:volumeDelta};
+}
+/* DVL_LIVE_VOLUME_ENGINE_1650_END */
+function _dvlApplyLivePriceToBucket1647(price, eventTime, quantity, buyerIsMaker){
   const p = Number(price), time = Number(eventTime), step = Number(intervalMs(interval));
+  const q = Math.max(0, Number(quantity) || 0);
   if(!(p>0) || !Number.isFinite(time) || !(step>0) || !klines.length) return {applied:false, reason:"invalid"};
   const stateKey = String(symbol || "").toUpperCase() + "|" + String(interval || "");
   if(window.__DVL_CANDLE_STATE_KEY_1647 && window.__DVL_CANDLE_STATE_KEY_1647 !== stateKey){
@@ -7172,7 +7235,7 @@ function _dvlApplyLivePriceToBucket1647(price, eventTime){
 
   let rolled = false;
   if(bucket > Number(last.time)){
-    last = { time:bucket, open:p, high:p, low:p, close:p, volume:0, quoteVolume:0, buyVolume:0 };
+    last = { time:bucket, open:p, high:p, low:p, close:p, volume:q, quoteVolume:p*q, buyVolume:buyerIsMaker?0:q };
     klines.push(last);
     rolled = true;
   }else{
@@ -7182,13 +7245,19 @@ function _dvlApplyLivePriceToBucket1647(price, eventTime){
       /* A fallback history came from another exchange. Do not keep its forming
          OHLC and paint Binance Spot trades on top of it. */
       last.open=p; last.high=p; last.low=p; last.close=p;
-      last.volume=0; last.quoteVolume=0; last.buyVolume=0;
+      last.volume=q; last.quoteVolume=p*q; last.buyVolume=buyerIsMaker?0:q;
     }else{
       last.close=p;
       if(p>last.high) last.high=p;
       if(p<last.low) last.low=p;
+      if(q>0){
+        last.volume=(Number(last.volume)||0)+q;
+        last.quoteVolume=(Number(last.quoteVolume)||0)+p*q;
+        if(!buyerIsMaker) last.buyVolume=(Number(last.buyVolume)||0)+q;
+      }
     }
   }
+  _dvlSyncCandleVolumeAliases1650(last);
   window.__DVL_LIVE_BUCKET_1647 = bucket;
   return {applied:true, rolled:rolled, bucket:bucket, candle:last};
 }
@@ -7214,9 +7283,11 @@ function _dvlMergeNativeKline1647(entry, isClosed, aggLive){
       window.__DVL_LIVE_BUCKET_1647=t;
     }
   }
+  if(targetIndex>=0) _dvlSyncCandleVolumeAliases1650(klines[targetIndex]);
   return {applied:targetIndex>=0, targetIndex:targetIndex, current:klines.length?klines[klines.length-1]:null};
 }
 /* DVL_CANDLE_BUCKET_ENGINE_1647_END */
+
 
 window.DVL_CANDLE_ENGINE_1647 = {
   status:function(){
@@ -7232,7 +7303,7 @@ function _applyAggTrade(d, feedIv){
   if(feedIv && String(feedIv) !== String(interval)) return;
   const p=+d.p; if(!(p>0) || !klines.length) return;
   _agLastMsg = Date.now();
-  const applied = _dvlApplyLivePriceToBucket1647(p, +d.T || +d.E || Date.now());
+  const applied = _dvlApplyLivePriceToBucket1647(p, +d.T || +d.E || Date.now(), +d.q || 0, !!d.m);
   if(!applied.applied) return;
   marketEntryPrice=p;
   __dvlTraceCandle(applied.rolled?'agg-roll':'aggTrade');
@@ -7354,6 +7425,10 @@ function _nnWsConnect(){
           const h=+k.h, l=+k.l, c=+k.c;
           if(h>last.high) last.high=h;
           if(l<last.low)  last.low=l;
+          _dvlApplyCumulativeVolumeFallback1650(
+            String(k.s||s)+"|"+String(k.i||base)+"|"+String(k.t),
+            k.v,k.q,k.V,last,_agAlive()
+          );
           /* k.x closes the one-second base candle, not the 15s/30s aggregate.
              It may only own close while aggTrade is unavailable. */
           if(!_agAlive()) last.close=c;
