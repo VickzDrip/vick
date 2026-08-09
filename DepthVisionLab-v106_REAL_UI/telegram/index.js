@@ -9,7 +9,8 @@ const config = require("./config");
 let _worker = null;
 let _evaluator = null;
 
-function install(app) {
+function install(app, deps) {
+  deps = deps || {};
   const store = require("./store");
 
   // 1) Carrega o store puro-JS (sem SQLite/nativo). Se por algum motivo falhar,
@@ -28,7 +29,7 @@ function install(app) {
   const { makeHandler } = require("./webhook");
   const { makeRouter } = require("./routes");
   const { makeWorker } = require("./worker");
-  const jsonMw = express.json({ limit: "16kb" });
+  const jsonMw = express.json({ limit: "256kb" });
   const enabled = config.enabled();
 
   if (enabled) app.post(config.webhookPath, jsonMw, makeHandler());
@@ -38,7 +39,7 @@ function install(app) {
     _worker = makeWorker().start();
     // avaliação server-side 24/7 (só no modo "server")
     if (config.mode === "server") {
-      try { _evaluator = require("./evaluator").makeEvaluator().start(); } catch (e) { console.warn("[DVL Telegram] evaluator não iniciou:", e && e.message); }
+      try { _evaluator = require("./evaluator").makeEvaluator({ subsecond: deps.subsecond }).start(); } catch (e) { console.warn("[DVL Telegram] evaluator não iniciou:", e && e.message); }
     }
     console.log("[DVL Telegram] ENABLED (store puro-JS) — worker" + (_evaluator ? "+evaluator" : "") + " started · bot=@" + config.botUsername + " · webhook=" + config.webhookUrl + " · mode=" + config.mode);
   } else {

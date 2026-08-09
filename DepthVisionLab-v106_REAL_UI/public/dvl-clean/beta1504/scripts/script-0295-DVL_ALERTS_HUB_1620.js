@@ -509,6 +509,40 @@
   /* Sync das regras com Telegram ligado → servidor (avaliação 24/7). Debounced.
      Resolve "chart" pro TF atual (evalTf), pra o servidor ter um TF concreto. */
   var _tgSyncTimer=0;
+  function tgIndicatorContext(){
+    var out={version:2,chartSymbol:gsym(),chartTf:gtf(),historyCount:620,ma:[],vwap:{},vp:{},exr:{},smartdelta:{},liqbands:{}};
+    try{ if(typeof klines!=="undefined"&&Array.isArray(klines)&&klines.length) out.historyCount=klines.length; }catch(_){}
+    try{
+      var ma=window.DVLMovingAverages, items=ma&&ma.state&&Array.isArray(ma.state.items)?ma.state.items:[];
+      out.ma=items.map(function(m,idx){return {idx:idx,period:Number(m&&m.period)||20,type:String(m&&m.type||"SMA")};});
+    }catch(_){}
+    try{
+      var vw=window.DVLVwapSession&&window.DVLVwapSession.state||{};
+      out.vwap={anchor:vw.anchor||"daily",mult1:Number(vw.mult1)||1,mult2:Number(vw.mult2)||2};
+    }catch(_){}
+    try{
+      var vpApi=window.DVLVolumeProfile, vpState=vpApi&&vpApi.state||{}, vpLevels=vpApi&&vpApi.getLevels?((vpApi.getLevels()||{}).current||{}):{};
+      var vpDebug=window.__DVL_VP_DEBUG_1334||{};
+      out.vp={rows:Number(vpState.rows)||120,valueAreaPct:Number(vpState.valueAreaPct)||0.70,
+        lookback:Number(vpDebug.count)||180,followLive:!!vpDebug.followLive,
+        levels:{poc:Number.isFinite(Number(vpLevels.poc))?Number(vpLevels.poc):null,vah:Number.isFinite(Number(vpLevels.vah))?Number(vpLevels.vah):null,val:Number.isFinite(Number(vpLevels.val))?Number(vpLevels.val):null}};
+    }catch(_){}
+    try{
+      var ex=window.DVLExhaustionRSI&&window.DVLExhaustionRSI.state||{}, ar=window.DVLArionZoneProfile&&window.DVLArionZoneProfile.state||{};
+      out.exr={calculationTF:ex.calculationTF||"Chart",mtfVolSpikeAt:ex.mtfVolSpikeAt,mtfVolMaLen:ex.mtfVolMaLen,mtfPush:ex.mtfPush,mtfRsiLen:ex.mtfRsiLen,
+        arionSpikeLevelWeight:!!ex.arionSpikeLevelWeight,arionSpikeLevels:ex.arionSpikeLevels,arionMult:ar.mult,
+        proExtendedScale:ex.proExtendedScale!==false,proExtension:ex.proExtension,upperZoneLevel:ex.upperZoneLevel,lowerZoneLevel:ex.lowerZoneLevel};
+    }catch(_){}
+    try{
+      var sd=window.DVL_SMART_DELTA_ENGINE_API&&window.DVL_SMART_DELTA_ENGINE_API.getState?window.DVL_SMART_DELTA_ENGINE_API.getState():{};
+      out.smartdelta={thNeutral:sd.thNeutral,alertDelta:sd.alertDelta,alertConf:sd.alertConf,alertExh:sd.alertExh,alertConflMin:sd.alertConflMin};
+    }catch(_){}
+    try{
+      var lb=window.DVL_LIQ_BANDS_API&&window.DVL_LIQ_BANDS_API.state||{};
+      out.liqbands={rangePct:lb.rangePct,minNotional:lb.minNotional,smoothBars:lb.smoothBars,wallStrength:2.2};
+    }catch(_){}
+    return out;
+  }
   function tgSyncRules(){
     if(!tgConnected()) return;
     clearTimeout(_tgSyncTimer);
@@ -518,15 +552,15 @@
         var payload=rules.filter(function(r){ return r.telegram; }).map(function(r){
           return { id:r.id, source:r.source, signal:r.signal, dir:r.dir, level:r.level, params:r.params,
                    tf:r.tf, evalTf:((!r.tf||r.tf==="chart")?iv:r.tf), rearm:r.rearm, cooldownSec:r.cooldownSec,
-                   symbol:r.symbol, telegram:r.telegram, enabled:r.enabled };
+                   symbol:r.symbol, evalSymbol:(r.symbol||gsym()), telegram:r.telegram, enabled:r.enabled };
         });
-        tgApi("/api/telegram/rules",{ method:"POST", body:JSON.stringify({rules:payload}) });
+        tgApi("/api/telegram/rules",{ method:"POST", body:JSON.stringify({rules:payload,context:tgIndicatorContext()}) });
       }catch(_){}
     }, 400);
   }
   /* Heartbeat: enquanto o DVL está aberto e conectado, avisa o servidor pra ele
      NÃO avaliar (o cliente já entrega) — evita duplicidade. */
-  function tgHeartbeat(){ if(tgConnected()) tgApi("/api/telegram/heartbeat",{method:"POST"}); }
+  function tgHeartbeat(){ if(tgConnected()){ tgApi("/api/telegram/heartbeat",{method:"POST"}); tgSyncRules(); } }
   function tgBoot(){
     tgLoadStatus().then(function(j){ if(j && j.connected){ tgSyncRules(); tgHeartbeat(); tgLoadRecent(); } });
     setInterval(tgHeartbeat, 15000);

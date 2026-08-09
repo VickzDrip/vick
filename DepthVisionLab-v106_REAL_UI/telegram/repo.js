@@ -174,10 +174,20 @@ function deliveryStatus(triggerId) {
 }
 
 /* ── regras sincronizadas (avaliação server-side 24/7) ───────────────────── */
-function setUserRules(dvlUserId, rules) {
+function setUserRules(dvlUserId, rules, context) {
   const d = store.data();
   d.userRules = d.userRules || {};
-  d.userRules[dvlUserId] = { rules: Array.isArray(rules) ? rules : [], updatedAt: now() };
+  const next = {
+    rules: Array.isArray(rules) ? rules : [],
+    context: context && typeof context === "object" ? context : {},
+    updatedAt: now()
+  };
+  const prev = d.userRules[dvlUserId];
+  if (prev && JSON.stringify(prev.rules || []) === JSON.stringify(next.rules) &&
+      JSON.stringify(prev.context || {}) === JSON.stringify(next.context)) {
+    return prev;
+  }
+  d.userRules[dvlUserId] = next;
   store.commit();
   return d.userRules[dvlUserId];
 }
@@ -193,8 +203,10 @@ function listEvalRules() {
   for (const userId in ur) {
     const conn = d.connections[userId];
     if (!isSendable(conn)) continue;
-    const rules = (ur[userId] && ur[userId].rules) || [];
-    for (const r of rules) { if (r && r.enabled !== false && r.telegram) out.push({ userId, conn, rule: r }); }
+    const userEntry = ur[userId] || {};
+    const rules = userEntry.rules || [];
+    const context = userEntry.context || {};
+    for (const r of rules) { if (r && r.enabled !== false && r.telegram) out.push({ userId, conn, rule: r, context }); }
   }
   return out;
 }

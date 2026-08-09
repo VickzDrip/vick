@@ -389,6 +389,7 @@
 
   window.DVLVwapSessionDraw = draw;
   window.DVLVwapSession = {
+    get state(){ return Object.assign({}, state); },
     on: () => !!state.on,
     setOn: v => { state.on = !!v; save(); },
     open: openPanel,

@@ -10,6 +10,80 @@ const _repo = require("./repo");
 const _messages = require("./messages");
 
 const DURATIONS = new Set(["1h", "today", "24h", "7d", "30d", "forever"]);
+const SERVER_SOURCES = ["price", "smartdelta", "exr", "liqbands", "ma", "vp", "cross"];
+
+function finite(v, fallback, min, max) {
+  v = Number(v);
+  if (!Number.isFinite(v)) v = fallback;
+  if (Number.isFinite(min)) v = Math.max(min, v);
+  if (Number.isFinite(max)) v = Math.min(max, v);
+  return v;
+}
+
+function cleanTf(v) {
+  v = String(v || "").trim();
+  return /^(15s|30s|1m|2m|3m|4m|5m|10m|15m|30m|1h|2h|4h|6h|8h|12h|1d|1D|3d|1w|chart|Chart)$/.test(v) ? v : "";
+}
+
+function cleanSymbol(v) {
+  return String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 24);
+}
+
+function sanitizeContext(raw) {
+  raw = raw && typeof raw === "object" ? raw : {};
+  const out = {
+    version: 2,
+    chartSymbol: cleanSymbol(raw.chartSymbol) || "BTCUSDT",
+    chartTf: cleanTf(raw.chartTf) || "1m",
+    historyCount: Math.round(finite(raw.historyCount, 620, 50, 1000)),
+    ma: [], vwap: {}, vp: {}, exr: {}, smartdelta: {}, liqbands: {}
+  };
+  if (Array.isArray(raw.ma)) {
+    out.ma = raw.ma.slice(0, 10).map((m, idx) => ({
+      idx: Math.round(finite(m && m.idx, idx, 0, 9)),
+      period: Math.round(finite(m && m.period, 20, 1, 999)),
+      type: /^(SMA|EMA|WMA|VWMA|RMA|HMA|DEMA|TEMA|LSMA|KAMA)$/.test(String(m && m.type)) ? String(m.type) : "SMA"
+    }));
+  }
+  const vw = raw.vwap || {};
+  out.vwap = {
+    anchor: /^(daily|weekly|monthly)$/.test(String(vw.anchor)) ? String(vw.anchor) : "daily",
+    mult1: finite(vw.mult1, 1, 0.1, 10), mult2: finite(vw.mult2, 2, 0.1, 10)
+  };
+  const vp = raw.vp || {}, levels = vp.levels || {};
+  out.vp = {
+    rows: Math.round(finite(vp.rows, 120, 20, 500)), valueAreaPct: finite(vp.valueAreaPct, 0.70, 0.01, 1),
+    lookback: Math.round(finite(vp.lookback, 180, 20, 1000)), followLive: !!vp.followLive,
+    levels: {
+      poc: Number.isFinite(Number(levels.poc)) ? Number(levels.poc) : null,
+      vah: Number.isFinite(Number(levels.vah)) ? Number(levels.vah) : null,
+      val: Number.isFinite(Number(levels.val)) ? Number(levels.val) : null
+    }
+  };
+  const ex = raw.exr || {};
+  out.exr = {
+    calculationTF: cleanTf(ex.calculationTF) || "Chart",
+    mtfVolSpikeAt: finite(ex.mtfVolSpikeAt, 2.5, 1.3, 8), mtfVolMaLen: Math.round(finite(ex.mtfVolMaLen, 20, 3, 500)),
+    mtfPush: finite(ex.mtfPush, 18, 0, 40), mtfRsiLen: Math.round(finite(ex.mtfRsiLen, 14, 2, 50)),
+    arionSpikeLevelWeight: !!ex.arionSpikeLevelWeight,
+    arionSpikeLevels: Array.isArray(ex.arionSpikeLevels) ? ex.arionSpikeLevels.slice(0, 10).map(Boolean) : new Array(10).fill(true),
+    arionMult: Array.isArray(ex.arionMult) ? ex.arionMult.slice(0, 10).map((v, i) => finite(v, i + 1, 0.01, 100)) : [1,2,3,4,5,6,7,8,9,10],
+    proExtendedScale: ex.proExtendedScale !== false, proExtension: finite(ex.proExtension, 100, 25, 500),
+    upperZoneLevel: finite(ex.upperZoneLevel, 60, 50, 600), lowerZoneLevel: finite(ex.lowerZoneLevel, 35, -500, 50)
+  };
+  const sd = raw.smartdelta || {};
+  out.smartdelta = {
+    thNeutral: finite(sd.thNeutral, 18, 0, 100), alertDelta: finite(sd.alertDelta, 60, 20, 100),
+    alertConf: finite(sd.alertConf, 70, 0, 100), alertExh: finite(sd.alertExh, 75, 0, 100),
+    confluenceMin: finite(sd.alertConflMin, 2, 2, 5)
+  };
+  const lb = raw.liqbands || {};
+  out.liqbands = {
+    rangePct: finite(lb.rangePct, 0.6, 0.05, 5), minNotional: finite(lb.minNotional, 50000, 0, 5e7),
+    smoothBars: finite(lb.smoothBars, 8, 0, 60), wallStrength: finite(lb.wallStrength, 2.2, 1, 20)
+  };
+  return out;
+}
 
 // rate-limiter simples por chave (janela deslizante grosseira)
 const _buckets = new Map();
@@ -43,7 +117,9 @@ function makeRouter(deps) {
     res.json(Object.assign({
       enabled: config.enabled(),
       mode: config.mode,
-      botUsername: config.botUsername
+      botUsername: config.botUsername,
+      server24x7: true,
+      serverSources: SERVER_SOURCES
     }, connSummary(repo.getConnection(req.dvlUserId))));
   });
 
@@ -83,14 +159,20 @@ function makeRouter(deps) {
     if (!config.enabled()) return res.status(503).json({ ok: false, error: "telegram_disabled" });
     if (!allow("rules:" + req.dvlUserId, 30, 60000)) return res.status(429).json({ ok: false, error: "rate_limited" });
     const rules = Array.isArray(req.body && req.body.rules) ? req.body.rules : [];
+    const context = sanitizeContext(req.body && req.body.context);
     const clean = rules.slice(0, 200).map(r => ({
       id: String(r.id || ""), source: String(r.source || ""), signal: String(r.signal || ""),
       dir: r.dir || "any", level: (r.level == null ? null : Number(r.level)),
-      params: (r.params && typeof r.params === "object") ? r.params : {},
+      params: (r.params && typeof r.params === "object") ? {
+        maId: r.params.maId == null ? "" : String(r.params.maId).slice(0, 8),
+        level: r.params.level == null ? "" : String(r.params.level).slice(0, 12),
+        lhs: r.params.lhs == null ? "" : String(r.params.lhs).slice(0, 32),
+        rhs: r.params.rhs == null ? "" : String(r.params.rhs).slice(0, 32)
+      } : {},
       tf: r.tf || "", evalTf: r.evalTf || "", rearm: r.rearm || "time", cooldownSec: Number(r.cooldownSec) || 0,
-      symbol: r.symbol ? String(r.symbol).toUpperCase() : "", telegram: !!r.telegram, enabled: r.enabled !== false
+      symbol: cleanSymbol(r.evalSymbol || r.symbol || context.chartSymbol), telegram: !!r.telegram, enabled: r.enabled !== false
     })).filter(r => r.id && r.source && r.signal);
-    repo.setUserRules(req.dvlUserId, clean);
+    repo.setUserRules(req.dvlUserId, clean, context);
     res.json({ ok: true, stored: clean.length });
   });
 

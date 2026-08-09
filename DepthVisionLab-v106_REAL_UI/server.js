@@ -48,7 +48,7 @@ app.use(cors());
 // node:sqlite não estiverem disponíveis, o servidor segue normal sem Telegram.
 try {
   if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_ENABLED !== "0") {
-    require("./telegram").install(app);
+    require("./telegram").install(app, { subsecond });
   } else {
     console.log("[DVL Telegram] skip (sem TELEGRAM_BOT_TOKEN)");
   }
