@@ -28,6 +28,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.654", note: "DVL_BODY_REVERSAL_WICK_VOLUME_FILTERS_1654 - adiciona filtros opcionais de pavio de rejeicao e volume acima da media ao Body Reversal Scout. O periodo da media de volume pode ser ajustado entre 5 e 200 candles; os calculos continuam usando somente candles fechados, sem lookahead." },
   { version: "Beta 1.653", note: "DVL_BODY_REVERSAL_NATIVE_REGISTRY_1653 - registra o Body Reversal Scout diretamente no catalogo nativo do menu de Indicadores. Remove a reinjecao por MutationObserver que disputava com os rebuilds do menu e fazia o clique sumir ou nao ativar. O switch agora usa DVLBodyReversalScout.setOn e o clique na linha abre os inputs pelo fluxo oficial." },
   { version: "Beta 1.652", note: "DVL_BODY_REVERSAL_MENU_1652 - corrige o registro do Body Reversal Scout no menu moderno visivel de Indicadores. A Beta 1.651 carregava o motor e criava a linha apenas no menu legado escondido; agora o item entra na secao OVERLAY do dvl1bIndicatorList0813, sobrevive aos rebuilds do menu e sincroniza o switch ON/OFF." },
   { version: "Beta 1.651", note: "DVL_BODY_REVERSAL_SCOUT_1651 - novo marcador informativo de possivel reversao baseado somente em sequencias de corpos dominantes fechados de 15s/30s. Projeta o sinal intrabar no candle correspondente de ate 5m sem lookahead. Historico visual de segundos ampliado para 8000 candles." },

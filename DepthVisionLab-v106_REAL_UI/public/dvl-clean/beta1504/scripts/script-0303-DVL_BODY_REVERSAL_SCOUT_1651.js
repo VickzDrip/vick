@@ -1,7 +1,7 @@
-/* DVL Body Reversal Scout 1.653
+/* DVL Body Reversal Scout 1.654
    Closed-candle, OHLC-only exhaustion watch for 15s/30s candles.
    Signals are informational and never place or manage orders.
-   DVL_BODY_REVERSAL_NATIVE_REGISTRY_1653 uses the native 0813 menu registry. */
+   DVL_BODY_REVERSAL_WICK_VOLUME_FILTERS_1654 adds optional rejection-wick and volume filters. */
 (function(root, makeEngine){
   "use strict";
 
@@ -18,6 +18,9 @@
     sensitivity:"balanced",
     projectTo5m:true,
     showLabels:true,
+    requireWick:false,
+    requireVolumeAboveAverage:false,
+    volumeAveragePeriod:20,
     color:"#ff9f1c",
     historyLimit:8000
   };
@@ -36,6 +39,9 @@
     out.sensitivity = ["early","balanced","strict"].includes(out.sensitivity) ? out.sensitivity : "balanced";
     out.projectTo5m = out.projectTo5m !== false;
     out.showLabels = out.showLabels !== false;
+    out.requireWick = !!out.requireWick;
+    out.requireVolumeAboveAverage = !!out.requireVolumeAboveAverage;
+    out.volumeAveragePeriod = Math.max(5, Math.min(200, Math.round(Number(out.volumeAveragePeriod) || DEFAULTS.volumeAveragePeriod)));
     out.color = /^#[0-9a-f]{6}$/i.test(String(out.color || "")) ? out.color : DEFAULTS.color;
     out.historyLimit = Math.max(2000, Math.min(10000, Math.round(Number(out.historyLimit) || DEFAULTS.historyLimit)));
     return out;
@@ -159,13 +165,16 @@
     if(!rows.length) return [];
     const last = rows[rows.length-1] || {};
     const prev = rows[rows.length-2] || {};
-    const sig = [currentSymbol(),state.sourceTf,state.sensitivity,rows.length,rowTime(last),last.close,last.high,last.low,rowTime(prev)].join("|");
+    const sig = [currentSymbol(),state.sourceTf,state.sensitivity,state.requireWick,state.requireVolumeAboveAverage,state.volumeAveragePeriod,rows.length,rowTime(last),last.close,last.high,last.low,last.volume,rowTime(prev)].join("|");
     if(computeCache.sig !== sig){
       computeCache = {
         sig:sig,
         signals:Engine.computeSignals(rows, {
           sourceTf:state.sourceTf,
           sensitivity:state.sensitivity,
+          requireWick:state.requireWick,
+          requireVolumeAboveAverage:state.requireVolumeAboveAverage,
+          volumeAveragePeriod:state.volumeAveragePeriod,
           now:Date.now()
         })
       };
@@ -257,6 +266,8 @@
       ".dvl-brs-body{padding:11px}.dvl-brs-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.dvl-brs-field{min-height:46px;padding:7px;border:1px solid rgba(150,180,168,.14);border-radius:6px;background:#091410}"+
       ".dvl-brs-field>label{display:block;color:#8ea39b;font-size:9px;margin-bottom:6px}.dvl-brs-field select{width:100%;height:26px;background:#07100d;color:#eaf5f0;border:1px solid rgba(255,159,28,.28);border-radius:5px;padding:0 6px}"+
       ".dvl-brs-check{display:flex!important;align-items:center;gap:7px;color:#eaf5f0!important;font-size:11px!important;margin:2px 0 0!important}.dvl-brs-check input{accent-color:#ff9f1c}.dvl-brs-note{margin:10px 1px 0;color:#90a49b;font-size:9px;line-height:1.45}.dvl-brs-status{margin-top:8px;color:#ffb547;font:700 9px ui-monospace,monospace}"+
+      ".dvl-brs-toggle{position:relative;display:flex!important;align-items:center;gap:7px;color:#eaf5f0!important;font-size:10px!important;margin:2px 0 0!important;cursor:pointer}.dvl-brs-toggle input{position:absolute;opacity:0;pointer-events:none}.dvl-brs-toggle i{position:relative;display:block;width:30px;height:16px;flex:0 0 30px;border:1px solid rgba(135,167,154,.35);border-radius:9px;background:#07100d;transition:background .16s,border-color .16s}.dvl-brs-toggle i:after{content:'';position:absolute;left:2px;top:2px;width:10px;height:10px;border-radius:50%;background:#81958c;transition:transform .16s,background .16s}.dvl-brs-toggle input:checked+i{border-color:rgba(255,159,28,.70);background:rgba(255,159,28,.22)}.dvl-brs-toggle input:checked+i:after{transform:translateX(14px);background:#ff9f1c}"+
+      ".dvl-brs-number{display:flex;align-items:center;gap:6px}.dvl-brs-number input{box-sizing:border-box;width:72px;height:26px;padding:0 7px;border:1px solid rgba(255,159,28,.28);border-radius:5px;background:#07100d;color:#eaf5f0;font:700 11px ui-monospace,monospace}.dvl-brs-number span{color:#8ea39b;font-size:9px}"+
       ".dvl-brs-reset{height:28px;margin-top:10px;padding:0 10px;border:1px solid rgba(255,159,28,.30);border-radius:5px;background:#0a1712;color:#ffc26c;cursor:pointer}"+
       ".dvl-brs-menu-row{box-sizing:border-box;width:100%;min-height:44px;display:flex;align-items:center;gap:10px;padding:7px 9px;border:0;border-bottom:1px solid rgba(145,177,164,.12);background:transparent;color:#eaf5f0;text-align:left;cursor:pointer}"+
       ".dvl-brs-menu-row:hover{background:rgba(255,159,28,.07)}.dvl-brs-mark{display:grid;place-items:center;width:30px;height:30px;border:1px solid rgba(255,159,28,.42);border-radius:5px;color:#ff9f1c;font:900 10px system-ui}"+
@@ -296,15 +307,21 @@
         '<div class="dvl-brs-field"><label>Projetar</label><label class="dvl-brs-check"><input id="brsProject" type="checkbox"'+(state.projectTo5m?' checked':'')+'> Ate 5m</label></div>'+
         '<div class="dvl-brs-field"><label>Marcador</label><label class="dvl-brs-check"><span style="color:'+state.color+';font-size:16px">&#9650;</span> Laranja</label></div>'+
         '<div class="dvl-brs-field"><label>Texto</label><label class="dvl-brs-check"><input id="brsLabels" type="checkbox"'+(state.showLabels?' checked':'')+'> REV '+state.sourceTf+'</label></div>'+
+        '<div class="dvl-brs-field"><label>Pavio de rejeicao</label><label class="dvl-brs-toggle"><input id="brsRequireWick" type="checkbox"'+(state.requireWick?' checked':'')+'><i></i><span>Exigir no extremo</span></label></div>'+
+        '<div class="dvl-brs-field"><label>Volume forte</label><label class="dvl-brs-toggle"><input id="brsRequireVolume" type="checkbox"'+(state.requireVolumeAboveAverage?' checked':'')+'><i></i><span>Acima da media</span></label></div>'+
+        '<div class="dvl-brs-field"><label>Media de volume</label><div class="dvl-brs-number"><input id="brsVolumePeriod" type="number" min="5" max="200" step="1" value="'+state.volumeAveragePeriod+'"><span>candles</span></div></div>'+
       '</div>'+
       '<div class="dvl-brs-status">'+status+'</div>'+
-      '<div class="dvl-brs-note">Marca exaustao possivel apos uma sequencia de corpos dominantes em extremo local. Usa somente OHLC fechado, sem olhar candles futuros.</div>'+
+      '<div class="dvl-brs-note">Marca exaustao possivel apos uma sequencia de corpos dominantes em extremo local. Os filtros opcionais usam o pavio de rejeicao e o volume do candle fechado, sem olhar candles futuros.</div>'+
       '<button class="dvl-brs-reset" id="brsReset" type="button">Restaurar padrao</button>';
     body.querySelector("#brsOn").addEventListener("change", e => { state.on=!!e.target.checked; save(); if(state.on) fetchSource(true); });
     body.querySelector("#brsTf").addEventListener("change", e => { state.sourceTf=e.target.value; sourceCache={key:"",rows:[],loading:false,error:"",fetchedAt:0,attemptedAt:0}; save(); if(state.on) fetchSource(true); });
     body.querySelector("#brsSensitivity").addEventListener("change", e => { state.sensitivity=e.target.value; save(); });
     body.querySelector("#brsProject").addEventListener("change", e => { state.projectTo5m=!!e.target.checked; save(); });
     body.querySelector("#brsLabels").addEventListener("change", e => { state.showLabels=!!e.target.checked; save(); });
+    body.querySelector("#brsRequireWick").addEventListener("change", e => { state.requireWick=!!e.target.checked; save(); });
+    body.querySelector("#brsRequireVolume").addEventListener("change", e => { state.requireVolumeAboveAverage=!!e.target.checked; save(); });
+    body.querySelector("#brsVolumePeriod").addEventListener("change", e => { state.volumeAveragePeriod=Number(e.target.value); save(); });
     body.querySelector("#brsReset").addEventListener("click", reset);
   }
 
@@ -358,9 +375,9 @@
   "use strict";
 
   const PROFILES = {
-    early:    {run:2,minBody:.64,maxEdgeWick:.22,minImpulse:1.05,lookback:5,cooldown:5},
-    balanced: {run:3,minBody:.70,maxEdgeWick:.18,minImpulse:1.35,lookback:8,cooldown:8},
-    strict:   {run:3,minBody:.76,maxEdgeWick:.14,minImpulse:1.75,lookback:12,cooldown:12}
+    early:    {run:2,minBody:.64,minReversalWick:.025,maxEdgeWick:.22,minImpulse:1.05,lookback:5,cooldown:5},
+    balanced: {run:3,minBody:.70,minReversalWick:.04,maxEdgeWick:.18,minImpulse:1.35,lookback:8,cooldown:8},
+    strict:   {run:3,minBody:.76,minReversalWick:.06,maxEdgeWick:.14,minImpulse:1.75,lookback:12,cooldown:12}
   };
   function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
   function tfMs(tf){
@@ -389,6 +406,11 @@
   function range(c){ return Math.max(0,Number(c.high)-Number(c.low)); }
   function bodyPct(c){ const r=range(c); return r>0?Math.abs(Number(c.close)-Number(c.open))/r:0; }
   function direction(c){ return c.close>c.open?1:c.close<c.open?-1:0; }
+  function rejectionWickPct(c,dir){
+    const r=range(c);
+    if(!(r>0)) return 0;
+    return dir>0?(Number(c.high)-Math.max(Number(c.open),Number(c.close)))/r:(Math.min(Number(c.open),Number(c.close))-Number(c.low))/r;
+  }
   function profile(name){ return Object.assign({},PROFILES[name]||PROFILES.balanced); }
 
   function computeSignals(rows, opts){
@@ -397,10 +419,13 @@
     const step=tfMs(sourceTf);
     const now=Number.isFinite(Number(opts.now))?Number(opts.now):Date.now();
     const cfg=Object.assign(profile(opts.sensitivity),opts.profile||{});
+    const requireWick=!!opts.requireWick;
+    const requireVolume=!!opts.requireVolumeAboveAverage;
+    const volumePeriod=Math.max(5,Math.min(200,Math.round(Number(opts.volumeAveragePeriod)||20)));
     const cs=normalize(rows).filter(c => c.isClosed===true || (c.isClosed!==false && now>=c.time+step-1));
     const out=[];
     let lastSignalIndex=-Infinity;
-    const warmup=Math.max(20,cfg.lookback,cfg.run+1);
+    const warmup=Math.max(20,cfg.lookback,cfg.run+1,requireVolume?volumePeriod:0);
 
     for(let i=warmup;i<cs.length;i++){
       const c=cs[i], dir=direction(c);
@@ -422,8 +447,22 @@
       if(!validRun) continue;
 
       const rr=range(c);
-      const edgeWick=dir>0?(c.high-c.close)/Math.max(rr,1e-12):(c.close-c.low)/Math.max(rr,1e-12);
+      const edgeWick=rejectionWickPct(c,dir);
       if(edgeWick>cfg.maxEdgeWick) continue;
+      if(requireWick && edgeWick<cfg.minReversalWick) continue;
+
+      let volumeAverage=0, volumeRatio=0;
+      if(requireVolume){
+        const priorVolumes=[];
+        for(let j=Math.max(0,i-volumePeriod);j<i;j++){
+          const v=Number(cs[j].volume);
+          if(Number.isFinite(v)&&v>0) priorVolumes.push(v);
+        }
+        if(priorVolumes.length<Math.min(5,volumePeriod)) continue;
+        volumeAverage=priorVolumes.reduce((sum,v)=>sum+v,0)/priorVolumes.length;
+        if(!(volumeAverage>0) || !(Number(c.volume)>volumeAverage)) continue;
+        volumeRatio=Number(c.volume)/volumeAverage;
+      }
 
       const priorRanges=[];
       for(let j=Math.max(0,firstIndex-20);j<firstIndex;j++){ const r=range(cs[j]); if(r>0) priorRanges.push(r); }
@@ -442,8 +481,11 @@
       const avgBody=bodySum/cfg.run;
       const bodyStrength=clamp((avgBody-cfg.minBody)/Math.max(.01,1-cfg.minBody),0,1);
       const impulseStrength=clamp((impulse-cfg.minImpulse)/Math.max(.25,cfg.minImpulse),0,1);
-      const edgeStrength=clamp(1-edgeWick/Math.max(.01,cfg.maxEdgeWick),0,1);
-      const score=Math.round(clamp(64+bodyStrength*14+impulseStrength*13+edgeStrength*9,64,99));
+      const edgeStrength=requireWick
+        ?clamp((edgeWick-cfg.minReversalWick)/Math.max(.01,cfg.maxEdgeWick-cfg.minReversalWick),0,1)
+        :clamp(1-edgeWick/Math.max(.01,cfg.maxEdgeWick),0,1);
+      const volumeStrength=requireVolume?clamp((volumeRatio-1)/1.25,0,1):0;
+      const score=Math.round(clamp(64+bodyStrength*13+impulseStrength*12+edgeStrength*8+volumeStrength*5,64,99));
       out.push({
         time:c.time,
         closeTime:c.time+step,
@@ -454,7 +496,11 @@
         score:score,
         price:dir>0?c.high:c.low,
         bodyPct:avgBody,
-        impulseATR:impulse
+        impulseATR:impulse,
+        rejectionWickPct:edgeWick,
+        volume:Number(c.volume)||0,
+        volumeAverage:volumeAverage,
+        volumeRatio:volumeRatio
       });
       lastSignalIndex=i;
     }
@@ -483,5 +529,5 @@
     return Array.from(grouped.values()).sort((a,b)=>a.hostTime-b.hostTime);
   }
 
-  return {PROFILES:PROFILES,tfMs:tfMs,normalize:normalize,median:median,bodyPct:bodyPct,computeSignals:computeSignals,mapSignals:mapSignals};
+  return {PROFILES:PROFILES,tfMs:tfMs,normalize:normalize,median:median,bodyPct:bodyPct,rejectionWickPct:rejectionWickPct,computeSignals:computeSignals,mapSignals:mapSignals};
 });
