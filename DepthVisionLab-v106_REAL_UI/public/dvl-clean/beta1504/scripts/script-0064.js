@@ -6980,6 +6980,7 @@ async function _fastPoll(){
         if(h>last.high) last.high=h;
         if(l<last.low)  last.low=l;
         last.close=c;
+        __dvlTraceCandle('poll-REST');
       } else if(last && targetT>last.time){
         klines.push({time:targetT,open:+row[1],high:+row[2],low:+row[3],close:+row[4],
                      volume:+row[5],quoteVolume:+row[7]||0,buyVolume:+row[9]||0});
@@ -7036,6 +7037,7 @@ function _glueFormingCandle(){
   last.close = p;
   if(p > last.high) last.high = p;
   if(p < last.low)  last.low  = p;
+  __dvlTraceCandle('glue-ticker');
   /* Escala travada e preço saiu da faixa → expande só o necessário. */
   if(priceScaleLocked && Number.isFinite(priceViewCenter) && Number.isFinite(priceViewRange) && priceViewRange > 0){
     const half = priceViewRange/2, top = priceViewCenter+half, bot = priceViewCenter-half;
@@ -7071,6 +7073,41 @@ let _klLastMsg = 0, _agLastMsg = 0, _nnLastMsg = 0;
 /* Beta 1.554 — aggTrade "vivo" = recebeu negócio nos últimos 5s (agora ele vem
    na conexão combinada, então não dá pra olhar readyState de um socket próprio). */
 function _agAlive(){ return (Date.now() - _agLastMsg) < 5000; }
+
+/* ── Instrumentação temporária do candle em formação (Spec Fluidez §17.1) ──────
+   Rastreia CADA escrita no OHLC da vela atual + a fonte, e sinaliza quando o
+   close diverge do preço real (marketEntryPrice = último @aggTrade) — ou seja, a
+   "piscada indo contra o preço". Liga com DVL_CANDLE_DEBUG(true) ou ?candledbg=1
+   na URL. 100% leitura/log; não altera o feed. Some no OFF. */
+window.__DVL_CANDLE_TRACE = window.__DVL_CANDLE_TRACE || [];
+function __dvlTraceCandle(src){
+  if(!window.__DVL_CANDLE_DEBUG) return;
+  try{
+    var last = klines[klines.length-1]; if(!last) return;
+    var agg = Number(marketEntryPrice) || 0;
+    var dev = agg>0 ? Number((last.close-agg).toFixed(2)) : 0;
+    var rec = { src:src, close:+last.close, high:+last.high, low:+last.low, agg:agg, dev:dev, ag:_agAlive(), t:Date.now() };
+    var buf = window.__DVL_CANDLE_TRACE; buf.push(rec); if(buf.length>80) buf.shift();
+    __dvlCandleDbgPaint();
+  }catch(_){}
+}
+function __dvlCandleDbgPaint(){
+  try{
+    var el = document.getElementById("dvlCandleDbg1643");
+    if(!el){ el=document.createElement("div"); el.id="dvlCandleDbg1643"; el.setAttribute("data-dvl-ui","true");
+      el.style.cssText="position:fixed;left:6px;bottom:130px;z-index:99999;background:rgba(2,10,7,.94);color:#bfe9d4;font:700 10px/1.45 monospace;padding:7px 9px;border:1px solid #1c6f4a;border-radius:7px;max-width:78vw;white-space:pre;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.5)";
+      document.body.appendChild(el); }
+    var buf=window.__DVL_CANDLE_TRACE, agg=(buf.length?buf[buf.length-1].agg:0);
+    var lines=buf.slice(-7).map(function(r){
+      var contra = (r.agg>0 && Math.abs(r.dev) > r.agg*0.0002) ? ("  ⚠CONTRA "+(r.dev>0?"+":"")+r.dev) : "";
+      return (r.src+"       ").slice(0,8)+" c="+r.close+(r.ag?"":" [agOFF]")+contra;
+    });
+    el.textContent="CANDLE DEBUG · agg(real)="+agg+"\n"+lines.join("\n");
+  }catch(_){}
+}
+window.DVL_CANDLE_DEBUG = function(on){ window.__DVL_CANDLE_DEBUG=!!on; if(!on){ var e=document.getElementById("dvlCandleDbg1643"); if(e&&e.remove) e.remove(); } return "candle debug: "+(!!on); };
+window.DVL_CANDLE_DEBUG_REPORT = function(){ return (window.__DVL_CANDLE_TRACE||[]).slice(-40); };
+try{ if(/[?&]candledbg=1/.test(location.search)) window.__DVL_CANDLE_DEBUG=true; }catch(_){}
 /* Aplica UM negócio (aggTrade) na vela em formação — move close/high/low a cada
    trade (fluidez tick a tick), atualiza preço/label/bubbles e agenda render. */
 function _applyAggTrade(d){
@@ -7083,6 +7120,7 @@ function _applyAggTrade(d){
   if(p>last.high) last.high=p;
   if(p<last.low)  last.low=p;
   marketEntryPrice=p;
+  __dvlTraceCandle('aggTrade');
   const now=Date.now();
   try{ window.DVL_PERF.tickMs = Math.max(0, now-(+d.T||now)); window.DVL_PERF.wsMs = Math.max(0, now-(+d.E||now)); }catch(_){}
   if(els && els.lastPrice && now-_agLastHdr>100){ _agLastHdr=now; try{ els.lastPrice.textContent=fmtPrice(p); }catch(_){} }
@@ -7154,6 +7192,7 @@ function _klWsConnect(){
         } else if(!lastK || t > lastK.time){
           klines.push(entry); lastK = klines[klines.length-1];
         }
+        __dvlTraceCandle(k.x?'klineWS-X':'klineWS');
         publishDvlChartPrice1204(k.x ? (+k.c) : ((lastK && lastK.close) || +k.c), 'kline-ws', +k.T || Date.now());
         requestLiveChartRender(!!k.x);
       }catch(_){}
@@ -7220,6 +7259,7 @@ function _nnWsConnect(){
           /* close do aggTrade na formação (fluido); kline só no fechamento ou
              sem aggTrade vivo. Evita a vela agregada piscar. */
           if(k.x || !_agAlive()) last.close=c;
+          __dvlTraceCandle(k.x?'nnWS-X':'nnWS');
           publishDvlChartPrice1204(k.x ? c : last.close, 'aggregate-kline-ws', +k.T || Date.now());
           requestLiveChartRender(!!k.x);
         }
