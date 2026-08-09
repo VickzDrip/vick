@@ -47,6 +47,11 @@
   let cacheKey = "";
   let cacheZones = [];
   let ext = { key:"", data:null, loading:false, error:null, loaded:0, want:0, ts:0, fallback:false };
+  /* DVL_SPIKE_FETCH_STORM_FIX */
+  let extRetryTimer = null;
+  let extRetryAt = 0;
+  let extRetryDelay = 5000;
+  let extLastWarnAt = 0;
 
   function clone(v){ return JSON.parse(JSON.stringify(v)); }
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
@@ -152,7 +157,8 @@
     const want = clamp(parseInt(state.histBars,10) || 1500, 200, 5000);
     const key = sym()+"|"+tf+"|"+want;
 
-    if(!force && ext.key === key && ext.loading) return;
+    if(ext.loading) return;
+    if(!force && Date.now() < extRetryAt) return;
     if(!force && ext.key === key && Array.isArray(ext.data) && ext.data.length) return;
 
     ext = { key, data:null, loading:true, error:null, loaded:0, want, ts:Date.now(), fallback:false };
@@ -161,16 +167,25 @@
     try{
       let rows = null;
 
+      /* Seconds candles already exist in the live chart. Reuse them instead
+         of asking Binance REST for unsupported 15s klines. */
+      if(/^\d+s$/.test(tf) && tf === currentInterval()){
+        const local = localCandles().slice(-want);
+        if(local.length){
+          rows = local.map(c => [c.t, String(c.o), String(c.h), String(c.l), String(c.c), String(c.v || 0)]);
+        }
+      }
+
       /*
         Use the platform historical loader first.
         This is important because the chart already has a robust paginated Binance loader.
         Direct fetch is only fallback.
       */
-      if(typeof fetchKlinesHistory === "function"){
+      if((!Array.isArray(rows) || !rows.length) && typeof fetchKlinesHistory === "function" && !/^\d+s$/.test(tf)){
         rows = await fetchKlinesHistory(sym(), tf, want);
       }
 
-      if(!Array.isArray(rows) || !rows.length){
+      if((!Array.isArray(rows) || !rows.length) && !/^\d+s$/.test(tf)){
         let base = "https://fapi.binance.com";
         try{ if(typeof BINANCE !== "undefined") base = BINANCE; }catch(_){}
 
@@ -200,6 +215,10 @@
         rows = all;
       }
 
+      if((!Array.isArray(rows) || !rows.length) && /^\d+s$/.test(tf)){
+        throw new Error("seconds candles not ready: " + tf);
+      }
+
       const seen = new Set();
       ext.data = (Array.isArray(rows) ? rows : [])
         .map((x)=>({t:+x[0],o:+x[1],h:+x[2],l:+x[3],c:+x[4],v:+x[5],index:0}))
@@ -209,13 +228,30 @@
 
       ext.loaded = ext.data.length;
       ext.error = ext.loaded ? null : "empty";
+      if(ext.loaded){
+        extRetryAt = 0;
+        extRetryDelay = 5000;
+        if(extRetryTimer){ clearTimeout(extRetryTimer); extRetryTimer = null; }
+      }
 
     }catch(err){
-      console.warn("DVL Spike Zones independent history fetch error", err);
+      const now = Date.now();
+      if(now - extLastWarnAt >= 30000){
+        extLastWarnAt = now;
+        console.warn("DVL Spike Zones history paused; retry controlled", err);
+      }
       ext.data = null;
       ext.loaded = 0;
       ext.error = err && err.message ? err.message : "fetch error";
-      setTimeout(function(){ try{ fetchTf(true); }catch(_){} }, 3500);
+      const delay = extRetryDelay;
+      extRetryAt = now + delay;
+      extRetryDelay = Math.min(60000, extRetryDelay * 2);
+      if(!extRetryTimer){
+        extRetryTimer = setTimeout(function(){
+          extRetryTimer = null;
+          try{ if(state.on !== false) fetchTf(true); }catch(_){}
+        }, delay);
+      }
     }finally{
       ext.loading = false;
       cacheKey = "";

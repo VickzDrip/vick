@@ -19,8 +19,8 @@ fi
 SRC_PUB="$REPO/DepthVisionLab-v106_REAL_UI/public"
 RESTART_FE=0
 if [ -d "$SRC_PUB" ]; then
-  # destrava os arquivos travados com chattr +i antes de copiar
   chattr -i "$DST/public/index.html" "$DST/public/index.organized-beta1504.html" 2>/dev/null || true
+    chattr -i "$MIRROR/index.html" "$MIRROR/index.organized-beta1504.html" 2>/dev/null || true
   # -i lista o que mudou; -c compara por checksum (robusto). Sem --delete: nunca apaga.
   CHG="$(rsync -rlptc -i --exclude 'index.backup-*' --exclude '*.bak-*' "$SRC_PUB/" "$DST/public/" 2>/dev/null)"
   if [ -n "$CHG" ]; then
@@ -28,8 +28,7 @@ if [ -d "$SRC_PUB" ]; then
     rsync -rlptc --exclude 'index.backup-*' --exclude '*.bak-*' "$DST/public/" "$MIRROR/" 2>/dev/null || true
     echo "[$(date -Iseconds)] DVL frontend sync @ $(git rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
   fi
-  # re-trava o index principal (mantém teu hábito de chattr +i)
-  chattr +i "$DST/public/index.html" 2>/dev/null || true
+    # O index permanece gravavel para deploys e hotfixes futuros.
 fi
 if [ "$RESTART_FE" = "1" ]; then
   pm2 restart depthvisionlab --silent 2>/dev/null

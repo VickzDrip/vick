@@ -4073,8 +4073,10 @@ function renderAssetDropdown(){
       applyAssetFilter();
     });
     /* Não deixa cliques/toques na busca fecharem o dropdown. */
-    ["click","pointerdown","mousedown","touchstart"].forEach(evt =>
+    /* DVL_ASSET_DROPDOWN_LISTENER_FIX */
+    ["click","pointerdown","mousedown"].forEach(evt =>
       assetSearch.addEventListener(evt, ev => ev.stopPropagation()));
+    assetSearch.addEventListener("touchstart", ev => ev.stopPropagation(), {passive:true});
   }
 
   els.assetDropdown.querySelectorAll("[data-star-symbol]").forEach(btn => {
@@ -4121,7 +4123,8 @@ function refreshAssetUi(){
 
   if(assetDropdownOpen && els.assetDropdown && els.assetDropdown.classList.contains("is-open")){
     updateOpenAssetDropdownInPlace();
-  }else{
+  }else if(!els.assetDropdown.firstElementChild){
+    /* Closed dropdown is static. Opening it performs a fresh render. */
     renderAssetDropdown();
   }
 
