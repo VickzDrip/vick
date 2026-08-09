@@ -1,6 +1,7 @@
-/* DVL Body Reversal Scout 1.651
+/* DVL Body Reversal Scout 1.652
    Closed-candle, OHLC-only exhaustion watch for 15s/30s candles.
-   Signals are informational and never place or manage orders. */
+   Signals are informational and never place or manage orders.
+   DVL_BODY_REVERSAL_MENU_1652 registers against the visible 0813 menu. */
 (function(root, makeEngine){
   "use strict";
 
@@ -323,6 +324,10 @@
       el.textContent = state.on ? "ON" : "OFF";
       el.classList.toggle("is-on", state.on);
     });
+    document.querySelectorAll("[data-brs-toggle]").forEach(el => {
+      el.classList.toggle("is-on", state.on);
+      el.setAttribute("aria-label", state.on ? "ON" : "OFF");
+    });
   }
   function insertLegacyRow(){
     const menu = document.getElementById("indicatorDropdown");
@@ -346,12 +351,41 @@
     });
     return best;
   }
+  function modernRow(){
+    const row = document.createElement("div");
+    row.id = "dvlBodyReversalScoutModernItem";
+    row.className = "dvl1b-ind0813-item dvl1b-ind0854-row";
+    row.setAttribute("data-ind-key","brs");
+    row.setAttribute("data-dvl-ui","true");
+    row.innerHTML = '<span class="dvl1b-ind0854-fav" aria-hidden="true"></span><span class="dvl1b-ind0813-mark" style="color:#ff9f1c">BR</span><span class="dvl1b-ind0813-copy"><b>Body Reversal Scout</b><small>corpos dominantes &middot; 15s/30s</small></span><i class="dvl1b-ind0813-switch" data-brs-toggle aria-label="OFF"></i>';
+    row.addEventListener("click", ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if(ev.target && ev.target.closest && ev.target.closest("[data-brs-toggle]")){
+        state.on = !state.on;
+        save();
+        if(state.on) fetchSource(true);
+        return;
+      }
+      openPanel();
+    });
+    return row;
+  }
   function insertModernRow(){
-    if(document.getElementById("dvlBodyReversalScoutModernItem")) return;
-    const ref = visibleReferenceRow();
+    const existing = document.getElementById("dvlBodyReversalScoutModernItem");
+    if(existing){ updateRows(); return; }
+    const visibleList = document.getElementById("dvl1bIndicatorList0813");
+    const exactRef = visibleList && visibleList.querySelector('[data-ind-key="vwapsession"]');
+    const ref = exactRef || visibleReferenceRow();
     if(!ref || !ref.parentNode) return;
-    const row = menuRow("dvlBodyReversalScoutModernItem");
+    const row = modernRow();
     ref.parentNode.insertBefore(row, ref.nextSibling);
+    const section = row.closest && row.closest('[data-ind-section-wrap="overlay"]');
+    if(section){
+      const body = section.querySelector(".dvl1b-ind0854-sectionBody");
+      const count = section.querySelector(".dvl1b-ind0854-count");
+      if(body && count) count.textContent = String(body.querySelectorAll(".dvl1b-ind0813-item").length);
+    }
     updateRows();
   }
   function scheduleMenuSync(){
