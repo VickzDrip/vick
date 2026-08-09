@@ -70,7 +70,7 @@
   function catFor(m){
     if(m.missing) return "soon";
     if(m.key==="oi"||m.key==="ls"||m.key==="netlong"||m.key==="netshort"||m.key==="netdelta"||m.key==="dv"||m.key==="exr"||m.key==="tv"||m.key==="arion") return "osc";
-    if(m.key==="ma"||m.key==="vwapsession"||m.key==="splinequant"||m.key==="liqbands"||m.key==="dwc"||m.key==="bookmap"||m.key==="dh"||m.key==="frvp"||m.key==="mfrvp"||m.key==="ifvgmagnet"||m.key==="gex") return "overlay";
+    if(m.key==="ma"||m.key==="vwapsession"||m.key==="brs"||m.key==="splinequant"||m.key==="liqbands"||m.key==="dwc"||m.key==="bookmap"||m.key==="dh"||m.key==="frvp"||m.key==="mfrvp"||m.key==="ifvgmagnet"||m.key==="gex") return "overlay";
     return "flow";
   }
 
@@ -87,6 +87,7 @@
       {key:"bubbles",mark:"BB",title:"DVL Bubbles",sub:"big trades · volume · deep proxy",api:"DVL_BUBBLES_API",pill:"dvlBubblesState",row:"dvlBubblesItem"},
       {key:"ma",mark:"MA",title:"Moving Averages",sub:"10 médias · overlay",api:"DVLMovingAverages",pill:"dvlMaState",row:"dvlMovingAveragesItem"},
       {key:"vwapsession",mark:"VW",title:"VWAP Session",sub:"reset por sessão · bandas σ",api:"DVLVwapSession",pill:"dvlVwapSessionState",row:"dvlVwapSessionItem"},
+      {key:"brs",mark:"BR",title:"Body Reversal Scout",sub:"corpos dominantes · 15s/30s",api:"DVLBodyReversalScout",row:"dvlBodyReversalScoutLegacyItem"},
       {key:"splinequant",mark:"SQ",title:"Spline Quantile Channel",sub:"canal quantílico · spline · forecast",api:"DVLSplineQuantChannel",pill:"dvlSplineQuantState",row:"dvlSplineQuantItem"},
       {key:"dh",mark:"DH",title:"DVL Deep Heatmap",sub:"liquidez + consumo confirmado",api:"DVL_DEEP_HEATMAP_API"},
       {key:"dwc",mark:"DWC",title:"Dominant Wick Candles",sub:"maior pavio vira corpo · filtro de volume",api:"DVLDominantWickCandles",pill:"dvlDwcState",row:"dvlDwcItem"},

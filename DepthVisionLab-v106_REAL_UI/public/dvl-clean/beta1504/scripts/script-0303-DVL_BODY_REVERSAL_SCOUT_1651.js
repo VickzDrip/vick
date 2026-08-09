@@ -1,7 +1,7 @@
-/* DVL Body Reversal Scout 1.652
+/* DVL Body Reversal Scout 1.653
    Closed-candle, OHLC-only exhaustion watch for 15s/30s candles.
    Signals are informational and never place or manage orders.
-   DVL_BODY_REVERSAL_MENU_1652 registers against the visible 0813 menu. */
+   DVL_BODY_REVERSAL_NATIVE_REGISTRY_1653 uses the native 0813 menu registry. */
 (function(root, makeEngine){
   "use strict";
 
@@ -26,7 +26,6 @@
   let panel = null;
   let computeCache = {sig:"", signals:[]};
   let sourceCache = {key:"", rows:[], loading:false, error:"", fetchedAt:0, attemptedAt:0};
-  let modernSyncTimer = 0;
 
   function clone(v){ return JSON.parse(JSON.stringify(v)); }
   function normalizeState(raw){
@@ -324,10 +323,6 @@
       el.textContent = state.on ? "ON" : "OFF";
       el.classList.toggle("is-on", state.on);
     });
-    document.querySelectorAll("[data-brs-toggle]").forEach(el => {
-      el.classList.toggle("is-on", state.on);
-      el.setAttribute("aria-label", state.on ? "ON" : "OFF");
-    });
   }
   function insertLegacyRow(){
     const menu = document.getElementById("indicatorDropdown");
@@ -338,72 +333,9 @@
     else menu.appendChild(row);
     updateRows();
   }
-  function visibleReferenceRow(){
-    const nodes = document.querySelectorAll('button,[role="button"],.indicatorItem,[class*="indicator-item"],[class*="module-item"]');
-    let best = null;
-    nodes.forEach(el => {
-      if(el.id === "dvlBodyReversalScoutLegacyItem" || el.closest("#indicatorDropdown")) return;
-      const text = String(el.textContent || "").replace(/\s+/g," ").trim();
-      if(!/VWAP Session|Moving Averages/i.test(text)) return;
-      const rect = el.getBoundingClientRect();
-      if(rect.width < 120 || rect.height < 24 || rect.height > 100) return;
-      if(!best || text.length < String(best.textContent || "").length) best = el;
-    });
-    return best;
-  }
-  function modernRow(){
-    const row = document.createElement("div");
-    row.id = "dvlBodyReversalScoutModernItem";
-    row.className = "dvl1b-ind0813-item dvl1b-ind0854-row";
-    row.setAttribute("data-ind-key","brs");
-    row.setAttribute("data-dvl-ui","true");
-    row.innerHTML = '<span class="dvl1b-ind0854-fav" aria-hidden="true"></span><span class="dvl1b-ind0813-mark" style="color:#ff9f1c">BR</span><span class="dvl1b-ind0813-copy"><b>Body Reversal Scout</b><small>corpos dominantes &middot; 15s/30s</small></span><i class="dvl1b-ind0813-switch" data-brs-toggle aria-label="OFF"></i>';
-    row.addEventListener("click", ev => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if(ev.target && ev.target.closest && ev.target.closest("[data-brs-toggle]")){
-        state.on = !state.on;
-        save();
-        if(state.on) fetchSource(true);
-        return;
-      }
-      openPanel();
-    });
-    return row;
-  }
-  function insertModernRow(){
-    const existing = document.getElementById("dvlBodyReversalScoutModernItem");
-    if(existing){ updateRows(); return; }
-    const visibleList = document.getElementById("dvl1bIndicatorList0813");
-    const exactRef = visibleList && visibleList.querySelector('[data-ind-key="vwapsession"]');
-    const ref = exactRef || visibleReferenceRow();
-    if(!ref || !ref.parentNode) return;
-    const row = modernRow();
-    ref.parentNode.insertBefore(row, ref.nextSibling);
-    const section = row.closest && row.closest('[data-ind-section-wrap="overlay"]');
-    if(section){
-      const body = section.querySelector(".dvl1b-ind0854-sectionBody");
-      const count = section.querySelector(".dvl1b-ind0854-count");
-      if(body && count) count.textContent = String(body.querySelectorAll(".dvl1b-ind0813-item").length);
-    }
-    updateRows();
-  }
-  function scheduleMenuSync(){
-    clearTimeout(modernSyncTimer);
-    modernSyncTimer = setTimeout(() => { insertLegacyRow(); insertModernRow(); }, 80);
-  }
   function bootMenu(){
     ensureStyle();
     insertLegacyRow();
-    const trigger = document.getElementById("dvl1b_indBtn");
-    if(trigger) trigger.addEventListener("click", () => { setTimeout(scheduleMenuSync,60); setTimeout(scheduleMenuSync,260); }, true);
-    try{
-      const mo = new MutationObserver(mutations => {
-        for(const m of mutations){ if(m.addedNodes && m.addedNodes.length){ scheduleMenuSync(); break; } }
-      });
-      mo.observe(document.body, {childList:true,subtree:true});
-    }catch(_){}
-    scheduleMenuSync();
   }
 
   root.DVLBodyReversalScoutDraw = draw;
