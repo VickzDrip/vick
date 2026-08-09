@@ -3222,6 +3222,28 @@ async function fetchMexcKlinesViaBackend(sym, iv, targetLimit){
   return __dvlTagRows(rows, { source:"MEXC_BACKEND_KLINES", endpoint:"/api/dvl/scanner/mexc-klines", market:"mexc-futures" });
 }
 
+/* Beta 1.647 - same-origin Binance Spot history. The live chart socket is Spot,
+   so its current candle must not be initialized from MEXC/Futures and then
+   mutated by Spot trades. The VPS proxy also avoids browser CORS/rate-limit
+   cascades. */
+async function fetchDvlSpotKlinesProxy(sym, iv, targetLimit){
+  if(!isNativeTimeframe(iv)) return null;
+  const limit = Math.min(Math.max(2, Number(targetLimit) || 650), 1000);
+  const url = "/api/klines?symbol=" + encodeURIComponent(String(sym || "").toUpperCase())
+    + "&interval=" + encodeURIComponent(iv) + "&limit=" + limit;
+  const r = await fetch(url, { cache:"no-store" });
+  if(!r.ok) throw new Error("DVL spot proxy HTTP " + r.status);
+  const data = await r.json();
+  if(!Array.isArray(data) || !data.length) throw new Error("DVL spot proxy empty");
+  const rows = data.map(x => [
+    Number(x.t), String(x.o), String(x.h), String(x.l), String(x.c), String(x.v || 0),
+    Number(x.closeTime), String(x.q || 0), Number(x.trades || 0),
+    String(x.buyVolume || 0), String(x.buyQuote || 0), "0"
+  ]).filter(x => Number.isFinite(x[0]) && Number.isFinite(Number(x[4])));
+  if(!rows.length) throw new Error("DVL spot proxy invalid rows");
+  return __dvlTagRows(rows, { source:"DVL_BINANCE_SPOT_PROXY", endpoint:"/api/klines", market:"binance-spot" });
+}
+
 async function fetchKlinesHistory(sym, iv, targetLimit){
   const errors = [];
 
@@ -3429,6 +3451,14 @@ async function fetchKlinesSmart(sym, iv, targetLimit){
     const rows = await fetchKlinesFromAggTrades(sym, iv, targetLimit);
     if(Array.isArray(rows) && rows.length) return rows;
     throw new Error("Sem aggTrades reais para " + iv);
+  }
+
+  /* Keep the initial/current candle on the same exchange as @aggTrade. */
+  if(isNativeTimeframe(iv)){
+    try{
+      const spotRows = await fetchDvlSpotKlinesProxy(sym, iv, targetLimit);
+      if(Array.isArray(spotRows) && spotRows.length) return spotRows;
+    }catch(_){ }
   }
 
   /* MEXC-FIRST — the chart is exchange-agnostic and MEXC lists ~every asset,
@@ -3745,6 +3775,11 @@ async function loadAll(silent=false){
     if(!Array.isArray(k) || !k.length){
       throw new Error("Sem candles para " + symbol + " " + interval);
     }
+    try{
+      window.__DVL_CANDLE_HISTORY_MARKET_1647 = String(k.__dvlMarket || "");
+      window.__DVL_LIVE_BUCKET_1647 = 0;
+      window.__DVL_CANDLE_STATE_KEY_1647 = String(symbol || "").toUpperCase() + "|" + String(interval || "");
+    }catch(_){ }
     applyKlineRowsToChart(k);
     ticker = buildTickerFromRealKlines(); /* provisional price from candles; refined by the real ticker in stage 2 */
     assetTickerMap[symbol] = ticker;
@@ -6950,9 +6985,10 @@ async function _fastPoll(){
   if(window.__DVL_REPLAY_ACTIVE) return;
   if(!symbol||!klines.length) return;
   try{
+    const pollIv = isNativeTimeframe(interval) ? interval : baseIntervalForTimeframe(interval);
     const [tk, kl] = await Promise.all([
-      jget(`${BINANCE}/fapi/v1/ticker/24hr?symbol=${encodeURIComponent(symbol)}`),
-      jget(`${BINANCE}/fapi/v1/klines?symbol=${encodeURIComponent(symbol)}&interval=${isNativeTimeframe(interval)?interval:baseIntervalForTimeframe(interval)}&limit=2`)
+      jget(`${BINANCE}/fapi/v1/ticker/24hr?symbol=${encodeURIComponent(symbol)}`).catch(()=>null),
+      fetchDvlSpotKlinesProxy(symbol, pollIv, 2).catch(()=>null)
     ]);
     if(window.__DVL_REPLAY_ACTIVE) return; // descarta resposta que chegou depois do Replay iniciar
 
@@ -6960,15 +6996,17 @@ async function _fastPoll(){
     if(tk && tk.lastPrice){
       ticker = tk;
       assetTickerMap[symbol] = tk;
-      marketEntryPrice = Number(tk.lastPrice)||marketEntryPrice;
-      if(els.lastPrice) els.lastPrice.textContent = fmtPrice(+tk.lastPrice);
+      if(!_agAlive()){
+        marketEntryPrice = Number(tk.lastPrice)||marketEntryPrice;
+        if(els.lastPrice) els.lastPrice.textContent = fmtPrice(+tk.lastPrice);
+      }
       const ch = +tk.priceChangePercent||0;
       if(els.changePct){
         els.changePct.textContent = pct(ch);
         els.changePct.style.color = ch>=0?'var(--green)':'var(--red)';
       }
       syncTradePanel();
-      publishDvlChartPrice1204(+tk.lastPrice, 'fast-poll', Date.now());
+      if(!_agAlive()) publishDvlChartPrice1204(+tk.lastPrice, 'fast-poll', Date.now());
     }
 
     // Atualiza última vela (close/high/low)
@@ -6982,9 +7020,9 @@ async function _fastPoll(){
         const h=+row[2], l=+row[3], c=+row[4];
         if(h>last.high) last.high=h;
         if(l<last.low)  last.low=l;
-        last.close=c;
+        if(!_agAlive()) last.close=c;
         __dvlTraceCandle('poll-REST');
-      } else if(last && targetT>last.time){
+      } else if(last && targetT>last.time && !_agAlive()){
         klines.push({time:targetT,open:+row[1],high:+row[2],low:+row[3],close:+row[4],
                      volume:+row[5],quoteVolume:+row[7]||0,buyVolume:+row[9]||0});
       }
@@ -7111,19 +7149,93 @@ function __dvlCandleDbgPaint(){
 window.DVL_CANDLE_DEBUG = function(on){ window.__DVL_CANDLE_DEBUG=!!on; if(!on){ var e=document.getElementById("dvlCandleDbg1643"); if(e&&e.remove) e.remove(); } return "candle debug: "+(!!on); };
 window.DVL_CANDLE_DEBUG_REPORT = function(){ return (window.__DVL_CANDLE_TRACE||[]).slice(-40); };
 try{ if(/[?&]candledbg=1/.test(location.search)) window.__DVL_CANDLE_DEBUG=true; }catch(_){}
-/* Aplica UM negócio (aggTrade) na vela em formação — move close/high/low a cada
-   trade (fluidez tick a tick), atualiza preço/label/bubbles e agenda render. */
-function _applyAggTrade(d){
-  _agLastMsg = Date.now();
+
+/* DVL_CANDLE_BUCKET_ENGINE_1647_START
+   One trade timestamp owns exactly one candle bucket. This is intentionally
+   DOM-free so the rollover rules can be tested offline. */
+function _dvlFindCandleIndex1647(time){
+  for(let i=klines.length-1; i>=0 && i>=klines.length-6; i--){
+    if(Number(klines[i] && klines[i].time) === time) return i;
+  }
+  return -1;
+}
+function _dvlApplyLivePriceToBucket1647(price, eventTime){
+  const p = Number(price), time = Number(eventTime), step = Number(intervalMs(interval));
+  if(!(p>0) || !Number.isFinite(time) || !(step>0) || !klines.length) return {applied:false, reason:"invalid"};
+  const stateKey = String(symbol || "").toUpperCase() + "|" + String(interval || "");
+  if(window.__DVL_CANDLE_STATE_KEY_1647 && window.__DVL_CANDLE_STATE_KEY_1647 !== stateKey){
+    return {applied:false, reason:"state-changing"};
+  }
+  const bucket = Math.floor(time / step) * step;
+  let last = klines[klines.length-1];
+  if(bucket < Number(last.time)) return {applied:false, late:true, bucket:bucket};
+
+  let rolled = false;
+  if(bucket > Number(last.time)){
+    last = { time:bucket, open:p, high:p, low:p, close:p, volume:0, quoteVolume:0, buyVolume:0 };
+    klines.push(last);
+    rolled = true;
+  }else{
+    const firstLiveWrite = Number(window.__DVL_LIVE_BUCKET_1647 || 0) !== bucket;
+    const historyMarket = String(window.__DVL_CANDLE_HISTORY_MARKET_1647 || "");
+    if(firstLiveWrite && historyMarket && historyMarket !== "binance-spot"){
+      /* A fallback history came from another exchange. Do not keep its forming
+         OHLC and paint Binance Spot trades on top of it. */
+      last.open=p; last.high=p; last.low=p; last.close=p;
+      last.volume=0; last.quoteVolume=0; last.buyVolume=0;
+    }else{
+      last.close=p;
+      if(p>last.high) last.high=p;
+      if(p<last.low) last.low=p;
+    }
+  }
+  window.__DVL_LIVE_BUCKET_1647 = bucket;
+  return {applied:true, rolled:rolled, bucket:bucket, candle:last};
+}
+function _dvlMergeNativeKline1647(entry, isClosed, aggLive){
+  if(!entry || !Number.isFinite(Number(entry.time))) return {applied:false};
+  const t = Number(entry.time);
+  let targetIndex = _dvlFindCandleIndex1647(t);
+  if(targetIndex >= 0){
+    const target = klines[targetIndex];
+    if(isClosed){
+      Object.assign(target, entry);
+    }else{
+      target.volume=entry.volume; target.quoteVolume=entry.quoteVolume; target.buyVolume=entry.buyVolume;
+      if(entry.high>target.high) target.high=entry.high;
+      if(entry.low<target.low) target.low=entry.low;
+      if(targetIndex===klines.length-1 && !aggLive) target.close=entry.close;
+    }
+  }else{
+    const last = klines.length ? klines[klines.length-1] : null;
+    if(!last || t>Number(last.time)){
+      klines.push(entry);
+      targetIndex=klines.length-1;
+      window.__DVL_LIVE_BUCKET_1647=t;
+    }
+  }
+  return {applied:targetIndex>=0, targetIndex:targetIndex, current:klines.length?klines[klines.length-1]:null};
+}
+/* DVL_CANDLE_BUCKET_ENGINE_1647_END */
+
+window.DVL_CANDLE_ENGINE_1647 = {
+  status:function(){
+    const last=klines.length?klines[klines.length-1]:null;
+    return {symbol:symbol, interval:interval, candles:klines.length, last:last, aggAgeMs:_agLastMsg?Date.now()-_agLastMsg:null};
+  }
+};
+
+/* Aplica UM negócio (aggTrade) no bucket do horário real do trade. */
+function _applyAggTrade(d, feedIv){
   if(window.__DVL_REPLAY_ACTIVE) return;
   if(!d || d.e!=='aggTrade' || d.s!==(symbol||'BTCUSDT').toUpperCase()) return;
+  if(feedIv && String(feedIv) !== String(interval)) return;
   const p=+d.p; if(!(p>0) || !klines.length) return;
-  const last=klines[klines.length-1];
-  last.close=p;
-  if(p>last.high) last.high=p;
-  if(p<last.low)  last.low=p;
+  _agLastMsg = Date.now();
+  const applied = _dvlApplyLivePriceToBucket1647(p, +d.T || +d.E || Date.now());
+  if(!applied.applied) return;
   marketEntryPrice=p;
-  __dvlTraceCandle('aggTrade');
+  __dvlTraceCandle(applied.rolled?'agg-roll':'aggTrade');
   const now=Date.now();
   try{ window.DVL_PERF.tickMs = Math.max(0, now-(+d.T||now)); window.DVL_PERF.wsMs = Math.max(0, now-(+d.E||now)); }catch(_){}
   if(els && els.lastPrice && now-_agLastHdr>100){ _agLastHdr=now; try{ els.lastPrice.textContent=fmtPrice(p); }catch(_){} }
@@ -7159,7 +7271,7 @@ function _klWsConnect(){
         const wrap = JSON.parse(ev.data);
         const d = (wrap && wrap.data) ? wrap.data : wrap;   // combined ({stream,data}) OU cru
         if(!d) return;
-        if(d.e === 'aggTrade'){ _applyAggTrade(d); return; }
+        if(d.e === 'aggTrade'){ _applyAggTrade(d, iv); return; }
         if(d.e !== 'kline') return;
         const k = d.k;
         // Descarta mensagens stale se symbol/interval mudou
@@ -7167,36 +7279,13 @@ function _klWsConnect(){
         const t = +k.t;
         const entry = { time:t, open:+k.o, high:+k.h, low:+k.l, close:+k.c,
                         volume:+k.v, quoteVolume:+k.q, buyVolume:+k.V };
+        /* Finalize by k.t, never by array position. A late close for the
+           previous bucket cannot pull the current price backwards. */
+        _dvlMergeNativeKline1647(entry, !!k.x, _agAlive());
         var lastK = klines.length ? klines[klines.length-1] : null;
-        if(lastK && lastK.time === t){
-          /* Beta 1.643 — o @kline vem EM LOTE e ATRASADO. No meio da vela ele
-             NUNCA pode DESFAZER o OHLC ao vivo (Spec Fluidez §4/§18: high/low não
-             retrocedem; a wick nunca volta de um extremo já registrado). Era o
-             Object.assign no meio da vela que causava a "piscada pro oposto":
-             sobrescrevia o OHLC vivo (do @aggTrade) por um close/high/low mais
-             velho do lote. Rollback: window.__DVL_CANDLE_LEGACY_MERGE = true. */
-          if(window.__DVL_CANDLE_LEGACY_MERGE){
-            if(_agAlive() && !k.x){ lastK.volume=entry.volume; lastK.quoteVolume=entry.quoteVolume; lastK.buyVolume=entry.buyVolume; }
-            else { Object.assign(lastK, entry); }
-          } else if(!k.x){
-            // meio da vela: volume sempre; OHLC só ESTENDE (nunca encolhe)
-            lastK.volume = entry.volume; lastK.quoteVolume = entry.quoteVolume; lastK.buyVolume = entry.buyVolume;
-            if(!_agAlive()){
-              // sem @aggTrade vivo, o kline é a única fonte de preço: segue o close
-              // e estende high/low monotonicamente — sem desfazer extremos.
-              lastK.close = entry.close;
-              if(entry.high > lastK.high) lastK.high = entry.high;
-              if(entry.low  < lastK.low)  lastK.low  = entry.low;
-            }
-          } else {
-            // FECHAMENTO (k.x): o kline é a fonte autoritativa do OHLC final real.
-            Object.assign(lastK, entry);
-          }
-        } else if(!lastK || t > lastK.time){
-          klines.push(entry); lastK = klines[klines.length-1];
-        }
+        if(lastK && !_agAlive()) marketEntryPrice = Number(lastK.close) || marketEntryPrice;
         __dvlTraceCandle(k.x?'klineWS-X':'klineWS');
-        publishDvlChartPrice1204(k.x ? (+k.c) : ((lastK && lastK.close) || +k.c), 'kline-ws', +k.T || Date.now());
+        publishDvlChartPrice1204((lastK && lastK.close) || +k.c, 'kline-ws', +k.T || Date.now());
         requestLiveChartRender(!!k.x);
       }catch(_){}
     };
@@ -7222,7 +7311,7 @@ let _agWs=null, _agSym=null, _agLastPub=0, _agLastHdr=0;
 function _agWsConnect(){ /* no-op: aggTrade agora é multiplexado no combined stream */ }
 
 // ── Live candle para TFs não-nativos (WS do intervalo base) ─────────────────
-let _nnWs=null, _nnWsSym=null, _nnWsBase=null;
+let _nnWs=null, _nnWsSym=null, _nnWsBase=null, _nnWsIv=null;
 function _nnWsConnect(){
   if(isNativeTimeframe(interval)){
     if(_nnWs){try{_nnWs.close();}catch(_){}_nnWs=null;}
@@ -7230,9 +7319,10 @@ function _nnWsConnect(){
   }
   const s=(symbol||'BTCUSDT').toUpperCase();
   const base=baseIntervalForTimeframe(interval);
-  if(_nnWsSym===s&&_nnWsBase===base&&_nnWs&&_nnWs.readyState<2) return;
+  const targetIv=String(interval);
+  if(_nnWsSym===s&&_nnWsBase===base&&_nnWsIv===targetIv&&_nnWs&&_nnWs.readyState<2) return;
   if(_nnWs){try{_nnWs.close();}catch(_){}_nnWs=null;}
-  _nnWsSym=s; _nnWsBase=base;
+  _nnWsSym=s; _nnWsBase=base; _nnWsIv=targetIv;
   try{
     /* Beta 1.554 — combinado kline_base + aggTrade (mesmo motivo do _klWs): dá
        fluidez tick a tick também nos TFs não-nativos (ex.: 15s/30s). */
@@ -7246,25 +7336,30 @@ function _nnWsConnect(){
         const wrap=JSON.parse(ev.data);
         const msg=(wrap && wrap.data)?wrap.data:wrap;
         if(!msg) return;
-        if(msg.e==='aggTrade'){ _applyAggTrade(msg); return; }
+        if(String(interval)!==targetIv) return;
+        if(msg.e==='aggTrade'){ _applyAggTrade(msg, targetIv); return; }
         if(msg.e!=='kline') return;
         const k=msg.k;
         const curBase=baseIntervalForTimeframe(interval);
         if(k.s!==(symbol||'BTCUSDT').toUpperCase()||k.i!==curBase) return;
         if(!klines.length) return;
-        const tMs=intervalMs(interval);
+        const tMs=intervalMs(targetIv);
         const bucketT=Math.floor(+k.t/tMs)*tMs;
-        const last=klines[klines.length-1];
+        let last=klines[klines.length-1];
+        if(last && bucketT>Number(last.time) && !_agAlive()){
+          _dvlApplyLivePriceToBucket1647(+k.o || +k.c, bucketT);
+          last=klines[klines.length-1];
+        }
         if(last.time===bucketT){
           const h=+k.h, l=+k.l, c=+k.c;
           if(h>last.high) last.high=h;
           if(l<last.low)  last.low=l;
-          /* close do aggTrade na formação (fluido); kline só no fechamento ou
-             sem aggTrade vivo. Evita a vela agregada piscar. */
-          if(k.x || !_agAlive()) last.close=c;
-          __dvlTraceCandle(k.x?'nnWS-X':'nnWS');
-          publishDvlChartPrice1204(k.x ? c : last.close, 'aggregate-kline-ws', +k.T || Date.now());
-          requestLiveChartRender(!!k.x);
+          /* k.x closes the one-second base candle, not the 15s/30s aggregate.
+             It may only own close while aggTrade is unavailable. */
+          if(!_agAlive()) last.close=c;
+          __dvlTraceCandle('nnWS');
+          publishDvlChartPrice1204(last.close, 'aggregate-kline-ws', +k.T || Date.now());
+          requestLiveChartRender(false);
         }
       }catch(_){}
     };

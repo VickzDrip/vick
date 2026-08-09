@@ -451,10 +451,19 @@ app.get("/api/market/health", (req,res) => {
 
 app.get("/api/klines", async (req,res) => {
   try{
-    const interval = req.query.interval || "5m";
-    const limit = Math.min(Number(req.query.limit || 650), 1000);
-    const raw = await getJson(`${REST}/api/v3/klines?symbol=${SYMBOL}&interval=${interval}&limit=${limit}`);
-    res.json(raw.map(k => ({ t:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], closeTime:+k[6] })));
+    const symbol = String(req.query.symbol || SYMBOL).toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const interval = String(req.query.interval || "5m");
+    const limit = Math.min(Math.max(Number(req.query.limit || 650), 1), 1000);
+    const validIntervals = new Set(["1s","1m","3m","5m","15m","30m","1h","2h","4h","6h","8h","12h","1d","3d","1w","1M"]);
+    if(!symbol || !validIntervals.has(interval)){
+      return res.status(400).json({ error:"symbol/interval invalido" });
+    }
+    const raw = await getJson(`${REST}/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`);
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.json(raw.map(k => ({
+      t:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5], closeTime:+k[6],
+      q:+k[7], trades:+k[8], buyVolume:+k[9], buyQuote:+k[10]
+    })));
   }catch(e){ res.status(500).json({ error: e.message }); }
 });
 
