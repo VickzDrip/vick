@@ -179,7 +179,9 @@ Aggregator.prototype.serialize = function(c){
 };
 /* snapshot cronológico crescente: fechados + o candle atual (provisório). */
 Aggregator.prototype.snapshot = function(from, to, limit){
-  from = from || 0; to = to || Infinity; limit = Math.min(limit || 5000, 5000);
+  /* Beta 1.651: the in-memory ring already holds 20k candles. Let the API
+     read up to 10k while retaining a hard serialization bound. */
+  from = from || 0; to = to || Infinity; limit = Math.min(Math.max(50, limit || 5000), 10000);
   var out = [];
   for (var i=0;i<this.candles.length;i++){
     var c = this.candles[i];

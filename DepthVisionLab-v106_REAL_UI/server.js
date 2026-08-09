@@ -428,7 +428,9 @@ app.get("/api/market/candles", (req,res) => {
     if (!subsecond) return res.json({ ok:true, market:"binance-usdm", symbol, interval, partial:true, status:"OFFLINE", serverTime:Date.now(), candles:[], nextFrom:null });
     const from = Number(req.query.from || 0);
     const to = Number(req.query.to || Date.now());
-    const limit = Math.min(Number(req.query.limit || 1000), 5000);
+    /* Beta 1.651: expose more of the existing 20k subsecond ring. The cap
+       remains bounded so one request cannot serialize the whole process. */
+    const limit = Math.min(Math.max(50, Number(req.query.limit || 1000)), 10000);
     const eng = subsecond.getEngine(symbol);
     if (!eng) return res.json({ ok:true, market:subsecond.MARKET, symbol, interval, partial:true, status:"OFFLINE", serverTime:Date.now(), candles:[], nextFrom:null });
     const candles = eng.getSnapshot(interval, from, to, limit) || [];

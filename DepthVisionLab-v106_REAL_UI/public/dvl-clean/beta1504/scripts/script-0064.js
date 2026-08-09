@@ -28,6 +28,7 @@ try{
   }
 }catch(_){}
 window.DVL_CHANGELOG = [
+  { version: "Beta 1.651", note: "DVL_BODY_REVERSAL_SCOUT_1651 - novo marcador informativo de possivel reversao baseado somente em sequencias de corpos dominantes fechados de 15s/30s. Projeta o sinal intrabar no candle correspondente de ate 5m sem lookahead. Historico visual de segundos ampliado para 8000 candles." },
   { version: "Beta 1.650", note: "DVL_LIVE_VOLUME_FALLBACK_1650 - Volume intrabar agora acompanha os candles ao vivo. Em 15s/30s, se aggTrade falhar mas o kline-base continuar, o delta cumulativo de volume preenche a barra sem duplicar quando os trades voltam. O poll REST tambem recupera volume nativo e os aliases volume/v/baseVolume ficam sincronizados." },
   { version: "Beta 1.633", note: "Remocao de indicadores. Sairam do menu de indicadores: ARION Zone Profile MTF, DVL FVG Firewall, DVL FVG Magnet IFVG, Alertas VP (o INDICADOR — os alertas do novo Alerts Hub NAO foram mexidos), DVL Smart Delta, DVL Bookmap Zones e Liquidity Bands. Alem de tira-los do menu, um passo de limpeza desliga quem porventura estava com algum deles ligado (pra ninguem ficar com o desenho na tela sem ter como desligar) e remove a linha residual do menu antigo. Os engines seguem carregados nos bastidores porque outros indicadores mantidos dependem deles (ex.: Deep Heatmap usa o Bookmap, RSI Exhaustion referencia o ARION). So frontend." },
   { version: "Beta 1.632", note: "Correcao — o site travava (freeze) logo apos carregar por causa do novo DWC. O 'a prova de rebuild' do menu do DWC observava a arvore inteira do documento e, ao reposicionar o proprio item, disparava o observer de novo, entrando numa tempestade de mutacoes/microtasks que congelava a aba (acontecia pra todos, mesmo com o DWC desligado, pois o observer roda no boot). Agora a insercao e IDEMPOTENTE (nao mexe no DOM se o item ja esta no lugar), com guarda de re-entrancia (ignora as mutacoes que nos mesmos causamos) e debounce de 200ms no observer. O cache do baseline de volume tambem passou a usar comprimento+tempo dos candles em vez da referencia do array (evita rebuild por frame). So frontend." },
@@ -2619,8 +2620,11 @@ function historyLimitForInterval(iv){
   if(iv === "1s")  return 600;
   if(iv === "5s")  return 720;
   if(iv === "10s") return 720;
-  if(iv === "15s") return 1200;
-  if(iv === "30s") return 1200;
+  /* Beta 1.651: ~33h no 15s e ~66h no 30s quando o recorder ja acumulou
+     a janela. O render usa apenas o slice visivel, entao o historico profundo
+     nao aumenta o custo de pintura proporcionalmente. */
+  if(iv === "15s") return 8000;
+  if(iv === "30s") return 8000;
   if(iv === "1m") return 4500;
   if(iv === "3m") return 4500;
   if(iv === "5m") return 4200;
@@ -3394,7 +3398,7 @@ async function fetchKlinesFromAggTrades(sym, iv, targetLimit){
 
 async function fetchDvlSubsecondCandles(sym, iv, targetLimit){
   if(iv !== "15s" && iv !== "30s") return null;
-  const lim = Math.min(Math.max(50, Number(targetLimit) || 1000), 5000);
+  const lim = Math.min(Math.max(50, Number(targetLimit) || 1000), 10000);
   const url = "/api/market/candles?symbol=" + encodeURIComponent(sym) + "&interval=" + iv + "&limit=" + lim;
   const r = await fetch(url, { cache: "no-store" });
   if(!r.ok) return null;
@@ -5808,6 +5812,12 @@ if(window.DVLMovingAveragesDraw){
 
   if(window.DVLLiquidityBandsDraw){
     try{ window.DVLLiquidityBandsDraw(ctx, { view, drawView, win, x, y, x0, x1, y0, y1, slotOffset, candleW, min, max, priceBottom, priceH, symbol }); }catch(_dvlLB_e){}
+  }
+
+  /* DVL_BODY_REVERSAL_SCOUT_DRAW_1651: orange watch marker after closed 15s/30s body
+     exhaustion. This hook is intentionally isolated from candle ownership. */
+  if(window.DVLBodyReversalScoutDraw){
+    try{ window.DVLBodyReversalScoutDraw(ctx, { view, drawView, win, x, y, x0, x1, y0, y1, slotOffset, candleW, min, max, priceBottom, priceH, symbol }); }catch(_dvlBrs_e){}
   }
 
   if(window.DVLHLinesDraw){
